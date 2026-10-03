@@ -70,10 +70,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    ${CLAUDE_PLUGIN_ROOT}/scripts/kb-propose.sh --proposer "<the instance's proposer>"   # exit 0 = a report was written
    ```
 
-   Exit 0 ⇒ it has already written the report as a `draft` task; print its line and do
-   **nothing else** — step 8 renders the row from that document like any other. Exit 1 is
-   silence (no proposer configured, nothing to propose, or a report still waiting on the
-   human). Exit 2 could not answer — report its line.
+   It runs the archive sweep first, with or without a proposer: a current, machine-written
+   Finding past every qualifier `scripts/kb-usage.sh sweep` prints becomes a
+   `status=archived` proposal. Exit 0 ⇒ it has already written the report as a `draft`
+   task; print its line and do **nothing else** — step 8 renders the row from that
+   document like any other. Exit 1 is silence (nothing to archive and no proposer
+   configured, nothing to propose, or a report still waiting on the human). Exit 2 could
+   not answer — report its line.
    **Never apply a report from here, and never promote one.** `/loopd:kb-apply` is the
    only path that writes `knowledge/` from a report, a human types it, and a report is
    declined by cancelling it — not by promoting it to `ready`, which would dispatch an

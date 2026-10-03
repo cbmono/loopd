@@ -27,7 +27,7 @@ done
 [ -d knowledge ] || { echo "build-kb-index: run from a bundle root (no knowledge/ here)." >&2; exit 2; }
 INDEX=knowledge/index.md
 VOCAB=knowledge/vocab.md
-FINDING_STATUSES="current superseded corrected"
+FINDING_STATUSES="current superseded corrected archived"
 FINDING_MAX_LINES=40
 SUMMARY_MAX=240
 # The KB journal shards per month once it is shared; a single-writer bundle keeps the
@@ -82,13 +82,15 @@ status_of()  { field "$1" status | sed 's/[[:space:]]*#.*//'; }
 summary_of() { local s; s=$(field "$1" lesson); [ -n "$s" ] || s=$(field "$1" description); printf '%s' "$s"; }
 
 # --- render -----------------------------------------------------------------
-render_rows() { # <kind> <want-superseded 0|1> <last-column: status|superseded_by|none>
+render_rows() { # <kind> <want: current|superseded|archived> <last-column: status|superseded_by|none>
   local kind=$1 want=$2 last=$3 f fmv st printed=0
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     fmv=$(fm "$f"); st=$(status_of "$fmv"); [ -n "$st" ] || st=current
-    if [ "$want" = 1 ]; then [ "$st" = superseded ] || continue
-    else [ "$st" != superseded ] || continue; fi
+    case "$want:$st" in
+      superseded:superseded|archived:archived) : ;;
+      current:superseded|current:archived|superseded:*|archived:*) continue ;;
+    esac
     local title summary path tail
     title=$(esc "$(title_of "$fmv")"); [ -n "$title" ] || title=$(slug_of "$f")
     summary=$(esc "$(summary_of "$fmv")")
@@ -128,7 +130,7 @@ them to understand a decision, never cite them as current guidance.
 | Service | What it is | Path | Status |
 |---|---|---|---|
 EOF
-  render_rows services 0 status
+  render_rows services current status
   cat <<'EOF'
 
 ## Findings — decisions, learnings, gotchas
@@ -136,7 +138,7 @@ EOF
 | Finding | Summary | Path | Status |
 |---|---|---|---|
 EOF
-  render_rows findings 0 status
+  render_rows findings current status
   cat <<'EOF'
 
 ### Superseded findings — history, not current guidance
@@ -144,7 +146,19 @@ EOF
 | Finding | Summary | Path | Superseded by |
 |---|---|---|---|
 EOF
-  render_rows findings 1 superseded_by
+  render_rows findings superseded superseded_by
+  # Only when one exists, so adding the status re-renders no existing index.
+  local archived; archived=$(render_rows findings archived status)
+  case "$archived" in *'_(none yet)_'*) : ;; *)
+    cat <<'EOF'
+
+### Archived findings — history, not current guidance: no brief cited them
+
+| Finding | Summary | Path | Status |
+|---|---|---|---|
+EOF
+    printf '%s\n' "$archived" ;;
+  esac
   cat <<'EOF'
 
 ## Runbooks
@@ -152,7 +166,7 @@ EOF
 | Runbook | When to use | Path | Status |
 |---|---|---|---|
 EOF
-  render_rows runbooks 0 status
+  render_rows runbooks current status
   cat <<'EOF'
 
 ## References — durable specs & contracts
@@ -160,7 +174,7 @@ EOF
 | Reference | What it specifies | Path | Status |
 |---|---|---|---|
 EOF
-  render_rows references 0 status
+  render_rows references current status
   cat <<'EOF'
 
 ## Teams — who owns what / routing
@@ -168,7 +182,7 @@ EOF
 | Team | Owns | Path |
 |---|---|---|
 EOF
-  render_rows teams 0 none
+  render_rows teams current none
   printf '\n---\n[KB log](%s) — what changed and when.\n' "$JOURNAL"
 }
 

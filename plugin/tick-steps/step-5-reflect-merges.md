@@ -69,10 +69,15 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    unmeasured task and a free one are not the same fact. Exit 1 means a `* TOTAL` line is
    already there; leave it alone.
 
-   **Check the citations you are reflecting.** For each task you move to `done`, run
-   `${CLAUDE_PLUGIN_ROOT}/scripts/cite-check.sh --text-file <f> --brief <slugs>` over its
-   `# Result` section and over each merged PR body, with the slugs that task's brief
-   carried. Anything dropped (exit 3, or exit 1 where a citing line lost every id) is
+   **Check the citations you are reflecting, and store them.** For each task you move to
+   `done`, run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/kb-usage.sh record --source <id> --text-file <f> --brief <slugs>`
+   over its `# Result` section and over each merged PR body, with the slugs that task's brief
+   carried — `<id>` is `<task-slug>.result` or `<repo>-pr-<n>`, so a re-run rewrites the same
+   record instead of counting it twice. It runs
+   `${CLAUDE_PLUGIN_ROOT}/scripts/cite-check.sh --text-file` and passes its report and exit
+   code through unchanged; that record is the only usage signal the archive sweep in
+   step 7 has, so a skipped run is a citation the KB never sees. Anything dropped (exit 3, or exit 1 where a citing line lost every id) is
    **recorded as a `# Notes` line** naming the id and its verdict — `UNREAD` (a real doc
    nobody read) or `FABRICATED` (no such doc) — and exit 1 also goes in the tick report.
    It never changes the reflect verdict: a merged PR is merged. `CONVENTIONS.md` → cite
