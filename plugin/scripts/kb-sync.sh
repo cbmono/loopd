@@ -202,12 +202,27 @@ check_ref() { # <url> <ref>
   if [ "${#ref}" -eq 40 ] && printf '%s' "$ref" | grep -qE '^[0-9a-fA-F]{40}$'; then
     die "knowledge.ref '$ref' is a commit SHA. A detached HEAD cannot be pushed — name a BRANCH."
   fi
-  local heads tags
-  heads="$(bounded git ls-remote --heads "$url" "$ref" 2>/dev/null)"
+  local heads tags rc=0
+  heads="$(bounded git ls-remote --heads "$url" "$ref" 2>/dev/null)"; rc=$?
   [ -z "$heads" ] || return 0
+  [ "$rc" -eq 0 ] || return 0
+  # A host reports a default branch for a repo with no refs at all — a setting, not a
+  # branch — so emptiness is asked of the heads. Only --exit-code's 2 means "read, none";
+  # any other failure is not evidence of anything and is left to the fetch to name.
+  bounded git ls-remote --heads --exit-code "$url" >/dev/null 2>&1; rc=$?
+  [ "$rc" -ne 2 ] || refuse_empty_remote "$url" "$ref"
   tags="$(bounded git ls-remote --tags "$url" "$ref" 2>/dev/null)"
   [ -z "$tags" ] || die "knowledge.ref '$ref' is a TAG. A detached HEAD cannot be pushed — name a BRANCH."
   return 0
+}
+
+refuse_empty_remote() { # <url> <ref>
+  local to; to="$(printf '%q %q' "$(safe_url "$1")" "HEAD:refs/heads/$2")"
+  warn "$KB_REPO exists but has no commits — not one branch — so knowledge.ref '$2' cannot
+       resolve. Nothing was written. Create the first commit, then mount again:
+         d=\"\$(mktemp -d)\" && git -C \"\$d\" init -q && git -C \"\$d\" commit -q --allow-empty -m 'chore: first commit' && git -C \"\$d\" push -q $to"
+  ab_say_run "kb-sync:  " kb-sync.sh mount >&2
+  exit 1
 }
 
 clone_mount() { # <gitdir> <worktree> <url> <ref> <sparse>

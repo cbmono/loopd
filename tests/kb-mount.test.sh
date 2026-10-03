@@ -171,6 +171,71 @@ out="$(bash "$SYNC" --instance "$BADPATH" mount 2>&1)"; rc=$?
 ok "an unmountable path is refused by name" "$rc" 1
 ok "…naming the two forms that work" "$(has "$out" "Only '/'")" yes
 
+echo "== a KB repo with no commits is named, and the printed remedy mounts it =="
+
+# GitHub reports a default_branch for a repo with zero refs. A bare repo whose HEAD names an
+# unborn main is that shape, so the check is proven not to read the declared branch.
+EMPTY="$TMP/empty.git"; git init --bare --quiet "$EMPTY"; git --git-dir="$EMPTY" symbolic-ref HEAD refs/heads/main
+ok "the empty fixture declares a default branch" "$(git --git-dir="$EMPTY" symbolic-ref HEAD)" refs/heads/main
+ok "…and git ls-remote --heads finds no ref in it" "$(git ls-remote --heads "$EMPTY" | grep -c .)" 0
+empty_bundle() { # <dir> <path>
+  mkdir -p "$1/$AB_DIR"; cp "$SEED/SCHEMA.md" "$1/$AB_SCHEMA"
+  printf '{ "knowledge": { "repo": "%s", "path": "%s", "ref": "main" } }\n' "$EMPTY" "$2" > "$1/instance.config.json"
+}
+EB="$TMP/emptybundle"; empty_bundle "$EB" /
+out="$(bash "$SYNC" --instance "$EB" mount 2>&1)"; rc=$?
+ok "a mount into a repo with no commits is refused" "$rc" 1
+ok "…naming the repo as existing with no commits" "$(has "$out" "$EMPTY exists but has no commits")" yes
+ok "…and knowledge.ref as unable to resolve" "$(has "$out" "knowledge.ref 'main' cannot")" yes
+ok "…before any fetch is attempted" "$(has "$out" 'fetching')" no
+ok "…and writing nothing, so the re-run is a first mount" \
+  "$([ -e "$EB/$AB_DIR/kb.git" ] || [ -e "$EB/knowledge" ] && echo wrote || echo nothing)" nothing
+remedy="$(printf '%s\n' "$out" | sed -n 's/^ *\(d=.*\)$/\1/p')"
+ok "…printing exactly one remedy command" "$(printf '%s' "$remedy" | grep -c .)" 1
+rc=0; ( cd "$TMP" && bash -c "$remedy" ) >/dev/null 2>&1 || rc=$?
+ok "the remedy runs as printed" "$rc" 0
+ok "…and leaves the declared branch a real ref" "$(git ls-remote --heads "$EMPTY" main | grep -c .)" 1
+out="$(bash "$SYNC" --instance "$EB" mount 2>&1)"; rc=$?
+ok "the same mount then succeeds" "$rc" 0
+ok "…saying it mounted" "$(has "$out" 'mounted')" yes
+ok "…and the mount is clean and pushed" "$(bash "$SYNC" --instance "$EB" status >/dev/null 2>&1; echo $?)" 0
+EBK="$TMP/emptybundle-k"; empty_bundle "$EBK" knowledge
+ok "a path: knowledge mount of that first commit succeeds too" \
+  "$(bash "$SYNC" --instance "$EBK" mount >/dev/null 2>&1; echo $?)" 0
+
+UNREAD="$TMP/unreadable"; mkdir -p "$UNREAD/$AB_DIR"; cp "$SEED/SCHEMA.md" "$UNREAD/$AB_SCHEMA"
+printf '{ "knowledge": { "repo": "%s", "path": "/", "ref": "main" } }\n' "$TMP/no-such.git" > "$UNREAD/instance.config.json"
+out="$(bash "$SYNC" --instance "$UNREAD" mount 2>&1)"
+ok "a remote that cannot be read is never called empty" "$(has "$out" 'no commits')" no
+
+# Over a real transport the printed URL is the masked one: a dumb-HTTP server on loopback
+# serves a second empty repo, and the configured URL carries a token.
+DUMB="$TMP/dumb"; mkdir -p "$DUMB/srv"; git init --bare --quiet "$DUMB/srv/empty.git"
+git --git-dir="$DUMB/srv/empty.git" update-server-info
+cat > "$DUMB/srv.py" <<'PY'
+import http.server, os, sys, threading, time
+os.chdir(sys.argv[1])
+class H(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *a): pass
+srv = http.server.HTTPServer(('127.0.0.1', 0), H)
+threading.Thread(target=lambda: (time.sleep(120), os._exit(0)), daemon=True).start()
+print(srv.server_address[1], flush=True)
+srv.serve_forever()
+PY
+python3 "$DUMB/srv.py" "$DUMB/srv" > "$DUMB/port" 2>/dev/null & SRV=$!; disown "$SRV" 2>/dev/null
+DPORT=""; for _ in $(seq 1 80); do
+  DPORT="$(tr -dc '0-9' < "$DUMB/port" 2>/dev/null)"; [ -n "$DPORT" ] && break
+  kill -0 "$SRV" 2>/dev/null || break; sleep 0.25; done
+ok "the loopback dumb-HTTP fixture is up" "$([ -n "$DPORT" ] && echo yes || echo no)" yes
+EBT="$TMP/emptybundle-tok"; mkdir -p "$EBT/$AB_DIR"; cp "$SEED/SCHEMA.md" "$EBT/$AB_SCHEMA"
+printf '{ "knowledge": { "repo": "http://u:s3cr3tt0ken@127.0.0.1:%s/empty.git", "path": "/", "ref": "main" } }\n' \
+  "$DPORT" > "$EBT/instance.config.json"
+out="$(bash "$SYNC" --instance "$EBT" --timeout 10 mount 2>&1)"
+ok "an empty repo over HTTP is named as empty" "$(has "$out" 'exists but has no commits')" yes
+ok "…and the token never reaches the message or the remedy" "$(has "$out" 's3cr3tt0ken')" no
+ok "…while the remedy still names the remote" "$(has "$out" "push -q http://127.0.0.1:$DPORT/empty.git")" yes
+reap
+
 echo "== a path: knowledge mount, the shared-repo case =="
 
 BARE2="$TMP/shared.git"; git init --bare --quiet "$BARE2"
