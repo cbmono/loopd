@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # kb-sync.sh — mount, read and write a knowledge base held in another repository.
 #
-#   kb-sync.sh [--instance DIR] mount | pull | status
+#   kb-sync.sh [--instance DIR] mount [--allow-empty] | pull | status
 #   kb-sync.sh [--instance DIR] commit --message <m> [--role <r>] -- <path>...
 #
 # `commit` is ONE bounded transaction and the only writer: rebase, regenerate the
 # index, commit, push, one retry, then stop and report. Every network call carries
 # the bound named by --timeout, so no command here can hang a tick or a session.
+# A mount into a repo with no commits is refused, naming it; --allow-empty is kb-migrate.sh's,
+# which populates exactly that repo and whose first commit creates the branch.
 # Exit: 0 done · 1 refused or failed (reported) · 2 usage · 3 no `knowledge` key.
 # Reasoning, and why the mount is a nested clone: ai-bridge-v3/task-021.
 set -uo pipefail
@@ -14,7 +16,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
 # shellcheck source=bundle-paths.sh
 . "$HERE/bundle-paths.sh" || exit 2
-inst="."; cmd=""; message=""; role=""; paths=(); TIMEOUT="${AI_BRIDGE_KB_TIMEOUT:-20}"
+inst="."; cmd=""; message=""; role=""; paths=(); allow_empty=0; KB_EMPTY=0; TIMEOUT="${AI_BRIDGE_KB_TIMEOUT:-20}"
 need2() { [ "$1" -ge 2 ] || { echo "kb-sync: $2 needs a value" >&2; exit 2; }; }
 seen_dashdash=0
 while [ $# -gt 0 ]; do
@@ -25,7 +27,8 @@ while [ $# -gt 0 ]; do
     --role)     need2 $# "$1"; role="$2"; shift 2 ;;
     --timeout)  need2 $# "$1"; TIMEOUT="$2"; shift 2 ;;
     --)         seen_dashdash=1; shift ;;
-    -h|--help)  sed -n '2,10p' "$0" >&2; exit 2 ;;
+    --allow-empty) allow_empty=1; shift ;;
+    -h|--help)  sed -n '2,12p' "$0" >&2; exit 2 ;;
     -*) echo "kb-sync: unknown flag $1" >&2; exit 2 ;;
     *)  [ -z "$cmd" ] || { echo "kb-sync: unexpected argument '$1'" >&2; exit 2; }
         cmd="$1"; shift ;;
@@ -210,7 +213,10 @@ check_ref() { # <url> <ref>
   # branch — so emptiness is asked of the heads. Only --exit-code's 2 means "read, none";
   # any other failure is not evidence of anything and is left to the fetch to name.
   bounded git ls-remote --heads --exit-code "$url" >/dev/null 2>&1; rc=$?
-  [ "$rc" -ne 2 ] || refuse_empty_remote "$url" "$ref"
+  if [ "$rc" -eq 2 ]; then
+    [ "$allow_empty" -eq 1 ] || refuse_empty_remote "$url" "$ref"
+    KB_EMPTY=1; return 0
+  fi
   tags="$(bounded git ls-remote --tags "$url" "$ref" 2>/dev/null)"
   [ -z "$tags" ] || die "knowledge.ref '$ref' is a TAG. A detached HEAD cannot be pushed — name a BRANCH."
   return 0
@@ -225,8 +231,8 @@ refuse_empty_remote() { # <url> <ref>
   exit 1
 }
 
-clone_mount() { # <gitdir> <worktree> <url> <ref> <sparse>
-  local gd="$1" wt="$2" url="$3" ref="$4" sparse="$5" rc=0
+clone_mount() { # <gitdir> <worktree> <url> <ref> <sparse> [empty]
+  local gd="$1" wt="$2" url="$3" ref="$4" sparse="$5" empty="${6:-0}" rc=0
   mkdir -p "$(dirname "$gd")" "$wt" || return 1
   git init --bare --quiet "$gd" || return 1
   git --git-dir="$gd" config core.bare false || return 1
@@ -236,6 +242,10 @@ clone_mount() { # <gitdir> <worktree> <url> <ref> <sparse>
   if [ -n "$sparse" ]; then
     git --git-dir="$gd" config core.sparseCheckout true || return 1
     printf '/%s/\n' "$sparse" > "$gd/info/sparse-checkout" || return 1
+  fi
+  if [ "$empty" -eq 1 ]; then
+    git --git-dir="$gd" symbolic-ref HEAD "refs/heads/$ref" || return 1
+    return 0
   fi
   bounded git --git-dir="$gd" fetch --quiet origin "$ref"; rc=$?
   if [ "$rc" -ne 0 ]; then
@@ -262,9 +272,13 @@ mount_writable() {
   if [ -d "$KBGIT" ]; then return 0; fi
   refuse_stale_folder
   check_ref "$KB_URL" "$KB_REF"
-  clone_mount "$KBGIT" "$KB_WT" "$KB_URL" "$KB_REF" "$KB_SPARSE" \
+  clone_mount "$KBGIT" "$KB_WT" "$KB_URL" "$KB_REF" "$KB_SPARSE" "$KB_EMPTY" \
     || { rm -rf "$KBGIT"; die "could not mount $KB_REPO at knowledge/ — nothing was written."; }
-  say "mounted $KB_REPO ($KB_PATH @ $KB_REF) at knowledge/"
+  if [ "$KB_EMPTY" -eq 1 ]; then
+    say "mounted $KB_REPO EMPTY at knowledge/ — it has no commits; the first 'kb-sync.sh commit' creates $KB_REF."
+  else
+    say "mounted $KB_REPO ($KB_PATH @ $KB_REF) at knowledge/"
+  fi
 }
 
 # Read-only mounts (`knowledgeSources[]`) use this same scheme and are never written,

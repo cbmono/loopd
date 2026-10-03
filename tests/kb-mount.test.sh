@@ -203,6 +203,19 @@ EBK="$TMP/emptybundle-k"; empty_bundle "$EBK" knowledge
 ok "a path: knowledge mount of that first commit succeeds too" \
   "$(bash "$SYNC" --instance "$EBK" mount >/dev/null 2>&1; echo $?)" 0
 
+# kb-migrate.sh populates an empty KB repo, so its mount passes --allow-empty.
+EMPTY2="$TMP/empty2.git"; git init --bare --quiet "$EMPTY2"
+EBA="$TMP/emptybundle-allow"; mkdir -p "$EBA/$AB_DIR"; cp "$SEED/SCHEMA.md" "$EBA/$AB_SCHEMA"
+printf '{ "knowledge": { "repo": "%s", "path": "/", "ref": "main" } }\n' "$EMPTY2" > "$EBA/instance.config.json"
+out="$(bash "$SYNC" --instance "$EBA" mount --allow-empty 2>&1)"; rc=$?
+ok "mount --allow-empty mounts a repo with no commits" "$rc" 0
+ok "…saying it is EMPTY and what creates the branch" "$(has "$out" "EMPTY at knowledge/ — it has no commits")" yes
+ok "…without a fetch failure it knew it would get" "$(has "$out" 'fetching')" no
+ok "…on the unborn branch knowledge.ref names" \
+  "$(git --git-dir="$EBA/$AB_DIR/kb.git" symbolic-ref HEAD 2>/dev/null)" refs/heads/main
+ok "kb-migrate.sh is the one caller that passes it" \
+  "$(grep -l -- 'mount --allow-empty' "$REPO"/plugin/scripts/*.sh | xargs -n1 basename | tr '\n' ' ')" "kb-migrate.sh "
+
 UNREAD="$TMP/unreadable"; mkdir -p "$UNREAD/$AB_DIR"; cp "$SEED/SCHEMA.md" "$UNREAD/$AB_SCHEMA"
 printf '{ "knowledge": { "repo": "%s", "path": "/", "ref": "main" } }\n' "$TMP/no-such.git" > "$UNREAD/instance.config.json"
 out="$(bash "$SYNC" --instance "$UNREAD" mount 2>&1)"
