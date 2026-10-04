@@ -480,7 +480,7 @@ EOF
     ahead="$(unpushed_count)"
     if [ "$ahead" -gt 0 ]; then
       warn "$ahead KB commit(s) are local and UNPUSHED in $KB_MOUNT. Push by hand, or run:"
-      ab_say_run "kb-sync:  " kb-sync.sh commit >&2
+      ab_say_run "kb-sync:  " kb-sync.sh commit --message '"<message>"' -- '<path>...' >&2
       exit 1
     fi
     say "KB mount is clean and pushed."

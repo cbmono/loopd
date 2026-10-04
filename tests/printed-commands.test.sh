@@ -55,12 +55,12 @@ plugin/scripts/init-bundle.sh|bash \"\$BIN_DIR/kb-sync.sh\" status
 plugin/scripts/init-bundle.sh|init-bundle.sh '--email <commit-address>'
 plugin/scripts/init-bundle.sh|init-bundle.sh '--owner <github-login>'
 plugin/scripts/init-bundle.sh|init-bundle.sh '--repos-root <absolute path>'
-plugin/scripts/init-bundle.sh|kb-sync.sh commit
+plugin/scripts/init-bundle.sh|kb-sync.sh commit --message '\"<message>\"' -- '<path>...'
 plugin/scripts/init-bundle.sh|loopd/plugin/scripts/init-bundle.sh --config
 plugin/scripts/kb-sweep-due.sh|build-kb-index.sh --check
-plugin/scripts/kb-sync.sh|kb-sync.sh commit
+plugin/scripts/kb-sync.sh|kb-sync.sh commit --message '\"<message>\"' -- '<path>...'
 plugin/scripts/kb-sync.sh|kb-sync.sh mount
-plugin/scripts/migrate-bundle.sh|kb-sync.sh commit
+plugin/scripts/migrate-bundle.sh|kb-sync.sh commit --message '\"chore: relink knowledge/\"' -- '<path>...'
 plugin/scripts/migrate-bundle.sh|migrate-bundle.sh --apply
 plugin/scripts/migrate-bundle.sh|validate-bundle.sh
 plugin/scripts/refresh-seeds.sh|\"\$SELF\" \"'\$TARGET'\" --apply
@@ -129,6 +129,7 @@ BIN_DIR=$SCRIPTS
 SELF=$SCRIPTS/refresh-seeds.sh
 TARGET=$OUTSIDE"
 SLOTS="<agent-id>=probe-agent-0001
+<message>=probe message
 <why>=probe reason
 <path>...=knowledge/probe.md
 <github-login>=example-user-007
@@ -149,7 +150,7 @@ render() { # <cmd source> — the line ab_say_run prints with every variable a d
 
 before_git="$(git -C "$REPO" status --porcelain 2>/dev/null)"
 b_outside="$(snap "$OUTSIDE")"; b_home="$(snap "$HOME_T")"; b_cfg="$(snap "$CFG_T")"; b_bundle="$(snap "$BUNDLE")"
-total=0; probed=0
+total=0; probed=0; kbcommit=0
 while IFS='|' read -r f cmd; do
   [ -n "${cmd:-}" ] || continue
   total=$((total+1))
@@ -161,6 +162,13 @@ while IFS='|' read -r f cmd; do
   [ "$bad" = no ] || { ok "$f: $cmd is a plain word list" no yes; continue; }
   line="$(render "$cmd")" || { ok "$f: every variable in $cmd has a stated dummy" no yes; continue; }
   line="${line# }"
+  # PARSES IS NOT USABLE: kb-sync.sh checks --message and the path tail after its bundle
+  # guard, so a bare `kb-sync.sh commit` passes the parse probe below and dies on usage.
+  case "$line" in *'kb-sync.sh commit'*)
+    kbcommit=$((kbcommit+1))
+    case "$line" in *' --message '*' -- '?*) u=yes ;; *) u=no ;; esac
+    ok "$f: '$line' carries --message and a -- <path> tail" "$u" yes ;;
+  esac
   while IFS='=' read -r k v; do line="${line//"$k"/$v}"; done <<<"$SLOTS"
   case "$line" in *'<'*'>'*) ok "$f: every slot in '$line' has a stated dummy" no yes; continue ;; esac
   argv=()
@@ -190,6 +198,7 @@ done <<<"$(printf '%s' "$found")"
 echo
 echo "  coverage  $total notices found, $probed probed"
 ok "every notice found was probed" "$probed/$total" "$total/$total"
+ok "a kb-sync.sh commit notice was checked for usability" "$([ "$kbcommit" -gt 0 ] && echo yes || echo no)" yes
 ok "the harness probed something" "$([ "$probed" -gt 0 ] && echo yes || echo no)" yes
 
 echo

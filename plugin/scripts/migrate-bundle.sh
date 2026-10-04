@@ -301,7 +301,7 @@ if [[ -n "$PENDING" ]]; then
     # dirty and this script must not commit it — kb-sync.sh is the only KB writer.
     if [[ -d "$AB_DIR/kb.git" ]]; then
       echo "           knowledge/ is MOUNTED: its relinked files are uncommitted in that"
-      ab_say_run "           repository. Review and push them with:" kb-sync.sh commit
+      ab_say_run "           repository. Review and push them with:" kb-sync.sh commit --message '"chore: relink knowledge/"' -- '<path>...'
     fi
     echo "           Now run /${PLUGIN_NAME}:init to re-seed the ignore lines at their new paths."
   fi

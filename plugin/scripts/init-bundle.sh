@@ -3131,6 +3131,6 @@ if [ -f "$BIN_DIR/kb-sync.sh" ]; then
   if [ "$krc" -eq 1 ]; then
     echo "warn  the mounted knowledge base has unpushed commits. To see and push them:"
     ab_say_run "     " bash "$BIN_DIR/kb-sync.sh" status
-    ab_say_run "      then:" kb-sync.sh commit
+    ab_say_run "      then:" kb-sync.sh commit --message '"<message>"' -- '<path>...'
   fi
 fi
