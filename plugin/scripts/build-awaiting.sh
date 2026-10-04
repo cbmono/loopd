@@ -22,6 +22,13 @@
 # **A new verb is free; a new marker is not**: the glyph sits AFTER the `* `, which is why
 # one writer emits every row and no caller ever composes one.
 #
+# ROW ORDER IS AN EXECUTION ORDER, read top to bottom, so it is sorted after the walk rather
+# than left in glob order: (1) a task's blocker above it, via `depends_on`, transitively
+# through tasks that have no row; (2) then grant, unblock, answer, approve, merge, close;
+# (3) then glob order, so an unchanged bundle renders the same page. A cycle or a reference
+# to no live task drops only that edge. The sort reorders `row()`'s output and never
+# composes or drops a row: a failed sort renders glob order.
+#
 # GENERIC PLUGIN FILE — no org, repo or path literals.
 set -uo pipefail
 
@@ -125,9 +132,28 @@ lookup() { # <path> <"trailer"|"merge">  -> prints the value, or nothing
 # greps the `* ` literally.
 row() { printf '* %s **%s** — [%s](%s) · %s\n' "$1" "$2" "$3" "$4" "$5"; }
 
-rows=""
-add() { rows="$rows$(row "$@")
-"; }
+row_txt=(); row_node=(); row_sev=()
+node_lines=""; node=0
+sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; answer) echo 2 ;;
+                        approve) echo 3 ;; merge) echo 4 ;; close) echo 5 ;; *) echo 6 ;; esac; }
+add() { row_txt+=("$(row "$@")"); row_node+=("$node"); row_sev+=("$(sev_of "$2")"); }
+# A live task becomes a sort node whether or not it renders a row, so an edge through an
+# in-progress or other-owner task still orders what it separates.
+add_node() { # <file> <rel> <slug>
+  node=$((node + 1))
+  local b; b="$(basename "$2" .md)"
+  node_lines="${node_lines}N	$node	$3	$b	$2
+"
+  [ "$2" = "${2#/projects/*/tasks/}" ] && return
+  local d
+  # Unparsable `depends_on` is no edge, not a failed render: ordering is the only casualty.
+  while IFS= read -r d; do
+    [ -n "$d" ] && node_lines="${node_lines}D	$node	$d
+"
+  done <<EOF
+$(entries "$1" depends_on || true)
+EOF
+}
 
 # The default trailers, assigned rather than inlined: a backtick or an apostrophe inside a
 # `${x:-…}` default is re-parsed by the shell and the script will not even load.
@@ -150,6 +176,7 @@ for pm in "$inst"/projects/*/project.md; do
     st="$(fmfirst "$f" status)"; st="${st%% *}"
     ntask=$((ntask + 1))
     case "$st" in done|cancelled) nterm=$((nterm + 1)); continue ;; esac
+    add_node "$f" "$rel" "$slug"
     mine "$f" || continue
     t="$(title_of "$f")"
     trail="$(lookup "$f" trailer)"; [ -n "$trail" ] || trail="$(lookup "$rel" trailer)"
@@ -190,10 +217,94 @@ EOF
   done
 
   if [ "$held" = 0 ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ]; then
+    add_node "$pm" "${pm#"$inst"}" "$slug"
     pt="$(title_of "$pm")"; ptrail="$(lookup "$pm" trailer)"
     add "🏁" close "$pt" "${pm#"$inst"}" "${ptrail:-$DEF_CLOSE$slug\`}"
   fi
 done
+
+order_rows() { # -> row indexes, one per line, in render order
+  local i
+  { printf '%s' "$node_lines"
+    for ((i = 0; i < ${#row_txt[@]}; i++)); do
+      printf 'R\t%s\t%s\t%s\n' "$i" "${row_node[$i]}" "${row_sev[$i]}"
+    done
+  } | awk -F'\t' '
+    $1 == "N" { slug[$2] = $3; base[$2] = $4; rel[$2] = $5; nodes[++nn] = $2; next }
+    $1 == "D" { dep[$2, ++nd[$2]] = $3; next }
+    $1 == "R" { r = $2; rnode[r] = $3; rsev[r] = $4; rows[++nr] = r; nrows[$3]++; next }
+    function resolve(d, e,   k, n, hits) {   # edges blocker -> dependent e
+      gsub(/^[ \t]+|[ \t]+$/, "", d)
+      if (d ~ /\//) {
+        if (d !~ /^\//) d = "/" d
+        if (d !~ /\.md$/) d = d ".md"
+        for (k = 1; k <= nn; k++) if (rel[nodes[k]] == d) addedge(nodes[k], e)
+        return
+      }
+      sub(/\.md$/, "", d)
+      if (d == "") return
+      for (k = 1; k <= nn; k++) {
+        n = nodes[k]
+        if (slug[n] == slug[e] && (base[n] == d || index(base[n], d "-") == 1)) addedge(n, e)
+      }
+    }
+    function addedge(b, e) { if (!((b, e) in edge)) { edge[b, e] = 1; out[b, ++no[b]] = e } }
+    END {
+      for (k = 1; k <= nn; k++) { e = nodes[k]; for (j = 1; j <= nd[e]; j++) resolve(dep[e, j], e) }
+      # reach[s, t]: t is reachable from s. An edge whose dependent reaches its blocker is
+      # inside a cycle, and is dropped.
+      for (k = 1; k <= nn; k++) {
+        s = nodes[k]; h = 0; t = 0
+        for (j = 1; j <= no[s]; j++) { x = out[s, j]; if (!((s, x) in reach)) { reach[s, x] = 1; q[++t] = x } }
+        while (h < t) {
+          y = q[++h]
+          for (j = 1; j <= no[y]; j++) { x = out[y, j]; if (!((s, x) in reach)) { reach[s, x] = 1; q[++t] = x } }
+        }
+      }
+      for (k in edge) { split(k, p, SUBSEP); if (!((p[2], p[1]) in reach)) { kept[p[1], p[2]] = 1; blockers[p[2]]++ } }
+      # A task is cleared once every row of it and every blocker of it has rendered; a row
+      # is free once every blocker of its task is cleared. Of the free rows, the smallest
+      # (severity, glob position) renders next.
+      left = nr
+      while (left > 0) {
+        do {
+          moved = 0
+          for (k = 1; k <= nn; k++) {
+            n = nodes[k]
+            if (!(n in cleared) && nrows[n] + 0 == 0 && waiting(n) == 0) { cleared[n] = 1; moved = 1
+              for (j = 1; j <= no[n]; j++) if ((n, out[n, j]) in kept) pend[out[n, j]]++ }
+          }
+        } while (moved)
+        best = ""
+        for (j = 1; j <= nr; j++) {
+          r = rows[j]
+          if (r in done || waiting(rnode[r]) > 0) continue
+          if (best == "" || rsev[r] + 0 < rsev[best] + 0 || (rsev[r] + 0 == rsev[best] + 0 && r + 0 < best + 0)) best = r
+        }
+        if (best == "") for (j = 1; j <= nr; j++) if (!(rows[j] in done)) { best = rows[j]; break }
+        print best; done[best] = 1; nrows[rnode[best]]--; left--
+      }
+    }
+    function waiting(n) { return blockers[n] - pend[n] }
+  '
+}
+
+# Never drop a row and never print one twice: anything the sort did not return exactly
+# once, in range, renders in glob order instead.
+rows=""
+ord="$(order_rows 2>/dev/null)" || ord=""
+nrow=${#row_txt[@]}
+if [ "$(printf '%s\n' "$ord" | grep -cE '^[0-9]+$')" != "$nrow" ] \
+   || [ "$(printf '%s\n' "$ord" | grep -E '^[0-9]+$' | sort -un | awk -v n="$nrow" '$1 < n' | wc -l | tr -d ' ')" != "$nrow" ]; then
+  ord="$(seq 0 $((nrow - 1)) 2>/dev/null)"
+fi
+[ "$nrow" -gt 0 ] || ord=""
+while IFS= read -r i; do
+  [ -n "$i" ] && rows="$rows${row_txt[$i]}
+"
+done <<EOF
+$ord
+EOF
 
 n="$(printf '%s' "$rows" | grep -c '^\* ' || true)"
 body="$rows"

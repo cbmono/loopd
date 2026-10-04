@@ -50,6 +50,8 @@ bash "$SH" --instance "$B" \
   --merge "$B/projects/demo/tasks/task-004-d.md=[ai-bridge#7](https://github.com/cbmono/ai-bridge/pull/7)" \
   --trailer "$B/projects/demo/tasks/task-003-c.md=waiting on a host account" >/dev/null 2>&1
 
+# Rows are in severity order, not glob order (tests/awaiting-queue.test.sh pins the sort);
+# each row's bytes are unchanged.
 cat > "$TMP/want" <<'WANT'
 # Awaiting you
 
@@ -58,10 +60,10 @@ by each dispatch tick that changed something. Delete this file to turn the queue
 Last refreshed: <ISO>.
 
 ## 🔴 Awaiting you (5)
-* ✅ **approve** — [Clean draft](/projects/demo/tasks/task-001-a.md) · refined & clean, promote `draft → ready`
 * 🧰 **grant** — [Has questions](/projects/demo/tasks/task-002-b.md) · Q2: install the foo CLI
-* ❓ **answer** — [Has questions](/projects/demo/tasks/task-002-b.md) · Q1: which colour?
 * ⛔ **unblock** — [Stuck](/projects/demo/tasks/task-003-c.md) · waiting on a host account
+* ❓ **answer** — [Has questions](/projects/demo/tasks/task-002-b.md) · Q1: which colour?
+* ✅ **approve** — [Clean draft](/projects/demo/tasks/task-001-a.md) · refined & clean, promote `draft → ready`
 * 🔀 **merge** — [Green](/projects/demo/tasks/task-004-d.md) · [ai-bridge#7](https://github.com/cbmono/ai-bridge/pull/7)
 WANT
 sed -E 's/^Last refreshed: .*$/Last refreshed: <ISO>./' "$B/$AB_AWAITING" > "$TMP/got"
