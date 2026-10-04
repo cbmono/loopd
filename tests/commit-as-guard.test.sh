@@ -53,7 +53,7 @@ check() { # <name> <expected: allow|block> <role> <files-to-stage...>
     printf '  PASS  %-52s (%s, rc=%s)\n' "$name" "$got" "$rc"; pass=$((pass+1))
   else
     printf '  FAIL  %-52s expected %s got %s (rc=%s)\n' "$name" "$expect" "$got" "$rc"
-    printf '        output: %s\n' "$(printf '%s' "$out" | head -4 | tr '\n' '|')"
+    printf '        output: %s\n' "$(head -4 <<<"$out" | tr '\n' '|')"
     fail=$((fail+1))
   fi
   git reset -q --hard HEAD >/dev/null 2>&1 || true
@@ -168,7 +168,7 @@ raw() { # <name> <expected: allow|block> <role> [args...]
     printf '  PASS  %-52s (%s, rc=%s)\n' "$name" "$got" "$rc"; pass=$((pass+1))
   else
     printf '  FAIL  %-52s expected %s got %s (rc=%s)\n' "$name" "$expect" "$got" "$rc"
-    printf '        output: %s\n' "$(printf '%s' "$out" | head -4 | tr '\n' '|')"
+    printf '        output: %s\n' "$(head -4 <<<"$out" | tr '\n' '|')"
     fail=$((fail+1))
   fi
 }
@@ -283,17 +283,17 @@ rc_of() { # <name> <expected-rc> <role> [args...]
     printf '  PASS  %-52s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
   else
     printf '  FAIL  %-52s expected rc=%s got rc=%s\n' "$name" "$want" "$rc"
-    printf '        output: %s\n' "$(printf '%s' "$out" | head -4 | tr '\n' '|')"
+    printf '        output: %s\n' "$(head -4 <<<"$out" | tr '\n' '|')"
     fail=$((fail+1))
   fi
 }
 
 said() { # <name> <substring> — against the previous rc_of()'s output
-  if printf '%s' "$LAST_OUT" | grep -Fq -- "$2"; then
+  if grep -Fq -- "$2" <<<"$LAST_OUT"; then
     printf '  PASS  %-52s\n' "$1"; pass=$((pass+1))
   else
     printf '  FAIL  %-52s missing [%s] in: %s\n' "$1" "$2" \
-      "$(printf '%s' "$LAST_OUT" | head -4 | tr '\n' '|')"; fail=$((fail+1))
+      "$(head -4 <<<"$LAST_OUT" | tr '\n' '|')"; fail=$((fail+1))
   fi
 }
 
@@ -362,7 +362,7 @@ echo "== the nothing-staged guard is PER PATH, not all-or-nothing =="
 # named paths were silently dropped, and the caller was told it worked.
 
 not_said() { # <name> <substring> — against the previous rc_of()'s output
-  if printf '%s' "$LAST_OUT" | grep -Fq -- "$2"; then
+  if grep -Fq -- "$2" <<<"$LAST_OUT"; then
     printf '  FAIL  %-52s named [%s] but it was staged\n' "$1" "$2"; fail=$((fail+1))
   else
     printf '  PASS  %-52s\n' "$1"; pass=$((pass+1))

@@ -1326,7 +1326,7 @@ assert "an absolute filesystem path is dropped"       "$(fhasnt 'attacker' "$DOU
 # YAML comment, see the last fixture entry). Spelled the first way, this assertion read
 # green on a page that was leaking, which is worse than not having it at all.
 no_copy_value_with() { # <needle> <file>
-  ! grep -o 'data-copy="[^"]*"' "$2" | grep -qF -- "$1"
+  ! grep -qF -- "$1" <<<"$(grep -o 'data-copy="[^"]*"' "$2")"
 }
 assert "…and no /Users ANYWHERE inside a data-copy value" \
   "$(yes_if no_copy_value_with '/Users' "$DOUT")"
@@ -1540,7 +1540,7 @@ drift_case() { # <label> <snapshot json>
   local rc=0 out
   out="$(bash "$GEN" --out "$TMP/drift.html" "$TMP/alpha" "$TMP/drift" 2>&1)" || rc=$?
   assert "$1: exits 0"                           "$(eq "$rc" 0)"
-  assert "$1: no traceback"                      "$(printf '%s\n' "$out" | grep -qF Traceback && echo 1 || echo 0)"
+  assert "$1: no traceback"                      "$(grep -qF Traceback <<<"$out" && echo 1 || echo 0)"
   # alpha's own project, not the page title: with two instances on the board the title
   # is the generic "Bridge Board", so asserting on it would prove nothing about alpha.
   assert "$1: the healthy instance still renders" "$(fhas 'Live work' "$TMP/drift.html")"
@@ -1608,7 +1608,7 @@ assert "…while the http PR link beside it still works" "$(fhas 'href="https://
 
 echo "== flags =="
 assert "an unknown flag is refused"                  "$(yes_if bash -c "bash '$GEN' --nope 2>/dev/null; [ \$? -eq 2 ]")"
-assert "--help prints the header"                    "$(yes_if bash -c "bash '$GEN' --help 2>&1 | grep -q 'Artifact page body'")"
+assert "--help prints the header"                    "$(yes_if grep -q 'Artifact page body' <<<"$(bash "$GEN" --help 2>&1)")"
 
 echo "== --layout is REMOVED, and is refused by name =="
 # WHY A REFUSAL AND NOT AN IGNORED FLAG. Every caller that passed `--layout` was written
@@ -1619,7 +1619,7 @@ echo "== --layout is REMOVED, and is refused by name =="
 # line tells a human what happened instead of looking like a typo.
 for form in "--layout table" "--layout columns" "--layout=table" "--layout"; do
   assert "\`$form\` exits 2"                          "$(yes_if bash -c "bash '$GEN' $form --out '$TMP/x.html' '$TMP/alpha' 2>/dev/null; [ \$? -eq 2 ]")"
-  assert "…saying the flag was REMOVED"                "$(yes_if bash -c "bash '$GEN' $form --out '$TMP/x.html' '$TMP/alpha' 2>&1 >/dev/null | grep -q 'was removed'")"
+  assert "…saying the flag was REMOVED"                "$(yes_if grep -q 'was removed' <<<"$(bash "$GEN" $form --out "$TMP/x.html" "$TMP/alpha" 2>&1 >/dev/null)")"
 done
 assert "…and writes no page"                         "$(fhasnt x "$TMP/x.html" 2>/dev/null || echo 0)"
 # The rejected page is DELETED, not merely unreachable: nothing selects it and nothing
@@ -1632,7 +1632,7 @@ assert "…and no layout variable to select one"       "$(fhasnt 'BOARD_LAYOUT' 
 echo "== --standalone is wrapping, not markup =="
 SA="$TMP/sa.html"
 bash "$GEN" --standalone --out "$SA" "$TMP/alpha" >/dev/null 2>&1
-assert "--standalone opens with a doctype"           "$(yes_if sh -c 'head -1 "$1" | grep -qF "<!doctype html>"' _ "$SA")"
+assert "--standalone opens with a doctype"           "$(yes_if grep -qF '<!doctype html>' <<<"$(head -1 "$SA")")"
 assert "…with exactly one <body>"                    "$(eq "$(grep -cF '<body>' "$SA")" 1)"
 assert "…the <style> in <head> and the board in <body>" "$(yes_if python3 -c "
 import sys
@@ -1701,7 +1701,7 @@ printf 'scripts/build-board.sh --out "$out" --layout table\n'             > "$FI
 printf 'the tick runs `scripts/build-board.sh --layout\ntable` and publishes\n' > "$FIX/docs/c.md"
 FOUND="$(layout_callers "$FIX")"
 for f in docs/a.md b.sh docs/c.md; do
-  assert "…flags a planted caller in $f" "$(printf '%s\n' "$FOUND" | grep -qx -- "$f" && echo 0 || echo 1)"
+  assert "…flags a planted caller in $f" "$(grep -qx -- "$f" <<<"$FOUND" && echo 0 || echo 1)"
 done
 # …and does NOT flag the two shapes that are not callers, or the guard is just a ban on
 # the string and the header explaining the removal could never be written.

@@ -69,7 +69,7 @@ ok "tick has a step 0 sync section"       "$([ -n "$S0" ]   && echo yes || echo 
 ok "tick has a step 8 sync paragraph"     "$([ -n "$PUSH" ] && echo yes || echo no)" yes
 ok "launcher has the sync guardrail bullet" "$([ -n "$G" ]  && echo yes || echo no)" yes
 
-in_str() { printf '%s' "$1" | grep -qF -- "$2" && echo yes || echo no; } # <text> <needle>
+in_str() { grep -qF -- "$2" <<<"$1" && echo yes || echo no; } # <text> <needle>
 
 # =================================================================================
 # Property 1 — a bundle WITH a remote pulls --rebase before re-deriving state
@@ -221,8 +221,8 @@ S0FILES="$(step0_mentioning_files)"
 # on-demand step — so "exactly two files" becomes "the tick's own files and the launcher,
 # nothing else". Asserted as a count of STRANGERS, which is the property: a third document
 # describing step 0 is the drift this catches, and a new step file is not one.
-ok "…the tick's core names it"  "$(printf '%s\n' "$S0FILES" | grep -qx 'plugin/agents/project-manager.md' && echo yes || echo no)" yes
-ok "…and the launcher does"     "$(printf '%s\n' "$S0FILES" | grep -qx 'plugin/skills/dispatch/SKILL.md' && echo yes || echo no)" yes
+ok "…the tick's core names it"  "$(grep -qx 'plugin/agents/project-manager.md' <<<"$S0FILES" && echo yes || echo no)" yes
+ok "…and the launcher does"     "$(grep -qx 'plugin/skills/dispatch/SKILL.md' <<<"$S0FILES" && echo yes || echo no)" yes
 ok "…and nothing outside those and the tick-step files" \
    "$(printf '%s\n' "$S0FILES" | grep -vx 'plugin/agents/project-manager.md' \
       | grep -vx 'plugin/skills/dispatch/SKILL.md' | grep -vc '^plugin/tick-steps/' | tr -d ' ')" 0
@@ -231,8 +231,8 @@ ok "…and nothing outside those and the tick-step files" \
 # The path is READ OUT OF the scratch rule rather than spelled here, so renaming the
 # scratch directory moves this probe with it instead of quietly retiring it.
 # shellcheck disable=SC2016  # the backticks are markdown in the rule, not a substitution
-SCRATCH="$(sed -n 's/^.*Scratch files go in `<worktree>\/\([^`]*\)`.*$/\1/p' \
-           "$REPO/plugin/seed/CONVENTIONS.md" | head -1)"; SCRATCH="${SCRATCH%/}"
+SCRATCH="$(head -1 <<<"$(sed -n 's/^.*Scratch files go in `<worktree>\/\([^`]*\)`.*$/\1/p' \
+           "$REPO/plugin/seed/CONVENTIONS.md")")"; SCRATCH="${SCRATCH%/}"
 if [ -z "$SCRATCH" ] || ! g check-ignore -q -- "$SCRATCH/probe.md"; then
   echo "shared-bundle-sync.test: no ignored scratch path in plugin/seed/CONVENTIONS.md" >&2; exit 2
 fi
@@ -319,14 +319,14 @@ ok "…and the untracked exclusion FAILS when the flag is dropped" \
 # --- ORDER, not just presence -----------------------------------------------------
 # Both commands being present says nothing about which runs first, and the whole
 # guard is the ordering: status THEN pull. Compare line numbers inside step 0.
-s0_status_ln="$(printf '%s\n' "$S0" | grep -n -- 'git status --porcelain --untracked-files=no' | head -1 | cut -d: -f1)"
-s0_pull_ln="$(printf '%s\n' "$S0" | grep -n -- 'git pull --rebase origin' | head -1 | cut -d: -f1)"
+s0_status_ln="$(head -1 <<<"$(printf '%s\n' "$S0" | grep -n -- 'git status --porcelain --untracked-files=no')" | cut -d: -f1)"
+s0_pull_ln="$(head -1 <<<"$(printf '%s\n' "$S0" | grep -n -- 'git pull --rebase origin')" | cut -d: -f1)"
 ok "step 0: the tree check comes BEFORE the pull" \
    "$([ -n "$s0_status_ln" ] && [ -n "$s0_pull_ln" ] && [ "$s0_status_ln" -lt "$s0_pull_ln" ] && echo yes || echo no)" yes
 # Step 8 must re-check the tree itself rather than assuming the commit cleaned it:
 # commit-as.sh commits only NAMED paths, so a sibling agent's edits survive it.
-p8_status_ln="$(printf '%s\n' "$PUSH" | grep -n -- 'git status --porcelain --untracked-files=no' | head -1 | cut -d: -f1)"
-p8_pull_ln="$(printf '%s\n' "$PUSH" | grep -n -- 'git pull --rebase origin' | head -1 | cut -d: -f1)"
+p8_status_ln="$(head -1 <<<"$(printf '%s\n' "$PUSH" | grep -n -- 'git status --porcelain --untracked-files=no')" | cut -d: -f1)"
+p8_pull_ln="$(head -1 <<<"$(printf '%s\n' "$PUSH" | grep -n -- 'git pull --rebase origin')" | cut -d: -f1)"
 ok "step 8: re-checks the tree itself" \
    "$([ -n "$p8_status_ln" ] && echo yes || echo no)" yes
 ok "step 8: that check comes BEFORE its pull" \
@@ -340,8 +340,8 @@ ok "step 0: forbids git clean as the response" \
    "$(in_str "$S0" 'never delete the untracked file')" yes
 # Non-vacuity for the ordering checks.
 swapped="$(printf '%s\n' 'git pull --rebase origin main'; printf '%s\n' 'git status --porcelain --untracked-files=no')"
-sw_a="$(printf '%s\n' "$swapped" | grep -n -- 'git status --porcelain --untracked-files=no' | head -1 | cut -d: -f1)"
-sw_b="$(printf '%s\n' "$swapped" | grep -n -- 'git pull --rebase origin' | head -1 | cut -d: -f1)"
+sw_a="$(head -1 <<<"$(printf '%s\n' "$swapped" | grep -n -- 'git status --porcelain --untracked-files=no')" | cut -d: -f1)"
+sw_b="$(head -1 <<<"$(printf '%s\n' "$swapped" | grep -n -- 'git pull --rebase origin')" | cut -d: -f1)"
 ok "…and the order check FAILS when the two are swapped" \
    "$([ "$sw_a" -lt "$sw_b" ] && echo yes || echo no)" no
 ok "…and the fence carries a language (MD040)" \

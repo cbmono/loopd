@@ -1193,7 +1193,7 @@ assert "…including the fragments after its commas" \
 # claim rather than repeating it — the two comments must be byte-identical, and a
 # SCHEMA.md edit that changes the shape of the documented form fails here rather than
 # leaving this fixture quietly testing a form nothing documents.
-doc_comment() { sed -n 's/^deliverable_paths:[^#]*#/#/p' "$1" | head -1; }
+doc_comment() { head -1 <<<"$(sed -n 's/^deliverable_paths:[^#]*#/#/p' "$1")"; }
 SCHEMA_DP_COMMENT="$(doc_comment "$TPL/plugin/seed/SCHEMA.md")"
 # Non-emptiness first, or the comparison below passes on two empty strings the day
 # SCHEMA.md's documented form loses its comment — which is the same failure this whole
@@ -1411,7 +1411,7 @@ PYC
 }
 for n in 1 2 3; do
   assert "writer through renderer: question Q$n gets its own handle" \
-    "$(card_of "$HTML" 'Question shapes' | grep -qF "answer Q$n</button>" && echo 0 || echo 1)"
+    "$(grep -qF "answer Q$n</button>" <<<"$(card_of "$HTML" 'Question shapes')" && echo 0 || echo 1)"
 done
 # SCOPED TO THAT TASK'S ROW, not to the card: the same project holds other tasks with
 # questions of their own, so a card-wide count measures the fixture rather than the task.
@@ -1438,7 +1438,7 @@ sys.exit(0 if t["open_questions"]==3 else 1)' "$SNAP")"
 # THE HONEST PATH, END TO END TOO: the other task's question names no number, and the
 # page says so rather than calling it Q1.
 assert "…while the unnumbered question keeps the honest control" \
-  "$(card_of "$HTML" 'Question shapes' | grep -qF 'answer question</button>' && echo 0 || echo 1)"
+  "$(grep -qF 'answer question</button>' <<<"$(card_of "$HTML" 'Question shapes')" && echo 0 || echo 1)"
 assert "…and no Q1 is invented for it" "$(yes_if python3 -c '
 import re,sys
 t=open(sys.argv[1],encoding="utf-8").read()
@@ -1487,7 +1487,7 @@ assert "…and the absolute path in its comment reaches no page"  "$(fhasnt "$SE
 # of a value whose first characters are a perfectly good bundle-relative prefix. Spelled
 # the first way, this assertion passed on a page that was leaking.
 no_copy_value_with() { # <needle> <file>
-  ! grep -o 'data-copy="[^"]*"' "$2" | grep -qF -- "$1"
+  ! grep -qF -- "$1" <<<"$(grep -o 'data-copy="[^"]*"' "$2")"
 }
 assert "…nor any /Users path ANYWHERE inside something to copy" \
   "$(yes_if no_copy_value_with '/Users' "$HTML")"
@@ -1666,7 +1666,7 @@ assert "…and no <body> tag"              "$(fhasnt '<body' "$HTML")"
 assert "…but it does carry a <title>"    "$(fhas '<title>Bridge Board</title>' "$HTML")"
 SA="$TMP/standalone.html"
 ( cd "$TMP" && bash "$BOARD" --standalone --out "$SA" "$ALPHA" ) >/dev/null 2>&1
-assert "--standalone opens with a doctype" "$(yes_if sh -c 'head -1 "$1" | grep -qF "<!doctype html>"' _ "$SA")"
+assert "--standalone opens with a doctype" "$(yes_if grep -qF '<!doctype html>' <<<"$(head -1 "$SA")")"
 assert "…and the content sits in <body>, not <head>" "$(yes_if python3 -c '
 import sys,re
 t=open(sys.argv[1]).read()

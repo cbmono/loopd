@@ -48,7 +48,7 @@ run() { # <fixture> [extra args…] — sets $RC and $OUT. Never behind $( ), wh
   OUT="$("$CITE" --text-file "$FIX/$f" --brief "$BRIEF" --index "$FIX/index.md" "$@" 2>&1)"
   RC=$?
 }
-saw() { printf '%s\n' "$OUT" | grep -Fq -- "$1" && echo yes || echo no; }
+saw() { grep -Fq -- "$1" <<<"$OUT" && echo yes || echo no; }
 in_file() { grep -Fq -- "$2" "$1" && echo yes || echo no; }
 
 echo "== the three fixtures =="
@@ -76,13 +76,13 @@ echo "== --strip prints the text with only the carried ids left =="
 STRIPPED="$("$CITE" --text-file "$FIX/one-invented.md" --brief "$BRIEF" \
             --index "$FIX/index.md" --strip 2>/dev/null)"
 ok "the carried id survives"      \
-   "$(printf '%s' "$STRIPPED" | grep -Fq '[[worktree-isolation-spike]]' && echo yes || echo no)" yes
+   "$(grep -Fq '[[worktree-isolation-spike]]' <<<"$STRIPPED" && echo yes || echo no)" yes
 ok "the fabricated id is gone"    \
-   "$(printf '%s' "$STRIPPED" | grep -Fq 'a-worktree-finding-that-does-not-exist' && echo yes || echo no)" no
+   "$(grep -Fq 'a-worktree-finding-that-does-not-exist' <<<"$STRIPPED" && echo yes || echo no)" no
 ok "the unread id is gone"        \
-   "$(printf '%s' "$STRIPPED" | grep -Fq 'stale-local-main-is-not' && echo yes || echo no)" no
+   "$(grep -Fq 'stale-local-main-is-not' <<<"$STRIPPED" && echo yes || echo no)" no
 ok "the prose around them is untouched" \
-   "$(printf '%s' "$STRIPPED" | grep -Fq 'The base branch was read from the host' && echo yes || echo no)" yes
+   "$(grep -Fq 'The base branch was read from the host' <<<"$STRIPPED" && echo yes || echo no)" yes
 
 echo
 echo "== non-vacuity: the two inputs that decide the verdict really decide it =="

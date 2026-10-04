@@ -219,7 +219,7 @@ echo "== 2. nothing in scope tells a reader to RUN install.sh or upgrade.sh =="
 # from the sentence.
 found="$(imperatives "$REPO")"
 ok "no surviving instruction to run either retired script" \
-   "$([ -z "$found" ] && echo none || printf '%s' "$found" | head -3 | tr '\n' ' ')" none
+   "$([ -z "$found" ] && echo none || head -3 <<<"$found" | tr '\n' ' ')" none
 
 # The frontmatter carve-out, both directions, on the real file that motivated it. Without
 # `body_lines` the first of these is 2 — the `paths:` globs — and adding `.claude/` to the
@@ -320,7 +320,7 @@ pm_hits() { # <root>
 
 pm_found="$(pm_hits "$REPO")"
 ok "no /pm-loop mention in README.md, docs/ or plugin/" \
-   "$([ -z "$pm_found" ] && echo none || printf '%s' "$pm_found" | head -3 | tr '\n' ' ')" none
+   "$([ -z "$pm_found" ] && echo none || head -3 <<<"$pm_found" | tr '\n' ' ')" none
 ok "…and plugin/ carries none, counted as the criterion counts it" \
    "$( ( cd "$REPO" && grep -r 'pm-loop' plugin/ 2>/dev/null | wc -l ) | tr -d ' ' )" 0
 
@@ -446,11 +446,11 @@ stub_hits() { # <root>
 
 claims="$(claim_hits "$REPO")"
 ok "no present-tense symlinked/shared/identical claim in scope" \
-   "$([ -z "$claims" ] && echo none || printf '%s' "$claims" | cut -d: -f1-2 | head -3 | tr '\n' ' ')" none
+   "$([ -z "$claims" ] && echo none || head -3 <<<"$(printf '%s' "$claims" | cut -d: -f1-2)" | tr '\n' ' ')" none
 
 stubs="$(stub_hits "$REPO")"
 ok "no live /${PN}: command is called a deprecation stub" \
-   "$([ -z "$stubs" ] && echo none || printf '%s' "$stubs" | cut -d: -f1-2 | head -3 | tr '\n' ' ')" none
+   "$([ -z "$stubs" ] && echo none || head -3 <<<"$(printf '%s' "$stubs" | cut -d: -f1-2)" | tr '\n' ' ')" none
 
 # =======================================================================================
 echo

@@ -194,7 +194,7 @@ RC=0
 OUT="$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
        "$SCRIPT" project-manager "test: none" -- mine.txt 2>&1)" || RC=$?
 assert "no email anywhere -> refuses"   "$([[ $RC -ne 0 ]] && echo 0 || echo 1)"
-assert "…and names the local file too"  "$(printf '%s\n' "$OUT" | grep -q 'instance.config.local.json' && echo 0 || echo 1)"
+assert "…and names the local file too"  "$(grep -q 'instance.config.local.json' <<<"$OUT" && echo 0 || echo 1)"
 
 echo
 echo "== the tracked people map: one line per clone, addresses recorded once =="
@@ -313,8 +313,8 @@ assert "…and says it is an example"           \
 assert "…and says placeholders must be verified unclaimed" \
   "$(grep -q 'VERIFIED UNCLAIMED' "$TPL/plugin/seed/instance.config.json" && echo 0 || echo 1)"
 assert "…and every address is at example.com" \
-  "$(grep -oE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+' "$TPL/plugin/seed/instance.config.json" \
-     | grep -vE '@example\.com$' | grep -q . && echo 1 || echo 0)"
+  "$(grep -q . <<<"$(grep -oE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+' "$TPL/plugin/seed/instance.config.json" \
+     | grep -vE '@example\.com$')" && echo 1 || echo 0)"
 # Plausible names are taken: these are real GitHub accounts and must never be examples.
 assert "…and names no live account (alice/bob/jane-doe)" \
   "$(grep -qE '"(alice|bob|jane-doe)"' "$TPL/plugin/seed/instance.config.json" && echo 1 || echo 0)"

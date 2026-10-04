@@ -65,7 +65,7 @@ ok "every surface rendered (absent run reached the board)" \
 ok "no surface emits the key" "$(grep -c '"timebox\|timebox:' "$TMP/weeks.out")" 0
 for v in weeks days empty; do
   ok "timebox ($v) renders byte-identically to absent" \
-    "$(cmp -s "$TMP/absent.out" "$TMP/$v.out" && echo same || { diff "$TMP/absent.out" "$TMP/$v.out" | head -5 >&2; echo differs; })" same
+    "$(cmp -s "$TMP/absent.out" "$TMP/$v.out" && echo same || { head -5 >&2 <<<"$(diff "$TMP/absent.out" "$TMP/$v.out")"; echo differs; })" same
 done
 ok "allow half: status: paused DOES move the render" \
   "$(cmp -s "$TMP/absent.out" "$TMP/paused.out" && echo same || echo differs)" differs

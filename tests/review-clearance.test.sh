@@ -214,7 +214,7 @@ expect() { # <name> <expected-rc> [args to the script...]
     printf '  PASS  %-58s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
   else
     printf '  FAIL  %-58s expected rc=%s got rc=%s\n' "$name" "$want" "$rc"
-    printf '        output: %s\n' "$(printf '%s' "$out" | head -3 | tr '\n' '|')"
+    printf '        output: %s\n' "$(head -3 <<<"$out" | tr '\n' '|')"
     fail=$((fail+1))
   fi
   LAST_OUT="$out"
@@ -229,17 +229,17 @@ expect_recorded() { # <name> <expected-rc> <pr-number> [args to the script...]
     printf '  PASS  %-58s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
   else
     printf '  FAIL  %-58s expected rc=%s got rc=%s\n' "$name" "$want" "$rc"
-    printf '        output: %s\n' "$(printf '%s' "$out" | head -3 | tr '\n' '|')"
+    printf '        output: %s\n' "$(head -3 <<<"$out" | tr '\n' '|')"
     fail=$((fail+1))
   fi
   LAST_OUT="$out"
 }
 
 says() { # <name> <substring> — against the previous expect()'s output
-  if printf '%s' "$LAST_OUT" | grep -Fq "$2"; then
+  if grep -Fq "$2" <<<"$LAST_OUT"; then
     printf '  PASS  %-58s\n' "$1"; pass=$((pass+1))
   else
-    printf '  FAIL  %-58s missing %s in: %s\n' "$1" "$2" "$(printf '%s' "$LAST_OUT" | head -2 | tr '\n' '|')"
+    printf '  FAIL  %-58s missing %s in: %s\n' "$1" "$2" "$(head -2 <<<"$LAST_OUT" | tr '\n' '|')"
     fail=$((fail+1))
   fi
 }
@@ -1202,7 +1202,7 @@ done
 assert "the banner marker really is in the recorded clean review" \
   "$(yes_if grep -Fq '<!-- review_stack_entry_start -->' "$CLEAN")"
 assert "…and what it wraps really is a promotion, not a review section" \
-  "$(yes_if bash -c 'grep -A3 -F "<!-- review_stack_entry_start -->" "$1" | grep -q "utm_campaign"' _ "$CLEAN")"
+  "$(yes_if grep -q 'utm_campaign' <<<"$(grep -A3 -F '<!-- review_stack_entry_start -->' "$CLEAN")")"
 setup "$CLEAN_HEAD"
 add_comment coderabbitai "$(body_file '<!-- review_stack_entry_start -->' \
   "between 6fca618a and $CLEAN_HEAD")"
@@ -1526,7 +1526,7 @@ echo "== ...and that it is COMPLETE, which running does not prove =="
 # sentinel, 112 of its 606 truncation points passed the self-test and 109 of those went on
 # to CLEAR an unreviewed PR. The old truncation case cut at `head -c 400` — inside the
 # header comment — so it could not see the class at all.
-SELFTEST_LINE="$(grep -n -- '--self-test" \]; then' "$SCRIPT" | head -1 | cut -d: -f1)"
+SELFTEST_LINE="$(head -1 <<<"$(grep -n -- '--self-test" \]; then' "$SCRIPT")" | cut -d: -f1)"
 TOTAL_LINES="$(wc -l < "$SCRIPT" | tr -d ' ')"
 assert "the self-test block is found, and is not the whole file" \
   "$([ -n "$SELFTEST_LINE" ] && [ "$SELFTEST_LINE" -lt "$TOTAL_LINES" ] && echo 0 || echo 1)"
@@ -1579,11 +1579,11 @@ break_row() { # <name> <sed expression that corrupts a row> [args to the script.
   setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"; write_pr
   local out rc
   out="$("$broken" 42 "$@" 2>&1)"; rc=$?
-  if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -Fq "not valid POSIX ERE"; then
+  if [ "$rc" -eq 2 ] && grep -Fq "not valid POSIX ERE" <<<"$out"; then
     printf '  PASS  %-58s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
   else
     printf '  FAIL  %-58s expected rc=2 + the ERE complaint, got rc=%s: %s\n' \
-      "$name" "$rc" "$(printf '%s' "$out" | head -2 | tr '\n' '|')"
+      "$name" "$rc" "$(head -2 <<<"$out" | tr '\n' '|')"
     fail=$((fail+1))
   fi
 }
@@ -1927,7 +1927,7 @@ setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
 add_thread false 'z.sh' 1 coderabbitai "$CR_URL" "$(printf 'esc\033[2Jhere')"
 expect "a thread body carrying an escape sequence -> 6" 6
 assert "  ...and the escape byte never reaches the terminal" \
-  "$(printf '%s' "$LAST_OUT" | grep -q "$(printf '\033')" && echo 1 || echo 0)"
+  "$(grep -q "$(printf '\033')" <<<"$LAST_OUT" && echo 1 || echo 0)"
 
 echo
 echo "== clause 9 is the LAST question, and it fails closed on what it cannot read =="
@@ -1979,9 +1979,9 @@ ROUNDS="$SCRIPTS/review-rounds.sh"
 assert "review-rounds.sh has no un-updated 1|3|4|5 arm left" \
   "$([ "$(grep -cE '^\s*1\|3\|4\|5\)' "$ROUNDS")" = 0 ] && echo 0 || echo 1)"
 assert "...and both non-counting arms list 8 — a skip notice is not a round" \
-  "$(grep -cE '^\s*1\|3\|4\|5\|8\)' "$ROUNDS" | grep -qx 2 && echo 0 || echo 1)"
+  "$(grep -qx 2 <<<"$(grep -cE '^\s*1\|3\|4\|5\|8\)' "$ROUNDS")" && echo 0 || echo 1)"
 assert "...and both of its counting arms accept 6 as a completed round" \
-  "$(grep -cE '^\s*0\|6\)' "$ROUNDS" | grep -qx 2 && echo 0 || echo 1)"
+  "$(grep -qx 2 <<<"$(grep -cE '^\s*0\|6\)' "$ROUNDS")" && echo 0 || echo 1)"
 assert "required-checks.sh tells a 6 not to request another review" \
   "$(grep -q 'do NOT request another one' "$SCRIPTS/required-checks.sh" && echo 0 || echo 1)"
 # The code is documented where a caller reads it, not only where it is raised.
@@ -2073,8 +2073,8 @@ echo "== the third part of the three-part change: the callers know code 7 =="
 # conflict today is not an answer. Both of its call sites must pass it or every
 # conflicting PR reports "the round count is unknown".
 assert "review-rounds.sh passes --no-merge-check at both call sites" \
-  "$(grep -vE '^[[:space:]]*#' "$ROUNDS" | grep -c -- '--no-merge-check' \
-     | grep -qx 2 && echo 0 || echo 1)"
+  "$(grep -qx 2 <<<"$(grep -vE '^[[:space:]]*#' "$ROUNDS" | grep -c -- '--no-merge-check')" \
+     && echo 0 || echo 1)"
 assert "required-checks.sh tells a 7 to rebase, not to request a review" \
   "$(grep -q 'CONFLICTS with its base' "$SCRIPTS/required-checks.sh" && echo 0 || echo 1)"
 assert "the exit-code table documents 7" \
@@ -2145,7 +2145,7 @@ assert "…and dispatches only on its exit 3" \
 
 assert "nothing in the script stores a mergeability answer" \
   "$(grep -qE 'mergeab|mergeState' "$SCRIPT" && \
-     ! grep -vE '^[[:space:]]*#' "$SCRIPT" | grep -qE '(cache|CACHE)[^)]*merge' && echo 0 || echo 1)"
+     ! grep -qE '(cache|CACHE)[^)]*merge' <<<"$(grep -vE '^[[:space:]]*#' "$SCRIPT")" && echo 0 || echo 1)"
 
 echo
 echo "== an ACKNOWLEDGEMENT is not a review =="
@@ -2267,7 +2267,7 @@ expect "…while an ack for an EARLIER head still asks at this one" 8
 # there, the skip notice answers 8 on every tick and the caller re-spends the quota every
 # tick. The comment's own created_at against the head commit's date is what binds it.
 assert "the recorded acknowledgement names no commit at all" \
-  "$(yes_if bash -c '! tr -c "0-9A-Za-z_-" "\n" < "$1" | grep -Eqx "[0-9a-fA-F]{7,40}"' _ "$ACK")"
+  "$(yes_if bash -c '! grep -Eqx "[0-9a-fA-F]{7,40}" <<<"$(tr -c "0-9A-Za-z_-" "\n" < "$1")"' _ "$ACK")"
 setup "$CLEAN_HEAD" 2026-09-15T00:10:00Z
 add_comment coderabbitai "$SKIP"; add_comment_at coderabbitai 2026-09-15T00:11:44Z "$ACK"
 expect "a SHA-LESS ack posted at this head -> hold, not ask again every tick" 1
@@ -2403,7 +2403,7 @@ while read -r id was now; do
     continue
   fi
   if [ "$was" = 0 ] && [ "$rc" != 0 ] \
-     && ! printf ' %s ' "$CHANGED" | grep -Fq " $id "; then
+     && ! grep -Fq " $id " <<<"$(printf ' %s ' "$CHANGED")"; then
     printf '  FAIL  %-58s cleared before and refuses now, unannounced\n' "$id"; fail=$((fail+1))
     continue
   fi

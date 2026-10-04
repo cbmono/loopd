@@ -140,7 +140,7 @@ ok "a failing read renders ?, never 0"    "$(FAIL=1 sl | seg)" "agents ?"
 ok "…and so does malformed JSON"          "$(FIXTURE="$TMP/bad.json" sl | seg)" "agents ?"
 ok "an empty list is 0 running"           "$(FIXTURE="$TMP/empty.json" sl | seg)" "agents 0 running"
 ok "the line is still one line"           "$(sl | wc -l | tr -d ' ')" 1
-sgr() { printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p' | head -n1; }
+sgr() { head -n1 <<<"$(printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p')"; }
 ok "unknown is a warning, so pink"        "$(sgr "$(C=always FAIL=1 sl)" 'agents ?')" 95
 ok "a session with no process is pink"    "$(sgr "$(C=always sl)" 'agents 2')" 95
 
@@ -148,7 +148,7 @@ echo "== 6. the read is cached and shared, so N sessions do not each pay for it 
 rm -rf "$XDG_CACHE_HOME"; : > "$CALLS"
 for _ in 1 2 3; do PATH="$P" bash "$SL" --instance "$B" --color never </dev/null >/dev/null 2>&1; done
 ok "three renders inside the TTL ⇒ one claude call" "$(wc -l < "$CALLS" | tr -d ' ')" 1
-CF="$(ls "$XDG_CACHE_HOME"/loopd/agents-* 2>/dev/null | head -1)"
+CF="$(head -1 <<<"$(ls "$XDG_CACHE_HOME"/loopd/agents-* 2>/dev/null)")"
 printf '1 9 9\n' > "$CF"; : > "$CALLS"
 ok "a stale cache is re-read, not shown" \
    "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "agents 2 running, 3 no process"

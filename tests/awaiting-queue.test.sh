@@ -152,8 +152,8 @@ check() { # <name> <expected-item-count: 0 = the awaiting SECTION must be absent
   else
     printf '  FAIL  %-52s expected %s item(s) rc=0 err="" (silent=%s, human=%s%s), got %s (rc=%s, err=%s)\n' \
       "$name" "$expect" "$silent_ok" "$human_ok" "${human_why:+: $human_why}" "$got" "$RC" "${ERR:-none}"
-    printf '        model: %s\n' "$(printf '%s' "$MODEL" | head -4 | tr '\n' '|')"
-    printf '        human: %s\n' "$(printf '%s' "$HUMAN" | head -4 | tr '\n' '|')"
+    printf '        model: %s\n' "$(head -4 <<<"$MODEL" | tr '\n' '|')"
+    printf '        human: %s\n' "$(head -4 <<<"$HUMAN" | tr '\n' '|')"
     fail=$((fail+1))
   fi
 }

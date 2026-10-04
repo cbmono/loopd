@@ -299,7 +299,7 @@ assert "an ESC title arrives as inert text"     "$(has 'ANSITITLE[2J[31mPAYLOAD'
 # the two halves land on the SAME line is what proves the newline could not split it.
 FORGED_LINE="$(printf '%s\n' "$OUT" | grep -F 'FORGEDROW' || true)"
 assert "a newline in a title cannot forge a row" "$(has 'ROWA FORGEDROW' "$FORGED_LINE")"
-assert "…and that row still starts with the instance" "$(yes_if sh -c 'printf "%s" "$1" | grep -q "^delta "' _ "$FORGED_LINE")"
+assert "…and that row still starts with the instance" "$(yes_if grep -q '^delta ' <<<"$FORGED_LINE")"
 assert "a tab in a title cannot forge a column"  "$(has 'COLA COLB' "$OUT")"
 assert "…and no tab survives into the output"    "$(hasnt "$(printf '\t')" "$OUT")"
 assert "a bidi override is stripped"             "$(hasnt "$(printf '\342\200\256')" "$OUT")"
@@ -340,7 +340,7 @@ echo
 echo "== print-board: a narrow terminal degrades, and no NUMBER is ever clipped =="
 WIDE="$( cd "$ALPHA" && bash "$PRINT" --width 0 "$ALPHA" 2>/dev/null )"
 assert "unlimited width prints the table"          "$(has 'INSTANCE  PROJECT' "$WIDE")"
-assert "…with every enum column"                   "$(yes_if sh -c 'printf "%s" "$1" | grep -q "DRAFT READY PROG REVIEW BLOCK DONE CANC"' _ "$WIDE")"
+assert "…with every enum column"                   "$(yes_if grep -q 'DRAFT READY PROG REVIEW BLOCK DONE CANC' <<<"$WIDE")"
 assert "…and an unclipped long title (a pipe is not narrow)" "$(has 'LONGTITLE-a-deliberately-overlong-project-name-that-no-terminal-width-leaves-intact-END' "$WIDE")"
 N80="$( cd "$ALPHA" && bash "$PRINT" --width 80 "$ALPHA" 2>/dev/null )"
 assert "at 80 columns it is still a table"         "$(has 'INSTANCE' "$N80")"
@@ -401,7 +401,7 @@ drift_case "a task is a string, not an object" \
 printf '%s\n' '{"group":5,"counts":{"tasks":1},"projects":[{"slug":"p","title":"Drifted","status":"active","tasks":[]}]}' > "$DRIFT/$AB_SNAPSHOT"
 D5="$( cd "$ALPHA" && bash "$PRINT" --width 0 "$ALPHA" "$DRIFT" 2>/dev/null )"
 assert "a non-string group becomes the row's instance cell" \
-  "$(yes_if sh -c 'printf "%s\n" "$1" | grep -q "^5  *Drifted"' _ "$D5")"
+  "$(yes_if grep -q '^5  *Drifted' <<<"$D5")"
 rm -rf "$DRIFT"
 
 echo
@@ -456,7 +456,7 @@ PAGE="$ALPHA/$AB_BOARD_DIR/board.html"
 assert "exits 0"                                  "$(eq "$O_RC" 0)"
 assert "…and says what it rendered"               "$(has 'rendered' "$O_OUT")"
 assert "the page is written"                      "$(yes_if test -s "$PAGE")"
-assert "…as a standalone document, openable directly" "$(yes_if sh -c 'head -1 "$1" | grep -qF "<!doctype html>"' _ "$PAGE")"
+assert "…as a standalone document, openable directly" "$(yes_if grep -qF '<!doctype html>' <<<"$(head -1 "$PAGE")")"
 assert "…rendering the healthy instance"          "$(fhas 'CI hardening' "$PAGE")"
 assert "…and the malformed one as a visible note" "$(fhas 'Unreadable snapshot' "$PAGE")"
 assert "an instance with no snapshot is absent"   "$(fhasnt '_ai-bridge-gamma' "$PAGE")"
@@ -656,8 +656,8 @@ echo "== a fresh instance is named by its directory, not \".\" =="
 # instance ".". Asserted here for BOTH of them, even though tests/snapshot.test.sh owns
 # the HTML board otherwise: the fallback is shared, and it was fixed in one change.
 FRESH_TTY="$( cd "$INST" && bash "$PRINT" --width 0 2>/dev/null )"
-assert "the terminal board names the instance"     "$(yes_if sh -c 'printf "%s\n" "$1" | grep -q "^stamped "' _ "$FRESH_TTY")"
-assert "…and never labels a row \".\""              "$(yes_if sh -c 'printf "%s\n" "$1" | grep -qv "^\. "' _ "$FRESH_TTY")"
+assert "the terminal board names the instance"     "$(yes_if grep -q '^stamped ' <<<"$FRESH_TTY")"
+assert "…and never labels a row \".\""              "$(yes_if grep -qv '^\. ' <<<"$FRESH_TTY")"
 ( cd "$INST" && bash "$BOARD" --out "$TMP/fresh.html" >/dev/null 2>&1 )
 # The HTML board puts the name in its masthead, title-cased ("stamped" -> "Stamped").
 # The "." bug shows there as a LEADING SPACE, not as a dot: the title is built from

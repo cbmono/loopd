@@ -880,12 +880,12 @@ echo "--- the two statuses the review caught, which this suite had missed ------
 ctl arm >/dev/null 2>&1
 OUT="$(ctl disarm 2>&1)"; RC=$?
 ok "disarm with NOTHING pending exits 0"               "$RC" 0
-ok "…and still says it disarmed"                     "$(printf '%s' "$OUT" | grep -qi disarmed && echo yes || echo no)" yes
+ok "…and still says it disarmed"                     "$(grep -qi disarmed <<<"$OUT" && echo yes || echo no)" yes
 # And the non-vacuity partner: with something pending it must still exit 0 AND say so.
 ctl gate B9 --reason x >/dev/null 2>&1
 OUT="$(ctl disarm 2>&1)"; RC=$?
 ok "disarm WITH a pending directive exits 0"           "$RC" 0
-ok "…and reports what went with it"                  "$(printf '%s' "$OUT" | grep -q "pending directive" && echo yes || echo no)" yes
+ok "…and reports what went with it"                  "$(grep -q "pending directive" <<<"$OUT" && echo yes || echo no)" yes
 
 # The cap refused a REPLACEMENT, which cannot grow the queue — blocking exactly the
 # operation you most need at a full queue: escalating an already-gated agent to a halt.

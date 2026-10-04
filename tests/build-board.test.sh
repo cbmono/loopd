@@ -52,9 +52,9 @@ ok "active card carries act"               "$(has_word "$(facets "$P1" 'Live one
 ok "…and not pause"                        "$(has_word "$(facets "$P1" 'Live one')" pause)" no
 ok "Paused tab counts the one paused project of mine" "$(tab "$P1" pause)" 1
 ok "the paused card carries its marker" \
-  "$(tr -d '\n' < "$P1" | grep -qF 'class="ptitle">Held one</span><span class="tag paused">⏸ Paused</span>' && echo yes || echo no)" yes
+  "$(grep -qF 'class="ptitle">Held one</span><span class="tag paused">⏸ Paused</span>' <<<"$(tr -d '\n' < "$P1")" && echo yes || echo no)" yes
 ok "the other human's paused project is marked in its row" \
-  "$(grep -oE 'Their held</td>.{0,120}' "$P1" | grep -qF '⏸ Paused' && echo yes || echo no)" yes
+  "$(grep -qF '⏸ Paused' <<<"$(grep -oE 'Their held</td>.{0,120}' "$P1")" && echo yes || echo no)" yes
 
 sed -i.bak 's/^status: paused$/status: active/' "$INST/projects/held/project.md"; rm -f "$INST/projects/held/project.md.bak"
 P2="$TMP/active.html"; render "$P2"

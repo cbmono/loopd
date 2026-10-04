@@ -167,10 +167,10 @@ assert() { if [ "$2" = 0 ]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
 yes_if() { if "$@" >/dev/null 2>&1; then echo 0; else echo 1; fi; }
 no_if()  { if "$@" >/dev/null 2>&1; then echo 1; else echo 0; fi; }
 eq()     { [ "$1" = "$2" ] && echo 0 || echo 1; }
-has()    { printf '%s\n' "$OUT" | grep -Eq -- "$1" && echo 0 || echo 1; }
+has()    { grep -Eq -- "$1" <<<"$OUT" && echo 0 || echo 1; }
 
 registered() { # <path> — still a registered worktree of the fixture repo?
-  git -C "$REPO" worktree list --porcelain | grep -Fxq "worktree $1"
+  grep -Fxq "worktree $1" <<<"$(git -C "$REPO" worktree list --porcelain)"
 }
 
 # Exit 1, a message naming the reason, and the worktree STILL THERE. The third is the
@@ -457,7 +457,7 @@ assert "no fixture directory was deleted by any refusal" \
        -a -d "$WT_UNPUSHED" -a -d "$WT_PR" -a -d "$WT_SCAFF" -a -d "$WT_RECYCLED" \
        -a -d "$WT_OUT" -a -d "$WT_CACHE" -a -d "$WT_LIVE")"
 assert "no output mentions a synced path" \
-  "$(printf '%s\n' "$OUT" | grep -Eq 'Dropbox|iCloud|OneDrive' && echo 1 || echo 0)"
+  "$(grep -Eq 'Dropbox|iCloud|OneDrive' <<<"$OUT" && echo 1 || echo 0)"
 
 echo "== the script passes no --force, anywhere =="
 assert "no --force anywhere in reclaim-worktree.sh (0 hits, comments included)" \
@@ -512,7 +512,7 @@ assert "G1 an external task path: exits 2"  "$(eq "$RC" 2)"
 assert "G1 …and says why"                   "$(has 'not a task document of this bundle')"
 run "projects/demo/tasks/task-no-branch.md"
 assert "G1 the in-place task is NOT refused for location" \
-  "$(printf '%s' "$OUT" | grep -q 'not a task document of this bundle' && echo 1 || echo 0)"
+  "$(grep -q 'not a task document of this bundle' <<<"$OUT" && echo 1 || echo 0)"
 
 echo "== worktreeRoot absent: the legacy <reposRoot>/_wt root =="
 mkdir -p "$REPOS/_wt"

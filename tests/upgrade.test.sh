@@ -202,7 +202,7 @@ assert "the conflicted merge is kept there too" \
 assert "…and it carries the conflict markers" \
   "$(yes_if sh -c 'grep -qE "^(<<<<<<< |>>>>>>> )" "$1"/CLAUDE.md.*' _ "$INST/.ai-bridge/refresh")"
 assert "…and no .bak file was written into the bundle tree at all" \
-  "$(find "$INST" -name '*.bak.*' -not -path '*/.ai-bridge/*' | grep -q . && echo 1 || echo 0)"
+  "$(grep -q . <<<"$(find "$INST" -name '*.bak.*' -not -path '*/.ai-bridge/*')" && echo 1 || echo 0)"
 assert "the report names the path it kept the conflicted merge at" \
   "$(has '.ai-bridge/refresh/CLAUDE.md' "$APPLY")"
 assert "instance.config.json was NOT written"        "$(hasnt 'PORTED    instance.config.json' "$APPLY")"
@@ -216,10 +216,10 @@ assert "no conflict markers were written into it" \
   "$(grep -qE '^(<<<<<<< |>>>>>>> )' "$INST/CLAUDE.md" && echo 1 || echo 0)"
 assert "the instance's own wording survived"  "$(yes_if grep -q 'HOUSE EDIT' "$INST/CLAUDE.md")"
 assert "no PORTED label was printed for it" \
-  "$(printf '%s\n' "$APPLY" | grep -B2 'CLAUDE.md' | grep -q 'PORTED' && echo 1 || echo 0)"
+  "$(grep -q 'PORTED' <<<"$(printf '%s\n' "$APPLY" | grep -B2 'CLAUDE.md')" && echo 1 || echo 0)"
 assert "it is still listed as work for the human" "$(has 'port the seed change into CLAUDE.md' "$APPLY")"
 assert "no temp file was left behind" \
-  "$(find "$INST" -name '.upgrade.*' | grep -q . && echo 1 || echo 0)"
+  "$(grep -q . <<<"$(find "$INST" -name '.upgrade.*')" && echo 1 || echo 0)"
 
 echo "== idempotence =="
 SECOND="$(bash "$UPGRADE" "$INST" 2>&1)"
@@ -465,7 +465,7 @@ echo "== .gitignore's instance-additions block is the bundle's own (2x/task-008)
 # plus the managed marker block init puts directly above it — is split off both sides
 # before the merge and re-appended verbatim after it.
 GI_HEAD='# Instance additions (kept across seed refreshes)'
-gi_line()  { grep -nxF "$2" "$1" | head -1 | cut -d: -f1 || true; }
+gi_line()  { head -1 <<<"$(grep -nxF "$2" "$1")" | cut -d: -f1 || true; }
 gi_where() { # <file> <pattern> <before|after> the heading
   local h p; h="$(gi_line "$1" "$GI_HEAD")"; p="$(gi_line "$1" "$2")"
   [[ -n "$h" && -n "$p" ]] || { echo 1; return; }
@@ -515,7 +515,7 @@ echo "== CLAUDE.md's instance-additions block is the bundle's own too =="
 # with a markdown heading carrying a parenthetical. The two bundles below diverge from the
 # seed in IDENTICAL bytes except for that heading line, so the pair is the whole claim.
 MD_HEAD='## Instance additions (kept across seed refreshes)'
-md_line()   { grep -nxF -e "$2" -- "$1" | head -1 | cut -d: -f1 || true; }
+md_line()   { head -1 <<<"$(grep -nxF -e "$2" -- "$1")" | cut -d: -f1 || true; }
 md_where()  { # <file> <heading> <pattern> <before|after>
   local h p; h="$(md_line "$1" "$2")"; p="$(md_line "$1" "$3")"
   [[ -n "$h" && -n "$p" ]] || { echo 1; return; }

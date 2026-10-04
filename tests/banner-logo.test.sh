@@ -45,7 +45,7 @@ ESC="$(printf '\033')"
 no_esc()    { LC_ALL=C grep -q "$ESC" <<<"$1" && echo 1 || echo 0; }
 strip_sgr() { printf '%s' "$1" | LC_ALL=C sed "s/$ESC\[[0-9;]*m//g"; }
 nth()       { printf '%s\n' "$1" | sed -n "$2p"; }
-head_no()   { printf '%s\n' "$1" | awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+head_no()   { awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$1"; }
 
 # THE THREE ROWS, TYPED HERE AND NOWHERE ELSE IN THIS FILE — copied from the design
 # source's `cli-banner.sh`. The hook keeps its own copy as `indent|pink|blue` data; that the
@@ -82,8 +82,7 @@ assert "row 2 is the exit arrow and the tube, byte for byte" "$(eq "$(nth "$OUT"
 assert "row 3 is the bottom edge, byte for byte" "$(eq "$(nth "$OUT" "$((n+2))")" "$L3")"
 # THE VERSION LINE'S SHAPE IS LITERAL — the `·` separators and the `org: ` label included.
 assert "…and the version line is directly under them, in its literal shape" \
-  "$(printf '%s\n' "$(nth "$OUT" "$((n+3))")" \
-     | grep -qE '^loopd v[0-9][^ ]* · [^ ]+ · org: .+$' && echo 0 || echo 1)"
+  "$(grep -qE '^loopd v[0-9][^ ]* · [^ ]+ · org: .+$' <<<"$(nth "$OUT" "$((n+3))")" && echo 0 || echo 1)"
 # KEPT ONCE, AS DATA. Three inline printf fragments would satisfy every assertion above and
 # be three places to edit; the hook holds one array and this counts it.
 for l in "$D1" "$D2" "$D3"; do

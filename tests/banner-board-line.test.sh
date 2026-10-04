@@ -114,7 +114,7 @@ render() { mkdir -p "$INST/$AB_BOARD_DIR"; printf '<!doctype html>\n<h1>board</h
 # re-added bare path or staleness note underneath would sit OUTSIDE the section and the
 # "exactly one line" assertion below would pass while the banner printed three. Delimiting
 # on the blank line is what makes that count mean something.
-section() { printf '%s\n' "$OUT" | awk '/^Board   /{f=1} f&&/^[[:space:]]*$/{exit} f'; }
+section() { awk '/^Board   /{f=1} f&&/^[[:space:]]*$/{exit} f' <<<"$OUT"; }
 # THE RENDERED BLOCK IS TWO ROWS, and it is spelled out ONCE here rather than re-typed at
 # each comparison: a fixture copied into six places is six chances for one of them to drift
 # into asserting the shape the row is being moved away from.
@@ -131,7 +131,7 @@ assert "session-banner.sh ships"      "$([ -f "$HOOK" ] && echo 0 || echo 1)"
 assert "…and is executable"           "$([ -x "$HOOK" ] && echo 0 || echo 1)"
 assert "…and parses"                  "$(bash -n "$HOOK" >/dev/null 2>&1 && echo 0 || echo 1)"
 assert "hooks.json registers it at SessionStart" \
-  "$(awk '/"SessionStart"/,0' "$SETTINGS" | grep -q 'session-banner.sh' && echo 0 || echo 1)"
+  "$(grep -q 'session-banner.sh' <<<"$(awk '/"SessionStart"/,0' "$SETTINGS")" && echo 0 || echo 1)"
 
 echo "== a non-bridge project that inherits the hook: silent, exit 0 =="
 mkdir -p "$INST" "$INST/$AB_DIR"
@@ -348,7 +348,7 @@ assert "…while the board line itself is right there" "$(has "Board   file://$P
 # THE UPDATE ROW IS EXEMPT AND ONLY IT: `up to date` there is a claim about the installed
 # PLUGIN, which the check measured, and not about the page, which nothing refreshes.
 assert "…and it never calls the page live or up to date" \
-  "$(printf '%s\n' "$OUT" | grep -v '^Update  ' | grep -qiE 'up to date|always current|live board' && echo 1 || echo 0)"
+  "$(grep -qiE 'up to date|always current|live board' <<<"$(printf '%s\n' "$OUT" | grep -v '^Update  ')" && echo 1 || echo 0)"
 
 echo "== it reads the exact key, never the neighbouring doc string =="
 # seed/instance.config.json ships "$board" (the doc comment) one line above "board" (the

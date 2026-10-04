@@ -94,7 +94,7 @@ bullet_of() { # <file> <regex> — the whole `- ` bullet containing <regex>
 }
 RULE="$(bullet_of "$CONV" "A subagent works ONE task")"
 ok "CONVENTIONS.md states it in a bullet of its own" "$([ -n "$RULE" ] && echo yes || echo no)" yes
-in_rule() { printf '%s' "$RULE" | grep -qF -- "$1" && echo yes || echo no; }
+in_rule() { grep -qF -- "$1" <<<"$RULE" && echo yes || echo no; }
 ok "…giving the resume arm"              "$(in_rule 'RESUME.')" yes
 ok "…the dispatch-fresh arm"             "$(in_rule 'DISPATCH FRESH.')" yes
 ok "…and the tick as an absolute"        "$(in_rule 'NEVER RESUME')" yes
@@ -154,7 +154,7 @@ ok "…and state the one case still open on the checked half" \
 INST="$TMP/instance"; mkdir -p "$INST"
 OUT="$(bash "$LOCKSH" acquire --as tick --instance "$INST" 2>&1)"; RC=$?
 ok "a tick nothing dispatched is refused for real" "$RC" 4
-ok "…and the refusal names the resume"   "$(printf '%s' "$OUT" | grep -qF 'never resumed' && echo yes || echo no)" yes
+ok "…and the refusal names the resume"   "$(grep -qF 'never resumed' <<<"$OUT" && echo yes || echo no)" yes
 ok "…leaving no lock behind"             "$([ -e "$INST/$AB_LOCK" ] && echo yes || echo no)" no
 # …and the same command, after a launcher has taken the lock, proceeds — so the refusal is
 # specific to "nobody dispatched you" and has not become a blanket refusal that would
@@ -162,13 +162,13 @@ ok "…leaving no lock behind"             "$([ -e "$INST/$AB_LOCK" ] && echo ye
 bash "$LOCKSH" acquire --instance "$INST" >/dev/null 2>&1
 OUT="$(bash "$LOCKSH" acquire --as tick --instance "$INST" 2>&1)"; RC=$?
 ok "a DISPATCHED tick still proceeds"    "$RC" 0
-ok "…by adopting the launcher's lock"    "$(printf '%s' "$OUT" | grep -qF 'adopted:' && echo yes || echo no)" yes
+ok "…by adopting the launcher's lock"    "$(grep -qF 'adopted:' <<<"$OUT" && echo yes || echo no)" yes
 
 echo
 echo "== 4. the absence: there is no 'delete the agent' primitive, and none appears =="
 # Resumption is the only lever, which is why the rule governs resumption and not lifetime.
 # An absence nobody checks is an absence somebody fills.
-subs="$(grep -oE '^  acquire\|release\|status\)' "$LOCKSH" | head -1)"
+subs="$(head -1 <<<"$(grep -oE '^  acquire\|release\|status\)' "$LOCKSH")")"
 ok "tick-lock.sh still has exactly three subcommands" "$subs" '  acquire|release|status)'
 ok "…and the rule says why lifetime is not a lever" "$(in_rule 'resumption is the only lever')" yes
 ok "…and that none is wanted"            "$(in_rule 'delete the agent')" yes
@@ -176,8 +176,8 @@ ok "the operator docs say it too"        "$(has "$OPS" 'no "delete the agent" pr
 hits=0
 for phrase in 'delete the agent' 'kill the agent' 'terminate the agent' 'delete a subagent' 'kill a subagent'; do
   # path-scan: absent symlink — retired in #122; "$REPO/plugin/seed" resolves
-  if grep -rlF -- "$phrase" "$REPO/symlink" "$REPO/plugin/seed" 2>/dev/null \
-     | grep -qv 'CONVENTIONS.md'; then
+  if grep -qv -e 'CONVENTIONS.md' -e '^$' \
+       <<<"$(grep -rlF -- "$phrase" "$REPO/symlink" "$REPO/plugin/seed" 2>/dev/null)"; then
     echo "  (a shipped file describes: $phrase)"; hits=$((hits+1))
   fi
 done
@@ -203,7 +203,7 @@ ok "a dispatcher missing the line is caught" "$(has "$FIX/uncited.md" "$CANON")"
 printf '%s\n' "- $ANCHOR — the same-task half is enforced by scripts/nothing.sh" > "$FIX/overclaim.md"
 OVER="$(bullet_of "$FIX/overclaim.md" "A subagent works ONE task")"
 ok "an overclaiming bullet is extractable" "$([ -n "$OVER" ] && echo yes || echo no)" yes
-ok "…and its false claim is visible"     "$(printf '%s' "$OVER" | grep -qF 'enforced by' && echo yes || echo no)" yes
+ok "…and its false claim is visible"     "$(grep -qF 'enforced by' <<<"$OVER" && echo yes || echo no)" yes
 
 # (d) a tick-lock with the refusal removed — the mechanism, not the sentence
 sed 's/^\( *\)refuse_unlaunched$/\1: # removed/' "$LOCKSH" > "$FIX/tick-lock.sh"

@@ -45,10 +45,10 @@ case "${1:-}" in
         # list, not on argument position — and not on `comments`, which
         # review-clearance.sh no longer asks `pr view` for at all. `body` and `author`
         # are each wanted by exactly one caller; all three ask for headRefOid.
-        if printf '%s\n' "$@" | grep -q body; then
+        if grep -q body <<<"$(printf '%s\n' "$@")"; then
           [ -f "$FIX/pr_body_json" ] || { echo "no PR" >&2; exit 1; }
           cat "$FIX/pr_body_json"
-        elif printf '%s\n' "$@" | grep -q author; then
+        elif grep -q author <<<"$(printf '%s\n' "$@")"; then
           [ -f "$FIX/pr_json" ] || { echo "no PR" >&2; exit 1; }
           cat "$FIX/pr_json"
         else
@@ -216,17 +216,17 @@ expect() { # <name> <expected-rc> [extra args to the script...]
     printf '  PASS  %-56s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
   else
     printf '  FAIL  %-56s expected rc=%s got rc=%s\n' "$name" "$want" "$rc"
-    printf '        output: %s\n' "$(printf '%s' "$out" | head -3 | tr '\n' '|')"
+    printf '        output: %s\n' "$(head -3 <<<"$out" | tr '\n' '|')"
     fail=$((fail+1))
   fi
   LAST_OUT="$out"
 }
 
 says() { # <name> <substring> — assert against the previous expect()'s output
-  if printf '%s' "$LAST_OUT" | grep -Fq "$2"; then
+  if grep -Fq "$2" <<<"$LAST_OUT"; then
     printf '  PASS  %-56s\n' "$1"; pass=$((pass+1))
   else
-    printf '  FAIL  %-56s missing %s in: %s\n' "$1" "$2" "$(printf '%s' "$LAST_OUT" | head -2 | tr '\n' '|')"
+    printf '  FAIL  %-56s missing %s in: %s\n' "$1" "$2" "$(head -2 <<<"$LAST_OUT" | tr '\n' '|')"
     fail=$((fail+1))
   fi
 }
@@ -651,11 +651,11 @@ sibling_case() { # <name> <what to write into review-clearance.sh> <expected mes
   setup; checks "pass	Build"; declared "Build"
   local out rc
   out="$("$dir/required-checks.sh" 42 2>&1)"; rc=$?
-  if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -Fq "$want"; then
+  if [ "$rc" -eq 2 ] && grep -Fq "$want" <<<"$out"; then
     printf '  PASS  %-56s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
   else
     printf '  FAIL  %-56s expected rc=2 + %s, got rc=%s: %s\n' \
-      "$name" "$want" "$rc" "$(printf '%s' "$out" | head -2 | tr '\n' '|')"
+      "$name" "$want" "$rc" "$(head -2 <<<"$out" | tr '\n' '|')"
     fail=$((fail+1))
   fi
 }
@@ -665,7 +665,7 @@ cp "$SCRIPT" "$LONELY/required-checks.sh"
 cp "$(dirname "$SCRIPT")/bundle-paths.sh" "$LONELY/bundle-paths.sh"
 setup; checks "pass	Build"; declared "Build"
 out="$("$LONELY/required-checks.sh" 42 2>&1)"; rc=$?
-if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -Fq "review-clearance.sh not found"; then
+if [ "$rc" -eq 2 ] && grep -Fq "review-clearance.sh not found" <<<"$out"; then
   printf '  PASS  %-56s (rc=%s)\n' "review-clearance.sh missing -> refuse, never clear" "$rc"; pass=$((pass+1))
 else
   printf '  FAIL  %-56s expected rc=2 got rc=%s\n' "review-clearance.sh missing -> refuse, never clear" "$rc"
@@ -689,7 +689,7 @@ sibling_case "truncated in its header comment -> refuse, never clear" \
 # answer was vouching for. Swept over the version before the sentinel, 109 such cuts went
 # on to clear an unreviewed PR through this script. These four walk that range end to end.
 SIB_SRC="$(dirname "$SCRIPT")/review-clearance.sh"
-SIB_SELFTEST="$(grep -n -- '--self-test" \]; then' "$SIB_SRC" | head -1 | cut -d: -f1)"
+SIB_SELFTEST="$(head -1 <<<"$(grep -n -- '--self-test" \]; then' "$SIB_SRC")" | cut -d: -f1)"
 SIB_LINES="$(wc -l < "$SIB_SRC" | tr -d ' ')"
 # Loudly, not vacuously: if the block can no longer be located, every case below would
 # degenerate into the zero-byte case and pass for the wrong reason.
@@ -742,7 +742,7 @@ if [ "$rc" -eq 0 ]; then
   printf '  PASS  %-56s (rc=%s)\n' "…and an intact sibling clears the same fixture" "$rc"; pass=$((pass+1))
 else
   printf '  FAIL  %-56s expected rc=0 got rc=%s: %s\n' "…and an intact sibling clears the same fixture" \
-    "$rc" "$(printf '%s' "$out" | head -2 | tr '\n' '|')"
+    "$rc" "$(head -2 <<<"$out" | tr '\n' '|')"
   fail=$((fail+1))
 fi
 

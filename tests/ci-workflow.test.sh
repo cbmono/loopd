@@ -95,7 +95,7 @@ echo "== it invokes tests/run.sh, and carries NO SECOND COPY of the selection ==
 wf_code() { grep -v '^[[:space:]]*#' <<<"$WF_TEXT"; }
 
 assert "a run step invokes tests/run.sh --ci" \
-  "$(wf_code | grep -qF 'tests/run.sh --ci' && echo 0 || echo 1)"
+  "$(grep -qF 'tests/run.sh --ci' <<<"$(wf_code)" && echo 0 || echo 1)"
 
 # Each marker is a load-bearing line of the runner — the derivation, the summary parse,
 # the integrity re-check, the harness loop, the core list. Any of them here is a copy.
@@ -128,7 +128,7 @@ echo "== ai-bridge-v4/task-022: the host-rendering oracle's --check runs automat
 assert "a step invokes tests/fixtures/reviewer/record-host-rendering.sh --check" \
   "$(grep -qF 'tests/fixtures/reviewer/record-host-rendering.sh --check' <<<"$WF_TEXT" && echo 0 || echo 1)"
 assert "…and that step is continue-on-error, so host drift never fails the required check" \
-  "$(grep -B8 -F 'record-host-rendering.sh --check' <<<"$WF_TEXT" | grep -qF 'continue-on-error: true' && echo 0 || echo 1)"
+  "$(grep -qF 'continue-on-error: true' <<<"$(grep -B8 -F 'record-host-rendering.sh --check' <<<"$WF_TEXT")" && echo 0 || echo 1)"
 
 echo "== the check name is declared as a required check, verbatim, on both sides =="
 # CHECK_NAME above is the pin; both the workflow and the declared-checks file are

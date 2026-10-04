@@ -365,7 +365,7 @@ for s in "${SHAPES[@]}"; do
       extra=""
       while IFS= read -r got_line; do
         [[ -n "$got_line" ]] || continue
-        printf '%s\n' "$want" | grep -qxF -- "$got_line" || extra="$extra$got_line "
+        grep -qxF -- "$got_line" <<<"$want" || extra="$extra$got_line "
       done <<< "$got"
       # `${x:+…}` and not `[[ -n ]] && …`, whose exit status would trip `set -e` on
       # every gap that declares nothing — i.e. on the common case.
@@ -399,8 +399,8 @@ assert "$label" "$( [[ "$agreed" -ge "$floor" ]] && echo 0 || echo 1 )"
 # shapes above and in no legitimate one, so a hit names its own source.
 echo "== and no shape, gap or not, puts the sentinel on the page =="
 assert "no rendered data-copy value contains the sentinel path" \
-  "$( grep -o 'data-copy="[^"]*"' "$PAGE" | grep -qF 'SENTINEL-HOME' && echo 1 || echo 0 )"
+  "$( grep -qF 'SENTINEL-HOME' <<<"$(grep -o 'data-copy="[^"]*"' "$PAGE")" && echo 1 || echo 0 )"
 assert "…and none contains a bare /Users/ either" \
-  "$( grep -o 'data-copy="[^"]*"' "$PAGE" | grep -qF '/Users/' && echo 1 || echo 0 )"
+  "$( grep -qF '/Users/' <<<"$(grep -o 'data-copy="[^"]*"' "$PAGE")" && echo 1 || echo 0 )"
 
 summary

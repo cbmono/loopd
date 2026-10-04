@@ -120,10 +120,10 @@ echo "== 2. the rename is a no-op, end to end =="
 for d in "$TMP/g/_ai-bridge-x" "$TMP/g/_loopd-x"; do
   ( cd "$d" && SNAPSHOT_NOW=2026-01-01T00:00:00Z bash "$WRITER" --quiet )
 done
-snapgroup() { grep -o '"group": "[^"]*"' "$1/$AB_SNAPSHOT" | head -1 | sed 's/.*: "//; s/"$//'; }
+snapgroup() { head -1 <<<"$(grep -o '"group": "[^"]*"' "$1/$AB_SNAPSHOT")" | sed 's/.*: "//; s/"$//'; }
 ok "write-snapshot.sh writes the same group under both names" \
   "$(snapgroup "$TMP/g/_ai-bridge-x"):$(snapgroup "$TMP/g/_loopd-x")" "x:x"
-boardrow() { ( cd "$1" && bash "$PRINT" --color never --width 0 . ) | awk '/^x /{print $1; exit}'; }
+boardrow() { awk '/^x /{print $1; exit}' <<<"$( ( cd "$1" && bash "$PRINT" --color never --width 0 . ) )"; }
 ok "print-board.sh labels both rows the same" \
   "$(boardrow "$TMP/g/_ai-bridge-x"):$(boardrow "$TMP/g/_loopd-x")" "x:x"
 ( cd "$TMP/g/_ai-bridge-x" && bash "$BOARD" --standalone --out "$TMP/a.html" . >/dev/null 2>&1 )

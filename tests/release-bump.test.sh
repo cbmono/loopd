@@ -308,7 +308,7 @@ writers() { # <file…> -> the basenames that write a version place
   for f in "$@"; do
     [ -f "$f" ] || continue
     [ "$(basename "$f")" = release-bump.sh ] && continue
-    grep -vE '^[[:space:]]*#' "$f" | grep -qE "$WRITE" && printf '%s\n' "${f##*/}"
+    grep -qE "$WRITE" <<<"$(grep -vE '^[[:space:]]*#' "$f")" && printf '%s\n' "${f##*/}"
   done
   return 0
 }

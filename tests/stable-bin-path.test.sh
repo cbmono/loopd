@@ -76,11 +76,11 @@ for sh in bash zsh; do
   flag=--norc; [ "$sh" = zsh ] && flag=-f
   got="$(env -i HOME="$H" PATH=/usr/bin:/bin "$sh" "$flag" -c "$L1"'
     command -v init-bundle.sh; init-bundle.sh --help >/dev/null 2>&1; echo "help=$?"' 2>&1)"
-  ok "$sh: bare name resolves through the link" "$(printf '%s\n' "$got" | head -1)" "$LINK/init-bundle.sh"
+  ok "$sh: bare name resolves through the link" "$(head -1 <<<"$got")" "$LINK/init-bundle.sh"
   ok "$sh: init-bundle.sh --help by bare name exits 0" "$(printf '%s\n' "$got" | tail -1)" help=0
 done
 got="$(env -i HOME="$H" PATH=/usr/bin:/bin bash --norc -c "$L1"'; plugin-name.sh' 2>&1)"
-ok "plugin-name.sh by bare name derives the name" "$(printf '%s\n' "$got" | head -1)" "PLUGIN_NAME=$PN"
+ok "plugin-name.sh by bare name derives the name" "$(head -1 <<<"$got")" "PLUGIN_NAME=$PN"
 got="$(env -i HOME="$H" PATH=/usr/bin:/bin bash --norc -c "$L1"'; refresh-seeds.sh --help >/dev/null 2>&1; echo $?')"
 ok "refresh-seeds.sh --help by bare name exits 0" "$got" 0
 

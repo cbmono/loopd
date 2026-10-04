@@ -106,8 +106,8 @@ verdict() { # <cwd> <command>
   [ -n "$out" ] || { printf 'allow'; return 0; }
   dec="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)"
   [ "$dec" = deny ] || { printf 'bad:%s' "$dec"; return 0; }
-  rule="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
-          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p' | head -1)"
+  rule="$(head -1 <<<"$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
+          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p')")"
   printf 'deny:%s' "${rule:-UNNAMED}"
 }
 
@@ -303,7 +303,7 @@ ok "a refusal still exits 0"           "$?" "0"
 REASON="$(raw "$GITREPO" 'terraform destroy' | jq -r '.hookSpecificOutput.permissionDecisionReason')"
 # A `case` glob cannot be written inline here: bash 3.2 — the version macOS ships and CI
 # runs on — ends a `$( … )` at the `)` that closes a case pattern.
-says() { printf '%s' "$REASON" | grep -qF -- "$1" && echo yes || echo no; }
+says() { grep -qF -- "$1" <<<"$REASON" && echo yes || echo no; }
 ok "…and tells the agent not to evade it"   "$(says 'Do NOT re-issue a variant')" "yes"
 ok "…and names the human's terminal as the way out" "$(says 'their own terminal')" "yes"
 
@@ -338,7 +338,7 @@ REGOUT="$(payload "$GITREPO" 'terraform destroy -auto-approve' \
 ok "…and the REGISTERED command string, executed, denies" \
    "$(printf '%s' "$REGOUT" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)" "deny"
 ok "…naming this rule"                 \
-   "$(printf '%s' "$REGOUT" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p' | head -1)" "terraform_destroy"
+   "$(head -1 <<<"$(printf '%s' "$REGOUT" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p')")" "terraform_destroy"
 
 echo "== retirement: the instance settings.json no longer registers any PreToolUse hook"
 # CRITERION 3 STATED AS A TEST. The plugin adding the hook and the instance keeping it are
@@ -439,8 +439,8 @@ verdict_agent() { # <cwd> <command> -> "allow" | "deny:<rule>" | "bad:<decision>
   [ -n "$out" ] || { printf 'allow'; return 0; }
   dec="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)"
   [ "$dec" = deny ] || { printf 'bad:%s' "$dec"; return 0; }
-  rule="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
-          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p' | head -1)"
+  rule="$(head -1 <<<"$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
+          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p')")"
   printf 'deny:%s' "${rule:-UNNAMED}"
 }
 
@@ -507,8 +507,8 @@ verdict_agent_in() { # <project-dir> <cwd> <command> -> "allow" | "deny:<rule>" 
   [ -n "$out" ] || { printf 'allow'; return 0; }
   dec="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)"
   [ "$dec" = deny ] || { printf 'bad:%s' "$dec"; return 0; }
-  rule="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
-          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p' | head -1)"
+  rule="$(head -1 <<<"$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
+          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p')")"
   printf 'deny:%s' "${rule:-UNNAMED}"
 }
 
@@ -622,8 +622,8 @@ verdict_role() { # <cwd> <agent_type> <command>
   [ -n "$out" ] || { printf 'allow'; return 0; }
   dec="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)"
   [ "$dec" = deny ] || { printf 'bad:%s' "$dec"; return 0; }
-  rule="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
-          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p' | head -1)"
+  rule="$(head -1 <<<"$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
+          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p')")"
   printf 'deny:%s' "${rule:-UNNAMED}"
 }
 for role in failure-analyst software-engineer devops-engineer; do
@@ -669,7 +669,7 @@ ok "…and neither is gh run list" \
 # THE REASON NAMES THE DISPATCH TO MAKE INSTEAD — criterion 4. A refusal that only refuses
 # gets a variant issued at it; this one has to carry the alternative, namespaced.
 LREASON="$(raw "$CPROOT" 'gh run view 1 --log' | jq -r '.hookSpecificOutput.permissionDecisionReason')"
-lsays() { printf '%s' "$LREASON" | grep -qF -- "$1" && echo yes || echo no; }
+lsays() { grep -qF -- "$1" <<<"$LREASON" && echo yes || echo no; }
 ok "…the reason names the failure-analyst" "$(lsays ''"${PN}:"'failure-analyst')" "yes"
 ok "…as a BACKGROUND dispatch"             "$(lsays 'background')" "yes"
 ok "…and says a dispatched agent may"      "$(lsays 'A dispatched agent runs the identical command untouched')" "yes"

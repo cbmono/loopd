@@ -212,7 +212,7 @@ ok "the coloured line is the plain one plus SGR" \
 # COLOURED BY STATE, which is the half of criterion 1 the plain line cannot show. Read off
 # the SGR the segment is wrapped in, not off the words.
 sgr_of() { # <output> <segment text> -> the code that opens it
-  printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p' | head -n1
+  head -n1 <<<"$(printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p')"
 }
 C="$(run --instance "$INST" --color always)"
 ok "work in flight is the machine's blue"  "$(sgr_of "$C" '2 in flight')" 94

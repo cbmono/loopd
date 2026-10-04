@@ -28,8 +28,8 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-64s (%s)\n' "$1" "$2"; pass=$(
 has() { grep -qF -- "$2" "$1" && echo yes || echo no; }
 yn() { "$@" && echo yes || echo no; }
 
-entry_tpl="$(sed -n 's/^[[:space:]]*\(Q<n>: dispatch refused: .*\)$/\1/p' "$S3" | head -n1)"
-line_tpl="$(sed -n 's/^[[:space:]]*\(dispatch refused: <which>\. <task> .*\)$/\1/p' "$S3" | head -n1)"
+entry_tpl="$(head -n1 <<<"$(sed -n 's/^[[:space:]]*\(Q<n>: dispatch refused: .*\)$/\1/p' "$S3")")"
+line_tpl="$(head -n1 <<<"$(sed -n 's/^[[:space:]]*\(dispatch refused: <which>\. <task> .*\)$/\1/p' "$S3")")"
 # The three `| <carries> | <which> | <remedy> |` rows under the table's header.
 table_of() { awk '/\| The text carries \|/ { t = 1; next } t && /^[[:space:]]*\|---/ { next } t && /^[[:space:]]*\|/ { print; next } t { exit }' "$1"; }
 table="$(table_of "$S3")"
@@ -103,7 +103,7 @@ ok "kind 4: a fold leaves the blocker OPEN" \
 
 echo
 echo "== the status line shows a refused wave apart from an idle machine =="
-sgr_of() { printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p' | head -n1; }
+sgr_of() { head -n1 <<<"$(printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p')"; }
 IDLE="$TMP/idle"; inst "$IDLE" ''; bash "$AW" --instance "$IDLE" >/dev/null 2>&1
 R="$(bash "$SL" --instance "$TMP/k1" --color always </dev/null)"; I="$(bash "$SL" --instance "$IDLE" --color always </dev/null)"
 ok "refused: the queue carries the grant, in the human's pink" "$(sgr_of "$R" '1 need you')" 95

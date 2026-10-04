@@ -78,7 +78,7 @@ assert "…and parses"                     "$(yes_if bash -n "$HOOK_SRC")"
 # the hook reached only bundles somebody had re-stamped.
 SET="$TPLSRC/plugin/hooks/hooks.json"
 assert "hooks.json registers it at SessionStart" \
-  "$(yes_if bash -c "awk '/\"SessionStart\"/,0' '$SET' | grep -q 'session-banner.sh'")"
+  "$(yes_if grep -q 'session-banner.sh' <<<"$(awk '/"SessionStart"/,0' "$SET")")"
 # The consolidation, stated from this side too: the hook it replaced must not still be
 # registered beside it. A manifest naming both would run the machinery probe twice.
 assert "…and check-machinery.sh is NOT registered any more" \

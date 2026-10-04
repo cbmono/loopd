@@ -119,8 +119,8 @@ assert "without it, the tracked root is used"     "$(hasnt 'nonexistent-local-ro
 # codegraphSkip is NOT overridable: it names repos, which both clones share. Assert
 # the extraction line itself, not proximity — the file mentions both names elsewhere.
 assert "codegraphSkip is extracted from \$CONFIG only" \
-  "$(grep -n 'codegraphSkip' "$SCRIPTS/index-kb.sh" | grep -v '^[0-9]*:#' \
-     | grep -q 'CONFIG_SKIP=.*"\$CONFIG"' && echo 0 || echo 1)"
+  "$(grep -q 'CONFIG_SKIP=.*"\$CONFIG"' \
+       <<<"$(grep -n 'codegraphSkip' "$SCRIPTS/index-kb.sh" | grep -v '^[0-9]*:#')" && echo 0 || echo 1)"
 
 echo
 echo "== build-board.sh: boardInstances =="
@@ -273,9 +273,9 @@ if command -v python3 >/dev/null 2>&1; then
     "$([ "$(MODEL cataloguer)" == sonnet ] && echo 0 || echo 1)"
   DUMP="$( bash "$SCRIPTS/resolve-config.sh" --instance "$INST" --dump 2>/dev/null )"
   assert "--dump omits the null leaf entirely" \
-    "$(printf '%s\n' "$DUMP" | grep -qE '^[a-z]+	models	deep	' && echo 1 || echo 0)"
+    "$(grep -qE '^[a-z]+	models	deep	' <<<"$DUMP" && echo 1 || echo 0)"
   assert "…and still carries the leaves beside it" \
-    "$(printf '%s\n' "$DUMP" | grep -q 'models	standard	sonnet' && echo 0 || echo 1)"
+    "$(grep -q 'models	standard	sonnet' <<<"$DUMP" && echo 0 || echo 1)"
   for M in "" --source --json; do
     OUT="$( bash "$SCRIPTS/resolve-config.sh" --instance "$INST" $M models deep 2>/dev/null )"; RC=$?
     assert "resolve-config ${M:---value} models.deep: nothing, exit 1" \
@@ -423,7 +423,7 @@ for k in models roleTiers maxAgentsInFlight; do
     "$(grep -q "^| \`$k\` | \*\*yes\*\*" "$SCHEMA" && echo 0 || echo 1)"
 done
 assert "…and no longer files them under 'everything else'" \
-  "$(grep '^| everything else' "$SCHEMA" | grep -qE 'models|roleTiers|maxAgentsInFlight' && echo 1 || echo 0)"
+  "$(grep -qE 'models|roleTiers|maxAgentsInFlight' <<<"$(grep '^| everything else' "$SCHEMA")" && echo 1 || echo 0)"
 # And the one that deliberately did NOT move, with the reason stated — an override there
 # is a change to where code may be sent, which is the disagreement that breaks it.
 assert "…and its table row marks externalReviewer NOT overridable, by design" \

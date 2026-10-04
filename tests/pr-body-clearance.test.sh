@@ -148,23 +148,23 @@ expect() { # <name> <expected-rc> [args...] — runs against PR 42
     printf '  PASS  %-58s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
   else
     printf '  FAIL  %-58s expected rc=%s got rc=%s\n' "$name" "$want" "$rc"
-    printf '        output: %s\n' "$(printf '%s' "$out" | head -3 | tr '\n' '|')"
+    printf '        output: %s\n' "$(head -3 <<<"$out" | tr '\n' '|')"
     fail=$((fail+1))
   fi
   LAST_OUT="$out"
 }
 
 says() { # <name> <substring> — against the previous expect()'s output
-  if printf '%s' "$LAST_OUT" | grep -Fq "$2"; then
+  if grep -Fq "$2" <<<"$LAST_OUT"; then
     printf '  PASS  %-58s\n' "$1"; pass=$((pass+1))
   else
-    printf '  FAIL  %-58s missing %s in: %s\n' "$1" "$2" "$(printf '%s' "$LAST_OUT" | head -3 | tr '\n' '|')"
+    printf '  FAIL  %-58s missing %s in: %s\n' "$1" "$2" "$(head -3 <<<"$LAST_OUT" | tr '\n' '|')"
     fail=$((fail+1))
   fi
 }
 
 says_not() { # <name> <substring> — the previous output must NOT contain it
-  if printf '%s' "$LAST_OUT" | grep -Fq "$2"; then
+  if grep -Fq "$2" <<<"$LAST_OUT"; then
     printf '  FAIL  %-58s unexpectedly said %s\n' "$1" "$2"; fail=$((fail+1))
   else
     printf '  PASS  %-58s\n' "$1"; pass=$((pass+1))

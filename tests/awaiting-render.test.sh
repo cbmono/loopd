@@ -68,7 +68,7 @@ Last refreshed: <ISO>.
 WANT
 sed -E 's/^Last refreshed: .*$/Last refreshed: <ISO>./' "$B/$AB_AWAITING" > "$TMP/got"
 ok "the rendered page is byte-identical" "$(cmp -s "$TMP/got" "$TMP/want" && echo yes || echo no)" yes
-[ -s "$TMP/got" ] && diff -u "$TMP/want" "$TMP/got" | head -20
+[ -s "$TMP/got" ] && head -20 <<<"$(diff -u "$TMP/want" "$TMP/got")"
 
 echo
 echo "== the consumer's two literals, asserted against the render itself =="

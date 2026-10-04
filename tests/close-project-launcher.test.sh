@@ -59,8 +59,8 @@ launcher() {
        /^## The closeout agent.s brief/{exit} {print}' "$SKILL"
 }
 brief()    { awk '/^## The closeout agent.s brief/{p=1} p' "$SKILL"; }
-in_launcher() { launcher | grep -qF -- "$1" && echo yes || echo no; }
-in_brief()    { brief    | grep -qF -- "$1" && echo yes || echo no; }
+in_launcher() { grep -qF -- "$1" <<<"$(launcher)" && echo yes || echo no; }
+in_brief()    { grep -qF -- "$1" <<<"$(brief)" && echo yes || echo no; }
 ok "both halves are present" \
   "$([ -n "$(launcher)" ] && [ -n "$(brief)" ] && echo yes || echo no)" yes
 
@@ -179,7 +179,7 @@ ok "…and a widened list is NOT equal to it" \
 # --- the launcher says, in the file, that it reads nothing else -------------------
 ok "launcher carries the closed-list rule" "$(has "$SKILL" 'The launcher reads nothing else')" yes
 section() { awk '/^### The launcher reads nothing else/{p=1;next} p&&/^#/{p=0} p' "$1"; }
-in_section() { section "$SKILL" | grep -qF -- "$1" && echo yes || echo no; }
+in_section() { grep -qF -- "$1" <<<"$(section "$SKILL")" && echo yes || echo no; }
 
 count_allowed_ops() { section "$1" | grep -c -E '^[0-9]+\. ' | tr -d ' '; }
 ok "the allowlist is exactly two operations" "$(count_allowed_ops "$SKILL")" 2
@@ -294,7 +294,7 @@ ok "brief points back at the launcher's rule" \
 # as prose, which is a citation and not a step.
 for s in close-project-folder prune-worktrees validate-bundle build-kb-index papercuts commit-as decision-stamp; do
   ok "the brief runs $s.sh" \
-    "$(brief | grep -qF "\${CLAUDE_PLUGIN_ROOT}/scripts/$s.sh" && echo yes || echo no)" yes
+    "$(grep -qF "\${CLAUDE_PLUGIN_ROOT}/scripts/$s.sh" <<<"$(brief)" && echo yes || echo no)" yes
   ok "…and the launcher does not" \
     "$(launcher | grep -cF "\${CLAUDE_PLUGIN_ROOT}/scripts/$s.sh" | tr -d ' ')" 0
 done

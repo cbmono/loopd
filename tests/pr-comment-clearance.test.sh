@@ -151,23 +151,23 @@ expect() { # <name> <expected-rc> [args...]
     printf '  PASS  %-62s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
   else
     printf '  FAIL  %-62s expected rc=%s got rc=%s\n' "$name" "$want" "$rc"
-    printf '        output: %s\n' "$(printf '%s' "$out" | head -3 | tr '\n' '|')"
+    printf '        output: %s\n' "$(head -3 <<<"$out" | tr '\n' '|')"
     fail=$((fail+1))
   fi
   LAST_OUT="$out"
 }
 
 says() { # <name> <substring> — against the previous expect()'s output
-  if printf '%s' "$LAST_OUT" | grep -Fq "$2"; then
+  if grep -Fq "$2" <<<"$LAST_OUT"; then
     printf '  PASS  %-62s\n' "$1"; pass=$((pass+1))
   else
-    printf '  FAIL  %-62s missing %s in: %s\n' "$1" "$2" "$(printf '%s' "$LAST_OUT" | head -4 | tr '\n' '|')"
+    printf '  FAIL  %-62s missing %s in: %s\n' "$1" "$2" "$(head -4 <<<"$LAST_OUT" | tr '\n' '|')"
     fail=$((fail+1))
   fi
 }
 
 says_not() { # <name> <substring>
-  if printf '%s' "$LAST_OUT" | grep -Fq "$2"; then
+  if grep -Fq "$2" <<<"$LAST_OUT"; then
     printf '  FAIL  %-62s unexpectedly said %s\n' "$1" "$2"; fail=$((fail+1))
   else
     printf '  PASS  %-62s\n' "$1"; pass=$((pass+1))
@@ -554,7 +554,7 @@ echo "== the rule is in CONVENTIONS.md, and it NAMES this reader =="
 # sentence spanning two lines is not greppable as written.
 flatten() { tr '\n' ' ' < "$1" | tr -s ' '; }
 CONV_FLAT="$(flatten "$CONV")"
-saw() { if printf '%s' "$1" | grep -Fq "$2"; then echo yes; else echo no; fi; }
+saw() { if grep -Fq "$2" <<<"$1"; then echo yes; else echo no; fi; }
 ok "the rule is there"                "$(saw "$CONV_FLAT" 'A reply to review findings has a shape, and now it has a reader.')" yes
 ok "the reader is NAMED, with its flag" "$(saw "$CONV_FLAT" '`scripts/pr-comment-clearance.sh --comment <id>` is the reader')" yes
 ok "the draft route is named too"     "$(saw "$CONV_FLAT" '`--comment-file <draft>` decides before you post')" yes

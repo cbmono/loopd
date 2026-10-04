@@ -360,7 +360,7 @@ assert "exits 0"                                       "$(eq "$RC" 0)"
 assert "the folder is GONE"                            "$(gone "$ROOT/projects/adoption")"
 assert "…and says it was not retained"                 "$(has 'not retained' "$OUT")"
 assert "…the removal is STAGED, not just unlinked" \
-  "$(yes_if sh -c 'cd "$1" && git diff --cached --name-only | grep -q "^projects/adoption/project.md$"' _ "$ROOT")"
+  "$(yes_if grep -q '^projects/adoption/project.md$' <<<"$(git -C "$ROOT" diff --cached --name-only)")"
 assert "…the sibling project is untouched"             "$(exists "$ROOT/projects/sibling")"
 assert "…and so is the rest of the bundle"             "$(exists "$ROOT/knowledge/findings")"
 
@@ -448,7 +448,7 @@ run "$ROOT" adoption --apply
 assert "the closeout exits 0"                         "$(eq "$RC" 0)"
 assert "…and writes projects/CLOSED.md"               "$(exists "$ROOT/projects/CLOSED.md")"
 assert "…and STAGES it, so it lands in the closing commit" \
-  "$(yes_if sh -c 'cd "$1" && git diff --cached --name-only | grep -qx "projects/CLOSED.md"' _ "$ROOT")"
+  "$(yes_if grep -qx 'projects/CLOSED.md' <<<"$(git -C "$ROOT" diff --cached --name-only)")"
 assert "…under a \`## <slug>\` heading"               "$(yes_if grep -qx '## adoption' "$ROOT/projects/CLOSED.md")"
 assert "…with an ISO close date"                      "$(yes_if grep -qE '^- closed: [0-9]{4}-[0-9]{2}-[0-9]{2}$' "$ROOT/projects/CLOSED.md")"
 assert "…and the project's one-line outcome"          "$(yes_if grep -q '^- outcome: finished research, kept as a reference surface$' "$ROOT/projects/CLOSED.md")"

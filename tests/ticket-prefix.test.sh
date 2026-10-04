@@ -53,7 +53,7 @@ section() {
     awk -v h="$HEADING" '$0==h{f=1;next} f&&/^## /{exit} f&&NF'
 }
 # The title format the brief hands an agent: its first backticked span.
-format_of() { sed -n 's/^[^`]*`\([^`]*\)`.*/\1/p' <<<"$1" | head -1; }
+format_of() { head -1 <<<"$(sed -n 's/^[^`]*`\([^`]*\)`.*/\1/p' <<<"$1")"; }
 # yes when <section> documents an untagged title and names no `[XYZ-n]` tag anywhere.
 untagged() {
   local f; f="$(format_of "$1")"

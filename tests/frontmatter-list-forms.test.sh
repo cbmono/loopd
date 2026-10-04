@@ -99,7 +99,7 @@ same() { # <label> <command...> — run in both bundles, compare
   local label="$1" a b; shift
   a="$(run "$FLOW" "$@")"; b="$(run "$BLOCK" "$@")"
   if [ "$a" = "$b" ]; then ok "$label" same same
-  else ok "$label" "$(diff <(printf '%s\n' "$a") <(printf '%s\n' "$b") | head -6 | tr '\n' '|')" same; fi
+  else ok "$label" "$(head -6 <<<"$(diff <(printf '%s\n' "$a") <(printf '%s\n' "$b"))" | tr '\n' '|')" same; fi
 }
 T2=projects/demo/tasks/task-002-draft.md
 

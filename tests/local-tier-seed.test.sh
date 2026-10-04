@@ -163,7 +163,7 @@ BANNER="$TPL/plugin/hooks/session-banner.sh"
 # `--full`: the SessionStart banner holds 12 lines and drops the two tables
 # (ai-bridge-v3/task-025); the AGENT table is what this section is about.
 BOUT="$(CLAUDE_PROJECT_DIR="$I" bash "$BANNER" --full 2>&1)"
-brow() { printf '%s\n' "$BOUT" | awk -v r="$1" '$1==r { print $NF }' | head -n1; }
+brow() { head -n1 <<<"$(printf '%s\n' "$BOUT" | awk -v r="$1" '$1==r { print $NF }')"; }
 # The gap before the arrow is variable: the tier is padded to the widest tier in the table
 # (tests/session-banner.test.sh §2c), so the row is matched with `+` rather than one space.
 ok "the banner prints a row for the role"   "$(printf '%s\n' "$BOUT" | awk '$1=="software-engineer"' | grep -cE 'deep +→ opus' | tr -d ' ')" 1
@@ -328,15 +328,15 @@ ERR="$(MERR "$I" software-engineer)"
 ok "stdout stays empty — a word there becomes an alias" "$([ -z "$OUT" ] && echo yes || echo no)" yes
 ok "…and it still exits 1"                              "$RC" 1
 ok "…but stderr is NOT empty"                           "$([ -n "$ERR" ] && echo yes || echo no)" yes
-ok "…it names the agent"                                "$(printf '%s' "$ERR" | grep -q "software-engineer" && echo yes || echo no)" yes
-ok "…names the consequence, not just the gap"           "$(printf '%s' "$ERR" | grep -qi 'SESSION model' && echo yes || echo no)" yes
-ok "…and names where the fix goes"                      "$(printf '%s' "$ERR" | grep -q 'instance.config.local.json' && echo yes || echo no)" yes
+ok "…it names the agent"                                "$(grep -q "software-engineer" <<<"$ERR" && echo yes || echo no)" yes
+ok "…names the consequence, not just the gap"           "$(grep -qi 'SESSION model' <<<"$ERR" && echo yes || echo no)" yes
+ok "…and names where the fix goes"                      "$(grep -q 'instance.config.local.json' <<<"$ERR" && echo yes || echo no)" yes
 # The second failure mode: a tier that exists but maps to no alias. Half a lookup is the
 # half nobody checks, and it degrades exactly the same way.
 printf '{\n  "roleTiers": { "software-engineer": "deep" }\n}\n' > "$I/instance.config.json"
 ERR="$(MERR "$I" software-engineer)"
 ok "a tier with no models entry is loud too"            "$([ -n "$ERR" ] && echo yes || echo no)" yes
-ok "…and says which tier"                               "$(printf '%s' "$ERR" | grep -q "'deep'" && echo yes || echo no)" yes
+ok "…and says which tier"                               "$(grep -q "'deep'" <<<"$ERR" && echo yes || echo no)" yes
 # NON-VACUITY. A resolver that complained on every call would be as useless as one that
 # never complained: the success path has to be silent, or nobody reads the failures.
 printf '{\n  "roleTiers": { "software-engineer": "deep" },\n  "models": { "deep": "opus" }\n}\n' > "$I/instance.config.json"
