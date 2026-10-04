@@ -77,6 +77,7 @@ success_criteria: [ "<measurable signal>", ... ]   # optional: this project's ow
 need: <who needs this, and what breaks for them if it never exists>   # THE VALUE GATE, all three keys: should this exist at all. Written on BOTH kinds, always — present is required, filled is not. See "The value gate" below
 cost_of_not_doing: <what the need above costs if it never ships>      # the answer that makes "not now" a real option
 no_owner: <who is allowed to say no>                                  # NOT the negation of `owner:` — the human who may stop this project. A decision with no owner is a trap
+timebox: <N>d | <N>w                  # optional, and absent on almost every project. PERMISSION TO STOP: this project is an experiment, and ending it when the box runs out is the plan, not an admission. A duration measured from this file's `timestamp:`. Inert until something reads it — see "Time-boxed projects" below
 target_repo: <org>/<repo>             # BUILD only: default repo for this project's tasks (<org> from instance.config.json). Omit for research.
 deliverables: [ "<artifact>", ... ]   # RESEARCH only: what this project produces, e.g. "tech landscape per domain (md)", "exec summary deck (marp)"
 autonomy: gated | <mode>              # optional (default gated). gated = the human promotes `ready` AND merges — both gates absolute. Any other value names a delegated-authority mode defined in `AUTONOMY.md`, and is INERT unless that file exists (absent ⇒ gated). See "Delegated authority" below.
@@ -105,6 +106,31 @@ candid sentence to the blank: `need: nobody yet — an experiment` says more tha
 Nothing validates this. `validate-bundle.sh` emits no diagnostic for a missing one at any
 severity, and must not grow one: every project created before these keys existed lacks all
 three, so the check would be noise on day one for 100% of them.
+
+**Time-boxed projects (`timebox:`) are allowed to die.** Building a prototype is not
+the failure; continuing one is, because each extra month makes stopping look like an
+admission that the last one was wasted. A project meant as an experiment says so up front
+with `timebox:`, so ending it on time is the plan. The field grants permission to stop.
+It is not a label.
+
+* **Grammar:** a positive whole number of days or weeks — `14d`, `6w` (`^[1-9][0-9]*[dw]$`).
+  Anything else, empty included, is not a time-box: a reader treats it as absent, and says
+  so when the value is non-empty, rather than guessing.
+* **Measured from** the project's `timestamp:`, which `/loopd:new-project` writes once at
+  creation and which nothing in the machinery re-stamps (the board already reads it as the
+  project's creation date). Editing it moves the origin, so on a time-boxed project it is
+  edited only to restart the box on purpose. The clock **keeps running through
+  `status: paused`**: a pause stops dispatch, not the calendar.
+* **A duration, not a date, a boolean or a `kind:` value.** A boolean cannot say *when*, and
+  a `kind:` value would cut across build/research. A date names the same deadline but drops
+  the size of the box, which is the decision the human actually made.
+* **Absent is the default and means nothing changes.** No duration is inferred, and no
+  project is time-boxed implicitly. `/loopd:new-project` never asks for one. It records
+  one only from an explicit `timebox=` flag.
+* **Inert until read.** Setting it changes nothing yet: no dispatch gate, no filtering, no
+  board change and no `AWAITING.md` row. `validate-bundle.sh` does not check it, and
+  `write-snapshot.sh` does not carry it into `SNAPSHOT.json`. A reader must add it there
+  before the board can show it. `tests/timebox-inert.test.sh` holds that.
 
 **Two kinds of project.** `kind: build` (default) ships changes to a product repo
 as PRs, executed by role agents — the full `draft → ready → dispatch → PR → merge`

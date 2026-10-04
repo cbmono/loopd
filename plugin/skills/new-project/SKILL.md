@@ -2,7 +2,7 @@
 name: new-project
 disable-model-invocation: true
 description: Scaffold a new project under projects/<slug>/ — schema-valid files, registered in the bundle index/log and linked to its objective, with seed draft tasks. Supports build (code/PRs) and research (in-bundle deliverables) projects.
-argument-hint: <one-line project description>  [kind=build|research] [objective=<slug>] [repo=<name|owner/name>] [deliverables="a; b"] [--no-commit]
+argument-hint: <one-line project description>  [kind=build|research] [objective=<slug>] [repo=<name|owner/name>] [deliverables="a; b"] [timebox=<N>d|<N>w] [--no-commit]
 allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
 ---
 
@@ -51,6 +51,11 @@ build projects.
   would be noise — but an explicit flag is recorded. Omitted ⇒ the key is left out
   entirely (no placeholder, no empty value), which resolves to this clone's human.
   See `SCHEMA.md` → "Ownership on a shared instance".
+- `timebox=<N>d|<N>w` — this project is an experiment, and stopping it when the box runs
+  out is the plan (`SCHEMA.md` → "Time-boxed projects"). **Never asked, on either kind**,
+  and never suggested: most projects have no time-box, and none should pay a question for
+  it. Recorded verbatim from the flag. A value outside the grammar is refused in one line
+  and left out. Omitted ⇒ the key is left out entirely, never written empty.
 - `--no-commit` — scaffold only; don't commit (default is to commit).
 
 If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing anything.
@@ -163,7 +168,7 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
      `target_repo` for **build**, or `deliverables: [...]` for **research**; plus the
      capabilities from step 4: `autonomy:` (always; default `gated`), and `clis:` /
      `browser:` / `owner:` only when non-default or explicitly given (omit them
-     otherwise) — and a `# Context` body
+     otherwise); plus `timebox:` only from a valid `timebox=` flag — and a `# Context` body
      that states what the project does and why, ending by linking its `index.md` and
      `log.md`.
    - `index.md` — `# <title> — tasks`, one bullet per seed task with its status.
