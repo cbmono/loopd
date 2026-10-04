@@ -78,7 +78,7 @@ fi
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BOARD="$HERE/build-board.sh"
 WRITER="$HERE/write-snapshot.sh"
-for f in "$BOARD" "$WRITER"; do
+for f in "$BOARD" "$WRITER" "$HERE/fold-answers.sh"; do
   [[ -f "$f" ]] || { echo "board-serve: missing $f" >&2; exit 2; }
 done
 command -v python3 >/dev/null 2>&1 || {
@@ -90,7 +90,7 @@ OUT_ABS="$(cd "$OUT_DIR" && pwd)"
 BOARD_ROOT="$ROOT" BOARD_OUT="$OUT_ABS" BOARD_PORT="$PORT" BOARD_INTERVAL="$INTERVAL" \
 BOARD_RENDER="$BOARD" BOARD_WRITER="$WRITER" \
 exec python3 - <<'PY'
-import errno, http.server, os, signal, socketserver, subprocess, sys, threading, time, urllib.parse, urllib.request
+import errno, html, http.server, os, re, signal, socketserver, subprocess, sys, threading, time, urllib.parse, urllib.request
 
 ROOT     = os.environ["BOARD_ROOT"]
 OUT      = os.path.realpath(os.environ["BOARD_OUT"])
@@ -98,6 +98,7 @@ PORT     = int(os.environ["BOARD_PORT"])
 INTERVAL = int(os.environ["BOARD_INTERVAL"])
 RENDER   = os.environ["BOARD_RENDER"]
 WRITER   = os.environ["BOARD_WRITER"]
+FOLD     = os.path.join(os.path.dirname(WRITER), "fold-answers.sh")
 PAGE     = os.path.join(OUT, "board.html")
 SNAP     = os.path.join(ROOT, os.environ["AB_SNAPSHOT"])
 STATE    = os.path.join(OUT, ".serve")
@@ -134,6 +135,57 @@ def render():
             sys.stderr.write("board-serve: build-board failed — the page was not updated.\n")
     except Exception:
         sys.stderr.write("board-serve: build-board could not be run — the page was not updated.\n")
+
+
+# THE QUESTION TEXT ENTERS HERE AND NOWHERE ELSE: in the HTTP response, never in a file.
+# build-board.sh marks a question item's paragraph with `data-q="<slug>/<task id>"`; this
+# swaps that paragraph for the task document's own `open_questions`, read fresh per
+# request. The snapshot and the rendered file stay text-free, so nothing that copies,
+# commits or publishes them can carry it. html.escape here is the page's SECOND escape
+# point (build-board.sh's e() is the first), pinned by tests/board-serve.test.sh.
+SEAM = re.compile(r'<p data-q="([^"<>]*)">[^<]*</p>')
+SEG = re.compile(r"\w[\w.+-]*")
+INSTANCES = [ROOT]
+
+
+def list_instances():
+    global INSTANCES
+    try:
+        r = subprocess.run(["bash", RENDER, "--list-instances"], cwd=ROOT,
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=60)
+        found = [os.path.join(ROOT, x) for x in r.stdout.decode().splitlines() if x]
+        if r.returncode == 0 and found:
+            INSTANCES = found
+    except Exception:
+        pass
+
+
+# fold-answers.sh's --list is the one parser that round-trips these lists; a refusal
+# leaves the count paragraph, never a half-parsed question. An entry carrying ` --- ` is
+# answered and awaiting the fold, so it is skipped exactly as build-awaiting.sh skips it.
+def open_questions(path):
+    try:
+        r = subprocess.run(["bash", FOLD, "--list", path, "open_questions"],
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30)
+    except Exception:
+        return []
+    if r.returncode != 0:
+        return []
+    return [q for q in r.stdout.decode("utf-8", "replace").splitlines()
+            if q.strip() and " --- " not in q]
+
+
+def fill(m):
+    ref = m.group(1).split("/")
+    if len(ref) != 2 or not all(SEG.fullmatch(x) for x in ref):
+        return m.group(0)
+    hits = [f for f in (os.path.join(d, "projects", ref[0], "tasks", ref[1] + ".md")
+                        for d in INSTANCES) if os.path.isfile(f)]
+    qs = open_questions(hits[0]) if len(hits) == 1 else []
+    if not qs:
+        return m.group(0)
+    return '<p data-q="%s">%s</p>' % (m.group(1), "<br>".join(html.escape(q, quote=True)
+                                                               for q in qs))
 
 
 def snap_mtime():
@@ -230,7 +282,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(404, b"not found\n")
         ctype = TYPES.get(os.path.splitext(full)[1], "application/octet-stream")
         if full == PAGE:
-            body = body + RELOAD.encode()
+            body = SEAM.sub(fill, body.decode("utf-8", "replace")).encode() + RELOAD.encode()
         return self._send(200, body, ctype)
 
     do_HEAD = do_GET
@@ -278,6 +330,7 @@ with open(STATE, "w") as fh:
 # The port answers at once; the first render runs beside it (it can take tens of seconds
 # on a cold machine) and the page shows "rendering" until it lands.
 def first_render():
+    list_instances()
     refresh()
     render()
 threading.Thread(target=first_render, daemon=True).start()

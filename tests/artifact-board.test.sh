@@ -79,7 +79,7 @@ mk "$TMP/alpha" "alpha" '[
     {"id":"task-003","title":"Third","status":"ready","assignee":"qa-reviewer",
      "awaiting":"","open_questions":2,"advisor_notes":0,
      "depends_on":["task-001","task-002"],"in_flight":false,"prs":[],
-     "open_question_text":["Q1 body?","advisor: escalated one?"]}]},
+     "open_question_ids":["Q1",""]}]},
  {"slug":"all-done","title":"Finished work","kind":"build","status":"active",
   "awaiting_close":true,"phase_progress":{"done":2,"total":2},
   "tasks":[{"id":"task-001","title":"Done","status":"done","assignee":"","awaiting":"",
@@ -375,13 +375,9 @@ assert "…two render as a pair"                       "$(fhas '>002</button>' "
 assert "…never the full slug"                        "$(fhasnt '>task-001-<' "$OUT")"
 
 echo "== questions =="
-# The fixture's two entries are `Q1 body?` (numbered) and `advisor: escalated one?`
-# (escalated, and carrying NO number of its own) — so this one task exercises both
-# branches. The first is labelled Q1 because IT SAYS Q1, not because it is first.
-assert "a numbered handle is labelled from the text"  "$(fhas 'Q1: ' "$OUT")"
-assert "carried question text is shown"              "$(fhas 'Q1: body?' "$OUT")"
-assert "an escalated concern says where it came from" "$(fhas 'could not settle it' "$OUT")"
-assert "…and the advisor: marker is stripped"        "$(fhasnt 'advisor: escalated' "$OUT")"
+# The fixture's two ids are `Q1` and `""` (a question naming no number), so this one task
+# exercises both branches. The first is Q1 because ITS LABEL SAYS Q1, not because it is first.
+assert "a numbered handle is labelled from its id"   "$(fhas 'answer Q1</button>' "$OUT")"
 # THE SECOND QUESTION IS NOT `Q2`. It carries no number, it is merely SECOND, and
 # calling that Q2 is the entire defect this file now guards. Scoped to the card, so the
 # fixture's other project cannot make it pass or fail.
@@ -409,17 +405,17 @@ mk "$TMP/qnum" "qnum" '[
   "tasks":[{"id":"task-012-claim-identity","title":"Claim identity","status":"ready",
             "assignee":"software-engineer","awaiting":"","open_questions":1,
             "advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
-            "open_question_text":["2026-08-30T19:06:51Z · Q2: ship this, or hold until a runtime exports a per-agent id?"]}]},
+            "open_question_ids":["Q2"]}]},
  {"slug":"sparse","title":"Non contiguous numbers","kind":"build","status":"active",
   "awaiting_close":false,"phase_progress":{"done":0,"total":0},
   "tasks":[{"id":"task-001","title":"Gaps","status":"ready","assignee":"","awaiting":"",
             "open_questions":3,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
-            "open_question_text":["Q7: seventh?","2026-01-02T03:04:05Z · Q9: ninth?","advisor: Q4: fourth?"]}]},
+            "open_question_ids":["Q7","Q9","Q4"]}]},
  {"slug":"noprefix","title":"No number in the text","kind":"build","status":"active",
   "awaiting_close":false,"phase_progress":{"done":0,"total":0},
   "tasks":[{"id":"task-001","title":"Unnumbered","status":"ready","assignee":"","awaiting":"",
             "open_questions":1,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
-            "open_question_text":["which region should this run in?"]}]},
+            "open_question_ids":[""]}]},
  {"slug":"notext","title":"Count only","kind":"build","status":"active",
   "awaiting_close":false,"phase_progress":{"done":0,"total":0},
   "tasks":[{"id":"task-001","title":"Two questions, no text","status":"ready","assignee":"",
@@ -429,12 +425,12 @@ mk "$TMP/qnum" "qnum" '[
   "awaiting_close":false,"phase_progress":{"done":0,"total":0},
   "tasks":[{"id":"task-001","title":"Prose","status":"ready","assignee":"","awaiting":"",
             "open_questions":2,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
-            "open_question_text":["Q01: padded?","does the answer to Q7 change this?"]}]},
+            "open_question_ids":["Q01",""]}]},
  {"slug":"runon","title":"A run that does not end","kind":"build","status":"active",
   "awaiting_close":false,"phase_progress":{"done":0,"total":0},
   "tasks":[{"id":"task-001","title":"Run on","status":"ready","assignee":"","awaiting":"",
             "open_questions":2,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
-            "open_question_text":["Q1234: a four digit run","Q2x: a letter straight after"]}]}]'
+            "open_question_ids":["Q1234","Q2x"]}]}]'
 QN="$TMP/qnum.html"
 qnrc=0; bash "$GEN" --out "$QN" "$TMP/qnum" >/dev/null 2>&1 || qnrc=$?
 
@@ -451,7 +447,7 @@ assert "…and the fixture's count really is 1"        "$(yes_if python3 -c "
 import json, sys
 s = json.load(open('$TMP/qnum/$AB_SNAPSHOT'))
 t = s['projects'][0]['tasks'][0]
-sys.exit(0 if t['open_questions'] == 1 and 'Q2' in t['open_question_text'][0] else 1)")"
+sys.exit(0 if t['open_questions'] == 1 and t['open_question_ids'] == ['Q2'] else 1)")"
 
 echo "== …for numbers that are neither contiguous nor in order =="
 for n in 7 9 4; do
@@ -463,8 +459,6 @@ done
 # ORDER IS PRESERVED, and it is the document's order — not sorted, which would be a
 # second way of deciding what a question is called.
 assert "…in the order the document lists them"       "$(card "$QN" 'Non contiguous numbers' | before_in '>Q7</button>' '>Q9</button>')"
-assert "…a stamped entry still yields its number"    "$(card "$QN" 'Non contiguous numbers' | fhas_in 'Q9: ')"
-assert "…and so does an escalated one"               "$(card "$QN" 'Non contiguous numbers' | fhas_in 'Q4: ')"
 
 echo "== …and says so honestly when there is no number to read =="
 assert "an unprefixed question gets an unnumbered handle" \
@@ -492,17 +486,8 @@ assert "…the copy value is the bare task handle"    "$(card "$QN" 'Count only'
 # scope one would be the same fabrication as a positional number, one segment along.
 assert "…and no /q segment is invented for it"      "$(card "$QN" 'Count only' | fhasnt_in 'task-001/q')"
 
-echo "== …reading the token, not a number mentioned in the prose =="
+echo "== …a padded label normalises, an empty one stays unnumbered =="
 assert "Q01 normalises to Q1"                        "$(card "$QN" 'Numbers in prose' | fhas_in '>Q1</button>')"
-# The second question MENTIONS Q7 in its prose, and the explanation paragraph quotes
-# that prose verbatim — so the assertion is about the LABEL, not about the byte `Q7`
-# being absent from the card. A question is named by the token it opens with; a number
-# it merely talks about names nothing. The prefix scan is bounded for exactly this.
-for form in '>Q7</button>' 'answer Q7' 'Q7 handle' 'task-001/q7'; do
-  assert "…and a Q7 buried in a sentence yields no $form" \
-    "$(card "$QN" 'Numbers in prose' | fhasnt_in "$form")"
-done
-assert "…the mention itself is still quoted"         "$(card "$QN" 'Numbers in prose' | fhas_in 'answer to Q7 change this')"
 assert "…and that question gets the unnumbered handle" "$(card "$QN" 'Numbers in prose' | fhas_in 'class="qbtn nonum"')"
 
 # THE FALLBACK IS NOT MERELY UNUSED — IT IS ABSENT. A renderer that still contains the
@@ -873,14 +858,14 @@ mk "$TMP/term" "term" '[
   "tasks":[{"id":"task-012-claim-identity","title":"Shipped already","status":"done",
             "assignee":"","awaiting":"","open_questions":1,"advisor_notes":0,
             "depends_on":[],"in_flight":false,"prs":[],
-            "open_question_text":["Q2: superseded, never answered"]},
+            "open_question_ids":["Q2"]},
            {"id":"task-013-cancelled-one","title":"Cancelled already","status":"cancelled",
             "assignee":"","awaiting":"","open_questions":1,"advisor_notes":0,
             "depends_on":[],"in_flight":false,"prs":[],
-            "open_question_text":["Q3: also stale"]},
+            "open_question_ids":["Q3"]},
            {"id":"task-014-still-live","title":"Still live","status":"ready","assignee":"",
             "awaiting":"","open_questions":1,"advisor_notes":0,"depends_on":[],
-            "in_flight":false,"prs":[],"open_question_text":["Q5: genuinely open"]},
+            "in_flight":false,"prs":[],"open_question_ids":["Q5"]},
            {"id":"task-015-drifted","title":"Drifted done with a verb","status":"done",
             "assignee":"","awaiting":"merge","open_questions":0,"advisor_notes":0,
             "depends_on":[],"in_flight":false,"prs":[]}]},

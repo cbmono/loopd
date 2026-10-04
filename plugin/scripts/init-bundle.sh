@@ -1470,7 +1470,7 @@ fi
 # SNAPSHOT.json is a LOCAL, gitignored file, and so is the page rendered from it. Having
 # one puts an instance on the TERMINAL board and makes a page renderable — and since the
 # account-scoped publish path was deleted, nothing this repo ships sends any of it
-# anywhere. Question TEXT still needs SNAPSHOT_QUESTION_TEXT=1 on top of that.
+# anywhere. Question TEXT is never in either; only board-serve.sh's response carries it.
 # On-by-default is therefore safe even for an instance whose board must not leave the
 # machine.
 #

@@ -303,17 +303,16 @@ acceptance_criteria_filled() { # <frontmatter>
 #
 # IT READS THE NUMBER THE QUESTION CARRIES, NEVER THE POSITION IN THE LIST. Answering
 # Q1 and leaving Q2 open is the ordinary case; a label taken from the index would then
-# name the wrong question, which is the defect build-board.sh's q_split() exists to
-# prevent. The two must agree, so this is q_split()'s rule transcribed:
+# name the wrong question. The rule:
 #   · skip an `advisor:` marker (the project-manager stamps escalations with one),
 #   · skip at most ONE `·`-delimited lead segment — a stamped entry reads
 #     `2026-08-30T16:01:52Z · Q2: …` — bounded at 41 so an unbounded skip cannot hunt
 #     for a `Q7` mentioned in the middle of a question's prose,
 #   · then read `Q` + 1-3 digits that END there. `Q1 (HALF ANSWERED …` — no colon —
 #     is a real shape on a real board and must yield Q1; `Q1234` yields nothing.
-# There is no other place in this file that reads a question, so there is one rule here
-# and one in the renderer, pinned against each other end-to-end by snapshot.test.sh
-# (write the snapshot, render it, read the buttons back).
+# This is the only reader of a question's NUMBER; the renderer only parses the label, and
+# snapshot.test.sh pins the two end-to-end (write the snapshot, render it, read the
+# buttons back).
 #
 # SPELLED WITHOUT `\s`/`\b`: banned file-wide, see the header of tests/snapshot.test.sh.
 # `tolower()` before matching is how the case-insensitive `q` is done without gawk's
@@ -521,19 +520,6 @@ deliverable_path_entries() { # <frontmatter>
   ')"
 }
 
-# The TEXT of each open question — OPT-IN, and off unless SNAPSHOT_QUESTION_TEXT=1.
-#
-# THIS CROSSES THE ALLOWLIST ON PURPOSE, at the bundle owner's explicit instruction
-# (2026-08-23): a board that says "1 open question" and will not say which one is not
-# actionable. Everything about the shape is chosen so the DEFAULT stays exactly as it
-# was — absence of the variable means absence of the key, so an instance that never
-# sets it publishes precisely what it published before, and the two assertions that
-# forbid question text (snapshot.test.sh: "open-question TEXT never reaches the
-# snapshot", and the secrets sweep over the rendered page) still hold unchanged.
-#
-# Set it only for an instance whose task titles AND question text are safe to publish.
-# The Alteos instance states no-PII rules four times in its CLAUDE.md; it is exactly
-# the case this stays off for.
 # How many advisor concerns are still untriaged. A COUNT, never the text: unlike
 # `open_questions` this is not a human gate at all — it is the loop's own inbox — so
 # the board shows it as information, not as something demanding attention. It gets no
@@ -546,11 +532,6 @@ advisor_note_count() { # <frontmatter>
   # "there is something here", so an honest floor beats a silent zero.
   elif list_filled "$1" advisor_notes; then printf '1'
   else printf '0'; fi
-}
-
-question_texts() { # <frontmatter>
-  [[ "${SNAPSHOT_QUESTION_TEXT:-}" == 1 ]] || return 0
-  yaml_list_entries "$1" open_questions
 }
 
 # ONE stanza builder, and it is not tidiness. The project loop has TWO exits — the
@@ -719,12 +700,6 @@ EOF
 
     # depends_on -> a JSON array of IDs. jstr() does the escaping, as everywhere else.
     an="$(advisor_note_count "$tfm")"
-    qt_json=""
-    while IFS= read -r qt; do
-      [[ -n "$qt" ]] || continue
-      [[ -n "$qt_json" ]] && qt_json="$qt_json, "
-      qt_json="$qt_json$(jstr "$qt")"
-    done <<< "$(question_texts "$tfm")"
 
     dep_json=""
     while IFS= read -r dep; do
@@ -754,7 +729,7 @@ EOF
     t_count=$((t_count+1)); tasks_total=$((tasks_total+1))
 
     tasks_json="$tasks_json${tasks_json:+,}
-      {\"id\": $(jstr "$t_id"), \"title\": $(jstr "$t_title"), \"kind\": $(jstr "$t_kind"), \"status\": $(jstr "$t_status"), \"assignee\": $(jstr "$t_assignee"), \"phase\": $(jstr "$t_phase"), \"in_flight\": $in_flight, \"pr_mergeable\": $(jstr "$t_mergeable"), \"awaiting\": $(jstr "$awaiting"), \"open_questions\": $oq, \"open_question_ids\": [$ql_json], \"advisor_notes\": $an${qt_json:+, \"open_question_text\": [$qt_json]}, \"depends_on\": [$dep_json], \"prs\": [$prs_json]}"
+      {\"id\": $(jstr "$t_id"), \"title\": $(jstr "$t_title"), \"kind\": $(jstr "$t_kind"), \"status\": $(jstr "$t_status"), \"assignee\": $(jstr "$t_assignee"), \"phase\": $(jstr "$t_phase"), \"in_flight\": $in_flight, \"pr_mergeable\": $(jstr "$t_mergeable"), \"awaiting\": $(jstr "$awaiting"), \"open_questions\": $oq, \"open_question_ids\": [$ql_json], \"advisor_notes\": $an, \"depends_on\": [$dep_json], \"prs\": [$prs_json]}"
   done <<EOF
 $(find "$pdir/tasks" -maxdepth 1 -name '*.md' 2>/dev/null | grep -vE '/(index|log)\.md$' | sort || true)
 EOF
@@ -838,7 +813,7 @@ cat > "$tmp" <<JSON
 {
   "_schema": "ai-bridge board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
-  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/pr_mergeable (MERGEABLE|CONFLICTING|UNKNOWN, the tick's last host read)/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links; open_question_text ONLY when SNAPSHOT_QUESTION_TEXT=1 (opt-in, off by default). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
+  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/pr_mergeable (MERGEABLE|CONFLICTING|UNKNOWN, the tick's last host read)/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links. Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
   "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},

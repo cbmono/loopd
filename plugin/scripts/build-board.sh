@@ -213,8 +213,8 @@
 #     used to be `range(1, open_questions + 1)`, which is a position dressed as a name:
 #     a task whose Q1 was answered and whose Q2 is open rendered `answer Q1`, pointing a
 #     human at the wrong question in a document they then stop trusting. The number is
-#     read out of the question's own text (q_split), and where there is no number to
-#     read — question text not published, or an entry with no `Qn` prefix — the control
+#     the writer's `open_question_ids` label (q_label_num), and where there is none — an
+#     older snapshot carrying only a count, or an entry with no `Qn` prefix — the control
 #     renders unnumbered and says why. There is no positional fallback anywhere in this
 #     file, and reintroducing one is reintroducing the defect.
 #   · With no readable snapshot it writes NOTHING and exits 0. Publishing an empty board
@@ -267,7 +267,6 @@ from pathlib import Path
 OUT = Path(os.environ["BOARD_OUT"])
 STANDALONE = os.environ.get("BOARD_STANDALONE") == "1"
 AB_SNAPSHOT = os.environ["AB_SNAPSHOT"]
-AB_AWAITING = os.environ["AB_AWAITING"]
 
 
 def e(v):
@@ -922,14 +921,14 @@ td:first-child{overflow-wrap:break-word}
   border:0;border-radius:6px;background:var(--ok-soft);color:var(--ok);
   justify-self:start;white-space:nowrap}
 .promote:hover,.promote:focus-visible{filter:brightness(1.15)}
-/* The Q chip. Its TEXT is never on this page — the allowlist forbids question text. */
+/* The Q chip. Its TEXT is never in this file — the allowlist forbids question text. */
 .qbtn{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:11px;font-weight:500;
   color:var(--signal-soft-text);border:0;border-radius:6px;padding:2px 8px;
   background:var(--signal-soft);font-variant-numeric:tabular-nums}
 .qs{display:inline-flex;gap:4px;flex-wrap:wrap}
 .qbtn:hover{filter:brightness(1.15)}
 /* A HANDLE THE BOARD CANNOT NAME: quieter, because it does not know which question it
-   is. What it must never do is borrow a number from its position — see q_split(). */
+   is. What it must never do is borrow a number from its position — see q_label_num(). */
 .qbtn.nonum{color:var(--muted);background:var(--neutral-soft)}
 button.ghost{font-size:13px;color:var(--muted)}
 .deps{white-space:normal}
@@ -1281,7 +1280,7 @@ def task_handle(p, tid, qn=None):
 
     `q<n>` IS APPENDED ONLY FOR SOMETHING THAT IS A QUESTION. A verdict on a merge or
     on a promotion is not question-scoped, and inventing a `q1` for it would be the
-    same fabrication q_split() exists to prevent, one level up: a reader would go
+    same fabrication q_label_num() exists to prevent, one level up: a reader would go
     looking for a question the item never had.
 
     THE SLUG IS SHAPE-CHECKED BEFORE IT IS COPIED, by the same rule the ✕ applies to it
@@ -1320,58 +1319,14 @@ Q_BUTTON_CAP = 24
 
 # A QUESTION IS NAMED BY THE `Q<n>` IT CARRIES, NEVER BY WHERE IT SITS IN A LIST.
 #
-# THE BUG THESE TWO PATTERNS EXIST TO KILL, because it is the kind that looks right on
+# THE BUG THIS PATTERN EXISTS TO KILL, because it is the kind that looks right on
 # every board you have ever seen and is wrong on the one that matters: the labels used
 # to be `range(1, open_questions + 1)` — a POSITION. A task whose Q1 had been answered
 # and whose Q2 was still open rendered a button reading `answer Q1`. A human clicks it,
 # opens the document, finds Q1 answered, and either answers the wrong question or stops
 # believing the board. Positional numbering is not a fallback here and must never be
-# reintroduced as one: it is the defect. `q_split()` below returns None rather than a
+# reintroduced as one: it is the defect. `q_label_num()` below returns None rather than a
 # guess, and every caller renders an honest unnumbered control for None.
-#
-# THE SHAPE A REAL ENTRY HAS, from the live documents this renders (SCHEMA.md, and
-# `write-snapshot.sh`'s `yaml_list_entries`), is a stamped one:
-#     "2026-08-30T16:01:52Z · Q2: should an instance that is behind the template …"
-# so the token is NOT at the start of the string, and an escalated one carries a leading
-# `advisor:` marker as well. Q_LEAD skips exactly that much and no more — at most one
-# `·`-delimited segment of at most 40 characters (an ISO stamp plus its space is 21),
-# with the marker allowed on either side of it. Bounded on purpose: an unbounded skip
-# would hunt for a `Q7` mentioned in the middle of a question's PROSE and name the
-# question after something it merely talks about.
-# SPELLED WITHOUT `\s` AND `\b`, AND NOT BECAUSE PYTHON MINDS. It does not — these are
-# Python `re` patterns and both escapes are portable there. The rule they obey is the
-# repo's, and it is a STATIC one: this file ships in the plugin and runs on machines this
-# repo never sees, where a GNU-only escape in a `grep`/`sed` is a silent wrong ANSWER
-# rather than an error, so `tests/snapshot.test.sh` refuses either escape ANYWHERE in the
-# shipped script. A file-wide ban is the only version of that check that can be trusted —
-# one that tried to tell a Python region from a shell one would be a place for a real
-# offender to hide. `[ \t\r\n]` is the same class here, and `(?![0-9A-Za-z_])` is exactly
-# what the `\b` after a digit run meant: the number must END where it is read.
-Q_LEAD = re.compile(
-    r"^[ \t\r\n]*(?:advisor[ \t\r\n]*:[ \t\r\n]*)?"
-    r"(?:[^·]{0,40}·[ \t\r\n]*)?(?:advisor[ \t\r\n]*:[ \t\r\n]*)?", re.I)
-Q_NUM = re.compile(r"Q(\d{1,3})(?![0-9A-Za-z_])[:.)\]]?[ \t\r\n]*", re.I)
-
-Q_BUTTON_CAP = 24
-
-
-def q_split(q):
-    """`(number, body)` for one open question — number is None when it names none.
-
-    The number is read out of the question's own text and nowhere else. `Q01` and `Q1`
-    are the same question, so the value is normalised through int(); three digits is the
-    ceiling, which is far past any real document and keeps a drifted entry from
-    producing an absurd label.
-    """
-    s = str(q)
-    lead = Q_LEAD.match(s)
-    if lead:
-        s = s[lead.end():]
-    m = Q_NUM.match(s)
-    if m:
-        return int(m.group(1)), s[m.end():].strip()
-    return None, s.strip()
-
 
 Q_LABEL = re.compile(r"Q0*(\d{1,3})", re.I)
 
@@ -1392,38 +1347,28 @@ def q_label_num(v):
 def q_handles(t):
     """One entry per open question — its number, or None when the board cannot know.
 
-    THREE SOURCES, IN THIS ORDER, AND THE FIRST IS WHY THIS FIX EXISTS.
+    TWO SOURCES, IN THIS ORDER, AND THE FIRST IS WHY THIS FIX EXISTS.
       · `open_question_ids` — one `Q<n>` label per question, carried by every snapshot
-        written since 2026-08-31. This is the ONLY source present by default, and its
-        absence was the whole defect: the two paths below are the pre-2026-08-31 pair,
-        and on a default instance neither could ever produce a numbered handle, because
-        the opt-in one was off and the other is a total. Measured on a real 8-project
-        board before the field existed: `answer Q<n>` × 0, `answer question` × 18.
-      · `open_question_text` — opt-in (SNAPSHOT_QUESTION_TEXT=1, off by default) and
-        read here only for a snapshot too old to carry labels. Numbers come from
-        q_split(), which reads the same rule the writer's question_labels() does.
+        written since 2026-08-31. Measured on a real 8-project board before the field
+        existed: `answer Q<n>` × 0, `answer question` × 18.
       · `open_questions`, a plain COUNT → ONE unnumbered handle for the whole task, not
         N of them. N identical `?` buttons all copying the same string say nothing, and
         each one implies a question it cannot name. This is the honest floor, and it
         stays: a count is all an older or foreign snapshot has.
-    The cap applies to the two per-question paths, where a drifted list of a thousand
+    The cap applies to the per-question path, where a drifted list of a thousand
     entries would otherwise render a page nobody can open; the count path emits one
     control regardless of how absurd the count is, so it needs no cap at all.
     """
     ids = tolist(t.get("open_question_ids"))
     if ids:
         return [q_label_num(x) for x in ids[:Q_BUTTON_CAP]]
-    qs = [str(q) for q in tolist(t.get("open_question_text"))][:Q_BUTTON_CAP]
-    if qs:
-        return [q_split(q)[0] for q in qs]
     return [None] if toint(t.get("open_questions")) > 0 else []
 
 
 # What an unnumbered handle says instead of a number. Two strings, because the two ways
 # a number can be missing are not the same fact and a reader acts on them differently.
-Q_NO_TEXT = ("The board carries a COUNT of open questions, not their numbers — this "
-             "instance does not publish question text. Open %s and use the Qn written "
-             "there; the board will not invent one.")
+Q_NO_TEXT = ("The board carries a COUNT of open questions, not their numbers. Open %s "
+             "and use the Qn written there; the board will not invent one.")
 Q_NO_NUM = ("This question's text carries no Qn prefix, so the board cannot name it. "
             "Open %s and use the number written there; the board will not invent one.")
 
@@ -1436,8 +1381,23 @@ def q_title(t, ref):
     Q_NO_TEXT — the board knows this question names no number, rather than not knowing
     whether it does.
     """
-    read_it = tolist(t.get("open_question_ids")) or tolist(t.get("open_question_text"))
-    return (Q_NO_NUM if read_it else Q_NO_TEXT) % ref
+    return (Q_NO_NUM if tolist(t.get("open_question_ids")) else Q_NO_TEXT) % ref
+
+
+def q_seam(p, t):
+    """` data-q="<slug>/<task id>"` on a question item's paragraph, else nothing.
+
+    The ONLY seam for question text, and this file never fills it: board-serve.sh
+    replaces the paragraph in its HTTP response with the task document's own
+    `open_questions`. Both values are already on the page (the handle and the row's
+    id), so the attribute adds nothing a published copy did not carry.
+    """
+    slug, tid = str(p.get("slug") or ""), str(t.get("id") or "")
+    if t.get("awaiting") not in ("answer", "question"):
+        return ""
+    if not (SLUG_SEG.fullmatch(slug) and SLUG_SEG.fullmatch(tid)):
+        return ""
+    return ' data-q="%s"' % e(slug + "/" + tid)
 
 
 def explain(verb, p, t, hint):
@@ -1467,34 +1427,11 @@ def explain(verb, p, t, hint):
                 "after which an agent can pick it up. Approving does not start work "
                 "immediately; the next loop tick does.")
     if verb in ("answer", "question"):
-        qs = [str(q) for q in tolist(t.get("open_question_text"))]
-        if qs:
-            # An escalated concern is prefixed `advisor:` by the project-manager. Say
-            # once, in prose, where it came from — then drop the marker, so the
-            # question does not read "Q2: advisor: …". q_split() removes it along with
-            # the entry's stamp, and returns the number THE QUESTION NAMES.
-            escalated = any(q.lower().lstrip().startswith("advisor:") for q in qs)
-            lead = ("The advisor raised this and the project-manager could not settle it from "
-                    "the documents, so it came to you. ") if escalated else ""
-            # A question with no number of its own is rendered as its text alone. It was
-            # numbered by POSITION here too — so a stamped entry reading `… · Q2: …`
-            # came out as "Q1: 2026-08-30T16:01:52Z · Q2: …", naming it twice and
-            # getting it wrong the first time. Never label a question by its index.
-            def one(q):
-                n, body = q_split(q)
-                return ("Q%d: %s" % (n, body)) if n else body
-            body = "  ".join(one(q) for q in qs)
-            return lead + body + ("  — an unanswered question blocks promotion, so the "
-                                  "loop will not dispatch this task.")
-        # No text carried (the default) — fall through to the count wording.
         n = toint(t.get("open_questions"))
-        one = n == 1
-        return ("There %s %d open question%s on this task, and an unanswered question blocks "
-                "promotion — the loop will not dispatch it. The board never carries question "
-                "text; use the Q button in the task table to copy a prompt that opens "
-                "%s, or read %s, which does carry %s."
-                % ("is" if one else "are", n, "" if one else "s",
-                   "it" if one else "them", AB_AWAITING, "it" if one else "them"))
+        return ("There %s %d open question%s on this task; an unanswered question blocks "
+                "promotion, so the loop will not dispatch it. Only the locally served "
+                "board shows question text." % ("is" if n == 1 else "are", n,
+                                                "" if n == 1 else "s"))
     if verb == "merge":
         prs = [todict(x) for x in tolist(t.get("prs"))]
         nums = ", ".join("#%s" % x.get("number") for x in prs)
@@ -1704,7 +1641,8 @@ def render_table():
             o.append('<span class="what">%s</span>' % e(t.get("title")))
             o.append('<span class="where">%s%s</span></summary>'
                      % (e(where), " · <code>%s</code>" % e(hint) if hint else ""))
-            o.append('<p>%s</p></details>' % e(explain(t.get("awaiting"), p, t, hint)))
+            o.append('<p%s>%s</p></details>'
+                     % (q_seam(p, t), e(explain(t.get("awaiting"), p, t, hint))))
             # ONE HANDLE, AND EVERY BUTTON IN THIS ROW OPENS WITH IT. `<handle>: ` is
             # the whole notation — the task's own for anything task-scoped, this
             # question's for a question, and the project's alone for a close proposal,

@@ -311,13 +311,56 @@ ok "board-serve.sh invokes no model"                   \
   "$(grep -cE '(^|[^a-z-])claude( |$)|anthropic|--model' "$SERVE")" 0
 ok "…and reads SNAPSHOT.json through build-board.sh only" \
   "$(yes_if grep -qF 'build-board.sh' "$SERVE")" yes
-# THE ALLOWLIST IS THE SPEC. The server may not reach past the snapshot to a task document,
-# a project document or the config — the renderer's input is one file and that is what the
-# field allowlist is scoped for.
-ok "…and opens no task or project document"           \
-  "$(grep -cE 'projects/|/tasks/' "$SERVE")" 0
+# The one document the server opens is a task's, for its open_questions (section 7); a
+# project document or a second path into the bundle would be a new reader to justify.
+ok "…and builds one path into the bundle, a task's"   "$(grep -cE 'projects|tasks' "$SERVE")" 1
 ok "…and only TESTS for the tracked config, never reads it" \
   "$(grep -n 'instance\.config\.json' "$SERVE" | grep -cv -- '-f instance\.config\.json')" 0
+
+echo
+echo "== 7. the served page shows the question; the published render cannot =="
+# BOTH SIDES FROM ONE FIXTURE IN ONE RUN. The local half alone passes on a build that
+# leaks; the published half alone passes on a build that renders nothing. The writer and
+# the publish render run with SNAPSHOT_QUESTION_TEXT=1 exported: the opt-in is deleted, so
+# setting it must change nothing.
+SENT="SENTINEL-task012-7f3c9a"
+D="$TMP/group/_ai-bridge-delta"
+new_instance "$D"
+cat > "$D/projects/p/tasks/task-002.md" <<TSK
+---
+type: Task
+title: Needs an answer
+kind: build
+status: draft
+open_questions: [ "Q1: $SENT first, with <b>markup</b> & an ampersand?", "Q2: $SENT second?", "Q3: ANSWERED-task012 --- yes" ]
+---
+TSK
+( cd "$D" && SNAPSHOT_QUESTION_TEXT=1 SNAPSHOT_NOW=2026-09-06T00:00:00Z bash "$WRITER" --quiet )
+PUB="$TMP/publish/artifact-body.html"
+mkdir -p "$TMP/publish"
+( cd "$D" && SNAPSHOT_QUESTION_TEXT=1 bash "$REPO/plugin/scripts/build-board.sh" --out "$PUB" . ) >/dev/null 2>&1
+PD="$(cd "$D" && bash "$SERVE" --print-port)"
+SRV_D="$(start_server "$D" "$TMP/d.log")"
+SERVED="$(body_of "$PD" /board.html)"
+
+ok "CONTROL: the snapshot counts all three entries"   \
+  "$(python3 -c "import json,sys; s=json.load(open(sys.argv[1])); print([t['open_questions'] for p in s['projects'] for t in p['tasks'] if t['id']=='task-002'])" "$D/$AB_SNAPSHOT")" "[3]"
+ok "the snapshot carries zero sentinel bytes"         "$(grep -c "$SENT" "$D/$AB_SNAPSHOT")" 0
+ok "the published render exists"                      "$(yes_if test -s "$PUB")" yes
+ok "…and carries zero sentinel bytes"                 "$(grep -c "$SENT" "$PUB")" 0
+ok "the served-dir file carries zero too"             "$(grep -c "$SENT" "$D/$AB_BOARD_DIR/board.html")" 0
+ok "the served page carries both questions"           "$(grep -o "$SENT" <<<"$SERVED" | wc -l | tr -d ' ')" 2
+ok "…escaped at the second escape point"              \
+  "$(yes_if grep -qF '&lt;b&gt;markup&lt;/b&gt; &amp; an ampersand' <<<"$SERVED")" yes
+ok "…and never as live markup"                        "$(grep -c '<b>markup</b>' <<<"$SERVED")" 0
+ok "…and an answered entry awaiting the fold is not shown" "$(grep -c 'ANSWERED-task012' <<<"$SERVED")" 0
+ok "the placeholder is gone from the served item"     \
+  "$(grep -c 'Only the locally served board shows question text' <<<"$SERVED")" 0
+ok "…and still stands in the published one"           \
+  "$(grep -c 'Only the locally served board shows question text' "$PUB")" 1
+ok "the flag and the text field are gone from plugin/" \
+  "$(grep -rlE 'SNAPSHOT_QUESTION_TEXT|open_question_text' "$REPO/plugin" | wc -l | tr -d ' ')" 0
+kill -TERM "$SRV_D" 2>/dev/null
 
 echo
 echo "pass=$pass fail=$fail skip=$skip"

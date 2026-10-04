@@ -530,6 +530,13 @@ can contain, because the renderer reads the snapshot and nothing else.
 | awaiting **verb**, open-question **count** | any path outside the bundle |
 | PR links | — |
 
+**Question text is shown on exactly one surface: the response `board-serve.sh` sends on
+`127.0.0.1`.** The renderer marks each question item with its `<slug>/<task id>`, and the
+server fills it from that task document's `open_questions` as it answers the request. The
+snapshot and every rendered file stay text-free, and nothing switches that: the
+`SNAPSHOT_QUESTION_TEXT` opt-in that once put the text in the snapshot is deleted, so a
+copied or published page cannot carry it.
+
 **One identity field is carried, and it was a decision.** `owner` used to be on the right
 of that table, for the obvious reason: on a shared bundle it names a person, and the page
 was published then. It moved because a board that cannot say whose project is whose cannot
