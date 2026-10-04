@@ -226,11 +226,18 @@ ok "a remote that cannot be read is never called empty" "$(has "$out" 'no commit
 DUMB="$TMP/dumb"; mkdir -p "$DUMB/srv"; git init --bare --quiet "$DUMB/srv/empty.git"
 git --git-dir="$DUMB/srv/empty.git" update-server-info
 cat > "$DUMB/srv.py" <<'PY'
-import http.server, os, sys, threading, time
+import http.server, os, socketserver, sys, threading, time
 os.chdir(sys.argv[1])
 class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
-srv = http.server.HTTPServer(('127.0.0.1', 0), H)
+# NOT http.server.HTTPServer as it ships: its server_bind() calls socket.getfqdn(host), a
+# reverse-DNS lookup of 127.0.0.1 that returns at once on a laptop and hangs past this
+# fixture's 20s wait on the CI runner (measured: process alive, stderr empty, no port).
+class S(http.server.HTTPServer):
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+srv = S(('127.0.0.1', 0), H)
 threading.Thread(target=lambda: (time.sleep(120), os._exit(0)), daemon=True).start()
 print(srv.server_address[1], flush=True)
 srv.serve_forever()
