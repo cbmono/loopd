@@ -911,7 +911,7 @@ and need no plugin — share one copy.
 |---|---|
 | `repo` | `org/name`, cloned over **the same transport and host as this bundle's own `origin`** — SSH bundle, SSH clone. An `http://` origin lends its host but not its scheme: the clone is HTTPS, never plaintext. A full URL is taken verbatim, which is the override. |
 | `path` | `/` for the repo root, or `knowledge` for a top-level folder of that name inside a shared repo. |
-| `ref` | a **BRANCH** (default `main`). A tag or a SHA is refused **by name**: it checks out a detached HEAD the write path cannot push. |
+| `ref` | a **BRANCH** (default `main`). A tag or a SHA is refused **by name**: it checks out a detached HEAD the write path cannot push. A repo with **no commits** is refused by name too — a host reports a default branch for it, but no branch exists — with the command that creates the first one. |
 
 **The mount is a nested clone — not a symlink and not a submodule.** `knowledge/` becomes a
 real directory, gitignored in the bundle, so `find knowledge -type f` descends it exactly as

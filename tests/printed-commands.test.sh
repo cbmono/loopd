@@ -60,6 +60,7 @@ plugin/scripts/init-bundle.sh|loopd/plugin/scripts/init-bundle.sh --config
 plugin/scripts/kb-sweep-due.sh|build-kb-index.sh --check
 plugin/scripts/kb-sync.sh|kb-sync.sh commit --message '\"<message>\"' -- '<path>...'
 plugin/scripts/kb-sync.sh|kb-sync.sh mount
+plugin/scripts/kb-sync.sh|kb-sync.sh mount
 plugin/scripts/migrate-bundle.sh|kb-sync.sh commit --message '\"chore: relink knowledge/\"' -- '<path>...'
 plugin/scripts/migrate-bundle.sh|migrate-bundle.sh --apply
 plugin/scripts/migrate-bundle.sh|validate-bundle.sh

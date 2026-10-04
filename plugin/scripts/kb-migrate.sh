@@ -64,7 +64,7 @@ STAGE="$(mktemp -d "${TMPDIR:-/tmp}/kb-migrate.XXXXXX")" || die "could not creat
 trap 'rm -rf "$STAGE"' EXIT
 mv "$INST/knowledge" "$STAGE/knowledge" || die "could not set knowledge/ aside."
 
-if ! bash "$HERE/kb-sync.sh" --instance "$INST" mount; then
+if ! bash "$HERE/kb-sync.sh" --instance "$INST" mount --allow-empty; then
   mv "$STAGE/knowledge" "$INST/knowledge"
   die "could not mount $REPO — knowledge/ was put back untouched."
 fi
