@@ -62,7 +62,11 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # 14737 -> 14938 (dispatch-reporting-defects/task-016). +201 bytes: the `AB="$(ls …)"`
 # snippet, which no permission rule can match, is replaced by the one-command-per-call
 # shape and the one-line why the task's criterion 4 requires. Measured, not rounded.
-CEILING=14938
+# 14938 -> 16102 (dispatch-reporting-defects/task-028). +1,170 bytes, 15 lines: the
+# `Needs you:` reply vocabulary and its carve-out — promote and merge are never inferred
+# from a glyph. The main thread reads replies, and only this file reaches it on every
+# install; the task capped the addition at 20 lines. Measured, not rounded.
+CEILING=16102
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
