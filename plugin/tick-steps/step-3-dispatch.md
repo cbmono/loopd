@@ -212,11 +212,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    reusable, write or update a `Finding` in `knowledge/findings/` per `SCHEMA.md` and
    link it from the task."*
 
-   **Grounding, Effort, Commit attribution and Scratch (where to start reading, how big
-   this is, how the commit is signed, and where the throwaway files go).** Before you
+   **Grounding, Effort, Commit attribution, PR title and Scratch (where to start reading,
+   how big this is, how the commit is signed, what the title is tagged with, and where the
+   throwaway files go).** Before you
    spawn, run `${CLAUDE_PLUGIN_ROOT}/scripts/dispatch-brief.sh <task-path>` and paste its
-   output into the brief **unchanged, all four headings and all** — the fixed headings are
-   `## Grounding (<target_repo>)`, `## Effort`, `## Commit attribution` and `## Scratch`.
+   output into the brief **unchanged, all five headings and all** — the fixed headings are
+   `## Grounding (<target_repo>)`, `## Effort`, `## Commit attribution`, `## PR title` and
+   `## Scratch`.
    Grounding is the
    target repo's
    `knowledge/services/<repo>.md` entry points, capped at 15 lines, or — when that Service
@@ -224,10 +226,11 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `cataloguer` to review. Effort is the files/LOC/turns budget derived from the task's
    criteria count and the instance's `maxPrLoc`/`maxPrFiles`. Commit attribution is the
    resolved `commitAttribution` (**absent ⇒ `claude`**), and it is in the brief precisely so
-   the worker never reads that key itself. Scratch is one directory **this task alone
+   the worker never reads that key itself. PR title is the resolved `ticketPrefix` on the
+   same terms (**absent ⇒ no tag at all**). Scratch is one directory **this task alone
    owns** — keyed on the task's slug, and checked with `git check-ignore` against the target
    repo's own clone, because a per-session path is the SAME path for every agent one tick
-   spawns and the second writer silently wins. **Never re-derive any of the four
+   spawns and the second writer silently wins. **Never re-derive any of the five
    yourself**: an agent that has to find its own entry points spends its first turns
    searching, which is the whole cost this block exists to remove.
 

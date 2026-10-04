@@ -42,7 +42,9 @@ and a `done`/`cancelled` task is finished.
 - Verify against the task's `acceptance_criteria`; the PR body carries them as a
   `✓`/`✗` table — tick only what you actually verified, and run
   `${CLAUDE_PLUGIN_ROOT}/scripts/pr-body-clearance.sh --body-file <draft>` before posting.
-- Push early; open the PR against the default branch with the task id in the title.
+- Push early; open the PR against the default branch with the task id in the title,
+  tagged per `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-config.sh ticketPrefix` (absent ⇒
+  no tag; `ABC` ⇒ `[ABC-<n>]`, or `[ABC-0]` with no ticket).
 - Hit a genuine ambiguity ⇒ add a numbered entry to the task's `open_questions` and
   say so — in-session the human may answer immediately, which you then fold in and
   MOVE to `answered_questions` (verbatim, timestamped, stamped `by <login>`) per the
