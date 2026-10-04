@@ -39,7 +39,12 @@ neither, ask for the notes; do not invent work.
    detail ("a customer's renewal", never the customer). Titles reach the board and
    these lines persist for the life of the repo. **Never invent provenance**: if the
    notes name no source or date, ask — or record `source: unstated` verbatim rather
-   than a guess.
+   than a guess. **Write the same decisive sentence into the document's
+   `original_request:`** frontmatter key — verbatim as captured, after the same
+   redaction, as a quoted single-line YAML string — on every project and task you
+   create. It is written **once, here, and never rewritten**: refine bakes answers into
+   `# Context` in place, so this key is where the wording that was actually asked for
+   survives (`SCHEMA.md`).
 5. **Never promote.** Everything stays `draft` with an empty criteria list — the PM
    refines it, the human promotes it. You do not set `ready`, do not dispatch, do not
    edit `AWAITING.md` (it is derived).

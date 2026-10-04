@@ -84,6 +84,7 @@ timestamp: <ISO 8601>
 type: Project
 title: <project name>
 description: <one line>
+original_request: "<what the human asked for, verbatim, on one line>"   # optional (older bundles lack it, and `validate-bundle.sh` emits no diagnostic for its absence). WRITTEN ONCE AT CREATION, NEVER REWRITTEN — not by refine, not by any tick step, not by a role agent, not by closeout. `/loopd:new-project` writes it from the owner's one-line description and `/loopd:capture` from the captured decisive sentence, as a quoted single-line YAML string (a multi-line ask collapsed to one line). Why: `title`, `description` and `# Context` are DERIVED from the ask, and refine bakes answers into `# Context` in place, so the human's own wording otherwise survives nowhere — and on an instance shared by two humans the reviewer must be able to see what was actually asked, not what the loop made of it. Same rule as every other document field: **no customer PII** — it persists for the life of the repo.
 kind: build | research                # build = ships code via PRs (default); research = produces in-bundle deliverables
 objective: /objectives/<slug>.md      # optional: link up to the objective it serves, WHEN one exists. Omit it and this project's own `success_criteria` are its anchor — see "Where a project's success is measured" below
 success_criteria: [ "<measurable signal>", ... ]   # optional: this project's own measurable success. Same rule as an objective's — name the command and today's number. What /audit grounds against when there is no `objective:`
@@ -199,6 +200,7 @@ timestamp: <ISO 8601>
 type: Task
 title: <imperative summary>
 description: <one line>
+original_request: "<what the human asked for, verbatim, on one line>"   # optional (older bundles lack it, and `validate-bundle.sh` emits no diagnostic for its absence). WRITTEN ONCE AT CREATION, NEVER REWRITTEN — not by refine, not by any tick step, not by a role agent. A seed task carries the owner's description `/loopd:new-project` derived it from; a captured task carries the decisive sentence `/loopd:capture` quoted; a task created later carries what was asked of it, or omits the key. A quoted single-line YAML string (a multi-line ask collapsed to one line). Why: refine rewrites `# Context` in place when it bakes an answer in, so the human's own wording otherwise survives nowhere — and on a shared instance the reviewer must see what was asked, not what refine made of it. Same rule as every other document field: **no customer PII** — it persists for the life of the repo.
 kind: build | research                # inherits the project's kind if omitted
 status: draft                         # initial state; see lifecycle below
 assignee:                             # BUILD: role slug set by PM (software-engineer | devops-engineer | qa-reviewer). RESEARCH: usually empty (human-driven)
