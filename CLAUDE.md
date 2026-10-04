@@ -6,7 +6,7 @@ Guidance for Claude Code when working in **this repo** — the ai-bridge templat
 
 A reusable **OKF control-panel template** for orchestrating background agents against a
 group's product repositories. You stamp out one **instance** per group; each instance is
-its own git repo under `~/workspace/<group>/_ai-bridge-<group>/`.
+its own git repo under `~/workspace/<group>/_loopd-<group>/`.
 
 - `plugin/` — **everything that ships**: the machinery, and (since task-022) the three files a stamp reads — `seed/`, `RETIRED` and a mirror of `VERSION`. An installed plugin is the CONTENTS of this directory, so anything `/loopd:init` needs that is not in here does not exist on a machine that never cloned this repo.
 - `plugin/seed/` — starting content, copied into an instance **once, only if absent**. A change here reaches nothing automatically.

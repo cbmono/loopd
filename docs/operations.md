@@ -509,7 +509,7 @@ at its next stamp, with no `touch` needed.
 
 ```jsonc
 // instance.config.json
-"boardInstances": [".", "~/workspace/other-group/_ai-bridge-other-group"]
+"boardInstances": [".", "~/workspace/other-group/_loopd-other-group"]
 ```
 
 ### Before it leaves the machine, know what it carries
@@ -600,7 +600,7 @@ grep. Opt-in, 100% local — no code leaves the machine.
 
 1. `npm i -g @colbymchenry/codegraph`
 2. `codegraph install` — wires the codegraph MCP into Claude Code (`-y` for non-interactive, `--print-config <id>` to inspect first)
-3. From the instance root: `scripts/index-kb.sh` — reads `reposRoot`, indexes every product repo (incremental on re-run), skips worktrees (`_wt`), instance dirs (`_ai-bridge-*`) and non-git dirs. `--with-serena` also warms a Serena LSP cache.
+3. From the instance root: `scripts/index-kb.sh` — reads `reposRoot`, indexes every product repo (incremental on re-run), skips worktrees (`_wt`), instance dirs (`_loopd-*`, `_ai-bridge-*`) and non-git dirs. `--with-serena` also warms a Serena LSP cache.
 
 Add infra/assets repos with no useful call graph via `codegraphSkip` (space-separated) or
 `$CODEGRAPH_SKIP`. With no index present, agents just grep as before.
@@ -1023,8 +1023,8 @@ owner asked three times in one session, for three different instances.
    ▄▄▄▄
 ◀━▐    ▌
   ▝▄▄▄▄▘
-loopd v3.1.0 · _ai-bridge-private · org: cbmono
-───────────────────────────────────────────────
+loopd v3.1.0 · _loopd-example · org: cbmono
+───────────────────────────────────────────
 
 SETTING               VALUE                               FROM
 owner                 example-user-007 · you@example.com  local/tracked
@@ -1036,7 +1036,7 @@ AGENT (role)          TIER     → MODEL                    FROM
 cataloguer            standard → sonnet                   tracked
 software-engineer     deep     → opus                     local
 
-Board   file:///Users/you/workspace/_ai-bridge-private/.board-live/board.html
+Board   file:///Users/you/workspace/_loopd-example/.board-live/board.html
 Run     /loopd:board serve for a live URL
 Update  claude plugin update loopd  (2.0.3 → 2.0.4) — restart to apply it
 ```
@@ -1338,7 +1338,7 @@ still see everything in one tree:
 | Zed (no workspace-file support) | the **group folder** | the instance's `_`-prefix already sorts it to the top |
 | any editor, and the terminal | **`repos/`** inside the instance | one symlink per repo, so `ls repos/` and `cd repos/<name>` work from inside the instance |
 
-**The workspace file.** A generic `files.exclude` glob (`_ai-bridge-*`) hides the instance
+**The workspace file.** A generic `files.exclude` glob per bundle prefix (`_loopd-*`, `_ai-bridge-*`) hides the instance
 from the repos pane so it isn't shown twice, and `terminal.integrated.cwd` — uncommented
 and stamped with the instance's absolute path at install time — pins **new terminals** to
 the instance. Without it a multi-root workspace picks the terminal's folder separately from

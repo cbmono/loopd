@@ -8,7 +8,7 @@ anyone can hand a project or a single task across.
 ## Step 0 — the bundle is the org's repo
 
 ```sh
-/loopd:init ~/workspace/<group>/_ai-bridge-<group> --org <org>
+/loopd:init ~/workspace/<group>/_loopd-<group> --org <org>
 ```
 
 The **first** person runs it and gets `<org>/<org>-okf` created private, seeded and
@@ -72,7 +72,7 @@ gitignored file on their machine, which `/loopd:init` writes there.
 # in Claude Code, once per machine:
 #   /plugin marketplace add cbmono/loopd
 #   /plugin install loopd@loopd
-/loopd:init ~/workspace/<group>/_ai-bridge-<group> --org <org>
+/loopd:init ~/workspace/<group>/_loopd-<group> --org <org>
 ```
 
 They get the clone with the **tracked** config — `people`, `defaultOwner`, `org` — already
@@ -82,8 +82,8 @@ can carry because it is never committed.
 **Already cloned it by hand?** Then it is three commands and the stamp is the same one:
 
 ```sh
-git clone <bundle-remote> _ai-bridge-<group>
-cd _ai-bridge-<group>
+git clone <bundle-remote> _loopd-<group>
+cd _loopd-<group>
 /loopd:init .
 ```
 
