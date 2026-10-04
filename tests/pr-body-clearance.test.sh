@@ -137,6 +137,7 @@ serve() { # <body-file> [head] — publish it as the PR the script will read
 }
 
 chars() { "$REAL_JQ" -Rs 'length' < "$1"; }   # code points, as the host counts them
+cell() { printf '%*s' "$1" '' | tr ' ' 'x'; }   # an evidence cell of exactly <n> bytes
 
 # --- assertions ---------------------------------------------------------------
 expect() { # <name> <expected-rc> [args...] — runs against PR 42
@@ -178,6 +179,7 @@ ok() { # <name> <actual> <expected>
 TABLE_HEAD='| Criterion | ✓ | Verified by |'
 TABLE_RULE='|---|---|---|'
 TABLE_ROW='| the retry backs off on 429 | ✓ | `foo.test.sh` 40/0 |'
+TABLE_CRIT='the retry backs off on 429'   # verbatim criterion text: not counted
 
 # --- the three elements #3286 carries and elements 1-3 never asked for --------
 # Every fixture below that is meant to CLEAR carries all of them, so a case about the
@@ -286,7 +288,7 @@ echo
 echo "== the BODY ceiling: the two bodies the owner measured, and one that fits =="
 # Exact lengths, so a ceiling moved anywhere above 5,826 stops catching #122 and goes red
 # here rather than quietly clearing the evidence it was set on.
-sized_body() { # <chars> -> a complete body padded to exactly that many characters
+sized_body() { # <chars> -> a complete body padded to COUNT exactly that many characters
   local want="$1" f; f="$TMP/sized.$want.md"
   { printf '%s\n' '## Description' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" ''
     printf '%s\n' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW"
@@ -294,12 +296,13 @@ sized_body() { # <chars> -> a complete body padded to exactly that many characte
   } > "$f"
   # `printf %*s` then a translate: ordinary prose characters, no newline, so the count is
   # exact rather than approximately right.
-  printf '%*s' "$(( want - $(chars "$f") ))" '' | tr ' ' 'x' >> "$f"
+  printf '%*s' "$(( want + ${#TABLE_CRIT} - $(chars "$f") ))" '' | tr ' ' 'x' >> "$f"
   printf '%s' "$f"
 }
 
 B122="$(sized_body "$PR122_CHARS")"
-ok "the #122 fixture is exactly its measured length" "$(chars "$B122")" "$PR122_CHARS"
+ok "the #122 fixture counts exactly its measured length" \
+   "$(( $(chars "$B122") - ${#TABLE_CRIT} ))" "$PR122_CHARS"
 serve "$B122"
 expect "ai-bridge#122's length (${PR122_CHARS}) -> REFUSE on length" 4 42
 says   "  ...naming the ceiling it broke"          "over the ${BODY_CEILING}-character ceiling"
@@ -310,7 +313,8 @@ serve "$B135"
 expect "ai-bridge#135's length (${PR135_CHARS}) -> REFUSE on length" 4 42
 
 GOODSIZE="$(sized_body "$GOOD_BODY_CHARS")"
-ok "the 2,000-character fixture is exactly that"   "$(chars "$GOODSIZE")" "$GOOD_BODY_CHARS"
+ok "the 2,000-character fixture counts exactly that" \
+   "$(( $(chars "$GOODSIZE") - ${#TABLE_CRIT} ))" "$GOOD_BODY_CHARS"
 serve "$GOODSIZE"
 expect "a ${GOOD_BODY_CHARS}-character complete body -> CLEAR" 0 42
 says   "  ...and reports the count against the ceiling" "body is $GOOD_BODY_CHARS characters (ceiling $BODY_CEILING)"
@@ -338,6 +342,7 @@ echo "== the ceiling measures the AUTHORED half: ai-bridge#195, verbatim =="
 BODY195="$(cd "$(dirname "$0")" && pwd)/fixtures/pr-body/ai-bridge-195.md"
 PR195_POSTED=2672          # what the host served     -> was REFUSED at 4
 PR195_AUTHORED=1932        # what its author wrote    -> must CLEAR
+PR195_CRITERIA=585         # of which verbatim criterion text, not counted
 PR195_OVER=2600            # the same body, authored past the ceiling -> must REFUSE
 OPEN195='<!-- This is an auto-generated comment: release notes by coderabbit.ai -->'
 CLOSE195='<!-- end of auto-generated comment: release notes by coderabbit.ai -->'
@@ -348,23 +353,32 @@ ok "…carrying the marker pair"   "$(grep -cF -e "$OPEN195" -e "$CLOSE195" "$BO
 
 serve "$BODY195"
 expect "#195 as posted (${PR195_POSTED}) -> CLEAR on its ${PR195_AUTHORED} authored" 0 42
-says   "  ...reporting the authored count" "body is $PR195_AUTHORED characters (ceiling $BODY_CEILING)"
+says   "  ...reporting the counted half" \
+       "body is $(( PR195_AUTHORED - PR195_CRITERIA )) characters (ceiling $BODY_CEILING)"
+says   "  ...and the criterion text it left out" \
+       "not counting $PR195_CRITERIA characters of verbatim criterion text"
+
+# The cases below are about the block, not the criteria, so they run on #195 with its
+# criterion allowance spent again as prose: every count below is its authored count.
+BODY195P="$TMP/pr195-prose.md"
+awk -v m="$OPEN195" -v pad="$(printf '%*s' "$(( PR195_CRITERIA - 1 ))" '' | tr ' ' 'x')" \
+  '$0 == m { print pad } { print }' "$BODY195" > "$BODY195P"
 says   "  ...and what it did not count"    "of $PR195_POSTED posted"
 
 # THE MARKER IS THE ANCHOR, NEVER THE EDITOR'S LOGIN — which nothing here even reads. The
 # identical text without its markers is an unrecognised block, so it is counted in full.
 UNMARKED195="$TMP/pr195-unmarked.md"
-grep -vF -e "$OPEN195" -e "$CLOSE195" "$BODY195" > "$UNMARKED195"
+grep -vF -e "$OPEN195" -e "$CLOSE195" "$BODY195P" > "$UNMARKED195"
 serve "$UNMARKED195"
 expect "…the same text with the markers removed -> REFUSE" 4 42
 says   "  ...on the whole body"            "over the ${BODY_CEILING}-character ceiling"
 
 # It loosens exactly one thing: an author past the ceiling is still refused, block or no.
 OVER195="$TMP/pr195-over.md"
-{ awk -v m="$OPEN195" '$0 == m { exit } { print }' "$BODY195"
+{ awk -v m="$OPEN195" '$0 == m { exit } { print }' "$BODY195P"
   # One short of the difference: the padding line carries its own newline.
   printf '%*s\n' "$(( PR195_OVER - PR195_AUTHORED - 1 ))" '' | tr ' ' 'x'
-  awk -v m="$OPEN195" 'index($0, m) { p = 1 } p { print }' "$BODY195"
+  awk -v m="$OPEN195" 'index($0, m) { p = 1 } p { print }' "$BODY195P"
 } > "$OVER195"
 serve "$OVER195"
 expect "…and #195 padded to ${PR195_OVER} AUTHORED characters -> REFUSE" 4 42
@@ -382,9 +396,9 @@ ok "the fixture's block is the measured 740" "$(( PR195_POSTED - PR195_AUTHORED 
 
 padded_block() { # <chars> -> #195 with its block padded to exactly that many characters
   local want="$1" out="$TMP/pr195-block-$1.md"
-  { awk -v m="$OPEN195" '{ print } index($0, m) { exit }' "$BODY195"
+  { awk -v m="$OPEN195" '{ print } index($0, m) { exit }' "$BODY195P"
     printf '%*s\n' "$(( want - PR195_BLOCK - 1 ))" '' | tr ' ' 'x'
-    awk -v m="$OPEN195" 'p { print } index($0, m) { p = 1 }' "$BODY195"
+    awk -v m="$OPEN195" 'p { print } index($0, m) { p = 1 }' "$BODY195P"
   } > "$out"
   printf '%s' "$out"
 }
@@ -392,7 +406,7 @@ padded_block() { # <chars> -> #195 with its block padded to exactly that many ch
 # The bound itself, both sides, one character apart.
 AT="$(padded_block "$GENERATED_CEILING")"
 ok "…the padded block is exactly the allowance" \
-   "$(( $(chars "$AT") - PR195_AUTHORED ))" "$GENERATED_CEILING"
+   "$(( $(chars "$AT") - PR195_AUTHORED - PR195_CRITERIA ))" "$GENERATED_CEILING"
 serve "$AT"
 expect "a block AT the ${GENERATED_CEILING}-character allowance -> CLEAR" 0 42
 says   "  ...still on the authored half"   "body is $PR195_AUTHORED characters"
@@ -410,6 +424,65 @@ SELF_GRANT="$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' "$(c
 serve "$SELF_GRANT"
 expect "an author-owned exact pair around 2,600 characters -> REFUSE" 4 42
 says   "  ...counting every character of it"  "over the ${BODY_CEILING}-character ceiling"
+
+echo
+echo "== verbatim criterion text is not charged: loopd task-025, verbatim =="
+# Eight real criteria, quoted in full, pinned here because the task doc they came from is
+# not in this repo. Under the old count this body refused at 4 with 214 characters of prose.
+BODY025="$(cd "$(dirname "$0")" && pwd)/fixtures/pr-body/loopd-task-025-criteria.md"
+T025_POSTED=4729
+T025_CRITERIA=3849
+CRITERION_ALLOWANCE=800
+ok "the fixture is there, to the character" "$(chars "$BODY025")" "$T025_POSTED"
+ok "…its criterion column alone is past the ceiling" \
+   "$(awk -F' [|] ' '/^[|] / && $2 != "Criterion" && $2 !~ /^-/ { print $1 }' "$BODY025" \
+      | sed 's/^| //' | tr -d '\n' | "$REAL_JQ" -Rs 'length > 2500')" true
+expect "task-025 quoted in full (${T025_POSTED}) -> CLEAR" 0 --body-file "$BODY025"
+says   "  ...printing the number it compared" \
+       "is $(( T025_POSTED - T025_CRITERIA )) characters (ceiling $BODY_CEILING)"
+says   "  ...and what it left out"   "not counting $T025_CRITERIA characters"
+
+crit_body() { # <criterion cell> <prose chars> -> one row, padded to COUNT <prose chars>
+  local f; f="$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
+                          "$TABLE_HEAD" "$TABLE_RULE" "| $1 | ✓ | \`foo.test.sh\` 40/0 |")"
+  printf '%*s' "$(( $2 - $(chars "$f") + $(printf '%s' "$1" | "$REAL_JQ" -Rs length) ))" '' \
+    | tr ' ' 'x' >> "$f"
+  printf '%s' "$f"
+}
+# The allowance, both sides: a criterion AT it costs nothing, one past it costs one.
+serve "$(crit_body "$(cell "$CRITERION_ALLOWANCE")" "$BODY_CEILING")"
+expect "a criterion AT the ${CRITERION_ALLOWANCE}-character allowance -> CLEAR" 0 42
+F801="$(crit_body "$(cell "$(( CRITERION_ALLOWANCE + 1 ))")" "$BODY_CEILING")"
+serve "$F801"
+expect "one character past it -> charged that one -> REFUSE" 4 42
+says   "  ...printing the number it compared" "is $(( BODY_CEILING + 1 )) characters"
+
+# ONE UNIT. A criterion of 200 em-dashes is 200 characters and 600 bytes; subtracting
+# bytes from a code-point count would clear this body. Without jq both terms are bytes.
+DASHES="$(printf '%*s' 200 '' | sed 's/ /—/g')"
+FDASH="$(crit_body "$DASHES" "$(( BODY_CEILING + 1 ))")"
+expect "200 em-dashes of criterion, body one past -> REFUSE" 4 --body-file "$FDASH"
+says   "  ...subtracting 200 characters, not 600 bytes" "not counting 200 characters"
+touch "$FIX/jq_broken"
+expect "…and without jq, bytes from bytes -> still REFUSE" 4 --body-file "$FDASH"
+says   "  ...subtracting 600 bytes from a byte count" "not counting 600 characters"
+rm -f "$FIX/jq_broken"
+
+# THE CRITERIA TABLE ONLY: a second marked table's first column is the author's text.
+TWO="$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 2)" '' \
+                 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '### More' '' \
+                 "$TABLE_HEAD" "$TABLE_RULE" "| $(cell 2600) | ✓ | \`foo.test.sh\` 40/0 |")"
+expect "a 2,600-character cell in a SECOND marked table -> REFUSE" 4 --body-file "$TWO"
+
+# ONLY WHAT SURVIVES IN THE AUTHORED COPY: a table inside a marked block is already gone
+# from the count, so its criterion is not subtracted a second time.
+INBLOCK="$(body_file '## Description' "Adds the gate. $(cell 2361)" '' "$VERIFIED" '' \
+                     "$(crit_head 1)" '' "$OPEN195" "$TABLE_HEAD" "$TABLE_RULE" \
+                     "| $(cell 700) | ✓ | \`foo.test.sh\` 40/0 |" "$CLOSE195")"
+expect "a criteria table inside a marked block -> nothing subtracted -> REFUSE" 4 \
+       --body-file "$INBLOCK"
+says   "  ...one authored character past the ceiling" "is $(( BODY_CEILING + 1 )) characters"
+says_not "  ...and no criterion text left out" "not counting"
 
 echo
 echo "== the NOTES ceiling: three is the limit, and the fourth is the essay =="
@@ -459,7 +532,6 @@ echo "== the ROW bound: the reader #66's two-sided bar never had =="
 # both sides on 2026-08-29; ai-bridge#71 breached it the next day with three rows of
 # 500-600 characters, inside the machinery built to end unread rules. Everything below
 # drives the reader that closes that, at the measured boundaries rather than near them.
-cell() { printf '%*s' "$1" '' | tr ' ' 'x'; }   # an evidence cell of exactly <n> bytes
 
 row_body() { # <evidence-bytes>... -> a conforming body with one criteria row per argument
   local -a lines

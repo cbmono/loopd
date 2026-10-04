@@ -355,6 +355,11 @@ GENERATED_OPEN='<!-- This is an auto-generated comment: release notes by coderab
 GENERATED_CLOSE='<!-- end of auto-generated comment: release notes by coderabbit.ai -->'
 GENERATED_CEILING=1000
 
+# --- table 8: verbatim criterion text, NOT counted against the ceiling ----------
+# The author copies it from the task doc and may not shorten it (element 3's reason, one
+# level up). Bounded per row like the block above: 800 over a largest real criterion of 702.
+CRITERION_ALLOWANCE=800
+
 # The body less every marked block. Byte-for-byte the input when there is no block, so a
 # body nobody appended to is measured exactly as before. Nothing else reads this copy:
 # every structural check below still runs on the body as posted.
@@ -381,14 +386,45 @@ authored_half() { # <src> <dst>
     || cat -- "$1" > "$2"
 }
 
+# THE number the ceiling compares and `report_length` prints: the authored copy less its
+# own criteria table's criterion cells. ONE unit for both terms, chosen once — bytes off
+# code points would over-subtract every multibyte glyph, which fails open.
+counted_chars() { # <raw-body> -> "<counted> <exempt>"; leaves $TMPD/authored
+  local n c
+  authored_half "$1" "$TMPD/authored"
+  render_body "$TMPD/authored" "$TMPD/authored.rendered"
+  table_scan "$TMPD/authored.rendered" \
+    | awk '/^criterion\t/ { sub(/^criterion\t/, ""); print }' > "$TMPD/criteria"
+  if command -v jq >/dev/null 2>&1 \
+     && n="$(jq -Rs 'length' < "$TMPD/authored" 2>/dev/null)" && [ -n "$n" ] \
+     && c="$(jq -Rn --argjson cap "$CRITERION_ALLOWANCE" \
+               '[inputs | length | if . > $cap then $cap else . end] | add // 0' \
+               < "$TMPD/criteria" 2>/dev/null)" && [ -n "$c" ]; then
+    :
+  else
+    n="$(LC_ALL=C wc -c < "$TMPD/authored" | tr -d ' ')"
+    c="$(LC_ALL=C awk -v cap="$CRITERION_ALLOWANCE" \
+           '{ l = length($0); s += (l > cap ? cap : l) } END { print s + 0 }' \
+           "$TMPD/criteria")"
+  fi
+  case "$n$c" in ''|*[!0-9]*) return 2 ;; esac
+  printf '%s %s\n' "$(( n - c ))" "$c"
+}
+
 # What the caller is measured on, said before the verdict. The second line only appears
 # where a block was actually found, so a body nobody appended to prints what it always did.
 report_length() { # <body-file> <label>
-  local authored posted
-  authored_half "$1" "$TMPD/authored"
+  local counted exempt authored posted
+  read -r counted exempt <<EOF
+$(counted_chars "$1")
+EOF
   authored="$(char_count "$TMPD/authored")"
   posted="$(char_count "$1")"
-  echo "pr-body-clearance: $2 is $authored characters (ceiling $BODY_CEILING_CHARS)" >&2
+  echo "pr-body-clearance: $2 is ${counted:-unknown} characters (ceiling $BODY_CEILING_CHARS)" >&2
+  [ "${exempt:-0}" = 0 ] || {
+    echo "pr-body-clearance: …not counting $exempt characters of verbatim criterion text" >&2
+    echo "pr-body-clearance:    (at most $CRITERION_ALLOWANCE a row)" >&2
+  }
   if [ "$posted" != "$authored" ]; then
     echo "pr-body-clearance: …of $posted posted; the rest is a reviewer-generated block" >&2
   elif grep -Fq -- "$GENERATED_OPEN" "$1" && grep -Fq -- "$GENERATED_CLOSE" "$1"; then
@@ -770,7 +806,7 @@ table_scan() { # <rendered-body>
       gsub(/\\\|/, "\002", s)      # an escaped pipe is CONTENT, exactly as in cellcount
       sub(/^\|/, "", s); sub(/\|$/, "", s)
       n = split(s, arr, "|")
-      R_EVI = ""; R_LABEL = ""; R_MARKLAST = 0
+      R_EVI = ""; R_LABEL = ""; R_MARKLAST = 0; R_CRIT = ""
       if (n < 1) return 0
       R_EVI = arr[n]
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", R_EVI)
@@ -781,6 +817,7 @@ table_scan() { # <rendered-body>
         c = arr[i]
         gsub(/^[[:space:]]+|[[:space:]]+$/, "", c)
         if (c == "" || mark_only(c)) continue
+        if (length(c) > length(R_CRIT)) R_CRIT = c
         out = (out == "" ? c : out " " c)
       }
       # UNTRUSTED TEXT LEAVES HERE. Under LC_ALL=C `[:print:]` is ASCII 0x20-0x7e, so this
@@ -792,6 +829,7 @@ table_scan() { # <rendered-body>
       gsub(/[^[:print:]]/, ".", out)
       if (length(out) > 60) out = substr(out, 1, 57) "..."
       R_LABEL = (out == "" ? "(row " nth ")" : out)
+      gsub(/\002/, "\\|", R_CRIT)
       return 1
     }
     { lines[NR] = $0 }
@@ -804,7 +842,7 @@ table_scan() { # <rendered-body>
         if (index(head, "|") == 0) continue
         if (cellcount(head) < 2) continue
         if (cellcount(head) != cellcount(lines[i])) continue
-        rowcount = 0; rowmarked = 0
+        rowcount = 0; rowmarked = 0; tcrit = ""
         for (j = i + 1; j <= NR; j++) {
           if (index(lines[j], "|") == 0) break
           if (lines[j] ~ /^[[:space:]]*$/) break
@@ -823,6 +861,7 @@ table_scan() { # <rendered-body>
           # evidence the floor exists to refuse.
           nth++
           if (!split_row(lines[j])) continue
+          if (R_CRIT != "") tcrit = tcrit "criterion\t" R_CRIT "\n"
           len = length(R_EVI)
           if (R_MARKLAST)
             offenders = offenders sprintf("row\tmark\t%d\t%d\t%s\n", nth, len, R_LABEL)
@@ -838,7 +877,9 @@ table_scan() { # <rendered-body>
           # The heading of the FIRST marked table is the criteria heading. Taking the last
           # one would let a second marked table further down the body move the tally onto
           # a heading the author did not write it under.
-          if (crit_head_seen == 0) { crit_head = heading_above(i - 2); crit_head_seen = 1 }
+          if (crit_head_seen == 0) {
+            crit_head = heading_above(i - 2); crit_head_seen = 1; crit = tcrit
+          }
         }
       }
       # The state line comes FIRST and always, so a reader can take the verdict without
@@ -849,7 +890,7 @@ table_scan() { # <rendered-body>
       # Rows are only ever reported for the state the caller acts on. Under `unmarked` or
       # `none` there is no criteria table, so a length measured inside some other table
       # would be a refusal about a row nobody wrote as a criterion.
-      if (found && marked) printf "%s", offenders
+      if (found && marked) printf "%s%s", offenders, crit
       # ELEMENT 5, for the same reason and under the same condition.
       if (found && marked) {
         if (crit_head == "") { printf "tally\tnoheading\n"; exit }
@@ -939,9 +980,10 @@ EOF
 # its bound — so its advice is always "relocate", never "add". Both ceilings are reported
 # in one pass: an author over both should learn both in one run.
 report_concision() { # <raw-body> <notes-scan> <label> -> 0 clear, 4 over a ceiling
-  local raw="$1" nscan="$2" label="$3" chars notes rc=0
-  authored_half "$raw" "$TMPD/authored"
-  chars="$(char_count "$TMPD/authored")"
+  local raw="$1" nscan="$2" label="$3" chars exempt notes rc=0
+  read -r chars exempt <<EOF
+$(counted_chars "$raw")
+EOF
   notes="$(printf '%s\n' "$nscan" | awk -F'\t' '$1 == "notecount" { print $2; exit }')"
   case "$chars" in ''|*[!0-9]*) return 2 ;; esac
   case "$notes" in ''|*[!0-9]*) return 2 ;; esac
@@ -951,6 +993,8 @@ report_concision() { # <raw-body> <notes-scan> <label> -> 0 clear, 4 over a ceil
     echo "        characters — over the $BODY_CEILING_CHARS-character ceiling $AB_CONVENTIONS sets in" >&2
     echo "        'Write less'. A marked reviewer block is not counted, up to $GENERATED_CEILING" >&2
     echo "        characters; a larger one is counted in full, markers or no markers." >&2
+    echo "        Nor is each criteria row's verbatim criterion text, up to" >&2
+    echo "        $CRITERION_ALLOWANCE characters a row; its evidence is yours and is counted." >&2
     echo "        Keep the TL;DR line, the Verified line and the criteria table. Move the" >&2
     echo "        design, the alternatives and the incident into the task doc and the" >&2
     echo "        commit message, which travel with the change and have no ceiling." >&2
@@ -1238,6 +1282,18 @@ if [ "${1:-}" = "--self-test" ]; then
     '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
     '' "$GENERATED_OPEN" "$(st_cell 2600)"
+
+  # TABLE 8, BOTH DIRECTIONS: four 700-character criteria clear; one of 3,400 is charged
+  # past its allowance. A copy that drops the subtraction fails the first, one that drops
+  # the bound fails the second.
+  st_probe 0 "2,800 characters of verbatim criterion text" \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' '### Criteria (4 ✓ / 0 ✗)' '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' \
+    "| $(st_cell 700) | ✓ | \`a.test.sh\` 40/0 |" "| $(st_cell 700) | ✓ | \`a.test.sh\` 40/0 |" \
+    "| $(st_cell 700) | ✓ | \`a.test.sh\` 40/0 |" "| $(st_cell 700) | ✓ | \`a.test.sh\` 40/0 |"
+  st_probe 4 "…and one criterion past its $CRITERION_ALLOWANCE-character allowance" \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' "| $(st_cell 3400) | ✓ | \`a.test.sh\` 40/0 |"
 
   st_probe 0 "three claim-first notes" \
     '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
