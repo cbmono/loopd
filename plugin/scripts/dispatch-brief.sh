@@ -22,7 +22,7 @@ ATTRIBUTION_HEADING='## Commit attribution'
 TITLE_HEADING='## PR title'
 SCRATCH_HEADING='## Scratch'
 
-usage() { sed -n '2,10p' "$0" >&2; exit 2; }
+usage() { sed -n '2,12p' "$0" >&2; exit 2; }
 
 fm_block() { # <file> — the frontmatter, or exit 3/4 for a shape we will not read
   awk '
