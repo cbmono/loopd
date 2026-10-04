@@ -27,6 +27,8 @@
 #     "provenance:"): `machine` only when a role created it and no one else touched it.
 #   · THE 3.0 LAYOUT. Plugin-owned files still sitting at the bundle root move under
 #     `.ai-bridge/`, and the links pointing at them are rewritten. See that step.
+#   · THE .loopd RENAME. `.ai-bridge/` moves to `.loopd/` in one `git mv`, with its ignore
+#     lines, the statusline pin and any KB mount's `core.worktree`, then commits. See that step.
 #
 # WHAT IT REFUSES TO FIX (needs a human):
 #   · Dangling structural references. Whether to drop a `depends_on:` depends on
@@ -79,9 +81,9 @@ fixed=0; skipped=0; human=0; failed=0
 # allowed to stop short: a refusal prints the commands instead, which is a finished answer
 # for the one colleague migrating three installations today.
 
-layout_pending() { # prints "<old>\t<new>" per plugin-owned file still at the root
+layout_pending() { # [<old:new ...>] — prints "<old>\t<new>" per source still present
   local pair old
-  for pair in $AB_MOVES; do
+  for pair in ${1:-$AB_MOVES}; do
     old="${pair%%:*}"
     [[ -e "$old" ]] && printf '%s\t%s\n' "$old" "${pair#*:}"
   done
@@ -89,7 +91,7 @@ layout_pending() { # prints "<old>\t<new>" per plugin-owned file still at the ro
 }
 
 layout_refusal() { # prints the reason, or nothing
-  [[ -e "$AB_LOCK" || -e ".tick-lock" ]] && { printf 'a dispatch tick holds the lock'; return 0; }
+  [[ -e "$AB_LOCK" || -e ".tick-lock" || -e "$RENAME_FROM/.tick-lock" ]] && { printf 'a dispatch tick holds the lock'; return 0; }
   git rev-parse --git-dir >/dev/null 2>&1 || return 0
   [[ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]] \
     && printf 'the tracked tree is dirty — commit or stash first'
@@ -121,6 +123,141 @@ layout_conflicts() { # <pending> — prints "<old> -> <new>" per occupied destin
     [[ -n "$new" && -e "$new" ]] && printf '%s -> %s\n' "$old" "$new"
   done <<< "$1"
   return 0
+}
+
+# THE .loopd RENAME. Both ends are spelled here, not read from AB_DIR, which still names the
+# old directory until the flip that follows this migration — the move works on either side.
+RENAME_FROM=".ai-bridge"; RENAME_TO=".loopd"; SETTINGS=".claude/settings.json"
+
+# Comments are prose and take the new name; a pattern line only has its directory segment
+# renamed, so an ignore line never starts or stops matching anything but the moved path.
+ignore_rewrite() { # stdin -> stdout
+  sed -E -e '/^[[:space:]]*#/{s/ai-bridge/loopd/g;b' -e '}' \
+         -e 's#(^|[/!])\.ai-bridge(/|$)#\1.loopd\2#g'
+}
+
+pin_target() { # <root> — the command the statusline pin should carry; nothing if not ours
+  local cur shim
+  cur="$(jq -r '.statusLine.command // empty' "$SETTINGS")"
+  [[ "$cur" =~ ^bash\ .*/\.claude/(ai-bridge|loopd)-statusline\.sh$ ]] || return 0
+  for shim in loopd-statusline.sh "${cur##*/}"; do
+    [[ -f ".claude/$shim" ]] && { printf 'bash %s/.claude/%s' "$1" "$shim"; return 0; }
+  done
+  echo "  HUMAN    the statusline pin names a shim .claude/ does not have — repin it by hand" >&2
+}
+
+kb_gitdirs() { # <dir> — the KB mount and every read-only source under it
+  local g
+  for g in "$1/kb.git" "$1"/kb-src/*.git; do [[ -d "$g" ]] && printf '%s\n' "$g"; done
+  return 0
+}
+
+kb_worktree_for() { # <root> <gitdir> — the core.worktree kb-sync.sh's clone_mount writes
+  local n="${2##*/}"
+  case "$2" in
+    */kb-src/*) printf '%s/knowledge-sources/%s' "$1" "${n%.git}" ;;
+    *) [[ "$(git config --file "$2/config" --bool core.sparseCheckout 2>/dev/null)" == true ]] \
+         && printf '%s' "$1" || printf '%s/knowledge' "$1" ;;
+  esac
+}
+
+rename_refusal() { # prints the reason, or nothing
+  local g n
+  if [[ -f "$SETTINGS" ]]; then
+    command -v jq >/dev/null 2>&1 || { printf '%s needs jq to be rewritten safely, and jq is not installed' "$SETTINGS"; return 0; }
+    jq empty "$SETTINGS" >/dev/null 2>&1 || { printf '%s does not parse — fix it first; a broken one drops permissions.deny' "$SETTINGS"; return 0; }
+  fi
+  if [[ -f .gitignore ]] && ignore_rewrite < .gitignore | grep -q ai-bridge; then
+    printf '.gitignore has a pattern naming ai-bridge outside the directory — rewrite it by hand'; return 0
+  fi
+  # --work-tree: a core.worktree naming a vanished directory makes every git call fatal,
+  # which must not read as "nothing unpushed".
+  while IFS= read -r g; do
+    n=0
+    if git --git-dir="$g" --work-tree=. rev-parse -q --verify HEAD >/dev/null 2>&1; then
+      n="$(git --git-dir="$g" --work-tree=. rev-list --count HEAD --not --remotes 2>/dev/null)" || n="an uncountable number of"
+    fi
+    [[ "$n" == 0 ]] || { printf '%s has %s unpushed commit(s) — push first (kb-sync.sh status)' "$g" "$n"; return 0; }
+  done < <(kb_gitdirs "$RENAME_FROM")
+}
+
+# THE DESTRUCTIVE EDGE: kb.git is a nested clone and gitignored, so `git status` cannot see it.
+# The directory moves in ONE rename and is never deleted; the ignore file is rewritten FIRST,
+# and put back if the move fails, so no window leaves either directory's derived files trackable.
+rename_step() { # <pending>
+  local root conflicts refusal pin cur g wt new gi_tmp gi_bak st_tmp st_bak tracked=""
+  root="$(pwd)"
+  echo "rename: this bundle keeps its state in $RENAME_FROM/, which moves to $RENAME_TO/."
+  conflicts="$(layout_conflicts "$1")"
+  refusal="$(layout_refusal)"; [[ -n "$refusal" ]] || refusal="$(rename_refusal)"
+  if [[ -n "$conflicts" ]]; then
+    echo "  STOPPED  $RENAME_TO/ already exists, so nothing was moved. Resolve it by hand, then re-run:"
+    echo "             $conflicts"
+    human=$((human+1)); return 0
+  elif [[ -n "$refusal" ]]; then
+    echo "  REFUSED  $refusal"; human=$((human+1)); return 0
+  fi
+  pin=""; [[ -f "$SETTINGS" ]] && pin="$(pin_target "$root")"
+  cur=""; [[ -n "$pin" ]] && cur="$(jq -r .statusLine.command "$SETTINGS")"
+  [[ "$pin" != "$cur" ]] || pin=""
+  if [[ $APPLY -eq 0 ]]; then
+    [[ -f .gitignore ]] && paste -d $'\037' .gitignore <(ignore_rewrite < .gitignore) \
+      | awk -F $'\037' '$1 != $2 { printf "  WOULD REWRITE .gitignore:%d  %s  ->  %s\n", NR, $1, $2 }'
+    [[ -z "$pin" ]] || echo "  WOULD REPIN  $SETTINGS: $cur -> $pin"
+    echo "  WOULD MOVE $RENAME_FROM -> $RENAME_TO"
+    while IFS= read -r g; do
+      echo "  WOULD KEEP  $g — it moves inside the directory, never copied or deleted"
+      wt="$(git config --file "$g/config" core.worktree 2>/dev/null || true)"
+      new="$(kb_worktree_for "$root" "$g")"
+      [[ "$wt" == "$new" ]] || echo "  WOULD SET   $RENAME_TO/${g#"$RENAME_FROM"/} core.worktree $wt -> $new"
+    done < <(kb_gitdirs "$RENAME_FROM")
+    echo "  WOULD COMMIT the move"
+    return 0
+  fi
+  if [[ -f .gitignore ]]; then
+    gi_tmp="$(temp_beside .gitignore)" && gi_bak="$(temp_beside .gitignore)" \
+      && ignore_rewrite < .gitignore > "$gi_tmp" && ! grep -q ai-bridge "$gi_tmp" && cp -p .gitignore "$gi_bak" \
+      || { echo "  FAILED   could not prepare the .gitignore rewrite — nothing was moved" >&2; failed=$((failed+1)); rm -f "${gi_tmp:-}" "${gi_bak:-}"; return 0; }
+  fi
+  if [[ -n "$pin" ]]; then
+    st_tmp="$(temp_beside "$SETTINGS")" && st_bak="$(temp_beside "$SETTINGS")" \
+      && jq --arg c "$pin" '.statusLine.command = $c' "$SETTINGS" > "$st_tmp" \
+      && [[ "$(jq -r .statusLine.command "$st_tmp")" == "$pin" ]] \
+      && [[ "$(jq -S 'del(.statusLine.command)' "$st_tmp")" == "$(jq -S 'del(.statusLine.command)' "$SETTINGS")" ]] \
+      && cp -p "$SETTINGS" "$st_bak" \
+      || { echo "  FAILED   the $SETTINGS rewrite did not parse back — nothing was moved" >&2; failed=$((failed+1))
+           rm -f "${gi_tmp:-}" "${gi_bak:-}" "${st_tmp:-}" "${st_bak:-}"; return 0; }
+  fi
+  [[ -z "${gi_tmp:-}" ]] || { mv "$gi_tmp" .gitignore; echo "  REWROTE  .gitignore — $(grep -c ai-bridge "$gi_bak" || true) line(s) naming ai-bridge, 0 left"; }
+  [[ -z "$pin" ]] || { mv "$st_tmp" "$SETTINGS"; echo "  REPINNED $SETTINGS: $pin"; }
+  if ! layout_move "$RENAME_FROM" "$RENAME_TO" || [[ -e "$RENAME_FROM" || ! -d "$RENAME_TO" ]]; then
+    if [[ -e "$RENAME_FROM" && ! -e "$RENAME_TO" ]]; then   # nothing moved: put both files back
+      [[ -z "${gi_bak:-}" ]] || mv "$gi_bak" .gitignore
+      [[ -z "${st_bak:-}" ]] || mv "$st_bak" "$SETTINGS"
+    fi
+    echo "  FAILED   the move of $RENAME_FROM/ did not land — check both directories by hand" >&2
+    failed=$((failed+1)); return 0
+  fi
+  rm -f "${gi_bak:-}" "${st_bak:-}"
+  echo "  MOVED    $RENAME_FROM -> $RENAME_TO"
+  while IFS= read -r g; do
+    new="$(kb_worktree_for "$root" "$g")"
+    [[ "$(git config --file "$g/config" core.worktree 2>/dev/null || true)" == "$new" ]] && { echo "  KEPT     $g"; continue; }
+    git config --file "$g/config" core.worktree "$new" 2>/dev/null || true
+    if [[ "$(git config --file "$g/config" core.worktree 2>/dev/null || true)" == "$new" ]]; then
+      echo "  SET      $g core.worktree $new"
+    else
+      echo "  FAILED   $g core.worktree — set it by hand to $new" >&2; failed=$((failed+1))
+    fi
+  done < <(kb_gitdirs "$RENAME_TO")
+  git rev-parse --git-dir >/dev/null 2>&1 || return 0
+  for g in .gitignore "$SETTINGS"; do git ls-files --error-unmatch -- "$g" >/dev/null 2>&1 && tracked="$tracked $g"; done
+  # shellcheck disable=SC2086
+  if { [[ -z "$tracked" ]] || git add -- $tracked; } && git commit -q -m "chore: move $RENAME_FROM/ to $RENAME_TO/ (migrate-bundle.sh)"; then
+    echo "  COMMITTED the move — push it when you are ready"
+  else
+    echo "  FAILED   the move is staged but not committed — run: git commit" >&2; failed=$((failed+1))
+  fi
 }
 
 # Links INSIDE the bundle are rewritten in the same step, or they rot: a task document or
@@ -305,6 +442,17 @@ if [[ -n "$PENDING" ]]; then
     fi
     echo "           Now run /${PLUGIN_NAME}:init to re-seed the ignore lines at their new paths."
   fi
+  echo "---"
+fi
+
+RENAMING="$(layout_pending "$RENAME_FROM:$RENAME_TO")"
+if [[ -n "$PENDING" && -n "$RENAMING" ]]; then
+  echo "rename: $RENAME_FROM/ -> $RENAME_TO/ waits until the layout move above is committed. Re-run then."
+  echo "---"
+elif [[ -n "$RENAMING" ]]; then
+  rename_step "$RENAMING"; echo "---"
+elif [[ -z "$PENDING" && -d "$RENAME_TO" ]]; then
+  echo "rename: already migrated — $RENAME_TO/ is in place and there is no $RENAME_FROM/. Nothing to do."
   echo "---"
 fi
 

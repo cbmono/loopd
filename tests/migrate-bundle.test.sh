@@ -273,6 +273,109 @@ assert "and moved nothing at all"          "$([[ -f SCHEMA.md && -d .board-live 
 assert "no source was nested inside it"    "$([[ ! -e $AB_BOARD_DIR/.board-live ]] && echo 0 || echo 1)"
 
 # =========================================================================================
+# THE .loopd RENAME — `.ai-bridge/` moves whole, with its ignore lines, its statusline pin
+# and a mounted KB. AB_DIR still names the old directory until that flip lands, so the KB
+# is read back through a copy of the scripts with AB_DIR flipped: the plugin that will read it.
+# =========================================================================================
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null AI_BRIDGE_KB_TIMEOUT=3
+SCRIPTS="$HERE/../plugin/scripts"
+FLIPPED="$TMP/flipped"; cp -R "$SCRIPTS" "$FLIPPED"
+sed -i.bak 's|^AB_DIR=".ai-bridge"$|AB_DIR=".loopd"|' "$FLIPPED/bundle-paths.sh"
+assert "the flipped copy really resolves .loopd" "$([[ "$(bash "$FLIPPED/bundle-paths.sh" AB_DIR)" == .loopd ]] && echo 0 || echo 1)"
+
+KBW="$TMP/kb-work"; KBBARE="$TMP/kb.bare"
+mkdir -p "$KBW/knowledge/findings" && doc "$KBW/knowledge/findings/kept.md" '---' 'type: Finding' 'title: K' 'status: current' 'provenance: human' "timestamp: $TS" '---' 'body'
+git -C "$KBW" init -q -b main && git -C "$KBW" add -A && git -C "$KBW" commit -qm kb
+git clone -q --bare "$KBW" "$KBBARE"
+STALE="$TMP/_ai-bridge-old"   # the bundle's directory before someone renamed it
+
+mk_rename() { # <dir> — a 3.x bundle: tracked state, derived state, a stale pin and a KB mount
+  mkdir -p "$1/.ai-bridge/agents" "$1/.claude" && cd "$1"
+  printf '{ "org": "x", "knowledge": { "repo": "%s", "path": "knowledge", "ref": "main" } }\n' "$KBBARE" > instance.config.json
+  echo '# Schema' > .ai-bridge/SCHEMA.md; echo '# Log' > .ai-bridge/log.md
+  printf '#!/usr/bin/env bash\nexit 0\n' > .claude/ai-bridge-statusline.sh
+  cat > .claude/settings.json <<JSON
+{
+  "statusLine": { "type": "command", "command": "bash $STALE/.claude/ai-bridge-statusline.sh", "refreshInterval": 5000 },
+  "permissions": { "deny": [ "Bash(rm -rf /)", "Bash(terraform destroy:*)" ] },
+  "\$schema": "the unconditional second layer behind the deny-destructive hook"
+}
+JSON
+  cat > .gitignore <<'GI'
+# Derived queue — rewritten by each /ai-bridge:dispatch tick (the ai-bridge-llm companion too).
+/.ai-bridge/AWAITING.md
+/.ai-bridge/.tick-lock
+# >>> ai-bridge index ignore >>>
+/.ai-bridge/index.md
+# <<< ai-bridge index ignore <<<
+/.ai-bridge/kb.git/
+/knowledge/
+node_modules/
+GI
+  git init -q -b main . && git add -A && git commit -qm init
+  echo 'derived' > .ai-bridge/AWAITING.md
+  bash "$SCRIPTS/kb-sync.sh" --instance . mount >/dev/null 2>&1
+  git --git-dir=.ai-bridge/kb.git config core.worktree "$STALE/"
+}
+treesum() { find . -path ./.git/objects -prune -o -type f -print | LC_ALL=C sort | xargs shasum 2>/dev/null; git rev-parse HEAD; }
+
+mk_rename "$TMP/rename"; R="$(pwd)"
+assert "the fixture mounted a KB at .ai-bridge/kb.git" "$([[ -d .ai-bridge/kb.git && -f knowledge/findings/kept.md ]] && echo 0 || echo 1)"
+assert "…which git status cannot see"  "$([[ -z "$(git status --porcelain)" ]] && echo 0 || echo 1)"
+GI_REFS="$(grep -c ai-bridge .gitignore)"; SET_BEFORE="$(jq -S 'del(.statusLine.command)' .claude/settings.json)"
+
+echo "== the rename: the dry run is the default, writes nothing and names everything =="
+BEFORE="$(treesum)"; RD="$(bash "$MIGRATE" 2>&1)"
+assert "a dry run wrote nothing"                "$([[ "$BEFORE" == "$(treesum)" ]] && echo 0 || echo 1)"
+assert "it names the directory move"            "$(printf '%s\n' "$RD" | grep -q 'WOULD MOVE .ai-bridge -> .loopd' && echo 0 || echo 1)"
+assert "it names every ignore-line rewrite"     "$([[ "$(printf '%s\n' "$RD" | grep -c 'WOULD REWRITE .gitignore:')" == "$GI_REFS" ]] && echo 0 || echo 1)"
+assert "it names the pin rewrite, whole path"   "$(printf '%s\n' "$RD" | grep -qF "WOULD REPIN  .claude/settings.json: bash $STALE/.claude/ai-bridge-statusline.sh -> bash $R/.claude/ai-bridge-statusline.sh" && echo 0 || echo 1)"
+assert "it says how the KB mount is handled"    "$(printf '%s\n' "$RD" | grep -q 'WOULD KEEP  .ai-bridge/kb.git' && printf '%s\n' "$RD" | grep -qF "WOULD SET   .loopd/kb.git core.worktree $STALE/ -> $R" && echo 0 || echo 1)"
+
+echo "== --apply: ignores first, then the move, then the mount and one commit =="
+RA_RC=0; RA="$(bash "$MIGRATE" --apply 2>&1)" || RA_RC=$?
+assert "--apply exits 0"                        "$([[ $RA_RC -eq 0 ]] && echo 0 || echo 1)"
+assert ".gitignore holds 0 ai-bridge references" "$([[ "$(grep -c ai-bridge .gitignore || true)" == 0 ]] && echo 0 || echo 1)"
+assert "…and was rewritten BEFORE the move"     "$(printf '%s\n' "$RA" | grep -nE 'REWROTE|MOVED' | head -1 | grep -q REWROTE && echo 0 || echo 1)"
+assert "the derived files are still ignored"    "$(git check-ignore -q .loopd/AWAITING.md && git check-ignore -q .loopd/kb.git && echo 0 || echo 1)"
+assert "a human's own ignore line stayed"       "$(grep -qx 'node_modules/' .gitignore && echo 0 || echo 1)"
+assert ".ai-bridge/ is gone, .loopd/ holds it"  "$([[ ! -e .ai-bridge && -f .loopd/SCHEMA.md && -f .loopd/AWAITING.md ]] && echo 0 || echo 1)"
+assert "git followed the move"                  "$(git log --follow --format=%s -- .loopd/SCHEMA.md | grep -qx init && echo 0 || echo 1)"
+assert "the pin names the whole new path"       "$([[ "$(jq -r .statusLine.command .claude/settings.json)" == "bash $R/.claude/ai-bridge-statusline.sh" ]] && echo 0 || echo 1)"
+assert "…and that path exists"                  "$([[ -f "$(jq -r .statusLine.command .claude/settings.json | cut -d' ' -f2-)" ]] && echo 0 || echo 1)"
+assert "nothing else in settings.json moved"    "$([[ "$(jq -S 'del(.statusLine.command)' .claude/settings.json)" == "$SET_BEFORE" ]] && echo 0 || echo 1)"
+assert ".loopd/kb.git exists"                   "$([[ -d .loopd/kb.git ]] && echo 0 || echo 1)"
+assert "its core.worktree names the new root"   "$([[ "$(git --git-dir=.loopd/kb.git config core.worktree)" == "$R" ]] && echo 0 || echo 1)"
+set +e; KS="$(bash "$FLIPPED/kb-sync.sh" --instance . status 2>&1)"; KS_RC=$?
+KP="$(bash "$FLIPPED/kb-sync.sh" --instance . pull 2>&1)"; KP_RC=$?; set -e
+assert "kb-sync.sh status exits 0"              "$([[ $KS_RC -eq 0 ]] && echo 0 || echo 1)"
+assert "kb-sync.sh pull merges, not warns"      "$([[ $KP_RC -eq 0 ]] && ! printf '%s' "$KP" | grep -q 'not checked out' && echo 0 || echo 1)"
+assert "git status --porcelain is empty"        "$([[ -z "$(git status --porcelain)" ]] && echo 0 || echo 1)"
+
+echo "== a second run changes nothing and says so =="
+BEFORE="$(treesum)"; R2D="$(bash "$MIGRATE" 2>&1)"; R2A="$(bash "$MIGRATE" --apply 2>&1)"
+assert "the dry run reports no pending moves"   "$(printf '%s\n' "$R2D" | grep -q 'WOULD' && echo 1 || echo 0)"
+assert "--apply wrote nothing"                  "$([[ "$BEFORE" == "$(treesum)" ]] && echo 0 || echo 1)"
+assert "the output says already migrated"       "$(printf '%s\n' "$R2A" | grep -q 'already migrated' && echo 0 || echo 1)"
+
+echo "== the refusals: an occupied .loopd/, a broken settings.json, an unpushed KB =="
+O="$TMP/occupied"; mk_rename "$O"; mkdir -p .loopd && echo mine > .loopd/keep.md
+BEFORE="$(treesum)"; OC="$(bash "$MIGRATE" --apply 2>&1)"
+assert "layout_conflicts STOPS an occupied .loopd/" "$(printf '%s\n' "$OC" | grep -q 'STOPPED' && printf '%s\n' "$OC" | grep -q '.ai-bridge -> .loopd' && echo 0 || echo 1)"
+assert "…and nothing was written or overwritten"    "$([[ "$BEFORE" == "$(treesum)" && -d .ai-bridge/kb.git ]] && echo 0 || echo 1)"
+J="$TMP/badjson"; mk_rename "$J"; echo '{ "permissions": ' > .claude/settings.json; git commit -qam broken
+BEFORE="$(treesum)"; JS="$(bash "$MIGRATE" --apply 2>&1)"
+assert "a settings.json that does not parse is REFUSED" "$(printf '%s\n' "$JS" | grep -q 'REFUSED.*settings.json' && echo 0 || echo 1)"
+assert "…and nothing was written"                   "$([[ "$BEFORE" == "$(treesum)" ]] && echo 0 || echo 1)"
+U="$TMP/unpushed"; mk_rename "$U"; echo more >> knowledge/findings/kept.md
+git --git-dir=.ai-bridge/kb.git --work-tree=. commit -qam local
+BEFORE="$(treesum)"; UP="$(bash "$MIGRATE" --apply 2>&1)"
+assert "an unpushed KB commit is REFUSED"           "$(printf '%s\n' "$UP" | grep -q 'REFUSED.*unpushed' && echo 0 || echo 1)"
+assert "…and nothing was written"                   "$([[ "$BEFORE" == "$(treesum)" ]] && echo 0 || echo 1)"
+unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL   # provenance below names its own authors
+
+# =========================================================================================
 # PROVENANCE — from git history, and every doubt lands on human.
 # =========================================================================================
 V="$TMP/prov"; mkdir -p "$V/knowledge"/{findings,services,teams,runbooks,references}; cd "$V"
