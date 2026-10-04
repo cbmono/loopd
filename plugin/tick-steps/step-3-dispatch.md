@@ -87,7 +87,12 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      id is recorded after the spawn and not before it.
    - **`--permission-mode bypassPermissions` with the plugin's `deny-destructive.sh`
      PreToolUse hook is the only posture measured to work.** Hooks fire in a `--bg`
-     session. A mode that can prompt parks the agent in `state: blocked` with nobody to
+     session, **and they find this bundle from the worktree only through the
+     `.git/loopd-bundle` marker `link-repos.sh` writes into each linked repo** — the
+     session's project dir is the worktree, which holds no `instance.config.json`. A
+     repo with no marker (a bundle not re-stamped since the marker shipped, or a repo
+     outside `reposRoot`) leaves its agents with NO baseline: the hook fires and allows.
+     `/loopd:init` writes it; `test -f <repo>/.git/loopd-bundle` reads it. A mode that can prompt parks the agent in `state: blocked` with nobody to
      answer, and it holds its slot until `claude stop` — this machine still lists two
      such sessions from August.
    - **`--add-dir <bundle root>`**, or the agent cannot reach its own task document: its

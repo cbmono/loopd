@@ -78,6 +78,12 @@ if [[ $REMOVE -eq 1 ]]; then
       echo "  keep    repos/$(basename "$link") (real file/dir — not ours to delete)"
       continue
     fi
+    # Take our marker with us (only ours: one naming another bundle is left alone).
+    m="$(link_target "$link")/.git/loopd-bundle"
+    if [[ -f "$m" ]] && [[ "$(<"$m")" == "$INSTANCE" ]]; then
+      if [[ $DRY_RUN -eq 1 ]]; then echo "  would   unmark $(basename "$link")/.git/loopd-bundle"
+      else rm -f "$m"; echo "  unmark  $(basename "$link")/.git/loopd-bundle"; fi
+    fi
     if [[ $DRY_RUN -eq 1 ]]; then echo "  would   unlink repos/$(basename "$link")"
     else rm "$link"; echo "  unlink  repos/$(basename "$link")"; fi
     gone=$((gone+1))
@@ -131,7 +137,22 @@ if [[ "$REPOS_ROOT" == "$INSTANCE" ]]; then
 fi
 
 [[ $DRY_RUN -eq 1 ]] || mkdir -p "$VIEW"
-linked=0; unchanged=0; kept=0; pruned=0
+linked=0; unchanged=0; kept=0; pruned=0; marked=0
+
+# The way back from a worktree to this bundle, for the two plugin hooks: a role agent
+# runs as `claude --bg` INSIDE <reposRoot>/_wt/<task>, so its CLAUDE_PROJECT_DIR is the
+# worktree and holds no instance.config.json. `<repo>/.git` is the common dir of every
+# worktree of that repo; the hooks read `<common dir>/loopd-bundle` (deny-destructive.sh,
+# guard point 4). Written on every refresh so a re-stamp arms bundles that predate it;
+# a repo whose own `.git` is a file is itself a worktree and gets no marker.
+mark() { # <repo dir> <name>
+  local m="$1/.git/loopd-bundle"
+  [[ -d "$1/.git" ]] || return 0
+  [[ -f "$m" ]] && [[ "$(<"$m")" == "$INSTANCE" ]] && return 0
+  if [[ $DRY_RUN -eq 1 ]]; then echo "  would   mark $2/.git/loopd-bundle -> $INSTANCE"
+  else printf '%s\n' "$INSTANCE" > "$m"; echo "  mark    $2/.git/loopd-bundle -> $INSTANCE"; fi
+  marked=$((marked+1))
+}
 
 # --- pass 1: create or refresh a link per repo -----------------------------
 for d in "$REPOS_ROOT"/*/; do
@@ -140,6 +161,7 @@ for d in "$REPOS_ROOT"/*/; do
   case "$name" in _*) continue ;; esac              # sibling instances, _wt
   [[ -e "$d/.git" ]] || continue                    # not a repo
   [[ "$(cd "$d" && pwd -P)" != "$INSTANCE" ]] || continue   # never link the holder
+  mark "$d" "$name"
 
   link="$VIEW/$name"
   if [[ -L "$link" ]]; then
@@ -174,3 +196,4 @@ done
 printf 'link-repos: %d linked, %d unchanged, %d pruned, %d kept.%s\n' \
   "$linked" "$unchanged" "$pruned" "$kept" \
   "$([[ $DRY_RUN -eq 1 ]] && echo ' (dry-run — nothing changed)')"
+[[ $marked -eq 0 ]] || printf 'link-repos: %d hook marker(s) written (.git/loopd-bundle).\n' "$marked"

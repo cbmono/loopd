@@ -85,7 +85,7 @@ guarantee that depends on someone remembering to run it is not a guarantee.
 **All five no-op SILENTLY outside a bundle root.** A plugin is installed once per user, so
 these fire in every project on the machine. Each resolves `$CLAUDE_PROJECT_DIR` (never the
 payload's `cwd` — a dispatched agent's cwd is a worktree of a target repo) and exits 0 with
-no stdout, no stderr and nothing written unless `instance.config.json` is there. Zero noise
+no stdout, no stderr and nothing written unless `instance.config.json` is there. The two safety hooks have one way back in: when the project dir is a **linked worktree** (its `.git` is a file) they read `<repo>/.git/loopd-bundle`, the marker `scripts/link-repos.sh` writes into every linked repo, and treat the bundle it names as the instance — because a role agent is a `claude --bg` session rooted in its worktree, and without that the baseline allowed everything it ran. Zero noise
 in any other folder is the requirement, not a side effect.
 
 **The banner and push-state moved here in ai-bridge-v2/task-013**, from a bundle's own

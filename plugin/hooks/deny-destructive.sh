@@ -86,8 +86,37 @@ set -uo pipefail
 #   3. SILENCE IS THE REQUIREMENT, not merely the behaviour. No stdout, no stderr, no
 #      state, exit 0 — before the payload is even read. A line per skipped call would be
 #      noise in every unrelated project on this machine.
+#   4. A LINKED WORKTREE OF A LINKED REPO IS INSIDE THE INSTANCE. Point 1 was written when
+#      a role agent was a subagent of the PM's session, whose project dir WAS the bundle.
+#      Since role agents became detached sessions (`cd <worktree> && claude --bg …`,
+#      step-3) CLAUDE_PROJECT_DIR is the worktree itself — no instance.config.json there —
+#      and this guard exited 0 for every one of them. Measured live 2026-10-04: a `--bg`
+#      agent force-pushed a default branch with this hook firing and allowing. The way
+#      back is the marker `link-repos.sh` writes into each linked repo's
+#      `.git/loopd-bundle` — the common git dir every worktree of that repo shares — so a
+#      re-stamp arms existing bundles and no step has to remember anything. `.git` is a
+#      FILE only in a linked worktree, which keeps a human's main clone un-armed, and the
+#      walk is three reads with builtins, no git process. A marker naming a directory
+#      with no instance.config.json is ignored: "absent ⇒ silent" still holds.
 INSTANCE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 INSTANCE_ROOT="$(cd "$INSTANCE_ROOT" 2>/dev/null && pwd -P || printf '%s' "$INSTANCE_ROOT")"
+if [ ! -f "$INSTANCE_ROOT/instance.config.json" ] && [ -f "$INSTANCE_ROOT/.git" ]; then
+  _gd=""; IFS= read -r _gd < "$INSTANCE_ROOT/.git" 2>/dev/null || _gd=""
+  _gd="${_gd#gitdir:}"; _gd="${_gd# }"
+  case "$_gd" in ""|/*) ;; *) _gd="$INSTANCE_ROOT/$_gd" ;; esac
+  _cd="$_gd"
+  if [ -n "$_gd" ] && [ -f "$_gd/commondir" ]; then
+    _c=""; IFS= read -r _c < "$_gd/commondir" 2>/dev/null || _c=""
+    case "$_c" in "") ;; /*) _cd="$_c" ;; *) _cd="$_gd/$_c" ;; esac
+  fi
+  if [ -n "$_cd" ] && [ -f "$_cd/loopd-bundle" ]; then
+    _b=""; IFS= read -r _b < "$_cd/loopd-bundle" 2>/dev/null || _b=""
+    if [ -n "$_b" ] && [ -f "$_b/instance.config.json" ]; then
+      INSTANCE_ROOT="$(cd "$_b" 2>/dev/null && pwd -P || printf '%s' "$_b")"
+    fi
+  fi
+  unset _gd _cd _c _b
+fi
 [ -f "$INSTANCE_ROOT/instance.config.json" ] || exit 0
 
 # The layout resolver, from the plugin this hook ships in. Unreachable ⇒ fail OPEN, the

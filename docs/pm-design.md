@@ -456,6 +456,23 @@ launcher's release point are untouched.
    recorded `session:` id is now *possible* — a background session's `session_id` is its
    own, which was never true of a subagent's — and is deliberately left to its own change.
 
+**A fourth price was paid UNknowingly, and is closed.** Both plugin hooks guard on
+`$CLAUDE_PROJECT_DIR/instance.config.json`. That held while a role agent was a subagent of
+the PM's session, whose project dir is the bundle. A detached session's project dir is the
+worktree it was launched in, so `deny-destructive.sh` fired and exited 0 for every role
+agent: on 2026-10-04 a `--bg` agent force-pushed a default branch with two `PreToolUse`
+events recorded and no refusal. "Hooks fire" had been measured; "the hook denied" never
+was, and `tests/deny-baseline.test.sh` pinned the project dir at the bundle on every probe.
+The guard now resolves a **linked worktree** to its bundle through `<repo>/.git/loopd-bundle`,
+written by `link-repos.sh` on every stamp; the harness carries the worktree-rooted cases in
+both directions.
+
+**What that does NOT change: the doom-loop and wall-clock bounds do not reach a top-level
+`--bg` role agent** (owner, 2026-10-04: left as is). `agent-control.sh` finds the bundle
+now, but still keys on `agent_id`, which a top-level session never carries — so
+`maxRepeatedToolCalls` and `maxAgentMinutes` bound a role agent's own *subagents* (a
+reviewer's lenses) and nothing bounds the role agent itself but `claude stop <id>`.
+
 **Why `bypassPermissions` and not an allowlist.** task-026 measured that a prefix
 allowlist cannot cover a real tick and that hooks fire regardless, leaving
 `--permission-mode bypassPermissions` plus `deny-destructive.sh` as the only posture that

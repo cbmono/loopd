@@ -899,5 +899,32 @@ RC=0; CONTROL_MAX=3 ctl gate F9 --reason new >/dev/null 2>&1 || RC=$?
 ok "at the cap, a NEW agent is still refused"          "$([ "$RC" -ne 0 ] && echo yes || echo no)" yes
 ctl disarm >/dev/null 2>&1
 
+echo
+echo "--- the detached shape: project dir is a LINKED WORKTREE, bundle via .git/loopd-bundle ----"
+# A role agent runs as `claude --bg` inside a worktree, so CLAUDE_PROJECT_DIR is the
+# worktree and holds no instance.config.json. The guard is the block deny-destructive.sh
+# shares; its point 4 explains the marker. Asserted both ways so the dependency shows.
+ctl_rc arm >/dev/null
+ok "re-armed for the worktree cases"                                   "$(ctl_rc halt W1 "worktree probe")" 0
+PROD="$TMP/prod"; git init -q "$PROD" >/dev/null 2>&1
+git -C "$PROD" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m init >/dev/null 2>&1
+WTREE="$TMP/wt-task-001"; git -C "$PROD" worktree add -q "$WTREE" -b task-001 >/dev/null 2>&1
+run_wt() { # <agent_id> <agent_type> <tool> — CLAUDE_PROJECT_DIR is the worktree
+  payload "$1" "$2" "$3" > "$TMP/payload"
+  OUT="$(CLAUDE_PROJECT_DIR="$WTREE" bash "$HOOK" <"$TMP/payload" 2>"$TMP/err")"; RC=$?
+}
+rm -f "$PROD/.git/loopd-bundle"
+run_wt W1 software-engineer Bash
+ok "no marker: the halted agent's call from a worktree is not seen (silent)" "$(verdict)" allowed
+printf '%s\n' "$INST" > "$PROD/.git/loopd-bundle"
+run_wt W1 software-engineer Bash
+ok "marker: the halt reaches the same call from the worktree"          "$(verdict)" deny
+ok "…exit 0 there too"                                                 "$RC" 0
+printf '%s\n' "$BARE" > "$PROD/.git/loopd-bundle"
+run_wt W1 software-engineer Bash
+ok "a marker naming a non-instance is ignored (silent)"                "$(verdict)" allowed
+rm -f "$PROD/.git/loopd-bundle"
+ctl disarm >/dev/null 2>&1
+
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

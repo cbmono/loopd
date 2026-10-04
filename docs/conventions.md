@@ -660,6 +660,22 @@ half is the load-bearing half: `psql` against a test container, `rm -rf node_mod
 `rm -rf "$TMP"`, `terraform plan -destroy`, `git push --force-with-lease` to a feature
 branch are what agents here run every day.
 
+**It has to reach the agents it was built for, and for a while it did not.** The guard
+keys on `$CLAUDE_PROJECT_DIR/instance.config.json` so that a plugin hook is silent in every
+unrelated project. A role agent used to be a subagent of the PM's session, whose project
+dir is the bundle; since it became a detached `claude --bg` session launched *inside its
+worktree*, its project dir is the worktree, which holds no such file — and the hook fired
+and allowed everything. Measured live on 2026-10-04: a force-push to a default branch
+landed with the hook's own `PreToolUse` events in the transcript. Nothing was red, because
+every probe in `tests/deny-baseline.test.sh` pinned the project dir at the bundle: the
+harness modelled the world the hook was written in. The way back is one file,
+`<repo>/.git/loopd-bundle`, written by `link-repos.sh` into each linked repo's common git
+dir and read only when the project dir is a **linked worktree** (`.git` is a file) — three
+reads with builtins, no git process, a human's main clone left un-armed, and a marker
+naming a non-instance ignored so "absent ⇒ silent" still holds. The rule it leaves
+behind: **a deny test must include the shape production launches in**, not only the shape
+the rule was designed in.
+
 **The escape hatch is the human's own terminal, and it is what keeps the rules narrow.**
 Every refusal is satisfiable by a human running the command outside the harness, so no
 rule ever has to be widened for a legitimate emergency and no instance has a reason to
