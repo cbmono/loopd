@@ -153,6 +153,18 @@ for probe in "3 small ~6" "4 standard ~14" "6 standard ~14" "7 large ~20"; do
   assert "$1 criteria ⇒ band $2, files $3" "$(has "Files expected: $3 (band $2 — $1 acceptance criteria)" "$(run "$DOC")")"
 done
 
+# SCHEMA.md's block form: one quoted entry per line. count_entries used to keep only the
+# LAST line's count, and field() handed it only the key line, so six criteria banded as 0.
+reset 1
+python3 - "$DOC" <<'PY2'
+import sys
+p = sys.argv[1]; s = open(p).read()
+block = "acceptance_criteria:\n" + "".join('  - "criterion %d, with `x` and [y]"\n' % i for i in range(1, 7))
+open(p, "w").write(s.replace('acceptance_criteria: [ "criterion 1" ]\n', block))
+PY2
+assert "a six-entry BLOCK list counts 6, band standard" \
+  "$(has "Files expected: ~14 (band standard — 6 acceptance criteria)" "$(run "$DOC")")"
+
 # A task with NO acceptance_criteria at all: the band arithmetic must see a number, not an
 # empty string — it printed `band large —  acceptance criteria` beside two `[: integer
 # expression expected` lines before `count_entries` was made to always emit one.

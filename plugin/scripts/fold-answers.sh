@@ -90,6 +90,49 @@ def frontmatter(text):
 FM_START, FM_END = frontmatter(src)
 
 
+def scan_dq(text, i, key=""):
+    """The body of a double-quoted scalar, from just past its opening quote."""
+    n = len(text)
+    buf = []
+    while True:
+        if i >= n:
+            die(3, "unterminated double-quoted entry in %s" % (key or "the list"))
+        c = text[i]
+        if c == "\\":
+            if i + 1 >= n:
+                die(3, "trailing escape")
+            nxt = text[i + 1]
+            # ONLY THE ESCAPES emit() CAN REPRODUCE. A `\u263A` would otherwise read
+            # as `u263A` and re-parse to `u263A`, so the round-trip guard — which
+            # uses this same scanner — cannot see that the backslash was dropped.
+            if nxt not in ESCAPES:
+                die(3, "unsupported escape \\%s in %s" % (nxt, key or "the list"))
+            buf.append(ESCAPES[nxt])
+            i += 2
+            continue
+        if c == '"':
+            return "".join(buf), i + 1
+        buf.append(c)
+        i += 1
+
+
+def scan_sq(text, i, key=""):
+    """The body of a single-quoted scalar, from just past its opening quote."""
+    n = len(text)
+    buf = []
+    while True:
+        if i >= n:
+            die(3, "unterminated single-quoted entry in %s" % (key or "the list"))
+        if text[i] == "'":
+            if i + 1 < n and text[i + 1] == "'":
+                buf.append("'")
+                i += 2
+                continue
+            return "".join(buf), i + 1
+        buf.append(text[i])
+        i += 1
+
+
 def scan_flow(text, i, key=""):
     """A real scanner for a YAML flow sequence of scalars: returns (entries, end_index).
 
@@ -116,46 +159,11 @@ def scan_flow(text, i, key=""):
         if text[i] == "]":
             return out, i + 1
         if text[i] == '"':
-            i += 1
-            buf = []
-            while True:
-                if i >= n:
-                    die(3, "unterminated double-quoted entry in %s" % (key or "the list"))
-                c = text[i]
-                if c == "\\":
-                    if i + 1 >= n:
-                        die(3, "trailing escape")
-                    nxt = text[i + 1]
-                    # ONLY THE ESCAPES emit() CAN REPRODUCE. A `\u263A` would otherwise read
-                    # as `u263A` and re-parse to `u263A`, so the round-trip guard — which
-                    # uses this same scanner — cannot see that the backslash was dropped.
-                    if nxt not in ESCAPES:
-                        die(3, "unsupported escape \\%s in %s" % (nxt, key or "the list"))
-                    buf.append(ESCAPES[nxt])
-                    i += 2
-                    continue
-                if c == '"':
-                    i += 1
-                    break
-                buf.append(c)
-                i += 1
-            out.append("".join(buf))
+            v, i = scan_dq(text, i + 1, key)
+            out.append(v)
         elif text[i] == "'":
-            i += 1
-            buf = []
-            while True:
-                if i >= n:
-                    die(3, "unterminated single-quoted entry in %s" % (key or "the list"))
-                if text[i] == "'":
-                    if i + 1 < n and text[i + 1] == "'":
-                        buf.append("'")
-                        i += 2
-                        continue
-                    i += 1
-                    break
-                buf.append(text[i])
-                i += 1
-            out.append("".join(buf))
+            v, i = scan_sq(text, i + 1, key)
+            out.append(v)
         else:
             j = i
             while j < n and text[j] not in ",]\n":
@@ -166,34 +174,87 @@ def scan_flow(text, i, key=""):
             i = j
 
 
+def scan_block(text, i, key):
+    """A block sequence (`key:` then `  - entry` lines): returns (entries, end_index, comment).
+
+    `i` is the rest of the key line. Its comment is returned so a rewrite keeps it. An
+    indented line that is not an entry — a continuation, a nested mapping — is a refusal:
+    the rewrite would leave it stranded under whatever entry it emits last."""
+    line_end = text.find("\n", i)
+    if line_end < 0:
+        line_end = len(text)
+    rest = text[i:line_end].strip()
+    if rest and not rest.startswith("#"):
+        die(3, "%s is neither a flow nor a block list" % key)
+    out, end, pos = [], line_end, line_end + 1
+    while pos < FM_END:
+        nl = text.find("\n", pos)
+        if nl < 0:
+            nl = len(text)
+        line = text[pos:nl]
+        m = re.match(r"[ \t]+-(?:[ \t]+|$)", line)
+        if not m:
+            if not line.strip():
+                pos = nl + 1
+                continue
+            if line[0] in " \t":
+                die(3, "%s has an indented line that is not a list entry" % key)
+            break
+        k = pos + m.end()
+        if k < nl and text[k] in "\"'":
+            v, k = (scan_dq if text[k] == '"' else scan_sq)(text, k + 1, key)
+            if "\n" in text[pos:k]:
+                die(3, "a quoted entry in %s spans lines" % key)
+            tail = text[k:nl].strip()
+            if tail and not tail.startswith("#"):
+                die(3, "text after a quoted entry in %s" % key)
+        else:
+            v = re.split(r"[ \t]#", text[k:nl], 1)[0].strip()
+            if not v:
+                die(3, "an empty entry in %s" % key)
+        out.append(v)
+        end, pos = nl, nl + 1
+    return out, end, (rest if rest.startswith("#") else "")
+
+
 def find_key(key):
-    m = re.search(r"(?m)^%s:[ \t]*" % re.escape(key), src[FM_START:FM_END])
+    m = re.search(r"(?m)^%s:" % re.escape(key), src[FM_START:FM_END])
     if not m:
         return None
     return FM_START + m.end()
 
 
 def read(key):
+    """(entries, at, end, comment) — `at` is just past the colon, so a rewrite owns the
+    whole value whichever form it was, and either form may be written back."""
     at = find_key(key)
     if at is None:
-        return None, None, None
-    entries, end = scan_flow(src, at, key)
-    return entries, at, end
+        return None, None, None, ""
+    j = at
+    while j < FM_END and src[j] in " \t":
+        j += 1
+    if src[j:j + 1] == "[":
+        entries, end = scan_flow(src, j, key)
+        return entries, at, end, ""
+    entries, end, comment = scan_block(src, j, key)
+    return entries, at, end, comment
 
 
-def emit(entries):
-    if not entries:
-        return "[ ]"
-    parts = []
+def emit(entries, comment=""):
+    """SCHEMA.md's form: `[ ]` when empty, else one quoted entry per line."""
+    head = " [ ]" if not entries else ""
+    if comment:
+        head += "  " + comment
+    lines = []
     for e in entries:
         if "\n" in e:
             die(3, "an entry contains a newline; refusing to write a damaged list")
-        parts.append('"%s"' % e.replace("\\", "\\\\").replace('"', '\\"'))
-    return "[ " + ", ".join(parts) + " ]"
+        lines.append('\n  - "%s"' % e.replace("\\", "\\\\").replace('"', '\\"'))
+    return head + "".join(lines)
 
 
 if list_key:
-    entries, _, _ = read(list_key)
+    entries, _, _, _ = read(list_key)
     for e in entries or []:
         # ONE ENTRY PER LINE IS THE CONTRACT every caller reads this by, and a quoted
         # scalar may legally span lines — so an entry that would print as two records is
@@ -203,8 +264,8 @@ if list_key:
         print(e)
     sys.exit(0)
 
-open_q, o_at, o_end = read("open_questions")
-ans_q, a_at, a_end = read("answered_questions")
+open_q, o_at, o_end, o_cmt = read("open_questions")
+ans_q, a_at, a_end, a_cmt = read("answered_questions")
 if open_q is None:
     sys.exit(0)
 if ans_q is None:
@@ -266,8 +327,8 @@ for e in keep:
 if len(keep) + len(answered) != len(open_q):
     die(4, "entry count does not balance; nothing written")
 
-new = emit(keep)
-new_a = emit(new_ans)
+new = emit(keep, o_cmt)
+new_a = emit(new_ans, a_cmt)
 
 if a_at is None:
     die(3, "no answered_questions: key to fold into")
@@ -282,8 +343,8 @@ for at, end, text in edits:
 # lists parse back to exactly what we meant.
 src = out
 FM_START, FM_END = frontmatter(out)
-back_o, _, _ = read("open_questions")
-back_a, _, _ = read("answered_questions")
+back_o, _, _, _ = read("open_questions")
+back_a, _, _, _ = read("answered_questions")
 if back_o != keep or back_a != new_ans:
     die(3, "the re-parse does not match; nothing written")
 

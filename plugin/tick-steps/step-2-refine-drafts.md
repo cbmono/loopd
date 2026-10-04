@@ -37,7 +37,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    reason as its answer. `open_questions` still holds only questions awaiting an answer, so
    a `draft` becomes clean once **that** list empties.
 
-   **Never hand-edit either list.** They are quoted YAML flow lists carrying backticks,
+   **Never hand-edit either list.** They are quoted YAML lists carrying backticks,
    commas and ` --- `, which is the exact shape a hand-rolled parse was already measured
    mis-reading (2026-09-12). **No customer PII in `answered_questions`** — it persists for
    the life of the repo, and that is the one clause the script cannot check for you.

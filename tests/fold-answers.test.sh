@@ -245,16 +245,38 @@ echo
 echo "== a refusal NAMES the key it refused =="
 # scan_flow read the module global `list_key`, which only `--list` sets — so on the fold
 # path every refusal printed an empty name and the operator was told that a list they
-# could not identify was not a flow list. A document has two scannable lists plus other
-# block lists that are never read, so the message decided nothing.
-K="$TMP/block.md"
-printf -- '---\ntype: Task\ntitle: "T"\nstatus: draft\nopen_questions:\n  - "Q1"\nanswered_questions: [ ]\n---\n\n# Context\n\nbody\n' > "$K"
-ok "a block-form list is exit 3" "$(bash "$SH" "$K" >/dev/null 2>&1; echo $?)" 3
-ok "…and the message names it"   "$(bash "$SH" "$K" 2>&1 | grep -c 'open_questions is not a flow list' | tr -d ' ')" 1
+# could not identify was not a list. A document has two scannable lists, so the message
+# must say which one.
+K="$TMP/scalar.md"
+printf -- '---\ntype: Task\ntitle: "T"\nstatus: draft\nopen_questions: Q1 is a scalar\nanswered_questions: [ ]\n---\n\n# Context\n\nbody\n' > "$K"
+ok "a list that is neither form is exit 3" "$(bash "$SH" "$K" >/dev/null 2>&1; echo $?)" 3
+ok "…and the message names it"   "$(bash "$SH" "$K" 2>&1 | grep -c 'open_questions is neither a flow nor a block list' | tr -d ' ')" 1
 ok "…never an empty name"        "$(bash "$SH" "$K" 2>&1 | grep -c 'fold-answers:  is not' | tr -d ' ')" 0
-# --list names the key it was given, as it always did
-ok "--list on a block list names it too" \
-   "$(bash "$SH" --list "$K" open_questions 2>&1 | grep -c 'open_questions is not a flow list' | tr -d ' ')" 1
+ok "--list on it names the key too" \
+   "$(bash "$SH" --list "$K" open_questions 2>&1 | grep -c 'open_questions is neither' | tr -d ' ')" 1
+
+echo
+echo "== SCHEMA.md's block form round-trips: the promotion gate reads and writes it =="
+# A non-empty list is one quoted entry per line; empty stays `[ ]`. An answered entry
+# stranded in both lists blocks the draft forever, so that is the assertion that counts.
+L="$TMP/blockfold.md"
+printf -- '---\ntype: Task\ntitle: "T"\nstatus: draft\nacceptance_criteria:\n  - "c1, with a comma"\nopen_questions:\n  - "Q1: `[ ]`, a comma and a ]? --- yes, all three"\nanswered_questions: [ ]\n---\n\n# Context\n\nbody\n' > "$L"
+ok "a block list is read, not refused" "$(bash "$SH" --list "$L" open_questions)" 'Q1: `[ ]`, a comma and a ]? --- yes, all three'
+ok "the fold exits 0"               "$(bash "$SH" "$L" >/dev/null 2>&1; echo $?)" 0
+ok "open_questions is left EMPTY, as [ ]" "$(grep -c '^open_questions: \[ \]$' "$L" | tr -d ' ')" 1
+ok "the entry moved to answered_questions" \
+   "$(bash "$SH" --list "$L" answered_questions | grep -c '· Q1: `\[ \]`, a comma and a \]? --- yes, all three$' | tr -d ' ')" 1
+LO="$(bash "$SH" --list "$L" open_questions)" && LA="$(bash "$SH" --list "$L" answered_questions)" \
+  && BOTH="$(comm -12 <(printf '%s\n' "$LO" | sort) <(printf '%s\n' "$LA" | sed 's/^[^·]*· //' | sort) | awk 'NF { n++ } END { print n + 0 }')" \
+  || BOTH=unreadable
+ok "NO entry survives in both lists (and both lists read)" "$BOTH" 0
+ok "answered_questions is written in block form" "$(sed -n '/^answered_questions:$/{n;p;}' "$L" | grep -c '^  - "' | tr -d ' ')" 1
+ok "…and the untouched block list is left as it was" "$(grep -c '^  - "c1, with a comma"$' "$L" | tr -d ' ')" 1
+M="$TMP/mixed.md"
+printf -- '---\ntype: Task\nstatus: draft\nopen_questions:\n  - "Q1: a --- b"\n  wrapped onto a second line\nanswered_questions: [ ]\n---\n' > "$M"
+cp "$M" "$TMP/mixed.before"
+ok "an indented non-entry line is refused (exit 3)" "$(bash "$SH" "$M" >/dev/null 2>&1; echo $?)" 3
+ok "…and nothing was written" "$(cmp -s "$M" "$TMP/mixed.before" && echo yes || echo no)" yes
 
 echo
 echo "== usage =="

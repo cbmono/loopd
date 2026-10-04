@@ -265,9 +265,9 @@ assert "every link in index.md resolves ($BROKEN dangling)" "$(eq "$BROKEN" 0)"
 assert "…and index.md still names the evidence it cites"    "$(yes_if grep -q 'sources/ 02/03/05' "$P/index.md")"
 
 echo "== deliverable_paths: the stamp the board reads instead of walking tasks/ =="
-STAMP="$(grep '^deliverable_paths:' "$P/project.md")"
+STAMP="$(awk '/^deliverable_paths:/ { f = 1; print; next } f && /^  - / { print; next } { f = 0 }' "$P/project.md")"
 assert "project.md carries the key"                   "$(has 'deliverable_paths:' "$STAMP")"
-assert "…in inline flow form"                         "$(has '[ /projects/' "$STAMP")"
+assert "…in SCHEMA.md's block form, one quoted path per line" "$(has '  - "/projects/' "$STAMP")"
 assert "…with the inline-list task's artifacts"       "$(has '/projects/adoption/deliverables/deck.md' "$STAMP")"
 assert "…and the html one"                            "$(has '/projects/adoption/deliverables/deck.html' "$STAMP")"
 assert "…and the BLOCK-list task's artifact"          "$(has '/projects/adoption/deliverables/cover.png' "$STAMP")"
@@ -275,8 +275,8 @@ assert "…and NOT the one that was never written"      "$(hasnt 'never-written.
 assert "…which is reported as a warning instead"      "$(has 'declared artifact does not exist' "$OUT")"
 assert "every stamped path is bundle-relative (starts with /projects/)" "$(yes_if python3 - "$STAMP" <<'PY'
 import sys
-body = sys.argv[1].split(":", 1)[1].strip().strip("[]")
-paths = [p.strip() for p in body.split(",") if p.strip()]
+lines = sys.argv[1].splitlines()[1:]
+paths = [l.strip()[2:].strip().strip('"') for l in lines]
 sys.exit(0 if paths and all(p.startswith("/projects/") for p in paths) else 1)
 PY
 )"
@@ -544,7 +544,7 @@ assert "…and says CLOSED.md is TRACKED"                 "$(yes_if grep -q 'is 
 assert "…and the 'no archive/' line says what replaces it" \
   "$(yes_if grep -q 'there is still no .archive/.; what replaces it is an INDEX' "$SCH")"
 assert "…and retain: is NOT removed by this change"     "$(yes_if grep -qF 'With `retain: true`** the folder stays' "$SCH")"
-assert "…and deliverable_paths: as closeout-written"    "$(yes_if grep -q '^deliverable_paths: \[ /projects/' "$SCH")"
+assert "…and deliverable_paths: as closeout-written"    "$(yes_if grep -qE '^  - "/projects/<slug>/deliverables/' "$SCH")"
 assert "…and that non-terminal tasks become cancelled"  "$(yes_if grep -q 'not terminal at closeout becomes .cancelled' "$SCH")"
 # The enum itself, at its enforcement point. A "closed-unfinished" sibling status would
 # show up here first, and the criterion this pins is that none was introduced.

@@ -38,9 +38,19 @@ field() { # <key> <frontmatter> — only the FIRST occurrence counts
     }'
 }
 
-count_entries() { # <`[ "a", "b" ]` value> — always a number, so an absent field bands as 0
+list_region() { # <key> <frontmatter> — the key line's value plus its block-sequence lines
+  printf '%s\n' "$2" | awk -v key="$1" '
+    !got && index($0, key ":") == 1 {
+      v = $0; sub(/^[^:]*:[[:space:]]*/, "", v); print v; got = 1; inblk = 1; next
+    }
+    inblk && /^[[:space:]]+-/ { print; next }
+    inblk && /^[[:space:]]*$/ { next }
+    { inblk = 0 }'
+}
+
+count_entries() { # <list region, flow or block> — always a number, so an absent field bands as 0
   printf '%s\n' "$1" | awk '
-    { n = split($0, a, "\""); c = (n > 1) ? int(n / 2) : 0 }
+    { n = split($0, a, "\""); c += (n > 1) ? int(n / 2) : 0 }
     END { print c + 0 }'
 }
 
@@ -93,7 +103,7 @@ FM="$(fm_block "$TASK")" || fm_rc=$?
 }
 
 REPO="$(field target_repo "$FM")"
-CRITERIA="$(count_entries "$(field acceptance_criteria "$FM")")"
+CRITERIA="$(count_entries "$(list_region acceptance_criteria "$FM")")"
 SERVICE=""
 [ -n "$REPO" ] && [ -n "$INSTANCE" ] && SERVICE="$INSTANCE/knowledge/services/${REPO##*/}.md"
 TARGET_REPO="$REPO"

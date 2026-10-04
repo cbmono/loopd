@@ -153,19 +153,19 @@ temp_beside() { # <file>
 # Replace (or insert) a frontmatter LIST field, dropping any block-sequence lines the
 # old value carried. Only inside the frontmatter, and only the first occurrence — a
 # `deliverable_paths:` in the body is prose about the key, not the key.
-set_list_field() { # <file> <key> <inline-value>
+set_list_field() { # <file> <key> <value, with its leading space or newline>
   local f="$1" k="$2" v="$3" tmp
   tmp="$(temp_beside "$f")" || return 1
   awk -v key="$k" -v val="$v" '
     BEGIN { n=0; written=0; drop=0 }
     /^---$/ {
       n++
-      if (n==2 && !written) { print key ": " val; written=1 }
+      if (n==2 && !written) { print key ":" val; written=1 }
       drop=0; print; next
     }
     n==1 && drop && /^[[:space:]]+-[[:space:]]*/ { next }
     n==1 && drop && /^[[:space:]]*$/ { next }
-    n==1 && !written && $0 ~ "^" key ":" { print key ": " val; written=1; drop=1; next }
+    n==1 && !written && $0 ~ "^" key ":" { print key ":" val; written=1; drop=1; next }
     n==1 && /^[^[:space:]]/ { drop=0 }
     { print }
   ' "$f" > "$tmp" && mv "$tmp" "$f"
@@ -367,11 +367,11 @@ $(find "$PROJ/tasks" -maxdepth 1 -name '*.md' 2>/dev/null | grep -vE '/(index|lo
   | while IFS= read -r t; do [[ -n "$t" ]] && refs_for "$t" artifacts; done)
 EOF
 
-# `[ /a, /b ]` — inline flow, the form `artifacts:` and `pr:` already use, and one line
-# so a reader of project.md sees the whole set at once. Bundle-relative, always: an
-# absolute path would leak the publisher's directory layout onto a published board.
-LIST="$(printf '%s' "$STAMP" | sed -e 's/\]\[/, /g' -e 's/^\[//' -e 's/\]$//')"
-if [[ -n "$LIST" ]]; then VALUE="[ $LIST ]"; else VALUE="[ ]"; fi
+# SCHEMA.md's list form: one quoted path per line, `[ ]` when empty. `\n` is expanded by
+# set_list_field's `awk -v`. Bundle-relative, always: an absolute path would leak the
+# publisher's directory layout onto a published board.
+LIST="$(printf '%s' "$STAMP" | sed -e 's/\]\[/"\\n  - "/g' -e 's/^\[/\\n  - "/' -e 's/\]$/"/')"
+if [[ -n "$LIST" ]]; then VALUE="$LIST"; else VALUE=" [ ]"; fi
 note "STAMP" "deliverable_paths: $stamped path(s) verified on disk${missing:+, $missing missing}"
 if [[ $APPLY -eq 1 ]]; then
   set_list_field "$PROJ/project.md" deliverable_paths "$VALUE" || {

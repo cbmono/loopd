@@ -44,6 +44,19 @@ exists, which is how `knowledge/references/` was already covered.)
 
 # Schema
 
+**Frontmatter lists — the one rule.** A NON-EMPTY `acceptance_criteria`, `open_questions`,
+`answered_questions`, `depends_on`, `deliverable_paths`, `open_caveats` or `advisor_notes`
+is a YAML block sequence: one quoted entry per line, indented two spaces under its key. An
+EMPTY one stays `[ ]` on the key's own line, because a block sequence cannot express empty.
+Flow form (`key: [ "a", "b" ]`) still reads correctly forever; it is just no longer written.
+
+```yaml
+acceptance_criteria:
+  - "<first testable outcome>"
+  - "<second testable outcome>"
+open_questions: [ ]
+```
+
 ## type: Objective  (`objectives/<slug>.md`) — an OPTIONAL layer
 
 **Most projects need no objective.** A project is normally self-contained and carries its
@@ -85,7 +98,8 @@ clis: [ <name>, ... ]                 # optional: external CLIs/integrations thi
 browser: off | claude-for-chrome      # optional (default off). claude-for-chrome = agents may drive the browser via the claude-in-chrome tools when present — background role agents included, each with its OWN tab group (not the human's tabs), so navigate explicitly. GRANTING IT GIVES AGENTS READ ACCESS TO EVERY SITE THIS HUMAN IS LOGGED INTO in that browser; browser WRITES ask first unless the project's autonomy delegates them, which is what makes granting it defensible. Absent tools = degrade, don't fail. Writes follow the project's autonomy (AUTONOMY.md). See "Browser access" below.
 owner: <github-username>              # optional: which human's work this project is, on an instance shared by more than one. A GitHub USERNAME, never an email. Absent ⇒ nobody in particular, so it is this clone's — see "Ownership on a shared instance" below. Gates DISPATCH only, never promotion.
 retain: true                          # optional (default absent = false). Closeout KEEPS this project's folder instead of `git rm -r`-ing it. Governs the FOLDER ONLY — not the tasks, not the status: a retained project still ends `status: done` with every task terminal. See "Project & objective completion" below.
-deliverable_paths: [ /projects/<slug>/deliverables/<file>, ... ]   # WRITTEN BY CLOSEOUT, not by hand. Bundle-relative paths, resolved once from each task's `artifacts:` and verified on disk at closeout. `[ ]` means closeout looked and found none.
+deliverable_paths:                    # WRITTEN BY CLOSEOUT, not by hand. Bundle-relative paths, resolved once from each task's `artifacts:` and verified on disk at closeout. `[ ]` means closeout looked and found none.
+  - "/projects/<slug>/deliverables/<file>"
 status: active | paused | done        # paused gates DISPATCH only, never a task rewrite — in-flight work and merges continue; resolved by project-paused.sh.
 timestamp: <ISO 8601>
 ---
@@ -171,7 +185,8 @@ description: <one line>
 project: /projects/<slug>/project.md
 order: 1                              # sequence within the project
 status: not-started | active | done
-depends_on: [ /projects/<slug>/phases/<prev>.md ]   # optional
+depends_on:                           # optional
+  - "/projects/<slug>/phases/<prev>.md"
 exit_criteria: [ "<what must be true to close the phase>", ... ]
 timestamp: <ISO 8601>
 ---
@@ -192,8 +207,10 @@ model:                                # optional: override model routing — a t
 target_repo: <org>/<repo>             # BUILD only: inherits project default if omitted
 objective: /objectives/<slug>.md
 phase: /projects/<slug>/phases/<n>-<slug>.md          # optional, links task to its phase
-depends_on: [ /projects/<slug>/tasks/<id>.md, ... ]   # optional
-acceptance_criteria: [ "<testable outcome>", ... ]    # PM fills/expands during refine
+depends_on:                           # optional
+  - "/projects/<slug>/tasks/<id>.md"
+acceptance_criteria:                  # PM fills/expands during refine
+  - "<testable outcome>"
 worktree: /abs/path/to/worktree        # optional, BUILD only. MACHINE-READ by the WorktreeCreate hook.
 branch:   <branch-name>                # optional, BUILD only. MACHINE-READ. Required whenever `worktree:` is set.
 # Both are written by the project-manager AT DISPATCH, and read by
@@ -250,10 +267,15 @@ interfaces:                           # optional, BUILD-shaped. NOT machine-read
 # spellings of the same function, route or column, and the mismatch surfaces at
 # review. Write exact identifiers, never prose. Omit the key entirely when a task
 # shares no surface with its siblings — an empty block is noise.
-open_questions: [ "Q1: <blocking question for the human>", "Q2: ...", ... ]   # PM-managed; ONLY still-unanswered questions. Number every entry (Q1, Q2, …). The human answers an entry by appending ` --- <answer>` to it on the same line (e.g. "Q1: Which region should we default to? --- eu-central-1"); the PM treats any text after the ` --- ` delimiter as the answer, folds it into the task (Context / acceptance_criteria / Notes) and MOVES that entry to `answered_questions`, stamped `by <login>` with the human who answered ("Decisions name the human" below) — this list still EMPTIES, because that is the signal promotion keys on. (Answering in-session works too.)
-advisor_notes: [ "<ISO 8601> · <the concern, as a question>", ... ]   # optional, PM-managed. Concerns raised by an ADVISORY agent — the tick `advisor`, or the `plan-architect` approach critique the PM runs at refine time — that the PM has NOT yet triaged. DELIBERATELY NOT A GATE: unlike `open_questions` this does NOT block promotion, does NOT put a row in AWAITING.md, and `validate-bundle.sh` adds no check for it — a concern is the loop's problem first, not the human's. On the next tick the PM triages each entry and it leaves this list one of two ways: RESOLVED, moving to `answered_questions` prefixed `advisor:` so the provenance survives; or ESCALATED, copied into `open_questions` prefixed `advisor:` because the PM genuinely cannot decide — and only then does it reach the human and the board. Absent means no concern is outstanding, which is the normal state. **No customer PII**, same rule as every other document field.
-answered_questions: [ "<ISO 8601> by <login> · Q1: Which region should we default to? --- eu-central-1", ... ]   # PM-managed answer history: one FLAT LINE per answered entry — the timestamp it was folded in, `by <login>` naming the human whose answer it was ("Decisions name the human" below; an entry the LOOP wrote, an `advisor:` receipt, carries no `by` because no human decided it), then the `open_questions` entry VERBATIM. Question and answer already sit on one line either side of the ` --- ` delimiter, so MOVING the line preserves both with zero new parsing and no nested mapping. A question that became moot moves here too, with the reason as its answer (no second mechanism for "dismissed"). NOT MACHINE-READ: no script parses it and no gate consults it — the PM reads its own `advisor:` lines as the receipt that an approach critique already ran, which is a receipt and not a gate — and `validate-bundle.sh` deliberately adds no check for it — a free-text list is neither an enum nor a reference, and a "missing ` --- `" warning is exactly the noise that buries real errors. Absent means no question has been answered yet — the PM creates the key on the first move, so a scaffold needs no placeholder. It never substitutes for `open_questions` emptying. **No customer PII**: these are human answers that now persist for the life of the repo, under the same rule that governs all task/project/log/deliverable text.
-open_caveats: [ "<ISO 8601> · <the conclusion this contradicts, and the evidence against it>", ... ]   # optional, TICK-WRITTEN. A caveat a tick recorded against a CONCLUSION about this task — "the rollout has not fixed what this is about to be cancelled for". It outranks anything an actor was told (`project-manager.md`, the precedence ladder the tick reads from disk — cited by name, because step numbers move), and it is **cleared only by evidence**, never by the actor whose conclusion it contradicts wanting to proceed. NOT A PROMOTION GATE: unlike `open_questions` it does NOT block `draft → ready` and puts no row in `AWAITING.md` — a caveat raised on an in-progress task must not stop the human promoting a sibling. It is a **TERMINAL-WRITE** gate instead: `validate-bundle.sh` ERRORS on a task that is `done` or `cancelled` while this list is non-empty, and quotes the caveat text so the reader knows what is being held. Absent ⇒ nothing outstanding, which is the normal state. Clear it in its OWN edit, before the status write, so the record shows the evidence and the conclusion in that order. **No customer PII**, same rule as every other document field.
+open_questions:                       # PM-managed; ONLY still-unanswered questions. Number every entry (Q1, Q2, …). The human answers an entry by appending ` --- <answer>` to it on the same line (e.g. "Q1: Which region should we default to? --- eu-central-1"); the PM treats any text after the ` --- ` delimiter as the answer, folds it into the task (Context / acceptance_criteria / Notes) and MOVES that entry to `answered_questions`, stamped `by <login>` with the human who answered ("Decisions name the human" below) — this list still EMPTIES, because that is the signal promotion keys on. (Answering in-session works too.)
+  - "Q1: <blocking question for the human>"
+  - "Q2: ..."
+advisor_notes:                        # optional, PM-managed. Concerns raised by an ADVISORY agent — the tick `advisor`, or the `plan-architect` approach critique the PM runs at refine time — that the PM has NOT yet triaged. DELIBERATELY NOT A GATE: unlike `open_questions` this does NOT block promotion, does NOT put a row in AWAITING.md, and `validate-bundle.sh` adds no check for it — a concern is the loop's problem first, not the human's. On the next tick the PM triages each entry and it leaves this list one of two ways: RESOLVED, moving to `answered_questions` prefixed `advisor:` so the provenance survives; or ESCALATED, copied into `open_questions` prefixed `advisor:` because the PM genuinely cannot decide — and only then does it reach the human and the board. Absent means no concern is outstanding, which is the normal state. **No customer PII**, same rule as every other document field.
+  - "<ISO 8601> · <the concern, as a question>"
+answered_questions:                   # PM-managed answer history: one FLAT LINE per answered entry — the timestamp it was folded in, `by <login>` naming the human whose answer it was ("Decisions name the human" below; an entry the LOOP wrote, an `advisor:` receipt, carries no `by` because no human decided it), then the `open_questions` entry VERBATIM. Question and answer already sit on one line either side of the ` --- ` delimiter, so MOVING the line preserves both with zero new parsing and no nested mapping. A question that became moot moves here too, with the reason as its answer (no second mechanism for "dismissed"). NOT MACHINE-READ: no script parses it and no gate consults it — the PM reads its own `advisor:` lines as the receipt that an approach critique already ran, which is a receipt and not a gate — and `validate-bundle.sh` deliberately adds no check for it — a free-text list is neither an enum nor a reference, and a "missing ` --- `" warning is exactly the noise that buries real errors. Absent means no question has been answered yet — the PM creates the key on the first move, so a scaffold needs no placeholder. It never substitutes for `open_questions` emptying. **No customer PII**: these are human answers that now persist for the life of the repo, under the same rule that governs all task/project/log/deliverable text.
+  - "<ISO 8601> by <login> · Q1: Which region should we default to? --- eu-central-1"
+open_caveats:                         # optional, TICK-WRITTEN. A caveat a tick recorded against a CONCLUSION about this task — "the rollout has not fixed what this is about to be cancelled for". It outranks anything an actor was told (`project-manager.md`, the precedence ladder the tick reads from disk — cited by name, because step numbers move), and it is **cleared only by evidence**, never by the actor whose conclusion it contradicts wanting to proceed. NOT A PROMOTION GATE: unlike `open_questions` it does NOT block `draft → ready` and puts no row in `AWAITING.md` — a caveat raised on an in-progress task must not stop the human promoting a sibling. It is a **TERMINAL-WRITE** gate instead: `validate-bundle.sh` ERRORS on a task that is `done` or `cancelled` while this list is non-empty, and quotes the caveat text so the reader knows what is being held. Absent ⇒ nothing outstanding, which is the normal state. Clear it in its OWN edit, before the status write, so the record shows the evidence and the conclusion in that order. **No customer PII**, same rule as every other document field.
+  - "<ISO 8601> · <the conclusion this contradicts, and the evidence against it>"
 # `open_caveats` is deliberately read by `validate-bundle.sh` ONLY. `build-board.sh` and
 # `write-snapshot.sh` do NOT read it, and that is a scope decision rather than an oversight
 # — a fully wired task field reaches ~30 files (`open_questions` is read by 4 scripts, 3

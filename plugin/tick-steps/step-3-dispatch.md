@@ -160,7 +160,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
      **Sanitised** — the refusal text is copied onto ONE line, with every `"` replaced by
      `'`, every backslash dropped, and every ` --- ` replaced by ` - `, before it goes in.
-     A `"` breaks the YAML flow list the entry is written into; and worse,
+     A `"` breaks the quoted YAML entry it is written into; and worse,
      ` --- ` makes `fold-answers.sh` read the entry as ANSWERED, so the next fold moves a
      live blocker into `answered_questions` and clears the only row telling the human
      that dispatch is refused. The report line below may still quote the refusal raw.

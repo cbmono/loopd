@@ -118,7 +118,8 @@ kind: build
 status: draft
 assignee: human
 acceptance_criteria: [ ]
-open_questions: [ "Apply the $n proposal(s) in this report? Read them, then run \`/loopd:kb-apply $REPORT\`. Decline by cancelling this task." ]
+open_questions:
+  - "Apply the $n proposal(s) in this report? Read them, then run \`/loopd:kb-apply $REPORT\`. Decline by cancelling this task."
 timestamp: $NOW
 ---
 

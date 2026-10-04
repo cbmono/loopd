@@ -231,7 +231,7 @@ ok "it names the one resolver"        "$(hasf "$SCHEMA" '`scripts/decision-stamp
 ok "…and says the stamp is written anyway" "$(hasf "$SCHEMA" '`<unknown>`')" yes
 ok "…and that none of it is a gate"   "$(hasf "$SCHEMA" '**None of this is a gate**')" yes
 ok "the answered_questions field carries the by" \
-   "$(hasf "$SCHEMA" 'answered_questions: [ "<ISO 8601> by <login> · Q1:')" yes
+   "$(hasf "$SCHEMA" '  - "<ISO 8601> by <login> · Q1:')" yes
 
 echo
 echo "== the agents and skills that write the stamps are told to =="
