@@ -463,6 +463,20 @@ works. For a `--bg` session there is a second reason: a mode that can prompt par
 agent in `state: blocked` with nobody to answer, holding a `maxAgentsInFlight` slot
 indefinitely. This machine still lists two such sessions from August.
 
+**The in-session view, and why it asks the process rather than the registry.** Detaching
+emptied the in-session agent panel; `agent-sessions.sh view <bundle>` and the status line's
+`agents N running, M no process` segment replace it with a reader, and change nothing about
+the spawn. The status line won over the board because it is the only one of the two inside
+the session; the board is a browser page, and live rows would put a worktree path — on
+`write-snapshot.sh`'s never-publish list — into a publishable snapshot. Its cost is one
+`claude agents --json` (~150 ms), so the answer is cached per bundle for 10 seconds and
+shared by every open session. **A row's `state` is not evidence anything runs**: measured
+2026-10-04, this bundle's registry held 15 background sessions reading `blocked` with no
+`pid` and no process behind any of them — for up to five days — while the live ones all
+carried a `pid`. So liveness is a live `pid` (`kill -0`), the registry's state is shown
+beside it, never instead of it, and a session is attributed by joining its `cwd` on the
+task's pre-spawn `worktree:` — `unattributed` when nothing matches, never guessed.
+
 <a id="step-4"></a>
 ### Step 4 — verification, priced
 

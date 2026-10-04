@@ -52,6 +52,11 @@ for t in gh jq git curl; do
   chmod +x "$BIN/$t"
 done
 SENTINEL="$TMP/network-was-touched"
+# `claude agents --json` is stubbed to an empty list, and the agents cache lives under TMP,
+# so this file never reads the machine's real sessions. tests/agent-view.test.sh owns the
+# segment itself.
+printf '#!/usr/bin/env bash\necho "[]"\n' > "$BIN/claude"; chmod +x "$BIN/claude"
+export XDG_CACHE_HOME="$TMP/cache"
 
 run() { SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" "$@" </dev/null 2>/dev/null; }
 plain() { run --instance "$1" --color never; }
@@ -101,10 +106,10 @@ else                  HM="$(date -d 2026-09-13T16:41:05Z '+%H:%M' 2>/dev/null)";
 echo
 echo "== 1. the whole line, character for character =="
 ok "the healthy bundle" "$(plain "$INST")" \
-   "AI Bridge · 2 in flight · 3 need you · lock free · last tick $HM"
+   "AI Bridge · 2 in flight · agents 0 running · 3 need you · lock free · last tick $HM"
 : > "$INST/$AB_LOCK"
 ok "…and with a tick holding the lock" "$(plain "$INST")" \
-   "AI Bridge · 2 in flight · 3 need you · lock held · last tick $HM"
+   "AI Bridge · 2 in flight · agents 0 running · 3 need you · lock held · last tick $HM"
 rm -f "$INST/$AB_LOCK"
 ok "exactly one line of output" "$(plain "$INST" | wc -l | tr -d ' ')" 1
 
@@ -115,7 +120,7 @@ ok 'an `open:` TICK is still the last tick (it is the newest)' \
 printf '{"counts":{"awaiting":99}}\n' > "$INST/$AB_SNAPSHOT"
 printf 'recorded: 2001-01-01T00:00:00Z\n'    > "$INST/$AB_STATE_DIR"
 ok "SNAPSHOT.json and .tick-state change nothing" "$(plain "$INST")" \
-   "AI Bridge · 2 in flight · 3 need you · lock free · last tick $HM"
+   "AI Bridge · 2 in flight · agents 0 running · 3 need you · lock free · last tick $HM"
 ok "…and neither is named in the source" \
    "$(grep -c 'SNAPSHOT\.json\|\.tick-state' "$SL" | tr -d ' ')" 2
 ok "…which is twice, in comments saying why not" \
@@ -128,7 +133,7 @@ D="$TMP/d1"; mk "$D"; rm -f "$D/$AB_AWAITING"
 ok "no AWAITING.md ⇒ the queue is off, so the segment is GONE" \
    "$(plain "$D" | grep -c 'need you\|AWAITING' | tr -d ' ')" 0
 ok "…and the rest of the line is untouched" "$(plain "$D")" \
-   "AI Bridge · 2 in flight · lock free · last tick $HM"
+   "AI Bridge · 2 in flight · agents 0 running · lock free · last tick $HM"
 D="$TMP/d2"; mk "$D"; rm -f "$D/$AB_LEDGER"
 ok "no log.md ⇒ the time is unknown"       "$(plain "$D" | sed 's/.*· //')" "last tick ?"
 D="$TMP/d3"; mk "$D"; printf '# Log\n\nnothing yet\n' > "$D/$AB_LEDGER"
@@ -157,7 +162,7 @@ fi
 chmod 644 "$D/projects/proj-a/tasks/task-001.md"
 D="$TMP/d10"; mk "$D"
 if unreadable "$D/$AB_AWAITING"; then
-  UNREAD="$(plain "$D" | awk -F ' · ' '{ print $3 }')"
+  UNREAD="$(plain "$D" | awk -F ' · ' '{ print $4 }')"
   ok "an unreadable AWAITING.md SPEAKS — it is arrived at, not chosen" \
      "$UNREAD" "${AB_AWAITING##*/} unreadable — chmod +r $AB_AWAITING"
   ok "…and the repair is in the LINE, not in a doc the operator must go find" \
@@ -240,9 +245,10 @@ ok "the theme's basic tier is asked for by name" "$(grep -c 'ab_theme "\$use_col
 ok "…and this file builds no escape of its own"  "$(grep -v '^[[:space:]]*#' "$SL" | grep -c '033' | tr -d ' ')" 0
 NT="$TMP/no-theme"; mkdir -p "$NT"
 cp "$SL" "$REPO/plugin/scripts/bundle-paths.sh" "$NT/"
+# Its own cache: this copy has no agent-sessions.sh, so it caches `agents ?` for $INST.
 ok "an unsourceable theme means no colour, never no line" \
-   "$(SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NT/status-line.sh" --instance "$INST" --color always </dev/null 2>/dev/null)" \
-   "$(plain "$INST")"
+   "$(XDG_CACHE_HOME="$TMP/nt-cache" SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NT/status-line.sh" --instance "$INST" --color always </dev/null 2>/dev/null)" \
+   "$(plain "$INST" | sed 's/agents 0 running/agents ?/')"
 ok "no \`38;5;\` (256-colour) anywhere"  "$(grep -c '38;5;' "$SL" | tr -d ' ')" 0
 ok "no \`38;2;\` (truecolor) anywhere"   "$(grep -c '38;2;' "$SL" | tr -d ' ')" 0
 ok "COLORTERM is never asked"            "$(grep -v '^[[:space:]]*#' "$SL" | grep -c 'COLORTERM' | tr -d ' ')" 0
@@ -260,7 +266,7 @@ echo "== 10. the session JSON on stdin: drained, and read only for a directory =
 SJ="$(printf '{"session_id":"x","workspace":{"current_dir":"%s"},"cost":{"total_cost_usd":1.5}}' "$INST")"
 ok "\`current_dir\` locates the bundle" \
    "$(printf '%s' "$SJ" | SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" --color never 2>/dev/null)" \
-   "AI Bridge · 2 in flight · 3 need you · lock free · last tick $HM"
+   "AI Bridge · 2 in flight · agents 0 running · 3 need you · lock free · last tick $HM"
 ok "…and --instance wins over it" \
    "$(printf '%s' "$SJ" | SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" --instance "$TMP/d5" --color never 2>/dev/null \
       | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "0 in flight"

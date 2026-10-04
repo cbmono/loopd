@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# status-line.sh — one line for Claude Code's `statusLine`: what is in flight, what waits
-# on the human, whether a tick holds the lock, when the last tick was.
+# status-line.sh — one line for Claude Code's `statusLine`: what is in flight, which agent
+# sessions have a process, what waits on the human, the lock, when the last tick was.
 #
 #   status-line.sh [--instance DIR] [--color auto|always|never]
 #
-# A script, never a model: file reads, no `gh`, no network, no `jq`. Any JSON Claude Code
-# puts on stdin is drained and only read for the session's directory.
+# A script, never a model: file reads plus one cached `claude agents --json`, no `gh`, no
+# network, no `jq`. Session JSON on stdin is drained and only read for its directory.
 # Exit: 0 always (a status line never fails a session), 3 usage.
 # Reasoning: ai-bridge-v3/task-025.
 set -uo pipefail
@@ -94,6 +94,34 @@ if [ -d "$root/projects" ]; then
   fi
 fi
 
+# --- agents: PROCESSES behind this bundle's background sessions, not the registry's word ---
+# The one segment that is not a file read: `agent-sessions.sh view --summary` runs
+# `claude agents --json` (~150 ms), so its answer is cached per bundle for AGENTS_TTL
+# seconds and every open session shares it. A failed read caches `?`, never `0 running`.
+AGENTS_TTL=10
+agents="$UNKNOWN"
+a_cache="${XDG_CACHE_HOME:-$HOME/.cache}/loopd/agents-$(printf '%s' "$root" | cksum | cut -d' ' -f1)"
+now="$(date +%s)"
+a_ep=""; a_run=""; a_none=""
+[ -r "$a_cache" ] && read -r a_ep a_run a_none < "$a_cache" 2>/dev/null
+case "$a_ep" in ''|*[!0-9]*) a_ep=0 ;; esac
+if [ $((now - a_ep)) -ge 0 ] && [ $((now - a_ep)) -lt "$AGENTS_TTL" ]; then
+  agents="$a_run $a_none"
+else
+  agents="$(bash "$(dirname "${BASH_SOURCE[0]:-$0}")/agent-sessions.sh" view "$root" --summary \
+            </dev/null 2>/dev/null)" || agents="$UNKNOWN"
+  if mkdir -p "${a_cache%/*}" 2>/dev/null; then
+    printf '%s %s\n' "$now" "$agents" > "$a_cache.$$" 2>/dev/null && mv -f "$a_cache.$$" "$a_cache" 2>/dev/null
+    rm -f "$a_cache.$$" 2>/dev/null
+  fi
+fi
+# Anything but two counts — a stale format, a truncated write — is unknown.
+case "$agents" in
+  [0-9]*' '[0-9]*) a_run="${agents%% *}"; a_none="${agents#* }"
+                   case "$a_run$a_none" in *[!0-9]*) agents="$UNKNOWN" ;; esac ;;
+  *) agents="$UNKNOWN" ;;
+esac
+
 # --- need you: AWAITING.md's own items, counted the way the banner counts them -----------
 # THREE STATES, THREE RENDERINGS, and `[ -r ]` alone cannot tell the first two apart.
 # ABSENT IS CHOSEN — build-awaiting.sh never recreates the file, so deleting it is how the
@@ -142,6 +170,13 @@ SEP="$(paint "$C_DIM" ' · ')"
 
 printf '%s' "$(paint "$C_B" 'AI Bridge')"
 printf '%s%s' "$SEP" "$(paint "$(n_colour "$inflight" "$C_BLUE")" "$inflight in flight")"
+if [ "$agents" = "$UNKNOWN" ]; then
+  printf '%s%s' "$SEP" "$(paint "$C_PINK" "agents $UNKNOWN")"
+elif [ "$a_none" -gt 0 ]; then
+  printf '%s%s' "$SEP" "$(paint "$C_PINK" "agents $a_run running, $a_none no process")"
+else
+  printf '%s%s' "$SEP" "$(paint "$(n_colour "$a_run" "$C_BLUE")" "agents $a_run running")"
+fi
 case "$queue" in
   on)         printf '%s%s' "$SEP" "$(paint "$(n_colour "$awaiting" "$C_PINK")" "$awaiting need you")" ;;
   unreadable) printf '%s%s' "$SEP" \

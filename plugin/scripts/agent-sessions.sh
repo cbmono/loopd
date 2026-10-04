@@ -7,14 +7,18 @@
 #   agent-sessions.sh in-flight <bundle-root> -> how many recorded sessions still hold a
 #                                                slot, on stdout; one line per recorded
 #                                                session on stderr
+#   agent-sessions.sh view <bundle-root> [--summary]
+#                                             -> this bundle's background sessions, one
+#                                                row each: task, state, process, age, id;
+#                                                `--summary` prints `<running> <no-process>`
 #
 # Exit 0 answered · 2 unknown (no `claude`, no `python3`, unreadable JSON) — and unknown is
 # never a zero, because "nothing is running" is what a broken read and an idle loop both
 # look like. Reasoning: docs/pm-design.md#step-3-background.
-# Verified by tests/background-dispatch.test.sh.
+# Verified by tests/background-dispatch.test.sh and tests/agent-view.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,9p' "$0" >&2; exit 2; }
+usage() { sed -n '3,13p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 command -v python3 >/dev/null 2>&1 || {
@@ -95,6 +99,122 @@ case "$1" in
     printf '%s\n' "$live"
     ;;
 
-  -h|--help) sed -n '3,9p' "$0"; exit 0 ;;
+  view)
+    [ $# -ge 2 ] && [ $# -le 3 ] || usage
+    root="$2"; summary=0
+    if [ $# -eq 3 ]; then [ "$3" = "--summary" ] || usage; summary=1; fi
+    [ -d "$root" ] || { echo "agent-sessions: no such bundle root: $root" >&2; exit 2; }
+    json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
+    here="$(dirname "${BASH_SOURCE[0]:-$0}")"
+    wtroot="$(bash "$here/resolve-config.sh" --instance "$root" worktreeRoot 2>/dev/null)" || wtroot=""
+    if [ -z "$wtroot" ]; then
+      rr="$(bash "$here/resolve-config.sh" --instance "$root" reposRoot 2>/dev/null)" || rr=""
+      [ -n "$rr" ] && wtroot="$rr/_wt"
+    fi
+    # `<worktree> TAB <task file>` per task that recorded one, terminal tasks included: a
+    # merged task's lingering session is still THAT task's session.
+    set -- "$root"/projects/*/tasks/*.md
+    tasks=""
+    [ -e "$1" ] && tasks="$(awk '
+      FNR == 1 { fm = 0; hit = 0; if ($0 == "---") { fm = 1; next } }
+      fm && $0 == "---" { fm = 0; next }
+      fm && !hit && /^worktree:/ {
+        hit = 1; v = $0
+        sub(/^worktree:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v); gsub(/["\047]/, "", v)
+        if (v != "") print v "\t" FILENAME
+      }' "$@" 2>/dev/null)"
+    python3 - "$json" "$root" "$wtroot" "$TERMINAL" "$summary" "$tasks" <<'PY' || {
+import json, os, re, sys, time, unicodedata
+raw, root, wtroot, terminal, summary, tasks = sys.argv[1:7]
+try:
+    rows = json.loads(raw)
+except Exception:
+    sys.exit(2)
+if not isinstance(rows, list):
+    sys.exit(2)
+terminal = set(terminal.split())
+def canon(p):
+    return os.path.realpath(os.path.expanduser(p)) if p else ""
+def under(p, d):
+    return bool(p and d) and (p == d or p.startswith(d.rstrip("/") + "/"))
+by_wt = []
+for line in tasks.splitlines():
+    wt, _, path = line.partition("\t")
+    if wt and path:
+        stem = os.path.basename(path)[:-3]
+        m = re.match(r"(task-[0-9]+)-", stem)
+        label = os.path.basename(os.path.dirname(os.path.dirname(path))) + "/" + (m.group(1) if m else stem)
+        by_wt.append((canon(wt), label))
+scope = [canon(root), canon(wtroot)] + [w for w, _ in by_wt]
+
+# A PROCESS, not the registry's word for one: a session the registry still lists as
+# `blocked` after its agent died carries no live pid, and `state` cannot tell the two apart.
+# EPERM means the process EXISTS; only ESRCH may be rendered as "no process".
+def alive(pid):
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+# Display only — classification above reads the raw value, as `in-flight` does.
+# Every printed field comes from JSON or a file name, so no control character reaches a terminal.
+def clean(v):
+    return "".join(ch for ch in str(v) if unicodedata.category(ch)[0] != "C")
+
+def age(ms):
+    if not isinstance(ms, (int, float)) or isinstance(ms, bool):
+        return "?"
+    s = max(0, int(time.time() - ms / 1000))
+    for unit, n in (("d", 86400), ("h", 3600), ("m", 60)):
+        if s >= n:
+            return "%d%s" % (s // n, unit)
+    return "%ds" % s
+
+out, running, ghost, ended = [], 0, 0, 0
+for r in rows:
+    if not isinstance(r, dict) or r.get("kind", "background") != "background":
+        continue
+    cwd = r.get("cwd") if isinstance(r.get("cwd"), str) else ""
+    c = canon(cwd)
+    # Another bundle's session is out of scope; a row with no cwd cannot be placed, so it
+    # is shown as unattributed rather than assumed to be someone else's.
+    if c and not any(under(c, d) for d in scope):
+        continue
+    labels = sorted({l for w, l in by_wt if under(c, w)})
+    task = clean(",".join(labels) if labels else "unattributed")
+    state = str(r.get("state") or r.get("status") or "?")
+    pid = r.get("pid")
+    if alive(pid):
+        proc, rank = "pid %d" % pid, 0
+        running += 1
+    elif state in terminal:
+        ended += 1
+        continue
+    else:
+        proc, rank = "none", 1
+        ghost += 1
+    sid = clean(r.get("id") or str(r.get("sessionId") or "?").split("-")[0])
+    where = "" if labels else "  " + clean(cwd or "(no cwd)")
+    out.append((rank, task, clean(state), proc, age(r.get("startedAt")), sid + where))
+
+if summary == "1":
+    print(running, ghost)
+    sys.exit(0)
+w = max([len("TASK")] + [len(o[1]) for o in out])
+fmt = "%-" + str(w) + "s  %-9s %-10s %-5s %s"
+print(fmt % ("TASK", "STATE", "PROCESS", "AGE", "SESSION"))
+for o in sorted(out):
+    print(fmt % o[1:])
+print("%d running · %d no process · %d ended, not listed" % (running, ghost, ended))
+PY
+      echo "agent-sessions: could not read the session list" >&2; exit 2; }
+    ;;
+
+  -h|--help) sed -n '3,13p' "$0"; exit 0 ;;
   *) usage ;;
 esac
