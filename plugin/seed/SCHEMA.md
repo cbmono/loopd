@@ -1005,6 +1005,7 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `defaultOwner` | **no, by design** | step 4 above: unowned, so every clone treats it as its own |
 | `people` | **no** — a shared directory of who is who | no lookup; the `authorEmail` chain answers |
 | `commitAttribution` | **yes** — the tracked file is where an organisation states its policy; the local file is how one machine departs from it | `claude`: a target-repo commit keeps the `Co-Authored-By: Claude` trailer, because Claude co-authored it. `none` drops the trailer and the session URL |
+| `ticketPrefix` | **no** — it names the organisation's ticket system, a shared fact both clones' PR titles must agree on | **no tag**: a PR title is `<type>: <subject>` with nothing appended. Set (a Jira-shaped key, e.g. `ABC`), titles end `[ABC-<n>]`, or `[ABC-0]` when the task names no ticket. `dispatch-brief.sh` resolves it into the brief's `## PR title`; no agent reads it |
 | `externalReviewer` | **no, by design** — it names **where this code may be sent**. That is policy, not preference: one clone silently routing diffs to a different reviewer is precisely the disagreement that breaks it, and it breaks in the direction nobody notices | the CodeRabbit CLI |
 | everything else | no — shared facts (`org`, `group`, `maxPrLoc`, `maxPrFiles`, `defaultRepo`, `codegraphSkip`, …) | as documented per key |
 

@@ -1,25 +1,28 @@
 #!/usr/bin/env bash
-# dispatch-brief.sh — the four fixed sections the PM pastes into a dispatch brief
+# dispatch-brief.sh — the five fixed sections the PM pastes into a dispatch brief
 # verbatim: `## Grounding (<repo>)`, the Service-doc entry points capped at 15 lines (or
 # one line telling the agent to draft the missing doc); `## Effort`, the files/LOC/turns
-# budget; `## Commit attribution`, the resolved `commitAttribution` — answered here
-# so no agent reads that key itself; and `## Scratch`, a directory this task alone owns.
+# budget; `## Commit attribution` and `## PR title`, the resolved `commitAttribution` and
+# `ticketPrefix` — answered here so no agent reads either key itself; and `## Scratch`, a
+# directory this task alone owns.
 # Usage: dispatch-brief.sh <task-doc> [--instance <bundle>]. Exit: 0 printed, 2 cannot
 # answer (no task doc, unreadable frontmatter). Never fails a dispatch — an absent config
 # key falls back to the documented default. Reasoning: ai-bridge-next/task-017 (bands),
-# task-031 (attribution), ai-bridge-v3/task-053 (scratch).
+# task-031 (attribution), ai-bridge-v3/task-053 (scratch),
+# dispatch-reporting-defects/task-030 (ticket prefix).
 set -uo pipefail
 
 GROUNDING_MAX_LINES=15
-# THE ONE COPY OF EACH HEADING. project-manager.md quotes both and
+# THE ONE COPY OF EACH HEADING. project-manager.md quotes them and
 # tests/dispatch-brief.test.sh pins them against this file, so a rename cannot land in one
 # place only.
 GROUNDING_HEADING='## Grounding'
 EFFORT_HEADING='## Effort'
 ATTRIBUTION_HEADING='## Commit attribution'
+TITLE_HEADING='## PR title'
 SCRATCH_HEADING='## Scratch'
 
-usage() { sed -n '2,10p' "$0" >&2; exit 2; }
+usage() { sed -n '2,12p' "$0" >&2; exit 2; }
 
 fm_block() { # <file> — the frontmatter, or exit 3/4 for a shape we will not read
   awk '
@@ -158,6 +161,16 @@ if [ "$(cfg commitAttribution claude)" = none ]; then
   printf 'commitAttribution: none — write NO attribution trailer and NO session URL on a target-repo commit. This installation opted out.\n'
 else
   printf 'commitAttribution: claude — end every target-repo commit with the `Co-Authored-By: Claude <model> <noreply@anthropic.com>` trailer the harness provides.\n'
+fi
+
+# Only a Jira-shaped key is a prefix; anything else is absent, so the default is no tag.
+printf '\n%s\n\n' "$TITLE_HEADING"
+PREFIX="$(cfg ticketPrefix "")"
+if [[ "$PREFIX" =~ ^[A-Z][A-Z0-9_]+$ ]]; then
+  printf 'ticketPrefix: %s — title is `<type>: <subject> [%s-<n>]`, with the id your task or this brief names, and `[%s-0]` when neither names one.\n' \
+    "$PREFIX" "$PREFIX" "$PREFIX"
+else
+  printf 'ticketPrefix: none — title is `<type>: <subject>` and NOTHING after it: no bracketed tag. This installation names no ticket system.\n'
 fi
 
 # The task slug is what makes this path unique: a tick spawns several agents into ONE
