@@ -235,10 +235,15 @@ threading.Thread(target=lambda: (time.sleep(120), os._exit(0)), daemon=True).sta
 print(srv.server_address[1], flush=True)
 srv.serve_forever()
 PY
-python3 "$DUMB/srv.py" "$DUMB/srv" > "$DUMB/port" 2>/dev/null & SRV=$!; disown "$SRV" 2>/dev/null
+python3 "$DUMB/srv.py" "$DUMB/srv" > "$DUMB/port" 2>"$DUMB/err" & SRV=$!; disown "$SRV" 2>/dev/null
 DPORT=""; for _ in $(seq 1 80); do
   DPORT="$(tr -dc '0-9' < "$DUMB/port" 2>/dev/null)"; [ -n "$DPORT" ] && break
   kill -0 "$SRV" 2>/dev/null || break; sleep 0.25; done
+# This fixture has never come up on the CI runner (#293 merged with it red), and its stderr
+# used to go to /dev/null — so say WHY when it does not start, instead of only that it did not.
+[ -n "$DPORT" ] || printf '    dumb-HTTP fixture did not start: python3=%s alive=%s stderr=[%s]\n' \
+  "$(command -v python3 2>/dev/null || echo none)" "$(kill -0 "$SRV" 2>/dev/null && echo yes || echo no)" \
+  "$(head -c 600 "$DUMB/err" 2>/dev/null | tr '\n' '|')"
 ok "the loopback dumb-HTTP fixture is up" "$([ -n "$DPORT" ] && echo yes || echo no)" yes
 EBT="$TMP/emptybundle-tok"; mkdir -p "$EBT/$AB_DIR"; cp "$SEED/SCHEMA.md" "$EBT/$AB_SCHEMA"
 printf '{ "knowledge": { "repo": "http://u:s3cr3tt0ken@127.0.0.1:%s/empty.git", "path": "/", "ref": "main" } }\n' \
