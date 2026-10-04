@@ -2,7 +2,9 @@
 # agent-usage.sh — what the harness handed back, recorded where the work is.
 # `fmt` prints the ONE fixed usage form (tick-delta.sh's close line calls it too);
 # `dispatch <task>` appends one `# Notes` line per role dispatch; `total <task>` sums
-# those lines against the merged PR(s) at reflect time; `series` prints the monthly
+# those lines against the merged PR(s) at reflect time; `settle <task>` fills the LAST
+# `usage UNKNOWN` dispatch line once a detached session's numbers exist (session-usage.sh
+# supplies them — this file still reads no transcript); `series` prints the monthly
 # figures from log.md's TICK pairs and the task docs' dispatch lines — file reads only,
 # no `gh`, no transcript. Denominated in TOKENS: no money anywhere, ever.
 # Exit: 0 done, 1 refused (already written), 2 cannot answer, 3 usage.
@@ -13,21 +15,21 @@ set -uo pipefail
 NOTES='# Notes'
 UNKNOWN='usage UNKNOWN'
 
-usage() { sed -n '2,8p' "$0" >&2; exit 3; }
+usage() { sed -n '2,10p' "$0" >&2; exit 3; }
 die2() { echo "agent-usage: $1" >&2; exit 2; }
 die3() { echo "agent-usage: $1" >&2; exit 3; }
 
 cmd="${1:-}"; [ "$#" -gt 0 ] && shift
-case "$cmd" in fmt|dispatch|total|series) ;; *) usage ;; esac
+case "$cmd" in fmt|dispatch|total|settle|series) ;; *) usage ;; esac
 
 doc=""
 case "$cmd" in
-  dispatch|total)
+  dispatch|total|settle)
     doc="${1:-}"; [ -n "$doc" ] || usage; shift
     [ -f "$doc" ] && [ -w "$doc" ] || die2 "no writable task document: $doc" ;;
 esac
 
-inst="."; tokens=""; tools=""; ms=""; role=""; model=""; prs=""
+inst="."; tokens=""; tools=""; ms=""; role=""; model=""; prs=""; cached=""
 while [ $# -gt 0 ]; do
   [ $# -ge 2 ] || die3 "$1 needs a value"
   case "$1" in
@@ -35,6 +37,7 @@ while [ $# -gt 0 ]; do
     --tokens)      tokens="$2" ;;
     --tools)       tools="$2" ;;
     --duration-ms) ms="$2" ;;
+    --cached)      cached="$2" ;;
     --role)        role="$2" ;;
     --model)       model="$2" ;;
     --pr)          prs="${prs:+$prs }$2" ;;
@@ -87,6 +90,23 @@ case "$cmd" in
     [ -n "$role" ] || die3 "dispatch needs --role"
     append_note "$doc" "* DISPATCH $now · $role · model ${model:-unset} · $(fmt "$tokens" "$tools" "$ms")"
     echo "recorded: $doc" ;;
+
+  settle)
+    # Numbers or nothing: an UNKNOWN is left as it is, never overwritten with a guess.
+    num "$tokens" && num "$tools" && num "$ms" || die3 "settle needs --tokens, --tools and --duration-ms"
+    grep -q "^\* DISPATCH .*$UNKNOWN\$" "$doc" || {
+      echo "REFUSED: $doc has no dispatch line still recording $UNKNOWN." >&2; exit 1; }
+    new="$(fmt "$tokens" "$tools" "$ms")"; num "$cached" && new="$new cached=$cached"
+    tmp="$doc.usage.$$"
+    NEW="$new" UNK="$UNKNOWN" awk '
+      { buf[NR] = $0; if ($0 ~ /^\* DISPATCH / && substr($0, length($0) - length(ENVIRON["UNK"]) + 1) == ENVIRON["UNK"]) last = NR }
+      END { for (i = 1; i <= NR; i++) {
+              if (i == last) print substr(buf[i], 1, length(buf[i]) - length(ENVIRON["UNK"])) ENVIRON["NEW"]
+              else print buf[i] } }
+    ' "$doc" > "$tmp" || { rm -f "$tmp"; die2 "cannot write beside $doc"; }
+    [ -s "$tmp" ] || { rm -f "$tmp"; die2 "refusing to replace $doc with an empty file"; }
+    mv "$tmp" "$doc" || { rm -f "$tmp"; die2 "cannot replace $doc"; }
+    echo "settled: $doc" ;;
 
   total)
     [ -n "$prs" ] || die3 "total needs at least one --pr"

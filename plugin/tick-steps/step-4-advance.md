@@ -24,6 +24,22 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    | `gone` | absent | never started, or its record was removed. Same verdict as `done`+absent, and the same recovery. |
    | exit 2 | either | unknown, which is not "finished". Report it and change nothing. |
 
+   **Settle the round's usage once, when its session has ended.** A dispatch line is
+   written at the spawn and records `usage UNKNOWN` (step 3). For a task whose session
+   reads `done` — or `gone` — **and whose last `* DISPATCH` line still says
+   `usage UNKNOWN`**, run:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/session-usage.sh <the task's `session:`> --settle <task-path>
+   ```
+
+   It reads that one session's transcript, counts each message once, and fills the line:
+   `usage tokens=N tools=N ms=N cached=N` — `tokens` is fresh input, cache writes and
+   output; `cached` is cache reads, kept apart. **Exit 1 printed `usage UNKNOWN`: leave the
+   line exactly as it is** — no transcript, two candidates or an unreadable one is not a
+   zero, and you never compose the numbers yourself. A line that already carries numbers is
+   never settled again.
+
    **Never `claude rm` a role agent's session** — it deletes the session **and its
    worktree**, which belongs to `reclaim-worktree.sh` once the task is `done` with every PR
    merged, and to `prune-worktrees.sh` plus a human in every other case.

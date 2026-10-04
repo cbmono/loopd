@@ -449,6 +449,14 @@ launcher's release point are untouched.
 2. **The usage numbers are gone.** They came off the `<task-notification>`, and a detached
    session sends none; `claude agents` carries no cost or token figure. The `* DISPATCH`
    line records `usage UNKNOWN` — the honest answer, and not a zero.
+   **Closed since:** the numbers were never gone, only unreported. A top-level session
+   writes its own transcript, one file per session id, with a usage block on every
+   assistant message; `session-usage.sh` reads that one file after the session ends and
+   `agent-usage.sh settle` fills the line (step 4). Two things it must hold: **one
+   message, one count** — a transcript repeats a message's usage on each content block's
+   line, measured at 2.2 lines per message, so a per-line sum doubles the figure — and
+   **UNKNOWN on any doubt**, because the transcript is a Claude Code internal and a
+   changed format must read as unknown, never as a smaller number.
 3. **`agent-control.sh` no longer reaches a role agent.** It keys on `agent_id`, which is
    present only on a subagent's tool call, and a `--bg` session is top-level. Operator
    `halt`/`gate`/`steer` therefore apply to nothing the tick dispatches. The blunt
