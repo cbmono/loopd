@@ -23,15 +23,16 @@
 #   tests/plugin-eval.test.sh     this file: the eval suite's own shape, always; and
 #                                 the run itself, when the CLI supports it.
 #
-# FOUR OF THE EIGHT CASES GRADE THE MAIN THREAD, not a skill. One is the reader for a prose
+# FIVE OF THE NINE CASES GRADE THE MAIN THREAD, not a skill. One is the reader for a prose
 # rule of `launcher-verification-contract` — unverified state — and it exists because the
 # previous prose fix for that defect shipped 2026-08-23 with no test and rotted in weeks.
 # Section 4 asserts the one property that keeps it from rotting the same way: a grader keyed
 # on WORDING passes the next paraphrase, so `regex` over a message is refused there.
-# The other three grade an artifact the session hands back — a refined task document, a PR
-# body, a reviewer verdict — so a deterministic grader can read it and section 4 is not
-# theirs: `refine-fills-criteria-never-ready` pins `status: ready` with a regex over the
-# document itself, which is the assertion, not a paraphrase of one.
+# The other four grade an artifact the session hands back — a refined task document, a PR
+# body, a reviewer verdict, a tick's three inputs with an instruction planted in each — so a
+# deterministic grader can read it and section 4 is not theirs: `refine-fills-criteria-never-ready`
+# pins `status: ready` with a regex over the document itself, which is the assertion, not a
+# paraphrase of one.
 #
 # FOUR MORE were RETIRED 2026-09-13 — see $RETIRED and evals/README.md.
 #
