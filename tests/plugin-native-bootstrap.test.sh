@@ -91,9 +91,9 @@ $(cd "$REPO" && grep -rhoE '\$\{CLAUDE_PLUGIN_ROOT\}/scripts/[a-z0-9-]+\.sh' plu
 EOF
 ok "every \${CLAUDE_PLUGIN_ROOT}/scripts/… reference resolves" "${MISSING:-none}" none
 
-# (e) the hooks manifest names its own files the same way, and all five exist. Seven
-# registrations, five scripts: `agent-control.sh` is on `SubagentStart` and `SubagentStop`
-# as well as `PreToolUse` — the two events that start and drop its per-agent state.
+# (e) the hooks manifest names its own files the same way, and every one exists.
+# `agent-control.sh` is on `SubagentStart` and `SubagentStop` as well as `PreToolUse` — the
+# two events that start and drop its per-agent state; `report-shape.sh` is on `SubagentStop`.
 HOOKCMDS="$(python3 -c '
 import json,sys
 d=json.load(open(sys.argv[1]))
@@ -101,8 +101,8 @@ for ev in d["hooks"].values():
     for g in ev:
         for h in g["hooks"]:
             print(h["command"])' "$REPO/plugin/hooks/hooks.json" 2>/dev/null)"
-ok "hooks.json registers eight commands" "$(printf '%s\n' "$HOOKCMDS" | grep -c . | tr -d ' ')" 8
-ok "…naming six distinct scripts"        "$(printf '%s\n' "$HOOKCMDS" | sort -u | grep -c . | tr -d ' ')" 6
+ok "hooks.json registers nine commands" "$(printf '%s\n' "$HOOKCMDS" | grep -c . | tr -d ' ')" 9
+ok "…naming seven distinct scripts"      "$(printf '%s\n' "$HOOKCMDS" | sort -u | grep -c . | tr -d ' ')" 7
 ok "…every one through \${CLAUDE_PLUGIN_ROOT}" \
    "$(printf '%s\n' "$HOOKCMDS" | grep -cv '^\${CLAUDE_PLUGIN_ROOT}/hooks/' | tr -d ' ')" 0
 HOOKMISS=""

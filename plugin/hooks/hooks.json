@@ -46,6 +46,14 @@
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/agent-control.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/report-shape.sh"
+          }
+        ]
       }
     ],
     "WorktreeCreate": [

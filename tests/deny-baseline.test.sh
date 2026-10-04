@@ -363,8 +363,8 @@ ok "…and the seeded settings.json has no hooks key at all" \
    "$(jq -r 'if has("hooks") then "present" else "absent" end' "$SETTINGS")" "absent"
 ok "…while the plugin manifest carries every hook file" \
    "$(jq -r '[.hooks[][].hooks[].command] | unique | length' "$HOOKSJSON")" "$N_HOOK_FILES"
-ok "…across eight registrations" \
-   "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "8"
+ok "…across nine registrations" \
+   "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "9"
 
 echo "== the permissions.deny block: unconditional shapes only"
 # This block is the SECOND layer — the harness matches it before any hook runs — and every

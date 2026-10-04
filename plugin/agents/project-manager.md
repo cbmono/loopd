@@ -649,25 +649,51 @@ state, and act only on deltas.
 
 ## Output
 
-**A tick that changed nothing reports ONE line and nothing else** — the probe's own
-`IDLE:` line from step 0.9, verbatim, naming the next check. Everything below describes
-the report of a tick that did something.
+**Your final message is read on its way out, by `hooks/report-shape.sh` on `SubagentStop`,
+and `${CLAUDE_PLUGIN_ROOT}/scripts/report-clearance.sh` refuses it unless it is the shape
+below.** The first refusal sends you back with the reasons to rewrite it; run the script with
+`--body-file` on your draft to clear it first. **A tick that changed nothing reports ONE line
+and nothing else** — the probe's own `IDLE:` line from step 0.9, verbatim, naming the next
+check.
 
-End each tick with a concise report: drafts refined (and which have open questions),
-tasks dispatched (with PR links once open), PRs awaiting the human's merge, tasks
-moved to `done`, and what currently awaits the human. **At most ONE cost line, and only
-when there is one to give** — a tick that dispatched nothing and merged nothing prints no
-cost line at all, and no tick prints two. **In tokens, never in money**; there is no price
-table anywhere in this loop and converting is the reader's business. **On a shared instance, also
-report the other human's work you saw and did not dispatch** — one line naming the
-task and its owner. **Cite every PR as a Markdown link — `[<repo>#<n>](<url>)`, bare
-repo name** — and link other artifacts (commits, CI runs) by URL. Follow this
-instance's `CLAUDE.md` for data-handling, units, and routing.
+Three parts, in this order, and nothing else:
 
-**EVERY ITEM IN THE "AWAITS THE HUMAN" PART CARRIES A URL OR A PATH — and an item that
-can name neither is not rendered at all.** A PR as `[<repo>#<n>](<url>)`, a task as its
-file path. This is not a new heading and there is no `Needs you` section to add: it
-constrains the items the paragraph above already describes. **Dropping the unnameable one
-is the point, not a gap** — a human reading "waiting on a review" with nowhere to click
-has to re-derive which review from the rest of the report, which costs more than the line
-saved, and an item with no artifact behind it is usually a state nothing on disk supports.
+1. **What happened** — the outcome in one or two sentences, at most 400 characters: drafts refined,
+   tasks dispatched, PRs merged, tasks moved to `done` and, on a shared instance, the other
+   human's work you saw and did not dispatch. The outcome, never the steps.
+2. **`Blocking:`** — only when something is. Absent when nothing is: a line saying nothing
+   is blocking is refused.
+3. **`Needs you:`** — a numbered list holding everything that awaits the human, omitted when
+   nothing does. Each item is one line, and each part of it is checked:
+   - **one action, in the imperative** — `Merge [<repo>#<n>](<url>)`, never "the PR needs
+     attention", and never two actions joined by "then";
+   - **EVERY ITEM IN THE "AWAITS THE HUMAN" PART CARRIES A URL OR A PATH — and an item that
+     can name neither is not rendered at all.** A PR as `[<repo>#<n>](<url>)`, a task as its
+     file path: a path the human has to go and find is a step before the step;
+   - **your recommendation, with one clause of why after ` — `** — what you think should be
+     done, never "whether" or "either";
+   - **in dependency order, executable top to bottom** — a prerequisite never sits below the
+     item that needs it.
+
+After those, only trailer lines: step 8's `BOARD:` lines and a `COST: <n> tokens` line.
+**At most ONE cost line, and only when there is one to give** — a tick that
+dispatched nothing and merged nothing prints no cost line at all, and no tick prints two.
+**In tokens, never in money**; there is no price table anywhere in this loop and converting
+is the reader's business.
+
+**Reasoning is kept out by the check, not by this request.** A list, heading, table or code
+fence outside `Needs you:`, a what-happened past two sentences, and narration ("I tried",
+"instead of", "alternatives") are refused. The steps taken, the alternatives rejected and the
+reasoning behind a decision go in the task document, the commit message or a `Finding`.
+
+**The order check is a detector, not the rule.** The rule is dependency. `first`, `before`,
+`once` and `after` are the cheap detector for the common case — `first` below item 1,
+`before <X>` below the item `<X>` names, `once <X>` or `after <X>` above it, matched on
+shared words. An
+inversion that uses none of the four words clears, and loopd's tests pin exactly that as a
+known miss: a clear report is not proof the order is right. The imperative, why and
+one-action checks are detectors in the same sense.
+
+**Cite every PR as a Markdown link — `[<repo>#<n>](<url>)`, bare repo name** — and link
+other artifacts (commits, CI runs) by URL. Follow this instance's `CLAUDE.md` for
+data-handling, units, and routing.
