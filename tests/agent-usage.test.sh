@@ -228,9 +228,22 @@ ok "no readable log.md is exit 2"                 "$("$AU" series --instance "$T
 echo "== tokens, never money — and no transcript on this path =="
 FEATURE=("$AU" "$TD" "$REPO/plugin/agents/auditor.md")
 # `cost` as a word is allowed (it names the subject); a PRICE is what may not appear.
-money='USD\|EUR\|\$[0-9]\|price\|pricing\|per million\|per 1M\|cents'
-ok "no price, no currency, no pricing source"     "$(grep -ic "$money" "${FEATURE[@]}" | awk '{s+=$1} END{print s+0}')" 0
-ok "no transcript path on the tick path"          "$(grep -c 'claude/projects\|\.jsonl' "${FEATURE[@]}" | awk '{s+=$1} END{print s+0}')" 0
+# No `\$[0-9]` arm: these files read their own positional parameters, and a pattern that
+# matches `$1` measures bash, not money.
+money='USD\|EUR\|price\|pricing\|per million\|per 1M\|cents'
+# `grep -c` over SEVERAL files prints `file:count`, and summing `$1` of that reads every
+# line as 0 — these two were green whatever the files held. The count is the LAST field.
+sumc() { awk -F: '{s+=$NF} END{print s+0}'; }
+ok "no price, no currency, no pricing source"     "$(grep -ic "$money" "$AU" "$TD" | sumc)" 0
+# The auditor's body STATES the prohibition, so the word appears there once, on the line
+# that forbids it. Any other line carrying money vocabulary is the thing being forbidden.
+AUD="$REPO/plugin/agents/auditor.md"
+ok "the auditor states the prohibition"            "$(grep -c 'never convert to money, and never introduce a price table' "$AUD" | tr -d ' ')" 1
+ok "…and names money nowhere else"               "$(grep -iv 'never convert to money' "$AUD" | grep -ic "$money" | tr -d ' ')" 0
+ok "no transcript path on the tick path"          "$(grep -c 'claude/projects\|\.jsonl' "${FEATURE[@]}" | sumc)" 0
+# The mutant: the same sum over a fixture that DOES carry a price must not read 0.
+printf 'costs 5 USD\n' > "$TMP/priced.txt"; : > "$TMP/clean.txt"
+ok "…and the sum does count across several files"   "$(grep -ic "$money" "$TMP/priced.txt" "$TMP/clean.txt" | sumc)" 1
 ok "agent-usage.sh calls no gh"                   "$(grep -c '^[^#]*[^a-z]gh ' "$AU" | tr -d ' ')" 0
 ok "…and the close path calls none either"      "$(sed -n '/--- the ledger half/,/^command -v git/p' "$TD" | grep -v '^[[:space:]]*#' | grep -c '[^a-z]gh ' | tr -d ' ')" 0
 
