@@ -817,6 +817,7 @@ table_scan() { # <rendered-body>
         c = arr[i]
         gsub(/^[[:space:]]+|[[:space:]]+$/, "", c)
         if (c == "" || mark_only(c)) continue
+        # The criterion is the LONGEST such cell, so an index column (#71) is not it.
         if (length(c) > length(R_CRIT)) R_CRIT = c
         out = (out == "" ? c : out " " c)
       }

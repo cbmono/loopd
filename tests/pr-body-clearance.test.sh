@@ -358,12 +358,13 @@ says   "  ...reporting the counted half" \
 says   "  ...and the criterion text it left out" \
        "not counting $PR195_CRITERIA characters of verbatim criterion text"
 
+says   "  ...and what it did not count"    "of $PR195_POSTED posted"
+
 # The cases below are about the block, not the criteria, so they run on #195 with its
 # criterion allowance spent again as prose: every count below is its authored count.
 BODY195P="$TMP/pr195-prose.md"
 awk -v m="$OPEN195" -v pad="$(printf '%*s' "$(( PR195_CRITERIA - 1 ))" '' | tr ' ' 'x')" \
   '$0 == m { print pad } { print }' "$BODY195" > "$BODY195P"
-says   "  ...and what it did not count"    "of $PR195_POSTED posted"
 
 # THE MARKER IS THE ANCHOR, NEVER THE EDITOR'S LOGIN — which nothing here even reads. The
 # identical text without its markers is an unrecognised block, so it is counted in full.
@@ -428,15 +429,15 @@ says   "  ...counting every character of it"  "over the ${BODY_CEILING}-characte
 echo
 echo "== verbatim criterion text is not charged: loopd task-025, verbatim =="
 # Eight real criteria, quoted in full, pinned here because the task doc they came from is
-# not in this repo. Under the old count this body refused at 4 with 214 characters of prose.
+# not in this repo. Under the old count this body refused at 4.
 BODY025="$(cd "$(dirname "$0")" && pwd)/fixtures/pr-body/loopd-task-025-criteria.md"
 T025_POSTED=4729
 T025_CRITERIA=3849
 CRITERION_ALLOWANCE=800
 ok "the fixture is there, to the character" "$(chars "$BODY025")" "$T025_POSTED"
-ok "…its criterion column alone is past the ceiling" \
-   "$(awk -F' [|] ' '/^[|] / && $2 != "Criterion" && $2 !~ /^-/ { print $1 }' "$BODY025" \
-      | sed 's/^| //' | tr -d '\n' | "$REAL_JQ" -Rs 'length > 2500')" true
+ok "…its criterion column alone, past the ceiling" \
+   "$(awk -F' [|] ' '$2 == "✓" && $1 != "| Criterion" { sub(/^[|] /, "", $1); printf "%s", $1 }' \
+      "$BODY025" | "$REAL_JQ" -Rs 'length')" "$T025_CRITERIA"
 expect "task-025 quoted in full (${T025_POSTED}) -> CLEAR" 0 --body-file "$BODY025"
 says   "  ...printing the number it compared" \
        "is $(( T025_POSTED - T025_CRITERIA )) characters (ceiling $BODY_CEILING)"
