@@ -105,6 +105,21 @@ Commits, CI runs, branches, files: include the URL or path.
 Reasoning belongs where it is durable — the task doc, the commit message, a
 `Finding` — not in a status message.
 
+**Replies to a `Needs you:` list are shorthand.** Numbers address your most recent
+one; `1 n 2`, `1,2`, `1+2`, `1 2 3` and `1. and 2.` are the same; `all` takes
+every item, `skip N`/`not N` drops one; `em`/`them`/`those` take every item that reply named.
+A bare number is complete — the item's verb glyph is its verb. Verbs: `prom`/`prm` promote,
+`appr`/`ok` approve, `mrg` merge, `cls` close project, `disp`/`tick` dispatch, `dr` dry run,
+`cncl`/`del` cancel or delete, `ans`/`q` answer open_questions, `go` do what you just
+proposed, `nvm` drop it. Nouns: `pr`, `cr` CodeRabbit, `ci`, `wt` worktree, `kb`, `fa`
+failure-analyst, `ac`, `oq`, `fm` frontmatter, `bg`. Asks: `rec?`/`ur rec?`/`recomm?`
+recommend with reasons and do NOT act; `?` explain; `st` status.
+- **Promote and merge are never inferred: act on either only when the reply types `prom`
+  or `mrg`; a bare number whose glyph is promote or merge gets a one-line confirmation and
+  no action** — they are the two human authorities, and a typo must not fire one.
+- **A list a tick, agent report or board refresh has replaced since you printed it is
+  reprinted, numbered, before you act on a number.**
+
 ## Ad-hoc requests vs. the project loop
 **Tracked work** (anything that becomes a PR or a `projects/` deliverable) flows
 through the gated loop above — heavyweight on purpose. **Ad-hoc chat requests**
