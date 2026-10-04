@@ -115,6 +115,7 @@ prov	tests/explorer-tier.test.sh
 list	tests/fixtures/brand/survivors.txt
 prov	tests/fixtures/dispatch/commented-pr.task.md
 prov	tests/fixtures/pr-body/ai-bridge-195.md
+prov	tests/fixtures/pr-body/loopd-task-025-criteria.md
 prov	tests/fixtures/reviewer/clean-review.pr29.md
 prov	tests/fixtures/reviewer/pr227.api.json
 prov	tests/fixtures/reviewer/pr228.api.json

@@ -276,7 +276,7 @@ IDX_SELF="$(bash "$VALIDATOR" knowledge/index.md 2>&1)"
 IDX_ABS="$(bash "$VALIDATOR" "$B/knowledge/index.md" 2>&1)"
 set -e
 rm knowledge/index.md
-seen() { printf '%s\n' "$1" | grep -q -- "$2" && echo 0 || echo 1; }
+seen() { grep -q -- "$2" <<<"$1" && echo 0 || echo 1; }
 assert "a named document on a stale index: no index warning" "$(seen "$IDX_NAMED" '0 errors, 0 warnings')"
 assert "a no-argument run on the same stale index still warns" "$(seen "$IDX_FULL" "$STALE")"
 assert "naming the index itself still checks it"  "$(seen "$IDX_SELF" "$STALE")"
