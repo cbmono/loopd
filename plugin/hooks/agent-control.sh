@@ -109,14 +109,14 @@
 # second bound, on the same event for the same reason. It is PER ROLE: `roleMinutes.<role>`
 # wins, and the `project-manager` defaults to 180 rather than 45, because a tick walks the
 # whole bundle and grows with it (docs/conventions.md #16). Past the budget an agent may
-# still `Read`/`Grep`/`Glob` and still `git add|commit|push`, `commit-as.sh`, `cd` or
-# `gh pr create|edit|view|checks` — everything it needs to land what it has and report
-# accurately — and nothing else. The Bash is parsed quote-aware, one `&&`/`;`/newline
+# still `Read`/`Grep`/`Glob`, `SubagentHandback`, and `git add|commit|push`, `commit-as.sh`,
+# `cd` or `gh pr create|edit|view|checks` — everything it needs to land what it has and
+# report accurately — and nothing else. The Bash is parsed quote-aware, one `&&`/`;`/newline
 # segment at a time: a quoted commit message may carry `()` and newlines, and a quoted
 # heredoc message is admitted, but an unquoted pipe, substitution or redirect is not. The
-# start time is the `SubagentStart` record under `agents.d/`, falling back to the oldest
-# timestamp the transcript carries (an append moves ctime and mtime, so neither alone is a
-# start time, and birth time is not recorded on every filesystem).
+# start time is the `SubagentStart` record under `agents.d/` and NOTHING else: no record ⇒
+# the cap is off for that agent and `control.log` says `elapsed=unknown`. The transcript is
+# never a clock — it is the parent session's, so its age is the session's (task-029).
 #
 # ------------------------------------------------------------------------ BOUNDED
 # Unbounded per-call state in front of every tool call is its own hazard, so the
@@ -290,32 +290,18 @@ cap_limit_load() {
   [ -n "$CAP_SRC" ] || CAP_SRC=maxAgentMinutes
 }
 
-# Epoch seconds, or nothing. The fallback takes the OLDEST of birth, ctime and mtime rather
-# than any one of them: a transcript is appended to for the whole of an agent's life, so
-# ctime and mtime both read as "started seconds ago", and birth time is not recorded on
-# every filesystem. None of the three can predate the transcript's first write.
+# Epoch seconds, or nothing — and nothing means the cap is off. Never fall back to a file the
+# agent does not own: the transcript is the parent session's, and its age capped every
+# handback with the same calendar-growing figure (task-029).
 cap_started() {
-  local f s t oldest=0
-  f="$(cap_file)" || f=""
-  if [ -n "$f" ] && [ -r "$f" ]; then
+  local f s
+  f="$(cap_file)" || return 1
+  for f in "$f" "${f%.started}.stopped"; do
+    [ -r "$f" ] || continue
     read -r s < "$f" 2>/dev/null || s=""
     case "$s" in ''|*[!0-9]*) ;; *) printf '%s' "$s"; return 0 ;; esac
-  fi
-  [ -n "$transcript" ] && [ -f "$transcript" ] || return 1
-  # BSD `stat -f` is a FORMAT; GNU `stat -f` is --file-system and prints a block of prose
-  # on stdout before failing, whose "4096" would read as an epoch. So the BSD answer is
-  # accepted only when it is digits and spaces, and anything else falls through to GNU.
-  s="$(stat -f '%B %c %m' "$transcript" 2>/dev/null)" || s=""
-  case "$s" in
-    ''|*[!0-9\ ]*) s="$(stat -c '%W %Z %Y' "$transcript" 2>/dev/null)" || s="" ;;
-  esac
-  for t in $s; do
-    case "$t" in ''|*[!0-9]*) continue ;; esac
-    [ "$t" -gt 0 ] || continue
-    { [ "$oldest" -eq 0 ] || [ "$t" -lt "$oldest" ]; } && oldest="$t"
   done
-  [ "$oldest" -gt 0 ] || return 1
-  printf '%s' "$oldest"
+  return 1
 }
 
 # The allowlist past the cap. Quoted spans are neutralised left to right — a quoted heredoc
@@ -343,7 +329,7 @@ CAP_SCAN='
     and all($segs[]; test($ok) and (test("[#|&`()<>\\\\\"\u0027]") | not))'
 cap_allows() {
   case "$tool_name" in
-    Read|Grep|Glob) return 0 ;;
+    Read|Grep|Glob|SubagentHandback) return 0 ;;
     Bash) ;;
     *) return 1 ;;
   esac
@@ -375,8 +361,9 @@ repeat_file() { local k; k="$(agent_key)" || return 1; printf '%s/%s' "$REPEATS"
 cap_file()    { local k; k="$(agent_key)" || return 1; printf '%s/%s.started' "$AGENTSTATE" "$k"; }
 cap_mark()    { local k; k="$(agent_key)" || return 1; printf '%s/%s.capped' "$AGENTSTATE" "$k"; }
 
-# One cleanup for both counters, on the one event that says an agent is gone. The clock is
-# swept far later than the repeat counter: a live agent legitimately holds one for hours.
+# One cleanup for both counters on SubagentStop. The clock is PARKED, never deleted: the stop
+# is not terminal when the harness re-prompts an agent to hand back, and a deleted clock left
+# that handback with no start time (task-029). It is swept far later than the repeat counter.
 agent_forget() {
   local f
   if [ -d "$REPEATS" ]; then
@@ -386,17 +373,17 @@ agent_forget() {
   fi
   if [ -d "$AGENTSTATE" ]; then
     f="$(cap_file)" || f=""
-    [ -z "$f" ] || rm -f "$f" "${f%.started}.capped" 2>/dev/null || true
+    [ -z "$f" ] || { [ ! -e "$f" ] || mv -f "$f" "${f%.started}.stopped"; rm -f "${f%.started}.capped" "${f%.started}.unclocked"; } 2>/dev/null || true
     find "$AGENTSTATE" -type f -mmin +"$CAP_SWEEP" -delete 2>/dev/null || true
   fi
 }
 
 # SubagentStart is the exact start, so it never overwrites: a second event for one agent
-# must not hand it a fresh budget.
+# must not hand it a fresh budget. After a stop the clock is parked, so a resume starts fresh.
 agent_started_record() {
   local f; f="$(cap_file)" || return 0
   mkdir -p "$AGENTSTATE" 2>/dev/null || true
-  [ -e "$f" ] || printf '%s\n' "$epoch" > "$f" 2>/dev/null || true
+  [ -e "$f" ] || { printf '%s\n' "$epoch" > "$f" && rm -f "${f%.started}.stopped"; } 2>/dev/null || true
 }
 
 # CONTROL_MAX normalised to base 10 BEFORE any arithmetic. `CONTROL_MAX=08` is
@@ -432,19 +419,18 @@ command -v jq >/dev/null 2>&1 || {
 # roster assertion looked for the empty string and passed vacuously.
 #
 # Line-oriented `IFS='' read -r` preserves an empty field exactly. `$(...)` strips
-# TRAILING newlines, which is harmless here: only `tool_name` is last, it is used
-# for the log alone, and `read` leaves it empty in that case anyway.
+# TRAILING newlines, which is harmless here: only `hook_event` is last, and an empty
+# one is read as PreToolUse below.
 fields="$(printf '%s' "$payload" \
-  | jq -r '[(.agent_id // ""), (.agent_type // ""), (.tool_name // ""), (.hook_event_name // ""), (.transcript_path // "")] | .[]' 2>/dev/null)" || fields=""
+  | jq -r '[(.agent_id // ""), (.agent_type // ""), (.tool_name // ""), (.hook_event_name // "")] | .[]' 2>/dev/null)" || fields=""
 [ -n "$fields" ] || { note "fail-open: unparseable PreToolUse payload"; exit 0; }
 
-agent_id=""; agent_type=""; tool_name=""; hook_event=""; transcript=""
+agent_id=""; agent_type=""; tool_name=""; hook_event=""
 {
   IFS='' read -r agent_id || true
   IFS='' read -r agent_type || true
   IFS='' read -r tool_name || true
   IFS='' read -r hook_event || true
-  IFS='' read -r transcript || true
 } <<EOF
 $fields
 EOF
@@ -499,7 +485,15 @@ fi
 cap_limit_load
 if [ "$CAP_N" != off ]; then
   started="$(cap_started)" || started=""
-  if [ -n "$started" ]; then
+  if [ -z "$started" ]; then
+    mark="$(cap_mark)" || mark=""
+    mark="${mark%.capped}.unclocked"
+    if [ "$mark" != .unclocked ] && [ ! -e "$mark" ]; then
+      mkdir -p "$AGENTSTATE" 2>/dev/null || true
+      : > "$mark" 2>/dev/null || true
+      note clock-unknown "$agent_id" "$agent_type" "$tool_name" "elapsed=unknown budget=${CAP_N}m (no SubagentStart record)"
+    fi
+  else
     elapsed=$(( (epoch - started) / 60 ))
     [ "$elapsed" -ge 0 ] || elapsed=0
     if [ "$elapsed" -ge "$CAP_N" ] && ! cap_allows; then
@@ -510,7 +504,7 @@ if [ "$CAP_N" != off ]; then
         : > "$mark" 2>/dev/null || true
         note agent-cap "$agent_id" "$agent_type" "$tool_name" "elapsed=${elapsed}m budget=${CAP_N}m"
       fi
-      body="TIME CAP: this agent has been running ${elapsed} minutes and the budget ($CAP_SRC) is ${CAP_N}, so $tool_name is refused. Wrap up now: commit and push what you have, open or update the pull request, and report what is done and what is not. Still allowed so that report is accurate: Read, Grep, Glob, and a Bash made only of git add|commit|push, commit-as.sh, cd and gh pr create|edit|view|checks, joined by && or ; — a quoted message may span lines and carry parentheses, but no pipe, redirect or unquoted \$( is admitted. Nothing else is. Do not start new work and do not work around this."
+      body="TIME CAP: this agent has been running ${elapsed} minutes and the budget ($CAP_SRC) is ${CAP_N}, so $tool_name is refused. Wrap up now: commit and push what you have, open or update the pull request, and report what is done and what is not. Still allowed so that report is accurate: Read, Grep, Glob, SubagentHandback, and a Bash made only of git add|commit|push, commit-as.sh, cd and gh pr create|edit|view|checks, joined by && or ; — a quoted message may span lines and carry parentheses, but no pipe, redirect or unquoted \$( is admitted. Nothing else is. Do not start new work and do not work around this."
       jq -n --arg r "$body" '{
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
