@@ -111,6 +111,7 @@ cannot date, and a dangling reference. Each needs a decision, not a rewrite. See
 | Section | Covers |
 |---|---|
 | Validation | what `validate-bundle.sh` enforces, and the schema-defined locations |
+| Which document wins | the authority table — per concern, which instruction document is right when two disagree, and that the other one is fixed, never asked about |
 | Task lifecycle | the full status table, multi-PR tasks, the `okf-verdict` trailer |
 | Independent verification gate | **the normative clearance predicate** — implement from here, nowhere else |
 | Ownership on a shared instance | `owner`, `defaultOwner`, and what `task-owner.sh` decides |

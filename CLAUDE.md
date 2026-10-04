@@ -72,6 +72,7 @@ shorten a "why" — relocate it intact.
 - **After adding or moving a skill or agent under `plugin/`, restart Claude Code and verify it registers** (no `skills:` prefix). New files aren't picked up mid-session, and a plugin the user has already installed needs `claude plugin update` before a new file exists on their machine at all.
 - **Don't run `init-bundle.sh --config` from a git worktree.** Every symlink into `~/.claude` would point at a temporary checkout. It refuses, exits 2, and deliberately does **not** compute the main tree's path — every derivation is wrong once the git metadata lives apart from the working tree. Don't "improve" the message by deriving one. A **bundle stamp** is fine from a worktree: it writes no link into this repo.
 - **No customer PII** in a task title, an answer, or a `Finding`. Titles reach the published board; answers persist for the life of the repo.
+- **When two docs disagree, `plugin/seed/SCHEMA.md` → "Which document wins" says which one is wrong.** Fix the non-authoritative one so it restates and points; never ask. `tests/authority-table.test.sh` keeps the table truthful — every path it names resolves, and every agent, tick step and skill is under some row.
 
 ## Out of scope
 
