@@ -117,7 +117,7 @@ enum_for() {
     Project)   echo "active paused done" ;;
     Phase)     echo "not-started active done" ;;
     Task)      echo "draft ready in-progress in-review blocked cancelled done" ;;
-    Finding)   echo "current superseded corrected" ;;
+    Finding)   echo "current superseded corrected archived" ;;
     Service)   echo "active deprecated" ;;
     Reference) echo "current superseded" ;;
     *)         echo "" ;;

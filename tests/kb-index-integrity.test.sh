@@ -166,7 +166,7 @@ ok "…and the message names the cell count" "$(check_out | grep -c 'cells, expe
 D="$(plant bad-status)"
 sed 's#/knowledge/findings/new-rule.md` | current |#/knowledge/findings/new-rule.md` | open |#' "$D/knowledge/index.md" > "$D/k" && mv "$D/k" "$D/knowledge/index.md"
 ok "a status outside the enum: red"      "$(check_rc "$D")" 1
-ok "…and the message names the enum"     "$(check_out | grep -c 'outside {current, superseded, corrected}')" 1
+ok "…and the message names the enum"     "$(check_out | grep -c 'outside {current, superseded, corrected, archived}')" 1
 
 echo
 echo "== corrected IS in the enum, on both readers =="
@@ -175,6 +175,33 @@ sed 's#^status: current#status: corrected#' "$D/knowledge/findings/new-rule.md" 
 ( cd "$D" && bash "$BUILD" >/dev/null 2>&1 )
 ok "a corrected Finding clears --check"  "$(check_rc "$D")" 0
 ok "validate-bundle allows it too"       "$(hasre "$VALIDATE" 'Finding\).*current superseded corrected')" yes
+
+echo
+echo "== archived IS in the enum, renders as history, and is never citable (task-005) =="
+D="$(plant archived)"
+sed 's#^status: current#status: archived#; s#^tags:#provenance: machine\ntags:#' "$D/knowledge/findings/pipe-in-title.md" > "$D/k" && mv "$D/k" "$D/knowledge/findings/pipe-in-title.md"
+( cd "$D" && bash "$BUILD" >/dev/null 2>&1 )
+ok "an archived Finding clears --check"  "$(check_rc "$D")" 0
+printf '{}\n' > "$D/instance.config.json"
+vb_errors() { ( cd "$D" && bash "$VALIDATE" knowledge/findings/pipe-in-title.md 2>&1 | sed -n 's/.* \([0-9]*\) errors.*/\1/p' ); }
+ok "validate-bundle allows it too"       "$(vb_errors)" 0
+sed 's#^status: archived#status: retired#' "$D/knowledge/findings/pipe-in-title.md" > "$D/k"
+cp "$D/knowledge/findings/pipe-in-title.md" "$D/keep" && mv "$D/k" "$D/knowledge/findings/pipe-in-title.md"
+ok "…and refuses a status outside it (control)" "$(vb_errors)" 1
+mv "$D/keep" "$D/knowledge/findings/pipe-in-title.md"; rm -f "$D/instance.config.json"
+ARCHDR="$(grep -n '^### Archived findings' "$D/knowledge/index.md" | cut -d: -f1)"
+ARCROW="$(grep -n 'findings/pipe-in-title.md' "$D/knowledge/index.md" | cut -d: -f1)"
+SUPHDR2="$(grep -n '^### Superseded findings' "$D/knowledge/index.md" | cut -d: -f1)"
+ok "it sits in its own section, below Superseded" \
+   "$([ -n "$ARCHDR" ] && [ "$ARCHDR" -gt "$SUPHDR2" ] && [ "$ARCROW" -gt "$ARCHDR" ] && echo yes || echo no)" yes
+ok "…once, and still on disk"            "$(grep -c 'findings/pipe-in-title.md' "$D/knowledge/index.md")/$([ -f "$D/knowledge/findings/pipe-in-title.md" ] && echo yes)" 1/yes
+ok "with no archived Finding there is no such section" \
+   "$(grep -c '^### Archived' "$CLEAN/knowledge/index.md")" 0
+printf 'See [[pipe-in-title]] and [[new-rule]].\n' > "$TMP/arch-cite.txt"
+ok "cite-check drops a carried archived slug" \
+   "$(bash "$CITE" --text-file "$TMP/arch-cite.txt" --brief pipe-in-title,new-rule --index "$D/knowledge/index.md" | grep -c '^ARCHIVED pipe-in-title ')" 1
+ok "…exit 3: dropped, the line still cites" \
+   "$(bash "$CITE" --text-file "$TMP/arch-cite.txt" --brief pipe-in-title,new-rule --index "$D/knowledge/index.md" >/dev/null; echo $?)" 3
 
 echo
 echo "== the controlled vocabulary is closed, and aliases resolve =="

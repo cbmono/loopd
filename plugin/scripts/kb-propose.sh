@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # kb-propose.sh — the scheduled half of the reflector: it PROPOSES. From a bundle root.
 #
-#   kb-propose.sh [--instance DIR] --proposer <command> [--project <slug>]
+#   kb-propose.sh [--instance DIR] [--proposer <command>] [--project <slug>]
 #
-# Runs <command>; each stdout line is `<kind> · <slug> · <field>=<value> · <with|-> · <why>`.
+# Runs the archive sweep (`kb-usage.sh sweep --propose`), then <command>; each stdout line
+# is `<kind> · <slug> · <field>=<value> · <with|-> · <why>`. The sweep rides inside the
+# command that derives the next report id, so no tick can issue a report and skip it.
 # The surviving proposals become ONE draft task document — the report, and the only thing
 # that reaches the human, through build-awaiting.sh, which nothing here calls. It writes
 # nothing under knowledge/, never AWAITING.md, and never reaches kb-apply.sh.
@@ -31,7 +33,6 @@ INST="$(cd "$INST" 2>/dev/null && pwd)" || { echo "kb-propose: no such instance 
 cd "$INST" || exit 2
 [ -d knowledge ] || { echo "kb-propose: run from a bundle root (no knowledge/ here)" >&2; exit 2; }
 case "$PROJECT" in ""|.|..|*[!A-Za-z0-9._-]*) echo "kb-propose: --project wants a slug" >&2; exit 2 ;; esac
-[ -n "$PROPOSER" ] || { echo "kb-propose: not due — no proposer configured" >&2; exit 1; }
 
 drop() { echo "kb-propose: dropped — $1" >&2; }
 split5() { # <line> -> F1..F4 and F5, which keeps any ` · ` the reason carries
@@ -50,8 +51,16 @@ for t in "projects/$PROJECT"/tasks/*.md; do
   echo "kb-propose: not due — $t is still waiting on the human" >&2; exit 1
 done
 
-RAW="$(bash -c "$PROPOSER")" || { echo "kb-propose: the proposer failed — proposing nothing" >&2; exit 2; }
-n=0; PROPOSALS=""
+RAW="$(bash "$HERE/kb-usage.sh" --instance "$INST" sweep --propose)" \
+  || { echo "kb-propose: the archive sweep failed — proposing nothing" >&2; exit 2; }
+if [ -n "$PROPOSER" ]; then
+  more="$(bash -c "$PROPOSER")" || { echo "kb-propose: the proposer failed — proposing nothing" >&2; exit 2; }
+  RAW="$RAW
+$more"
+elif [ -z "$RAW" ]; then
+  echo "kb-propose: not due — no proposer configured and nothing to archive" >&2; exit 1
+fi
+n=0; PROPOSALS=""; NAMED=""
 while IFS= read -r line; do
   [ -n "${line//[[:space:]]/}" ] || continue
   [ "$(grep -o ' · ' <<<"$line" | wc -l)" -ge 4 ] || { drop "not five ' · ' fields: $line"; continue; }
@@ -73,9 +82,10 @@ while IFS= read -r line; do
     [ "$F4" != - ] || { drop "$F2: a $F1 must name the other item(s)"; continue; } ;;
   esac
   case ",$F4," in *",$F2,"*) drop "$F2: --with names the item itself"; continue ;; esac
+  case " $NAMED " in *" $F2 "*) drop "$F2 is already named by a proposal"; continue ;; esac
   [[ "$F5" =~ [^[:space:]] ]] || { drop "$F2: an empty reason"; continue; }
   case "$F3$F4$F5" in *'"'*|*\\*|*\`*|*\$*) drop "$F2: a field carries a quote, a backslash or a shell metacharacter"; continue ;; esac
-  n=$((n + 1))
+  n=$((n + 1)); NAMED="$NAMED $F2"
   PROPOSALS="$PROPOSALS
 P$n · $F1 · $F2 · $F3 · $F4 · $(fingerprint "${MATCH[0]}") · $F5"
 done <<EOF

@@ -104,7 +104,7 @@ knowledge base") means several people write this KB. Absent the key nothing belo
    One row per doc, sorted, pipes escaped, summary copied from `lesson:`. So a row you
    would have written by hand is a row you fix **in the document**. `--check` fails on a
    doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a
-   status outside `{current, superseded, corrected}`, a tag outside `vocab.md`, and a
+   status outside `{current, superseded, corrected, archived}`, a tag outside `vocab.md`, and a
    dangling supersession edge — run it before you finish.
    **A KB sweep is that check as the whole job.** A tick with nothing to dispatch sends
    you one (`kb-sweep-due.sh`) and its brief carries the error list.

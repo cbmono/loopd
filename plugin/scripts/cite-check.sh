@@ -6,7 +6,7 @@
 # Exit: 0 nothing dropped · 1 a citing line lost every citation · 2 unknown (usage, an
 # unreadable input, or an id no index can classify) · 3 dropped, every citing line
 # still cites something. Report on stdout, one
-# `KEPT|SUPERSEDED|UNREAD|FABRICATED|UNKNOWN|EMPTY` line per citation; `--strip` puts the
+# `KEPT|SUPERSEDED|ARCHIVED|UNREAD|FABRICATED|UNKNOWN|EMPTY` line per citation; `--strip` puts the
 # cleaned text on stdout and the report on stderr.
 # Offline by construction — files only, no network, no `gh`.
 # Why: CONVENTIONS.md → the citation bullet. Reasoning: ai-bridge-next/task-014.
@@ -47,13 +47,16 @@ CARRIED=" $(printf '%s' "$BRIEF" | slugs_of | tr '\n' ' ')"
 [ -n "$INDEX" ] || { [ -r knowledge/index.md ] && INDEX=knowledge/index.md; }
 # A superseded doc keeps its row — it is history — so it is KNOWN and still not citable.
 # The generated index puts those rows under their own `### Superseded` heading, which is
-# what makes "never cite one" checkable instead of a rule agents remember.
-HAVE_INDEX=0; KNOWN=" "; GONE=" "
+# what makes "never cite one" checkable instead of a rule agents remember. An archived doc
+# (no brief cited it) is history the same way, under its own `### Archived` heading.
+HAVE_INDEX=0; KNOWN=" "; GONE=" "; ARCH=" "
+under() { awk -v h="$1" '/^#{2,}[[:space:]]/ { in_h = ($0 ~ h) } in_h' "$INDEX" \
+          | grep -oE '[A-Za-z0-9._/-]+\.md' | slugs_of | tr '\n' ' '; }
 if [ -n "$INDEX" ] && [ -r "$INDEX" ]; then
   HAVE_INDEX=1
   KNOWN=" $(grep -oE '[A-Za-z0-9._/-]+\.md' "$INDEX" | slugs_of | tr '\n' ' ')"
-  GONE=" $(awk '/^#{2,}[[:space:]]/ { sup = ($0 ~ /[Ss]uperseded/) } sup' "$INDEX" \
-           | grep -oE '[A-Za-z0-9._/-]+\.md' | slugs_of | tr '\n' ' ')"
+  GONE=" $(under '[Ss]uperseded')"
+  ARCH=" $(under '^#+[[:space:]]+[Aa]rchived')"
 elif [ -n "$INDEX" ]; then
   echo "cite-check: cannot read index '$INDEX' — a dropped id stays unclassified" >&2
 fi
@@ -61,7 +64,7 @@ fi
 has() { case "$1" in *" $2 "*) return 0 ;; esac; return 1; }
 
 report=""; out=""; lineno=0
-kept=0; unread=0; fabricated=0; unknown=0; empty=0; superseded=0
+kept=0; unread=0; fabricated=0; unknown=0; empty=0; superseded=0; archived=0
 while IFS= read -r line || [ -n "$line" ]; do
   lineno=$((lineno + 1))
   cites="$(printf '%s\n' "$line" | grep -o '\[\[[A-Za-z0-9._-]\{1,\}\]\]' || true)"
@@ -72,6 +75,11 @@ while IFS= read -r line || [ -n "$line" ]; do
     if has "$GONE" "$slug"; then
       superseded=$((superseded + 1))
       report="${report}SUPERSEDED $slug (line $lineno) — history; cite the replacement"$'\n'
+      line="${line//" $cite"/}"; line="${line//"$cite"/}"; continue
+    fi
+    if has "$ARCH" "$slug"; then
+      archived=$((archived + 1))
+      report="${report}ARCHIVED $slug (line $lineno) — history; no brief cited it"$'\n'
       line="${line//" $cite"/}"; line="${line//"$cite"/}"; continue
     fi
     if has "$CARRIED" "$slug"; then
@@ -89,9 +97,9 @@ while IFS= read -r line || [ -n "$line" ]; do
   out="$out$line"$'\n'
 done < "$TEXT"
 
-dropped=$((unread + fabricated + unknown + superseded))
+dropped=$((unread + fabricated + unknown + superseded + archived))
 report="${report}cite-check: ${kept} kept, ${dropped} dropped (${unread} unread, "
-report="${report}${fabricated} fabricated, ${superseded} superseded, ${unknown} unclassified), ${empty} empty block(s)."
+report="${report}${fabricated} fabricated, ${superseded} superseded, ${archived} archived, ${unknown} unclassified), ${empty} empty block(s)."
 if [ "$STRIP" -eq 1 ]; then printf '%s' "$out"; printf '%s\n' "$report" >&2
 else printf '%s\n' "$report"; fi
 
