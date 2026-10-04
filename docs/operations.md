@@ -1023,7 +1023,7 @@ owner asked three times in one session, for three different instances.
    ▄▄▄▄
 ◀━▐    ▌
   ▝▄▄▄▄▘
-loopd v3.0.0 · _ai-bridge-private · org: cbmono
+loopd v3.1.0 · _ai-bridge-private · org: cbmono
 ───────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
