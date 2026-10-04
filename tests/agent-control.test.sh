@@ -84,9 +84,8 @@ ctl_rc() { ( cd "$INST" && bash scripts/control.sh "$@" >/dev/null 2>&1 ); print
 # A realistic PreToolUse payload. `agent_id` is OMITTED entirely when the first
 # argument is empty, because that is what the parent's own tool call looks like —
 # not an empty string.
-# A transcript inside the fixture, because the hook now STATS it for a fallback start time
-# (ai-bridge-v3/task-039). A shared `/tmp/t.jsonl` would hand every assertion here whatever
-# age that path happens to have on the machine running the suite.
+# A transcript inside the fixture. The hook no longer reads it (task-029), and the time-cap
+# block below backdates its own copy to prove that.
 FIXTR="$TMP/transcript.jsonl"; : > "$FIXTR"
 TRANSCRIPT="$FIXTR"
 payload() { # <agent_id|""> <agent_type> <tool_name> [tool_input_command]
@@ -714,34 +713,52 @@ started C5 30
 run_start C5 software-engineer
 ok "a SECOND SubagentStart does not restart the clock" "$(cat "$CAPDIR/C5.started")" "$((NOW - 1800))"
 
-# SOURCE 2: the transcript, when no start file exists. Backdated with `touch`, which moves
-# birth time on APFS and mtime everywhere — the hook takes the oldest of what it is given.
+# NO START RECORD ⇒ NO CAP, and the log says so once. The transcript was the fallback until
+# task-029: it is the PARENT session's, so it capped every agent at the session's age.
 OLDTR="$TMP/old-transcript.jsonl"; : > "$OLDTR"
-touch -t "$(date -v-120M +%Y%m%d%H%M 2>/dev/null || date -d '120 minutes ago' +%Y%m%d%H%M)" "$OLDTR"
+backdate() { touch -t "$(date -v-"$1"d +%Y%m%d%H%M 2>/dev/null || date -d "$1 days ago" +%Y%m%d%H%M)" "$OLDTR"; }
+backdate 10
 TRANSCRIPT="$OLDTR"
-ok "no start file: a 2h-old transcript caps"          "$(run C6 software-engineer Edit; decision)" deny
-ok "…and Read is still allowed on that path too"      "$(run C6 software-engineer Read; verdict)" allowed
-# A FRESH file, not the suite's shared one: at a 1-minute budget, a transcript created when
-# the suite started is itself past the cap on a loaded machine.
-fresh_transcript() { FIXTR="$TMP/transcript.$1.jsonl"; : > "$FIXTR"; TRANSCRIPT="$FIXTR"; }
-fresh_transcript C7
-ok "…while a transcript created just now does not"    "$(run C7 software-engineer Edit; verdict)" allowed
-# …and the start file WINS over the transcript, which is what makes it the primary source.
-TRANSCRIPT="$OLDTR"
-started C8 0
-ok "the start file outranks an old transcript"        "$(run C8 software-engineer Edit; verdict)" allowed
-TRANSCRIPT="$FIXTR"
+ok "no start file + a 10-day-old transcript: NOT capped" "$(run C6 software-engineer Edit; verdict)" allowed
+run C6 software-engineer Write
+ok "…and control.log says the clock is unknown, once" "$(grep -c $'\tagent-cap-off\tC6\t.*elapsed=unknown' "$CTL/control.log")" 1
+ok "…and the hook never stats the transcript"         "$(grep -c 'stat -[fc]' "$HOOK_SRC")" 0
 
-# SubagentStop drops the clock as well as the counter — ONE cleanup, ONE state directory.
+# THE FINGERPRINT (task-029): two agents measured together reported the same elapsed, and it
+# grew with the calendar. Real starts 7 and 3 minutes ago, one shared 10-day-old transcript,
+# and a SubagentStop that is NOT terminal — the harness re-prompts for the handback after it.
+set_cap 1
+started F1 7; started F2 3
+run_stop F1 software-engineer; run_stop F2 software-engineer
+run F1 software-engineer Edit; FP1="$(reasontxt | sed -n 's/.*running \([0-9]*\) minutes.*/\1/p')"
+run F2 software-engineer Edit; FP2="$(reasontxt | sed -n 's/.*running \([0-9]*\) minutes.*/\1/p')"
+ok "after a non-terminal stop, agent 1 is still on ITS clock" "$FP1" 7
+ok "…agent 2 on its own, so the two differ"           "$FP2" 3
+backdate 20
+ok "…and a transcript 10 days older moves neither"    "$(run F1 software-engineer Edit; reasontxt | sed -n 's/.*running \([0-9]*\) minutes.*/\1/p')" 7
+# THE TRUE POSITIVE: a real record past its budget is still denied, wrap-up text intact.
+ok "a genuinely long agent is still denied"           "$(run F1 software-engineer Bash 'pnpm build'; decision)" deny
+ok "…with the wrap-up instruction intact"             "$(reasontxt | grep -c 'commit and push what you have, open or update the pull request')" 1
+# THE HANDBACK is the delivery: refusing it refuses the report the cap asks for.
+ok "…while SubagentHandback is allowed past the cap"  "$(run F1 software-engineer SubagentHandback; verdict)" allowed
+ok "…and the refusal says so"                         "$(run F1 software-engineer Edit; reasontxt | grep -c 'Glob, SubagentHandback, and a Bash')" 1
+TRANSCRIPT="$FIXTR"
+set_cap 1
+
+# SubagentStop PARKS the clock and drops the marker; only a new SubagentStart restarts it.
 started C9 90
 run C9 software-engineer Edit
 ok "the refusal left a .capped marker"                "$([ -e "$CAPDIR/C9.capped" ] && echo yes || echo no)" yes
 run_stop C9 software-engineer
-ok "SubagentStop removes the start file"              "$([ -e "$CAPDIR/C9.started" ] && echo yes || echo no)" no
-ok "…and the marker with it"                          "$([ -e "$CAPDIR/C9.capped" ] && echo yes || echo no)" no
+ok "SubagentStop parks the start file"                "$([ -e "$CAPDIR/C9.started" ] || [ ! -e "$CAPDIR/C9.stopped" ] && echo no || echo yes)" yes
+ok "…and drops the marker"                            "$([ -e "$CAPDIR/C9.capped" ] && echo yes || echo no)" no
 ok "…and leaves another agent's clock alone"          "$([ -e "$CAPDIR/C5.started" ] && echo yes || echo no)" yes
-fresh_transcript C9
-ok "…so a resumed agent starts a fresh budget"        "$(run C9 software-engineer Edit; verdict)" allowed
+ok "…so a re-prompted agent is still capped"          "$(run C9 software-engineer Edit; decision)" deny
+run_stop C9 software-engineer
+ok "…and a second stop keeps the parked clock"        "$(cat "$CAPDIR/C9.stopped")" "$((NOW - 5400))"
+run_start C9 software-engineer
+ok "a resumed agent starts a fresh budget"            "$(run C9 software-engineer Edit; verdict)" allowed
+ok "…and its parked clock is gone"                    "$([ -e "$CAPDIR/C9.stopped" ] && echo yes || echo no)" no
 # NO SECOND STATE TREE: the clock and the doom-loop counter share one directory, and the
 # one SubagentStop cleanup. Both keys on, so both counters exist to be counted.
 printf '{"maxAgentMinutes": 1, "maxRepeatedToolCalls": 2}\n' > "$INST/instance.config.json"
@@ -752,7 +769,7 @@ ok "both counters exist, and only these two"          "$(find "$CTL" -mindepth 1
 ok "…the clock is one of them"                        "$([ -f "$CAPDIR/CX.started" ] && echo yes || echo no)" yes
 ok "…the repeat counter the other"                    "$([ -f "$CTL/repeats/CX" ] && echo yes || echo no)" yes
 run_stop CX software-engineer
-ok "…and ONE SubagentStop drops both"                 "$([ -e "$CAPDIR/CX.started" ] || [ -e "$CTL/repeats/CX" ] && echo no || echo yes)" yes
+ok "…and ONE SubagentStop drops the counter, parks the clock" "$([ -e "$CAPDIR/CX.started" ] || [ -e "$CTL/repeats/CX" ] || [ ! -e "$CAPDIR/CX.stopped" ] && echo no || echo yes)" yes
 rm -rf "$CTL/repeats" "$CTL/repeat-limit"
 
 # PER ROLE. The tick walks the whole bundle, so the role-agent number is not its bound: the
