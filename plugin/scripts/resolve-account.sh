@@ -47,7 +47,8 @@ sane() { case "$1" in ""|*[!A-Za-z0-9._-]*) return 1 ;; esac; [ "${#1}" -le 32 ]
 companion_root=""
 registry="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/plugins/installed_plugins.json"
 if [ -f "$registry" ]; then
-  self_root="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || self_root=""
+  _d="$(dirname "$0")"; if [ -L "$_d" ] && [ ! -f "$(dirname "$_d")/VERSION" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
+  self_root="$(cd "$_d/.." 2>/dev/null && pwd)" || self_root=""
   entries="$(awk '
     /^[[:space:]]*"[^"]+@[^"]+"[[:space:]]*:[[:space:]]*\[/ {
       k = $0

@@ -258,7 +258,8 @@ fmcount() { fmlist "$1" "$2" count; } # <file> <key>
 # that is decided from state the walk already read. Steps 2-6 only: step 7's trigger (a
 # merge reflected, or a due sweep) is not on disk before the tick runs, and naming it here
 # would be a claim this walk cannot make.
-STEPS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../tick-steps" 2>/dev/null && pwd || true)"
+_d="$(dirname "${BASH_SOURCE[0]}")"; if [ -L "$_d" ] && [ ! -f "$(dirname "$_d")/VERSION" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
+STEPS_DIR="$(cd "$_d/../tick-steps" 2>/dev/null && pwd || true)"
 step2=0 step3=0 step4=0 step5=0 step6=0
 
 # A ` --- `-answered entry inside the open_questions block. The digest's `q=` count says

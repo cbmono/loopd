@@ -55,6 +55,9 @@
 #      supply it without a terminal. An existing local file is never rewritten here.
 #   6. Reports seed DRIFT — a seed doc this repo has changed since the bundle was stamped
 #      — via refresh-seeds.sh, report-only unless `--refresh-seeds` is given.
+#   7. Its ONE write outside TARGET: re-points the per-machine link
+#      ${CLAUDE_CONFIG_DIR:-~/.claude}/plugins/<plugin>/bin at this plugin's scripts/ (step 1g),
+#      and prints — never writes — the shell-rc line that puts it on PATH.
 #
 # CONFIG mode links `config/required/` into the Claude Code config dir, one FILE at a
 # time — never a whole directory (see the CONFIG LAYER block below). That is the WHOLE
@@ -88,7 +91,10 @@ set -euo pipefail
 # (`VERSION` and `seed/` must be there), never searched for: a walk that keeps climbing
 # will eventually find SOME ancestor with a VERSION file, and answering with an unrelated
 # repo is worse than refusing.
-BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Through the operator's plugins/<plugin>/bin link (step 1g) a logical `cd ..` lands beside
+# the link, so a linked scripts dir whose parent is not a plugin root is followed one hop.
+_d="$(dirname "$0")"; if [ -L "$_d" ] && [ ! -f "$(dirname "$_d")/VERSION" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
+BIN_DIR="$(cd "$_d" && pwd)"
 PLUGIN_ROOT="$(cd "$BIN_DIR/.." 2>/dev/null && pwd || true)"
 if [ -z "$PLUGIN_ROOT" ] || [ ! -f "$PLUGIN_ROOT/VERSION" ] || [ ! -d "$PLUGIN_ROOT/seed" ]; then
   echo "error: cannot locate the loopd plugin root from $BIN_DIR" >&2
@@ -172,7 +178,7 @@ while [ "$#" -gt 0 ]; do
       # line) — extend it when you add lines there, or --help truncates silently.
       # tests/config-layer.test.sh asserts the flags appear in the output, which is
       # what notices a stale range instead of leaving --help quietly truncated.
-      sed -n '3,71p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '3,74p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     --owner|--email|--repos-root|--org|--name)
       [ "$#" -ge 2 ] || { echo "error: $arg needs a value" >&2; exit 2; }
@@ -1637,6 +1643,43 @@ elif ! grep -qE '"Bash\(claude --bg' "$AL_FILE" 2>/dev/null; then
   echo "          $BG_RULE"
   echo "        It lets any brief run as any ${PLUGIN_NAME} role with bypassPermissions, unprompted."
   echo "        Adding it to .claude/settings.local.json is yours, not the plugin's."
+fi
+
+# 1g. A STABLE PATH TO THE SCRIPTS, for the operator's terminal only: a link this stamp
+# re-points at its own scripts/, and a PATH line it prints but never writes (task-022).
+# Ours = a symlink into a plugin cache's <plugin>/<version>/scripts; anything else is left.
+BIN_LINK="$CONFIG_DEST/plugins/$PLUGIN_NAME/bin"
+bin_prev="$(readlink "$BIN_LINK" 2>/dev/null || true)"
+bin_ok=1
+if [ -z "$al_mk" ]; then
+  bin_ok=0; echo "  skip  $BIN_LINK (not run from a plugin cache install)"
+elif [ "$bin_prev" = "$BIN_DIR" ]; then
+  echo "  keep  $BIN_LINK -> $BIN_DIR"
+elif [ -L "$BIN_LINK" ] && case "$bin_prev" in */plugins/cache/*/"$PLUGIN_NAME"/*/scripts) true ;; *) false ;; esac; then
+  ln -sfn "$BIN_DIR" "$BIN_LINK" && echo "  link  $BIN_LINK -> $BIN_DIR (was $bin_prev)" \
+    || { bin_ok=0; echo "  warn  could not re-point $BIN_LINK" >&2; }
+elif [ -e "$BIN_LINK" ] || [ -L "$BIN_LINK" ]; then
+  bin_ok=0
+  echo "  warn  $BIN_LINK exists and is not a link this stamp made; left alone." >&2
+  echo "        Move it aside and re-run /${PLUGIN_NAME}:init to get the stable scripts path." >&2
+elif mkdir -p "${BIN_LINK%/*}" && ln -s "$BIN_DIR" "$BIN_LINK"; then
+  echo "  link  $BIN_LINK -> $BIN_DIR"
+else
+  bin_ok=0; echo "  warn  could not create $BIN_LINK" >&2
+fi
+bin_shown="$BIN_LINK"
+case "$BIN_LINK" in
+  *[\"\`\\\$]*) [ "$bin_ok" = 0 ] || echo "  warn  $BIN_LINK needs shell quoting; no PATH line printed" >&2; bin_ok=0 ;;
+  "$HOME"/*) bin_shown="\$HOME/${BIN_LINK#"$HOME"/}" ;;
+esac
+if [ "$bin_ok" = 1 ]; then
+  case ":$PATH:" in
+    *":$BIN_LINK:"*) ;;
+    *)
+      echo "  note  for your terminal only, add this line to your shell rc yourself (init never edits it):"
+      echo "          if [ -d \"$bin_shown\" ]; then export PATH=\"$bin_shown:\$PATH\"; fi"
+      echo "        Agents and permission rules keep the absolute versioned path; never point them here." ;;
+  esac
 fi
 
 # 2. RETIRE the managed machinery block from the bundle's .gitignore.

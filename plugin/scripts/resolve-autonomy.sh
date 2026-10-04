@@ -101,7 +101,8 @@ registry="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/plugins/installed_plugins.json
 # This plugin's own root: `<...>/scripts/resolve-autonomy.sh` -> `<...>`. Used twice —
 # to learn which marketplace core came from, and to make sure core is never read as its
 # own companion.
-self_root="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" || self_root=""
+_d="$(dirname "$0")"; if [ -L "$_d" ] && [ ! -f "$(dirname "$_d")/VERSION" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
+self_root="$(cd "$_d/.." 2>/dev/null && pwd)" || self_root=""
 
 # `<plugin>@<marketplace>` TAB `<installPath>`, one per installed copy.
 #

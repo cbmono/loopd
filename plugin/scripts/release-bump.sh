@@ -31,7 +31,8 @@ done
 # the caller never named.
 [ "$ROOT_GIVEN" = 0 ] || [ -n "$ROOT" ] || usage
 
-[ -n "$ROOT" ] || ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+_d="$(dirname "$0")"; if [ -L "$_d" ] && [ ! -f "$(dirname "$_d")/VERSION" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
+[ -n "$ROOT" ] || ROOT="$(cd "$_d/../.." && pwd)"
 [ -f "$ROOT/VERSION" ] || die "no VERSION under $ROOT — pass --repo <checkout>"
 command -v python3 >/dev/null 2>&1 || die "python3 is required: the manifests are JSON, and the banner rule is counted in CHARACTERS"
 git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || die "$ROOT is not a git checkout"

@@ -1227,6 +1227,31 @@ matches the command text, so it covers `<abs>/scripts/x.sh args` and never a `~`
 `$(…)`-derived path, a `; echo "EXIT=$?"` tail, or a rule mixing a mid-pattern `*` with
 `:*` — `…/scripts/*.sh:*` matches nothing at all.
 
+### A stable scripts path, for your terminal only
+
+The scripts directory is version-pinned, so a literal `PATH` entry rots at the next plugin
+update. **`/loopd:init` re-points `${CLAUDE_CONFIG_DIR:-~/.claude}/plugins/loopd/bin` at
+the running plugin's `scripts/` on every stamp from a plugin-cache install**, and prints
+the one line to add to your shell rc — it never edits the rc itself (the same boundary as
+the `claude --bg` grant: the plugin delivers a notice, never the grant):
+
+```sh
+if [ -d "$HOME/.claude/plugins/loopd/bin" ]; then export PATH="$HOME/.claude/plugins/loopd/bin:$PATH"; fi
+```
+
+- **The guard is the point.** A missing or dangling link leaves `PATH` alone, so it can never
+  gain an empty element (an empty element means the current directory).
+- **It owns only that name.** A link into a plugin cache's `loopd/<version>/scripts` is
+  re-pointed; a real file, a directory, or a link anywhere else is reported and left.
+  A stamp from a checkout makes no link. Uninstalling the plugin leaves the link dangling,
+  which the guard makes harmless; `rm` it by hand if you want it gone.
+- **It is NOT for agents.** Agents call scripts by their absolute versioned path, and the
+  permission rules above match that command text — a bare name, or this `bin` path,
+  matches none of them and re-prompts every call. Never point an agent recipe, a
+  `permissions.allow` rule or the seed's plugin-path recipe at it.
+- `release-bump.sh` is a maintainer script: from `PATH` it needs `--repo <checkout>`,
+  because the installed plugin has no repo around it.
+
 ### The supported shape: one main thread, auto mode always on
 
 **The target** (owner, 2026-09-30): **one main thread** — the human's own session — and the

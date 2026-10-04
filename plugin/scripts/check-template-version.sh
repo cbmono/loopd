@@ -85,7 +85,8 @@ if [ -L "$self" ]; then
   target="$(readlink "$self" 2>/dev/null || printf '%s' "$self")"
   case "$target" in /*) self="$target" ;; *) self="$(dirname "$self")/$target" ;; esac
 fi
-selfdir="$(cd "$(dirname "$self")" 2>/dev/null && pwd || true)"
+_d="$(dirname "$self")"; if [ -L "$_d" ] && [ ! -f "$(dirname "$_d")/VERSION" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
+selfdir="$(cd "$_d" 2>/dev/null && pwd || true)"
 
 if [ -z "$TEMPLATE" ] && [ "$PLUGIN_SET" -eq 0 ] && [ -n "$selfdir" ]; then
   # The layout is fixed by the marketplace manifest (`source: ./plugin`): this file sits at

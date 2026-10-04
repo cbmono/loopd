@@ -205,7 +205,8 @@ if [ -L "$SELF_PATH" ]; then
   _t="$(readlink "$SELF_PATH" 2>/dev/null || printf '%s' "$SELF_PATH")"
   case "$_t" in /*) SELF_PATH="$_t" ;; *) SELF_PATH="$(dirname "$SELF_PATH")/$_t" ;; esac
 fi
-BIN="$(cd "$(dirname "$SELF_PATH")" && pwd)"
+_d="$(dirname "$SELF_PATH")"; if [ -L "$_d" ] && [ ! -f "$(dirname "$_d")/VERSION" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
+BIN="$(cd "$_d" && pwd)"
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$BIN/.." && pwd)}"
 HOOKS="$PLUGIN_ROOT/hooks"
 
