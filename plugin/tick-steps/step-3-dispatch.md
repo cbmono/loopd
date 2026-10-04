@@ -274,11 +274,12 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
    It appends to the task's `# Notes`, so a **re-dispatch adds a second line** and the
    rounds stay countable; **you never compose the line yourself**.
-   **The three usage numbers are gone with the notification, and the line says so.** A
+   **The three usage numbers are not known at the spawn, and the line says so.** A
    detached session reports nothing back and `claude agents` carries no cost, so drop
    `--tokens`/`--tools`/`--duration-ms` and let the line record `usage UNKNOWN` —
-   the honest answer, and not a zero. That is the price of the decoupling, paid
-   knowingly (`docs/pm-design.md#step-3-background`).
+   the honest answer, and not a zero. **Step 4 settles it** from the session's own
+   transcript once the session has ended (`session-usage.sh --settle`); until then, and
+   whenever that reading is in doubt, UNKNOWN stands (`docs/pm-design.md#step-3-background`).
 
 
 <!-- end of step 3 -->
