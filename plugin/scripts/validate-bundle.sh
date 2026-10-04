@@ -391,7 +391,7 @@ while IFS= read -r file; do
 
   type="$(printf '%s\n' "$fm" | sed -n 's/^type:[[:space:]]*//p' | head -1)"
   if [[ -z "$type" ]]; then
-    fail "$rel" "missing required field: type"
+    fail "$rel" "missing required field: type — add \`type: <Type>\` to the frontmatter, one of: $KNOWN_TYPES; SCHEMA.md defines each under its \`## type:\` heading"
     continue
   fi
   case " $KNOWN_TYPES " in

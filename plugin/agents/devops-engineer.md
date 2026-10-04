@@ -54,5 +54,9 @@ setting `status`, no PII/secrets, and capturing
 6. **Report back** per the shared conventions (`status: in-review`, `pr:`,
    `# Result`).
 
+**Same change, same check, same error twice = a dead end — stop iterating on it.** Record it with
+`${CLAUDE_PLUGIN_ROOT}/scripts/do-not-repeat.sh append <task-doc> --line "<approach> — <evidence>"` and report
+in the block `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES" defines: tried X and Y, failed because Z, need: ….
+
 If a change would require live access you don't have, set `status: blocked`,
 document exactly what's needed, and stop.

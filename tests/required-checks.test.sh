@@ -259,6 +259,8 @@ checks "pass	Build, Lint & Format"
 declared "Build, Lint & Format" "Unit Tests (vitest)"
 expect "declared name never reported (renamed) -> refuse" 1
 says   "  ...and names the drifted check" "Unit Tests (vitest): not reported"
+says   "  ...and says what to do next, never bypass" "surface the PR to"
+says   "  ...and forbids merging around it" "Do NOT merge around this gate"
 
 setup; checks "fail	Build" "pass	Other"; declared "Build"
 expect "declared check failing -> refuse" 1
