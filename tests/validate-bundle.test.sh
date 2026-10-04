@@ -245,7 +245,7 @@ echo "== exit codes =="
 assert "errors make it exit 1"                    "$([[ $RC -eq 1 ]] && echo 0 || echo 1)"
 assert "--strict also exits non-zero"             "$([[ $RC_STRICT -ne 0 ]] && echo 0 || echo 1)"
 
-echo "== a scope selects DOCUMENTS, never checks =="
+echo "== a scope selects DOCUMENTS, and every per-document check runs on it =="
 # The 40-line Finding cap used to reach a full run only, so a Finding was written long and
 # trimmed later. Naming the document is what makes the cap arrive while it is being written.
 set +e
@@ -265,6 +265,23 @@ assert "an absolute path names the same document" "$(printf '%s\n' "$ABS_ONE" | 
 assert "a clean named document is silent"         "$(printf '%s\n' "$GOOD_ONE" | grep -q '0 errors, 0 warnings' && echo 0 || echo 1)"
 assert "a named non-concept file is SKIPped"      "$(printf '%s\n' "$SKIP_ONE" | grep -q 'SKIP   projects/live/HANDOVER.md' && echo 0 || echo 1)"
 assert "…not turned into an error"                "$([[ $SKIP_RC -eq 0 ]] && echo 0 || echo 1)"
+
+echo "== the knowledge/index.md drift check is bundle-level, so a named scope leaves it out =="
+STALE='carries rows the generator would not produce'
+printf '# Knowledge Base — index\n\n| hand-written | row |\n' > knowledge/index.md
+set +e
+IDX_NAMED="$(bash "$VALIDATOR" knowledge/findings/good.md 2>&1)"
+IDX_FULL="$(bash "$VALIDATOR" 2>&1)"
+IDX_SELF="$(bash "$VALIDATOR" knowledge/index.md 2>&1)"
+IDX_ABS="$(bash "$VALIDATOR" "$B/knowledge/index.md" 2>&1)"
+set -e
+rm knowledge/index.md
+seen() { printf '%s\n' "$1" | grep -q -- "$2" && echo 0 || echo 1; }
+assert "a named document on a stale index: no index warning" "$(seen "$IDX_NAMED" '0 errors, 0 warnings')"
+assert "a no-argument run on the same stale index still warns" "$(seen "$IDX_FULL" "$STALE")"
+assert "naming the index itself still checks it"  "$(seen "$IDX_SELF" "$STALE")"
+assert "…by absolute path too"                    "$(seen "$IDX_ABS" "$STALE")"
+assert "…without also SKIPping it"                "$(printf '%s\n' "$IDX_SELF" | grep -q 'SKIP' && echo 1 || echo 0)"
 
 echo "== --changed reads git, and refuses when it cannot =="
 # The ceiling keeps the answer the fixture's, not that of whatever TMPDIR sits under.
