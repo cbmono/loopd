@@ -76,10 +76,14 @@
 # average 110 lines. A warning puts them on the cataloguer's list; an error would fail
 # every bundle that has one, which is every bundle.
 #
-# EVERY CHECK RUNS ON EVERY SCOPE — full bundle, `--changed`, or the paths you name. A
-# scope selects DOCUMENTS, never checks. The Finding cap reached only a full run while
-# nothing else could name one document, so the loop was: write it long, trim it at the
-# next full run. The author now gets the warning at the moment of writing.
+# EVERY PER-DOCUMENT CHECK RUNS ON EVERY SCOPE — full bundle, `--changed`, or the paths
+# you name. The Finding cap reached only a full run while nothing else could name one
+# document, so the loop was: write it long, trim it at the next full run. The author now
+# gets the warning at the moment of writing.
+#
+# BUNDLE-LEVEL CHECKS ARE SCOPED OUT WHEN PATHS ARE NAMED: the `knowledge/index.md`
+# drift check is the one, and it runs on a named scope only when the index itself is
+# named. Otherwise a stale index buried every named document's verdict under its warning.
 #
 # Run from a control-panel instance root. Generic: no org/repo/path literals.
 # Bash + awk only — no jq, no python — so it ships into every instance unchanged.
@@ -88,7 +92,7 @@
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
-STRICT=0; CHANGED=0; NAMED=()
+STRICT=0; CHANGED=0; NAMED=(); NAMED_INDEX=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --strict) STRICT=1 ;;
@@ -350,6 +354,7 @@ if [[ $CHANGED -eq 1 || ${#NAMED[@]} -gt 0 ]]; then
   # A path you NAMED and did not get is worth a line; in --changed every other file is one.
   for p in ${NAMED[@]+"${NAMED[@]}"}; do
     scope+=("$(canon "$p")")
+    [[ "${scope[${#scope[@]}-1]}" != ./knowledge/index.md ]] || { NAMED_INDEX=1; continue; }
     printf '%s\n' "$FILE_LIST" | grep -qFx "${scope[${#scope[@]}-1]}" \
       || printf '  SKIP   %s\n         not a concept document — %s names the locations that are\n' "$p" "$AB_SCHEMA"
   done
@@ -478,7 +483,7 @@ done <<< "$FILE_LIST"
 # knowledge/index.md is DERIVED. A row the generator would not produce is a row somebody
 # hand-wrote, and a hand-written row is the conflict magnet the generator exists to remove.
 kb_gen="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/build-kb-index.sh"
-if [[ -r knowledge/index.md && -x "$kb_gen" ]]; then
+if [[ ( ${#NAMED[@]} -eq 0 || $NAMED_INDEX -eq 1 ) && -r knowledge/index.md && -x "$kb_gen" ]]; then
   if ! bash "$kb_gen" --print 2>/dev/null | diff -q - knowledge/index.md >/dev/null 2>&1; then
     warn "knowledge/index.md" "carries rows the generator would not produce — it is derived, never hand-edited."
     ab_say_run "         Regenerate it with:" build-kb-index.sh
