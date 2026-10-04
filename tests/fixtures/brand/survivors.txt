@@ -22,6 +22,7 @@ prov,bundle,instdir,fname,frozen	docs/operations.md
 prov	docs/pm-design.md
 frozen	docs/releases/v1.0.0.md
 frozen	docs/releases/v3.0.0.md
+frozen	docs/releases/v3.1.0.md
 prov,instdir	docs/sharing.md
 prov,bundle,fname	plugin/README.md
 prov	plugin/evals/README.md
