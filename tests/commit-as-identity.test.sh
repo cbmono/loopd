@@ -67,6 +67,9 @@ if command -v git >/dev/null 2>&1; then
   fi
 fi
 
+# fixture_bundle: a cached copy of a real stamp, for the one first stamp here that is only
+# setup. tests/lib.sh says when a copy will do; every other stamp below stays the real one.
+. "$TPL/tests/lib.sh"
 pass=0; fail=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
@@ -327,7 +330,7 @@ assert "seed/.gitignore ignores it" \
 # install.sh must also add it to an instance whose .gitignore predates the line —
 # the seed is copied only when absent, so an older instance would never get it.
 INST="$TMP/g/_ai-bridge-g"; mkdir -p "$INST"
-bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
+fixture_bundle "$INST"   # setup: the stamp under test is the RE-stamp below
 grep -v 'instance.config.local.json' "$INST/.gitignore" > "$INST/.gi" && mv "$INST/.gi" "$INST/.gitignore"
 bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
 assert "install.sh re-adds it to an older instance" \

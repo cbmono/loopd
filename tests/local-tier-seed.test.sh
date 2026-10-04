@@ -47,6 +47,11 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/tierseed.XXXXXX")" || {
   echo "local-tier-seed.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
+# A first stamp that only gives a section a bundle to edit and RE-stamp is `fixture_bundle`
+# — a cached copy of that same stamp (tests/lib.sh says when a copy will do, and
+# tests/lib.test.sh proves it is one). Every stamp a section is ABOUT stays `stamp`.
+# Sourced before this file's own ok(), which keeps its column width.
+. "$REPO/tests/lib.sh"
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
        else printf '  FAIL  %-58s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi; }
@@ -189,7 +194,7 @@ echo "-- 2. a RE-stamp of an instance that lacks the keys seeds them"
 # The live case: an instance stamped before this existed. Its local file holds identity
 # and nothing else, exactly as the roster block used to write it.
 I="$(newinst 2)"
-stamp "$I" >/dev/null 2>&1
+fixture_bundle "$I"
 LC="$I/instance.config.local.json"
 printf '{\n  "ownerGithubUser": "example-user-007"\n}\n' > "$LC"
 ok "the pre-existing file has no models"   "$(jget "$LC" models)" -
@@ -205,7 +210,7 @@ ok "…and every role resolves"              "$(all_resolve "$I")" yes
 echo
 echo "-- 3. a value a human already set is NEVER overwritten, and never reconciled"
 I="$(newinst 3)"
-stamp "$I" >/dev/null 2>&1
+fixture_bundle "$I"
 LC="$I/instance.config.local.json"
 # A PARTIAL roleTiers map plus no `models` at all. The partial map must survive intact —
 # topping it up to the tracked seven would silently change six agents' provenance — while
@@ -237,7 +242,7 @@ ok "…and reports that it left it alone"    "$(said 'already set — left alone
 # tightened would quietly widen it. This file can hold a commit address; a permission
 # that loosens itself on a re-stamp is exactly the kind of change nobody looks for.
 I="$(newinst 8)"
-stamp "$I" >/dev/null 2>&1
+fixture_bundle "$I"
 LC="$I/instance.config.local.json"
 printf '{\n  "ownerGithubUser": "example-user-007"\n}\n' > "$LC"
 chmod 600 "$LC"
@@ -249,7 +254,7 @@ ok "…and was really seeded, so the check is not vacuous" "$(jcount "$LC" model
 # An explicit null is SCHEMA.md's documented UNSET. Seeding over it would silently
 # re-enable the thing the human switched off — the one edit that must not be "helped".
 I="$(newinst 4)"
-stamp "$I" >/dev/null 2>&1
+fixture_bundle "$I"
 LC="$I/instance.config.local.json"
 printf '{\n  "models": null,\n  "roleTiers": null\n}\n' > "$LC"
 stamp "$I" >/dev/null 2>&1
@@ -270,7 +275,7 @@ echo "-- 4. the TRACKED pair stays, and answers with no local file at all"
 ok "seed/instance.config.json still has models"    "$(jcount "$TPL/plugin/seed/instance.config.json" models)" 4
 ok "…and still has roleTiers"                      "$([ "$(jcount "$TPL/plugin/seed/instance.config.json" roleTiers)" -ge 4 ] && echo yes || echo no)" yes
 I="$(newinst 5)"
-stamp "$I" >/dev/null 2>&1
+fixture_bundle "$I"
 rm -f "$I/instance.config.local.json"
 ok "with the local file deleted, every role still resolves" "$(all_resolve "$I")" yes
 ok "…from the tracked layer"                       "$(FROM "$I" roleTiers software-engineer)" tracked
@@ -304,7 +309,7 @@ ok "…and its default roleTiers too"             "$DEFAULTS_TIERS" "$(jget "$TP
 # And they are really used: a tracked config with neither key still produces a working
 # instance, which is the "fresh install, no manual editing" promise for an older bundle.
 I="$(newinst 6)"
-stamp "$I" >/dev/null 2>&1
+fixture_bundle "$I"
 python3 - "$I/instance.config.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))

@@ -57,6 +57,9 @@ if command -v git >/dev/null 2>&1; then
   fi
 fi
 
+# fixture_bundle: a cached copy of a real stamp, for the one first stamp here that is only
+# setup. tests/lib.sh says when a copy will do; every other stamp below stays the real one.
+. "$TPL/tests/lib.sh"
 pass=0; fail=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
@@ -115,7 +118,7 @@ assert "…but stages the KB index"           "$(has 'knowledge/index\.md' "$STA
 echo
 echo "== an instance whose .gitignore predates the lines =="
 OLD="$TMP/g/_ai-bridge-old"; mkdir -p "$OLD"
-bash "$BRIDGE_INSTALL" "$OLD" >/dev/null 2>&1
+fixture_bundle "$OLD"   # setup: the stamp under test is the RE-stamp below
 grep -vE "^/(${AB_INDEX//./\\.}|projects/\*/index\.md)$" "$OLD/.gitignore" > "$OLD/.gi" && mv "$OLD/.gi" "$OLD/.gitignore"
 assert "the lines really were removed"      "$(no_if grep -qxF "/$AB_INDEX" "$OLD/.gitignore")"
 bash "$BRIDGE_INSTALL" "$OLD" >/dev/null 2>&1

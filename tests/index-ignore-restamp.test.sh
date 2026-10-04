@@ -57,6 +57,14 @@ TPL="$TMP/tpl"; mkdir -p "$TPL"
 done
 chmod +x "$TPL/plugin/scripts/init-bundle.sh" "$TPL"/plugin/scripts/*.sh 2>/dev/null || true
 
+# The stamps this file is ABOUT are the re-stamps, and the first one in sections 1, 2, 4
+# and 7 (a fresh stamp, or one into a directory that already holds projects/). A first
+# stamp of an empty directory that only gives a section something to edit is
+# `fixture_bundle` — a cached copy of that same stamp; see tests/lib.sh for when a copy
+# will do. It is taken from this checkout's plugin/, which is what $TPL is until section 3
+# edits it.
+. "$TPLSRC/tests/lib.sh"
+
 git_check_ignore() { # $1 = instance dir, $2 = path relative to it -> 0 if ignored
   ( cd "$1" && git init -q . >/dev/null 2>&1 || true; git check-ignore -q "$2" )
 }
@@ -128,7 +136,7 @@ assert "…and the negation line sits after the block's END marker" \
 #    stamp cannot distinguish "works" from "only ever worked once".
 # ---------------------------------------------------------------------------------
 INST2="$TMP/inst2"; mkdir -p "$INST2"
-bash "$TPL/plugin/scripts/init-bundle.sh" "$INST2" >"$TMP/out2a" 2>&1
+fixture_bundle "$INST2"
 before="$(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST2/.gitignore")"
 
 # Mutate the TEMPLATE's install.sh between runs — a new comment sentence AND a new
@@ -178,7 +186,7 @@ assert "…the decoy line itself survives untouched"  \
 #    FIRST end marker, not swallow everything up to whichever one comes last.
 # ---------------------------------------------------------------------------------
 INST4="$TMP/inst4"; mkdir -p "$INST4"
-bash "$TPL/plugin/scripts/init-bundle.sh" "$INST4" >"$TMP/out4a" 2>&1
+fixture_bundle "$INST4"
 {
   printf '\n# a later, unrelated section quoting the same text a second time:\n'
   printf '# <<< ai-bridge index ignore <<<\n'
@@ -207,7 +215,7 @@ assert "…and the unrelated comment line above it survives untouched" \
 #    that the run reports the problem.
 # ---------------------------------------------------------------------------------
 INST5="$TMP/inst5"; mkdir -p "$INST5"
-bash "$TPL/plugin/scripts/init-bundle.sh" "$INST5" >"$TMP/out5a" 2>&1
+fixture_bundle "$INST5"
 # Append a distinctive trailer AFTER the natural stamp — deliberately, so there is real
 # content sitting after the block regardless of where a fresh stamp happens to place it
 # (a bare "the block was already the last thing in the file" fixture would let a

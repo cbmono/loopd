@@ -36,7 +36,9 @@ Measured on an M3 Pro, 2026-09-13, `claude` masked off PATH: a one-line edit to
 `plugin/scripts/commit-as.sh` selects 18 harnesses and takes **1m 21s** (was 2m 25s
 sequential, and 9m 12s with the eval in the core); all 111 take **6m 15s** in a pool of
 11, against **39m 47s** sequential. In CI, where the runner has 3 CPUs: **10m 35s**,
-against 29m 45s sequential (run 34774374082).
+against 29m 45s sequential (run 34774374082). By 2026-10-04 the suite was 141 harnesses and
+that same CI job measured **20m 10s** of wall clock — 3,178 harness-seconds, the ten
+slowest harnesses 46% of it.
 
 The full suite is CI's job: `harness suite` is a required check with `strict=true`, and it
 runs everything against the merged base. Locally the same loop measured **39m 47s and
@@ -66,6 +68,7 @@ guard and leave its harness behind, with the required check green.
 ## Rules
 
 - **`ok()` compares actual to expected, in that argument order**, and every harness prints its own `pass=/fail=` (or `N passed, N failed`) line and exits non-zero on any failure. Keep both.
+- **`tests/lib.sh` is the shared helper file — `ok`, `finish`, and `fixture_bundle <dest>`, a cached copy of one real stamp.** Source it as `. "$REPO/tests/lib.sh"`, with `tests/lib.sh` spelled out, because run.sh selects a harness that *names* a changed path. Use `fixture_bundle` only where the stamp is **setup** — a bundle to edit, re-stamp or hand to another script — and only for an **empty** destination stamped from this checkout's `plugin/`. A harness whose subject is `init-bundle.sh` (a first stamp's output, a re-stamp, `--uninstall`, the team prompt, any flag), or that stamps from a template it has edited, keeps calling the real script. **Never reorder a harness to stamp first and populate after**: a pre-made `projects/` changes what the stamp seeds, which `tests/lib.test.sh` asserts. That harness is the oracle — it diffs a copy against a real stamp — so a new location-dependent thing in the stamp turns it red rather than a migrated harness wrong. Measured 2026-10-05 on an M3 Pro: a real stamp is ~1.5s and a copy ~0.2s, but few stamps in this suite are setup — eleven across four harnesses saved 14.4s, which the oracle's own 13.8s spends again on a full run. `FIXTURE_BUNDLE_NO_CACHE=1` turns every call back into the real stamp.
 - **Harnesses live here, never under `/plugin/`.** Everything under `plugin/` ships into every instance, and a fixture harness is not machinery an instance needs.
 - **A test that only asserts the refusal is vacuous.** Assert **both directions** — that the guard fires *and* that the normal path still works. `installer-worktree-guard.test.sh` says so in its header: "It refuses in a worktree" alone would pass a script that refuses everywhere.
 - **Assert the property, not the implementation text.** `derived-indexes.test.sh` checks `git check-ignore --no-index` rather than the pattern string; `snapshot.test.sh` asserts no key outside the documented allowlist is emitted.
