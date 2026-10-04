@@ -746,6 +746,52 @@ RULE_IDS="$(sed -n 's/^RULES="\(.*\)"$/\1/p' "$HOOK")"
 DEFINED="$(grep -oE '^rule_[a-z0-9_]+\(\)' "$HOOK" | sed 's/^rule_//; s/()$//' | sort | tr '\n' ' ')"
 ok "RULES is readable from the hook"    "$([ -n "$RULE_IDS" ] && echo yes || echo no)" "yes"
 ok "…and matches the functions defined" "$(printf '%s' "$RULE_IDS" | tr ' ' '\n' | sort | tr '\n' ' ')" "$DEFINED"
+
+# --- THE DETACHED SHAPE: CLAUDE_PROJECT_DIR is a LINKED WORKTREE, not the bundle --------
+# Every probe above pins CLAUDE_PROJECT_DIR at the bundle, which is what a SUBAGENT of the
+# PM's session saw. A role agent is now `cd <worktree> && claude --bg …` (step-3), so its
+# project dir is the worktree — and on 2026-10-04 a live `--bg` agent force-pushed a
+# default branch with this hook firing and allowing, because the guard found no
+# instance.config.json there and exited 0. These cases pin the shape production runs:
+# without the marker the hook is silent (and that is asserted, so the dependency is
+# visible); with the marker `link-repos.sh` writes into the repo's common git dir, the
+# worktree resolves to the bundle and the same denied set applies — both halves.
+echo "== the detached shape: a linked worktree resolves to its bundle through .git/loopd-bundle"
+WTREE="$WORK/wt-task-001"
+git -C "$GITREPO" worktree add -q "$WTREE" -b task-001 main >/dev/null 2>&1
+WTREE="$(res "$WTREE")"
+MARKER="$GITREPO/.git/loopd-bundle"
+verdict_from() { # <project-dir> <cwd> <command> — CLAUDE_PROJECT_DIR is the FIRST argument
+  local out dec rule
+  out="$(payload "$2" "$3" | HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$1" bash "$HOOK" 2>/dev/null)"
+  [ -n "$out" ] || { printf 'allow'; return 0; }
+  dec="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)"
+  [ "$dec" = deny ] || { printf 'bad:%s' "$dec"; return 0; }
+  rule="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
+          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p' | head -1)"
+  printf 'deny:%s' "${rule:-UNNAMED}"
+}
+ok "the fixture worktree is linked (.git is a file)" "$([ -f "$WTREE/.git" ] && echo file || echo dir)" "file"
+rm -f "$MARKER"
+ok "NO marker: a --bg agent in a worktree is outside the instance — silent" \
+   "$(verdict_from "$WTREE" "$WTREE" 'git push --force origin main')" "allow"
+printf '%s\n' "$INSTROOT" > "$MARKER"
+ok "marker: the same force-push from the worktree is DENIED" \
+   "$(verdict_from "$WTREE" "$WTREE" 'git push --force origin main')" "deny:force_push_protected"
+ok "…and the allow half holds from the worktree too (feature branch)" \
+   "$(verdict_from "$WTREE" "$WTREE" 'git push --force-with-lease origin feat/x')" "allow"
+ok "…rm -rf at the worktree root is denied there as well" \
+   "$(verdict_from "$WTREE" "$WTREE" "rm -rf $WTREE")" "deny:rm_rf_repo_root"
+ok "…the MAIN clone (.git is a directory) stays un-armed even with the marker" \
+   "$(verdict_from "$GITREPO" "$GITREPO" 'git push --force origin main')" "allow"
+printf '%s\n' "$OUTSIDE" > "$MARKER"
+ok "a marker naming a directory with no instance.config.json is ignored — silent" \
+   "$(verdict_from "$WTREE" "$WTREE" 'git push --force origin main')" "allow"
+printf 'gitdir: /nowhere/at/all\n' > "$WORK/broken.git"; mkdir -p "$WORK/brokenwt"; cp "$WORK/broken.git" "$WORK/brokenwt/.git"
+ok "a .git file pointing nowhere is silent, never an error" \
+   "$(verdict_from "$WORK/brokenwt" "$WORK/brokenwt" 'git push --force origin main')" "allow"
+rm -f "$MARKER"
+
 # EVERY RULE MUST BE EXERCISED HERE. Without this, a rule added to `RULES` and never tested
 # is exactly the false comfort this baseline exists to avoid — it ships, it is documented,
 # and nobody has ever seen it fire.
