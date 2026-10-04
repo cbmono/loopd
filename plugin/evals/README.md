@@ -97,8 +97,8 @@ file can produce that verdict.
 ## Running it
 
 ```sh
-claude plugin eval ./plugin                    # from the repo root; runs: 2 per case
-claude plugin eval ./plugin --case dispatch-is-human-gated
+claude plugin eval ./plugin --judge-model claude-sonnet-5-5   # from the repo root; runs: 2 per case
+claude plugin eval ./plugin --judge-model claude-sonnet-5-5 --case dispatch-is-human-gated
 ```
 
 **Measured 2026-09-13 on Claude Code 2.1.270, through the harness**
@@ -107,10 +107,17 @@ retirements, **12 cases, 8 green, $2.12, 187 s at `-j 4`**; after them, **8 case
 $1.31, 130 s**. Concurrency is what wall time turns on — the same 12 cases took 443 s serial.
 `aggregate-result.json` reports **cost and duration, never tokens** — there is no token count
 to record.
-`tests/plugin-eval.test.sh` runs it at `--runs 1 --ablation none --judge-model sonnet` and
-a `--max-cost-usd` ceiling — the question it asks is "did any case go red", not "what is
-the stable score". The judge is sonnet rather than the default haiku because a small judge
-misses the distinction these rubrics turn on.
+`tests/plugin-eval.test.sh` runs it at `--runs 1 --ablation none --judge-model claude-sonnet-5-5`
+and a `--max-cost-usd` ceiling — the question it asks is "did any case go red", not "what is
+the stable score". The judge is a Sonnet rather than the background-task default (haiku)
+because a small judge misses the distinction these rubrics turn on. **It is pinned to the
+model id, never the `sonnet` alias**: the alias is Claude Code's pointer to whichever Sonnet
+is current, so a judge named by it changes generation without a commit changing — and a
+score that moved under a new judge is indistinguishable from a plugin that regressed.
+`claude-sonnet-5-5` is itself the pinned snapshot: from the 4.6 generation on, Anthropic
+ships no dated id, and an existing id is never re-weighted. Moving the judge is a deliberate
+edit here and in the harness, made on a release, with the scores re-read against the old
+judge first (`docs/operations.md` → "Cutting a release").
 
 Results land in `evals/results/<timestamp>/` (gitignored: run artifacts, and this repo
 is public).
