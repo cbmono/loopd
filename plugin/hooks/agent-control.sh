@@ -491,7 +491,7 @@ if [ "$CAP_N" != off ]; then
     if [ "$mark" != .unclocked ] && [ ! -e "$mark" ]; then
       mkdir -p "$AGENTSTATE" 2>/dev/null || true
       : > "$mark" 2>/dev/null || true
-      note agent-cap-off "$agent_id" "$agent_type" "$tool_name" "elapsed=unknown budget=${CAP_N}m (no SubagentStart record)"
+      note clock-unknown "$agent_id" "$agent_type" "$tool_name" "elapsed=unknown budget=${CAP_N}m (no SubagentStart record)"
     fi
   else
     elapsed=$(( (epoch - started) / 60 ))

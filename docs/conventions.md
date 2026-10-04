@@ -461,7 +461,7 @@ bound: **absent from both config layers it is 45**, so unlike the doom loop it i
 default on an armed instance, and `0` is how you turn it off. Past the budget the agent's
 next tool call is a `deny` whose text is the whole instruction — commit and push what you
 have, open or update the PR, report — and the **allowlist is what makes that report
-honest**: `Read`, `Grep`, `Glob`, and a `Bash` made only of `git add|commit|push`,
+honest**: `Read`, `Grep`, `Glob`, `SubagentHandback`, and a `Bash` made only of `git add|commit|push`,
 `commit-as.sh`, `cd` and `gh pr create|edit|view|checks`, joined by `&&` or `;`; `Edit`,
 `Write` and every other `Bash` are refused. **That `Bash` is scanned quote-aware**, because
 until 2026-09-29 it refused any `(` or newline anywhere, so `git commit -m x` was the only
@@ -471,13 +471,18 @@ commit it admitted: a scoped message, a heredoc and `commit-as.sh` were all deni
 absent-key budget is **180**, not the role agents' 45 — measured ticks ran 73 and 121+
 minutes with no critique in flight, so the walk, not the critiques, outgrew 45. The clock
 starts at the **`SubagentStart`** registration of this same script, which writes
-`.claude/control/agents.d/<agent_id>.started`, and falls back to the **oldest** timestamp the transcript carries — never its ctime alone, which an append
-moves to now, and not birth time alone, which not every filesystem records. The stop
-event drops it, so a **resumed** agent is given a fresh budget rather than an expired one.
+`.claude/control/agents.d/<agent_id>.started`, and **nothing else**: no record ⇒ the cap is
+off for that agent and `control.log` says `clock-unknown … elapsed=unknown`. **The transcript
+is never a clock** — it is the parent session's, so until task-029 every handback was capped
+at the session's age (14,439 minutes, identical for two agents 18 seconds apart). The stop
+event **parks** the record rather than deleting it, because a stop is not terminal when the
+harness re-prompts an agent to hand back; the next `SubagentStart` restarts it, so a
+**resumed** agent is given a fresh budget rather than an expired one. `SubagentHandback` is
+allowed past the cap, because refusing it refuses the very report the cap asks for.
 Same reflection path as the doom loop: `agent-cap` in `control.log`, one `capped: <minutes>`
 line on the task at the next tick.
 
-Covered by `tests/agent-control.test.sh` (287 assertions, most of them refusals).
+Covered by `tests/agent-control.test.sh` (299 assertions, most of them refusals).
 
 ## 17. An instruction addressed to an agent is executable only if that agent *holds* the tool
 

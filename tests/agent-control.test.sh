@@ -721,7 +721,7 @@ backdate 10
 TRANSCRIPT="$OLDTR"
 ok "no start file + a 10-day-old transcript: NOT capped" "$(run C6 software-engineer Edit; verdict)" allowed
 run C6 software-engineer Write
-ok "…and control.log says the clock is unknown, once" "$(grep -c $'\tagent-cap-off\tC6\t.*elapsed=unknown' "$CTL/control.log")" 1
+ok "…and control.log says the clock is unknown, once" "$(grep -c $'\tclock-unknown\tC6\t.*elapsed=unknown' "$CTL/control.log")" 1
 ok "…and the hook never stats the transcript"         "$(grep -c 'stat -[fc]' "$HOOK_SRC")" 0
 
 # THE FINGERPRINT (task-029): two agents measured together reported the same elapsed, and it
