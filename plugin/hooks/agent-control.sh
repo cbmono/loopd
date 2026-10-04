@@ -419,8 +419,8 @@ command -v jq >/dev/null 2>&1 || {
 # roster assertion looked for the empty string and passed vacuously.
 #
 # Line-oriented `IFS='' read -r` preserves an empty field exactly. `$(...)` strips
-# TRAILING newlines, which is harmless here: only `tool_name` is last, it is used
-# for the log alone, and `read` leaves it empty in that case anyway.
+# TRAILING newlines, which is harmless here: only `hook_event` is last, and an empty
+# one is read as PreToolUse below.
 fields="$(printf '%s' "$payload" \
   | jq -r '[(.agent_id // ""), (.agent_type // ""), (.tool_name // ""), (.hook_event_name // "")] | .[]' 2>/dev/null)" || fields=""
 [ -n "$fields" ] || { note "fail-open: unparseable PreToolUse payload"; exit 0; }
