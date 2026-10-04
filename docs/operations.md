@@ -1010,6 +1010,16 @@ conflict in five of six merges. `tests/release-bump.test.sh` pins both halves: a
 `plugin/` with no bump passes, and `main` after the script passes
 `tests/template-version.test.sh`.
 
+**Before the bump, run `claude plugin eval ./plugin` and read the per-case scores, not the
+aggregate.** A model upgrade moves judgement silently — the plugin's text is unchanged and every
+bash harness stays green — and a release is the only recurring event correlated with one, so the
+evals (`plugin/evals/README.md` → "Running it") are read here, by the human. It is a check, never
+a gate: `release-bump.sh` does not run it and no workflow does. **Then ask one question, for each
+hook, gate and script: which assumption has this model generation made unnecessary?** Answer it in
+prose in `docs/releases/v<new>.md`, report-only — "none" is an answer, written down — and never
+as an inventory file, because a hand-kept table drifts the day after it is written
+([conventions #18](conventions.md#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure)).
+
 ### The session banner
 
 One `SessionStart` hook, `.claude/hooks/session-banner.sh`, prints the whole orientation:
