@@ -14,6 +14,8 @@ PROPOSE="$REPO/plugin/scripts/kb-propose.sh"
 APPLY="$REPO/plugin/scripts/kb-apply.sh"
 BUILD="$REPO/plugin/scripts/build-kb-index.sh"
 VALIDATE="$REPO/plugin/scripts/validate-bundle.sh"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$REPO/plugin/scripts/bundle-paths.sh"
 for f in "$USAGE" "$PROPOSE" "$APPLY"; do
   [ -x "$f" ] || { echo "kb-usage.test: $f is missing or not executable" >&2; exit 2; }
 done
@@ -30,7 +32,7 @@ code() { grep -vE '^[[:space:]]*#' "$1"; }
 
 TODAY=2026-10-03
 D="$TMP/bundle"
-mkdir -p "$D/knowledge/findings" "$D/.ai-bridge"
+mkdir -p "$D/knowledge/findings" "$D/$AB_DIR"
 item() { # <slug> <category|-> <timestamp> [provenance]
   { printf -- '---\ntype: Finding\ntitle: Title %s\ndescription: d\nlesson: l %s\n' "$1" "$1"
     [ "$2" = - ] || printf 'category: %s\n' "$2"
@@ -48,7 +50,7 @@ item stale-human     learning 2025-01-01 human
 cp "$REPO/plugin/seed/knowledge/vocab.md" "$D/knowledge/vocab.md"
 : >"$D/knowledge/log.md"
 printf '{ "org": "example-org" }\n' >"$D/instance.config.json"
-cp "$REPO/plugin/seed/SCHEMA.md" "$D/.ai-bridge/SCHEMA.md"
+cp "$REPO/plugin/seed/SCHEMA.md" "$D/$AB_DIR/SCHEMA.md"
 cd "$D" || exit 2
 bash "$BUILD" >/dev/null 2>&1
 git init -q . && git config user.name example-user-007 && git config user.email u@example.com
@@ -57,7 +59,7 @@ git add -A && git commit -qm init
 echo "== criterion 1: one citation reaches the store =="
 printf 'Fixed it per [[cited-learning]] and [[stale-gotcha]], not [[nope]].\n' >"$TMP/result.md"
 out="$("$USAGE" record --source task-001.result --text-file "$TMP/result.md" --brief cited-learning 2>/dev/null)"; rc=$?
-STORE="$D/.ai-bridge/citations/task-001.result.txt"
+STORE="$D/$AB_DIR/citations/task-001.result.txt"
 ok "record passes cite-check's exit code through (3: dropped)" "$rc" 3
 ok "…and its report"                                  "$(grep -c '^KEPT cited-learning ' <<<"$out")" 1
 ok "the store file is named for the source"           "$([ -f "$STORE" ] && echo yes || echo no)" yes
@@ -68,7 +70,7 @@ cp "$STORE" "$TMP/first"
 "$USAGE" record --source task-001.result --text-file "$TMP/result.md" --brief cited-learning --today 2027-01-01 >/dev/null 2>&1
 ok "a re-run is idempotent: same file, same recorded date" "$(cmp -s "$TMP/first" "$STORE" && echo same || echo differs)" same
 ok "record with no index stores nothing (exit 2)" \
-  "$(cd "$TMP" && mkdir -p bare/knowledge && "$USAGE" --instance bare record --source x --text-file "$TMP/result.md" --brief a >/dev/null 2>&1; echo "$?/$(ls "$TMP/bare/.ai-bridge/citations" 2>/dev/null | wc -l | tr -d ' ')")" 2/0
+  "$(cd "$TMP" && mkdir -p bare/knowledge && "$USAGE" --instance bare record --source x --text-file "$TMP/result.md" --brief a >/dev/null 2>&1; echo "$?/$(ls "$TMP/bare/$AB_DIR/citations" 2>/dev/null | wc -l | tr -d ' ')")" 2/0
 ok "a source id carrying a path is refused" \
   "$("$USAGE" record --source ../x --text-file "$TMP/result.md" --brief a >/dev/null 2>&1; echo $?)" 2
 rm -f "$STORE"
@@ -81,7 +83,7 @@ ok "…and says the store is why"                         "$(sweep | grep '^KEEP
 
 # Ten texts and twenty citations: exactly the default floors.
 for n in 1 2 3 4 5 6 7 8 9 10; do
-  printf 'recorded: 2026-09-%02d\nKEPT cited-learning\nUNREAD cited-measure\n' "$n" >"$D/.ai-bridge/citations/pr-$n.txt"
+  printf 'recorded: 2026-09-%02d\nKEPT cited-learning\nUNREAD cited-measure\n' "$n" >"$D/$AB_DIR/citations/pr-$n.txt"
 done
 echo
 echo "== criterion 4: under age OR category is kept; past both is archived =="

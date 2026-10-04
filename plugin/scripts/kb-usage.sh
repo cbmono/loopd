@@ -6,7 +6,7 @@
 #                                      [--categories "a b"] [--min-texts N] [--min-citations N]
 #
 # record: runs cite-check.sh, prints its report, exits with its code, and stores the
-#   KEPT/UNREAD/ARCHIVED slugs as .ai-bridge/citations/<id>.txt — one file per text, so a
+#   KEPT/UNREAD/ARCHIVED slugs as $AB_DIR/citations/<id>.txt — one file per text, so a
 #   re-run rewrites the same file and two clones never append to one. Exit 2: nothing stored.
 # sweep: per current Finding, the qualifiers and its remaining grace, derived from disk on
 #   every run. --propose prints only the archivable ones, as kb-propose.sh proposals.
