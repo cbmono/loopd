@@ -23,10 +23,17 @@ refused by the deny baseline exactly as a `--bg` agent is. The price is one read
 
 `maxRepeatedToolCalls` and `maxAgentMinutes` do not reach a top-level `--bg` role agent:
 `agent-control.sh` keys on `agent_id`, which only a subagent's call carries
-(`docs/pm-design.md`). Auto mode is not a substitute — on 2.1.289 a detached session started
-with `--permission-mode auto` records `default` and parks as `blocked` before its first turn
-(6 of 6, measured 2026-10-05). So nothing bounds a role agent today but `claude stop <id>`,
+(`docs/pm-design.md`). So nothing bounds a role agent today but `claude stop <id>`,
 run by a human.
+
+**Corrected 2026-10-05.** The first version of this section said auto mode "is not a
+substitute" because a detached session started with `--permission-mode auto` parked as
+`blocked`. That was measured with `--model haiku`, where auto mode is unavailable: the
+session records `auto`, is demoted to `default` at once, and parks. On Sonnet, and on Opus
+with `--agent loopd:software-engineer`, a `claude --bg --permission-mode auto` session held
+auto mode throughout, finished a branch-commit-push task unprompted, and had a force-push to
+`main` refused by the deny hook. Auto mode bounds what an agent may *do*; it still bounds
+neither its turns nor its wall clock, which is what this spike is about.
 
 ## What was measured
 
