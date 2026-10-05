@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/agent-control.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/agent-control.sh\""
           }
         ]
       },
@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/deny-destructive.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/deny-destructive.sh\""
           }
         ]
       },
@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/permission-mode.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/permission-mode.sh\""
           }
         ]
       }
@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/agent-control.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/agent-control.sh\""
           }
         ]
       }
@@ -43,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/agent-control.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/agent-control.sh\""
           }
         ]
       },
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/report-shape.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-shape.sh\""
           }
         ]
       }
@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/worktree-create.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/worktree-create.sh\""
           }
         ]
       }
@@ -71,7 +71,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-banner.sh --format json"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-banner.sh\" --format json"
           }
         ]
       }
@@ -81,7 +81,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/push-state.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/push-state.sh\""
           }
         ]
       }

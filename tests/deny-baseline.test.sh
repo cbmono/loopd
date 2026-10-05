@@ -323,7 +323,7 @@ ok "…agent-control.sh is registered too, unmatched" \
 # tool call. `${CLAUDE_PLUGIN_ROOT}` is the plugin's equivalent of the `$CLAUDE_PROJECT_DIR`
 # idiom settings.json used, and it is the only correct spelling here.
 ok "…both via the \${CLAUDE_PLUGIN_ROOT} idiom, never a bare relative path" \
-   "$(jq -r '[.hooks.PreToolUse[].hooks[].command | select(test("(deny-destructive|agent-control)[.]sh")) | select(startswith("${CLAUDE_PLUGIN_ROOT}/hooks/"))] | length' "$HOOKSJSON")" "2"
+   "$(jq -r '[.hooks.PreToolUse[].hooks[].command | select(test("(deny-destructive|agent-control)[.]sh")) | select(startswith("\"${CLAUDE_PLUGIN_ROOT}/hooks/"))] | length' "$HOOKSJSON")" "2"
 # RUN THE COMMAND hooks.json ACTUALLY REGISTERS, rather than grepping the artifact for a
 # name that looks right. The lesson is the bundle Finding
 # "a-hooks-stdout-is-the-models-channel-not-the-humans": five harnesses and 214 assertions

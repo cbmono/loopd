@@ -104,11 +104,11 @@ for ev in d["hooks"].values():
 ok "hooks.json registers nine commands" "$(printf '%s\n' "$HOOKCMDS" | grep -c . | tr -d ' ')" 9
 ok "…naming seven distinct scripts"      "$(printf '%s\n' "$HOOKCMDS" | sort -u | grep -c . | tr -d ' ')" 7
 ok "…every one through \${CLAUDE_PLUGIN_ROOT}" \
-   "$(printf '%s\n' "$HOOKCMDS" | grep -cv '^\${CLAUDE_PLUGIN_ROOT}/hooks/' | tr -d ' ')" 0
+   "$(printf '%s\n' "$HOOKCMDS" | grep -cv '^"\${CLAUDE_PLUGIN_ROOT}/hooks/[a-z-]*\.sh"' | tr -d ' ')" 0
 HOOKMISS=""
 while IFS= read -r c; do
   [ -n "$c" ] || continue
-  f="${c#\$\{CLAUDE_PLUGIN_ROOT\}/}"; f="${f%% *}"
+  f="${c#\"\$\{CLAUDE_PLUGIN_ROOT\}/}"; f="${f%%\"*}"
   [ -f "$REPO/plugin/$f" ] || HOOKMISS="${HOOKMISS:+$HOOKMISS }$f"
 done <<EOF
 $HOOKCMDS

@@ -76,7 +76,7 @@ ok "…reasoning goes to the task document, commit or Finding" \
 
 echo "-- criterion 1: the binding point is SubagentStop, and it acts"
 ok "hooks.json registers report-shape.sh on SubagentStop" \
-   "$(jq -r '[.hooks.SubagentStop[].hooks[].command] | index("${CLAUDE_PLUGIN_ROOT}/hooks/report-shape.sh") != null' "$REPO/plugin/hooks/hooks.json")" true
+   "$(jq -r '[.hooks.SubagentStop[].hooks[].command] | index("\"${CLAUDE_PLUGIN_ROOT}/hooks/report-shape.sh\"") != null' "$REPO/plugin/hooks/hooks.json")" true
 INST="$TMP/inst"; mkdir -p "$INST"; echo '{}' > "$INST/instance.config.json"
 payload() { # <fixture|-> <agent_type> <stop_hook_active> [<agent_id>]
   if [ "$1" = - ]; then jq -cn --arg t "$2" --argjson a "$3" --arg i "${4:-a1}" \
