@@ -8,7 +8,7 @@
       "name": "loopd",
       "source": "./plugin",
       "description": "The OKF control panel as a Claude Code plugin — /brief-me, /capture, /work, /dispatch, /handoff, /welcome, /new-project, /close-project, /answer, /audit, /board, /fanout, /pr-review-request, plus the two PreToolUse enforcement hooks and the eight role agents.",
-      "version": "3.1.0",
+      "version": "3.2.0",
       "author": {
         "name": "cbmono"
       },
