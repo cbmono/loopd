@@ -42,6 +42,28 @@ the spec this bundle follows). Neither exists in any instance and neither is req
 a shape, not a list of names — a fifth kind directory is validated the moment it
 exists, which is how `knowledge/references/` was already covered.)
 
+# Which document wins
+
+Several documents instruct an agent, and two of them will disagree one day — one was
+edited and the other restated it. This table says which one is right, per concern.
+Every other document may **restate and point**, never redefine.
+
+| Concern | Authoritative document | What the others may do |
+|---|---|---|
+| Document shapes, frontmatter, enums, the task lifecycle, and **what a bundle contains** | `plugin/seed/SCHEMA.md` — this file | restate and point: `docs/schema.md`, a skill's precondition, an agent's probe |
+| How a role agent behaves in a target repo (branches, commits, PR size, tests, reporting) | `plugin/seed/CONVENTIONS.md` | restate and point: `plugin/seed/CLAUDE.md` § "Conventions for role agents", `plugin/agents/*.md` |
+| What one role holds and refuses (tools, scope, exits) | `plugin/agents/*.md`, one file per role | route and point: `plugin/seed/agents/index.md` is the routing reference |
+| The tick's steps — what a PM tick does, in which order, and what each step reads | `plugin/tick-steps/*.md` | launch and point: `plugin/skills/dispatch/SKILL.md` is the launcher, `plugin/agents/project-manager.md` the loop |
+| A skill's preconditions, arguments and scope | `plugin/skills/*/SKILL.md`, each for itself — except what it asserts about the bundle, which is row 1's | — |
+| This instance's own instructions (how work flows here, what the human does) | `plugin/seed/CLAUDE.md`, as this instance has edited it | — |
+| Human-facing explanation — why a rule exists | `docs/*.md` in the template repo (cbmono/loopd) | carry the rule and point: the template's `CLAUDE.md`, `.claude/rules/*.md` |
+| Prohibitions on editing the template itself | the template's `CLAUDE.md` and `.claude/rules/*.md` | explain: `docs/conventions.md` holds the why, never a second rule |
+
+**On a contradiction, fix the non-authoritative document** — the minimal edit that makes it
+restate or point — and **never ask** the human which one is right: this table already
+answered. A document no row names has no owner, so add the row before the document;
+`tests/authority-table.test.sh` in the template fails on a document outside every row.
+
 # Schema
 
 **Frontmatter lists — the one rule.** A NON-EMPTY `acceptance_criteria`, `open_questions`,
@@ -310,7 +332,9 @@ pointer to the finished deliverable(s) on completion).
 Executable definitions ship in the **`loopd` plugin** (`/plugin install
 loopd@loopd`), one per machine — not in the bundle. Dispatch them by their
 **namespaced** name, `loopd:<role>`: a bare agent name does NOT resolve (measured
-2026-09-02). The roster doc is a human-readable routing reference.
+2026-09-02). The roster doc is a human-readable routing reference. So a bundle has **no
+`.claude/agents/`**, and a skill's precondition probes `SCHEMA.md` and
+`instance.config.json` only — never a directory the roles do not live in.
 
 **`roles` vs `roleTiers` in `instance.config.json`.** The two lists look like they
 should share membership and deliberately do not. `roles` is the roster the PM may
