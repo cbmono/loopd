@@ -365,6 +365,7 @@ decision unblocks.
 | 🔀 | merge |
 | ⛔ | unblock |
 | 🏁 | close |
+| ⏳ | continue — only where `continueAfterTasks`/`continueAfterDays` is set (absent ⇒ off) |
 
 Each item carries a real link. Every `/loopd:dispatch` tick rewrites the file, and a `SessionStart`
 hook injects its items at launch.
@@ -544,6 +545,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `review-clearance.sh` | asserts an artifact **evidencing a completed review** exists on a PR (never a green check) | no |
 | `review-rounds.sh` | counts a PR's completed verification **rounds**; exit non-zero at or past **two** | no |
 | `rebase-pr.sh` | `<pr>` — the deterministic first try at a CONFLICTING PR, so a one-hunk merge magnet costs no agent: rebase in a throwaway worktree and auto-resolve **only** the known shapes (an `EXPECTED_ASSERTIONS=N` counter → the three-way sum of both sides' deltas; a ratchet row both sides lowered → recomputed from the merged file; a comment history → both kept), assert the result parses and kept exactly one assignment, then push with an explicit `--force-with-lease=<ref>:<the host's own headRefOid>` and let CI verify. 0 pushed · 3 an **unclassified** conflict, named, which is the one exit that earns an agent round · 4 the resolution failed its own check · 5 refused (fork head, closed) · 6 the lease no longer holds. Every non-zero leaves the branch and the remote untouched | yes — a temp worktree, and a lease push to that PR's own branch |
+| `report-clearance.sh` | refuses a tick report that is not the three-part shape — what happened, what is blocking, a numbered `Needs you:` list. Called by `hooks/report-shape.sh` on `SubagentStop` | no |
 | `pr-body-clearance.sh` | asserts a PR **body** carries the required shape — the TL;DR heading, a `Verified:` line that cites something, and a criteria table whose heading tally matches its rows. `--body-file` decides on a draft before you open it | no |
 | `pr-comment-clearance.sh` | asserts a **reply to review findings** carries a verdict per finding, and that no element exceeds the measured ceiling. `--comment-file` decides before you post | no |
 | `pr-verdict-clearance.sh` | compares the **worker's** `✓`/`✗` criteria table (the PR body) with the **checker's** re-derived `PASS`/`FAIL` one (a PR comment). 0 agree · 1 the worker passed what the checker failed · 3 a checker row with no verdict or no command · 4 the checker is the PR author · 2 unknown | no |
@@ -571,6 +573,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `board-serve.sh` | serves `.board-live/` on `127.0.0.1:<boardPort>` and re-renders it when `SNAPSHOT.json` changes — one process per bundle | yes, the page (gitignored) |
 | `link-repos.sh` | refreshes `<instance>/repos/`, and writes each linked repo's `.git/loopd-bundle` — the marker the two safety hooks follow from a role agent's worktree back to this bundle | yes |
 | `index-kb.sh` | builds local CodeGraph indexes for the group's repos (code intelligence — **not** the knowledge base) | yes |
+| `continue-checkpoint.sh` | names each active project past `continueAfterTasks`/`continueAfterDays` (absent ⇒ off) or its `timebox:`, for `build-awaiting.sh`'s `continue` row and `tick-delta.sh`'s fingerprint | no |
 | `build-awaiting.sh` | renders `AWAITING.md` — the heading and its count, the `* ` marker `session-banner.sh` greps literally, the glyph, the verb and the link — from the task documents, never `SNAPSHOT.json`. It classifies `grant` against `answer` from the `open_questions` entry itself, narrows to this clone's human with `task-owner.sh`, and takes each row's trailing sentence as a `--trailer`. No `AWAITING.md` ⇒ it writes nothing and exits 0 | yes, that file (gitignored) |
 | `build-kb-index.sh` | regenerates `knowledge/index.md` from document frontmatter; `--check` fails on a doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a status outside `{current, superseded, corrected}`, a tag outside `knowledge/vocab.md`, a dangling supersession edge, or (as a warning, an error under `--strict`) a bundle-relative link in `knowledge/**` or a `source:` path token that resolves to nothing | yes, that index |
 | `kb-sync.sh` | mounts, reads and writes a knowledge base held in another repository (`knowledge` in `instance.config.json`) — `mount` clones it into `knowledge/` as a nested, gitignored clone, `pull` fast-forwards it under a named timeout, `status` reports unpushed KB commits, and `commit` is the one bounded write transaction: rebase, regenerate the index, commit, push, one retry, then stop and report. Absent the key it exits 3 and touches nothing | yes, the mounted KB (never the bundle) |

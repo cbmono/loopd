@@ -6,7 +6,8 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
 
    **Refresh the awaiting-you queue — only if it already exists, and only on a tick that
    changed something.** If `AWAITING.md` is present at the bundle root **and this tick will
-   report `noop: false`**, rewrite it with the renderer; **you never format the page**:
+   report `noop: false`** — or this tick's `tick-delta.sh check` named a moved `checkpoint`
+   line — rewrite it with the renderer; **you never format the page**:
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh \
@@ -17,7 +18,9 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    The script owns the structure — the heading and its count, the `* ` marker, the glyph,
    the verb, the link and the ` · ` separator — and reads the task documents, never
    `SNAPSHOT.json` (absent on a boardless instance). It derives every row it can see on
-   disk (`approve`, `answer`/`grant`, `unblock`, `close`) and **classifies `grant` against
+   disk (`approve`, `answer`/`grant`, `unblock`, `close`, and `continue` — the continue
+   checkpoint, whose sentence is the script's because it carries the human's answer line;
+   `SCHEMA.md` → "The continue checkpoint") and **classifies `grant` against
    `answer` from the `open_questions` entry itself, so you never pick a glyph**. You supply
    two things and nothing else: the trailing sentence of each row, which is per-tick prose
    by design, and a `--merge` row per PR you have found verified and green at its current

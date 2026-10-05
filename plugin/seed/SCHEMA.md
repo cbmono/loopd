@@ -114,6 +114,7 @@ need: <who needs this, and what breaks for them if it never exists>   # THE VALU
 cost_of_not_doing: <what the need above costs if it never ships>      # the answer that makes "not now" a real option
 no_owner: <who is allowed to say no>                                  # NOT the negation of `owner:` — the human who may stop this project. A decision with no owner is a trap
 timebox: <N>d | <N>w                  # optional, and absent on almost every project. PERMISSION TO STOP: this project is an experiment, and ending it when the box runs out is the plan, not an admission. A duration measured from this file's `timestamp:`. Inert until something reads it — see "Time-boxed projects" below
+continued: <YYYY-MM-DD> <n>           # optional, WRITTEN BY THE HUMAN as the answer to the continue checkpoint: the date they said "continue" and how many tasks were `done` then. Copied from the `AWAITING.md` row, which prints it. Re-arms the question from that point — see "The continue checkpoint" below
 non_goals: [ "<what this project deliberately does not do>", ... ]   # optional, PROJECT ONLY — there is no such key on a Task. Short strings, so a role agent does not gold-plate and a reviewer can say "that was ruled out". Not validated, and `/new-project` never asks for it. A decision that recurs across projects belongs in a `Finding` (`knowledge/`) instead, because a project's frontmatter leaves with the project.
 target_repo: <org>/<repo>             # BUILD only: default repo for this project's tasks (<org> from instance.config.json). Omit for research.
 deliverables: [ "<artifact>", ... ]   # RESEARCH only: what this project produces, e.g. "tech landscape per domain (md)", "exec summary deck (marp)"
@@ -165,10 +166,43 @@ It is not a label.
 * **Absent is the default and means nothing changes.** No duration is inferred, and no
   project is time-boxed implicitly. `/loopd:new-project` never asks for one. It records
   one only from an explicit `timebox=` flag.
-* **Inert until read.** Setting it changes nothing yet: no dispatch gate, no filtering, no
-  board change and no `AWAITING.md` row. `validate-bundle.sh` does not check it, and
-  `write-snapshot.sh` does not carry it into `SNAPSHOT.json`. A reader must add it there
-  before the board can show it. `tests/timebox-inert.test.sh` holds that.
+* **Inert until read, and read by one thing.** No dispatch gate, no filtering and no board
+  change. Its one reader is the continue checkpoint below, and only on a bundle that sets
+  one of its keys: there, a time-boxed project is asked when its box runs out, sooner than
+  the bundle's own threshold. `validate-bundle.sh` does not check it, and
+  `write-snapshot.sh` does not carry it into `SNAPSHOT.json`. `tests/timebox-inert.test.sh`
+  holds that on an unconfigured bundle.
+
+**The continue checkpoint asks once whether a running project should continue.**
+`plugin/scripts/continue-checkpoint.sh` names each active project that has crossed a
+threshold, and `build-awaiting.sh` renders one `⏳ **continue**` row for it. Closeout asks only
+when every task is terminal, so a project that never finishes was never asked at all.
+
+* **Opt-in.** Two tracked keys, `continueAfterTasks` (tasks `done`) and `continueAfterDays`
+  (days since `timestamp:`). **Both absent ⇒ off: no row, ever, and no `timebox:` is read.**
+  There is no default. A value that is not a positive whole number counts as absent.
+  Measured on one bundle's 16 closed projects: fix-sized ones closed with at most 15 tasks
+  done and programmes with at least 24, and none lived past 19.4 days. So `16` and `20` are
+  past every closed small project. Measure your own history before copying them.
+* **Every active project, and a time-boxed one sooner.** A project is due when either key
+  is crossed or its `timebox:` has run out. A label is not needed to be asked. `paused`
+  and `done` projects are never asked: a pause already answers it. A project whose tasks
+  are all terminal gets the `🏁 close` row instead.
+* **Report-only.** It never pauses, closes or deprioritises a project, and it rewrites no
+  document.
+* **Once.** The row stands until the human answers, like every other row. It is one row,
+  never repeated. **Yes** = paste the row's `continued: <date> <n>` line into `project.md`.
+  That is tracked frontmatter, so both clones of a shared bundle read it. **No** = pause or
+  close the project. **Re-armed** by the same thresholds, counted from the answer: days from
+  its date, tasks `done` beyond its `<n>`, and the time-box from its date. An unreadable
+  `continued:` is no answer, so it asks.
+* **Who decides, and whose queue.** The row names `no_owner:`. If that is empty, it names
+  the login on the project's **Project added** entry in the root log, then `defaultOwner`.
+  The row lands in the queue of the project's `owner:`, through the same `task-owner.sh`
+  filter every row takes. So a shared bundle shows it once.
+* **A stalled project still gets asked.** The idle fast-path fingerprint carries the due set
+  (`tick-delta.sh`), so a project that crosses a threshold makes the next tick a full one.
+  `tests/continue-checkpoint.test.sh` holds every point above.
 
 **Two kinds of project.** `kind: build` (default) ships changes to a product repo
 as PRs, executed by role agents — the full `draft → ready → dispatch → PR → merge`
@@ -1034,7 +1068,7 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `commitAttribution` | **yes** — the tracked file is where an organisation states its policy; the local file is how one machine departs from it | `claude`: a target-repo commit keeps the `Co-Authored-By: Claude` trailer, because Claude co-authored it. `none` drops the trailer and the session URL |
 | `ticketPrefix` | **no** — it names the organisation's ticket system, a shared fact both clones' PR titles must agree on | **no tag**: a PR title is `<type>: <subject>` with nothing appended. Set (a Jira-shaped key, e.g. `ABC`), titles end `[ABC-<n>]`, or `[ABC-0]` when the task names no ticket. `dispatch-brief.sh` resolves it into the brief's `## PR title`; no agent reads it |
 | `externalReviewer` | **no, by design** — it names **where this code may be sent**. That is policy, not preference: one clone silently routing diffs to a different reviewer is precisely the disagreement that breaks it, and it breaks in the direction nobody notices | the CodeRabbit CLI |
-| everything else | no — shared facts (`org`, `group`, `maxPrLoc`, `maxPrFiles`, `defaultRepo`, `codegraphSkip`, …) | as documented per key |
+| everything else | no — shared facts (`org`, `group`, `maxPrLoc`, `maxPrFiles`, `continueAfterTasks`, `continueAfterDays`, `defaultRepo`, `codegraphSkip`, …) | as documented per key (`continueAfterTasks`/`continueAfterDays`: off) |
 
 **`models`, `roleTiers` and `maxAgentsInFlight` moved into this table on 2026-08-29.** They
 are **spend and capacity**, not shared facts: which model a human pays for, and how many

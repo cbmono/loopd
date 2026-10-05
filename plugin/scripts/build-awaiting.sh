@@ -24,7 +24,7 @@
 #
 # ROW ORDER IS AN EXECUTION ORDER, read top to bottom, so it is sorted after the walk rather
 # than left in glob order: (1) a task's blocker above it, via `depends_on`, transitively
-# through tasks that have no row; (2) then grant, unblock, answer, approve, merge, close;
+# through tasks that have no row; (2) then grant, unblock, answer, approve, merge, close, continue;
 # (3) then glob order, so an unchanged bundle renders the same page. A cycle or a reference
 # to no live task drops only that edge. The sort reorders `row()`'s output and never
 # composes or drops a row: a failed sort renders glob order.
@@ -135,7 +135,7 @@ row() { printf '* %s **%s** — [%s](%s) · %s\n' "$1" "$2" "$3" "$4" "$5"; }
 row_txt=(); row_node=(); row_sev=()
 node_lines=""; node=0
 sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; answer) echo 2 ;;
-                        approve) echo 3 ;; merge) echo 4 ;; close) echo 5 ;; *) echo 6 ;; esac; }
+                        approve) echo 3 ;; merge) echo 4 ;; close) echo 5 ;; continue) echo 6 ;; *) echo 7 ;; esac; }
 add() { row_txt+=("$(row "$@")"); row_node+=("$node"); row_sev+=("$(sev_of "$2")"); }
 # A live task becomes a sort node whether or not it renders a row, so an edge through an
 # in-progress or other-owner task still orders what it separates.
@@ -160,6 +160,10 @@ EOF
 DEF_APPROVE='refined & clean, promote `draft → ready`'
 DEF_UNBLOCK='blocked — see the task’s `# Notes`'
 DEF_CLOSE='all tasks terminal → `/close-project '
+
+# The `continue` row's sentence is the script's, not the model's: it carries the one line the
+# human pastes to answer, and a per-tick rewording would lose it.
+due="$(bash "$HERE/continue-checkpoint.sh" --instance "$inst" 2>/dev/null)" || due=""
 
 for pm in "$inst"/projects/*/project.md; do
   [ -f "$pm" ] || continue
@@ -220,6 +224,16 @@ EOF
     add_node "$pm" "${pm#"$inst"}" "$slug"
     pt="$(title_of "$pm")"; ptrail="$(lookup "$pm" trailer)"
     add "🏁" close "$pt" "${pm#"$inst"}" "${ptrail:-$DEF_CLOSE$slug\`}"
+  fi
+
+  ck="$(printf '%s\n' "$due" | awk -F'\t' -v p="${pm#"$inst"}" '$1 == p { print; exit }')"
+  if [ -n "$ck" ] && [ "$held" = 0 ] && mine "$pm"; then
+    IFS=$'\t' read -r _ ckwho ckwhy ckrec <<EOF
+$ck
+EOF
+    add_node "$pm" "${pm#"$inst"}" "$slug"
+    add "⏳" continue "$(title_of "$pm")" "${pm#"$inst"}" \
+      "$ckwho: should this continue? $ckwhy · yes ⇒ add \`continued: $ckrec\` to project.md · no ⇒ pause or close it"
   fi
 done
 

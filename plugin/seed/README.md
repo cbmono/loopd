@@ -189,6 +189,7 @@ its verb and a real link:
 * 🔀 **merge** — a PR in review
 * ⛔ **unblock** — a blocked task
 * 🏁 **close** — a project whose tasks are all terminal
+* ⏳ **continue** — a running project past `continueAfterTasks`/`continueAfterDays` or its `timebox:`; both keys absent ⇒ never
 
 In-flight and upcoming work is deliberately **not** here: it needs no decision from
 you, and scrolling past it is how a queue stops getting read. Each `/loopd:dispatch` tick
