@@ -26,8 +26,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
    **Settle the round's usage once, when its session has ended.** A dispatch line is
    written at the spawn and records `usage UNKNOWN` (step 3). For a task whose session
-   reads `done` — or `gone` — **and whose last `* DISPATCH` line still says
-   `usage UNKNOWN`**, run:
+   has ended — `agent-sessions.sh state` prints `done`, `gone` or `stopped` (a session
+   somebody ran `claude stop` on has a transcript like any other) — **and whose last
+   `* DISPATCH` line still says `usage UNKNOWN`**, run:
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/session-usage.sh <the task's `session:`> --settle <task-path>
