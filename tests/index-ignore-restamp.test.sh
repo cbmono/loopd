@@ -277,7 +277,7 @@ assert "install.sh exits 0 with an earlier unrelated /index.md line present" \
   "$([[ $? -eq 0 ]] && echo 0 || echo 1)"
 assert "the REAL index-ignore pair is migrated to the marker pair (not the decoy)" \
   "$(yes_if grep -qxF '# >>> ai-bridge index ignore >>>' "$INST6/.gitignore")"
-# ONE since the block's own rule line is `/.ai-bridge/index.md`: the decoy is the only
+# ONE since the block's own rule line is `/.loopd/index.md`: the decoy is the only
 # `/index.md` left, which is exactly the line that had to survive.
 assert "the earlier unrelated /index.md rule is untouched" \
   "$([[ "$(grep -cxF '/index.md' "$INST6/.gitignore")" -eq 1 ]] && echo 0 || echo 1)"

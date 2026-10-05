@@ -672,7 +672,7 @@ PHOME="$TMP/phome/plugins"
 PINST="$PHOME/cache/mkt/${PN}/1.0.0"
 PMKT="$PHOME/marketplaces/mkt"
 PCACHE="$PHOME/data/${PN}-mkt/version-check"
-# THE WHOLE PLUGIN, not just this one script: `ai-bridge.sh check` is asserted against the
+# THE WHOLE PLUGIN, not just this one script: `welcome.sh check` is asserted against the
 # same fixture below, and it resolves its own root from where it is executing.
 mkdir -p "$PINST" "$PHOME/marketplaces"
 cp -R "$TPL/plugin/." "$PINST/"
@@ -697,7 +697,7 @@ ok "…and the human line stays byte-empty"          "$(printf '%s' "$OUT" | wc 
 
 # THE SAME HELPER ANSWERS `/<plugin>:welcome check`, which is what stops that row and the
 # banner's from ever disagreeing — asserted on both verdicts, against this same install.
-abcheck() { AOUT="$(CLAUDE_PLUGIN_ROOT="$PINST" bash "$PINST/scripts/ai-bridge.sh" check --instance "$TMP/inst" 2>/dev/null)"; }
+abcheck() { AOUT="$(CLAUDE_PLUGIN_ROOT="$PINST" bash "$PINST/scripts/welcome.sh" check --instance "$TMP/inst" 2>/dev/null)"; }
 abcheck
 ok "welcome check agrees it is current" \
   "$(grep -qF 'plugin version: 1.0.0 is what the marketplace' <<<"$AOUT" && echo yes || echo no)" yes

@@ -224,7 +224,7 @@ ok "…a non-recursive rm is not this rule's business" \
 ok "…and a glob below the root" \
    "$(verdict "$GITREPO" 'rm -rf coverage/*')" "allow"
 # THE BUNDLE'S PLUGIN-OWNED DIRECTORY, protected as a PREFIX — ai-bridge-v3/task-031.
-ok "rm -r of the bundle's .ai-bridge/ is refused" \
+ok "rm -r of the bundle's .loopd/ is refused" \
    "$(verdict "$GITREPO" "rm -rf $INSTROOT/$AB_DIR")" "deny:rm_rf_repo_root"
 ok "…while a subdirectory INSIDE it is still allowed" \
    "$(verdict "$GITREPO" "rm -rf $INSTROOT/$AB_DIR/seed-base")" "allow"
@@ -644,7 +644,7 @@ ok "…and cats a build artifact" \
    "$(verdict "$GITREPO" 'cat dist/main.js')" "allow"
 # `instance.config.json` alone is NOT the pair this rule keys on — that marker arms the
 # hook's own guard, and reusing it here would fire in a target repo that happens to hold one.
-ok "…instance.config.json without .ai-bridge/SCHEMA.md is not a bundle root" \
+ok "…instance.config.json without .loopd/SCHEMA.md is not a bundle root" \
    "$(verdict "$BUNDLE" 'kubectl get pods -n staging')" "allow"
 
 # --- ALLOW HALF C: the main thread, IN the bundle root, doing its actual job. If any of

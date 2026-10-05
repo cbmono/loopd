@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# ai-bridge.sh — the welcome command (plugin skill `/welcome`), in three forms.
+# welcome.sh — the welcome command (plugin skill `/welcome`), in three forms.
 #
-#   ai-bridge.sh                      reprint the SessionStart banner
-#   ai-bridge.sh check  [flags]       report the state of this instance
-#   ai-bridge.sh fix    [flags]       RETIRED — points at /<plugin>:init and exits 0
+#   welcome.sh                      reprint the SessionStart banner
+#   welcome.sh check  [flags]       report the state of this instance
+#   welcome.sh fix    [flags]       RETIRED — points at /<plugin>:init and exits 0
 #
 # `fix` MOVED INTO `/<plugin>:init` — it stamps the bundle, then runs this file's pass
 # (`AI_BRIDGE_INIT_PASS=1`, same tiers, same refusals). This form is a pointer for one release.
@@ -52,7 +52,7 @@
 # and no `fix_tick_lock` in this file, the dispatcher calls `fix_<id>` only for a row whose
 # declared tier is `idempotent`, and `check` and `fix` both REFUSE TO RUN if either function
 # is ever defined (the banner form `exec`s before that point, deliberately — it dispatches
-# no repair, and nothing may come between it and the hook). `tests/ai-bridge-command.test.sh` asserts the non-action against a modified
+# no repair, and nothing may come between it and the hook). `tests/welcome-command.test.sh` asserts the non-action against a modified
 # config and a stale lock — the two files come out byte-identical, unstaged and unremoved.
 #
 # ---------------------------------------------------------------------------------------
@@ -72,7 +72,7 @@
 #   relayed by the model (`/<plugin>:welcome check` in a session)   markdown renders; ANSI DOES NOT.
 #       0 of 4 ESC bytes survived the relay and the human was left reading a literal `[1m`.
 #       Single newlines and leading indent survive, so the block keeps its shape.
-#   a human's terminal (`bash ai-bridge.sh check`)   ANSI renders; markdown does not.
+#   a human's terminal (`bash welcome.sh check`)   ANSI renders; markdown does not.
 #   inlined into the SessionStart banner (`--banner`)        NEITHER, here. That channel does
 #       render ANSI — but `session-banner.sh` owns the weight of every line it prints, so
 #       this side stays plain and the banner colours it. Two writers on one line is how a
@@ -86,7 +86,7 @@
 # and no brand literal either: every message below spells the name through `$PLUGIN_NAME`,
 # which plugin-name.sh derives. tests/banner-user-channel.test.sh asserts this file carries
 # no copy of the brand — its proof that the wrapper prints no banner text of its own, and
-# the reason a rename does not reach in here. Verified by tests/ai-bridge-command.test.sh.
+# the reason a rename does not reach in here. Verified by tests/welcome-command.test.sh.
 #
 # EVERY `check_*` AND `fix_*` FUNCTION IS INVOKED INDIRECTLY, by a name built from the row
 # in `CHECKS` — which is the whole design, and is exactly what shellcheck cannot see. The
@@ -140,11 +140,11 @@ LIST=0; STYLE=auto
 # usage — the three forms and their flags, on stderr so `--help` never pollutes a pipeline.
 usage() {
   cat >&2 <<'USAGE'
-Usage: ai-bridge.sh [banner]                       reprint the SessionStart banner
-       ai-bridge.sh check [--instance DIR] [--template DIR] [--fetch]
+Usage: welcome.sh [banner]                       reprint the SessionStart banner
+       welcome.sh check [--instance DIR] [--template DIR] [--fetch]
                           [--since <ref>] [--only-problems] [--banner] [--list]
                           [--style auto|markdown|ansi|plain]
-       ai-bridge.sh fix   [--instance DIR] [--template DIR] [--fetch]
+       welcome.sh fix   [--instance DIR] [--template DIR] [--fetch]
                           [--style auto|markdown|ansi|plain]
 USAGE
 }
@@ -157,7 +157,7 @@ case "${1:-}" in
   banner)      FORM=banner; shift ;;
   -h|--help)   usage; exit 0 ;;
   "")          FORM=banner ;;
-  -*)          FORM=banner ;;   # `ai-bridge.sh --color=never` — flags belong to the banner
+  -*)          FORM=banner ;;   # `welcome.sh --color=never` — flags belong to the banner
   *)           usage; exit 2 ;;
 esac
 
@@ -233,7 +233,7 @@ fi
 # form exists for one reason: a long session scrolls it out of view. Any line printed here
 # — a header, a "reprinting…", a blank line — is a way for the two to differ, and the
 # moment they differ this form is wrong. `exec` rather than a call so even the exit status
-# is the hook's own. `tests/ai-bridge-command.test.sh` asserts the output is BYTE-IDENTICAL
+# is the hook's own. `tests/welcome-command.test.sh` asserts the output is BYTE-IDENTICAL
 # to the hook's own, in the rendering this run asked the hook for.
 #
 # IT ASKS FOR THE RENDERING ITS READER CAN SEE, AND THAT IS THE ONLY OPINION IT HAS. When
@@ -250,13 +250,13 @@ fi
 # is that reader's colour. `--style` has no counterpart here — a caller that wants a specific
 # rendering passes the hook's own `--format`, which is why ANY argument leaves this decision
 # alone. That is the one form that must not grow a second opinion about its own options: the
-# flags belong to the banner, and `bash ai-bridge.sh --format json` must reach it
+# flags belong to the banner, and `bash welcome.sh --format json` must reach it
 # unedited.
 #
 # `CLAUDE_PROJECT_DIR` is exported because it is the only thing the hook reads to decide
 # which instance it is describing. This form takes none of our own flags — `--instance` is a
 # `check`/`fix` option — so the value is whatever the environment already said, or this
-# directory; setting it explicitly is what makes `bash ai-bridge.sh` from an
+# directory; setting it explicitly is what makes `bash welcome.sh` from an
 # instance root print the same thing the hook prints at session start.
 if [ "$FORM" = banner ]; then
   hook="$HOOKS/session-banner.sh"

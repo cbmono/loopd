@@ -173,7 +173,7 @@
 # task-006 SUPERSEDES task-024's "/welcome shows the logo": the mark is THIS channel's alone.
 #
 # SO THERE ARE THREE RENDERINGS, NOT TWO, AND THE THIRD IS `--format md`. It is the path
-# `/welcome` relays — `ai-bridge.sh` asks for it when its own stdout is a pipe —
+# `/welcome` relays — `welcome.sh` asks for it when its own stdout is a pipe —
 # and it exists because that channel renders MARKDOWN and destroys SGR, so the mechanism
 # every other line of this file reaches for is worth nothing there. Two things make it a
 # THIRD rendering rather than an edit to either existing one:
@@ -193,7 +193,7 @@
 # same columns, same values, which is what tests/banner-user-channel.test.sh pins.
 #
 # AND ITS EMPHASIS IS ITS COLOUR, so `NO_COLOR` and `--color never` turn it off there too —
-# one opt-out a reader already knows, not a second one (`ai-bridge.sh` states the
+# one opt-out a reader already knows, not a second one (`welcome.sh` states the
 # same contract for `--style markdown`). `--color always` does NOT put SGR into it: 0 of 4
 # escape bytes survive that relay, so emitting them would be writing bytes for nobody.
 #
@@ -261,7 +261,7 @@ while [ $# -gt 0 ]; do
     --no-color) COLOR=never; shift ;;
     --format) shift; FORMAT="${1:-text}"; shift || true ;;
     --format=*) FORMAT="${1#--format=}"; shift ;;
-    # `ai-bridge.sh` passes this on its no-argument branches: a relayed banner is markdown,
+    # `welcome.sh` passes this on its no-argument branches: a relayed banner is markdown,
     # which drops the leading space of the mark's first row and carries no SGR at all.
     --no-logo) LOGO=0; shift ;;
     # THE TWO TABLES, WHICH THE SESSION-START BANNER NO LONGER PRINTS. The human's channel
@@ -277,7 +277,7 @@ done
 # An unrecognised FORMAT is text, for the same reason an unrecognised argument is ignored:
 # this is a SessionStart hook, and printing the banner beats exiting 2 at every launch.
 # THREE ARE RECOGNISED AND text IS STILL THE DEFAULT: `json` is what settings.json asks for,
-# `md` is what `ai-bridge.sh` asks for when its reader is a markdown renderer, and a
+# `md` is what `welcome.sh` asks for when its reader is a markdown renderer, and a
 # terminal gets neither.
 case "$FORMAT" in json|md) ;; *) FORMAT=text ;; esac
 
@@ -632,7 +632,7 @@ esac
 # `--color always --format md` would be writing bytes for nobody and leaving a literal `[1m`
 # in a human's page. And markdown emphasis instead, which that channel does render — but
 # gated on the SAME opt-out, because on a channel that draws `**bold**` as bold, bold IS the
-# colour, and a second switch for it is a switch nobody knows about. `ai-bridge.sh`
+# colour, and a second switch for it is a switch nobody knows about. `welcome.sh`
 # resolves `--style markdown` by the identical rule, deliberately.
 use_emph=0
 if [ "$FORMAT" = md ]; then
@@ -705,7 +705,7 @@ logo() {
 }
 
 # emphasise — colour a block this file did NOT compose, by SIGNIFICANCE, one whole line at a
-# time. `check-template-version.sh` (§2b) and `ai-bridge.sh check` (§8) are printed verbatim
+# time. `check-template-version.sh` (§2b) and `welcome.sh check` (§8) are printed verbatim
 # so that this hook carries no second opinion about what they say — but "verbatim" left their
 # warnings the same weight as the settings table, and the whole point of the banner is that
 # the line needing a human is the one you find first. So the CONTENT still comes from them
@@ -1472,10 +1472,10 @@ if [ "$board_on" -eq 1 ]; then
     case "${u_state:-}" in
       behind)  echo "$(pad Update "$BOARD_LW")claude plugin update ${u_name:-loopd}  (${u_here} → ${u_there}) — restart to apply it" ;;
       current)
-        # `.ai-bridge/seed-base/VERSION` is the plugin version the bundle was last stamped
+        # `$AB_DIR/seed-base/VERSION` is the plugin version the bundle was last stamped
         # with; trailing the installed one means seed edits are waiting on /<plugin>:init.
         stamped=""
-        [ -r "$root/.ai-bridge/seed-base/VERSION" ] && IFS= read -r stamped < "$root/.ai-bridge/seed-base/VERSION"
+        [ -r "$root/$AB_DIR/seed-base/VERSION" ] && IFS= read -r stamped < "$root/$AB_DIR/seed-base/VERSION"
         case "$stamped" in ""|*[!0-9A-Za-z.-]*) stamped="" ;; esac
         [ "${#stamped}" -le 20 ] || stamped=""
         if [ -n "$stamped" ] && [ "$stamped" != "${u_here}" ]; then
@@ -1694,7 +1694,7 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------------------
-# 8. STATE THAT COULD BE WRONG — `ai-bridge.sh check`, problems only.
+# 8. STATE THAT COULD BE WRONG — `welcome.sh check`, problems only.
 # ---------------------------------------------------------------------------------------
 # THIS IS THE READER FOR A TRAP THAT HAD NONE. "Pulling the template half-upgrades every
 # unstamped instance" was prose in a knowledge base: an edit to an already-linked file
@@ -1718,14 +1718,14 @@ fi
 # ABSENT ⇒ NOTHING, like every other optional section — and that state is exactly what this
 # section reports about other files, so it stays silent about itself rather than erroring.
 # `--fetch` is deliberately not passed: no banner waits on a socket.
-if [ -f "$bin/ai-bridge.sh" ]; then
+if [ -f "$bin/welcome.sh" ]; then
   # Spelled out rather than `${tmpl:+--template "$tmpl"}`: that expansion is unquoted by
   # construction, so a template path containing a space arrives as two arguments and the
   # check reports on a directory that does not exist. Same shape as §2b above.
   if [ -n "$tmpl" ]; then
-    state="$(bash "$bin/ai-bridge.sh" check --only-problems --banner --instance "$root" --template "$tmpl" 2>/dev/null || true)"
+    state="$(bash "$bin/welcome.sh" check --only-problems --banner --instance "$root" --template "$tmpl" 2>/dev/null || true)"
   else
-    state="$(bash "$bin/ai-bridge.sh" check --only-problems --banner --instance "$root" 2>/dev/null || true)"
+    state="$(bash "$bin/welcome.sh" check --only-problems --banner --instance "$root" 2>/dev/null || true)"
   fi
   if [ -n "$state" ]; then
     echo

@@ -39,3 +39,4 @@
 # to retire something reads this and asks which of the two classes it is in.
 
 todos.md	the /todo feature was removed; this file is your own notes, so it is yours to keep
+.claude/ai-bridge-statusline.sh	renamed .claude/loopd-statusline.sh; repin statusLine.command in .claude/settings.json to it before you remove this one

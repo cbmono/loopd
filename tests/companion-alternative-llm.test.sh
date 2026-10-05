@@ -251,7 +251,7 @@ ok "unset -> the banner says nothing about a backend" \
 # Three exec sites since 2x/task-006: the md form, the plain form (both --no-logo) and the
 # pass-through — every one of them the hook itself, none a second rendering.
 ok "/${PN}:welcome execs the hook, not a copy"  \
-   "$(grep -c 'exec bash "$hook"' "$REPO/plugin/scripts/ai-bridge.sh")" 3
+   "$(grep -c 'exec bash "$hook"' "$REPO/plugin/scripts/welcome.sh")" 3
 
 echo
 echo "== 8. it ships as a companion, on the contract core already has =="

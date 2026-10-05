@@ -157,7 +157,7 @@ Subagents return only their final message, so brief each one completely. They
 inherit this file; role agents additionally read `CONVENTIONS.md`.
 
 **One agent, one task — resume it only for that task's next round.** The rule is
-stated once, in [`CONVENTIONS.md`](.ai-bridge/CONVENTIONS.md) → "A subagent works ONE task":
+stated once, in [`CONVENTIONS.md`](.loopd/CONVENTIONS.md) → "A subagent works ONE task":
 
 > same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never
 
@@ -179,7 +179,7 @@ the only reader this rule has.
   commit there carries the repo's own identity.
 
 ## Conventions for role agents working in target repos
-**Full rules: [`CONVENTIONS.md`](.ai-bridge/CONVENTIONS.md) — read it before your first write
+**Full rules: [`CONVENTIONS.md`](.loopd/CONVENTIONS.md) — read it before your first write
 in a target repo.** It is the single source of truth for role-agent behaviour; it
 lives there and not here because it governs work *outside* this bundle.
 

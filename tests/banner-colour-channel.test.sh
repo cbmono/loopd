@@ -46,7 +46,7 @@ TPL="$(cd "$HERE/.." && pwd)"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
-AB="$TPL/plugin/scripts/ai-bridge.sh"
+AB="$TPL/plugin/scripts/welcome.sh"
 # The four loopd hooks are registered by the PLUGIN since task-013.
 SETTINGS="$TPL/plugin/hooks/hooks.json"
 CMDDOC="$TPL/plugin/skills/welcome/SKILL.md"
@@ -313,7 +313,7 @@ assert "coloured lines are a minority of the banner ($esc_lines of $all_lines)" 
   "$([ "$esc_lines" -gt 0 ] && [ "$all_lines" -gt 0 ] && [ $((esc_lines * 2)) -lt "$all_lines" ] && echo 0 || echo 1)"
 
 # THE `check` BLOCK IS COLOURED BY THE BANNER, not by the script that produced it. Two
-# writers on one line is how a padded column drifts, so `ai-bridge.sh` emits it plain under
+# writers on one line is how a padded column drifts, so `welcome.sh` emits it plain under
 # `--banner` and `emphasise` decides the weight here.
 assert "the inlined $PN check block fired"   "$(has "$PN check — state worth a look" "$SM")"
 assert "…its ⚠ line is coloured" \
@@ -406,7 +406,7 @@ assert "an unknown --style value is not fatal"     \
   "$(eq "$( ( cd "$INST" && bash "$AB" check --style wat --instance "$INST" --template "$TPL" >/dev/null 2>&1 ); echo $? )" 0)"
 
 # THE SIGIL IS THE ANCHOR AND IT IS OUTSIDE THE EMPHASIS IN EVERY STYLE. `session-banner.sh`
-# filters this block with `grep -e '^⚠'` and tests/ai-bridge-command.test.sh pins the same
+# filters this block with `grep -e '^⚠'` and tests/welcome-command.test.sh pins the same
 # anchor, so `**⚠ text**` would silence the banner's whole check section without failing a
 # single content grep.
 for st in markdown ansi plain; do

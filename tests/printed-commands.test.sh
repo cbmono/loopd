@@ -77,7 +77,7 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/printedcmd.XXXXXX")" || {
 trap 'rm -rf "$TMP"' EXIT
 OUTSIDE="$TMP/outside"; HOME_T="$TMP/home"; CFG_T="$TMP/cfg"; BUNDLE="$TMP/bundle"; CAP="$TMP/cap"
 INSTALLED="$TMP/installed"; ABSENT="$TMP/absent"
-mkdir -p "$OUTSIDE" "$HOME_T" "$CFG_T" "$BUNDLE/.ai-bridge" "$CAP" "$INSTALLED"
+mkdir -p "$OUTSIDE" "$HOME_T" "$CFG_T" "$BUNDLE/.loopd" "$CAP" "$INSTALLED"
 : > "$BUNDLE/instance.config.json"; : > "$BUNDLE/SCHEMA.md"   # a fake un-migrated bundle
 # An installed plugin: the real scripts with no marketplace (so no config/) above them.
 ln -s "$SCRIPTS" "$INSTALLED/scripts"; ln -s "$REPO/plugin/VERSION" "$INSTALLED/VERSION"

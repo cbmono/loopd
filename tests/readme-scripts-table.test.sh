@@ -5,7 +5,7 @@
 #
 # WHY. A hand-maintained table of scripts drifts the moment a PR adds one, silently, and
 # nothing read it. Measured 2026-09-01 on `origin/main` (55088f8): the section carried
-# **19 rows against 26 scripts** — `ai-bridge.sh`, `control.sh`, `pr-body-clearance.sh`,
+# **19 rows against 26 scripts** — `welcome.sh`, `control.sh`, `pr-body-clearance.sh`,
 # `pr-comment-clearance.sh`, `reclaim-worktree.sh`, `resolve-config.sh` and
 # `resolve-max-agents.sh` were in no row and named nowhere else in the README. Four of the
 # seven predate the PR that was blamed for the drift, so the table had been wrong for far
@@ -13,7 +13,7 @@
 #
 # THE CONTRACT THIS PINS IS "EVERY SCRIPT IS ACCOUNTED FOR", NOT "EVERY SCRIPT IS A USER
 # COMMAND". Some of what ships in `plugin/scripts/` is internal plumbing a reader should
-# not be told to run (`resolve-config.sh`, `resolve-max-agents.sh`, `ai-bridge.sh`, which
+# not be told to run (`resolve-config.sh`, `resolve-max-agents.sh`, `welcome.sh`, which
 # backs the `/loopd:welcome` command). The README therefore carries a second, explicitly
 # labelled **Internal helpers** table under the same heading, and this file scans the whole
 # `## Scripts` SECTION rather than one table — so a helper is documented as a helper and

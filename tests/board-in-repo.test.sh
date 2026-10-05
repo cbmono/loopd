@@ -184,7 +184,7 @@ ok "project-manager.md exists"                          "$(yes_if test -f "$PM")
 ok "…still names the LIVE render" \
   "$(yes_if grep -qF -- 'build-board.sh --standalone' "$PM")" yes
 ok "…at the resolved path, not the pre-3.0 root one" \
-  "$(yes_if grep -qF -- '.ai-bridge/.board-live/board.html' "$PM")" yes
+  "$(yes_if grep -qF -- '.loopd/.board-live/board.html' "$PM")" yes
 ok "…names no tracked render"    "$(yes_if grep -qF -- '--standalone --out board.html .' "$PM")" no
 ok "…and no board commit"        "$(grep -cF -- 'chore: refresh board.html' "$PM")" 0
 ok "…and points a human at the local server" \

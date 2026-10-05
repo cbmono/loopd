@@ -453,7 +453,7 @@ ticks, regardless of how long a tick runs.
   instance**.
 - **The board page is re-rendered by the same tick, to a local file** —
   `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone` — which resolves its own
-  output path from `AB_BOARD_DIR` — today `.ai-bridge/.board-live/board.html` — so do
+  output path from `AB_BOARD_DIR` — today `.loopd/.board-live/board.html` — so do
   NOT pass `--out`: a hardcoded one overrides the resolver and renders outside the
   layout. It is the gitignored
   path `${CLAUDE_PLUGIN_ROOT}/scripts/watch-board.sh` also writes. Per machine, not per account; nothing is
