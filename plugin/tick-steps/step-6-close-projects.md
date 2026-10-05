@@ -30,6 +30,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `index.md` is edited but **not** staged — derived and gitignored; a retained
    project's OWN `index.md` is the exception, step 8.) There is **no `archive/`** —
    git history + the KB are the record, except where `retain: true` says the folder IS
-   the record. Closing is never autonomous.
+   the record. Closing is never autonomous. A project that is still running is asked
+   whether to continue by step 8's `continue` row (`SCHEMA.md` → "The continue
+   checkpoint"), never by this step.
 
 <!-- end of step 6 -->

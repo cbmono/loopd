@@ -215,7 +215,9 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
      this bullet entirely.
    - Prepend a dated **Project added** bullet to the root `log.md` (newest-first:
      reuse today's `## <date>` heading if present, else add it at the top of the
-     dated entries).
+     dated entries), stamped `Added <ISO 8601> by <login>` from
+     `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`. The continue checkpoint
+     names that login when `no_owner:` is empty.
 
 7. **Show & commit.** Print the created tree, the `project.md` frontmatter, and the
    seed task titles. On a **build** project, **record the current `HEAD` sha before
