@@ -91,7 +91,7 @@ ok "…and no record exists for it"                   "$(find "$F.cache" -type f
 echo "== a record that does not carry the expected line is not a pass =="
 P="$(lab planted)"; sibling "$P" "$OKLINE"
 call "$P" >/dev/null
-rec="$(find "$P.cache" -type f | head -1)"
+rec="$(find "$P.cache" -type f)"   # exactly one: the labs share nothing
 ok "the record holds exactly the expected line"     "$(cat "$rec")" "$OKLINE"
 printf 'ok\n' > "$rec"
 call "$P" >/dev/null
@@ -116,7 +116,7 @@ ok "neither calls a sibling's --self-test outside it" \
 R="$(lab real)"; cp "$REPO/plugin/scripts/review-clearance.sh" "$R/"
 PATH="$BIN:$PATH" TMPDIR="$R.cache" bash "$R/review-rounds.sh" 1 >/dev/null 2>"$R/err"
 ok "the REAL review-clearance.sh passes and is recorded" "$(find "$R.cache" -type f -name 'review-clearance.sh.*' | wc -l | tr -d ' ')" 1
-ok "…under a key that is its checksum and byte count"    "$(basename "$(find "$R.cache" -type f | head -1)")" "review-clearance.sh.$(cksum < "$R/review-clearance.sh" | tr ' ' '-')"
+ok "…under a key that is its checksum and byte count"    "$(basename "$(find "$R.cache" -type f)")" "review-clearance.sh.$(cksum < "$R/review-clearance.sh" | tr ' ' '-')"
 
 echo
 echo "pass=$pass fail=$fail"
