@@ -40,6 +40,7 @@ SCRIPTS="$REPO/plugin/scripts"
 # The checked-in inventory, as source text. It is the absence detector AND what makes
 # `tests/run.sh --changed` select this file: run.sh matches literal path strings.
 EXPECTED="plugin/scripts/bundle-paths.sh|migrate-bundle.sh --apply
+plugin/scripts/bundle-paths.sh|migrate-bundle.sh --apply
 plugin/scripts/close-project-folder.sh|close-project-folder.sh \"\$SLUG\" --apply
 plugin/scripts/close-project-folder.sh|close-project-folder.sh \"\$SLUG\" --apply
 plugin/scripts/commit-as.sh|kb-sync.sh commit --role \"\$role\" --message \"\\\"\$message\\\"\" -- '<path>...'
@@ -57,6 +58,8 @@ plugin/scripts/init-bundle.sh|init-bundle.sh '--owner <github-login>'
 plugin/scripts/init-bundle.sh|init-bundle.sh '--repos-root <absolute path>'
 plugin/scripts/init-bundle.sh|kb-sync.sh commit --message '\"<message>\"' -- '<path>...'
 plugin/scripts/init-bundle.sh|loopd/plugin/scripts/init-bundle.sh --config
+plugin/scripts/init-bundle.sh|migrate-bundle.sh
+plugin/scripts/init-bundle.sh|migrate-bundle.sh --apply
 plugin/scripts/kb-sweep-due.sh|build-kb-index.sh --check
 plugin/scripts/kb-sync.sh|kb-sync.sh commit --message '\"<message>\"' -- '<path>...'
 plugin/scripts/kb-sync.sh|kb-sync.sh mount

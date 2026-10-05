@@ -1058,6 +1058,20 @@ TARGET="$(cd "$_want" 2>/dev/null && pwd || true)"
 [ -n "$TARGET" ] || { echo "error: target directory does not exist" >&2; exit 2; }
 [ -d "$SEED_SRC" ] || { echo "error: template missing $SEED_SRC" >&2; exit 2; }
 
+# A BUNDLE STILL HOLDING ITS STATE IN THE PRE-3.3 DIRECTORY IS REFUSED BEFORE ANYTHING IS
+# WRITTEN. A stamp copies a seed file only if absent, and to this plugin every file under
+# $AB_DIR/ is absent in such a bundle — so it seeded a second, empty state directory beside
+# the real one (three bundles, 2026-10-05), and migrate-bundle.sh then stopped because its
+# destination existed. Refusing costs one command; stamping cost a hand recovery each.
+if [ "$MODE" = install ] && ab_is_bundle "$TARGET" && [ -d "$TARGET/$AB_DIR_BEFORE" ]; then
+  echo "error: this bundle still keeps its state in $AB_DIR_BEFORE/, and this plugin reads $AB_DIR/." >&2
+  echo "       Nothing was written. Migrate it first, from the bundle root:" >&2
+  ab_say_run "        " migrate-bundle.sh >&2
+  ab_say_run "        " migrate-bundle.sh --apply >&2
+  [ ! -e "$TARGET/$AB_DIR" ] || echo "       $AB_DIR/ exists too (an earlier stamp made it): move it aside first, or the migration stops." >&2
+  exit 2
+fi
+
 # =========================================================================================
 # 0. THE ORG'S BUNDLE (--org) — clone <org>/<name>, or create it private and push.
 # =========================================================================================

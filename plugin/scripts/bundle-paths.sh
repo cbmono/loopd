@@ -35,9 +35,12 @@ AB_MOVES="SCHEMA.md:$AB_SCHEMA CONVENTIONS.md:$AB_CONVENTIONS log.md:$AB_LEDGER 
 agents/index.md:$AB_ROSTER AWAITING.md:$AB_AWAITING SNAPSHOT.json:$AB_SNAPSHOT \
 index.md:$AB_INDEX .tick-state:$AB_STATE_DIR .board-live:$AB_BOARD_DIR \
 .board-others.json:$AB_BOARD_OTHERS"
+# The directory a bundle kept its state in before 3.3 — AB_DIR's previous value. Spelled
+# here so the detector below, the stamp's refusal and the notice name the same thing.
+AB_DIR_BEFORE=".ai-bridge"
 
 export AB_DIR AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER
-export AB_STATE_DIR AB_RECEIPTS AB_MODE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM AB_MOVES
+export AB_STATE_DIR AB_RECEIPTS AB_MODE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM AB_MOVES AB_DIR_BEFORE
 
 AB_KEYS="AB_DIR AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER \
 AB_STATE_DIR AB_RECEIPTS AB_MODE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM"
@@ -101,9 +104,14 @@ ab_seed_dest() { # <seed-relative path> — where the stamp puts it
   printf '%s' "$1"
 }
 
+# ALSO a bundle still holding its state in $AB_DIR_BEFORE/: the 3.3 rename. Measured
+# 2026-10-05 on three bundles — the plugin was updated before the migration, nothing said
+# so, and the next stamp seeded an EMPTY $AB_DIR/ beside the real one: two ledgers, the KB
+# mount invisible, and migrate-bundle.sh then stopped because its destination existed.
 ab_unmigrated() { # <root> — a bundle still carrying plugin files at its root
   local r="${1:-.}" pair
   ab_is_bundle "$r" || return 1
+  [ -d "$r/$AB_DIR_BEFORE" ] && return 0
   for pair in $AB_MOVES; do
     [ -e "$r/${pair%%:*}" ] && return 0
   done
@@ -120,6 +128,13 @@ ab_say_run() { # <lead> <script> [arg...] — on STDOUT; redirect at the call si
 
 ab_unmigrated_notice() { # <root> — names what is still at the root, and the one fix
   local r="${1:-.}" pair old
+  if [ -d "$r/$AB_DIR_BEFORE" ]; then
+    echo "loopd: this bundle still keeps its state in $AB_DIR_BEFORE/ — this plugin reads $AB_DIR/:" >&2
+    echo "             $AB_DIR_BEFORE/ -> $AB_DIR/" >&2
+    [ ! -e "$r/$AB_DIR" ] || echo "             $AB_DIR/ exists too — it was stamped before the migration; move it aside first" >&2
+    ab_say_run "           Fix it with:" migrate-bundle.sh --apply >&2
+    return 0
+  fi
   echo "loopd: this bundle still has plugin-owned files at its root:" >&2
   for pair in $AB_MOVES; do
     old="${pair%%:*}"; [ -e "$r/$old" ] && echo "             $old -> ${pair#*:}" >&2
