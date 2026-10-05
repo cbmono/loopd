@@ -40,7 +40,7 @@ ledger="$inst/$AB_LEDGER"; [ -f "$ledger" ] || ledger="$inst/log.md"
 creator() { # <slug>
   [ -f "$ledger" ] || return 0
   awk -v s="$1" '
-    !on && /Project added/ && (index($0, ": " s) || index($0, "/projects/" s "/") || index($0, "`" s "`")) { on=1; print; next }
+    !on && /Project added/ && (substr($0, length($0) - length(s) - 1) == ": " s || index($0, "/projects/" s "/") || index($0, "`" s "`")) { on=1; print; next }
     on && (/^## / || /^\* /) { exit }
     on { print }' "$ledger" \
   | grep -oE '(Added|added|[0-9]Z)(\*\*)? by [A-Za-z0-9]+(-[A-Za-z0-9]+)*' | head -n1 | sed 's/.* by //'

@@ -98,7 +98,7 @@ W="$TMP/who"; inst "$W" '{ "continueAfterDays": 20, "defaultOwner": "example-use
 printf '{ "ownerGithubUser": "example-user-008" }\n' > "$W/instance.config.local.json"
 proj "$W" made 2026-09-01T00:00:00Z 0 1; sed -i.bak 's/^no_owner: Dana$/no_owner:/' "$W/projects/made/project.md"
 proj "$W" orphan 2026-09-01T00:00:00Z 0 1; sed -i.bak 's/^no_owner: Dana$/no_owner:/' "$W/projects/orphan/project.md"
-printf '## 2026-09-01 — Project added: made\n\n**Added 2026-09-01T00:00:00Z by example-user-007.** Measured by hand.\n' > "$W/$AB_LEDGER"
+printf '## 2026-09-02 — Project added: made-later\n\nAdded by example-user-008.\n\n## 2026-09-01 — Project added: made\n\n**Added 2026-09-01T00:00:00Z by example-user-007.** Measured by hand.\n' > "$W/$AB_LEDGER"
 rows "$W" >/dev/null
 ok "empty no_owner: ⇒ the login on the creation entry" "$(row_for "$W" made | grep -c 'example-user-007: should')" 1
 ok "no creation entry ⇒ defaultOwner" "$(row_for "$W" orphan | grep -c 'example-user-008: should')" 1
