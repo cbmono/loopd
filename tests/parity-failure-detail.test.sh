@@ -55,9 +55,12 @@ printf 'mutefix deliberate no-summary diagnostic\n'
 exit 2
 EOS
 
-# The parity harness under test, aimed at the fixtures instead of the seven real
-# harnesses. The substitution is asserted below: a reworded loop must not leave this
-# driving nothing.
+# The parity harness under test, its end-to-end loop aimed at the fixtures instead of the
+# real harness it runs. The substitution is asserted below: a reworded loop must not
+# leave this driving nothing. Since 2026-10-05 that loop is one harness, not seven, and
+# the parity file's static and mutant sections read real harnesses this fixture repo
+# does not carry — they go red on stdout here, which no assertion below reads: every
+# one of them is about what the end-to-end loop writes to stderr.
 sed -E 's/^for h in .*; do$/for h in redfix greenfix mutefix; do/' \
   "$PARITY" >"$FIX/tests/worktree-suite-parity.test.sh"
 ok "the fixture list replaced the real one" \
