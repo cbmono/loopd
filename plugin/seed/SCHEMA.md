@@ -467,6 +467,14 @@ P1 · supersede · duplicate · status=superseded · keeper · 1234567890-412 ·
   narrows the concurrent-writer window with the mechanism the bundle has, and does not close
   it (`skills/audit/SKILL.md` says the same of the same probe).
 
+- **The shipped proposer is `scripts/kb-compare.sh <candidate.md>`** — one candidate Finding,
+  before it is appended, against every `type: Finding`. Its key is the content words of
+  `title` + `description` + `lesson:` (case, punctuation, order, articles and plurals
+  dropped), and **only an equal key is proposed**: one differing word — an interpreter, a
+  harness, a calling context — is `append as new`, because a false merge costs more than a
+  missed one. A superseded match follows `superseded_by:`; a match not `provenance: machine`
+  is `human-authored, review only`; an empty `lesson:` is `no proposal: unreadable`.
+
 ### type: Service  (`knowledge/services/<name>.md`)
 
 ```yaml

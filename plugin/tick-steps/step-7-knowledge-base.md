@@ -70,6 +70,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    ${CLAUDE_PLUGIN_ROOT}/scripts/kb-propose.sh --proposer "<the instance's proposer>"   # exit 0 = a report was written
    ```
 
+   The shipped proposer is `scripts/kb-compare.sh <candidate.md>` (`SCHEMA.md` → "The
+   reflection report").
    It runs the archive sweep first, with or without a proposer: a current, machine-written
    Finding past every qualifier `scripts/kb-usage.sh sweep` prints becomes a
    `status=archived` proposal. Exit 0 ⇒ it has already written the report as a `draft`
