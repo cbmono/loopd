@@ -127,3 +127,4 @@ Return a tight, structured report (this is your return value, not a file you wri
   include a `Finding` draft formatted per `SCHEMA.md`, ready to paste into
   `knowledge/findings/`. **Do not write or commit it** — persistence is a curated
   step owned by the human / PM / cataloguer.
+- **Eval case (optional)** — when the root cause is a loopd skill's or agent's *judgement*, not product code, propose one: the prompt idea and the grader shape, in the vocabulary of `${CLAUDE_PLUGIN_ROOT}/evals/README.md`. **Propose only — you write no file.**
