@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ai-bridge-statusline.sh — this bundle's `statusLine`. SEED content: yours once copied,
+# loopd-statusline.sh — this bundle's `statusLine`. SEED content: yours once copied,
 # safe to delete with the key in .claude/settings.json. It resolves the plugin at RUN
 # time: a `statusLine` command gets no `${CLAUDE_PLUGIN_ROOT}` and a pinned path rots.
 set -uo pipefail

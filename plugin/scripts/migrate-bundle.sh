@@ -26,7 +26,7 @@
 #   · A missing knowledge-document `provenance`, from the file's git history (SCHEMA.md,
 #     "provenance:"): `machine` only when a role created it and no one else touched it.
 #   · THE 3.0 LAYOUT. Plugin-owned files still sitting at the bundle root move under
-#     `.ai-bridge/`, and the links pointing at them are rewritten. See that step.
+#     `.loopd/`, and the links pointing at them are rewritten. See that step.
 #   · THE .loopd RENAME. `.ai-bridge/` moves to `.loopd/` in one `git mv`, with its ignore
 #     lines, the statusline pin and any KB mount's `core.worktree`, then commits. See that step.
 #
@@ -64,7 +64,7 @@ ab_is_bundle . || {
 fixed=0; skipped=0; human=0; failed=0
 
 # =========================================================================================
-# THE 3.0 LAYOUT STEP — plugin-owned files move from the bundle root under `.ai-bridge/`.
+# THE 3.0 LAYOUT STEP — plugin-owned files move from the bundle root under `.loopd/`.
 # =========================================================================================
 #
 # HARD CUTOVER, NO COMPATIBILITY SYMLINKS. A `mv` once left 185 dangling symlinks across
@@ -114,7 +114,7 @@ layout_move() { # <old> <new> — git mv when tracked, plain mv when not
 
 # Every destination is checked BEFORE the first move, not inside layout_move: a plain `mv`
 # onto an occupied path overwrites a file or buries the source inside an existing directory
-# (`.board-live` -> `.ai-bridge/.board-live/.board-live`), and a per-path guard would only
+# (`.board-live` -> `.loopd/.board-live/.board-live`), and a per-path guard would only
 # catch the collision after the earlier paths had already moved. This is not one of the two
 # refusals — it says the bundle is HALF-MIGRATED, which a human resolves pair by pair.
 layout_conflicts() { # <pending> — prints "<old> -> <new>" per occupied destination
@@ -125,8 +125,8 @@ layout_conflicts() { # <pending> — prints "<old> -> <new>" per occupied destin
   return 0
 }
 
-# THE .loopd RENAME. Both ends are spelled here, not read from AB_DIR, which still names the
-# old directory until the flip that follows this migration — the move works on either side.
+# THE .loopd RENAME. Both ends are spelled here: AB_DIR names only the new directory, and the
+# old one has to be recognised to be moved.
 RENAME_FROM=".ai-bridge"; RENAME_TO=".loopd"; SETTINGS=".claude/settings.json"
 
 # Comments are prose and take the new name; a pattern line only has its directory segment
@@ -402,7 +402,11 @@ collect_files() {
   find ./knowledge -mindepth 2 -maxdepth 2 -type f -name '*.md' 2>/dev/null || true
 }
 
-PENDING="$(layout_pending)"
+# A bundle still holding $RENAME_FROM/ takes its root files INTO it, so the rename carries them
+# over whole; moving them to $AB_DIR would leave the rename an occupied destination.
+LAYOUT_DIR="$AB_DIR"; [[ -d "$RENAME_FROM" ]] && LAYOUT_DIR="$RENAME_FROM"
+LAYOUT_MOVES="${AB_MOVES//$AB_DIR\//$LAYOUT_DIR/}"
+PENDING="$(layout_pending "$LAYOUT_MOVES")"
 if [[ -n "$PENDING" ]]; then
   echo "layout: this bundle is on the pre-3.0 layout."
   refusal="$(layout_refusal)"
@@ -415,7 +419,7 @@ if [[ -n "$PENDING" ]]; then
   elif [[ -n "$refusal" ]]; then
     echo "  REFUSED  $refusal"
     echo "           Run these by hand once it clears, from $(pwd):"
-    echo "             mkdir -p $AB_DIR $(dirname "$AB_ROSTER")"
+    echo "             mkdir -p $LAYOUT_DIR $LAYOUT_DIR/$(basename "$(dirname "$AB_ROSTER")")"
     while IFS=$'\t' read -r old new; do echo "             $(layout_cmd "$old") $old $new"; done <<< "$PENDING"
     echo "           …then re-run this script. docs/operations.md carries the full list."
   elif [[ $APPLY -eq 0 ]]; then
@@ -436,7 +440,7 @@ if [[ -n "$PENDING" ]]; then
     echo "  RELINKED projects/ and knowledge/ links to $AB_SCHEMA and $AB_CONVENTIONS"
     # A MOUNTED knowledge base is another repository's worktree, so the relink leaves it
     # dirty and this script must not commit it — kb-sync.sh is the only KB writer.
-    if [[ -d "$AB_DIR/kb.git" ]]; then
+    if [[ -d "$LAYOUT_DIR/kb.git" ]]; then
       echo "           knowledge/ is MOUNTED: its relinked files are uncommitted in that"
       ab_say_run "           repository. Review and push them with:" kb-sync.sh commit --message '"chore: relink knowledge/"' -- '<path>...'
     fi

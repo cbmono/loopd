@@ -123,7 +123,7 @@ ok "…as a REAL directory, never a symlink" \
   "$([ -d "$MOUNTED/knowledge" ] && [ ! -L "$MOUNTED/knowledge" ] && echo yes || echo no)" yes
 ok "…with no .git inside knowledge/ for a reader to walk into" \
   "$([ -e "$MOUNTED/knowledge/.git" ] && echo yes || echo no)" no
-ok "…and the gitdir lives under .ai-bridge/, per bundle" \
+ok "…and the gitdir lives under .loopd/, per bundle" \
   "$([ -d "$MOUNTED/$AB_DIR/kb.git" ] && echo yes || echo no)" yes
 
 # `find knowledge -type f` is the exact call build-kb-index.sh:342 makes; the symlink form

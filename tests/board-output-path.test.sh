@@ -2,7 +2,7 @@
 #
 # board-output-path.test.sh — WHERE the board lands, which is the whole of this file.
 #
-# After the 3.0 layout moved plugin-owned paths under `.ai-bridge/`, the renderer's
+# After the 3.0 layout moved plugin-owned paths under `.loopd/`, the renderer's
 # default and two shipped instruction files still named the pre-3.0 root path. The
 # resolver was right the whole time; the callers passed an explicit `--out` that
 # overrode it, so a tick following its own instructions rendered to `./.board-live/`
@@ -11,7 +11,7 @@
 #
 #   · THE VIEWER SHOWED A STALE PAGE. The root copy was two hours fresher than the one
 #     `board serve` reads, and nothing said so — the render reported success each time.
-#   · THE DERIVED PAGE WAS NOT IGNORED. `/.ai-bridge/.board-live/` is gitignored;
+#   · THE DERIVED PAGE WAS NOT IGNORED. `/.loopd/.board-live/` is gitignored;
 #     `/.board-live/` is not, so the page accumulated as untracked files at the bundle
 #     root, which is exactly what the local-render route was introduced to stop.
 #
@@ -30,17 +30,17 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-60s (%s)\n' "$1" "$2"; pass=$(
        else printf '  FAIL  %-60s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi }
 
 BOARD_DIR="$(bash "$PATHS" AB_BOARD_DIR)"
-ok "the resolver still answers AB_BOARD_DIR" "$BOARD_DIR" ".ai-bridge/.board-live"
+ok "the resolver still answers AB_BOARD_DIR" "$BOARD_DIR" ".loopd/.board-live"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/board-output-path.XXXXXX")" || {
   echo "board-output-path.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
-B="$TMP/bundle"; mkdir -p "$B/.ai-bridge"
+B="$TMP/bundle"; mkdir -p "$B/.loopd"
 cd "$B"
 echo '{ "org": "x", "reposRoot": "/tmp", "board": true }' > instance.config.json
-touch SCHEMA.md .ai-bridge/SCHEMA.md
+touch SCHEMA.md .loopd/SCHEMA.md
 bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet 2>/dev/null || true
-[ -f .ai-bridge/SNAPSHOT.json ] || printf '{"instance":"bundle","generated":"2026-01-01T00:00:00Z","projects":[],"awaiting":[]}\n' > .ai-bridge/SNAPSHOT.json
+[ -f .loopd/SNAPSHOT.json ] || printf '{"instance":"bundle","generated":"2026-01-01T00:00:00Z","projects":[],"awaiting":[]}\n' > .loopd/SNAPSHOT.json
 
 echo
 echo "== the default output lands in AB_BOARD_DIR =="

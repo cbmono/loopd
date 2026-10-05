@@ -101,7 +101,7 @@ inside it 3-way merges the changes this repo has made since the bundle was stamp
 verifying every write on disk, never forcing a hand-diverged file, and resolving the
 **decidable** conflict classes on the rule that decides them (below). Nothing carrying
 conflict markers is left in the bundle tree: every copy it keeps goes under the gitignored
-`.ai-bridge/refresh/`, and the report names the path. Re-run it any time; a second run
+`.loopd/refresh/`, and the report names the path. Re-run it any time; a second run
 finds nothing to do.
 
 **What `/loopd:welcome` is for, now that it does not fix anything:** the banner, and
@@ -120,8 +120,8 @@ A conflict that recurs on every bundle with the same answer is a rule, not a que
 | Seed path | Rule that resolves it |
 |---|---|
 | `knowledge/index.md` | derived from frontmatter — regenerated with `build-kb-index.sh`, never merged |
-| `index.md` (`.ai-bridge/index.md`) | derived and gitignored — the project-manager rewrites it at tick step 8 (Curate), so a conflicting hunk keeps the bundle's copy and writes nothing |
-| `.gitignore` | conflicting hunks that touch only seed-managed lines (`board.html`, `.board-live/`, `AWAITING.md`, `.tick-lock`, `.ai-bridge/`) take the seed side; every bundle-added line is kept |
+| `index.md` (`.loopd/index.md`) | derived and gitignored — the project-manager rewrites it at tick step 8 (Curate), so a conflicting hunk keeps the bundle's copy and writes nothing |
+| `.gitignore` | conflicting hunks that touch only seed-managed lines (`board.html`, `.board-live/`, `AWAITING.md`, `.tick-lock`, `.loopd/`) take the seed side; every bundle-added line is kept |
 
 ### The two config files, on the same stamp
 
@@ -148,7 +148,7 @@ file on evidence from this repo's git history.
 | Verdict | What it means | What `--apply` does |
 |---|---|---|
 | prior version of the seed, **verbatim** | nothing was hand-edited | ports it exactly |
-| **hand-edited**, change lands elsewhere in the file | your edits and the seed's don't overlap | 3-way merges on top of your edits (keeping the copy it replaced under `.ai-bridge/refresh/`) and verifies the result on disk |
+| **hand-edited**, change lands elsewhere in the file | your edits and the seed's don't overlap | 3-way merges on top of your edits (keeping the copy it replaced under `.loopd/refresh/`) and verifies the result on disk |
 | **`RESOLVED`** | the conflict is a **decidable class** (table above) | applies the rule that decides it, and names the rule |
 | **`CONFLICT`** | your edits and the seed's collide, and no rule decides it | **nothing.** Your wording is the only copy of a decision somebody made — port it by hand |
 | seed file **never changed** since your instance was stamped | nothing to deliver | stays quiet even though your copy has grown (`log.md`, `index.md`, a `.gitignore` with the machinery block) |
@@ -1179,7 +1179,7 @@ illustrative):
 | nothing newer, but this bundle was last stamped by an older plugin | `up to date (2.0.4) · bundle stamped at 2.0.3 — run /loopd:init` |
 | no answer — offline, no clone, no git | `unknown (offline)` |
 
-The fourth reads `.ai-bridge/seed-base/VERSION`, which `/loopd:init` writes on every
+The fourth reads `.loopd/seed-base/VERSION`, which `/loopd:init` writes on every
 stamp. A plugin update lands on the machine; the seed edits it carries land in a bundle only
 when that bundle is re-stamped — so "run init after every plugin update" is a row you see,
 not a rule you remember. A bundle stamped before the record existed prints the plain row
@@ -1227,7 +1227,7 @@ both, for a human piping the banner somewhere that renders escapes.
 
 **Three renderings, one buffer, one artifact.** `--format json` is what `settings.json` asks
 for: the client draws `systemMessage`, and that field was measured rendering SGR and printing
-markdown *literally*. `--format md` is what `scripts/ai-bridge.sh` asks for when its stdout
+markdown *literally*. `--format md` is what `scripts/welcome.sh` asks for when its stdout
 is a pipe — the welcome-skill relay path (`/loopd:welcome`), where the output is relayed into an assistant message and
 the measurement is the exact opposite: markdown renders and 0 of 4 ANSI escape bytes survive.
 Plain text is the default and what a terminal gets. The md rendering differs from the plain

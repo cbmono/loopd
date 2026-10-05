@@ -4,7 +4,7 @@
 # in a bundle `init-bundle.sh` has just stamped.
 #
 # The seed is FLAT and the bundle is NOT: `ab_seed_dest` maps `SCHEMA.md` onto
-# `.ai-bridge/SCHEMA.md` and friends, but it maps PATHS, never link TEXT — so a link that
+# `.loopd/SCHEMA.md` and friends, but it maps PATHS, never link TEXT — so a link that
 # is correct in `plugin/seed/` is dead the moment a stamp finishes. No migration is
 # involved: `init-bundle.sh` already writes the 3.0 layout.
 #
@@ -43,7 +43,7 @@ ok() { # <name> <actual> <expected>
 #        `…`); each names no file, and flagging them would be five false positives on
 #        day one — the noisy-validator failure of docs/conventions.md §8.
 #   HOW  a leading `/` resolves against the BUNDLE ROOT; anything else against the
-#        LINKING FILE's own directory — which for the moved `index.md` is `.ai-bridge/`.
+#        LINKING FILE's own directory — which for the moved `index.md` is `.loopd/`.
 #        Those two rules are the whole of it, and criterion 3's negative control
 #        (`/knowledge/index.md`) is only decidable once both are stated.
 # ---------------------------------------------------------------------------------

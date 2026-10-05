@@ -67,8 +67,8 @@ ok "…and it reports a script that dropped it" \
    "$(grep -q 'bundle-paths.sh' "$TMP/tick-delta.sh" && echo sourced || echo missing)" missing
 
 echo
-echo "== 4. the 3.0 layout: every plugin-owned path is under .ai-bridge/ =="
-ok "the directory is .ai-bridge" "$AB_DIR" ".ai-bridge"
+echo "== 4. the 3.0 layout: every plugin-owned path is under .loopd/ =="
+ok "the directory is .loopd" "$AB_DIR" ".loopd"
 under=""
 for k in $KEYS; do
   [ "$k" = AB_DIR ] && continue

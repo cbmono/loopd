@@ -195,7 +195,7 @@ doc projects/p/tasks/task-001-x.md '---' 'type: Task' 'title: T' 'status: draft'
 # BOTH FORMS, in one bundle: a document written before the move and one written after it.
 doc knowledge/findings/both.md '---' 'type: Finding' 'title: F' 'status: current' \
   'lesson: one line' "timestamp: $TS" '---' \
-  'Root form [S](/SCHEMA.md); new form [C](/.ai-bridge/CONVENTIONS.md).'
+  "Root form [S](/SCHEMA.md); new form [C](/$AB_CONVENTIONS)."
 git init -q -b main . && git add -A && git -c user.email=a@b -c user.name=a commit -qm init
 : > AWAITING.md   # gitignored, so git mv would refuse it
 # A SYMLINKED document. The relink reads through it and renames a temp file over the
@@ -274,15 +274,16 @@ assert "no source was nested inside it"    "$([[ ! -e $AB_BOARD_DIR/.board-live 
 
 # =========================================================================================
 # THE .loopd RENAME — `.ai-bridge/` moves whole, with its ignore lines, its statusline pin
-# and a mounted KB. AB_DIR still names the old directory until that flip lands, so the KB
-# is read back through a copy of the scripts with AB_DIR flipped: the plugin that will read it.
+# and a mounted KB. The fixture is mounted through a copy of the scripts with AB_DIR set back
+# to the old name, and read back through the plugin as it ships.
 # =========================================================================================
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null AI_BRIDGE_KB_TIMEOUT=3
 SCRIPTS="$HERE/../plugin/scripts"
-FLIPPED="$TMP/flipped"; cp -R "$SCRIPTS" "$FLIPPED"
-sed -i.bak 's|^AB_DIR=".ai-bridge"$|AB_DIR=".loopd"|' "$FLIPPED/bundle-paths.sh"
-assert "the flipped copy really resolves .loopd" "$([[ "$(bash "$FLIPPED/bundle-paths.sh" AB_DIR)" == .loopd ]] && echo 0 || echo 1)"
+OLD="$TMP/old-scripts"; cp -R "$SCRIPTS" "$OLD"
+sed -i.bak 's|^AB_DIR=".loopd"$|AB_DIR=".ai-bridge"|' "$OLD/bundle-paths.sh"
+assert "the old copy really resolves .ai-bridge" "$([[ "$(bash "$OLD/bundle-paths.sh" AB_DIR)" == .ai-bridge ]] && echo 0 || echo 1)"
+assert "the plugin as shipped resolves .loopd"   "$([[ "$(bash "$SCRIPTS/bundle-paths.sh" AB_DIR)" == .loopd ]] && echo 0 || echo 1)"
 
 KBW="$TMP/kb-work"; KBBARE="$TMP/kb.bare"
 mkdir -p "$KBW/knowledge/findings" && doc "$KBW/knowledge/findings/kept.md" '---' 'type: Finding' 'title: K' 'status: current' 'provenance: human' "timestamp: $TS" '---' 'body'
@@ -315,7 +316,7 @@ node_modules/
 GI
   git init -q -b main . && git add -A && git commit -qm init
   echo 'derived' > .ai-bridge/AWAITING.md
-  bash "$SCRIPTS/kb-sync.sh" --instance . mount >/dev/null 2>&1
+  bash "$OLD/kb-sync.sh" --instance . mount >/dev/null 2>&1
   git --git-dir=.ai-bridge/kb.git config core.worktree "$STALE/"
 }
 treesum() { find . -path ./.git/objects -prune -o -type f -print | LC_ALL=C sort | xargs shasum 2>/dev/null; git rev-parse HEAD; }
@@ -347,11 +348,17 @@ assert "…and that path exists"                  "$([[ -f "$(jq -r .statusLine.
 assert "nothing else in settings.json moved"    "$([[ "$(jq -S 'del(.statusLine.command)' .claude/settings.json)" == "$SET_BEFORE" ]] && echo 0 || echo 1)"
 assert ".loopd/kb.git exists"                   "$([[ -d .loopd/kb.git ]] && echo 0 || echo 1)"
 assert "its core.worktree names the new root"   "$([[ "$(git --git-dir=.loopd/kb.git config core.worktree)" == "$R" ]] && echo 0 || echo 1)"
-set +e; KS="$(bash "$FLIPPED/kb-sync.sh" --instance . status 2>&1)"; KS_RC=$?
-KP="$(bash "$FLIPPED/kb-sync.sh" --instance . pull 2>&1)"; KP_RC=$?; set -e
+set +e; KS="$(bash "$SCRIPTS/kb-sync.sh" --instance . status 2>&1)"; KS_RC=$?
+KP="$(bash "$SCRIPTS/kb-sync.sh" --instance . pull 2>&1)"; KP_RC=$?; set -e
 assert "kb-sync.sh status exits 0"              "$([[ $KS_RC -eq 0 ]] && echo 0 || echo 1)"
 assert "kb-sync.sh pull merges, not warns"      "$([[ $KP_RC -eq 0 ]] && ! grep -q 'not checked out' <<<"$KP" && echo 0 || echo 1)"
 assert "git status --porcelain is empty"        "$([[ -z "$(git status --porcelain)" ]] && echo 0 || echo 1)"
+
+echo "== then the plugin as shipped reads it: every AB_* path is under .loopd/ =="
+NOT_UNDER="$(bash "$SCRIPTS/bundle-paths.sh" | awk -F= '$2 != ".loopd" && index($2, ".loopd/") != 1 { print $1 }')"
+assert "bundle-paths.sh resolves every key under .loopd/" "$([[ -z "$NOT_UNDER" ]] && echo 0 || echo 1)"
+assert "…and the files the fixture held are there"     "$([[ -f $AB_SCHEMA && -f $AB_LEDGER && -f $AB_AWAITING ]] && echo 0 || echo 1)"
+assert "…and the bundle does not read as unmigrated"   "$(ab_unmigrated . && echo 1 || echo 0)"
 
 echo "== a second run changes nothing and says so =="
 BEFORE="$(treesum)"; R2D="$(bash "$MIGRATE" 2>&1)"; R2A="$(bash "$MIGRATE" --apply 2>&1)"
@@ -373,6 +380,18 @@ git --git-dir=.ai-bridge/kb.git --work-tree=. commit -qam local
 BEFORE="$(treesum)"; UP="$(bash "$MIGRATE" --apply 2>&1)"
 assert "an unpushed KB commit is REFUSED"           "$(grep -q 'REFUSED.*unpushed' <<<"$UP" && echo 0 || echo 1)"
 assert "…and nothing was written"                   "$([[ "$BEFORE" == "$(treesum)" ]] && echo 0 || echo 1)"
+
+echo "== a pre-3.0 bundle that already holds .ai-bridge/ reaches .loopd/ whole, in two runs =="
+P="$TMP/pre3"; mkdir -p "$P/.ai-bridge/seed-base" && cd "$P"
+echo '{ "org": "x" }' > instance.config.json
+echo '# Schema' > SCHEMA.md; echo '# Log' > log.md; echo v > .ai-bridge/seed-base/VERSION
+git init -q -b main . && git add -A && git commit -qm init
+P1="$(bash "$MIGRATE" --apply 2>&1)"
+assert "the root files go INTO .ai-bridge/, not beside it" "$([[ -f .ai-bridge/SCHEMA.md && -f .ai-bridge/log.md && ! -e .loopd ]] && echo 0 || echo 1)"
+assert "…and the rename waits for the commit"            "$(printf '%s\n' "$P1" | grep -q 'waits until the layout move' && echo 0 || echo 1)"
+git commit -qam layout
+P2_RC=0; bash "$MIGRATE" --apply >/dev/null 2>&1 || P2_RC=$?
+assert "the second run renames, exit 0"                  "$([[ $P2_RC -eq 0 && ! -e .ai-bridge && -f $AB_SCHEMA && -f $AB_LEDGER && -f .loopd/seed-base/VERSION ]] && echo 0 || echo 1)"
 unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL   # provenance below names its own authors
 
 # =========================================================================================

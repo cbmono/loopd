@@ -265,7 +265,7 @@ ok "…and says so beside the list"        "$(has "$LAUNCHER" 'Why there is no p
 ok "…naming why it could not work"       "$(has "$LAUNCHER" 'account-scoped')" yes
 ok "…and naming the second, independent reason: no artifact tool headless" \
   "$(has "$LAUNCHER" 'holds no')" yes
-ok "…and where the board goes instead"   "$(has "$LAUNCHER" '.ai-bridge/.board-live/board.html')" yes
+ok "…and where the board goes instead"   "$(has "$LAUNCHER" '.loopd/.board-live/board.html')" yes
 # The launcher stays out of the config entirely: the URL is the TICK's read, and two
 # readers of one key is how that key went wrong the first time.
 ok "launcher names no config URL key"    "$(has "$LAUNCHER" "$URL_KEY")" no
@@ -303,7 +303,7 @@ ok "…absent or true renders"             "$(has "$TICK_RENDER" 'Absent or `tru
 ok "…and it does NOT replace the stamp-time reader" "$(has "$TICK_RENDER" 'cfg_bool board true')" yes
 ok "…reading the same tracked file"      "$(has "$TICK_RENDER" '**tracked**')" yes
 ok "tick renders the board"              "$(has "$TICK_RENDER" 'build-board.sh --standalone')" yes
-ok "…to the path watch-board.sh uses"    "$(has "$TICK_RENDER" '.ai-bridge/.board-live/board.html')" yes
+ok "…to the path watch-board.sh uses"    "$(has "$TICK_RENDER" '.loopd/.board-live/board.html')" yes
 # AND IT PASSES NO --out. The hardcoded one that stood here named the pre-3.0 root path
 # and overrode the resolver, so the tick rendered where nothing reads it.
 ok "…passing no --out, so the resolver decides" \

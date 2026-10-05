@@ -39,7 +39,7 @@ rows() { grep -c '^\* ' "$1" 2>/dev/null || true; }
 code() { grep -vE '^[[:space:]]*#' "$1"; }
 
 D="$TMP/bundle"
-mkdir -p "$D/knowledge/findings" "$D/.ai-bridge"
+mkdir -p "$D/knowledge/findings" "$D/.loopd"
 item() { # <slug> <provenance>
   printf -- '---\ntype: Finding\ntitle: Title %s\ndescription: d\nlesson: l %s\ncategory: learning\ntags: [ ]\nstatus: current\nprovenance: %s\ntimestamp: 2026-10-01T00:00:00Z\n---\n\n# Finding\n\nThe claim of %s.\n' \
     "$1" "$1" "$2" "$1" >"$D/knowledge/findings/$1.md"
@@ -48,7 +48,7 @@ item keeper machine; item duplicate machine; item bystander machine; item handwr
 cp "$REPO/plugin/seed/knowledge/vocab.md" "$D/knowledge/vocab.md"
 printf 'index, regenerated\n' >"$D/knowledge/index.md"
 printf '{ "org": "example-org" }\n' >"$D/instance.config.json"
-cp "$REPO/plugin/seed/SCHEMA.md" "$D/.ai-bridge/SCHEMA.md"
+cp "$REPO/plugin/seed/SCHEMA.md" "$D/.loopd/SCHEMA.md"
 cd "$D" || exit 2
 git init -q . && git config user.name example-user-007 && git config user.email u@example.com
 git add -A && git commit -qm init
@@ -63,15 +63,15 @@ chmod +x "$ONE"
 
 echo "== criterion 1: a PRODUCTIVE scheduled run reports, raises one row, and writes no byte of knowledge/ =="
 BEFORE="$(kbsum)"
-: >"$D/.ai-bridge/AWAITING.md"          # absence is the off switch; the human opted in
+: >"$D/.loopd/AWAITING.md"          # absence is the off switch; the human opted in
 out="$("$PROPOSE" --proposer "$ONE" 2>"$TMP/propose.err")"; rc=$?
 ok "the scheduled run exits 0 — it found something" "$rc" 0
 ok "…and reports what it proposes"                  "$(grep -c '^KB REFLECTION: 1 proposal' <<<"$out")" 1
 REPORT="$(sed -n 's/.* in \(projects[^ ]*\.md\) .*/\1/p' <<<"$out")"
 ok "…naming a report that exists"                   "$([ -f "$REPORT" ] && echo yes || echo no)" yes
 bash "$AWAIT" --instance "$D" >/dev/null 2>&1
-ok "exactly one AWAITING.md row appears"            "$(rows "$D/.ai-bridge/AWAITING.md")" 1
-ok "…and it is the report, asking the human"        "$(grep -c "answer.*Knowledge reflection" "$D/.ai-bridge/AWAITING.md")" 1
+ok "exactly one AWAITING.md row appears"            "$(rows "$D/.loopd/AWAITING.md")" 1
+ok "…and it is the report, asking the human"        "$(grep -c "answer.*Knowledge reflection" "$D/.loopd/AWAITING.md")" 1
 ok "EVERY file under knowledge/ is byte-identical"  "$([ "$BEFORE" = "$(kbsum)" ] && echo yes || echo no)" yes
 ok "…and git sees no change there either"           "$(git status --porcelain knowledge/ | wc -l | tr -d ' ')" 0
 ok "the report is a task document, so the row has a source" "$(head -1 <<<"$(sed -n 's/^type: //p' "$REPORT")")" Task
@@ -86,12 +86,12 @@ ok "…and that one mention is the prose saying it does not" \
   "$(grep -cE '^# .*never AWAITING\.md' "$PROPOSE" | tr -d ' ')" 1
 ok "it calls neither build-awaiting.sh nor any renderer" \
   "$(code "$PROPOSE" | grep -c 'build-awaiting' | tr -d ' ')" 0
-rm -f "$D/.ai-bridge/AWAITING.md"
+rm -f "$D/.loopd/AWAITING.md"
 bash "$AWAIT" --instance "$D" >/dev/null 2>&1
-ok "absence stays the off switch across the whole path" "$([ -e "$D/.ai-bridge/AWAITING.md" ] && echo yes || echo no)" no
-: >"$D/.ai-bridge/AWAITING.md"
+ok "absence stays the off switch across the whole path" "$([ -e "$D/.loopd/AWAITING.md" ] && echo yes || echo no)" no
+: >"$D/.loopd/AWAITING.md"
 bash "$AWAIT" --instance "$D" >/dev/null 2>&1
-ok "…and the row is re-rendered from the task document alone" "$(rows "$D/.ai-bridge/AWAITING.md")" 1
+ok "…and the row is re-rendered from the task document alone" "$(rows "$D/.loopd/AWAITING.md")" 1
 
 echo "== criterion 3: apply is reachable only through the slash command =="
 ok "the cron entry point contains no call to kb-apply.sh" "$(code "$PROPOSE" | grep -c 'kb-apply\.sh' | tr -d ' ')" 0
@@ -126,7 +126,7 @@ ok "the commit touches only what the report + the exclusion set name" \
 ok "the same report applied twice is refused"       "$("$APPLY" --by example-user-007 "$REPORT" >/dev/null 2>&1; echo $?)" 1
 
 echo "== the refusals that make nothing else true =="
-: >"$D/.ai-bridge/AWAITING.md"
+: >"$D/.loopd/AWAITING.md"
 P2="$TMP/proposer-human.sh"
 printf '#!/usr/bin/env bash\necho "edit · handwritten · status=superseded · - · reads like keeper"\n' >"$P2"
 chmod +x "$P2"
@@ -188,10 +188,10 @@ rm -f "$FORGED"
 ok "a '..' project slug is refused, not resolved" \
   "$("$PROPOSE" --proposer "$ONE" --project .. >/dev/null 2>&1; echo $?)" 2
 ok "…and no tasks/ appeared at the instance root" "$([ -e tasks ] && echo yes || echo no)" no
-printf 'lock\n' >"$D/.ai-bridge/.tick-lock"
+printf 'lock\n' >"$D/.loopd/.tick-lock"
 ok "apply stands down while a tick holds the lock" \
   "$("$APPLY" --by example-user-007 "$R2" 2>&1 >/dev/null | grep -c 'holds the dispatch lock')" 1
-rm -f "$D/.ai-bridge/.tick-lock" "$D/.ai-bridge/.tick-lock.claim"
+rm -f "$D/.loopd/.tick-lock" "$D/.loopd/.tick-lock.claim"
 ok "…and clears once it is free"             "$(bash "$REPO/plugin/scripts/tick-lock.sh" status --instance "$D" >/dev/null 2>&1; echo $?)" 0
 ok "the skill discovers reports under ANY project slug" \
   "$(grep -c 'projects/\*/tasks/\*\.md' "$SKILL")" 1

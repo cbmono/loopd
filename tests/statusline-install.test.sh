@@ -77,8 +77,8 @@ ok "the bundle has project settings"        "$(yn test -f "$I/$SET")" yes
 ok "…which still parse as JSON"             "$(yn python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$I/$SET")" yes
 ok "statusLine.type is command"             "$(jq_ "$I/$SET" statusLine.type)" command
 ok "…and the command names the seeded shim" \
-   "$(jq_ "$I/$SET" statusLine.command)" "bash $I/.claude/ai-bridge-statusline.sh"
-ok "…which is really there"                 "$(yn test -f "$I/.claude/ai-bridge-statusline.sh")" yes
+   "$(jq_ "$I/$SET" statusLine.command)" "bash $I/.claude/loopd-statusline.sh"
+ok "…which is really there"                 "$(yn test -f "$I/.claude/loopd-statusline.sh")" yes
 ok "a refreshInterval is set"               "$(jq_ "$I/$SET" statusLine.refreshInterval)" 5000
 ok "…and the permissions block survived"    "$(yn python3 -c '
 import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["permissions"]["deny"] else 1)' "$I/$SET")" yes
@@ -88,7 +88,7 @@ echo
 echo "-- 2. the command carries NO version-scoped plugin path (it would rot on upgrade)"
 ok "no plugins/cache path in settings.json" "$(grep -c 'plugins/cache' "$I/$SET" | tr -d ' ')" 0
 ok "…the shim is what resolves it"          \
-   "$(grep -c 'plugins/cache' "$I/.claude/ai-bridge-statusline.sh" | tr -d ' ')" 1
+   "$(grep -c 'plugins/cache' "$I/.claude/loopd-statusline.sh" | tr -d ' ')" 1
 
 echo
 echo "-- 3. an ALREADY-STAMPED bundle receives it — the only path there is"
@@ -143,7 +143,7 @@ ok "…naming the key a human would paste"    "$(said '"statusLine": {"type": "c
 
 echo
 echo "-- 7. the shim: resolves at run time, and is silent when it cannot"
-SHIM="$I/.claude/ai-bridge-statusline.sh"
+SHIM="$I/.claude/loopd-statusline.sh"
 EMPTY="$TMP/nohome"; mkdir -p "$EMPTY"
 out="$(CLAUDE_CONFIG_DIR="$EMPTY" bash "$SHIM" </dev/null 2>&1; echo "rc=$?")"
 ok "no plugin cache ⇒ no output"            "${out%rc=*}" ""
@@ -158,7 +158,7 @@ ok "…and hands the script THIS bundle"      "$got" "NEW --instance $I"
 
 echo
 echo "-- 8. the wiring the criterion names, in the files that carry it"
-ok "the seed ships the shim"                "$(yn test -f "$REPO/plugin/seed/.claude/ai-bridge-statusline.sh")" yes
+ok "the seed ships the shim"                "$(yn test -f "$REPO/plugin/seed/.claude/loopd-statusline.sh")" yes
 ok "the renderer ships beside the scripts"  "$(yn test -x "$REPO/plugin/scripts/status-line.sh")" yes
 ok "init writes PROJECT settings, not \$HOME" \
    "$(grep -c 'SL_SETTINGS="\$TARGET/.claude/settings.json"' "$REPO/plugin/scripts/init-bundle.sh" | tr -d ' ')" 1

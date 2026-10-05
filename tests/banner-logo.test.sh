@@ -18,7 +18,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
-SH="$TPL/plugin/scripts/ai-bridge.sh"
+SH="$TPL/plugin/scripts/welcome.sh"
 SKILL="$TPL/plugin/skills/welcome/SKILL.md"
 DOC="$TPL/docs/operations.md"
 THEME="$TPL/plugin/scripts/cli-theme.sh"
@@ -229,7 +229,7 @@ echo "== 5. the mark is the SessionStart channel's alone =="
 # =======================================================================================
 # BOTH SIDES, IN ONE SECTION, because the claim is a difference between two channels and
 # either half alone passes on a hook that lost the mark entirely. The hook keeps it; the
-# `/welcome` path — `ai-bridge.sh`, which `exec`s that same hook — starts at the version line.
+# `/welcome` path — `welcome.sh`, which `exec`s that same hook — starts at the version line.
 SMJ="$(strip_sgr "$(sm "$(run "$HOOK" --format json)")")"
 assert "the SessionStart channel carries the mark's three rows" \
   "$([ "$(has "$L1" "$SMJ")" = 0 ] && [ "$(has "$L2" "$SMJ")" = 0 ] \

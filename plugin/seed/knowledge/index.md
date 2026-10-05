@@ -1,7 +1,7 @@
 # Knowledge Base — index
 
 Compact catalog of this control panel's OKF knowledge base (`Service`s, `Finding`s,
-`Runbook`s, `Team`s, `Reference`s — types in `/.ai-bridge/SCHEMA.md`). **This index is the KB's lookup
+`Runbook`s, `Team`s, `Reference`s — types in `/.loopd/SCHEMA.md`). **This index is the KB's lookup
 surface:** scan it to find prior work, then open only the specific doc(s) you need —
 **don't bulk-read `knowledge/`**.
 

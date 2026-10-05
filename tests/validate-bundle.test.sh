@@ -348,7 +348,7 @@ echo "== malformed frontmatter is an error, per measured fault class =="
 # the classes that have been SEEN, checked structurally — not a YAML parse.
 mkdir -p "$TMP/fm/projects/p/tasks" && cd "$TMP/fm"
 echo '{ "org": "x", "reposRoot": "/tmp" }' > instance.config.json
-mkdir -p .ai-bridge && touch .ai-bridge/SCHEMA.md SCHEMA.md
+mkdir -p .loopd && touch .loopd/SCHEMA.md SCHEMA.md
 
 fmdoc() { # <file> <lines...>
   local f="$1"; shift; mkdir -p "$(dirname "$f")"; printf '%s\n' "$@" > "$f"

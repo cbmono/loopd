@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# ai-bridge-command.test.sh — `/loopd:welcome`: one banner, one list of checks, and two
+# welcome-command.test.sh — `/loopd:welcome`: one banner, one list of checks, and two
 # non-actions that are the reason the command exists.
 #
 # THE TWO PROPERTIES A REVIEWER SHOULD BE ABLE TO REFUSE THE CHANGE ON, and they are both
@@ -41,16 +41,16 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
-SH="$TPL/plugin/scripts/ai-bridge.sh"
+SH="$TPL/plugin/scripts/welcome.sh"
 BANNER="$TPL/plugin/hooks/session-banner.sh"
 CMD="$TPL/plugin/skills/welcome/SKILL.md"
-[ -f "$SH" ] || { echo "ai-bridge-command.test: missing $SH" >&2; exit 2; }
+[ -f "$SH" ] || { echo "welcome-command.test: missing $SH" >&2; exit 2; }
 
 # An explicit template, because a bare `mktemp -d` silently ignores a bogus TMPDIR on macOS
 # and lands in a real /var path — which is how a broken guard here would go unnoticed.
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/ai-bridge-command.XXXXXX")" || {
-  echo "ai-bridge-command.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
-case "$TMP" in /*) ;; *) echo "ai-bridge-command.test: mktemp returned a relative path" >&2; exit 2 ;; esac
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/welcome-command.XXXXXX")" || {
+  echo "welcome-command.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
+case "$TMP" in /*) ;; *) echo "welcome-command.test: mktemp returned a relative path" >&2; exit 2 ;; esac
 trap 'rm -rf "$TMP"' EXIT
 
 pass=0; fail=0
@@ -95,7 +95,7 @@ mkinstance() {
 # carries no `.git`, so that row reports "not a git checkout" and reaches nothing.
 SRC="$TMP/tplcopy"; mkdir -p "$SRC"
 ( cd "$TPL" && tar cf - --exclude .git . ) | ( cd "$SRC" && tar xf - )
-[ -f "$SRC/plugin/scripts/init-bundle.sh" ] || { echo "ai-bridge-command.test: the template copy is missing install.sh" >&2; exit 2; }
+[ -f "$SRC/plugin/scripts/init-bundle.sh" ] || { echo "welcome-command.test: the template copy is missing install.sh" >&2; exit 2; }
 
 # =======================================================================================
 echo "== 1. the bare form INVOKES the banner — it does not reproduce it =="
@@ -213,7 +213,7 @@ NOVER="$TMP/nover/plugin"
 mkdir -p "$NOVER/scripts"; printf '0.0.1\n' > "$TMP/nover/VERSION"
 cp "$TPL/plugin/scripts/"*.sh "$NOVER/scripts/"
 rm -f "$NOVER/scripts/check-template-version.sh"
-SNV="$(bash "$NOVER/scripts/ai-bridge.sh" check --instance "$INST1" --template "$RTPL" 2>&1)"
+SNV="$(bash "$NOVER/scripts/welcome.sh" check --instance "$INST1" --template "$RTPL" 2>&1)"
 ok "an unavailable version checker is REPORTED, not skipped" \
   "$(printf '%s\n' "$SNV" | grep -c 'cannot compare VERSION drift' | tr -d ' ')" 1
 ok "…as a fact, not a warning (it never reaches the banner)" \
@@ -400,7 +400,7 @@ ok "no fix_ function exists for a print-only tier" \
   "$(for t in config_uncommitted tick_lock config_layers orphan_processes; do
        grep -c "^fix_$t()" "$SH"; done | awk '{s+=$1} END {print s+0}')" 0
 ROGUE="$TMP/rogue.sh"
-# The mutants run from $TMP, and ai-bridge.sh sources its sibling resolver — without this
+# The mutants run from $TMP, and welcome.sh sources its sibling resolver — without this
 # copy both exit 2 for the wrong reason, which is the code the guard itself returns.
 cp "$TPL/plugin/scripts/bundle-paths.sh" "$TMP/bundle-paths.sh"
 # BEFORE the call, not after: a function defined after `assert_no_rogue_fixers` runs would
@@ -505,7 +505,7 @@ ok "a banner:no row stays off the banner path" \
 # At least once, not exactly twice: the hook spells the call out in two branches today so a
 # template path with a space survives, and pinning the count would fail a correct refactor.
 ok "session-banner.sh invokes the check" \
-  "$([ "$(grep -c 'ai-bridge.sh" check --only-problems --banner' "$BANNER" | tr -d ' ')" -ge 1 ] && echo yes || echo no)" yes
+  "$([ "$(grep -c 'welcome.sh" check --only-problems --banner' "$BANNER" | tr -d ' ')" -ge 1 ] && echo yes || echo no)" yes
 ok "…and the hook carries the name of no individual check" \
   "$(for id in $ids; do grep -c -- "$id" "$BANNER"; done | awk '{s+=$1} END {print s+0}')" 0
 
@@ -577,7 +577,7 @@ ok "no CHECKOUT at all -> the row still answers, from the plugin's seed" \
 # again and nobody would know.
 NOSEED="$TMP/noseed/plugin"; mkdir -p "$NOSEED/scripts"
 cp "$TPL"/plugin/scripts/*.sh "$NOSEED/scripts/" 2>/dev/null || true
-OUT6c2="$(bash "$NOSEED/scripts/ai-bridge.sh" check --instance "$INST6" --template "$SRC" 2>&1)"; rc6c2=$?
+OUT6c2="$(bash "$NOSEED/scripts/welcome.sh" check --instance "$INST6" --template "$SRC" 2>&1)"; rc6c2=$?
 ok "a plugin with no seed -> reported as not resolvable, exit 0" \
   "$(printf '%s\n' "$OUT6c2" | grep -c 'config keys: not resolvable here' | tr -d ' '):$rc6c2" "1:0"
 
@@ -602,9 +602,9 @@ ok "…and the unparseable sibling is named beside it" \
 # =======================================================================================
 echo "== 10. it ships like every other script here =="
 # =======================================================================================
-ok "ai-bridge.sh parses"                                   "$(yn bash -n "$SH")" yes
-ok "…and is 100755 in the index"                           "$(cd "$TPL" && git ls-files -s plugin/scripts/ai-bridge.sh | awk '{print $1}')" 100755
-ok "…and in HEAD"                                          "$(cd "$TPL" && git ls-tree HEAD plugin/scripts/ai-bridge.sh | awk '{print $1}')" 100755
+ok "welcome.sh parses"                                   "$(yn bash -n "$SH")" yes
+ok "…and is 100755 in the index"                           "$(cd "$TPL" && git ls-files -s plugin/scripts/welcome.sh | awk '{print $1}')" 100755
+ok "…and in HEAD"                                          "$(cd "$TPL" && git ls-tree HEAD plugin/scripts/welcome.sh | awk '{print $1}')" 100755
 ok "the welcome skill ships"                                "$(yn test -f "$CMD")" yes
 # `symlink/**` must carry no org, repo, path or channel literal — it is linked into every
 # instance, whoever owns it.
