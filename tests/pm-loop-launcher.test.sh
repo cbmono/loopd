@@ -114,6 +114,7 @@ readers_granted() { # <file> -> count of grants that are NOT on the approved lis
     | grep -v -x -e 'Bash(pwd)' -e 'Bash(ls:\*)' -e 'Agent' \
                  -e 'ScheduleWakeup' -e 'CronList' -e 'CronDelete' \
                  -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' \
+                 -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:\*)' \
     | wc -l | tr -d ' '
 }
 
@@ -163,6 +164,7 @@ in_section() { grep -qF -- "$1" <<<"$(section "$LAUNCHER")" && echo yes || echo 
 count_allowed_ops() { section "$1" | grep -c -E '^[0-9]+\. ' | tr -d ' '; }
 ok "the allowlist is exactly three operations" "$(count_allowed_ops "$LAUNCHER")" 3
 ok "…op 1 is the cwd precondition"    "$(in_section 'The cwd precondition')" yes
+ok "…and says nothing wider"           "$(in_section 'precondition 1 above and nothing wider')" yes
 ok "…op 2 is the lock, by script name" "$(in_section 'scripts/tick-lock.sh acquire')" yes
 ok "…op 3 is the cron cleanup, by tool name" "$(in_section 'The cron cleanup')" yes
 ok "…naming both cron tools"          "$(in_section '`CronList`, then `CronDelete`')" yes
@@ -212,6 +214,30 @@ ok "tick points back at the launcher rule" "$(has "$TICK" 'The launcher reads no
 # launcher as a set of refusals is half the pair teaching the polarity the other half
 # just deleted, and both files would still read correctly on their own.
 ok "…as an allowlist, not a set of refusals" "$(has "$TICK" 'allowlist of three')" yes
+
+# --- precondition 1 runs, and finds SCHEMA.md where the layout puts it ----------
+# It read `SCHEMA.md` in the cwd, so every migrated bundle was "not an instance root".
+# The command is extracted from the skill and RUN, never re-typed here; the layout comes
+# from bundle-paths.sh, so neither file spells the bundle directory.
+pre1() { awk '/^## Preconditions/{p=1;next} p&&/^2\. /{p=0} p' "$LAUNCHER"; }
+PRE_CMD="$(pre1 | grep -o '`ls instance\.config\.json[^`]*`' | tr -d '`')"
+ok "precondition 1 carries one runnable check" "$([ -n "$PRE_CMD" ] && echo yes || echo no)" yes
+AB_SCHEMA_REL="$(bash "$REPO/plugin/scripts/bundle-paths.sh" AB_SCHEMA)"
+pre_runs() { # <dir> -> pass|refuse
+  (cd "$1" && CLAUDE_PLUGIN_ROOT="$REPO/plugin" eval "$PRE_CMD") >/dev/null 2>&1 && echo pass || echo refuse
+}
+mkfx() { # <name> <file>... — files created empty under $TMP/fx/<name>
+  local d="$TMP/fx/$1" f; shift; mkdir -p "$d"
+  for f in "$@"; do mkdir -p "$d/$(dirname "$f")"; : > "$d/$f"; done
+  printf '%s' "$d"
+}
+ok "…passes a migrated bundle, no root SCHEMA.md" "$(pre_runs "$(mkfx migrated instance.config.json "$AB_SCHEMA_REL")")" pass
+ok "…passes a legacy root layout"           "$(pre_runs "$(mkfx legacy instance.config.json SCHEMA.md)")" pass
+ok "…refuses no instance.config.json (migrated)" "$(pre_runs "$(mkfx nocfg-m "$AB_SCHEMA_REL")")" refuse
+ok "…refuses no instance.config.json (legacy)"   "$(pre_runs "$(mkfx nocfg-l SCHEMA.md)")" refuse
+ok "…refuses a config with no SCHEMA.md"    "$(pre_runs "$(mkfx noschema instance.config.json)")" refuse
+ok "…and spells no bundle directory" \
+  "$( { pre1; section "$LAUNCHER" | grep -F 'The cwd precondition' -A1; } | grep -c -E '\.ai-bridge/|\.loopd/' | tr -d ' ')" 0
 
 # --- the property is not lost: it lives in the tick, naming all four disk sources --
 step0() { awk '/^0\. /{p=1} p&&/^1\. /{p=0} p' "$TICK"; }
