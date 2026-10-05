@@ -605,6 +605,39 @@ grep. Opt-in, 100% local — no code leaves the machine.
 Add infra/assets repos with no useful call graph via `codegraphSkip` (space-separated) or
 `$CODEGRAPH_SKIP`. With no index present, agents just grep as before.
 
+### A knowledge-base migration that stopped part-way
+
+`kb-migrate.sh` moves `knowledge/` into the repo `knowledge.repo` names: mount, copy, push
+to the KB repo, then one bundle commit that un-tracks `knowledge/` and adds the
+`/knowledge/` ignore line. If any step fails it stops **before** the bundle's index is
+touched. **Re-run the same command**: it resumes from the mount the first run left, pushes
+anything unpushed, reads every tracked file back from the remote and names the count, and
+only then makes the bundle commit. A file absent from the remote stops it, by name.
+
+On a plugin from before this resume shipped (3.2.0 and earlier), the re-run refuses with
+`the bundle's working tree is dirty`, because the mount wrote `<AB_DIR>/kb.git/` and
+`knowledge/README.md`. Finish it by hand from the bundle root, `path: /` shown:
+
+```bash
+d="$(scripts/bundle-paths.sh AB_DIR)"; ref=main               # knowledge.ref
+printf '/%s/kb.git/\n/knowledge/README.md\n' "$d" >> .git/info/exclude
+scripts/kb-sync.sh commit --message "feat: import the bundle's knowledge base" -- knowledge
+git --git-dir="$d/kb.git" fetch origin "+refs/heads/$ref:refs/remotes/origin/$ref"
+comm -23 <(git ls-files knowledge | sed 's#^knowledge/##' | sort) \
+         <(git --git-dir="$d/kb.git" ls-tree -r --name-only "origin/$ref" | sort)
+```
+
+That `comm` must print **nothing** — each line is a file the remote lacks, and removing it
+from the index would leave it only in the bundle's history. (For `path: knowledge`, drop
+the `sed`.) Then the final step, **one commit**, so a clone that pulls it mid-way sees no
+`knowledge/` and is told which command makes one:
+
+```bash
+printf '\n# The knowledge base is MOUNTED from another repository. A clone that has not\n# synced yet has no knowledge/ at all; make one with: scripts/kb-sync.sh mount\n/knowledge/\n/knowledge-sources/\n' >> .gitignore
+git rm -r --cached --quiet knowledge && git add .gitignore \
+  && git commit -m "chore: knowledge/ moves to <knowledge.repo>"
+```
+
 ### Model routing
 
 Two knobs in `instance.config.json`:

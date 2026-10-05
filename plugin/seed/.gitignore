@@ -88,6 +88,12 @@ instance.config.local.json
 # bundle — so there is nothing here to ignore. A bundle stamped under the old design
 # still has the block; /loopd:init RETIRES it, markers and all, on the next stamp.
 
+# The knowledge-base mount's own git directories (scripts/kb-sync.sh mount) — nested
+# clones the machinery creates and never commits. Per clone; never delete one with
+# unpushed commits in it (`scripts/kb-sync.sh status` says).
+/.ai-bridge/kb.git/
+/.ai-bridge/kb-src/
+
 # Copies refresh-seeds.sh keeps when it merges a seed change in — the file it replaced,
 # and any merge it could not resolve, with its conflict markers. Derived and per-machine:
 # nothing in the bundle tree ever carries a conflict marker, and nothing here needs

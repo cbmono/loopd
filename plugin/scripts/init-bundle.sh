@@ -1848,6 +1848,19 @@ if ! grep -qE '^/?\.ai-bridge/refresh/?$' "$gi"; then
 GI
 fi
 
+# The knowledge-base mount's gitdirs (kb-sync.sh) — its OWN guard, the .tick-lock.claim
+# lesson again. Unignored, `kb-migrate.sh` saw its own first half as a dirty tree.
+if ! grep -qE "^/?${AB_DIR//./\\.}/kb\.git/?$" "$gi"; then
+  gi_add <<'GI'
+
+# The knowledge-base mount's own git directories (kb-sync.sh mount) — nested clones
+# the machinery creates and never commits. Per clone; never delete one with unpushed
+# commits in it (`kb-sync.sh status` says).
+/__AB_DIR__/kb.git/
+/__AB_DIR__/kb-src/
+GI
+fi
+
 # The board page (/board.html) is DERIVED again, so it is ignored again. This block used
 # to append the opposite line — `!/board.html` — for the era when the tick committed the
 # page; a derived path every clone re-renders and pushes is contended on every tick, and
@@ -3076,7 +3089,7 @@ if [ "$FIRST_STAMP" = no ] && [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
   # a resolver constant, so none can contain a space.
   if [ -f "$gi" ]; then
     gi_managed="/$AB_LOCK /$AB_LOCK_CLAIM /$AB_STATE_DIR /$AB_BOARD_OTHERS"
-    gi_managed="$gi_managed /$AB_BOARD_DIR/ /$AB_AWAITING /$AB_SNAPSHOT"
+    gi_managed="$gi_managed /$AB_BOARD_DIR/ /$AB_AWAITING /$AB_SNAPSHOT /$AB_DIR/kb.git/ /$AB_DIR/kb-src/"
     tmp="$gi.tmp.$$"
     if awk -v managed="$gi_managed" '
          BEGIN { n = split(managed, m, " "); for (i = 1; i <= n; i++) if (m[i] != "") mine[m[i]] = 1 }
