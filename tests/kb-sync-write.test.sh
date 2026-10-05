@@ -280,6 +280,78 @@ bash "$SYNC" --instance "$FRESH" mount >/dev/null 2>&1
 ok "…and that one command populates it" \
   "$([ -f "$FRESH/knowledge/findings/zeta.md" ] && echo yes || echo no)" yes
 
+echo "== a migration that stopped half-way is finished by running it again (task-008) =="
+# 2026-10-03: the push failed after the mount, and every later run refused the tree its own
+# first run had dirtied. Each stop below is a real one, and the same command resumes it.
+BARE4="$TMP/kb4.git"; git init --bare --quiet "$BARE4"
+RES="$TMP/res"
+mkdir -p "$RES/knowledge/findings" "$RES/projects" "$RES/$AB_DIR"
+cp "$SEED/SCHEMA.md" "$RES/$AB_SCHEMA"; cp "$SEED/.gitignore" "$RES/.gitignore"
+: > "$RES/knowledge/log.md"
+printf '{ "org": "acme", "ownerGithubUser": "example-user-007", "people": { "example-user-007": "seven@example.com" }, "knowledge": { "repo": "%s", "path": "/", "ref": "main" } }\n' "$BARE4" > "$RES/instance.config.json"
+finding "$RES/knowledge/findings/eta.md"   eta   "a finding that must survive a stopped move"
+finding "$RES/knowledge/findings/theta.md" theta "a second one"
+( cd "$RES" && bash "$REPO/plugin/scripts/build-kb-index.sh" >/dev/null 2>&1 \
+  && git init --quiet -b main . && git add -A >/dev/null && git commit -qm seed )
+tracked() { (cd "$RES" && git ls-files -- knowledge | grep -c . | tr -d ' '); }
+want="$(tracked)"
+printf '#!/bin/sh\nexit 1\n' > "$BARE4/hooks/pre-receive"; chmod +x "$BARE4/hooks/pre-receive"
+
+out="$(bash "$MIGRATE" --instance "$RES" 2>&1)"; rc=$?
+ok "a rejected push stops the first run" "$rc" 1
+ok "…after the mount was made" "$([ -d "$RES/$AB_DIR/kb.git" ] && echo yes || echo no)" yes
+ok "…removing nothing from the bundle's index" "$(tracked)" "$want"
+ok "…and leaving the bundle's tree clean, mount and README included" \
+  "$(cd "$RES" && git status --porcelain | grep -c . | tr -d ' ')" 0
+
+out="$(bash "$MIGRATE" --instance "$RES" 2>&1)"; rc=$?
+ok "the re-run is not refused as dirty" "$(has "$out" 'dirty')" no
+ok "…it resumes, and stops on the same push" "$rc" 1
+
+rm -f "$BARE4/hooks/pre-receive"
+printf '#!/bin/sh\nexit 1\n' > "$RES/.git/hooks/pre-commit"; chmod +x "$RES/.git/hooks/pre-commit"
+out="$(bash "$MIGRATE" --instance "$RES" 2>&1)"; rc=$?
+ok "a refused bundle commit stops the run" "$rc" 1
+ok "…after the KB push landed" "$(git --git-dir="$BARE4" show main:findings/eta.md >/dev/null 2>&1; echo $?)" 0
+ok "…rolled back to a clean tree" "$(cd "$RES" && git status --porcelain | grep -c . | tr -d ' ')" 0
+ok "…still tracking every file" "$(tracked)" "$want"
+
+DEL="$TMP/res-del"; git clone --quiet "$BARE4" "$DEL"
+( cd "$DEL" && git rm -q findings/eta.md && git commit -qm "remove eta" && git push -q origin main )
+out="$(bash "$MIGRATE" --instance "$RES" 2>&1)"; rc=$?
+ok "a file absent from the remote refuses the index removal" "$rc" 1
+ok "…naming the count" "$(has "$out" "1 of $want tracked file(s) are NOT on")" yes
+ok "…and the file" "$(has "$out" 'knowledge/findings/eta.md')" yes
+ok "…removing nothing" "$(tracked)" "$want"
+
+( cd "$DEL" && git revert --no-edit HEAD >/dev/null && git push -q origin main )
+rm -f "$RES/.git/hooks/pre-commit"
+out="$(bash "$MIGRATE" --instance "$RES" 2>&1)"; rc=$?
+ok "the same command then finishes the migration" "$rc" 0
+ok "…after verifying every file on the remote" "$(has "$out" "verified $want of $want file(s)")" yes
+ok "…and the bundle tracks none of them" "$(tracked)" 0
+ok "…in one commit with the ignore line" \
+  "$(cd "$RES" && git show --name-only --format= HEAD | grep -c '^\.gitignore$' | tr -d ' ')" 1
+ok "…leaving the tree clean" "$(cd "$RES" && git status --porcelain | grep -c . | tr -d ' ')" 0
+
+out="$(bash "$MIGRATE" --instance "$RES" 2>&1)"; rc=$?
+ok "a run after the migration is a no-op" "$rc" 0
+ok "…saying so" "$(has "$out" 'already migrated')" yes
+
+# The README is hidden from the bundle in its own exclude, not its .gitignore: with
+# `path: knowledge` the KB worktree IS the bundle root and reads that file.
+BARE5="$TMP/kb5.git"; git init --bare --quiet "$BARE5"
+RK="$TMP/res-k"; mkdir -p "$RK/knowledge/findings" "$RK/$AB_DIR"
+cp "$SEED/SCHEMA.md" "$RK/$AB_SCHEMA"; cp "$SEED/.gitignore" "$RK/.gitignore"; : > "$RK/knowledge/log.md"
+printf '{ "ownerGithubUser": "example-user-007", "people": { "example-user-007": "seven@example.com" }, "knowledge": { "repo": "%s", "path": "knowledge", "ref": "main" } }\n' "$BARE5" > "$RK/instance.config.json"
+finding "$RK/knowledge/findings/iota.md" iota "a shared-repo migration"
+( cd "$RK" && bash "$REPO/plugin/scripts/build-kb-index.sh" >/dev/null 2>&1 \
+  && git init --quiet -b main . && git add -A >/dev/null && git commit -qm seed )
+bash "$MIGRATE" --instance "$RK" >/dev/null 2>&1; rc=$?
+ok "a path: knowledge migration runs" "$rc" 0
+ok "…and its KB commit carries the README" \
+  "$(git --git-dir="$BARE5" show main:knowledge/README.md >/dev/null 2>&1; echo $?)" 0
+
 echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

@@ -1024,7 +1024,8 @@ other. They are never written, never pushed and never index-regenerated.
 
 **Migrating an existing bundle** is `scripts/kb-migrate.sh`: one recorded commit pair —
 `git mv` into the KB repo, `git rm --cached` plus the `/knowledge/` ignore line here. It
-refuses a dirty tree and prints what it moved. A clone that pulls that commit before it has
+refuses a dirty tree and prints what it moved. A run that stopped part-way is finished by
+running it again, and nothing leaves the index until every file is read back from the remote. A clone that pulls that commit before it has
 synced sees **no** `knowledge/` at all and one instruction naming the sync command; a sync
 that finds a real `knowledge/` folder already there **refuses** and prints the migration
 command rather than cloning over it.
