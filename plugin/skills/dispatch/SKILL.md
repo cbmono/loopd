@@ -3,7 +3,7 @@ name: dispatch
 disable-model-invocation: true
 description: Start the Project Manager loop as a SERIAL, completion-driven loop (one tick at a time) in this control-panel instance repo
 argument-hint: "[gap]  pause between ticks, default 10m  (e.g. 0m for back-to-back, 30m)"
-allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Agent, ScheduleWakeup, CronList, CronDelete
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Agent, ScheduleWakeup, CronList, CronDelete
 ---
 
 Start the **Project Manager loop** — but as a **SERIAL, completion-driven** loop:
@@ -47,10 +47,13 @@ Three standing facts the steps below rest on:
 **Two checks. What the launcher may look at is an ALLOWLIST of three** — see "The launcher
 reads nothing else"; anything not on it is a tick or a subagent. Both checks below are on it.
 
-1. Must run from a **control-panel instance root**: confirm `SCHEMA.md` +
-   `instance.config.json` exist in the cwd; if not, tell the user to `cd` into the
-   instance and stop. (Never hardcode a path. The role agents ship in the plugin, so a
-   bundle has no `.claude/agents` and the check must not look for one.)
+1. Must run from a **control-panel instance root**: confirm `instance.config.json` in the
+   cwd and `SCHEMA.md` at the resolved schema path (`AB_SCHEMA`; the root on a legacy
+   layout) with exactly
+   `ls instance.config.json "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`
+   — if it fails, tell the user to `cd` into the instance and stop. (Never hardcode a
+   path. The role agents ship in the plugin, so a bundle has no `.claude/agents` and the
+   check must not look for one.)
 2. **Kill any fixed-interval PM cron** from an older approach: `CronList`, and if a
    job's prompt is `run the project-manager agent for one LIVE tick`, `CronDelete` it.
    Do **not** create a cron here.
@@ -60,8 +63,8 @@ reads nothing else"; anything not on it is a tick or a subagent. Both checks bel
 **Everything the launcher may look at — this bundle, git, the GitHub API, the network,
 the machine — is exactly these operations:**
 
-1. **The cwd precondition** — `SCHEMA.md` + `instance.config.json` in the cwd, which is
-   precondition 1 above and nothing wider.
+1. **The cwd precondition** — `instance.config.json` in the cwd and `SCHEMA.md` at the
+   resolved schema path, which is precondition 1 above and nothing wider.
 2. **`${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire`** — a **write** only the launcher can
    make, which returns an exit code rather than content and prints nothing on the normal path.
 3. **The cron cleanup** — `CronList`, then `CronDelete` on a job whose prompt matches:
