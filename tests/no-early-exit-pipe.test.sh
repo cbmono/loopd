@@ -17,7 +17,7 @@ assert() { if [ "$2" = 0 ]; then pass=$((pass+1)); echo "  PASS  $1"; else fail=
 # The reader names are bracketed so this file never matches itself.
 PFX='(^|[^|])[|][[:space:]]*(([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|command|env)[[:space:]]+)*'
 GREP='[g]rep([[:space:]]+[^|&;)[:space:]]+)*[[:space:]]+(-[A-Za-z0-9]*[qmlL]|--(quiet|silent|max-count|files-with(out)?-match))'
-OTHER='([h]ead|[r]ead)([[:space:]]|$|[)])|[s]ed[[:space:]][^|]*[0-9$/;{][[:space:]]*q([[:space:]0-9;}'"'"'"]|$)|[a]wk[[:space:]][^|]*[^A-Za-z_]exit([^A-Za-z_]|$)'
+OTHER='([h]ead|[r]ead)([[:space:]]|$|[)])|[s]ed[[:space:]][^|]*[0-9$/;{'"'"'"][[:space:]]*q([[:space:]0-9;}'"'"'"]|$)|[a]wk[[:space:]][^|]*[^A-Za-z_]exit([^A-Za-z_]|$)'
 RE="$PFX($GREP|$OTHER)"
 # A pipeline continued onto the next line (trailing `|` or `\`) is scanned as one line, numbered
 # by its first; a comment never continues, or it would hide the line after it.
@@ -87,6 +87,8 @@ x="$(ls "$d" ¦ head -1)"
 yes ¦ head -40
 printf '%s' "$OUT" ¦ read -r first
 printf '%s' "$OUT" ¦ sed -n '1p;q'
+producer ¦ sed 'q'
+printf '%s' "$OUT" ¦ sed -e "q"
 printf '%s' "$OUT" ¦ awk '/x/{print; exit}'
 bash "$b" 2>/dev/null ¦⏎  awk '/x/{exit} 1'
 printf '%s' "$OUT" \⏎  ¦ grep -q x
