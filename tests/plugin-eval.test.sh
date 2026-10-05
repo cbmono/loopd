@@ -23,15 +23,16 @@
 #   tests/plugin-eval.test.sh     this file: the eval suite's own shape, always; and
 #                                 the run itself, when the CLI supports it.
 #
-# FOUR OF THE EIGHT CASES GRADE THE MAIN THREAD, not a skill. One is the reader for a prose
+# FIVE OF THE NINE CASES GRADE THE MAIN THREAD, not a skill. One is the reader for a prose
 # rule of `launcher-verification-contract` — unverified state — and it exists because the
 # previous prose fix for that defect shipped 2026-08-23 with no test and rotted in weeks.
 # Section 4 asserts the one property that keeps it from rotting the same way: a grader keyed
 # on WORDING passes the next paraphrase, so `regex` over a message is refused there.
-# The other three grade an artifact the session hands back — a refined task document, a PR
-# body, a reviewer verdict — so a deterministic grader can read it and section 4 is not
-# theirs: `refine-fills-criteria-never-ready` pins `status: ready` with a regex over the
-# document itself, which is the assertion, not a paraphrase of one.
+# The other four grade an artifact the session hands back — a refined task document, a PR
+# body, a reviewer verdict, a tick's three inputs with an instruction planted in each — so a
+# deterministic grader can read it and section 4 is not theirs: `refine-fills-criteria-never-ready`
+# pins `status: ready` with a regex over the document itself, which is the assertion, not a
+# paraphrase of one.
 #
 # FOUR MORE were RETIRED 2026-09-13 — see $RETIRED and evals/README.md.
 #
@@ -315,14 +316,17 @@ else
   # --max-cost-usd is a ceiling, not a budget: it aborts (exit 2) rather than overrun. 7
   # against a measured $1.31 for the eight cases (2026-09-13, 2.1.270), which leaves room
   # for a case that dispatches a subagent whose own run is billed.
-  # --judge-model sonnet: the default judge is haiku, and the CLI's own authoring guidance
-  # is that a small judge misses the distinctions a rubric turns on. The rubrics here turn
-  # on one (a conclusion asserted vs. withheld), so the judge is sized to it.
+  # --judge-model claude-sonnet-5-5: the default judge is the background-task model (haiku),
+  # and the CLI's own authoring guidance is that a small judge misses the distinctions a
+  # rubric turns on. The rubrics here turn on one (a conclusion asserted vs. withheld), so
+  # the judge is sized to it — and PINNED to a model id, never the `sonnet` alias, which
+  # follows the current generation: a score that moved under a new judge reads as a plugin
+  # regression. evals/README.md → "Running it" is the one place the pin is explained.
   # --trust-plugin: the first run in an untrusted plugin directory PROMPTS, and a harness
   # that waits for an answer nobody is there to give hangs instead of failing. The plugin
   # is this checkout's own.
   out="$(claude plugin eval "$PLUGIN" --runs 1 --ablation none --no-publish --trust-plugin \
-    --judge-model sonnet --max-cost-usd 7 2>&1)"
+    --judge-model claude-sonnet-5-5 --max-cost-usd 7 2>&1)"
   rc=$?
   # GATE 3 — AUTHENTICATION, and it is readable only AFTER the run. Neither probe above
   # makes a model call, so a logged-out CLI is indistinguishable from a working one until

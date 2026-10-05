@@ -86,15 +86,16 @@ moves the machine and each bundle over, in order.
 
 ### 2. Make the bundle directory
 
-Name it **`_ai-bridge-<group>`**, inside the group folder, beside that group's repos.
+Name it **`_loopd-<group>`**, inside the group folder, beside that group's repos.
 
 ```bash
-mkdir -p ~/workspace/<group>/_ai-bridge-<group>
+mkdir -p ~/workspace/<group>/_loopd-<group>
 ```
 
 - The leading underscore pins it to the top of the group folder and keeps it visible (unlike a dotfile).
 - The `-<group>` suffix distinguishes it from other groups' bundles.
 - The group folder itself is **not** a repo — just a plain directory holding this bundle plus the group's repos, side by side, each its own repo.
+- A bundle created before the rename keeps its `_ai-bridge-<group>` name: that prefix is still recognised wherever the directory name is read (`plugin/scripts/bundle-paths.sh`), so nothing has to move.
 
 **No clone of this repo is needed.** The installer ships in the plugin. `/loopd:init`
 creates the directory too, so this step is optional — it is here because naming it right
@@ -103,7 +104,7 @@ is the part worth doing deliberately.
 ### 3. Stamp it
 
 ```
-/loopd:init ~/workspace/<group>/_ai-bridge-<group>
+/loopd:init ~/workspace/<group>/_loopd-<group>
 ```
 
 It does three things, and **none of them is a symlink into a checkout**:
@@ -143,7 +144,7 @@ three values a shared bundle needs, which used to be hand-edited afterwards. See
 ### 4. Configure it
 
 ```bash
-cd ~/workspace/<group>/_ai-bridge-<group>
+cd ~/workspace/<group>/_loopd-<group>
 $EDITOR instance.config.json      # org, reposRoot, worktreeRoot, authorEmail
 ```
 
@@ -151,16 +152,16 @@ $EDITOR instance.config.json      # org, reposRoot, worktreeRoot, authorEmail
 
 ```bash
 git init && git add -A && git commit -m "chore: bootstrap control panel"
-gh repo create <user>/_ai-bridge-<group> --private --source=. --push
+gh repo create <user>/_loopd-<group> --private --source=. --push
 ```
 
 Keep the leading underscore in the repo name, so a fresh `git clone` lands a
-`_ai-bridge-<group>/` directory that matches the convention.
+`_loopd-<group>/` directory that matches the convention.
 
 ### 6. Run your first loop
 
 ```bash
-cd ~/workspace/<group>/_ai-bridge-<group>   # this matters — see below
+cd ~/workspace/<group>/_loopd-<group>   # this matters — see below
 claude
 ```
 
@@ -299,7 +300,7 @@ Role dispatches are routed to a cost-appropriate model per tier
 ## Where the work lives
 
 ```
-_ai-bridge-<group>/
+_loopd-<group>/
 ├── objectives/        OPTIONAL — goals that outlive one project (`/loopd:init <dir> --with-objectives`)
 ├── projects/<slug>/
 │   ├── project.md     kind, status, autonomy, owner, target_repo
@@ -552,7 +553,8 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `resolve-model.sh` | `<agent>` — prints the model alias it should run on, from `roleTiers`/`models` (local file first; the bundle stamp seeds both there). No entry ⇒ nothing on stdout, exit 1, and **a line on stderr** saying the caller would otherwise inherit the session model | no |
 | `tick-lock.sh` | `acquire [--as launcher\|tick]`/`release`/`status` — the per-clone PM dispatch lock; exit 0 is the only clearance to dispatch or to run a tick | `acquire`/`release` only, `.tick-lock` + `.tick-lock.claim` (gitignored) |
 | `tick-delta.sh` | `check [--gap <interval>]`/`record`/`digest` — the idle-tick fast-path probe and the tick's one-command orientation: a full tick records a fingerprint (bundle HEAD, task statuses, open-PR heads/states/decisions), the next tick compares — only a byte-for-byte match (exit 0) permits skipping the full walk, and every doubt is the full tick. The `IDLE:` line is ONE line and IS the quiet tick's whole report, so `--gap` makes it name the next check; `digest` prints the same walk enriched (project/task fields + PR facts) so step 1 is one read instead of N. `record --close "<summary>" [--tick ISO] [--tokens N --tools N --duration-ms N]` is the ledger half: it appends the `close:` line **beside** the tick's own `open:` line (never over it, so the pair carries the tick's wall duration), copying that line's timestamp and `by <login>`, with the three notification numbers in the one fixed form `agent-usage.sh fmt` owns — offline, and refused if the entry is already closed. `--tick` names which open entry to close, matched exactly; without it a close is taken only when exactly one entry is open, never guessed between two | `record` only, `.tick-state` (gitignored) and `log.md` on `--close` |
-| `agent-usage.sh` | `fmt`/`dispatch`/`total`/`series` — what the harness handed back, **in tokens and never in money**: `fmt` is the one fixed `usage tokens=N tools=N ms=N` form every other writer calls, `dispatch <task-doc> --role R --model M` appends one `# Notes` line per role dispatch from that agent's notification (a re-dispatch appends a second), `total <task-doc> --pr <url>` sums those lines against the merged PR at reflect time (no dispatch lines ⇒ `usage UNKNOWN`, never zero), and `series` prints the month-by-month figures from `log.md`'s `TICK` pairs and those dispatch lines — file reads only, no `gh` and no transcript | `dispatch`/`total` only, that task document |
+| `agent-usage.sh` | `fmt`/`dispatch`/`total`/`settle`/`series` — what the harness handed back, **in tokens and never in money**: `fmt` is the one fixed `usage tokens=N tools=N ms=N` form every other writer calls, `dispatch <task-doc> --role R --model M` appends one `# Notes` line per role dispatch from that agent's notification (a re-dispatch appends a second), `total <task-doc> --pr <url>` sums those lines against the merged PR at reflect time (no dispatch lines ⇒ `usage UNKNOWN`, never zero), and `series` prints the month-by-month figures from `log.md`'s `TICK` pairs and those dispatch lines — file reads only, no `gh` and no transcript | `dispatch`/`total` only, that task document |
+| `session-usage.sh` | `<session-id> [--settle <task-doc>]` — what ONE detached role-agent session cost, read from that session's own transcript and counted **once per message** (a transcript repeats a message's usage on every content block's line): prints `usage tokens=N tools=N ms=N cached=N`, or `usage UNKNOWN` on any doubt — no transcript, two candidates, no usage record, no `jq`. `--settle` hands the numbers to `agent-usage.sh settle`, which fills that task's last UNKNOWN dispatch line. The one file that knows where a transcript lives | only with `--settle` |
 | `task-owner.sh` | resolves and compares a task's owner | no |
 | `stall-counter.sh` | `record`/`escalate`/`status` — the per-task stall memory: `record <task-doc> --blocker <text>` after each round (`--progress` when the PR moved) counts consecutive rounds on the same blocker and **exits 1 at or past `maxStallRounds`** (absent ⇒ **2**); `escalate` then sets `status: blocked`, notes the blocker and prints the one `⛔ **unblock**` line for `AWAITING.md` | `record`/`escalate` only, that task document |
 | `do-not-repeat.sh` | `append`/`brief` — the per-task memory of DEAD ENDS: `append <task-doc> --line <text>` records one approach an ended round already tried and the evidence it failed on (folded to one line, 200 chars, deduped, **capped at 10** — exit 1 past it, fold the oldest into `# Notes`); `brief` prints those lines verbatim under a fixed heading for the next dispatch's brief, and nothing at all when there are none | `append` only, that task document |
@@ -567,7 +569,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `status-line.sh` | the bundle's Claude Code `statusLine`: one coloured line — `AI Bridge · <n> in flight · agents <n> running[, <n> no process] · <n> need you · lock free\|held · last tick <hh:mm>` — from task frontmatter, `agent-sessions.sh view`, `AWAITING.md`, `.tick-lock` and `log.md`'s last `* TICK`. No `jq`, no `gh`, no model; a number it cannot establish renders `?`, and outside a bundle it prints nothing. The `need you` segment is three-state: a deleted `AWAITING.md` is the queue's off switch, so the segment goes; an unreadable one says so and names its own `chmod +r` repair. `/loopd:init` installs it into the BUNDLE's `.claude/settings.json` and never the user's | yes — the 10-second `agents` cache under `${XDG_CACHE_HOME:-~/.cache}/loopd/` |
 | `watch-board.sh` | renders the board into `.board-live/` and re-renders on every change | yes, the page (gitignored) |
 | `board-serve.sh` | serves `.board-live/` on `127.0.0.1:<boardPort>` and re-renders it when `SNAPSHOT.json` changes — one process per bundle | yes, the page (gitignored) |
-| `link-repos.sh` | refreshes `<instance>/repos/` | yes |
+| `link-repos.sh` | refreshes `<instance>/repos/`, and writes each linked repo's `.git/loopd-bundle` — the marker the two safety hooks follow from a role agent's worktree back to this bundle | yes |
 | `index-kb.sh` | builds local CodeGraph indexes for the group's repos (code intelligence — **not** the knowledge base) | yes |
 | `build-awaiting.sh` | renders `AWAITING.md` — the heading and its count, the `* ` marker `session-banner.sh` greps literally, the glyph, the verb and the link — from the task documents, never `SNAPSHOT.json`. It classifies `grant` against `answer` from the `open_questions` entry itself, narrows to this clone's human with `task-owner.sh`, and takes each row's trailing sentence as a `--trailer`. No `AWAITING.md` ⇒ it writes nothing and exits 0 | yes, that file (gitignored) |
 | `build-kb-index.sh` | regenerates `knowledge/index.md` from document frontmatter; `--check` fails on a doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a status outside `{current, superseded, corrected}`, a tag outside `knowledge/vocab.md`, a dangling supersession edge, or (as a warning, an error under `--strict`) a bundle-relative link in `knowledge/**` or a `source:` path token that resolves to nothing | yes, that index |

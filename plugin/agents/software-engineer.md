@@ -71,7 +71,12 @@ worktree and gets the push refused. Run `git push --force-with-lease origin
    narration of how you got there, and stays readable enough that a person can check the
    claim from it. The table is what the independent reviewer checks against; the reasoning
    goes in the commit message and the task doc, not the PR body.
+   If the change alters behaviour that a document in the repo describes, update that document in the same PR.
 6. **Report back** per the shared conventions (`status: in-review`, `pr:`,
    `# Result`). Your final message summarizes the same.
+
+**Same change, same check, same error twice = a dead end — stop iterating on it.** Record it with
+`${CLAUDE_PLUGIN_ROOT}/scripts/do-not-repeat.sh append <task-doc> --line "<approach> — <evidence>"` and report
+in the block `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES" defines: tried X and Y, failed because Z, need: ….
 
 If blocked, set `status: blocked`, explain why, and stop.

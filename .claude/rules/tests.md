@@ -18,7 +18,8 @@ tests/run.sh --deep           # ONLY the `# deep` harnesses: they spawn the clau
 bash tests/<one>.test.sh      # still fine while you iterate on one harness
 ```
 
-`--changed` is the same selection CI takes on a plugin-only PR, because CI runs
+`--changed` is the same selection CI takes on a PR whose diff is `plugin/` and top-level
+harness files (`tests/*.test.sh`) only — any other path buys the full suite — because CI runs
 `tests/run.sh --ci` — one implementation, and `tests/ci-workflow.test.sh` fails if the
 workflow grows a second copy. It reads committed, uncommitted and untracked paths against
 `origin/HEAD` (`--base <ref>` for another base). **No changed path runs the core; a changed
@@ -40,8 +41,12 @@ against 29m 45s sequential (run 34774374082). By 2026-10-04 the suite was 141 ha
 that same CI job measured **20m 10s** of wall clock — 3,178 harness-seconds, the ten
 slowest harnesses 46% of it.
 
-The full suite is CI's job: `harness suite` is a required check with `strict=true`, and it
-runs everything against the merged base. Locally the same loop measured **39m 47s and
+The full suite is CI's job: `harness suite` is a required check, a push to `main` always
+runs everything, and a PR does too unless its diff is plugin and top-level harness files
+only. A full CI run measured **20m 10s** on 2026-10-04 (3,178 harness-seconds on the
+3-CPU runner; the 10m 35s above was 111 harnesses, it is 141 now). Branch protection's
+`strict` flag is **off** (read from the API on 2026-10-05) — a `pull_request` run tests the
+merge of the branch into the base as of that run, and nothing re-runs it when the base moves. Locally the same loop measured **39m 47s and
 269.4k tokens** (2026-08-29) before the pool, and tokens are still spent on a local run
 that CI would do for nothing. So run it only when
 your change touches shared machinery every harness loads, and say why in the PR body —

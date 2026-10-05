@@ -10,9 +10,10 @@ Answer the Project Manager's pending `open_questions` **interactively**, instead
 opening each `taskX.md` and appending ` --- <answer>` by hand.
 
 ## Preconditions
-Run from a control-panel instance root — confirm `SCHEMA.md`, `instance.config.json`,
-and `.claude/agents` exist in the cwd; if not, tell the user to `cd` into the instance
-and stop.
+Run from a control-panel instance root — confirm `SCHEMA.md` and `instance.config.json`
+exist in the cwd; if not, tell the user to `cd` into the instance and stop. (A bundle
+carries no `.claude/agents`; the roles ship in the plugin — `SCHEMA.md` → "Which document
+wins", row 1.)
 
 ## Scope — `$ARGUMENTS`
 - **Empty** ⇒ every project: glob `projects/*/tasks/*.md`.

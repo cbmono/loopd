@@ -42,6 +42,28 @@ the spec this bundle follows). Neither exists in any instance and neither is req
 a shape, not a list of names — a fifth kind directory is validated the moment it
 exists, which is how `knowledge/references/` was already covered.)
 
+# Which document wins
+
+Several documents instruct an agent, and two of them will disagree one day — one was
+edited and the other restated it. This table says which one is right, per concern.
+Every other document may **restate and point**, never redefine.
+
+| Concern | Authoritative document | What the others may do |
+|---|---|---|
+| Document shapes, frontmatter, enums, the task lifecycle, and **what a bundle contains** | `plugin/seed/SCHEMA.md` — this file | restate and point: `docs/schema.md`, a skill's precondition, an agent's probe |
+| How a role agent behaves in a target repo (branches, commits, PR size, tests, reporting) | `plugin/seed/CONVENTIONS.md` | restate and point: `plugin/seed/CLAUDE.md` § "Conventions for role agents", `plugin/agents/*.md` |
+| What one role holds and refuses (tools, scope, exits) | `plugin/agents/*.md`, one file per role | route and point: `plugin/seed/agents/index.md` is the routing reference |
+| The tick's steps — what a PM tick does, in which order, and what each step reads | `plugin/tick-steps/*.md` | launch and point: `plugin/skills/dispatch/SKILL.md` is the launcher, `plugin/agents/project-manager.md` the loop |
+| A skill's preconditions, arguments and scope | `plugin/skills/*/SKILL.md`, each for itself — except what it asserts about the bundle, which is row 1's | — |
+| This instance's own instructions (how work flows here, what the human does) | `plugin/seed/CLAUDE.md`, as this instance has edited it | — |
+| Human-facing explanation — why a rule exists | `docs/*.md` in the template repo (cbmono/loopd) | carry the rule and point: the template's `CLAUDE.md`, `.claude/rules/*.md` |
+| Prohibitions on editing the template itself | the template's `CLAUDE.md` and `.claude/rules/*.md` | explain: `docs/conventions.md` holds the why, never a second rule |
+
+**On a contradiction, fix the non-authoritative document** — the minimal edit that makes it
+restate or point — and **never ask** the human which one is right: this table already
+answered. A document no row names has no owner, so add the row before the document;
+`tests/authority-table.test.sh` in the template fails on a document outside every row.
+
 # Schema
 
 **Frontmatter lists — the one rule.** A NON-EMPTY `acceptance_criteria`, `open_questions`,
@@ -84,6 +106,7 @@ timestamp: <ISO 8601>
 type: Project
 title: <project name>
 description: <one line>
+original_request: "<what the human asked for, verbatim, on one line>"   # optional (older bundles lack it, and `validate-bundle.sh` emits no diagnostic for its absence). WRITTEN ONCE AT CREATION, NEVER REWRITTEN — not by refine, not by any tick step, not by a role agent, not by closeout. `/loopd:new-project` writes it from the owner's one-line description and `/loopd:capture` from the captured decisive sentence, as a quoted single-line YAML string (a multi-line ask collapsed to one line). Why: `title`, `description` and `# Context` are DERIVED from the ask, and refine bakes answers into `# Context` in place, so the human's own wording otherwise survives nowhere — and on an instance shared by two humans the reviewer must be able to see what was actually asked, not what the loop made of it. Same rule as every other document field: **no customer PII** — it persists for the life of the repo.
 kind: build | research                # build = ships code via PRs (default); research = produces in-bundle deliverables
 objective: /objectives/<slug>.md      # optional: link up to the objective it serves, WHEN one exists. Omit it and this project's own `success_criteria` are its anchor — see "Where a project's success is measured" below
 success_criteria: [ "<measurable signal>", ... ]   # optional: this project's own measurable success. Same rule as an objective's — name the command and today's number. What /audit grounds against when there is no `objective:`
@@ -91,6 +114,7 @@ need: <who needs this, and what breaks for them if it never exists>   # THE VALU
 cost_of_not_doing: <what the need above costs if it never ships>      # the answer that makes "not now" a real option
 no_owner: <who is allowed to say no>                                  # NOT the negation of `owner:` — the human who may stop this project. A decision with no owner is a trap
 timebox: <N>d | <N>w                  # optional, and absent on almost every project. PERMISSION TO STOP: this project is an experiment, and ending it when the box runs out is the plan, not an admission. A duration measured from this file's `timestamp:`. Inert until something reads it — see "Time-boxed projects" below
+non_goals: [ "<what this project deliberately does not do>", ... ]   # optional, PROJECT ONLY — there is no such key on a Task. Short strings, so a role agent does not gold-plate and a reviewer can say "that was ruled out". Not validated, and `/new-project` never asks for it. A decision that recurs across projects belongs in a `Finding` (`knowledge/`) instead, because a project's frontmatter leaves with the project.
 target_repo: <org>/<repo>             # BUILD only: default repo for this project's tasks (<org> from instance.config.json). Omit for research.
 deliverables: [ "<artifact>", ... ]   # RESEARCH only: what this project produces, e.g. "tech landscape per domain (md)", "exec summary deck (marp)"
 autonomy: gated | <mode>              # optional (default gated). gated = the human promotes `ready` AND merges — both gates absolute. Any other value names a delegated-authority mode defined in `AUTONOMY.md`, and is INERT unless that file exists (absent ⇒ gated). See "Delegated authority" below.
@@ -199,6 +223,7 @@ timestamp: <ISO 8601>
 type: Task
 title: <imperative summary>
 description: <one line>
+original_request: "<what the human asked for, verbatim, on one line>"   # optional (older bundles lack it, and `validate-bundle.sh` emits no diagnostic for its absence). WRITTEN ONCE AT CREATION, NEVER REWRITTEN — not by refine, not by any tick step, not by a role agent. A seed task carries the owner's description `/loopd:new-project` derived it from; a captured task carries the decisive sentence `/loopd:capture` quoted; a task created later carries what was asked of it, or omits the key. A quoted single-line YAML string (a multi-line ask collapsed to one line). Why: refine rewrites `# Context` in place when it bakes an answer in, so the human's own wording otherwise survives nowhere — and on a shared instance the reviewer must see what was asked, not what refine made of it. Same rule as every other document field: **no customer PII** — it persists for the life of the repo.
 kind: build | research                # inherits the project's kind if omitted
 status: draft                         # initial state; see lifecycle below
 assignee:                             # BUILD: role slug set by PM (software-engineer | devops-engineer | qa-reviewer). RESEARCH: usually empty (human-driven)
@@ -310,7 +335,9 @@ pointer to the finished deliverable(s) on completion).
 Executable definitions ship in the **`loopd` plugin** (`/plugin install
 loopd@loopd`), one per machine — not in the bundle. Dispatch them by their
 **namespaced** name, `loopd:<role>`: a bare agent name does NOT resolve (measured
-2026-09-02). The roster doc is a human-readable routing reference.
+2026-09-02). The roster doc is a human-readable routing reference. So a bundle has **no
+`.claude/agents/`**, and a skill's precondition probes `SCHEMA.md` and
+`instance.config.json` only — never a directory the roles do not live in.
 
 **`roles` vs `roleTiers` in `instance.config.json`.** The two lists look like they
 should share membership and deliberately do not. `roles` is the roster the PM may
@@ -998,8 +1025,8 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `models` | **yes**, and **seeded** — which model each tier costs **this human**. `/loopd:init` writes this key into the local file on any stamp that finds it missing, so local is normally the layer in force and the banner reads `local` | the tracked map, which stays as the fallback; absent from **both**, `resolve-model.sh` prints nothing on stdout, **says so on stderr**, and exits 1 |
 | `roleTiers` | **yes**, and **seeded** on the same terms — the same bill, per agent. **A partial override replaces only the entries it names**, so moving one agent to a cheaper tier leaves every other agent's tier standing, and the installer never tops a partial map up | as `models` above |
 | `maxAgentsInFlight` | **yes** — how many agents **this machine** can carry (below) | the tracked value; absent from both, `resolve-max-agents.sh` prints nothing and exits 1, and the caller applies the fallback its own document states |
-| `maxRepeatedToolCalls` | **yes** — a doom loop is a spend, and how tolerant a machine is of one is a per-machine call | **off**: `agent-control.sh` hashes, counts and writes nothing, so a bundle that predates the key is unaffected. Set it (the seed ships **3**) and an armed instance refuses one agent's Nth identical tool call with a `deny`, never a kill |
-| `maxAgentMinutes` | **yes** — an hour of agent is a spend, and how long one machine tolerates is a per-machine call | **45**, for every role `roleMinutes` does not name: past it an armed instance refuses the agent's next tool call with a `deny` that says to commit, push, open or update the PR and report. `Read`/`Grep`/`Glob`, the subagent handback that delivers its report, and a shell command made only of `git add\|commit\|push`, `commit-as.sh`, `cd` and `gh pr create\|edit\|view\|checks` stay allowed so that report is accurate; `0` (or anything not a positive integer) is off |
+| `maxRepeatedToolCalls` | **yes** — a doom loop is a spend, and how tolerant a machine is of one is a per-machine call | **off**: `agent-control.sh` hashes, counts and writes nothing, so a bundle that predates the key is unaffected. Set it (the seed ships **3**) and an armed instance refuses one agent's Nth identical tool call with a `deny`, never a kill. **Reach:** this is enforced by `agent-control.sh`, which keys on `agent_id` — it bounds an in-session subagent (a reviewer's lenses), never a top-level `claude --bg` role agent, for which the operator's tool is `claude stop <id>` (`docs/pm-design.md`) |
+| `maxAgentMinutes` | **yes** — an hour of agent is a spend, and how long one machine tolerates is a per-machine call | **45**, for every role `roleMinutes` does not name: past it an armed instance refuses the agent's next tool call with a `deny` that says to commit, push, open or update the PR and report. `Read`/`Grep`/`Glob`, the subagent handback that delivers its report, and a shell command made only of `git add\|commit\|push`, `commit-as.sh`, `cd` and `gh pr create\|edit\|view\|checks` stay allowed so that report is accurate; `0` (or anything not a positive integer) is off. **Reach:** this is enforced by `agent-control.sh`, which keys on `agent_id` — it bounds an in-session subagent (a reviewer's lenses), never a top-level `claude --bg` role agent, for which the operator's tool is `claude stop <id>` (`docs/pm-design.md`) |
 | `roleMinutes` | **yes**, merged **per role** like `roleTiers` — a map of role → minutes that replaces `maxAgentMinutes` for the roles it names | `project-manager` **180** (a tick walks the whole bundle and grows with it); every other role `maxAgentMinutes` |
 | `allowSubstituteBackend` | **local ONLY** — whether this machine may launch a session on a substituted LLM backend (the `loopd-llm` companion). Never in the tracked file: which backend an installation runs is a per-machine data-governance call, and a tracked `true` is one clone's decision every other clone reads | not opted in — the launcher refuses and prints its governance warning |
 | `defaultOwner` | **no, by design** | step 4 above: unowned, so every clone treats it as its own |

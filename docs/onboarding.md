@@ -26,11 +26,11 @@ read; a bundle with no stamp has the data and no way to drive it. Do the plugin 
 | # | Step | Where | Do this |
 |---|---|---|---|
 | 1 | Install the plugin | once per **machine**, in any Claude Code session | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd` |
-| 2 | Get the bundle | once per **bundle** | **joining** one: `git clone <bundle-remote> ~/workspace/<group>/_ai-bridge-<group>` · **starting** one: [README § Install](../README.md#install), steps 2-5 |
-| 3 | Stamp it | **each** clone | `/loopd:init ~/workspace/<group>/_ai-bridge-<group>` — seeds what is absent and links `repos/` |
+| 2 | Get the bundle | once per **bundle** | **joining** one: `git clone <bundle-remote> ~/workspace/<group>/_loopd-<group>` · **starting** one: [README § Install](../README.md#install), steps 2-5 |
+| 3 | Stamp it | **each** clone | `/loopd:init ~/workspace/<group>/_loopd-<group>` — seeds what is absent and links `repos/` |
 | 4 | Say which login this clone is | **each** clone | `{ "ownerGithubUser": "<login>" }` in `instance.config.local.json` (gitignored, per machine) |
-| 5 | Turn the nudges on — **joining only** | your clone | `touch ~/workspace/<group>/_ai-bridge-<group>/AWAITING.md`. A clone is not a first stamp, so the stamp deliberately does not create it |
-| 6 | Open a session | | `cd ~/workspace/<group>/_ai-bridge-<group>` then `claude` |
+| 5 | Turn the nudges on — **joining only** | your clone | `touch ~/workspace/<group>/_loopd-<group>/AWAITING.md`. A clone is not a first stamp, so the stamp deliberately does not create it |
+| 6 | Open a session | | `cd ~/workspace/<group>/_loopd-<group>` then `claude` |
 
 **There is no "clone the template" step.** The machinery ships in the plugin, so step 1 is
 the whole of what a machine needs; the bundle holds data and nothing else.
@@ -150,4 +150,7 @@ owner's, 2026-09-06.
 | `superpowers` | brainstorming, TDD, subagent-driven development, as skills that insist on being invoked first | **do not install with loopd** — its SessionStart hook demands a skill before any response and pushes brainstorming on every creative ask, which fights a dispatched agent's task contract; its worktree skill overlaps loopd's, and its planning/verification skills overlap ai-setup's `/plan` and `/verify` |
 
 Install with `/plugin install <name>@claude-plugins-official`; one line per plugin, user scope, and it is available in every session on that machine.
+
+Running the role agents unattended inside a container or VM is operator setup rather than
+a plugin: [operations.md → Running the role agents in a sandbox](operations.md#running-the-role-agents-in-a-sandbox).
 

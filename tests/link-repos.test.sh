@@ -91,9 +91,26 @@ ok "a dir without .git is skipped" \
 ok "never links the instance that holds the view" \
   "$([ -e "$INST/repos/bridge" ] && echo RECURSES || echo skipped)" skipped
 
+# --- the hook marker: the way back from a worktree to this bundle -----------
+# deny-destructive.sh / agent-control.sh resolve a linked worktree's bundle by reading
+# `<repo>/.git/loopd-bundle`; this script is the one writer. Written for every linked
+# repo, never for the worktree root or a sibling instance, idempotent, and reversed
+# by --remove (below) — only when the marker names THIS instance.
+ok "writes the hook marker into each linked repo" \
+  "$(cat "$TMP/group/repo1/.git/loopd-bundle" 2>/dev/null)" "$(cd "$INST" && pwd -P)"
+ok "…into the dot-named repo too" \
+  "$([ -f "$TMP/group/.github/.git/loopd-bundle" ] && echo marked || echo MISSED)" marked
+ok "…never into _wt or a sibling instance" \
+  "$( { [ -e "$TMP/group/_wt/some-worktree/.git/loopd-bundle" ] || [ -e "$TMP/group/_ai-bridge-other/.git/loopd-bundle" ]; } && echo LEAKED || echo clean)" clean
+ok "…and never into the holder itself" \
+  "$([ -e "$INST/.git/loopd-bundle" ] && echo MARKED || echo clean)" clean
+ok "the first run reports the markers it wrote" \
+  "$(printf '%s' "$out" | grep -c 'hook marker(s) written' || true)" "1"
+
 # --- idempotence and pruning ----------------------------------------------
 out="$(run)"
 ok "second run relinks nothing" "$(printf '%s' "$out" | grep -c '^  link' || true)" "0"
+ok "second run rewrites no marker (idempotent)" "$(printf '%s' "$out" | grep -c 'mark ' || true)" "0"
 ok "second run leaves the view identical" "$(view)" ".github,repo1,repo2"
 
 mv "$TMP/group/repo2" "$TMP/group/repo2-renamed"
@@ -136,8 +153,17 @@ printf 'keep me\n' > "$INST/repos/notes.txt"
 run --remove >/dev/null
 ok "--remove deletes the links" \
   "$([ -e "$INST/repos/repo1" ] && echo left || echo gone)" gone
+ok "--remove takes this instance's marker with it" \
+  "$([ -e "$TMP/group/repo1/.git/loopd-bundle" ] && echo left || echo gone)" gone
 ok "--remove keeps a real file (so the dir survives)" \
   "$(cat "$INST/repos/notes.txt" 2>/dev/null)" "keep me"
+
+setup
+run >/dev/null
+printf '%s\n' "/some/other/bundle" > "$TMP/group/repo2/.git/loopd-bundle"
+run --remove >/dev/null
+ok "--remove leaves a marker that names ANOTHER bundle alone" \
+  "$(cat "$TMP/group/repo2/.git/loopd-bundle")" "/some/other/bundle"
 
 setup
 run >/dev/null

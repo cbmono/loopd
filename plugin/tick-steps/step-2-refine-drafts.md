@@ -20,7 +20,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    appending ` --- <answer>` to an `open_questions` entry on the same line (answering
    in-session works too). Bake each answer into the task itself — `# Context`, a tightened
    `acceptance_criteria`, or `# Notes`. **That half is yours, and the script neither writes
-   it nor checks it.** Then do the mechanical move with
+   it nor checks it.** Refine never writes or changes `original_request:` — it is written
+   once at creation and is the one place the human's own wording survives the rewrite of
+   `# Context` (`SCHEMA.md`). Then do the mechanical move with
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/fold-answers.sh <task-doc>

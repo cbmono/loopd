@@ -166,6 +166,43 @@ assert "ONE path outside plugin/ and .claude-plugin/ and the fast path is off" \
   "$(lacks "$G_OUT" 'plugin-only diff')"
 assert "…so every harness runs"                               "$(has "$G_OUT" 'tests/fp-names-nothing.test.sh')"
 
+echo "== a TOP-LEVEL HARNESS in the diff keeps the fast path; anything else under tests/ ends it =="
+# Every change carries its test, so a gate that only fast-paths a plugin-ONLY diff
+# fast-paths nothing: 0 of the last 40 merged PRs qualified (measured 2026-10-05).
+H_OUT="$(run_ci "$R/work")"
+assert "a diff of one edited harness takes the fast path"     "$(has "$H_OUT" 'plugin-and-harness diff — running')"
+assert "…and runs the harness that changed"                   "$(has "$H_OUT" '  harness: tests/fp-names-nothing.test.sh')"
+assert "…and the core"                                        "$(has "$H_OUT" '  harness: tests/commit-as-guard.test.sh')"
+assert "…and NOT a harness nothing selected (it is not the full suite)" \
+  "$(lacks "$H_OUT" '  harness: tests/fp-names-the-guard.test.sh')"
+
+HP="$TMP/hp"; mkdir -p "$HP"; build "$HP"
+( cd "$HP/work" && git checkout -q -b feat && printf '# edited\n' >> plugin/scripts/commit-as.sh \
+  && printf '# edited\n' >> tests/fp-names-nothing.test.sh && git add -A && git commit -qm edit ) >/dev/null 2>&1
+HP_OUT="$(run_ci "$HP/work")"
+assert "a plugin file AND its harness take the fast path too" "$(has "$HP_OUT" 'plugin-and-harness diff — running')"
+assert "…selecting by name as before"                         "$(has "$HP_OUT" '  harness: tests/fp-names-the-guard.test.sh')"
+assert "…and the edited harness by identity"                  "$(has "$HP_OUT" '  harness: tests/fp-names-nothing.test.sh')"
+
+HF="$TMP/hf"; mkdir -p "$HF"; build "$HF"
+( cd "$HF/work" && git checkout -q -b feat && mkdir -p tests/fixtures && printf 'x\n' > tests/fixtures/shared.txt \
+  && git add -A && git commit -qm fixture ) >/dev/null 2>&1
+HF_OUT="$(run_ci "$HF/work")"
+assert "a tests/ path that is NOT a top-level harness ends the fast path" "$(lacks "$HF_OUT" 'diff — running the core')"
+assert "…so every harness runs"                               "$(has "$HF_OUT" 'tests/fp-names-nothing.test.sh')"
+assert "…including one nothing would have selected"           "$(has "$HF_OUT" 'tests/fp-names-the-guard.test.sh')"
+
+HR="$TMP/hr"; mkdir -p "$HR"; build "$HR"
+( cd "$HR/work" && git checkout -q -b feat && mkdir -p tests/sub && printf '#!/usr/bin/env bash\necho "pass=1 fail=0"\n' > tests/sub/nested.test.sh \
+  && git add -A && git commit -qm nested ) >/dev/null 2>&1
+assert "a NESTED *.test.sh is not a top-level harness: fast path off" "$(lacks "$(run_ci "$HR/work")" 'diff — running the core')"
+
+HD="$TMP/hd"; mkdir -p "$HD"; build "$HD"
+( cd "$HD/work" && git checkout -q -b feat && git rm -q tests/fp-names-nothing.test.sh && git commit -qm delete ) >/dev/null 2>&1
+HD_OUT="$(run_ci "$HD/work")"
+assert "a DELETED harness cannot select itself: the FULL suite" "$(has "$HD_OUT" 'running the FULL suite')"
+assert "…and it names the path that selected nothing"         "$(has "$HD_OUT" 'tests/fp-names-nothing.test.sh')"
+
 echo "== PROVING THE CORE IS READ: strike a name out of it and the same fixture stops running it =="
 # Inside the fixture's tests/, because run.sh resolves the repo it verifies from its
 # OWN location — a mutant left in $TMP would exercise $TMP, not the fixture.

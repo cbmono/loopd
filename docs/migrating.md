@@ -101,7 +101,9 @@ applies to you**, because on path A nothing moves. It is there for path B.
 ## Path B — fresh re-home, in six steps
 
 Placeholders throughout: `<group>` is the group folder, `<new-folder>` the instance
-directory you are stamping, `<user>` your GitHub login.
+directory you are stamping, `<user>` your GitHub login. `_ai-bridge-<group>` is the
+folder you are leaving, spelled under the convention bundles had before the rename; a
+bundle already named `_loopd-<group>` substitutes its own name.
 
 ### 1. Back up the whole bundle — as a git repo, because it is one
 
@@ -147,7 +149,7 @@ if this machine already has `loopd`, skip the step. If it has `ai-bridge-v2`, in
 /loopd:init ~/workspace/<group>/<new-folder>
 ```
 
-It creates the directory too. Name it `_ai-bridge-<group>` unless you are deliberately
+It creates the directory too. Name it `_loopd-<group>` unless you are deliberately
 renaming ([README § 2](../README.md#2-make-the-bundle-directory)).
 
 **Answer the roster prompt.** A first stamp at a terminal offers to collect

@@ -509,7 +509,7 @@ at its next stamp, with no `touch` needed.
 
 ```jsonc
 // instance.config.json
-"boardInstances": [".", "~/workspace/other-group/_ai-bridge-other-group"]
+"boardInstances": [".", "~/workspace/other-group/_loopd-other-group"]
 ```
 
 ### Before it leaves the machine, know what it carries
@@ -600,7 +600,7 @@ grep. Opt-in, 100% local — no code leaves the machine.
 
 1. `npm i -g @colbymchenry/codegraph`
 2. `codegraph install` — wires the codegraph MCP into Claude Code (`-y` for non-interactive, `--print-config <id>` to inspect first)
-3. From the instance root: `scripts/index-kb.sh` — reads `reposRoot`, indexes every product repo (incremental on re-run), skips worktrees (`_wt`), instance dirs (`_ai-bridge-*`) and non-git dirs. `--with-serena` also warms a Serena LSP cache.
+3. From the instance root: `scripts/index-kb.sh` — reads `reposRoot`, indexes every product repo (incremental on re-run), skips worktrees (`_wt`), instance dirs (`_loopd-*`, `_ai-bridge-*`) and non-git dirs. `--with-serena` also warms a Serena LSP cache.
 
 Add infra/assets repos with no useful call graph via `codegraphSkip` (space-separated) or
 `$CODEGRAPH_SKIP`. With no index present, agents just grep as before.
@@ -933,6 +933,78 @@ laptop. **No role agent's allowlist contains `Workflow`**, and of the role agent
 fan-out instruction against the agent's `tools:` list, never against what is installed:
 [invariant 17](conventions.md#17-an-instruction-addressed-to-an-agent-is-executable-only-if-that-agent-holds-the-tool).
 
+### Running the role agents in a sandbox
+
+Unattended agents mean auto mode on and nobody watching, which is when a container or
+VM earns its keep. **This section relaxes nothing**: `autonomy: gated`
+([autonomy.md](autonomy.md#modes)) and the `deny-destructive.sh` baseline
+([invariant 19](conventions.md#19-the-destructive-action-baseline-is-a-hook-and-it-is-narrow-on-purpose))
+apply inside the box exactly as outside it. The box is a boundary around the agent, not a
+reason to hand it more.
+
+**Isolate the agent; don't loosen the host.** Run the background role agents inside a
+container or VM instead of widening permissions on the machine you work on. Inside the
+box a wrong `rm`, a stray force-push or a request to the wrong host reaches a mount and an
+allowlisted domain; the host's credentials, shell history and the rest of its filesystem
+are never on offer. Claude Code's own
+[sandbox environments page](https://code.claude.com/docs/en/sandbox-environments) draws
+the same line for unattended runs: auto mode's classifier is a per-action control, not
+an isolation boundary, so the container or VM is the defence in depth it does not supply.
+
+**The lighter option first: the built-in Bash sandbox.** Claude Code ships one
+([sandboxing](https://code.claude.com/docs/en/sandboxing)): OS-enforced filesystem and
+network isolation around the shell commands Claude runs, Seatbelt on macOS, `bubblewrap`
+and `socat` on Linux and WSL2, nothing on native Windows. It is **off by default**;
+`/sandbox` or `sandbox.enabled: true` turns it on, after which writes are confined to the
+working directory, a temp directory and `--add-dir` paths, and network leaves through a
+proxy whose allowlist starts empty. It wraps Bash only, so file tools, MCP servers and
+hooks still run on the host, and the docs rate it insufficient on its own for fully
+unattended runs. Two defaults to know before relying on it: it reads the whole computer
+unless `sandbox.credentials` masks `~/.ssh`, `~/.aws` and friends, and a missing
+dependency makes it **fall back to unsandboxed** unless `sandbox.failIfUnavailable` is
+`true`.
+
+**Set auto mode at the policy layer, and set it yourself.** The box's permission mode
+belongs in managed settings, `/etc/claude-code/managed-settings.json` on Linux and WSL
+(`/Library/Application Support/ClaudeCode/managed-settings.json` on macOS), never in a
+project or local `.claude/settings*.json` that a checked-out repo could write. Claude Code
+enforces the same line: `permissions.defaultMode` values `auto` and `bypassPermissions`
+take effect only from managed, user or `--settings` sources, not from project or local
+settings (before v2.1.257 `bypassPermissions` took effect from any file), and the
+classifier reads no `autoMode` block from a project file either
+([settings](https://code.claude.com/docs/en/settings),
+[auto mode](https://code.claude.com/docs/en/auto-mode-config)). **The operator installs
+that file.** The plugin never writes a `claude --bg` grant or a workspace-trust key, inside
+a box or out of it: `/loopd:init` prints the notice and `tests/no-bg-grant.test.sh` asserts
+the absence. See [The supported shape](#the-supported-shape-one-main-thread-auto-mode-always-on).
+
+**Forward credentials; never copy them.** Mount nothing that holds a secret. Forward the
+host's SSH agent socket (`SSH_AUTH_SOCK`), so private keys never enter the box; pass the
+existing GitHub token through (`gh auth token`) rather than logging in a second time; and
+supply registry tokens as environment variables referenced from a **user-level** config
+inside the image (`//npm.pkg.github.com/:_authToken=${GITHUB_REGISTRY_ACCESS_TOKEN}` in
+`~/.npmrc`, never in a repo's `.npmrc`), so no token is ever written into a checkout.
+Mount `~/.ssh/known_hosts` read-only so host-key checks do not prompt, and leave the host
+`~/.gitconfig` out: with no global identity, each repo's own `user.name` and `user.email`
+apply and a commit cannot pick up the wrong author.
+
+**Size the box for `maxAgentsInFlight`** (**4** when the key is absent; it is per machine,
+so set it in `instance.config.local.json`). Each background agent is a full Claude Code
+Node process plus whatever its brief spawns, package installs, test runners and builds
+included, so the fan-out multiplies memory and CPU. An undersized VM does not produce an
+error: with no swap, memory exhaustion is an OOM kill that leaves the parent waiting on a
+dead child, or thrashing, and both present as **"the box froze"**. There is no published
+figure per agent, so **measure on your machine**: from a shell in the box, run
+`watch -n1 'free -m; ps aux --sort=-%mem | head'` while a tick dispatches; if available
+memory collapses towards zero as the freeze hits, raise the VM's memory or lower the cap.
+
+**One example runner, not a dependency.**
+[`icostadev/claude-box`](https://github.com/icostadev/claude-box) runs Claude Code inside
+Apple's `container` sandbox (macOS 26, Apple Silicon) with the forwarding above, memory
+and CPU settable per run, and a settings file baked into the image. loopd neither requires
+nor tests against it, and the repo carried no licence file when this was written, so
+check before reusing code from it.
+
 ### PR size
 
 `maxPrLoc` (**500** when the key is absent) is the diff size past which a PR-opening role
@@ -1010,6 +1082,16 @@ conflict in five of six merges. `tests/release-bump.test.sh` pins both halves: a
 `plugin/` with no bump passes, and `main` after the script passes
 `tests/template-version.test.sh`.
 
+**Before the bump, run `claude plugin eval ./plugin` and read the per-case scores, not the
+aggregate.** A model upgrade moves judgement silently — the plugin's text is unchanged and every
+bash harness stays green — and a release is the only recurring event correlated with one, so the
+evals (`plugin/evals/README.md` → "Running it") are read here, by the human. It is a check, never
+a gate: `release-bump.sh` does not run it and no workflow does. **Then ask one question, for each
+hook, gate and script: which assumption has this model generation made unnecessary?** Answer it in
+prose in `docs/releases/v<new>.md`, report-only — "none" is an answer, written down — and never
+as an inventory file, because a hand-kept table drifts the day after it is written
+([conventions #18](conventions.md#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure)).
+
 ### The session banner
 
 One `SessionStart` hook, `.claude/hooks/session-banner.sh`, prints the whole orientation:
@@ -1023,8 +1105,8 @@ owner asked three times in one session, for three different instances.
    ▄▄▄▄
 ◀━▐    ▌
   ▝▄▄▄▄▘
-loopd v3.1.0 · _ai-bridge-private · org: cbmono
-───────────────────────────────────────────────
+loopd v3.2.0 · _loopd-example · org: cbmono
+───────────────────────────────────────────
 
 SETTING               VALUE                               FROM
 owner                 example-user-007 · you@example.com  local/tracked
@@ -1036,7 +1118,7 @@ AGENT (role)          TIER     → MODEL                    FROM
 cataloguer            standard → sonnet                   tracked
 software-engineer     deep     → opus                     local
 
-Board   file:///Users/you/workspace/_ai-bridge-private/.board-live/board.html
+Board   file:///Users/you/workspace/_loopd-example/.board-live/board.html
 Run     /loopd:board serve for a live URL
 Update  claude plugin update loopd  (2.0.3 → 2.0.4) — restart to apply it
 ```
@@ -1287,6 +1369,10 @@ fixes drifted into because this was never written down (task-019).
 | **Trust** (required) | run `claude` interactively **once in each product repo's main clone** and accept the prompt | trust is a `~/.claude.json` key; a plugin writing it grants itself trust |
 | **Grant** (optional) | add `Bash(claude --bg * --agent ai-bridge:* --permission-mode bypassPermissions --add-dir *)` to the bundle's `.claude/settings.local.json` | it lets any brief run as any role with `bypassPermissions`, unprompted |
 
+To run the role agents unattended inside a container or VM, with auto mode set in
+managed settings by the operator, see
+[Running the role agents in a sandbox](#running-the-role-agents-in-a-sandbox).
+
 **Measured on Claude Code 2.1.285, 2026-10-01** (task-019): a headless `--permission-mode
 dontAsk` child with one rule each and a stub `claude` on `PATH`, so nothing spawned. Columns
 are the spawn's brief as `"one line"`, `'one line'`, and `"multi-line"` — step 3's form.
@@ -1338,7 +1424,7 @@ still see everything in one tree:
 | Zed (no workspace-file support) | the **group folder** | the instance's `_`-prefix already sorts it to the top |
 | any editor, and the terminal | **`repos/`** inside the instance | one symlink per repo, so `ls repos/` and `cd repos/<name>` work from inside the instance |
 
-**The workspace file.** A generic `files.exclude` glob (`_ai-bridge-*`) hides the instance
+**The workspace file.** A generic `files.exclude` glob per bundle prefix (`_loopd-*`, `_ai-bridge-*`) hides the instance
 from the repos pane so it isn't shown twice, and `terminal.integrated.cwd` — uncommented
 and stamped with the instance's absolute path at install time — pins **new terminals** to
 the instance. Without it a multi-root workspace picks the terminal's folder separately from

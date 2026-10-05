@@ -160,8 +160,13 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    project never itself promotes, merges, or drives a browser.
 
 5. **Scaffold `projects/<slug>/`**, matching the schema/example exactly:
-   - `project.md` — `type: Project` frontmatter (`title`, `description`, `kind`,
-     `success_criteria: [...]` from step 3, the step-3 value gate `need:`,
+   - `project.md` — `type: Project` frontmatter (`title`, `description`,
+     `original_request:` — the owner's one-line description from `$ARGUMENTS`
+     **verbatim**, with the option tokens stripped, as a quoted single-line YAML string
+     (a multi-line ask collapsed to one line, inner double quotes escaped); written here
+     **once and never rewritten** by refine or any tick step (`SCHEMA.md`), because
+     `title`, `description` and `# Context` are what you *made* of the ask and this is
+     the ask itself — `kind`, `success_criteria: [...]` from step 3, the step-3 value gate `need:`,
      `cost_of_not_doing:` and `no_owner:` — **all three, always, on both kinds**, empty
      where the answer was empty and never omitted — `status: active`, `timestamp`; plus
      `objective: /objectives/<slug>.md` only where step 3 resolved one) — plus
@@ -180,8 +185,10 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
      (`tasks/task-001-<chunk>.md` → `deliverables/<chunk>.md`). Otherwise a single
      `task-001-<slug>.md` capturing the main goal. Each task: `type: Task`, `kind`
      (matching the project), `status: draft`, `assignee:` empty,
-     `acceptance_criteria: []`, `open_questions: []`, `timestamp`, body with a
-     `# Context`. **Build** tasks carry `target_repo` (omit if same as project
+     `original_request:` — the same verbatim description the project carries, since
+     a seed task is derived from it and nothing else (same quoting; write-once, see
+     `SCHEMA.md`) — `acceptance_criteria: []`, `open_questions: []`, `timestamp`,
+     body with a `# Context`. **Build** tasks carry `target_repo` (omit if same as project
      default) + `pr:`; **research** tasks carry `artifacts: [ <deliverable path> ]`
      instead. **Never invent `acceptance_criteria`** — leave them for the PM's refine.
      **And no placeholders when they *are* written** (PM refine, or a human): not

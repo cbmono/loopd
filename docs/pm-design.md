@@ -449,12 +449,37 @@ launcher's release point are untouched.
 2. **The usage numbers are gone.** They came off the `<task-notification>`, and a detached
    session sends none; `claude agents` carries no cost or token figure. The `* DISPATCH`
    line records `usage UNKNOWN` — the honest answer, and not a zero.
+   **Closed since:** the numbers were never gone, only unreported. A top-level session
+   writes its own transcript, one file per session id, with a usage block on every
+   assistant message; `session-usage.sh` reads that one file after the session ends and
+   `agent-usage.sh settle` fills the line (step 4). Two things it must hold: **one
+   message, one count** — a transcript repeats a message's usage on each content block's
+   line, measured at 2.2 lines per message, so a per-line sum doubles the figure — and
+   **UNKNOWN on any doubt**, because the transcript is a Claude Code internal and a
+   changed format must read as unknown, never as a smaller number.
 3. **`agent-control.sh` no longer reaches a role agent.** It keys on `agent_id`, which is
    present only on a subagent's tool call, and a `--bg` session is top-level. Operator
    `halt`/`gate`/`steer` therefore apply to nothing the tick dispatches. The blunt
    replacement is `claude stop <id>`, which the human runs; keying the hook on the
    recorded `session:` id is now *possible* — a background session's `session_id` is its
    own, which was never true of a subagent's — and is deliberately left to its own change.
+
+**A fourth price was paid UNknowingly, and is closed.** Both plugin hooks guard on
+`$CLAUDE_PROJECT_DIR/instance.config.json`. That held while a role agent was a subagent of
+the PM's session, whose project dir is the bundle. A detached session's project dir is the
+worktree it was launched in, so `deny-destructive.sh` fired and exited 0 for every role
+agent: on 2026-10-04 a `--bg` agent force-pushed a default branch with two `PreToolUse`
+events recorded and no refusal. "Hooks fire" had been measured; "the hook denied" never
+was, and `tests/deny-baseline.test.sh` pinned the project dir at the bundle on every probe.
+The guard now resolves a **linked worktree** to its bundle through `<repo>/.git/loopd-bundle`,
+written by `link-repos.sh` on every stamp; the harness carries the worktree-rooted cases in
+both directions.
+
+**What that does NOT change: the doom-loop and wall-clock bounds do not reach a top-level
+`--bg` role agent** (owner, 2026-10-04: left as is). `agent-control.sh` finds the bundle
+now, but still keys on `agent_id`, which a top-level session never carries — so
+`maxRepeatedToolCalls` and `maxAgentMinutes` bound a role agent's own *subagents* (a
+reviewer's lenses) and nothing bounds the role agent itself but `claude stop <id>`.
 
 **Why `bypassPermissions` and not an allowlist.** task-026 measured that a prefix
 allowlist cannot cover a real tick and that hooks fire regardless, leaving

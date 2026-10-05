@@ -14,15 +14,15 @@
 #
 # <reason(s)><TAB><path>
 prov,instdir,fname,frozen	README.md
-prov,instdir,fname	docs/conventions.md
+prov,fname	docs/conventions.md
 frozen	docs/index.html
 prov,instdir,frozen	docs/migrating.md
-instdir	docs/onboarding.md
 prov,bundle,instdir,fname,frozen	docs/operations.md
 prov	docs/pm-design.md
 frozen	docs/releases/v1.0.0.md
 frozen	docs/releases/v3.0.0.md
-prov,instdir	docs/sharing.md
+frozen	docs/releases/v3.1.0.md
+prov	docs/sharing.md
 prov,bundle,fname	plugin/README.md
 prov	plugin/evals/README.md
 prov	plugin/hooks/deny-destructive.sh

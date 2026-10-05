@@ -233,6 +233,8 @@ if [ -n "$problems" ]; then
   echo "refuse: required checks not green on PR $pr (source: $source, head $head_sha):" >&2
   printf '%s' "$problems" >&2
   echo "        Only 'pass' clears — pending, skipped and missing all count as not passed." >&2
+  echo "        Pending: wait and ask again next tick. Failing or missing: surface the PR to" >&2
+  echo "        the human with the list above. Do NOT merge around this gate." >&2
   exit 1
 fi
 

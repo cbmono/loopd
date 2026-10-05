@@ -177,8 +177,27 @@ set -u
 #   3. SILENCE IS THE REQUIREMENT, not merely the behaviour. No stdout, no
 #      stderr, no state, exit 0. A line per skipped call would be noise in every
 #      unrelated project on this machine.
+#   4. A linked worktree of a linked repo resolves to its bundle through the
+#      `.git/loopd-bundle` marker — point 4 in deny-destructive.sh says why.
 root="${CLAUDE_PROJECT_DIR:-$PWD}"
 root="$(cd "$root" 2>/dev/null && pwd -P || printf '%s' "$root")"
+if [ ! -f "$root/instance.config.json" ] && [ -f "$root/.git" ]; then
+  _gd=""; IFS= read -r _gd < "$root/.git" 2>/dev/null || _gd=""
+  _gd="${_gd#gitdir:}"; _gd="${_gd# }"
+  case "$_gd" in ""|/*) ;; *) _gd="$root/$_gd" ;; esac
+  _cd="$_gd"
+  if [ -n "$_gd" ] && [ -f "$_gd/commondir" ]; then
+    _c=""; IFS= read -r _c < "$_gd/commondir" 2>/dev/null || _c=""
+    case "$_c" in "") ;; /*) _cd="$_c" ;; *) _cd="$_gd/$_c" ;; esac
+  fi
+  if [ -n "$_cd" ] && [ -f "$_cd/loopd-bundle" ]; then
+    _b=""; IFS= read -r _b < "$_cd/loopd-bundle" 2>/dev/null || _b=""
+    if [ -n "$_b" ] && [ -f "$_b/instance.config.json" ]; then
+      root="$(cd "$_b" 2>/dev/null && pwd -P || printf '%s' "$_b")"
+    fi
+  fi
+  unset _gd _cd _c _b
+fi
 [ -f "$root/instance.config.json" ] || exit 0
 
 CTL="$root/.claude/control"
