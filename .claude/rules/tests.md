@@ -18,8 +18,8 @@ tests/run.sh --deep           # ONLY the `# deep` harnesses: they spawn the clau
 bash tests/<one>.test.sh      # still fine while you iterate on one harness
 ```
 
-`--changed` is the same selection CI takes on a PR whose diff is `plugin/` and top-level
-harness files (`tests/*.test.sh`) only — any other path buys the full suite — because CI runs
+`--changed` is the same selection CI takes on a plugin-only PR — any path outside `plugin/`
+buys the full suite, and since every change carries its test that is every PR — because CI runs
 `tests/run.sh --ci` — one implementation, and `tests/ci-workflow.test.sh` fails if the
 workflow grows a second copy. It reads committed, uncommitted and untracked paths against
 `origin/HEAD` (`--base <ref>` for another base). **No changed path runs the core; a changed
@@ -40,8 +40,13 @@ sequential, and 9m 12s with the eval in the core); all 111 take **6m 15s** in a 
 against 29m 45s sequential (run 34774374082).
 
 The full suite is CI's job: `harness suite` is a required check, a push to `main` always
-runs everything, and a PR does too unless its diff is plugin and top-level harness files
-only. A full CI run measured **20m 10s** on 2026-10-04 (3,178 harness-seconds on the
+runs everything, and so does a PR whose diff touches anything outside `plugin/`. **That
+is deliberate and must stay**: `--changed` derives a selection from the paths a harness
+NAMES, and about 40 harnesses ask "is every file under `plugin/…` documented, executable,
+linked, on brand?" and name none. Admitting `tests/*.test.sh` to the fast path (#324) let
+a new script through without its README row and turned `main` red the same day. So
+`--changed` is a local convenience, never proof — which is why `--all` is run once before
+a PR. A full CI run measured **20m 10s** on 2026-10-04 (3,178 harness-seconds on the
 3-CPU runner; the 10m 35s above was 111 harnesses, it is 141 now). Branch protection's
 `strict` flag is **off** (read from the API on 2026-10-05) — a `pull_request` run tests the
 merge of the branch into the base as of that run, and nothing re-runs it when the base moves. Locally the same loop measured **39m 47s and
