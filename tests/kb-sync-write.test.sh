@@ -316,12 +316,12 @@ ok "…after the KB push landed" "$(git --git-dir="$BARE4" show main:findings/et
 ok "…rolled back to a clean tree" "$(cd "$RES" && git status --porcelain | grep -c . | tr -d ' ')" 0
 ok "…still tracking every file" "$(tracked)" "$want"
 
-DEL="$TMP/res-del"; git clone --quiet "$BARE4" "$DEL"
+DEL="$TMP/res-del"; git clone --quiet -b main "$BARE4" "$DEL"
 ( cd "$DEL" && git rm -q findings/eta.md && git commit -qm "remove eta" && git push -q origin main )
 out="$(bash "$MIGRATE" --instance "$RES" 2>&1)"; rc=$?
 ok "a file absent from the remote refuses the index removal" "$rc" 1
 ok "…naming the count" "$(has "$out" "1 of $want tracked file(s) are NOT on")" yes
-ok "…and the file" "$(has "$out" 'knowledge/findings/eta.md')" yes
+ok "…and the file, in the absent list" "$(has "$out" '         knowledge/findings/eta.md')" yes
 ok "…removing nothing" "$(tracked)" "$want"
 
 ( cd "$DEL" && git revert --no-edit HEAD >/dev/null && git push -q origin main )
