@@ -48,7 +48,14 @@ jobs:
     # ~1.7x that worst case, and it is also 879s plus one harness dying at the 600s
     # HARNESS_TIMEOUT in tests/run.sh, which is the case this ceiling must survive to
     # report. It is a backstop now, not the instrument: the per-harness bound is.
-    timeout-minutes: 25
+    #
+    # RE-MEASURED 2026-10-05, because 25 had stopped being a backstop: the suite is 154
+    # harnesses and 4,108 harness-seconds on this 3-CPU runner (run 37304822869), about 23
+    # minutes of pool before the replay — that run was CANCELLED at 25 with every harness
+    # passed and zero failures, and the two green runs before it took 24 and 25 minutes.
+    # 45 is the same ~1.7x over today's worst case that 25 was over 879s. If the suite
+    # reaches 26 minutes again, cut the suite; do not raise this a third time.
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
