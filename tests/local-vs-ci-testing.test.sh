@@ -124,7 +124,7 @@ SAYWHY='**the PR body must state why the full run was needed**'
 POLL='**Do not poll a long-running local run.**'
 NOTRESTATE='This is its own prohibition, not a restatement'
 PARKED='**parked-watcher failure `check-dispatch.sh` exists for, with a pulse**'
-CI_COST='**about 9 minutes of wall clock and no tokens**'
+CI_COST='**about 20 minutes of wall clock and no tokens**'
 LOCAL_COST='**39m 47s and 269.4k tokens**'
 NOTBAN='**proportion argument, not a ban**'
 REQUIRED='the `harness suite` job is a **required check** on every PR'
@@ -164,7 +164,7 @@ ok "…and why it is not redundant is given" "$(saw "$CONV_FLAT" 'still burn an 
 
 echo
 echo "== 5. the trade is NAMED WITH THE NUMBERS, so a reader can tell when it inverts =="
-ok "one CI round-trip: ~9 min, no tokens"  "$(saw "$CONV_FLAT" "$CI_COST")" yes
+ok "one CI round-trip: ~20 min, no tokens"  "$(saw "$CONV_FLAT" "$CI_COST")" yes
 ok "the local run: 39m 47s / 269.4k"       "$(saw "$CONV_FLAT" "$LOCAL_COST")" yes
 ok "…dated to the measurement"             "$(saw "$CONV_FLAT" 'measured **2026-08-29**')" yes
 ok "it is a proportion argument, not a ban" "$(saw "$CONV_FLAT" "$NOTBAN")" yes

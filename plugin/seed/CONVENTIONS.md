@@ -371,8 +371,8 @@ above it so none may grow its share.
   40-minute poll and a parked watcher cost the same and look equally busy. Start a long
   job only if you will leave it alone; otherwise stop it.
   **The trade, with the measured numbers, so you can tell when it stops applying.** One CI
-  round-trip costs **about 9 minutes of wall clock and no tokens** (8-10 minutes on a
-  clean runner, measured across `cbmono/loopd`'s recent runs); the local full run
+  round-trip costs **about 20 minutes of wall clock and no tokens** for the full suite
+  (20m 10s on 2026-10-04, when it was 141 harnesses; it was 8-10 minutes at 111); the local full run
   measured **2026-08-29** cost **39m 47s and 269.4k tokens** on a machine that was also
   running a `/loopd:dispatch` tick. Same answer, several times the wall clock, and tokens on top.
   This is a **proportion argument, not a ban**: a *red* local run would have saved a CI
@@ -403,7 +403,7 @@ above it so none may grow its share.
   push it. A push is how you confirm a hypothesis you have already tried to falsify; it is
   never how you test one.
   **The cost, measured:** a CI run takes **every stage through to testing**, so a wrong guess
-  costs a **whole pipeline** and not the one step you doubted — about **9 minutes** here (→
+  costs a **whole pipeline** and not the one step you doubted — about **20 minutes** here (→
   "The full suite belongs to CI"), far longer on a deploy pipeline. Probing by push is the
   **direct cause** of the "hours, and many builds" the owner reported on that day.
   **When you genuinely cannot run it locally** — a runner-only tool, a credential you do not
