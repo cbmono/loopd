@@ -767,8 +767,8 @@ verdict_from() { # <project-dir> <cwd> <command> — CLAUDE_PROJECT_DIR is the F
   [ -n "$out" ] || { printf 'allow'; return 0; }
   dec="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)"
   [ "$dec" = deny ] || { printf 'bad:%s' "$dec"; return 0; }
-  rule="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
-          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p' | head -1)"
+  rule="$(head -1 <<<"$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
+          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p')")"
   printf 'deny:%s' "${rule:-UNNAMED}"
 }
 ok "the fixture worktree is linked (.git is a file)" "$([ -f "$WTREE/.git" ] && echo file || echo dir)" "file"

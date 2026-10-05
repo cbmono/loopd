@@ -19,6 +19,13 @@ PFX='(^|[^|])[|][[:space:]]*(([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|command|env)[
 GREP='[g]rep([[:space:]]+[^|&;)[:space:]]+)*[[:space:]]+(-[A-Za-z0-9]*[qmlL]|--(quiet|silent|max-count|files-with(out)?-match))'
 OTHER='([h]ead|[r]ead)([[:space:]]|$|[)])|[s]ed[[:space:]][^|]*[0-9$/;{][[:space:]]*q([[:space:]0-9;}'"'"'"]|$)|[a]wk[[:space:]][^|]*[^A-Za-z_]exit([^A-Za-z_]|$)'
 RE="$PFX($GREP|$OTHER)"
+# A pipeline continued onto the next line (trailing `|` or `\`) is scanned as one line, numbered
+# by its first; a comment never continues, or it would hide the line after it.
+JOIN='FNR == 1 && n { print f ":" n ":" b; n = 0 }
+{ if (n) b = b " " $0; else { b = $0; n = FNR; f = FILENAME } }
+b !~ /^[[:space:]]*#/ && (b ~ /(^|[^|])[|][[:space:]]*$/ || b ~ /\\$/) { sub(/\\$/, "", b); next }
+{ print f ":" n ":" b; n = 0 }
+END { if (n) print f ":" n ":" b }'
 
 exempt() { # <file> <text> -> 0 when exempt.tsv names this line
   local f t why
@@ -36,7 +43,7 @@ scan() { # <dir> -> `file:line: text` per pipe into an early-exiting reader
     [[ "$text" =~ ^[[:space:]]*# ]] && continue
     exempt "${loc%%:*}" "$text" && continue
     printf '%s: %s\n' "$loc" "$text"
-  done <<<"$(grep -HnE "$RE" "$1"/*.test.sh || true)"
+  done <<<"$(grep -E "$RE" <<<"$(awk "$JOIN" "$1"/*.test.sh)" || true)"
 }
 
 echo "== no test pipes into an early-exiting reader =="
@@ -53,10 +60,11 @@ while IFS=$'\t' read -r f t why; do
 done < "$EXEMPT"
 
 echo "== the pattern keys on the reader, not on what the left side interpolates =="
-# `¦` stands for the pipe, so these cases are not hits in this file.
+# `¦` stands for the pipe and `⏎` for a newline, so these cases are not hits in this file.
 flagged() { # <case> -> 0 when scan reports it
   rm -f "$TMP"/*.test.sh
-  printf '%s\n' "${1//¦/|}" > "$TMP/case.test.sh"
+  local c="${1//¦/|}"
+  printf '%s\n' "${c//⏎/$'\n'}" > "$TMP/case.test.sh"
   [ -n "$(scan "$TMP")" ] && echo 0 || echo 1
 }
 while IFS= read -r c; do
@@ -80,6 +88,11 @@ yes ¦ head -40
 printf '%s' "$OUT" ¦ read -r first
 printf '%s' "$OUT" ¦ sed -n '1p;q'
 printf '%s' "$OUT" ¦ awk '/x/{print; exit}'
+bash "$b" 2>/dev/null ¦⏎  awk '/x/{exit} 1'
+printf '%s' "$OUT" \⏎  ¦ grep -q x
+printf '%s' "$OUT" ¦ \⏎  grep -q x
+ls "$d" ¦⏎  sort ¦⏎  head -1
+# a comment ending in a pipe ¦⏎printf '%s' "$OUT" ¦ grep -q x
 CASES
 while IFS= read -r c; do
   assert "passes: $c" "$(flagged "$c" | tr 01 10)"
@@ -95,6 +108,7 @@ printf '%s\n' "$OUT" ¦ awk '{print $1}'
 printf '%s\n' "$OUT" ¦ headline
 [ -f "$f" ] ¦¦ grep -q x "$f"
 # printf '%s\n' "$OUT" ¦ grep -q x
+printf '%s' "$OUT" ¦⏎  grep -c x
 CASES
 
 echo "== a named-variable pipe in a real harness turns the guard red =="

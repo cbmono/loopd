@@ -49,8 +49,8 @@ bundle() {
 }
 # <brief-script> <bundle> — the `## PR title` body, blank lines dropped.
 section() {
-  bash "$1" "$2/projects/demo/tasks/task-001.md" 2>/dev/null |
-    awk -v h="$HEADING" '$0==h{f=1;next} f&&/^## /{exit} f&&NF'
+  awk -v h="$HEADING" '$0==h{f=1;next} f&&/^## /{exit} f&&NF' \
+    <<<"$(bash "$1" "$2/projects/demo/tasks/task-001.md" 2>/dev/null)"
 }
 # The title format the brief hands an agent: its first backticked span.
 format_of() { head -1 <<<"$(sed -n 's/^[^`]*`\([^`]*\)`.*/\1/p' <<<"$1")"; }

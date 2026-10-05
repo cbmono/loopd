@@ -61,7 +61,7 @@ unowned() {
   for set in "$@"; do
     while IFS= read -r f; do
       [ -n "$f" ] || continue
-      printf '%s\n' "$owned" | grep -qxF "$f" || echo "$f"
+      grep -qxF -- "$f" <<<"$owned" || echo "$f"
     done <<<"$(expand "$root" "$set")"
   done
 }
