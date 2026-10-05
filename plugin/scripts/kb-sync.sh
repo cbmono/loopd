@@ -522,9 +522,15 @@ EOF
     [ -d "$KBGIT" ] || { warn "knowledge is configured but not mounted. Mount it with:"
       ab_say_run "kb-sync:  " kb-sync.sh mount >&2
       exit 1; }
+    # Tracked files under the KB path only: under `path: knowledge` the worktree is the
+    # bundle root, where every bundle file is untracked and the bundle's README differs.
+    changed="$(kbg status --porcelain --untracked-files=no -- "${KB_PREFIX:-.}" 2>/dev/null)" \
+      || die "could not read the state of the KB mount in $KB_MOUNT — it is NOT known to be clean."
+    dirty="$(printf '%s' "$changed" | grep -c .)"
     ahead="$(unpushed_count)"
-    if [ "$ahead" -gt 0 ]; then
-      warn "$ahead KB commit(s) are local and UNPUSHED in $KB_MOUNT. Push by hand, or run:"
+    [ "$dirty" -eq 0 ] || warn "$dirty tracked KB file(s) have UNCOMMITTED changes in $KB_MOUNT. Commit and push them with:"
+    [ "$ahead" -eq 0 ] || warn "$ahead KB commit(s) are local and UNPUSHED in $KB_MOUNT. Push by hand, or run:"
+    if [ "$dirty" -gt 0 ] || [ "$ahead" -gt 0 ]; then
       ab_say_run "kb-sync:  " kb-sync.sh commit --message '"<message>"' -- '<path>...' >&2
       exit 1
     fi

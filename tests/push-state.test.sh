@@ -476,7 +476,7 @@ assert "  ...as a UserPromptSubmit hook"            \
 # exits 127 on every prompt in any project that does not itself ship the script.
 assert "  ...via the \${CLAUDE_PLUGIN_ROOT} absolute-path idiom" \
   "$( command -v python3 >/dev/null 2>&1 \
-      && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); want="${CLAUDE_PLUGIN_ROOT}/hooks/push-state.sh"; sys.exit(0 if any(h.get("command")==want for g in d["hooks"]["UserPromptSubmit"] for h in g["hooks"]) else 1)' "$SETTINGS" \
+      && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); want="\"${CLAUDE_PLUGIN_ROOT}/hooks/push-state.sh\""; sys.exit(0 if any(h.get("command")==want for g in d["hooks"]["UserPromptSubmit"] for h in g["hooks"]) else 1)' "$SETTINGS" \
       && echo 0 || echo 1 )"
 # `seed/` moved to `plugin/seed/` in #125, and this probe was left on the old path: the
 # grep then exited 2 for a missing file, the `||` arm yielded 0, and 0 is exactly what the

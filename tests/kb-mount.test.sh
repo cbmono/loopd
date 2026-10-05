@@ -279,6 +279,42 @@ ok "path: knowledge lands at knowledge/, one level deep" \
 ok "…and the sparse checkout leaves the repo's own README out" \
   "$([ -e "$SHARED/README.md" ] && echo yes || echo no)" no
 
+echo "== status counts uncommitted edits to tracked KB files, and only those =="
+
+# 865 modified documents read as "clean and pushed" (2026-10-05). Both layouts, both ways.
+st() { out="$(bash "$SYNC" --instance "$1" status 2>&1)"; rc=$?; }
+printf '# the bundle has its own README\n' > "$SHARED/README.md"
+printf 'not knowledge\n' > "$SHARED/projects/note.md"
+printf 'new, untracked\n' > "$SHARED/knowledge/findings/untracked.md"
+st "$SHARED"
+ok "path: knowledge — bundle files and its own README are not KB edits" "$rc" 0
+ok "…so the mount still says clean" "$(has "$out" 'KB mount is clean and pushed.')" yes
+printf 'edited\n' >> "$SHARED/knowledge/findings/alpha.md"
+st "$SHARED"
+ok "path: knowledge — an edited tracked document exits 1" "$rc" 1
+ok "…counting exactly the one file" "$(has "$out" '1 tracked KB file(s) have UNCOMMITTED changes')" yes
+ok "…never saying clean" "$(has "$out" 'clean and pushed')" no
+ok "…and printing the commit command" "$(has "$out" 'kb-sync.sh commit --message')" yes
+ok "…without inventing an unpushed commit" "$(has "$out" 'UNPUSHED')" no
+( cd "$SHARED" && git --git-dir="$AB_DIR/kb.git" checkout -q -- knowledge/findings/alpha.md )
+st "$SHARED"
+ok "…and the edit undone reads clean again" "$rc" 0
+
+st "$MOUNTED"
+ok "path: / — the untouched mount is clean" "$rc" 0
+printf 'edited\n' >> "$MOUNTED/knowledge/findings/alpha.md"
+rm -f "$MOUNTED/knowledge/findings/beta.md"
+st "$MOUNTED"
+ok "path: / — an edit and a deletion exit 1" "$rc" 1
+ok "…counted as two" "$(has "$out" '2 tracked KB file(s) have UNCOMMITTED changes')" yes
+( cd "$MOUNTED/knowledge" && git --git-dir="../$AB_DIR/kb.git" -c user.name=t -c user.email=t@example.com commit -qm local -- findings/alpha.md )
+st "$MOUNTED"
+ok "an unpushed commit AND an uncommitted file are both reported" \
+  "$(has "$out" '1 KB commit(s) are local and UNPUSHED')$(has "$out" '1 tracked KB file(s) have UNCOMMITTED')$rc" yesyes1
+( cd "$MOUNTED/knowledge" && git --git-dir="../$AB_DIR/kb.git" reset -q --hard origin/main )
+st "$MOUNTED"
+ok "…and reset to the remote it is clean" "$rc" 0
+
 echo "== the reads are bounded and never fatal =="
 
 DEAD="$TMP/dead"; mkdir -p "$DEAD"

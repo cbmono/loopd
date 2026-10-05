@@ -100,7 +100,7 @@ assert "…and it is session-banner.sh, via \${CLAUDE_PLUGIN_ROOT}" \
   "$(python3 -c 'import json,sys
 d=json.load(open(sys.argv[1]))
 c=d["hooks"]["SessionStart"][0]["hooks"][0]["command"]
-sys.exit(0 if c.startswith("${CLAUDE_PLUGIN_ROOT}/hooks/session-banner.sh") else 1)' "$HOOKSJSON" 2>/dev/null && echo 0 || echo 1)"
+sys.exit(0 if c.startswith("\"${CLAUDE_PLUGIN_ROOT}/hooks/session-banner.sh\"") else 1)' "$HOOKSJSON" 2>/dev/null && echo 0 || echo 1)"
 assert "hooks.json is still valid JSON" \
   "$(python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$HOOKSJSON" >/dev/null 2>&1 && echo 0 || echo 1)"
 assert "settings.json is still valid JSON" \
