@@ -352,6 +352,13 @@ ok "a path: knowledge migration runs" "$rc" 0
 ok "…and its KB commit carries the README" \
   "$(git --git-dir="$BARE5" show main:knowledge/README.md >/dev/null 2>&1; echo $?)" 0
 
+TOK="$TMP/res-tok"; mkdir -p "$TOK/knowledge"; : > "$TOK/knowledge/log.md"
+printf '{ "knowledge": { "repo": "https://u:s3cr3tt0ken@example.com/kb.git", "path": "/" } }\n' > "$TOK/instance.config.json"
+( cd "$TOK" && git init --quiet -b main . && git add -A >/dev/null && git commit -qm seed )
+out="$(bash "$MIGRATE" --instance "$TOK" --dry-run 2>&1)"
+ok "a tokened knowledge.repo is named without its token" \
+  "$(has "$out" 'example.com/kb.git')$(has "$out" 's3cr3tt0ken')" yesno
+
 echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

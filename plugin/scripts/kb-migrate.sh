@@ -34,6 +34,8 @@ cfg() { bash "$HERE/resolve-config.sh" --instance "$INST" "$@" 2>/dev/null; }
 
 REPO="$(cfg knowledge repo)"
 [ -n "$REPO" ] || { say "no 'knowledge' key in instance.config.json — nothing to migrate."; exit 3; }
+# Display-only from here (kb-sync.sh reads the URL itself), so userinfo and query go once.
+REPO="$(printf '%s' "$REPO" | LC_ALL=C sed -e 's|\(://\)[^/]*@|\1|' -e 's|[?#].*$||')"
 KB_PATH="$(cfg knowledge path)"; [ -n "$KB_PATH" ] || KB_PATH="/"
 KB_REF="$(cfg knowledge ref)"; [ -n "$KB_REF" ] || KB_REF="main"
 case "$KB_PATH" in /|.|knowledge|knowledge/|/knowledge|/knowledge/) ;; *)
