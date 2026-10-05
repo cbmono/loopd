@@ -352,6 +352,30 @@ ok "a path: knowledge migration runs" "$rc" 0
 ok "…and its KB commit carries the README" \
   "$(git --git-dir="$BARE5" show main:knowledge/README.md >/dev/null 2>&1; echo $?)" 0
 
+echo "== a path: knowledge mount stages a NEW file past the bundle's /knowledge/ line (task-035) =="
+ok "the migrated bundle ignores /knowledge/" "$(grep -cxF '/knowledge/' "$RK/.gitignore" | tr -d ' ')" 1
+finding "$RK/knowledge/findings/kappa.md" kappa "a new file after the migration"
+out="$(bash "$SYNC" --instance "$RK" commit --message "docs: kappa" -- knowledge/findings/kappa.md 2>&1)"; rc=$?
+ok "a NEW file commits" "$rc" 0
+ok "…without 'could not stage'" "$(has "$out" 'could not stage')" no
+ok "…and reaches the remote" \
+  "$(git --git-dir="$BARE5" show main:knowledge/findings/kappa.md >/dev/null 2>&1; echo $?)" 0
+ok "…with its index row" "$(git --git-dir="$BARE5" show main:knowledge/index.md | grep -c 'a new file after the migration' | tr -d ' ')" 1
+ok "…and the bundle still lists no knowledge/ file" \
+  "$(cd "$RK" && git status --porcelain --untracked-files=all | grep -c 'knowledge/' | tr -d ' ')" 0
+printf 'scratch.md\n' > "$RK/knowledge/.gitignore"
+finding "$RK/knowledge/findings/lambda.md" lambda "a directory commit"
+: > "$RK/knowledge/findings/scratch.md"
+bash "$SYNC" --instance "$RK" commit --message "docs: lambda" -- knowledge/findings >/dev/null 2>&1; rc=$?
+ok "a directory commit stages its new files" "$rc$(git --git-dir="$BARE5" show main:knowledge/findings/lambda.md >/dev/null 2>&1; echo $?)" 00
+ok "…but not one the KB's own .gitignore excludes" \
+  "$(git --git-dir="$BARE5" show main:knowledge/findings/scratch.md >/dev/null 2>&1; echo $?)" 128
+rm "$RK/knowledge/findings/kappa.md"
+bash "$SYNC" --instance "$RK" commit --message "docs: drop kappa" -- knowledge/findings/kappa.md >/dev/null 2>&1; rc=$?
+ok "a deleted file still commits as a deletion" "$rc$(git --git-dir="$BARE5" show main:knowledge/findings/kappa.md >/dev/null 2>&1; echo $?)" 0128
+out="$(bash "$SYNC" --instance "$RK" commit --message "docs: none" -- knowledge/findings/nope.md 2>&1)"; rc=$?
+ok "a path that matches nothing is still refused" "$rc$(has "$out" 'could not stage')" 1yes
+
 TOK="$TMP/res-tok"; mkdir -p "$TOK/knowledge"; : > "$TOK/knowledge/log.md"
 printf '{ "knowledge": { "repo": "https://u:s3cr3tt0ken@example.com/kb.git", "path": "/" } }\n' > "$TOK/instance.config.json"
 ( cd "$TOK" && git init --quiet -b main . && git add -A >/dev/null && git commit -qm seed )

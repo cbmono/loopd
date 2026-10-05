@@ -198,6 +198,22 @@ kb_vars() {
 # current directory, which for this mount is usually somewhere else entirely.
 kbg() { ( cd "$KB_WT" && git --git-dir="$KBGIT" "$@" ); }
 
+# Under `path: knowledge` the worktree is the bundle root, so the bundle's `/knowledge/`
+# ignore line hides every new file, and no excludes file can negate a parent directory.
+# New files are listed through a view rooted at knowledge/ — the ignore rules a `path: /`
+# mount gets — and force-added by name; a blanket -f would sweep in what the KB ignores.
+kb_stage() { # <worktree-relative path>
+  [ -n "$KB_SPARSE" ] || { kbg add -- "$1"; return; }
+  local sub="${1#"$KB_SPARSE"}" list
+  sub="${sub#/}"; [ -n "$sub" ] || sub=.
+  list="$(mktemp "${TMPDIR:-/tmp}/kb-sync-new.XXXXXX")" || return 1
+  ( cd "$KB_MOUNT" && git --git-dir="$KBGIT" --work-tree=. ls-files -o --exclude-standard -z -- "$sub" ) > "$list" \
+    && { [ -s "$list" ] || kbg ls-files --error-unmatch -- "$1" >/dev/null 2>&1; } \
+    && { [ ! -s "$list" ] || ( cd "$KB_MOUNT" && git --git-dir="$KBGIT" add -f --pathspec-from-file="$list" --pathspec-file-nul ); } \
+    && kbg add -u -- "$1"
+  local rc=$?; rm -f "$list"; return $rc
+}
+
 # `ref` names a BRANCH. A tag or a SHA checks out a detached HEAD, and the write path
 # below has nothing to push it to — so it is refused here, by name, not at push time.
 check_ref() { # <url> <ref>
@@ -354,7 +370,7 @@ abort_rebase() { rebase_in_progress && kbg rebase --abort >/dev/null 2>&1; retur
 
 regenerate_index() {
   bash "$HERE/build-kb-index.sh" >/dev/null 2>&1 || return 1
-  kbg add -- "${KB_PREFIX}index.md" >/dev/null 2>&1
+  kb_stage "${KB_PREFIX}index.md" >/dev/null 2>&1
 }
 
 conflicted() { kbg diff --name-only --diff-filter=U 2>/dev/null; }
@@ -417,7 +433,7 @@ do_commit() {
       *) die "'$p' is outside knowledge/ — kb-sync commits the mounted KB and nothing else." ;;
     esac
     case "$KB_SPARSE" in "") rel="${p#knowledge/}"; [ "$rel" = knowledge ] && rel="." ;; *) rel="$p" ;; esac
-    kbg add -- "$rel" || die "could not stage '$p' in the KB mount."
+    kb_stage "$rel" || die "could not stage '$p' in the KB mount."
   done
 
   local who name email
