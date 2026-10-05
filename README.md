@@ -86,15 +86,16 @@ moves the machine and each bundle over, in order.
 
 ### 2. Make the bundle directory
 
-Name it **`_ai-bridge-<group>`**, inside the group folder, beside that group's repos.
+Name it **`_loopd-<group>`**, inside the group folder, beside that group's repos.
 
 ```bash
-mkdir -p ~/workspace/<group>/_ai-bridge-<group>
+mkdir -p ~/workspace/<group>/_loopd-<group>
 ```
 
 - The leading underscore pins it to the top of the group folder and keeps it visible (unlike a dotfile).
 - The `-<group>` suffix distinguishes it from other groups' bundles.
 - The group folder itself is **not** a repo — just a plain directory holding this bundle plus the group's repos, side by side, each its own repo.
+- A bundle created before the rename keeps its `_ai-bridge-<group>` name: that prefix is still recognised wherever the directory name is read (`plugin/scripts/bundle-paths.sh`), so nothing has to move.
 
 **No clone of this repo is needed.** The installer ships in the plugin. `/loopd:init`
 creates the directory too, so this step is optional — it is here because naming it right
@@ -103,7 +104,7 @@ is the part worth doing deliberately.
 ### 3. Stamp it
 
 ```
-/loopd:init ~/workspace/<group>/_ai-bridge-<group>
+/loopd:init ~/workspace/<group>/_loopd-<group>
 ```
 
 It does three things, and **none of them is a symlink into a checkout**:
@@ -143,7 +144,7 @@ three values a shared bundle needs, which used to be hand-edited afterwards. See
 ### 4. Configure it
 
 ```bash
-cd ~/workspace/<group>/_ai-bridge-<group>
+cd ~/workspace/<group>/_loopd-<group>
 $EDITOR instance.config.json      # org, reposRoot, worktreeRoot, authorEmail
 ```
 
@@ -151,16 +152,16 @@ $EDITOR instance.config.json      # org, reposRoot, worktreeRoot, authorEmail
 
 ```bash
 git init && git add -A && git commit -m "chore: bootstrap control panel"
-gh repo create <user>/_ai-bridge-<group> --private --source=. --push
+gh repo create <user>/_loopd-<group> --private --source=. --push
 ```
 
 Keep the leading underscore in the repo name, so a fresh `git clone` lands a
-`_ai-bridge-<group>/` directory that matches the convention.
+`_loopd-<group>/` directory that matches the convention.
 
 ### 6. Run your first loop
 
 ```bash
-cd ~/workspace/<group>/_ai-bridge-<group>   # this matters — see below
+cd ~/workspace/<group>/_loopd-<group>   # this matters — see below
 claude
 ```
 
@@ -299,7 +300,7 @@ Role dispatches are routed to a cost-appropriate model per tier
 ## Where the work lives
 
 ```
-_ai-bridge-<group>/
+_loopd-<group>/
 ├── objectives/        OPTIONAL — goals that outlive one project (`/loopd:init <dir> --with-objectives`)
 ├── projects/<slug>/
 │   ├── project.md     kind, status, autonomy, owner, target_repo
