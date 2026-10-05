@@ -3188,7 +3188,7 @@ if [ -n "$ORG_SLUG" ]; then
   echo "        https://github.com/cbmono/ai-bridge/blob/main/docs/sharing.md"
 fi
 
-# 8. The mount, and one WARNING when it carries unpushed commits. It reports, it never
+# 8. The mount, and one WARNING when it carries uncommitted edits or unpushed commits. It reports, it never
 # writes: a local KB commit is somebody's work, and pushing it on their behalf from an
 # installer is exactly the surprise this pass exists to avoid.
 if [ -f "$BIN_DIR/kb-sync.sh" ]; then
@@ -3204,7 +3204,7 @@ if [ -f "$BIN_DIR/kb-sync.sh" ]; then
   krc=0
   bash "$BIN_DIR/kb-sync.sh" --instance "$TARGET" status >/dev/null 2>&1 || krc=$?
   if [ "$krc" -eq 1 ]; then
-    echo "warn  the mounted knowledge base has unpushed commits. To see and push them:"
+    echo "warn  the mounted knowledge base has uncommitted edits or unpushed commits. To see and push them:"
     ab_say_run "     " bash "$BIN_DIR/kb-sync.sh" status
     ab_say_run "      then:" kb-sync.sh commit --message '"<message>"' -- '<path>...'
   fi
