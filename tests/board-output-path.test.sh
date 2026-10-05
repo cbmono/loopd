@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# iced — the board is on hold (owner's decision, 2026-10-05). `run.sh --iced`, the nightly
+# workflow and any PR whose diff names this file's subject still run it. Thaw: delete these lines.
 #
 # board-output-path.test.sh — WHERE the board lands, which is the whole of this file.
 #

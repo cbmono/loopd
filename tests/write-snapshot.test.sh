@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# iced — the board is on hold (owner's decision, 2026-10-05). `run.sh --iced`, the nightly
+# workflow and any PR whose diff names this file's subject still run it. Thaw: delete these lines.
 #
 # write-snapshot.test.sh — the snapshot's `awaiting` verbs agree with AWAITING.md on a
 # paused project: `merge` survives, every other verb is emptied, and `counts.awaiting` falls

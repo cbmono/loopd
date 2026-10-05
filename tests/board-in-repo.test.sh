@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# iced — the board is on hold (owner's decision, 2026-10-05). `run.sh --iced`, the nightly
+# workflow and any PR whose diff names this file's subject still run it. Thaw: delete these lines.
 #
 # board-in-repo.test.sh — `/board.html` is NOT tracked, and the migration that took it
 # out of the bundles is asserted behaviourally rather than by grepping for prose.

@@ -56,3 +56,24 @@ jobs:
           tests/run.sh --deep
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+  # The `# iced` tier: harnesses whose subject is on hold. tests/run.sh keeps them out of
+  # every pull request that does not name their subject, so this run is what notices one
+  # going stale for a reason no diff named — a day late, which is the price of the pause.
+  # No model call and no secret: it is a gate tier, with the refusing `claude` shim.
+  iced:
+    name: iced tier
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run tests/run.sh --iced
+        shell: bash
+        run: |
+          export TMPDIR="${RUNNER_TEMP:-/tmp}"
+          mkdir -p "$TMPDIR"
+          tests/run.sh --iced

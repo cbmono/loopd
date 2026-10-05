@@ -7,9 +7,13 @@
 #                             the full suite on anything else
 #   --deep                    ONLY the harnesses marked `# deep` — they spawn the claude
 #                             CLI and cost money; no other mode runs them or reaches it
+#   --iced                    ONLY the harnesses marked `# iced` — a subject on hold; every
+#                             other mode runs one only when a changed path names it
 #   --jobs N                  harnesses in parallel (default: CPUs); `# serial` runs alone
 # Each harness is bounded by HARNESS_TIMEOUT seconds (600, 1800 under --deep): one that
 # never returns is killed and fails as ITSELF, and the rest of the suite still reports.
+# A full run also reports its harness-seconds against SUITE_BUDGET_S (3600) — a warning,
+# never a failure: the runner's own speed varies by a third between two runs of one tree.
 # Exit: 0 all green · 1 a harness failed · 2 refused (no harnesses, or a dead checkout).
 # Why, the core list and the measured numbers: .claude/rules/tests.md.
 set -uo pipefail
@@ -48,7 +52,16 @@ CORE=(
 HARNESS_TIMEOUT="${HARNESS_TIMEOUT:-600}"
 HARNESS_TIMEOUT_DEEP="${HARNESS_TIMEOUT_DEEP:-1800}"
 
-usage() { sed -n '3,14p' "$0" | sed 's/^#\{1,\} \{0,1\}//'; }
+# The budget for a FULL run, in harness-seconds (the sum of every harness's own wall time;
+# divide by the pool size for minutes). The suite had none, and grew from 3,178 to 4,108
+# harness-seconds in one day (2026-10-04 to -05) until a green run was cancelled at the
+# job limit. 3600 is 20 minutes on the 3-CPU runner. It WARNS and never fails: two runs of
+# the same tree measured 3,015 and 4,108 on that runner, so a failing bound would be a coin.
+# One harness over HARNESS_WARN_S is named too — half the kill bound, while there is room.
+SUITE_BUDGET_S="${SUITE_BUDGET_S:-3600}"
+HARNESS_WARN_S="${HARNESS_WARN_S:-300}"
+
+usage() { sed -n '3,18p' "$0" | sed 's/^#\{1,\} \{0,1\}//'; }
 
 mode=all
 base=""
@@ -60,6 +73,7 @@ while [ $# -gt 0 ]; do
     --changed) mode=changed ;;
     --ci)      mode=ci ;;
     --deep)    mode=deep ;;
+    --iced)    mode=iced ;;
     --jobs)    shift; jobs="${1:-}" ;;
     --run-one) shift; one="${1:-}"; mode=run-one ;;   # internal: one harness, for the pool
     --base)    shift; base="${1:-}" ;;
@@ -75,6 +89,7 @@ export HARNESS_TIMEOUT   # the pool re-enters this script as --run-one, which re
 group()    { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::group::$1"; else echo "== $1"; fi; }
 endgroup() { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::endgroup::"; fi; return 0; }
 fatal()    { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::error::$1"; else echo "run.sh: $1" >&2; fi; }
+warn()     { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::warning::$1"; else echo "run.sh: warning: $1"; fi; }
 
 # A harness with a broken TMPDIR guard can rm -rf its OWN checkout while still printing a
 # clean pass=N fail=0 and exiting 0 — knowledge/findings/suite-cleanup-can-delete-its-own-
@@ -87,7 +102,8 @@ verify_checkout() {
 }
 
 # A harness declares its tier in its own header, on a line of its own in the first 20:
-# `# serial` (never run beside another harness) or `# deep` (spawns the claude CLI).
+# `# serial` (never run beside another harness), `# deep` (spawns the claude CLI) or
+# `# iced` (its subject is on hold — see the tier filter below).
 declares() { head -20 "$2" 2>/dev/null | grep -qE "^# $1( |$)"; }
 
 # bounded <harness> — the harness under a HARNESS_TIMEOUT-second wall clock, exiting 142
@@ -179,6 +195,7 @@ select_derived() {
 }
 
 files_from_selection() {
+  narrowed=1
   files=()
   while IFS= read -r h; do
     [ -n "$h" ] && files+=("$h")
@@ -194,13 +211,16 @@ announce() { # <lead> <changed paths>
 shopt -s nullglob
 files=(tests/*.test.sh)
 shopt -u nullglob
+narrowed=0    # 1 once a selection replaced the full list: the budget judges full runs only
+thaw=""       # the harnesses a changed path names — an `# iced` one among them still runs
+thaw_all=0    # 1 when the diff could not be read: fail toward running them
 
 # `.git` is a FILE in a linked worktree. init-bundle.sh --config refuses to run from one
 # by design, so four harnesses fail there for reasons unrelated to the code under test.
 [ -f "$workspace/.git" ] && echo "run.sh: this is a git WORKTREE — derived-indexes, link-repos, snapshot and board-renderers fail here by design (.claude/rules/tests.md). Verify from the main checkout or a fresh clone." >&2
 
 case "$mode" in
-  all|deep) ;;
+  all|deep|iced) ;;
 
   changed)
     [ -n "$base" ] || base="$(default_base)"
@@ -216,6 +236,7 @@ case "$mode" in
     else
       select_derived "$changed"
       files_from_selection
+      thaw="$SELECTED"
       announce "changed-path selection — the ${#CORE[@]} core harnesses plus every harness that names a changed path:" "$changed"
       [ -z "$UNNAMED" ] || echo "no harness names these changed paths, so they selected nothing beyond the core — verify with --all before the PR: $UNNAMED"
     fi
@@ -236,11 +257,12 @@ case "$mode" in
     # lists them reliably — the one that failed was not caught by the search for them.
     # Derivation is sound for a path somebody NAMES; it is blind to a harness that asks
     # "is every file here …?". Frequency was measured; soundness was not.
+    if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then thaw_all=1; fi
     if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GITHUB_BASE_REF:-}" ] \
        && git fetch --quiet origin "$GITHUB_BASE_REF"; then
       changed="$(git diff --name-only "origin/$GITHUB_BASE_REF...HEAD")"
+      if [ -n "$changed" ]; then select_derived "$changed"; thaw="$SELECTED"; thaw_all=0; fi
       if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qvE '^(plugin/|\.claude-plugin/)'; then
-        select_derived "$changed"
         if [ -n "$UNNAMED" ]; then
           echo "plugin-only diff, but no harness names these paths — running the FULL suite: $UNNAMED"
         else
@@ -260,11 +282,27 @@ fi
 # The tiers are disjoint: `# deep` runs under --deep and nowhere else, everything else
 # runs everywhere else. Selection can pick a deep harness by derivation, so the filter
 # is here rather than in the selector.
-serial=(); par=(); kept=()
+#
+# `# iced` is the third tier, and it is a PAUSE, not a retirement: the subject still ships
+# and its harness still exists, but nobody is changing it, so every PR was paying for a
+# verdict that could not move (the board's twelve: 241 of 3,015 harness-seconds on run
+# 37310865693, 2026-10-05). An iced harness runs under --iced and in the nightly workflow,
+# and in a gate tier ONLY when a changed path names it or is it — the one case where its
+# verdict can move, and derivation is sound for exactly that case. What it cannot see is
+# an iced harness that reads a directory wholesale; the nightly run is what catches that,
+# a day late, and that delay is the price accepted here. A pull request whose diff cannot
+# be read runs them all. THAWING a subject is deleting the marker line, nothing else.
+serial=(); par=(); kept=(); iced_skipped=0
 for f in "${files[@]}"; do
   if declares deep "$f"; then
     [ "$mode" = deep ] || continue
   elif [ "$mode" = deep ]; then
+    continue
+  elif declares iced "$f"; then
+    if [ "$mode" != iced ] && [ "$thaw_all" -ne 1 ] && ! grep -qxF -e "$f" <<<"$thaw"; then
+      iced_skipped=$((iced_skipped + 1)); continue
+    fi
+  elif [ "$mode" = iced ]; then
     continue
   fi
   kept+=("$f")
@@ -272,8 +310,10 @@ for f in "${files[@]}"; do
 done
 files=(); [ "${#kept[@]}" -eq 0 ] || files=("${kept[@]}")
 
+[ "$iced_skipped" -eq 0 ] || echo "== $iced_skipped '# iced' harness(es) not run: their subject is on hold and no changed path names them — tests/run.sh --iced and the nightly workflow run them =="
+
 if [ "${#files[@]}" -eq 0 ]; then
-  echo "nothing to run in this tier — the selection is entirely '# deep' harnesses, which only --deep runs"
+  echo "nothing to run in this tier — the selection is entirely '# deep' or '# iced' harnesses, which only --deep and --iced run"
   exit 0
 fi
 
@@ -301,6 +341,8 @@ case "$jobs" in ''|*[!0-9]*|0) fatal "--jobs wants a positive integer, got '$job
 
 total_pass=0
 total_fail=0
+sum_secs=0
+timings=""
 bad=()
 destroyed=""
 first_notrun=""
@@ -329,6 +371,7 @@ for f in "${files[@]}"; do
   fi
   read -r rc secs state < "$RUN_OUT_DIR/$b.meta"
   out="$(cat "$RUN_OUT_DIR/$b.out")"
+  sum_secs=$((sum_secs + secs)); timings="${timings}${secs} ${f}"$'\n'
 
   group "$f"
   printf '%s\n' "$out"
@@ -376,6 +419,23 @@ if [ -n "$destroyed" ] || [ -n "$first_notrun" ]; then
 fi
 
 echo "== ${#files[@]} harness(es) in $((end_ts - start_ts))s — pass=$total_pass fail=$total_fail =="
+
+# The time report. Printed for every run, judged for a full one only: a selection is
+# small by construction and would always read as under budget.
+echo "== $sum_secs harness-seconds; the slowest: $(printf '%s' "$timings" | sort -rn | head -5 | awk '{ sub(/^tests\//, "", $2); sub(/\.test\.sh$/, "", $2); printf "%s%s %ss", (NR > 1 ? ", " : ""), $2, $1 }') =="
+while read -r t_secs t_f; do
+  [ -n "$t_f" ] && [ "$t_secs" -gt "$HARNESS_WARN_S" ] || continue
+  warn "$t_f took ${t_secs}s — over ${HARNESS_WARN_S}s, half the ${HARNESS_TIMEOUT}s kill bound. Split it or make its subject cheaper before it is killed."
+done <<<"$timings"
+if [ "$narrowed" -eq 0 ] && [ "$mode" != deep ] && [ "$mode" != iced ] && [ "$sum_secs" -gt "$SUITE_BUDGET_S" ]; then
+  warn "the full suite took $sum_secs harness-seconds, over the budget of $SUITE_BUDGET_S. Nothing fails on this — but the next harness is a decision: say in the PR body what it costs and what it replaces (.claude/rules/tests.md, 'The time budget')."
+fi
+if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+  { echo "### harness suite — $sum_secs harness-seconds (budget $SUITE_BUDGET_S for a full run), ${#files[@]} harnesses, $((end_ts - start_ts))s wall"
+    echo; echo "| harness | seconds |"; echo "|---|--:|"
+    printf '%s' "$timings" | sort -rn | head -15 | awk '{ printf "| `%s` | %s |\n", $2, $1 }'
+  } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+fi
 
 if [ "${#bad[@]}" -gt 0 ]; then
   echo "FAILED harnesses:"

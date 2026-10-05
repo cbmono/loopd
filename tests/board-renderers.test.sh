@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# iced — the board is on hold (owner's decision, 2026-10-05). `run.sh --iced`, the nightly
+# workflow and any PR whose diff names this file's subject still run it. Thaw: delete these lines.
 #
 # board-renderers.test.sh — the two renderers added over the SAME snapshot the HTML
 # board already reads: scripts/print-board.sh (terminal) and scripts/watch-board.sh
