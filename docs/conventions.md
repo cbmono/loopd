@@ -108,6 +108,18 @@ It prefers **branch protection** and falls back to `.github/required-checks.txt`
 
 **A corpus rescore is a change detector, not a correctness proof.** All 37 PRs, both versions, the same live GitHub state re-read from the API on each invocation (never a snapshot), **0 of 37 exit codes changed** — for five rounds running. That is a null result about *reachability*: every behavioural change in the last three rounds is unreachable in this corpus, so the rescore gives **zero coverage of the new logic**. It shows the gate was not widened; the evidence that a route is closed is the constructed case and its passing control.
 
+**The self-test still decides; it is no longer re-run for bytes it has already passed.**
+`pr-body-clearance.sh --self-test` is a deliberate battery of probes and takes 2–4 seconds;
+`required-checks.sh` ran it, and `review-clearance.sh`'s, on **every** invocation — every
+gate evaluation in a tick, and 100 seconds of one harness (52 after, measured 2026-10-05).
+A self-test reads nothing but the script's own file, so its answer is a property of those
+bytes: `selftest_ok` keys the verdict on the file's checksum and byte count, records **only
+a pass**, and treats an unreadable, unwritable or mismatching record as no record. An
+edited, truncated or swapped sibling has a different key and is always tested again; a
+failing one is refused and re-tested on every call. Fail closed is untouched — the saving
+is the only thing a broken cache can cost. `tests/selftest-reuse.test.sh` pins each of
+those from both sides, driving the real caller with a counting stand-in for its sibling.
+
 ## 7. `prune-worktrees.sh` is report-only, and that is load-bearing
 
 It classifies worktrees and prints `git worktree remove` commands; it never deletes. The removal path was deleted in v2 because it had destroyed three running agents' worktrees, and because no first-party mechanism covers this root: native worktree isolation and its retention sweep only reach worktrees the harness itself created, of the **session** repo — measured, see the `worktree-isolation-spike` finding — while loopd's live under `<reposRoot>/_wt` and are created by agents calling `git worktree add`. **Do not reintroduce a delete into THIS script, not even behind a flag**; the auto-mode permission classifier independently refuses bulk worktree deletion, which is the same conclusion reached from the other side.

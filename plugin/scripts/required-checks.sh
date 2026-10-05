@@ -265,6 +265,30 @@ fi
 # spelled out here rather than sourced from the sibling, because sourcing the file is
 # exactly what cannot be trusted when the file is the thing under suspicion.
 CLEARANCE="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/review-clearance.sh"
+# selftest_ok <script> <expected-line> — does <script> --self-test answer <expected-line>?
+# THE SELF-TEST STILL DECIDES; it is only not re-run for bytes it has already passed. A
+# self-test reads nothing but the script's own file (no network, no PR), so its answer is a
+# property of those bytes. Measured 2026-10-05: pr-body-clearance.sh's takes 2-4 s, and it
+# ran on EVERY call of this script — every gate evaluation in a tick, and 100 s of one
+# harness. The key is the file's checksum and byte count, so a truncated, edited or swapped
+# copy never inherits an earlier verdict. ONLY A PASS IS RECORDED: a failure is re-measured
+# every time, and an unreadable, unwritable or mismatching record just means the self-test
+# runs, exactly as it always did. Fail closed is unchanged — anything but the expected
+# line is a refusal in the caller below.
+selftest_ok() {
+  local s="$1" want="$2" key dir got
+  dir="${TMPDIR:-/tmp}/loopd-selftest.$(id -u)"
+  key="$(cksum < "$s" 2>/dev/null)"; key="${key// /-}"
+  if [ -n "$key" ] && [ -f "$dir/${s##*/}.$key" ]; then
+    got=""; IFS= read -r got < "$dir/${s##*/}.$key" 2>/dev/null || true
+    [ "$got" = "$want" ] && return 0
+  fi
+  if got="$("$s" --self-test 2>/dev/null)"; then :; else got=""; fi
+  [ "$got" = "$want" ] || return 1
+  [ -n "$key" ] && mkdir -p "$dir" 2>/dev/null && chmod 700 "$dir" 2>/dev/null \
+    && printf '%s\n' "$want" > "$dir/${s##*/}.$key" 2>/dev/null
+  return 0
+}
 CLEARANCE_SELFTEST_OK="review-clearance: self-test ok"
 if [ ! -f "$CLEARANCE" ]; then
   echo "error: review-clearance.sh not found beside this script ($CLEARANCE)." >&2
@@ -272,8 +296,7 @@ if [ ! -f "$CLEARANCE" ]; then
   echo "       so the reviewer state is unknown and this refuses (fail closed)." >&2
   exit 2
 fi
-if selftest="$("$CLEARANCE" --self-test 2>/dev/null)"; then :; else selftest=""; fi
-if [ "$selftest" != "$CLEARANCE_SELFTEST_OK" ]; then
+if ! selftest_ok "$CLEARANCE" "$CLEARANCE_SELFTEST_OK"; then
   echo "error: review-clearance.sh is present but does not run ($CLEARANCE)." >&2
   echo "       Its --self-test did not answer '$CLEARANCE_SELFTEST_OK'. A reviewer's" >&2
   echo "       check cannot be told from a CI job by a script that cannot execute, and" >&2
@@ -408,8 +431,7 @@ if [ ! -f "$BODYGATE" ]; then
   echo "       unknown is never clearance. Refusing (fail closed)." >&2
   exit 2
 fi
-if bg_selftest="$("$BODYGATE" --self-test 2>/dev/null)"; then :; else bg_selftest=""; fi
-if [ "$bg_selftest" != "$BODYGATE_SELFTEST_OK" ]; then
+if ! selftest_ok "$BODYGATE" "$BODYGATE_SELFTEST_OK"; then
   echo "error: pr-body-clearance.sh is present but does not run ($BODYGATE)." >&2
   echo "       Its --self-test did not answer '$BODYGATE_SELFTEST_OK'. A script that" >&2
   echo "       fails every invocation reads exactly like a gate doing its job, so the" >&2
