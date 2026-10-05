@@ -270,6 +270,7 @@ step2=0 step3=0 step4=0 step5=0 step6=0
 # Exit 2 is UNKNOWN, not "no": the caller poisons the fingerprint on it rather than let a
 # parser it could not run read as a task with nothing answered.
 FOLD="$(dirname "${BASH_SOURCE[0]}")/fold-answers.sh"
+CKPT="$(dirname "${BASH_SOURCE[0]}")/continue-checkpoint.sh"
 answered_open() { # <file>
   fmlist "$1" open_questions text 2>/dev/null | grep -qF -- ' --- ' && return 0
   local parsed
@@ -352,6 +353,14 @@ $prs"
   # A live dispatch is owed its monitoring whatever the record says. Signalled as a
   # fingerprint line so `record` captures it too, and short-circuited in `check` below.
   [ "$inflight" = 1 ] && printf 'inflight yes\n' || printf 'inflight no\n'
+
+  # The one wall-clock fact: a stalled project's fingerprint never moves, and it is the
+  # project the continue checkpoint exists for. Only the DUE SET is printed, so it moves
+  # once per crossing rather than once per day.
+  if [ -f "$inst/$AB_AWAITING" ] && [ -f "$CKPT" ]; then
+    local due; due="$(bash "$CKPT" --instance "$inst" 2>/dev/null)" || return 1
+    printf 'checkpoint %s\n' "$(printf '%s\n' "$due" | cut -f1 | grep . | tr '\n' ' ')"
+  fi
 
   # Every open-PR fact comes from the HOST, via gh's own --jq (no local jq needed). A
   # failure on any one PR poisons the whole fingerprint — better no answer than a match
