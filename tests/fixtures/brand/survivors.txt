@@ -1,4 +1,4 @@
-# Files under `plugin docs README.md tests` that still contain the string
+# Files under `plugin docs README.md tests scripts` that still contain the string
 # `ai-bridge` after the brand-prose flip (loopd/task-012), one per line, each with the
 # hand-assigned reason it survives. Pinned, not derived: tests/readme-brand-mark.test.sh
 # compares this list to the repository and goes red both ways, so a file that joins or

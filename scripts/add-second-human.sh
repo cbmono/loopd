@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# add-second-human.sh — put a second human on an existing ai-bridge bundle.
+# add-second-human.sh — put a second human on an existing loopd bundle.
 #
 #   Usage:  ./scripts/add-second-human.sh <instance-dir> [--apply]
 #
@@ -136,35 +136,29 @@ PYEOF
 
 REMOTE="$(git -C "$TARGET" remote get-url origin 2>/dev/null || echo '<bundle-remote>')"
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
+. "$TPL/plugin/scripts/plugin-name.sh"
+GH_REPO="$(sed -n 's#^  "repository": *"https://github.com/\([^"]*\)".*#\1#p' "$TPL/plugin/.claude-plugin/plugin.json" | head -1)"
 
 echo
 echo "== what the SECOND human runs, on their own machine ==================="
-echo "  # 1. clone this template somewhere PERMANENT (instances symlink into it by"
-echo "  #    absolute path, so moving it later silently breaks every instance)"
-echo "  git clone git@github.com:cbmono/ai-bridge.git ~/workspace/ai-bridge"
+echo "  # 1. install the plugin, once per machine, in Claude Code:"
+echo "  #      /plugin marketplace add $GH_REPO"
+echo "  #      /plugin install $PLUGIN_NAME@$PLUGIN_MARKETPLACE"
 echo
 echo "  # 2. clone the bundle"
-echo "  git clone $REMOTE _ai-bridge-<group> && cd _ai-bridge-<group>"
+echo "  git clone $REMOTE _loopd-<group> && cd _loopd-<group>"
 echo
-echo "  # 3. link the machinery from THEIR clone of the template"
-echo "  ~/workspace/ai-bridge/install.sh \"\$PWD\""
+echo "  # 3. stamp the clone, in Claude Code. It writes their GITIGNORED"
+echo "  #    instance.config.local.json, which must never be committed, or both humans'"
+echo "  #    commits get authored as one person. Add --repos-root <dir> if their repos"
+echo "  #    do not sit beside the bundle."
+echo "  /$PLUGIN_NAME:init . --owner $SECOND_LOGIN"
 echo
-echo "  # 4. say which human this clone is, plus their own absolute paths."
-echo "  #    instance.config.local.json is GITIGNORED and must never be committed, or"
-echo "  #    both humans' commits get authored as one person."
-echo "  cat > instance.config.local.json <<'JSON'"
-echo "  {"
-echo "    \"ownerGithubUser\": \"$SECOND_LOGIN\","
-echo "    \"reposRoot\": \"/absolute/path/to/their/repos\","
-echo "    \"worktreeRoot\": \"/absolute/path/to/their/_wt\""
-echo "  }"
-echo "JSON"
-echo
-echo "  # 5. A CLONE IS NOT A FIRST STAMP, so the queue is not created. Turn it on:"
+echo "  # 4. A CLONE IS NOT A FIRST STAMP, so the queue is not created. Turn it on:"
 echo "  touch AWAITING.md"
 echo "  ./scripts/write-snapshot.sh        # board presence (\`board\` defaults to on)"
 echo
-echo "  # 6. sanity-check ownership BEFORE starting a loop — exit 0 means 'this clone's'"
+echo "  # 5. sanity-check ownership BEFORE starting a loop — exit 0 means 'this clone's'"
 echo "  ./scripts/task-owner.sh projects/<slug>/tasks/<id>.md; echo \"exit=\$?\""
 
 echo

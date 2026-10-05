@@ -132,7 +132,7 @@ SURV="$REPO/tests/fixtures/brand/survivors.txt"
 [ -f "$SURV" ] || { echo "readme-brand-mark.test: missing $SURV" >&2; exit 2; }
 listed()    { grep -v '^#' "$SURV" | cut -f2 | sort; }
 # The measure is criterion 1's own command, run from a root so a mutant tree can take it.
-sweep()     { ( cd "$1" && grep -rIl ai-bridge plugin docs README.md tests 2>/dev/null ) | sort; }
+sweep()     { ( cd "$1" && grep -rIl ai-bridge plugin docs README.md tests scripts 2>/dev/null ) | sort; }
 pinned_in() { local r="$1" p; listed | while IFS= read -r p; do [ -e "$r/$p" ] && echo "$p"; done; }
 new_brand() { comm -13 <(pinned_in "$1") <(sweep "$1") | tr '\n' ' ' | sed 's/ $//'; }
 left_list() { comm -23 <(pinned_in "$1") <(sweep "$1") | tr '\n' ' ' | sed 's/ $//'; }
@@ -153,6 +153,12 @@ ok "mutant E: reintroduced brand prose is named" "$(new_brand "$MUT")" plugin/sc
 MUT2="$TMP/mut2"; mkdir -p "$MUT2/plugin/scripts"
 sed 's/ai-bridge//g' "$REPO/plugin/scripts/bundle-paths.sh" > "$MUT2/plugin/scripts/bundle-paths.sh"
 ok "mutant F: a listed file that no longer matches is named" "$(left_list "$MUT2")" plugin/scripts/bundle-paths.sh
+
+# Mutant G: scripts/ is swept — the retired install.sh line comes back and must be NAMED.
+MUT3="$TMP/mut3"; mkdir -p "$MUT3/scripts"
+{ cat "$REPO/scripts/add-second-human.sh"; echo 'echo "  ~/workspace/ai-bridge/install.sh \"\$PWD\""'; } \
+  > "$MUT3/scripts/add-second-human.sh"
+ok "mutant G: the retired install.sh line in scripts/ is named" "$(new_brand "$MUT3")" scripts/add-second-human.sh
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
