@@ -151,3 +151,6 @@ owner's, 2026-09-06.
 
 Install with `/plugin install <name>@claude-plugins-official`; one line per plugin, user scope, and it is available in every session on that machine.
 
+Running the role agents unattended inside a container or VM is operator setup rather than
+a plugin: [operations.md → Running the role agents in a sandbox](operations.md#running-the-role-agents-in-a-sandbox).
+
