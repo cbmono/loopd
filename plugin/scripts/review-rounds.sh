@@ -190,6 +190,22 @@ done
 # answer "not a review" to every candidate, every PR would read as zero rounds, and the cap
 # would not fail — it would DISAPPEAR. `[ -x ]` cannot see that; `--self-test` can.
 CLEARANCE="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/review-clearance.sh"
+# selftest_ok — see required-checks.sh, where this function is explained; the two copies are
+# kept identical, because a shared file would have to be sourced before anything proved it runs.
+selftest_ok() {
+  local s="$1" want="$2" key dir got
+  dir="${TMPDIR:-/tmp}/loopd-selftest.$(id -u)"
+  key="$(cksum < "$s" 2>/dev/null)"; key="${key// /-}"
+  if [ -n "$key" ] && [ -f "$dir/${s##*/}.$key" ]; then
+    got=""; IFS= read -r got < "$dir/${s##*/}.$key" 2>/dev/null || true
+    [ "$got" = "$want" ] && return 0
+  fi
+  if got="$("$s" --self-test 2>/dev/null)"; then :; else got=""; fi
+  [ "$got" = "$want" ] || return 1
+  [ -n "$key" ] && mkdir -p "$dir" 2>/dev/null && chmod 700 "$dir" 2>/dev/null \
+    && printf '%s\n' "$want" > "$dir/${s##*/}.$key" 2>/dev/null
+  return 0
+}
 CLEARANCE_SELFTEST_OK="review-clearance: self-test ok"
 if [ ! -f "$CLEARANCE" ]; then
   echo "error: review-clearance.sh not found beside this script ($CLEARANCE)." >&2
@@ -197,8 +213,7 @@ if [ ! -f "$CLEARANCE" ]; then
   echo "       without it no round can be counted. Refusing (fail closed)." >&2
   exit 2
 fi
-if selftest="$("$CLEARANCE" --self-test 2>/dev/null)"; then :; else selftest=""; fi
-if [ "$selftest" != "$CLEARANCE_SELFTEST_OK" ]; then
+if ! selftest_ok "$CLEARANCE" "$CLEARANCE_SELFTEST_OK"; then
   echo "error: review-clearance.sh is present but does not run ($CLEARANCE)." >&2
   echo "       Its --self-test did not answer '$CLEARANCE_SELFTEST_OK'. A sibling that" >&2
   echo "       fails every invocation reports every PR as zero rounds, which reads as" >&2
