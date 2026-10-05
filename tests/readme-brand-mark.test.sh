@@ -181,7 +181,7 @@ for f in bundle-paths.sh migrate-bundle.sh; do
 done
 ok "mutant H: the file check is blind to an extra $DOT" "$(new_brand "$MUT4")" ""
 ok "mutant H: each gained $DOT is named with its count" "$(dot_drift "$MUT4")" \
-   "plugin/scripts/bundle-paths.sh=1 plugin/scripts/migrate-bundle.sh=4"
+   "plugin/scripts/bundle-paths.sh=2 plugin/scripts/migrate-bundle.sh=4"
 
 # Mutant I: a pinned $DOT disappears without the pin moving. The check must NAME it.
 MUT5="$TMP/mut5"; mkdir -p "$MUT5/plugin/scripts"

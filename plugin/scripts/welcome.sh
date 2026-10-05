@@ -582,6 +582,14 @@ check_bundle_unmigrated() {
     return 0
   fi
   local pair old
+  if [ -d "$ROOT/$AB_DIR_BEFORE" ]; then
+    warn "this bundle still keeps its state in $AB_DIR_BEFORE/ — this plugin reads $AB_DIR/"
+    printf '    %s/ -> %s/\n' "$AB_DIR_BEFORE" "$AB_DIR"
+    [ ! -e "$ROOT/$AB_DIR" ] || note "$AB_DIR/ exists too — stamped before the migration; move it aside, the migration stops while it is there"
+    note "every reader looks at the new path, and an absent one reads as 'switched off'"
+    hint "cd $ROOT && migrate-bundle.sh        # then again with --apply"
+    return 1
+  fi
   warn "plugin-owned files are still at the bundle root — this bundle predates the 3.0 layout"
   for pair in $AB_MOVES; do
     old="${pair%%:*}"; [ -e "$ROOT/$old" ] && printf '    %s -> %s\n' "$old" "${pair#*:}"

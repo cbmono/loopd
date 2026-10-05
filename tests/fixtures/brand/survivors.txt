@@ -36,7 +36,7 @@ prov	plugin/scripts/agent-usage.sh
 frozen	plugin/scripts/board-serve.sh
 frozen	plugin/scripts/build-board.sh
 prov	plugin/scripts/build-kb-index.sh
-prov,instdir	plugin/scripts/bundle-paths.sh
+prov,instdir,bundle	plugin/scripts/bundle-paths.sh	1
 prov	plugin/scripts/check-dispatch.sh
 prov	plugin/scripts/cite-check.sh
 prov	plugin/scripts/clearance-receipt.sh
