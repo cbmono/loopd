@@ -1634,15 +1634,19 @@ fi
 
 # 1f. THE `claude --bg` GRANT IS NOTICED, NEVER WRITTEN: a plugin must not grant itself a
 # permissions bypass (owner, 2026-09-25/30). tests/no-bg-grant.test.sh pins it; task-019.
-BG_RULE="Bash(claude --bg * --agent ${PLUGIN_NAME}:* --permission-mode bypassPermissions --add-dir *)"
+BG_RULE="Bash(claude --bg * --agent ${PLUGIN_NAME}:* --permission-mode auto --add-dir *)"
+BG_OLD="Bash(claude --bg * --agent ${PLUGIN_NAME}:* --permission-mode bypassPermissions --add-dir *)"
 BG_INERT="Bash(claude --bg ' *)"
 if grep -qF "\"$BG_INERT\"" "$AL_FILE" 2>/dev/null; then
   echo "  note  .claude/settings.local.json has \`$BG_INERT\`; it matches no spawn form measured (Claude Code 2.1.285)."
   echo "        The narrowest that does: $BG_RULE"
+elif grep -qF "\"$BG_OLD\"" "$AL_FILE" 2>/dev/null; then
+  echo "  note  .claude/settings.local.json grants a \`bypassPermissions\` spawn; the tick spawns in auto mode now, so it matches nothing."
+  echo "        The narrowest that does: $BG_RULE"
 elif ! grep -qE '"Bash\(claude --bg' "$AL_FILE" 2>/dev/null; then
   echo "  note  init writes no \`claude --bg\` grant. The narrowest rule measured to match the tick's spawn:"
   echo "          $BG_RULE"
-  echo "        It lets any brief run as any ${PLUGIN_NAME} role with bypassPermissions, unprompted."
+  echo "        It lets the tick spawn any ${PLUGIN_NAME} role, in auto mode, unprompted."
   echo "        Adding it to .claude/settings.local.json is yours, not the plugin's."
 fi
 

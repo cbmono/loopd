@@ -33,7 +33,8 @@ stamp() { # <plugin root> <instance>
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" \
     bash "$1/scripts/init-bundle.sh" "$2" </dev/null >"$TMP/out" 2>&1
 }
-RULE="Bash(claude --bg * --agent ${PN}:* --permission-mode bypassPermissions --add-dir *)"
+RULE="Bash(claude --bg * --agent ${PN}:* --permission-mode auto --add-dir *)"
+OLD_RULE="Bash(claude --bg * --agent ${PN}:* --permission-mode bypassPermissions --add-dir *)"
 INERT="Bash(claude --bg ' *)"
 grants() { # <instance> -> count of claude allow entries across every settings file it has
   cat "$1"/.claude/*.json 2>/dev/null | grep -cE '"Bash\(claude[ :]' | tr -d ' '
@@ -61,6 +62,15 @@ printf '{\n  "permissions": {\n    "allow": [\n      "%s"\n    ]\n  }\n}\n' "$RU
 stamp "$MK" "$I"
 ok "still exactly one claude allow entry" "$(grants "$I")" 1
 ok "no notice printed" "$(cnt -F 'claude --bg' "$TMP/out")" 0
+
+echo "== 3b. a grant from before 3.3 names bypassPermissions: reported as matching nothing, left alone =="
+I="$TMP/i3b"; mkdir -p "$I/.claude"; L="$I/.claude/settings.local.json"
+printf '{\n  "permissions": {\n    "allow": [\n      "%s"\n    ]\n  }\n}\n' "$OLD_RULE" > "$L"
+stamp "$MK" "$I"
+ok "the operator's old rule is kept, once" "$(cnt -F "\"$OLD_RULE\"" "$L")" 1
+ok "no other claude allow entry was added" "$(grants "$I")" 1
+ok "it is told the tick spawns in auto mode now" "$(cnt -F 'the tick spawns in auto mode now' "$TMP/out")" 1
+ok "…and shown the rule that matches" "$(cnt -F "$RULE" "$TMP/out")" 1
 
 echo "== 4. a checkout stamp writes no grant either =="
 I="$TMP/i4"; mkdir -p "$I"; stamp "$TMP/checkout/plugin" "$I"
@@ -90,7 +100,7 @@ fi
 ok "no shipped JSON allows a claude command" "$json_hits" 0
 # Outside markdown, `Bash(claude` may only appear in a line that prints it.
 code_hits="$(printf '%s\n' "$SURF" | grep -v '\.md$' | while IFS= read -r f; do
-  grep -nF 'Bash(claude' "$f" | grep -vE '^[0-9]+:[[:space:]]*(echo|printf|#|BG_RULE=|BG_INERT=)' | sed "s|^|$f:|"
+  grep -nF 'Bash(claude' "$f" | grep -vE '^[0-9]+:[[:space:]]*(echo|printf|#|BG_RULE=|BG_INERT=|BG_OLD=)' | sed "s|^|$f:|"
 done)"
 [ -z "$code_hits" ] || printf '%s\n' "$code_hits" | sed 's/^/        /'
 ok "no script line writes a claude rule" "$(printf '%s' "$code_hits" | grep -c . | tr -d ' ')" 0

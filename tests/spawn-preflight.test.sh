@@ -146,14 +146,15 @@ ok "could-not-read is neither a pass nor a failure" "$(yn grep -qF 'never a pass
 ok "the preflight writes no grant entry"     "$(yn grep -qF 'preflight writes no `open_questions` entry' "$S3")" yes
 ok "ONE entry shape: task-003's"             "$(grep -c 'Q<n>: dispatch refused: ' "$S3" | tr -d ' ')" 1
 ok "the remedy is stated once, in one place" \
-   "$(grep -rlF 'exit auto mode for the WHOLE tick' "$REPO/plugin" | sed "s|$REPO/||" | tr '\n' ' ')" "plugin/tick-steps/step-3-dispatch.md "
+   "$(grep -rlF 'check the spawn asked for --permission-mode auto' "$REPO/plugin" | sed "s|$REPO/||" | tr '\n' ' ')" "plugin/tick-steps/step-3-dispatch.md "
 row1="$(awk '/\| The text carries \|/ { t = 1; next } t && /^[[:space:]]*\|---/ { next } t { print; exit }' "$S3")"
 cell() { printf '%s' "$row1" | awk -F' [|] ' -v n="$1" '{ gsub(/^[[:space:]]*[|] | [|][[:space:]]*$/, ""); print $n }' | sed 's/^`//; s/`$//'; }
 which="$(cell 2)"; remedy="$(cell 3)"
 line_tpl="$(head -n1 <<<"$(sed -n 's/^[[:space:]]*\(dispatch refused: <which>\. .*\)$/\1/p' "$S3")")"
 line="${line_tpl//<which>/$which}"; line="${line//<remedy>/$remedy}"; line="${line//<k>/3}"
 ok "the report line template is there"       "$([ -n "$line_tpl" ] && echo yes || echo no)" yes
-ok "…carrying the shift+tab remedy"          "$(yn grep -qF 'shift+tab' <<<"$line")" yes
+ok "…carrying the remedy: the spawn's own mode" "$(yn grep -qF 'asked for --permission-mode auto' <<<"$line")" yes
+ok "…and never telling the operator to leave auto mode" "$(yn grep -qF 'shift+tab' <<<"$line")" no
 ok "…never a claude --bg or bypass grant"    "$(yn grep -qE 'claude --bg|bypassPermissions' <<<"$line")" no
 ok "…never a cap"                            "$( { grep -qiw 'cap' || grep -qiE 'in[- ]flight'; } <<<"$line" && echo yes || echo no)" no
 entry_tpl="$(head -n1 <<<"$(sed -n 's/^[[:space:]]*\(Q<n>: dispatch refused: .*\)$/\1/p' "$S3")")"
