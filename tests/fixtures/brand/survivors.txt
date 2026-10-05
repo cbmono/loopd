@@ -12,7 +12,10 @@
 #   harness  the check in section 5 below, which must name the string it sweeps for
 #   list     this file
 #
-# <reason(s)><TAB><path>
+# A third column pins how many `.ai-bridge` literals the file carries; absent means 0, and
+# § 5 compares it per file, because a file already listed is otherwise free to gain one.
+#
+# <reason(s)><TAB><path>[<TAB><count of .ai-bridge>]
 prov,instdir,fname,frozen	README.md
 prov,fname	docs/conventions.md
 frozen	docs/index.html
@@ -20,8 +23,8 @@ prov,instdir,frozen	docs/migrating.md
 prov,instdir,fname,frozen	docs/operations.md
 prov	docs/pm-design.md
 frozen	docs/releases/v1.0.0.md
-frozen	docs/releases/v3.0.0.md
-frozen	docs/releases/v3.1.0.md
+frozen	docs/releases/v3.0.0.md	2
+frozen	docs/releases/v3.1.0.md	3
 prov	docs/sharing.md
 prov,fname	plugin/README.md
 fname	plugin/RETIRED
@@ -43,7 +46,7 @@ prov	plugin/scripts/kb-migrate.sh
 prov,frozen	plugin/scripts/kb-sync.sh
 instdir	plugin/scripts/link-repos.sh
 prov	plugin/scripts/merge-permit.sh
-bundle	plugin/scripts/migrate-bundle.sh
+bundle	plugin/scripts/migrate-bundle.sh	3
 prov	plugin/scripts/papercuts.sh
 prov	plugin/scripts/pr-body-clearance.sh
 prov	plugin/scripts/pr-verdict-clearance.sh
@@ -101,7 +104,7 @@ instdir,frozen	tests/deliverable-paths-vs-yaml.test.sh
 prov	tests/deny-baseline.test.sh
 prov,instdir	tests/derived-indexes.test.sh
 prov	tests/explorer-tier.test.sh
-list	tests/fixtures/brand/survivors.txt
+list	tests/fixtures/brand/survivors.txt	3
 prov	tests/fixtures/dispatch/commented-pr.task.md
 prov	tests/fixtures/pr-body/ai-bridge-195.md
 prov	tests/fixtures/pr-body/loopd-task-025-criteria.md
@@ -124,7 +127,7 @@ prov,instdir	tests/link-repos.test.sh
 prov	tests/local-tier-seed.test.sh
 prov	tests/local-vs-ci-testing.test.sh
 frozen	tests/loop-cadence.test.sh
-bundle,fname	tests/migrate-bundle.test.sh
+bundle,fname	tests/migrate-bundle.test.sh	29
 prov,instdir,frozen	tests/moved-template.test.sh
 prov	tests/override-count-and-reason.test.sh
 instdir	tests/per-owner-board.test.sh
@@ -139,7 +142,7 @@ prov,fname	tests/pr-body-clearance.test.sh
 prov	tests/pr-comment-clearance.test.sh
 prov	tests/pr-verdict-clearance.test.sh
 prov	tests/quiet-tick.test.sh
-prov,harness	tests/readme-brand-mark.test.sh
+prov,harness	tests/readme-brand-mark.test.sh	4
 prov	tests/record-host-rendering.test.sh
 frozen	tests/release-bump.test.sh
 prov,instdir,fname	tests/retire-machinery.test.sh
