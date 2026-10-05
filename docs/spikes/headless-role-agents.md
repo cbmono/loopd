@@ -4,6 +4,9 @@
 linked worktree of a repo carrying the `.git/loopd-bundle` marker, against scratch
 repositories with a local bare remote. No task document, product repo or tick lock was
 touched. Reproduce: `bash docs/spikes/headless-role-agents-probe.sh --live <trusted-worktree>`.
+The probe runs in the default headless permission mode with `--allowedTools Write` at most;
+only its deny-baseline step uses `bypassPermissions`, restricted to the Bash tool, and it
+is skipped unless the worktree's repo carries the hook's marker.
 
 This picks up where [`headless-tick.md`](headless-tick.md) stopped. That spike measured the
 **tick** under `-p` (plugin agents, skills and hooks load; the budget cap; a killed tick) and
