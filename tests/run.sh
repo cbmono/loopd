@@ -3,8 +3,9 @@
 # run.sh — the ONE implementation of this repo's harness selection. CI calls it too.
 #   --changed [--base <ref>]  the core harnesses plus every harness naming a changed path
 #   --all                     every tests/*.test.sh (the default)
-#   --ci                      the workflow entry: the fast path on a plugin-only PR diff,
-#                             the full suite on anything else
+#   --ci                      the workflow entry: the fast path on a PR diff that touches
+#                             only plugin/ and top-level harness files, the full suite on
+#                             anything else
 #   --deep                    ONLY the harnesses marked `# deep` — they spawn the claude
 #                             CLI and cost money; no other mode runs them or reaches it
 #   --jobs N                  harnesses in parallel (default: CPUs); `# serial` runs alone
@@ -223,19 +224,30 @@ case "$mode" in
 
   ci)
     # PRs only; a push to main always runs everything. The verdict FAILS TOWARD THE FULL
-    # SUITE at every step — empty diff, failed fetch, any path outside plugin/ and
-    # .claude-plugin/, or a changed path NO harness names. That last one differs from
-    # --changed on purpose: this is the merge gate, and there is no --all run after it.
+    # SUITE at every step — empty diff, failed fetch, any path outside plugin/,
+    # .claude-plugin/ and the top-level harness files, or a changed path NO harness names.
+    # That last one differs from --changed on purpose: this is the merge gate, and there
+    # is no --all run after it.
+    #
+    # A TOP-LEVEL HARNESS IN THE DIFF NO LONGER TURNS THE FAST PATH OFF. Every change here
+    # carries its test, so "plugin-only" described no pull request at all: of the last 40
+    # merged, 0 took the fast path and 15 touched nothing but plugin/ and tests/*.test.sh
+    # (measured 2026-10-05). A changed harness selects ITSELF (select_derived), so it runs;
+    # a DELETED one cannot, lands in UNNAMED, and buys the full suite. Anything else under
+    # tests/ — fixtures, tools, this runner — is shared by harnesses that do not name it,
+    # and still means everything runs.
     if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GITHUB_BASE_REF:-}" ] \
        && git fetch --quiet origin "$GITHUB_BASE_REF"; then
       changed="$(git diff --name-only "origin/$GITHUB_BASE_REF...HEAD")"
-      if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qvE '^(plugin/|\.claude-plugin/)'; then
+      if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qvE '^(plugin/|\.claude-plugin/|tests/[^/]+\.test\.sh$)'; then
+        kind="plugin-only"
+        ! printf '%s\n' "$changed" | grep -qE '^tests/' || kind="plugin-and-harness"
         select_derived "$changed"
         if [ -n "$UNNAMED" ]; then
-          echo "plugin-only diff, but no harness names these paths — running the FULL suite: $UNNAMED"
+          echo "$kind diff, but no harness names these paths — running the FULL suite: $UNNAMED"
         else
           files_from_selection
-          announce "plugin-only diff — running the core plugin harnesses plus every harness that names a changed path:" "$changed"
+          announce "$kind diff — running the core plugin harnesses plus every harness that names a changed path:" "$changed"
         fi
       fi
     fi
