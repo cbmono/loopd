@@ -1345,7 +1345,8 @@ FIRST_STAMP=no
 # shared bundle's clone. ~190 KB, and it is what makes the refresh work offline.
 SEED_BASE_DIR="$TARGET/$AB_DIR/seed-base"
 record_seed_base() { # <rel> <the seed file just copied>
-  mkdir -p "$SEED_BASE_DIR/$(dirname "$1")" 2>/dev/null || return 0
+  local d=.; case "$1" in */*) d="${1%/*}" ;; esac   # dirname, without the process
+  [ -d "$SEED_BASE_DIR/$d" ] || mkdir -p "$SEED_BASE_DIR/$d" 2>/dev/null || return 0
   cp "$2" "$SEED_BASE_DIR/$1" 2>/dev/null || true
 }
 
@@ -1389,14 +1390,14 @@ if [ -d "$SEED_SRC" ]; then
     # and refresh-seeds.sh's merge base is unchanged by the move.
     dest="$(ab_seed_dest "$rel")"
     src="$SEED_SRC/$rel"; dst="$TARGET/$dest"
-    dstdir="$(dirname "$dst")"
+    dstdir="${dst%/*}"
     if [ -e "$dst" ]; then
       echo "  keep  $dest (exists)"
-    elif [ "$(basename "$rel")" = ".gitkeep" ] && [ -d "$dstdir" ] && [ -n "$(ls -A "$dstdir" 2>/dev/null)" ]; then
+    elif [ "${rel##*/}" = ".gitkeep" ] && [ -d "$dstdir" ] && [ -n "$(ls -A "$dstdir" 2>/dev/null)" ]; then
       # The dir already has real content — a placeholder .gitkeep would just be clutter.
       echo "  skip  $dest (dir already populated)"
     else
-      mkdir -p "$dstdir"
+      [ -d "$dstdir" ] || mkdir -p "$dstdir"
       cp "$src" "$dst"
       record_seed_base "$rel" "$src"
       echo "  seed  $dest"
@@ -3107,7 +3108,7 @@ fi
 # 5b. The plugin version this stamp ran with, tracked with the rest of the record. The
 # banner's Update row compares it with the installed plugin and names /<plugin>:init when
 # they differ — "re-run init after every plugin update" had no reader before this file.
-if [ -f "$PLUGIN_ROOT/VERSION" ] && mkdir -p "$SEED_BASE_DIR" 2>/dev/null; then
+if [ -f "$PLUGIN_ROOT/VERSION" ] && { [ -d "$SEED_BASE_DIR" ] || mkdir -p "$SEED_BASE_DIR" 2>/dev/null; }; then
   cp "$PLUGIN_ROOT/VERSION" "$SEED_BASE_DIR/VERSION" 2>/dev/null || true
 fi
 
