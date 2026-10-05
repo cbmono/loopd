@@ -40,7 +40,7 @@
 # never fires at all.
 #
 # `gh` is replaced by a stub on PATH, so the whole matrix runs offline. The stub answers
-# from $FIX; an absent fixture is an absent thing, exactly as in review-clearance.test.sh.
+# from $FIX; an absent fixture is an absent thing, exactly as in review-clearance.lib.sh.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail

@@ -81,7 +81,7 @@ ok() { # <name> <actual> <expected>
 # --- the network -------------------------------------------------------------
 # One stub for the four reads the pair makes: the PR record, the PR's commits, the review
 # objects and the issue comments. `--jq` is honoured with the real jq, exactly as
-# tests/review-clearance.test.sh does it, so the filters under test are the real ones.
+# tests/review-clearance.lib.sh does it, so the filters under test are the real ones.
 cat > "$TMP/bin/gh" <<STUB
 #!/usr/bin/env bash
 REAL_JQ="$REAL_JQ"

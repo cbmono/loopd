@@ -261,7 +261,13 @@
 # the first such assignment would exit the script with a success-looking code. Every
 # failure path below is therefore explicit.
 set -uo pipefail
-. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
+# This file's directory, resolved once. `${RC_SELF%/*}` is the text `dirname` prints
+# whenever the path has a slash, no trailing one, no leading `-`, and a parent that does
+# not itself end in a slash; every other spelling still asks `dirname`.
+RC_SELF="${BASH_SOURCE[0]:-$0}"; RC_DIR="${RC_SELF%/*}"
+case "$RC_SELF" in -*|*/) RC_DIR="" ;; esac
+case "$RC_DIR" in ''|*/|"$RC_SELF") RC_DIR="$(dirname "$RC_SELF")" ;; esac
+. "$RC_DIR/bundle-paths.sh" || exit 2
 
 # --- table 1: who is a reviewer, and what its check is called ----------------
 # Two whitespace-separated fields per row, so neither may contain a space:
@@ -551,10 +557,26 @@ usage() {
 # --- table lookups (no network, no PR) ---------------------------------------
 # `rows <table>` strips comments and blank lines; every table is read through it, so a
 # malformed row is inert rather than silently matching everything.
-rows() { printf '%s\n' "$1" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
-                                  | grep -v '^#' | grep -v '^$'; }
+# In the shell itself, not `sed | grep | grep`: every table is read through this several
+# times per run, and the three processes were most of what a run spawned.
+rows() {
+  local l
+  while IFS= read -r l; do
+    l="${l#"${l%%[![:space:]]*}"}"; l="${l%"${l##*[![:space:]]}"}"
+    case "$l" in ''|'#'*) ;; *) printf '%s\n' "$l" ;; esac
+  done <<EOF
+$1
+EOF
+}
 
-fold() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+# A string of nothing but these characters has no upper-case letter in any locale, so `tr`
+# would hand it back unchanged; spelled out, never `a-z`, which collation may widen.
+fold() {
+  case "$1" in
+    *[!abcdefghijklmnopqrstuvwxyz0123456789._-]*) printf '%s' "$1" | tr '[:upper:]' '[:lower:]' ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
 
 # A login as every comparison here wants it: case-folded, with the host's "[bot]" suffix
 # removed. `coderabbitai` and `coderabbitai[bot]` are one account, and the API returns
@@ -608,14 +630,32 @@ all_patterns() {
 # table that matches nothing turns every refusal into a review. Checked here (up front, so
 # the whole file is known good before one artifact is read), in --self-test (so the caller
 # refuses a sibling carrying a broken table), and again at every match through hits().
+#
+# ONE grep COMPILES THEM ALL FIRST, and the row-by-row loop below it is unchanged and still
+# decides anything that grep does not pass: given every row as its own `-e`, grep compiles
+# each one before it reads a byte, and exits above 1 if any of them will not — the same
+# status `hits` already trusts from `-f`. A row that opens with `-` is never sent that way,
+# because alone on a command line it is an option and here it would be a pattern.
 validate_tables() {
-  local bad="" r
+  local bad="" r pats all=() optlike=""
+  pats="$(all_patterns)"
+  while IFS= read -r r; do
+    [ -n "$r" ] || continue
+    all+=(-e "$r")
+    case "$r" in -*) optlike=yes ;; esac
+  done <<EOF
+$pats
+EOF
+  if [ -z "$optlike" ] && [ "${#all[@]}" -gt 0 ]; then
+    grep -Eq "${all[@]}" </dev/null 2>/dev/null
+    case "$?" in 0|1) return 0 ;; esac
+  fi
   while IFS= read -r r; do
     [ -n "$r" ] || continue
     printf '' | grep -Eq "$r" 2>/dev/null || [ $? -eq 1 ] || bad="$bad          $r
 "
   done <<EOF
-$(all_patterns)
+$pats
 EOF
   [ -n "$bad" ] || return 0
   echo "error: these rows in this script's pattern tables are not valid POSIX EREs, so" >&2
@@ -661,8 +701,11 @@ EOF
 }
 
 # Is <login> a known reviewer account at all?
+reviewer_logins=""; reviewer_logins_read=""
 match_reviewer() {
-  match_patterns "$1" "$(rows "$REVIEWERS" | awk '{print $1}')"
+  [ -n "$reviewer_logins_read" ] || {
+    reviewer_logins="$(rows "$REVIEWERS" | awk '{print $1}')"; reviewer_logins_read=yes; }
+  match_patterns "$1" "$reviewer_logins"
 }
 
 # --- the two table-only modes: no network, no PR ------------------------------
@@ -833,13 +876,34 @@ meta="$(printf '%s' "$raw" \
                        | select(.oid == $p.headRefOid) | (.committedDate // "") ]
                      | last // "")] | @tsv' \
           2>/dev/null)" || meta=""
-url="$(printf '%s' "$meta" | cut -f1)"
-head_sha="$(printf '%s' "$meta" | cut -f2)"
-pr_author="$(printf '%s' "$meta" | cut -f3)"
-pr_number="$(printf '%s' "$meta" | cut -f4)"
-mergeable="$(printf '%s' "$meta" | cut -f5)"
-merge_state="$(printf '%s' "$meta" | cut -f6)"
-head_date="$(printf '%s' "$meta" | cut -f7)"
+# ONE LINE WITH A TAB IN IT (or nothing at all) is split here, field by field, which is
+# what `cut -f` prints for it: an empty field stays empty and a missing one is empty. Any
+# other shape — several lines, or a line with no tab, which `cut` echoes whole into every
+# field — still goes through `cut`, so no input reads differently than it did.
+TAB=$'\t'; NL=$'\n'
+case "$meta" in
+  *"$NL"*)       meta_shape=other ;;
+  ''|*"$TAB"*)   meta_shape=line ;;
+  *)             meta_shape=other ;;
+esac
+if [ "$meta_shape" = line ]; then
+  rest="$meta$TAB"
+  url="${rest%%"$TAB"*}";         rest="${rest#*"$TAB"}"
+  head_sha="${rest%%"$TAB"*}";    rest="${rest#*"$TAB"}"
+  pr_author="${rest%%"$TAB"*}";   rest="${rest#*"$TAB"}"
+  pr_number="${rest%%"$TAB"*}";   rest="${rest#*"$TAB"}"
+  mergeable="${rest%%"$TAB"*}";   rest="${rest#*"$TAB"}"
+  merge_state="${rest%%"$TAB"*}"; rest="${rest#*"$TAB"}"
+  head_date="${rest%%"$TAB"*}"
+else
+  url="$(printf '%s' "$meta" | cut -f1)"
+  head_sha="$(printf '%s' "$meta" | cut -f2)"
+  pr_author="$(printf '%s' "$meta" | cut -f3)"
+  pr_number="$(printf '%s' "$meta" | cut -f4)"
+  mergeable="$(printf '%s' "$meta" | cut -f5)"
+  merge_state="$(printf '%s' "$meta" | cut -f6)"
+  head_date="$(printf '%s' "$meta" | cut -f7)"
+fi
 nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')"
 [ -n "$url" ] && [ -n "$head_sha" ] && [ -n "$pr_number" ] && [ "$nwo" != "$url" ] || {
   echo "error: could not resolve the head SHA / repo of PR $pr — refusing (fail closed)" >&2
@@ -850,7 +914,7 @@ nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.
 # here is precondition 2's FIRST HALF, so this line is one of four and never a merge permit
 # on its own. Silent on any failure: it cannot change the answer this script gives.
 mint_receipt() {
-  "$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record review-clearance.sh \
+  "$RC_DIR/clearance-receipt.sh" record review-clearance.sh \
     --repo "$nwo" --pr "$pr_number" --head "$head_sha" >/dev/null 2>&1 || true
 }
 
@@ -982,6 +1046,8 @@ jq -r '.login // empty' "$TMPD/reviews.ndjson" > "$TMPD/rlogins" 2>/dev/null || 
   echo "       An unreadable list would re-arm the comment route it is here to close." >&2
   exit 2
 }
+review_object_logins=""
+[ -s "$TMPD/rlogins" ] && \
 review_object_logins="$(while IFS= read -r l; do norm "$l"; echo; done < "$TMPD/rlogins" \
                         | sort -u)"
 
@@ -1429,6 +1495,7 @@ names_head() {
 # earlier head. Both timestamps must be the host's RFC 3339 UTC; anything else is unknown
 # and unknown leaves the ask open, which is the cheap direction (one comment, no round).
 stamp() { # <timestamp> -> comparable digits, or nothing at all
+  [ -n "$1" ] || return 1
   printf '%s' "$1" | grep -Eqx '[0-9]{4}(-[0-9]{2}){2}T([0-9]{2}:){2}[0-9]{2}Z' || return 1
   printf '%s' "$1" | tr -cd '0-9'
 }
@@ -1807,7 +1874,7 @@ check_clause9() {
   # yields four fields instead of five and every field after it shifts one left. The login
   # column then holds a URL, the reviewer test rejects it, and the thread is silently
   # DROPPED: a file-level finding would clear the gate. Measured on the first run of
-  # tests/review-clearance.test.sh's clause-9 section. `// "-"` keeps the column, and a
+  # tests/review-clearance-gates.test.sh's clause-9 section. `// "-"` keeps the column, and a
   # null `author` (a deleted account) is likewise `""` rather than absent.
   clause9_threads="$(printf '%s' "$json" | jq -r '
       .data.repository.pullRequest.reviewThreads.nodes[]?
