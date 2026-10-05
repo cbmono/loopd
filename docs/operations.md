@@ -1408,7 +1408,10 @@ managed settings by the operator, see
 
 **Measured on Claude Code 2.1.285, 2026-10-01** (task-019): a headless `--permission-mode
 dontAsk` child with one rule each and a stub `claude` on `PATH`, so nothing spawned. Columns
-are the spawn's brief as `"one line"`, `'one line'`, and `"multi-line"` — step 3's form.
+are the spawn's brief as `"one line"`, `'one line'`, and `"multi-line"` — step 3's form then.
+Step 3 now single-quotes the brief, because bash runs a backtick or `$(...)` inside `"…"`;
+re-measured on 2.1.289 (2026-10-05) the narrowest rule below still matches a multi-line
+`'…'` brief carrying backticks, `$(...)` and an embedded `'\''`.
 
 | `permissions.allow` rule | `"…"` | `'…'` | `"…↵…"` |
 |---|---|---|---|
