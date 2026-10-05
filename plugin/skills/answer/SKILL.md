@@ -3,15 +3,16 @@ name: answer
 disable-model-invocation: true
 description: Answer the PM's pending open_questions interactively — gather the unanswered questions (all projects, one project, or one task), ask them in one batch, then fold the answers back into the tasks (clearing them). In-session convenience instead of editing each task file by hand.
 argument-hint: "[<project-slug> | projects/<slug> | <task path>]  omit for every project"
-allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Read, Edit, Glob, Grep, AskUserQuestion
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Read, Edit, Glob, Grep, AskUserQuestion
 ---
 
 Answer the Project Manager's pending `open_questions` **interactively**, instead of
 opening each `taskX.md` and appending ` --- <answer>` by hand.
 
 ## Preconditions
-Run from a control-panel instance root — confirm `SCHEMA.md` and `instance.config.json`
-exist in the cwd; if not, tell the user to `cd` into the instance and stop. (A bundle
+Run from a control-panel instance root — confirm `instance.config.json` in the cwd and
+`SCHEMA.md` at the resolved schema path (`AB_SCHEMA`; the root on a legacy layout) with exactly
+`ls instance.config.json "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`; if it fails, tell the user to `cd` into the instance and stop. (A bundle
 carries no `.claude/agents`; the roles ship in the plugin — `SCHEMA.md` → "Which document
 wins", row 1.)
 

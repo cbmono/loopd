@@ -17,8 +17,9 @@ human typed.
 
 ## `serve` — the local board server, and what a bare `/loopd:board` does
 
-**Confirm you are at an instance root first** — `SCHEMA.md` and `instance.config.json` are
-both present. If they are not, say which directory this is, say that an instance root
+**Confirm you are at an instance root first** — `instance.config.json` in the cwd and
+`SCHEMA.md` at the resolved schema path (`AB_SCHEMA`; the root on a legacy layout), with exactly
+`ls instance.config.json "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`. If it fails, say which directory this is, say that an instance root
 carries those two files, and stop. Do not run the script: it exits 0 and prints nothing
 when the check fails, so a session that delegated the refusal would leave the human
 looking at a blank line.

@@ -2,7 +2,7 @@
 name: audit
 disable-model-invocation: true
 description: Run the slow-cadence audit loop — the counter-metric that grounds each goal (an objective's success_criteria, or a project's own where it carries no objective) against reality and flags Goodhart drift, stale knowledge, and green-but-not-progressing work. The audit agent is read-only; the command's only write is prepending its report to log.md; never promotes, merges, or dispatches.
-allowed-tools: Bash(pwd), Bash(ls:*), Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status:*), Read, Edit, Agent
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status:*), Read, Edit, Agent
 ---
 
 Run one **audit pass** over this control-panel instance — the slow counter-metric loop
@@ -10,8 +10,9 @@ that complements `/loopd:dispatch`. It is **read-only**: it surfaces drift, it n
 merges, dispatches, or changes task status.
 
 ## Preconditions
-1. Run from a control-panel instance root — confirm `SCHEMA.md` and
-   `instance.config.json` exist in the cwd; if not, tell the user to `cd` into the instance
+1. Run from a control-panel instance root — confirm `instance.config.json` in the cwd
+   and `SCHEMA.md` at the resolved schema path (`AB_SCHEMA`; the root on a legacy layout) with exactly
+   `ls instance.config.json "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`; if it fails, tell the user to `cd` into the instance
    and stop. (A bundle carries no `.claude/agents`; the roles ship in the plugin.)
 2. **Stand down while a tick is in flight.** Step 3 prepends to `log.md`, and so does every
    non-idle dispatch tick, so the two must not run at once. Run
