@@ -134,7 +134,7 @@ echo
 echo "== step 3: the preflight runs before the wave, through task-003's channel =="
 pre_at="$(head -n1 <<<"$(grep -n 'scripts/spawn-preflight.sh --instance' "$S3")" | cut -d: -f1)"
 write_at="$(head -n1 <<<"$(grep -n 'set `assignee` +' "$S3")" | cut -d: -f1)"
-spawn_at="$(head -n1 <<<"$(grep -n 'claude --bg "<the whole brief>"' "$S3")" | cut -d: -f1)"
+spawn_at="$(head -n1 <<<"$(grep -nF "claude --bg '<the whole brief>'" "$S3")" | cut -d: -f1)"
 ok "the preflight is named in step 3"        "$([ -n "$pre_at" ] && echo yes || echo no)" yes
 ok "…before the first status write"          "$([ "${pre_at:-999}" -lt "${write_at:-0}" ] && echo yes || echo no)" yes
 ok "…and so before the first spawn"          "$([ "${pre_at:-999}" -lt "${spawn_at:-0}" ] && echo yes || echo no)" yes
