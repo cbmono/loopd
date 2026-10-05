@@ -1173,7 +1173,8 @@ echo "== the wiring: the launcher runs the acquire, and holds exactly the grant 
 grants() { awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/,""); print}' "$1" \
   | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$'; }
 ok "allowed-tools grants the script"     "$(grep -qx 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' <<<"$(grants "$LAUNCHER")" && echo yes || echo no)" yes
-ok "…and grants nothing else new"        "$(grants "$LAUNCHER" | wc -l | tr -d ' ')" 7
+# 8: the eighth is bundle-paths.sh, which prints a layout constant for precondition 1.
+ok "…and grants nothing else new"        "$(grants "$LAUNCHER" | wc -l | tr -d ' ')" 8
 ok "step 1 runs the acquire"             "$(has "$LAUNCHER" 'scripts/tick-lock.sh acquire --agent project-manager')" yes
 ok "…and step 2 releases on the notification" "$(has "$LAUNCHER" 'scripts/tick-lock.sh release')" yes
 ok "…only on the notification, nothing weaker" "$(has "$LAUNCHER" 'before you schedule the gap')" yes
