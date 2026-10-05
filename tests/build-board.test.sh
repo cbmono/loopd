@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# iced — the board is on hold (owner's decision, 2026-10-05). `run.sh --iced`, the nightly
+# workflow and any PR whose diff names this file's subject still run it. Thaw: delete these lines.
 #
 # build-board.test.sh — a paused project leaves `Active` for its own `Paused` tab and keeps a
 # card marker, and a paused project owned by the OTHER human is marked too. Two owners on

@@ -77,6 +77,11 @@ build() {
     > "$root/base/tests/fp-serial.test.sh"
   printf '#!/usr/bin/env bash\necho "tier=${AB_TIER:-unset} claude=$(command -v claude || echo none)"\necho "pass=1 fail=0"\n' \
     > "$root/base/tests/fp-tier.test.sh"
+  # The iced fixture: on hold, and it NAMES one path so a diff of that path can thaw it.
+  # path-scan: absent plugin/agents/iced-subject.md — fixture content, built below
+  printf '#!/usr/bin/env bash\n# iced — its subject is on hold\n# reads "$REPO/plugin/agents/iced-subject.md"\necho "iced ran"\necho "pass=1 fail=0"\n' \
+    > "$root/base/tests/fp-iced.test.sh"
+  printf 'subject\n'   > "$root/base/plugin/agents/iced-subject.md"
   printf '#!/bin/sh\n' > "$root/base/plugin/scripts/commit-as.sh"
   # path-scan: absent — fixture content, deliberately named by no harness in this repo
   printf 'seed\n'      > "$root/base/plugin/agents/unread-by-any-harness.md"
@@ -240,6 +245,47 @@ DEEP_OUT="$( cd "$A/work" && bash tests/run.sh --deep 2>&1 )"
 assert "--deep runs it"                                       "$(has "$DEEP_OUT" 'deep ran')"
 assert "…telling the harness it is the deep tier"             "$(has "$DEEP_OUT" 'deep ran tier=deep')"
 assert "…and runs nothing else"                               "$(lacks "$DEEP_OUT" 'harness: tests/fp-tier.test.sh')"
+
+echo "== the tiers: an '# iced' harness runs under --iced, and elsewhere ONLY when a changed path names it =="
+# A pause, not a retirement — so each direction is pinned: skipped where nothing touches
+# its subject, run where something does, and run whenever the diff cannot be read.
+assert "--all does not run the iced harness"                  "$(lacks "$P_OUT" 'iced ran')"
+assert "…and SAYS it left one out, with the way to run it"    "$(has "$P_OUT" "1 '# iced' harness(es) not run")"
+assert "…and --changed does not, for a diff that does not name its subject" "$(lacks "$(run_changed "$A/work")" 'iced ran')"
+assert "…and --ci does not either"                            "$(lacks "$(run_ci "$A/work")" 'iced ran')"
+assert "…not even on the FULL suite a README diff buys"       "$(lacks "$G_OUT" 'iced ran')"
+ICED_OUT="$( cd "$A/work" && bash tests/run.sh --iced 2>&1 )"
+assert "--iced runs it"                                       "$(has "$ICED_OUT" 'iced ran')"
+assert "…and runs nothing else"                               "$(has "$ICED_OUT" 'ok: all 1 harnesses passed')"
+assert "…in a gate tier: no paid CLI there either"            "$(lacks "$ICED_OUT" 'deep ran')"
+I="$TMP/i"; mkdir -p "$I"; build "$I"
+commit_on_branch "$I/work" plugin/agents/iced-subject.md
+assert "a --ci diff that NAMES its subject thaws it"          "$(has "$(run_ci "$I/work")" 'iced ran')"
+assert "…and so does --changed"                               "$(has "$(run_changed "$I/work")" 'iced ran')"
+I2="$TMP/i2"; mkdir -p "$I2"; build "$I2"
+( cd "$I2/work" && git checkout -q -b feat && printf '# edited\n' >> tests/fp-iced.test.sh \
+  && printf 'x\n' >> README.md && git add -A && git commit -qm edit ) >/dev/null 2>&1
+assert "a diff that edits the iced HARNESS thaws it, on the full suite too" "$(has "$(run_ci "$I2/work")" 'iced ran')"
+NOBASE_OUT="$( cd "$A/work" && GITHUB_EVENT_NAME=pull_request GITHUB_BASE_REF=no-such-branch bash tests/run.sh --ci 2>&1 )"
+assert "a pull request whose diff cannot be read runs it — fail toward running" "$(has "$NOBASE_OUT" 'iced ran')"
+PUSH_OUT="$( cd "$A/work" && GITHUB_EVENT_NAME=push bash tests/run.sh --ci 2>&1 )"
+assert "a push runs everything else and leaves it to the nightly" \
+  "$([ "$(has "$PUSH_OUT" 'tests/fp-names-nothing.test.sh')" = 0 ] && [ "$(lacks "$PUSH_OUT" 'iced ran')" = 0 ] && echo 0 || echo 1)"
+
+echo "== the time budget: reported on every run, judged on a FULL one, and never a failure =="
+assert "a run reports its harness-seconds and its slowest"    "$(grep -qE '^== [0-9]+ harness-seconds; the slowest: ' <<<"$P_OUT" && echo 0 || echo 1)"
+assert "…and a run inside the budget says nothing more"       "$(lacks "$P_OUT" 'over the budget')"
+printf '#!/usr/bin/env bash\nsleep 2\necho "pass=1 fail=0"\n' > "$A/work/tests/fp-slow.test.sh"
+OVER_OUT="$( cd "$A/work" && SUITE_BUDGET_S=1 HARNESS_WARN_S=1 bash tests/run.sh --all 2>&1 )"; OVER_RC=$?
+assert "a FULL run over the budget is warned"                 "$(has "$OVER_OUT" 'over the budget of 1')"
+assert "…and the one slow harness is named"                   "$(has "$OVER_OUT" 'tests/fp-slow.test.sh took')"
+assert "…and the run still passes: a budget is not a gate"    "$([ "$OVER_RC" -eq 0 ] && [ "$(has "$OVER_OUT" 'ok: all')" = 0 ] && echo 0 || echo 1)"
+SEL_OUT="$( cd "$A/work" && SUITE_BUDGET_S=0 bash tests/run.sh --changed --base main 2>&1 )"
+assert "a SELECTION is never judged against the full-run budget" "$(lacks "$SEL_OUT" 'over the budget')"
+SUMF="$TMP/step-summary.md"; : > "$SUMF"
+( cd "$A/work" && GITHUB_STEP_SUMMARY="$SUMF" bash tests/run.sh --all >/dev/null 2>&1 )
+assert "under CI the slowest harnesses land in the step summary" "$(grep -qF '| `tests/fp-slow.test.sh` |' "$SUMF" && echo 0 || echo 1)"
+rm -f "$A/work/tests/fp-slow.test.sh"
 
 echo "== the gate tiers cannot spawn the claude CLI even if a harness tries =="
 assert "a harness in a gate tier is told so"                  "$(has "$P_OUT" 'tier=gate')"

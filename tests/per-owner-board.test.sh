@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# iced — the board is on hold (owner's decision, 2026-10-05). `run.sh --iced`, the nightly
+# workflow and any PR whose diff names this file's subject still run it. Thaw: delete these lines.
 #
 # per-owner-board.test.sh — the board is PER OWNER: your own projects come from this
 # clone's SNAPSHOT.json, and every other owner's come from the TRACKED task documents at

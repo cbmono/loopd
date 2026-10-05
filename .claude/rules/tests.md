@@ -15,6 +15,7 @@ tests/run.sh --changed        # the core plus every harness that NAMES a path yo
 tests/run.sh --all            # all of them — once, before you open the PR, and never polled
 tests/run.sh --all --jobs 4   # the pool is CPU-wide by default; bound it when you need the machine
 tests/run.sh --deep           # ONLY the `# deep` harnesses: they spawn the claude CLI and cost money
+tests/run.sh --iced           # ONLY the `# iced` harnesses: a subject on hold (today: the board)
 bash tests/<one>.test.sh      # still fine while you iterate on one harness
 ```
 
@@ -30,6 +31,24 @@ header to run alone, and `# deep` to leave the merge gate altogether — `--deep
 nightly `tests-deep.yml` are the only things that run a `# deep` harness, and every other
 mode puts a refusing shim in front of `claude` so no gate run can spend a paid eval.
 Everything else runs in a bounded pool, output replayed in file order.
+**A third marker, `# iced`, pauses a subject without retiring it.** The owner put the board
+on hold on 2026-10-05, and its twelve harnesses were still 241 of 3,015 harness-seconds on
+every PR (run 37310865693) for a verdict nothing was moving. An iced harness runs under
+`--iced`, in the nightly `iced tier` job of `tests-deep.yml`, and in a gate run **only when
+a changed path names it or is it** — the case derivation is sound for. What that cannot see
+is an iced harness reading a directory wholesale; the nightly catches it a day late, and
+that delay is the accepted price. A pull request whose diff cannot be read runs them all.
+**Never ice a live surface** — `session-banner`, `awaiting-queue`, `status-line` and
+`push-state` run in every session and stay in the gate. Thawing is deleting the marker.
+
+**The time budget.** A run prints its harness-seconds and its five slowest; a **full** run
+over `SUITE_BUDGET_S` (**3600** when unset — 20 minutes on the 3-CPU runner) is warned, and
+so is any one harness over `HARNESS_WARN_S` (**300** when unset, half the kill bound). It
+**warns and never fails**: two runs of the same tree measured 3,015 and 4,108
+harness-seconds on that runner, so a failing bound would be a coin. The suite had no budget
+and grew 3,178 → 4,108 in a day. **A PR that adds a harness says in its body what the
+harness costs in seconds** (the `took` line of a local run) and, when the suite is over
+budget, what it replaces. CI writes the fifteen slowest to the job's step summary.
 **Each harness is also bounded in wall clock** (`HARNESS_TIMEOUT`, 600s; 1800s under
 `--deep`): the pool replays nothing until every worker is done, so a harness that never
 returns would otherwise take the whole job down with an empty log — ai-bridge-v3/task-040.
