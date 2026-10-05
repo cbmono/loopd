@@ -53,7 +53,7 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
-AIB="$REPO/plugin/scripts/ai-bridge.sh"
+AIB="$REPO/plugin/scripts/welcome.sh"
 for f in "$CONV" "$AIB"; do
   [ -f "$f" ] || { echo "background-teardown.test: missing $f" >&2; exit 2; }
 done
@@ -645,7 +645,7 @@ ok "…in at most 2 lines for this row"               \
 ok "…and never the child's own argv"                "$(saw "$CHK" 'sleep 240')" no
 
 # NON-VACUITY: the same instance, the same live orphan, with the ROW deleted from the script.
-# THE MUTANT LIVES IN A PLUGIN-SHAPED DIRECTORY, because ai-bridge.sh resolves its sibling
+# THE MUTANT LIVES IN A PLUGIN-SHAPED DIRECTORY, because welcome.sh resolves its sibling
 # helpers from its own location — <root>/plugin/scripts/ — and a copy dropped anywhere else
 # would find none of them, so the CONTROL assertion below ("it still reports the other
 # rows") would fail for a reason that has nothing to do with the mutation.
@@ -653,7 +653,7 @@ mkdir -p "$TMP/mutplugin/plugin"
 ln -sfn "$REPO/plugin/scripts" "$TMP/mutplugin/plugin/scripts-real" 2>/dev/null || true
 cp -R "$REPO/plugin/scripts" "$TMP/mutplugin/plugin/scripts"
 cp "$REPO/VERSION" "$TMP/mutplugin/VERSION"
-MUTAIB="$TMP/mutplugin/plugin/scripts/ai-bridge.sh"
+MUTAIB="$TMP/mutplugin/plugin/scripts/welcome.sh"
 # The row is the last line of the CHECKS string, so a plain line delete takes the closing
 # quote with it and the "mutant" only proves that a syntax error reports nothing. Keep
 # whatever terminated the string on that line.
@@ -678,7 +678,7 @@ mkstub() { # <dir> <tool>... — symlink each tool that exists here, so PATH can
   for t in "$@"; do p="$(command -v "$t" 2>/dev/null)" && [ -n "$p" ] && ln -sf "$p" "$d/$t"; done
   return 0
 }
-# `dirname` is in the list because ai-bridge.sh locates its own sibling scripts with it
+# `dirname` is in the list because welcome.sh locates its own sibling scripts with it
 # (the plugin ships them beside itself since task-013). Narrowing PATH is meant to simulate
 # a machine with no `ps`, not one with no coreutils.
 TOOLS="bash sh python3 git find sed awk tr wc sort comm grep id date basename dirname cat readlink"

@@ -9,7 +9,7 @@
 #
 # Exit: 0 ok, 1 no such key. Reasoning: ai-bridge-v3/task-031.
 
-AB_DIR=".ai-bridge"
+AB_DIR=".loopd"
 AB_SCHEMA="$AB_DIR/SCHEMA.md"
 AB_CONVENTIONS="$AB_DIR/CONVENTIONS.md"
 AB_SNAPSHOT="$AB_DIR/SNAPSHOT.json"
@@ -92,7 +92,7 @@ ab_ensure_dir() { # <root>
 #
 # `plugin/seed/` ships `SCHEMA.md` and friends at its top level and keeps `seed-base/`
 # where it is. Nesting the seed instead would re-arm the documented gitignore trap — a
-# `/.ai-bridge/index.md` line in the seed's own `.gitignore` hides the seed's own file.
+# `/.loopd/index.md` line in the seed's own `.gitignore` hides the seed's own file.
 ab_seed_dest() { # <seed-relative path> — where the stamp puts it
   local pair
   for pair in $AB_MOVES; do

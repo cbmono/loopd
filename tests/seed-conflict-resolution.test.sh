@@ -38,7 +38,7 @@ gc() { git -c user.email=a@b -c user.name=a commit -qm "$1"; }
 # ------------------------------------------------------------- the template, seed v1
 TPL="$TMP/tpl"
 mkdir -p "$TPL/plugin/scripts"
-for f in init-bundle.sh refresh-seeds.sh validate-bundle.sh ai-bridge.sh build-kb-index.sh \
+for f in init-bundle.sh refresh-seeds.sh validate-bundle.sh welcome.sh build-kb-index.sh \
          check-template-version.sh normalise-config.sh link-repos.sh tick-lock.sh \
          bundle-paths.sh; do
   cp "$REPO/plugin/scripts/$f" "$TPL/plugin/scripts/"
@@ -77,9 +77,9 @@ bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" > "$TMP/stamp1.out" 2>&1
 #   knowledge/index.md — a hand-written stub, while the KB has documents     ⇒ decidable
 #   CLAUDE.md         — the same line the seed is about to change            ⇒ undecidable
 assert "the keep directory is gitignored by the stamp" \
-  "$(yes_if git -C "$INST" check-ignore -q .ai-bridge/refresh/CLAUDE.md.1)"
+  "$(yes_if git -C "$INST" check-ignore -q .loopd/refresh/CLAUDE.md.1)"
 assert "…while the stamped-seed record stays tracked" \
-  "$(git -C "$INST" check-ignore -q .ai-bridge/seed-base/CLAUDE.md && echo 1 || echo 0)"
+  "$(git -C "$INST" check-ignore -q .loopd/seed-base/CLAUDE.md && echo 1 || echo 0)"
 printf 'node_modules/\n!/board.html\n/%s\nMY-OWN-IGNORE\n' "$AB_LOCK" > "$INST/.gitignore"
 mkdir -p "$INST/knowledge/findings"
 printf -- '---\ntype: Finding\ntitle: F1\nstatus: current\nlesson: a lesson\ntimestamp: 2026-01-01T00:00:00Z\n---\nbody\n' \
@@ -136,11 +136,11 @@ assert "no .bak file anywhere in the bundle" \
   "$(grep -q . <<<"$(find "$INST" -name '*.bak*')" && echo 1 || echo 0)"
 assert "the bundle ROOT gained no .bak" \
   "$(sh -c 'ls "$1"/*.bak* >/dev/null 2>&1' _ "$INST" && echo 1 || echo 0)"
-assert "the conflicted merge is kept under .ai-bridge/refresh/" \
-  "$(yes_if sh -c 'ls "$1"/CLAUDE.md.* >/dev/null 2>&1' _ "$INST/.ai-bridge/refresh")"
+assert "the conflicted merge is kept under .loopd/refresh/" \
+  "$(yes_if sh -c 'ls "$1"/CLAUDE.md.* >/dev/null 2>&1' _ "$INST/.loopd/refresh")"
 assert "…and it carries the markers"          \
-  "$(yes_if sh -c 'grep -qE "^(<<<<<<< |>>>>>>> )" "$1"/CLAUDE.md.*' _ "$INST/.ai-bridge/refresh")"
-assert "…and the report names that path"      "$(has '.ai-bridge/refresh/CLAUDE.md' "$APPLY")"
+  "$(yes_if sh -c 'grep -qE "^(<<<<<<< |>>>>>>> )" "$1"/CLAUDE.md.*' _ "$INST/.loopd/refresh")"
+assert "…and the report names that path"      "$(has '.loopd/refresh/CLAUDE.md' "$APPLY")"
 
 echo "== \"what's left for you\" is only what a human must decide =="
 assert "the conflict is listed"               "$(has 'port the seed change into CLAUDE.md' "$APPLY")"
@@ -180,12 +180,12 @@ assert "…without re-entering the stamp"        "$(hasnt 'NOT re-stamped' "$STA
 
 echo "== welcome fix points at init and exits 0 =="
 FIX_RC=0
-FIX="$(bash "$TPL/plugin/scripts/ai-bridge.sh" fix --instance "$INST" 2>&1)" || FIX_RC=$?
+FIX="$(bash "$TPL/plugin/scripts/welcome.sh" fix --instance "$INST" 2>&1)" || FIX_RC=$?
 assert "welcome fix exits 0"                   "$([ "$FIX_RC" -eq 0 ] && echo 0 || echo 1)"
 assert "…and points at /${PN}:init"        "$(has ''"${PN}:"'init' "$FIX")"
 assert "…in ONE line"                          "$([ "$(printf '%s\n' "$FIX" | wc -l | tr -d ' ')" = 1 ] && echo 0 || echo 1)"
 assert "…and repairs nothing itself"           "$(hasnt 'idempotent tier' "$FIX")"
-CHECK="$(bash "$TPL/plugin/scripts/ai-bridge.sh" check --instance "$INST" 2>&1 || true)"
+CHECK="$(bash "$TPL/plugin/scripts/welcome.sh" check --instance "$INST" 2>&1 || true)"
 assert "welcome check still surveys the bundle" "$(has 'seed documents' "$CHECK")"
 
 echo "== the docs name init as the command after a plugin update =="

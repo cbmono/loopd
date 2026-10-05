@@ -63,7 +63,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    record. Then spawn the role in its own worktree:
 
    ```bash
-   cd <worktree> && claude --bg "<the whole brief>" \
+   cd <worktree> && claude --bg '<the whole brief>' \
      --agent loopd:<assignee> --model <the alias you resolved> \
      --permission-mode auto --add-dir <bundle root> < /dev/null
    ```
@@ -80,7 +80,11 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    they produce no artifact, and you read their answer inside the tick, so they stay
    `Agent`-tool dispatches.
 
-   Six things about that command line, each of which costs a wave if you get it wrong:
+   Seven things about that command line, each of which costs a wave if you get it wrong:
+   - **The brief is SINGLE-quoted**, and every `'` inside it is written `'\''`. Inside
+     single quotes a backtick and a `$` are literal; inside double quotes bash runs a
+     `` `span` `` or `$(...)` as a command and the agent gets the brief with that span
+     silently gone — the spawn still succeeds. `tests/bg-brief-quoting.test.sh` pins it.
    - **`--bg` and `-p` conflict** and the CLI refuses the pair at exit 1 — the prompt is
      positional, so drop `--print`.
    - **`--session-id` is ignored beside `--bg`**, which mints its own; that is why the

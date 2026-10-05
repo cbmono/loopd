@@ -2,10 +2,10 @@
 name: welcome
 description: The AI Bridge welcome screen — banner, or `check` (state that could be wrong). Reports facts, never rules; it repairs nothing (`fix` moved into /loopd:init).
 argument-hint: "[check|fix]  omit for the banner"
-allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/ai-bridge.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
+allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/welcome.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
 
-Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/ai-bridge.sh $ARGUMENTS` from the bundle root and
+Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/welcome.sh $ARGUMENTS` from the bundle root and
 **relay its output verbatim**. `$ARGUMENTS` is empty, `check` or `fix` — nothing else; anything else is a
 typo and the script will say so rather than guess.
 
@@ -21,7 +21,7 @@ because a relayed answer is rendered as markdown and ANSI does not survive the r
 literal asterisks and hands the human the flat page the styling exists to replace.
 
 **The two tables are `welcome`'s alone now, and that is not a divergence.** The
-SessionStart banner is capped at 12 lines and drops them; `ai-bridge.sh` passes `--full`
+SessionStart banner is capped at 12 lines and drops them; `welcome.sh` passes `--full`
 here because a human who typed the command asked to look. Same script, same rendering,
 one flag — never a second copy of either table in this file.
 
@@ -62,7 +62,7 @@ as an autolink once, and that row's `FROM` sat two columns left of every other's
 
 - Not an instance root at all (no `instance.config.json`)? Say which directory this is,
   name any instance directories you can see nearby, and stop — never improvise a banner.
-- A bundle, but `${CLAUDE_PLUGIN_ROOT}/scripts/ai-bridge.sh` is missing? That is a broken
+- A bundle, but `${CLAUDE_PLUGIN_ROOT}/scripts/welcome.sh` is missing? That is a broken
   plugin install, not a bundle problem — say so, and give the repair (`/plugin install
   loopd@loopd`, then restart Claude Code) rather than improvising the checks by
   hand.

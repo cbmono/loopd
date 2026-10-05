@@ -109,7 +109,7 @@ rm -rf "$INST"; mkdir -p "$INST/$AB_DIR"; : > "$INST/$AB_SCHEMA"; run
 assert "SCHEMA.md alone -> silent (partial match)" "$( [ -z "$OUT" ] && [ "$RC" = 0 ] && echo 0 || echo 1 )"
 
 # ONE MARKER since the 3.0 layout: instance.config.json, the same one the two plugin
-# hooks and the banner key on. SCHEMA.md moved under .ai-bridge/, so a pair including it
+# hooks and the banner key on. SCHEMA.md moved under .loopd/, so a pair including it
 # would silence this hook in every bundle stamped before the move.
 rm -rf "$INST"; mkdir -p "$INST/.claude/agents"; : > "$INST/instance.config.json"; run
 assert "instance.config.json alone IS the marker" "$( [ -n "$OUT" ] && [ "$RC" = 0 ] && echo 0 || echo 1 )"

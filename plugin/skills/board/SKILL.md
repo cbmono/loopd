@@ -31,7 +31,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/board-serve.sh
 
 That is the whole form. The script binds `127.0.0.1` on `boardPort`
 (`instance.config.local.json`; absent, a port derived from the bundle path in the 4xxxx
-band), renders `.ai-bridge/.board-live/board.html` from `SNAPSHOT.json`, re-renders in two seconds
+band), renders `.loopd/.board-live/board.html` from `SNAPSHOT.json`, re-renders in two seconds
 of that file changing, and serves nothing outside `$AB_BOARD_DIR`. Each open question's text
 is filled in from its task document as the page is served — never into the file, so
 `publish` below never carries it. **No model is in that

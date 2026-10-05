@@ -97,11 +97,11 @@ done
 echo "== 4. welcome — the absorbed /loopd:welcome contract, property by property =="
 # =======================================================================================
 W="$SK/welcome/SKILL.md"
-ok "welcome relays ai-bridge.sh verbatim"                "$(grep -c 'relay its output verbatim' "$W" | tr -d ' ')" 1
+ok "welcome relays welcome.sh verbatim"                "$(grep -c 'relay its output verbatim' "$W" | tr -d ' ')" 1
 ok "…all three forms are named"                          "$(grep -cE '^\| `/welcome( check| fix)?`' "$W" | tr -d ' ')" 3
 ok "…its tools are the one script plus read-only inspection" \
-  "$(fm welcome allowed-tools)" "Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/ai-bridge.sh:*), Bash(pwd), Bash(ls:*), Read, Glob"
-# The two non-actions are the reason the contract exists (tests/ai-bridge-command.test.sh
+  "$(fm welcome allowed-tools)" "Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/welcome.sh:*), Bash(pwd), Bash(ls:*), Read, Glob"
+# The two non-actions are the reason the contract exists (tests/welcome-command.test.sh
 # proves the SCRIPT never acts; this pins that the skill never invites the model to).
 ok "…never rewrite config files"                         "$(grep -c 'never revert, stage or rewrite `instance.config.json`' "$W" | tr -d ' ')" 1
 ok "…never clear a tick lock"                            "$(grep -c 'never remove or rewrite `.tick-lock`' "$W" | tr -d ' ')" 1

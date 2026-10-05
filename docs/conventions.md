@@ -43,7 +43,7 @@ move it here intact instead.
 | 18 | [The allowlist check is pinned from both sides](#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure) | `agent-tool-allowlist.test.sh` |
 | 19 | [The destructive-action baseline is a hook, and it is narrow on purpose](#19-the-destructive-action-baseline-is-a-hook-and-it-is-narrow-on-purpose) | `plugin/hooks/deny-destructive.sh`, `permissions.deny` |
 | 20 | [The version is a number the MERGE moves](#20-the-version-is-a-number-the-merge-moves-and-the-drift-check-speaks-only-when-behind) | `VERSION`, `release-bump.sh`, `check-template-version.sh`, `core` paths |
-| 21 | [`/loopd:welcome` reports facts that can be false, and `fix` is tiered in code](#21-loopdwelcome-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) | `ai-bridge.sh`, `/loopd:welcome`, `session-banner.sh` |
+| 21 | [`/loopd:welcome` reports facts that can be false, and `fix` is tiered in code](#21-loopdwelcome-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) | `welcome.sh`, `/loopd:welcome`, `session-banner.sh` |
 
 ---
 
@@ -856,7 +856,7 @@ That is the test to apply to the next line somebody wants to add.
 **The bare form INVOKES the banner; it does not reprint it.** `/loopd:welcome` `exec`s
 `session-banner.sh`, because its whole purpose is that a long session scrolled the real
 banner out of view — and the moment the two print differently, the form is a lie about what
-the session was told. `tests/ai-bridge-command.test.sh` asserts byte-identical output, so a
+the session was told. `tests/welcome-command.test.sh` asserts byte-identical output, so a
 header or a courtesy blank line fails the build.
 
 **What it may decide is the RENDERING, and nothing else.** The one thing this form knows
@@ -914,7 +914,7 @@ enumerated with the same `find` the installer walked, so the two could not disag
 what a stamp covered. **A bundle has carried no machinery since the plugin replatform**, so
 the question has no answer left to give: the `unstamped-machinery` row is retired and
 `--since` is parsed and then dropped, kept for one version so a saved command line does not
-become a fatal unknown argument (`plugin/scripts/ai-bridge.sh`). What it leaves behind still
+become a fatal unknown argument (`plugin/scripts/welcome.sh`). What it leaves behind still
 governs every other row: **empty output is a reported answer**, never silence.
 
 ---

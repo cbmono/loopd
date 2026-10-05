@@ -63,7 +63,7 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
       `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone`, from the bundle
       root. `--standalone` is required (a file opened straight in a browser needs the
       full HTML wrapper). **Pass no `--out`**: the renderer resolves `AB_BOARD_DIR`
-      itself — today `.ai-bridge/.board-live/board.html` — which is the path
+      itself — today `.loopd/.board-live/board.html` — which is the path
       `watch-board.sh` writes, `board-serve.sh` serves and `/loopd:init` gitignores. A hardcoded `--out` overrides that resolver, and
       the one that used to stand here named the pre-3.0 root path — so the page
       landed where nothing reads it, untracked and un-ignored. Never stage or commit it. No

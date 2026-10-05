@@ -136,7 +136,7 @@ ok "…the live one is named WORKING"                   "$(grep -c 'is WORKING' 
 ok "…the exited one is named EXITED"                  "$(grep -c 'has EXITED' "$TMP/e3")" 1
 
 echo "== the tick's own instructions carry the clauses a wave costs =="
-ok "step 3 spawns with claude --bg"       "$(has "$S3" 'claude --bg "<the whole brief>"')" yes
+ok "step 3 spawns with claude --bg"       "$(has "$S3" "claude --bg '<the whole brief>'")" yes
 ok "…and names the --bg/-p conflict"      "$(has "$S3" '**`--bg` and `-p` conflict**')"    yes
 ok "…in auto mode: the command line asks for it" "$(has "$S3" '--permission-mode auto --add-dir <bundle root>')" yes
 ok "…and never for a bypass agent"         "$(has "$S3" '--permission-mode bypassPermissions --add-dir')" no

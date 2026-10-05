@@ -27,6 +27,10 @@
 # tests/fixtures/brand/survivors.txt is the list, § 5 compares it to the repository in both
 # directions, and a file joining or leaving it does so in a PR that says why.
 #
+# AND THE OLD DIRECTORY NAME, PER OCCURRENCE (retire-the-ai-bridge-name/task-003). A file
+# already on that list could gain a `.ai-bridge` literal with the file check still green,
+# so the list's third column pins each file's count and § 5 compares it file by file.
+#
 # NON-VACUOUS BY CONSTRUCTION. Each predicate also runs on a mutant carrying exactly the
 # drift it exists to catch, and the mutant must go red.
 set -uo pipefail
@@ -136,6 +140,14 @@ sweep()     { ( cd "$1" && grep -rIl ai-bridge plugin docs README.md tests scrip
 pinned_in() { local r="$1" p; listed | while IFS= read -r p; do [ -e "$r/$p" ] && echo "$p"; done; }
 new_brand() { comm -13 <(pinned_in "$1") <(sweep "$1") | tr '\n' ' ' | sed 's/ $//'; }
 left_list() { comm -23 <(pinned_in "$1") <(sweep "$1") | tr '\n' ' ' | sed 's/ $//'; }
+DOT=.ai-bridge
+dot_pins()  { grep -v '^#' "$SURV" | awk -F'\t' '$3 {print $2 "=" $3}' | while IFS== read -r p n; do [ -e "$1/$p" ] && echo "$p=$n"; done | sort; }
+dot_found() { ( cd "$1" && grep -rIoF -- "$DOT" plugin docs README.md tests scripts 2>/dev/null ) | cut -d: -f1 | sort | uniq -c | awk '{print $2 "=" $1}' | sort; }
+dot_drift() { # <root> -> each swept file whose `.ai-bridge` count differs from its pin, as path=count
+  { comm -13 <(dot_pins "$1") <(dot_found "$1")
+    comm -23 <(dot_pins "$1" | cut -d= -f1) <(dot_found "$1" | cut -d= -f1) | sed 's/$/=0/'
+  } | sort | tr '\n' ' ' | sed 's/ $//'
+}
 
 ok "the list is sorted and has no duplicate" \
    "$(listed | sort -u | cmp -s - <(listed) && echo yes || echo no)" yes
@@ -143,6 +155,7 @@ ok "every pinned path is a tracked file" \
    "$(listed | while IFS= read -r p; do (cd "$REPO" && git ls-files --error-unmatch "$p") >/dev/null 2>&1 || echo "$p"; done | tr '\n' ' ' | sed 's/ $//')" ""
 ok "no file outside the list carries the old brand" "$(new_brand "$REPO")" ""
 ok "…and no listed file has quietly stopped carrying it" "$(left_list "$REPO")" ""
+ok "every $DOT literal is pinned, file by file and count by count" "$(dot_drift "$REPO")" ""
 
 # Mutant E: a cleaned file takes the brand back as prose. The check must NAME it.
 MUT="$TMP/mut"; mkdir -p "$MUT/plugin/scripts"
@@ -159,6 +172,23 @@ MUT3="$TMP/mut3"; mkdir -p "$MUT3/scripts"
 { cat "$REPO/scripts/add-second-human.sh"; echo 'echo "  ~/workspace/ai-bridge/install.sh \"\$PWD\""'; } \
   > "$MUT3/scripts/add-second-human.sh"
 ok "mutant G: the retired install.sh line in scripts/ is named" "$(new_brand "$MUT3")" scripts/add-second-human.sh
+
+# Mutant H: two listed files each gain one $DOT literal — invisible to the file check, so
+# it must stay green while the count check NAMES both files and their new counts.
+MUT4="$TMP/mut4"; mkdir -p "$MUT4/plugin/scripts"
+for f in bundle-paths.sh migrate-bundle.sh; do
+  { cat "$REPO/plugin/scripts/$f"; echo "OLD_DIR=$DOT"; } > "$MUT4/plugin/scripts/$f"
+done
+ok "mutant H: the file check is blind to an extra $DOT" "$(new_brand "$MUT4")" ""
+ok "mutant H: each gained $DOT is named with its count" "$(dot_drift "$MUT4")" \
+   "plugin/scripts/bundle-paths.sh=1 plugin/scripts/migrate-bundle.sh=4"
+
+# Mutant I: a pinned $DOT disappears without the pin moving. The check must NAME it.
+MUT5="$TMP/mut5"; mkdir -p "$MUT5/plugin/scripts"
+awk -v d="$DOT" '!done && (i = index($0, d)) { $0 = substr($0, 1, i-1) substr($0, i+length(d)); done=1 } 1' \
+  "$REPO/plugin/scripts/migrate-bundle.sh" > "$MUT5/plugin/scripts/migrate-bundle.sh"
+ok "mutant I: a vanished pinned $DOT is named with its count" "$(dot_drift "$MUT5")" \
+   "plugin/scripts/migrate-bundle.sh=2"
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

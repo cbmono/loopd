@@ -589,11 +589,11 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 
 | Script | Does | Writes? |
 |---|---|---|
-| `ai-bridge.sh` | backs the plugin's `/welcome`: reprints the SessionStart banner, `check` reports state that could be wrong, `fix` repairs only the idempotent tier | only under `fix` |
+| `welcome.sh` | backs the plugin's `/welcome`: reprints the SessionStart banner, `check` reports state that could be wrong, `fix` repairs only the idempotent tier | only under `fix` |
 | `decision-stamp.sh` | the one resolver of *which GitHub login made a decision a document records* — `--self` for a decision taken in this session, `--author <path>`/`--promotion <path>` for one that arrived as a commit (the git author's email reverse-mapped through `people`, so a hand-promotion or a reply pushed from the other clone attributes to the other human). Unattributable prints `<unknown>` and exits 1; the stamp is written anyway. A login, never an address | no |
 | `bundle-paths.sh` | the one place a bundle's layout is spelled — sourced it exports `AB_SCHEMA`, `AB_AWAITING`, `AB_LEDGER` and the rest as paths relative to a bundle root; run it, it prints them | no |
 | `plugin-name.sh` | the one place the plugin names itself — sourced (via `bundle-paths.sh`) it sets `PLUGIN_NAME` and `PLUGIN_MARKETPLACE` from the install path `<cache>/<marketplace>/<plugin>/<version>`, or from the two manifests in a checkout; run it, it prints them | no |
-| `cli-theme.sh` | the one place a plugin surface's colour escapes are spelled — sourced by the banner, status line, board and `ai-bridge.sh`; `ab_theme` picks the tier | no |
+| `cli-theme.sh` | the one place a plugin surface's colour escapes are spelled — sourced by the banner, status line, board and `welcome.sh`; `ab_theme` picks the tier | no |
 | `resolve-config.sh` | the one implementation of the two-file config precedence — `instance.config.local.json` first, `instance.config.json` second, dicts merged entry by entry | no |
 | `resolve-max-agents.sh` | prints the concurrency cap **this machine** should honour, from the same two files | no |
 | `spawn-preflight.sh` | step 3's read before a wave: what permission mode is **this session** in? Reads the mode `hooks/permission-mode.sh` recorded for this call, matched by its `--token` — no probe, no spawn. Exit 1 `auto`, 0 `not-auto`, 2 `could-not-read`, never folded into either. It reports the mode and predicts no launch outcome: the classifier judges the brief, not the command | no |

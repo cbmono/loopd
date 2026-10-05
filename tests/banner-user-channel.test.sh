@@ -479,7 +479,7 @@ assert "…and says exactly what the coloured one says" \
 # =======================================================================================
 echo "== 6. /loopd:welcome INVOKES this hook, it does not reproduce it =="
 # =======================================================================================
-# GUARDED ON PRESENCE, and deliberately: `scripts/ai-bridge.sh` arrives with task-011
+# GUARDED ON PRESENCE, and deliberately: `scripts/welcome.sh` arrives with task-011
 # (ai-bridge#70), which is open at the time of writing. Until it lands there is nothing to
 # check and this section says so rather than asserting a vacuous pass; the moment it
 # merges, the assertion starts running with no edit here. What it guards is divergence — a
@@ -503,7 +503,7 @@ echo "== 6. /loopd:welcome INVOKES this hook, it does not reproduce it =="
 # so the wrapper asks for a banner without it; tests/banner-logo.test.sh §5 measures that
 # subtraction, and these stay identity assertions about the wrapper. `MD_OUT`/`TXT_OUT` keep
 # the ship below, because the emphasis claims are about the hook's own renderings.
-AB="$TPL/plugin/scripts/ai-bridge.sh"
+AB="$TPL/plugin/scripts/welcome.sh"
 if [ -f "$AB" ]; then
   AB_OUT="$( cd "$INST" && CLAUDE_PROJECT_DIR="$INST" bash "$AB" 2>/dev/null )"
   AB_MD="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md --no-logo --full 2>/dev/null)"
@@ -567,7 +567,7 @@ if [ -f "$AB" ]; then
     "$(hasnt '**' "$(printf '%s\n' "$(field "$OUT" hookSpecificOutput.additionalContext)" \
         | sed -n '/BEGIN AWAITING ITEMS/,/END AWAITING ITEMS/!p')")"
 else
-  echo "  SKIP  ai-bridge.sh is not in this template yet (task-011 / ai-bridge#70 is open)"
+  echo "  SKIP  welcome.sh is not in this template yet (task-011 / ai-bridge#70 is open)"
 fi
 
 # =======================================================================================

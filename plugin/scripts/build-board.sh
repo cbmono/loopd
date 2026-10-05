@@ -155,7 +155,7 @@
 #     ✕ close-command control — every `[data-copy]` button on the page shares it, and
 #     there is no second one.
 #   · A FAILED COPY IS A STICKY, SELECTABLE FAILURE — because the page is opened over
-#     `file://`. The tick renders to `.ai-bridge/.board-live/board.html` and double-clicks
+#     `file://`. The tick renders to `.loopd/.board-live/board.html` and double-clicks
 #     it, so the copy buttons have to work on an origin nobody serves.
 #     WHAT WAS ACTUALLY MEASURED THERE, on `file:///…/board.html` in Chrome 151 (macOS),
 #     because the intuition was wrong in a way worth writing down: `file:` IS a
@@ -2065,7 +2065,7 @@ else:
     doc = head_html + "\n" + body_html + "\n"
 # The output DIRECTORY is created, and only here — after the "nothing to write" exit
 # above, so an instance that is off the board still leaves no trace. The /<plugin>:dispatch tick
-# renders to `.ai-bridge/.board-live/board.html`, which exists on a machine that has run
+# renders to `.loopd/.board-live/board.html`, which exists on a machine that has run
 # watch-board.sh and on no other, and a renderer that fails with a FileNotFoundError the
 # first time each tick calls it would be a board nobody ever sees.
 OUT.parent.mkdir(parents=True, exist_ok=True)

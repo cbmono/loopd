@@ -58,7 +58,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    and `claude logs <id>` first: the work is usually already committed, and one message
    asking it to open the PR on what it has recovers it — the same task and same PR,
    which is the resume step 3 allows. **The resume is
-   `cd <worktree> && claude --bg --resume <the recorded session> "<the message>"`**,
+   `cd <worktree> && claude --bg --resume <the recorded session> '<the message>'`**,
    with the same flags step 3 lists. It continues that session under the same id when it
    has exited, and **starts a COPY and says so when it is still running** — so resume
    only a session `agent-sessions.sh state` calls `done`, and when the output names a

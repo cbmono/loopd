@@ -1343,7 +1343,7 @@ FIRST_STAMP=no
 # fabricated provenance, which is worse than none: a false base merges silently.
 # The record is bundle content, not machine state, so it is tracked and travels with a
 # shared bundle's clone. ~190 KB, and it is what makes the refresh work offline.
-SEED_BASE_DIR="$TARGET/.ai-bridge/seed-base"
+SEED_BASE_DIR="$TARGET/$AB_DIR/seed-base"
 record_seed_base() { # <rel> <the seed file just copied>
   mkdir -p "$SEED_BASE_DIR/$(dirname "$1")" 2>/dev/null || return 0
   cp "$2" "$SEED_BASE_DIR/$1" 2>/dev/null || true
@@ -1385,7 +1385,7 @@ if [ -d "$SEED_SRC" ]; then
       continue
     fi
     # THE SEED IS FLAT AND THE BUNDLE IS NOT — the mapping happens here, on the copy.
-    # `record_seed_base` is keyed by the SEED path, so `.ai-bridge/seed-base/` stays flat
+    # `record_seed_base` is keyed by the SEED path, so `$AB_DIR/seed-base/` stays flat
     # and refresh-seeds.sh's merge base is unchanged by the move.
     dest="$(ab_seed_dest "$rel")"
     src="$SEED_SRC/$rel"; dst="$TARGET/$dest"
@@ -1532,7 +1532,7 @@ fi
 # directly under a top-level `{` on its own line, and a settings.json shaped any other way
 # is reported for the human to edit rather than rewritten by a guess.
 SL_SETTINGS="$TARGET/.claude/settings.json"
-SL_SHIM="$TARGET/.claude/ai-bridge-statusline.sh"
+SL_SHIM="$TARGET/.claude/loopd-statusline.sh"
 if [ ! -f "$SL_SETTINGS" ]; then
   echo "  skip  statusLine (no $SL_SETTINGS to write it into)"
 elif grep -q '"statusLine"' "$SL_SETTINGS"; then
@@ -1841,14 +1841,14 @@ fi
 # The copies refresh-seeds.sh keeps — its own guard, the .tick-lock.claim lesson again:
 # every bundle in existence satisfies the guards above, so a line added to one of their
 # heredocs reaches nobody.
-if ! grep -qE '^/?\.ai-bridge/refresh/?$' "$gi"; then
+if ! grep -qE "^/?${AB_DIR//./\\.}/refresh/?\$" "$gi"; then
   gi_add <<'GI'
 
 # Copies refresh-seeds.sh keeps when it merges a seed change in — the file it replaced,
 # and any merge it could not resolve, with its conflict markers. Derived and per-machine;
-# delete it freely. (`.ai-bridge/seed-base/` beside it IS tracked — it is the merge base
+# delete it freely. (`__AB_DIR__/seed-base/` beside it IS tracked — it is the merge base
 # this bundle was stamped from, and it is the same on every clone.)
-/.ai-bridge/refresh/
+/__AB_DIR__/refresh/
 GI
 fi
 
@@ -3075,9 +3075,9 @@ fi
 # and that row still counts would loop forever.
 [ "$REFRESH_SEEDS" -eq 0 ] || REFRESH_SEEDS=0   # read and dropped — see the flag above
 if [ "$FIRST_STAMP" = no ] && [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
-  if [ -f "$BIN_DIR/ai-bridge.sh" ]; then
+  if [ -f "$BIN_DIR/welcome.sh" ]; then
     echo
-    AI_BRIDGE_INIT_PASS=1 bash "$BIN_DIR/ai-bridge.sh" fix --instance "$TARGET" || true
+    AI_BRIDGE_INIT_PASS=1 bash "$BIN_DIR/welcome.sh" fix --instance "$TARGET" || true
   elif [ -f "$BIN_DIR/refresh-seeds.sh" ]; then
     bash "$BIN_DIR/refresh-seeds.sh" "$TARGET" --apply || true
   fi

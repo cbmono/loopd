@@ -9,13 +9,13 @@ node_modules/
 # Derived awaiting-you queue — rewritten by each /loopd:dispatch tick from
 # projects/*/tasks/*.md. A view, not source; never commit it. Delete the file
 # itself to turn the queue off (the loop never recreates it).
-/.ai-bridge/AWAITING.md
+/.loopd/AWAITING.md
 
 # Derived board snapshot — rewritten by scripts/write-snapshot.sh at the end of each
 # /loopd:dispatch tick, and read by scripts/build-board.sh (possibly from another instance).
 # A view, not source. Delete the file itself to take this instance off the board (the
 # writer never recreates it).
-/.ai-bridge/SNAPSHOT.json
+/.loopd/SNAPSHOT.json
 
 # The board page is DERIVED and never tracked. It used to be committed on every tick that
 # changed something — which made one path contended by every clone of a shared bundle, for
@@ -29,13 +29,13 @@ node_modules/
 # that section can only change when HEAD moves. Derived and per-machine; delete it freely
 # and the next render rebuilds it. /loopd:init appends this line too, so it reaches
 # instances stamped before the cache existed.
-/.ai-bridge/.board-others.json
+/.loopd/.board-others.json
 
 # The local live board page (scripts/watch-board.sh, scripts/board-serve.sh) — the page
 # regenerated on every task-document change by a watcher you keep running. Derived,
 # per-machine, and safe to delete. /loopd:init appends this line too, so it reaches
 # instances stamped before the directory existed.
-/.ai-bridge/.board-live/
+/.loopd/.board-live/
 
 # The PM dispatch lock (scripts/tick-lock.sh) — written by /loopd:dispatch immediately before it
 # dispatches a tick and released when that tick reports, so the one-tick-at-a-time
@@ -43,7 +43,7 @@ node_modules/
 # never committed: two humans sharing one bundle work from two clones and each dispatches
 # independently, which a shared lock would break. Derived and safe to delete when no tick
 # is running.
-/.ai-bridge/.tick-lock
+/.loopd/.tick-lock
 
 # The tick's claim on that lock (the second half of the same mechanism): a tick takes the
 # lock too, because a resumed tick never passes through the launcher, and the claim is what
@@ -51,7 +51,7 @@ node_modules/
 # derived exactly like the lock, removed with it by `scripts/tick-lock.sh release`. Its own
 # line because `/.tick-lock` does not match it and instances stamped before it exists carry
 # the first line already — /loopd:init appends this one separately for that reason.
-/.ai-bridge/.tick-lock.claim
+/.loopd/.tick-lock.claim
 
 # API keys — for a substituted model backend (the loopd-llm companion) or anything
 # else. NEVER tracked: a key in a tracked file is a published key, and that launcher
@@ -91,15 +91,15 @@ instance.config.local.json
 # The knowledge-base mount's own git directories (scripts/kb-sync.sh mount) — nested
 # clones the machinery creates and never commits. Per clone; never delete one with
 # unpushed commits in it (`scripts/kb-sync.sh status` says).
-/.ai-bridge/kb.git/
-/.ai-bridge/kb-src/
+/.loopd/kb.git/
+/.loopd/kb-src/
 
 # Copies refresh-seeds.sh keeps when it merges a seed change in — the file it replaced,
 # and any merge it could not resolve, with its conflict markers. Derived and per-machine:
 # nothing in the bundle tree ever carries a conflict marker, and nothing here needs
-# committing. Delete it freely. (`.ai-bridge/seed-base/` beside it IS tracked — it is the
+# committing. Delete it freely. (`.loopd/seed-base/` beside it IS tracked — it is the
 # merge base this bundle was stamped from, and it is the same on every clone.)
-/.ai-bridge/refresh/
+/.loopd/refresh/
 
 # Instance additions (kept across seed refreshes)
 # Everything from the heading above to end of file is THIS bundle's own. refresh-seeds.sh

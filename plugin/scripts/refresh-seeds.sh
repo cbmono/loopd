@@ -35,7 +35,7 @@
 #     that resolves it; `--apply` applies it and reports RESOLVED, naming the rule. A class
 #     not in the table is still a CONFLICT for the human.
 #   · NOTHING WITH CONFLICT MARKERS IS EVER WRITTEN INTO THE BUNDLE TREE. Every copy this
-#     script keeps goes under `.ai-bridge/refresh/<file>.<epoch>` — gitignored, out of the
+#     script keeps goes under `.loopd/refresh/<file>.<epoch>` — gitignored, out of the
 #     way of the bundle's own git status — and the report names the path.
 #   · `instance.config.json` / `instance.config.local.json` ⇒ NEVER merged, only reported.
 #     Config is the one seed file whose purpose is to diverge, and a value in it is
@@ -67,7 +67,7 @@
 #      blobs): a clone that has moved on, or belongs to another plugin, is a stranger's
 #      history and would compute merge bases for content this copy never had. Rejected
 #      with the reason printed, never silently.
-#   3. THE BUNDLE'S OWN STAMPED-SEED RECORD — `.ai-bridge/seed-base/`, pristine copies
+#   3. THE BUNDLE'S OWN STAMPED-SEED RECORD — `.loopd/seed-base/`, pristine copies
 #      `init-bundle.sh` writes of every seed file IT stamped. That is the merge base by
 #      construction (it is what the bundle's copy was made from), it needs no git at all,
 #      and it is the only source that still works offline on a machine with no clone.
@@ -141,7 +141,7 @@ CLAUDE.md|instance-additions|the trailing "## Instance additions (kept across se
 
 # The seed-managed .gitignore paths: derived files this machinery itself writes, so which
 # side ignores them is the plugin's answer and never the bundle's.
-SEED_MANAGED_IGNORE="board\.html|${AB_BOARD_DIR//./\\.}/|${AB_AWAITING//./\\.}|${AB_LOCK//./\\.}|\.ai-bridge/"
+SEED_MANAGED_IGNORE="board\.html|${AB_BOARD_DIR//./\\.}/|${AB_AWAITING//./\\.}|${AB_LOCK//./\\.}|${AB_DIR//./\\.}/"
 
 # A TRAILING INSTANCE BLOCK IS BUNDLE-OWNED: the additions heading (plus the blank run
 # before it) through end of file, split off both sides before the merge and re-appended
@@ -240,7 +240,7 @@ HIST_KIND=none        # git | record | none — which shape the per-file lookup 
 HIST_LABEL=""         # what the `history:` line says
 HIST_SHALLOW=0        # the source's history is truncated; absence proves nothing
 REPO_ROOT=""; PREFIX=""
-BASE_DIR="$TARGET/.ai-bridge/seed-base"
+BASE_DIR="$TARGET/$AB_DIR/seed-base"
 MKT_DIR=""            # the marketplace clone we derived, whether or not we accepted it
 MKT_WHY=""            # why it was rejected, so the report can say
 
@@ -397,7 +397,7 @@ echo "== seed drift (a seed edit never reaches a stamped bundle by itself) =="
 # a seed path can never look like a SHA. `core.quotePath=false` keeps a non-ASCII name
 # readable; a name with a newline in it is still beyond this parse, and is not a seed path.
 #
-# THE RECORD SOURCE ANSWERS THE SAME QUESTION WITH ONE CANDIDATE. `.ai-bridge/seed-base/`
+# THE RECORD SOURCE ANSWERS THE SAME QUESTION WITH ONE CANDIDATE. `.loopd/seed-base/`
 # holds the seed file the stamp actually copied, so it is not a candidate base — it IS the
 # base, with no history to search. Both shapes hand back blob ids so the loop below is one
 # piece of code; `cat_base` is what knows where the bytes come from.
@@ -448,7 +448,7 @@ write_beside() { # <merged> <target-file>
 
 # Keep a copy OUT of the bundle tree. A `.bak` beside the file — worse, one carrying
 # conflict markers — is something the human then has to notice, read and delete.
-KEEP_DIR="$TARGET/.ai-bridge/refresh"
+KEEP_DIR="$TARGET/$AB_DIR/refresh"
 keep_aside() { # <file-to-copy> <seed-relative path> -> prints the kept path
   local dest
   dest="$KEEP_DIR/$2.$(date +%s)"
@@ -519,7 +519,7 @@ while IFS= read -r rel; do
       # seed's stub is only the shape of an empty bundle and merging it onto a populated
       # one re-appends the stub every run (measured 2026-09-07, proceso). Regenerating is
       # the answer, and it is the same answer on every bundle — so --apply takes it.
-      # The bundle's .ai-bridge/index.md is NOT in this class: no script builds it, so it
+      # The bundle's .loopd/index.md is NOT in this class: no script builds it, so it
       # is `derived-gitignored` and resolved after the merge instead.
       builder="$BIN_DIR/build-kb-index.sh"
       if [ ! -e "$inst_f" ] || [ ! -f "$builder" ] || [ ! -d "$TARGET/knowledge" ]; then
@@ -734,14 +734,14 @@ EOF
     ' "$TMPD/sd"
     detail "port it by hand, then re-run. Full diff of what you have vs the seed:"
     detail "  diff -u '$inst_f' '$seed_f'"
-    # UNDER --apply, THE CONFLICTED MERGE IS KEPT UNDER `.ai-bridge/refresh/` — never
+    # UNDER --apply, THE CONFLICTED MERGE IS KEPT UNDER `.loopd/refresh/` — never
     # over the file and never beside it. The live file stays exactly as the human left it
     # (that is the never-clobber guarantee) and the markers are there to read, but a
     # marker-carrying `.bak` in the bundle tree is a second thing the human has to notice
     # and delete. IDEMPOTENT: kept once, not once per run.
     if [ "$APPLY" -eq 1 ]; then
       if kept_already "$TMPD/merged" "$rel"; then
-        detail "the conflicted merge is already kept under .ai-bridge/refresh/"
+        detail "the conflicted merge is already kept under $AB_DIR/refresh/"
       else
         cbak="$(keep_aside "$TMPD/merged" "$rel" || true)"
         [ -z "$cbak" ] || detail "the conflicted merge (with markers) is kept at $cbak"
@@ -767,7 +767,7 @@ EOF
   fi
 
   # --apply: write the MERGE RESULT, never a copy of the seed, then read it back.
-  # A hand-edited file is kept first, under `.ai-bridge/refresh/`; a verbatim old seed is
+  # A hand-edited file is kept first, under `.loopd/refresh/`; a verbatim old seed is
   # not, because its content is recoverable from this template's git history.
   bak=""
   if [ "$base_kind" != "verbatim" ]; then
@@ -836,7 +836,7 @@ if [ "$HIST_KIND" != git ] && [ "$unknown" -gt 0 ]; then
   left_more "  content). ${MKT_WHY:-not derivable from this install path}."
   [ -z "$MKT_DIR" ] || left_more "  claude plugin marketplace add <the marketplace> re-creates it at $MKT_DIR"
   left_more "· or record the base in the bundle itself, so no clone is needed at all:"
-  left_more "  /${PLUGIN_NAME}:init '$TARGET'  — a stamp writes .ai-bridge/seed-base/ for every"
+  left_more "  /${PLUGIN_NAME}:init '$TARGET'  — a stamp writes $AB_DIR/seed-base/ for every"
   left_more "  seed file IT copies, which is the merge base by construction."
 fi
 if [ "$HIST_SHALLOW" -eq 1 ]; then

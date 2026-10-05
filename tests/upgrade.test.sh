@@ -190,21 +190,21 @@ assert "index.md is now byte-identical to the current seed" \
 assert "todos.md is reported PORTED"      "$(has 'PORTED    todos.md' "$APPLY")"
 assert "todos.md gained the seed's new line"  "$(yes_if grep -q '^TOP LINE FROM SEED V2$' "$INST/todos.md")"
 assert "todos.md KEPT the instance's own line" "$(yes_if grep -q '^INSTANCE TODO$' "$INST/todos.md")"
-# EVERY COPY THIS SCRIPT KEEPS GOES UNDER .ai-bridge/refresh/, never beside the file:
+# EVERY COPY THIS SCRIPT KEEPS GOES UNDER .loopd/refresh/, never beside the file:
 # a `.bak` in the bundle tree is one more thing the human has to notice and delete, and
 # one carrying conflict markers is worse.
-assert "a merged file's old copy is kept under .ai-bridge/refresh/" \
-  "$(yes_if sh -c 'ls "$1"/todos.md.* >/dev/null 2>&1' _ "$INST/.ai-bridge/refresh")"
+assert "a merged file's old copy is kept under .loopd/refresh/" \
+  "$(yes_if sh -c 'ls "$1"/todos.md.* >/dev/null 2>&1' _ "$INST/.loopd/refresh")"
 assert "a verbatim-seed file needs no copy kept" \
-  "$(sh -c 'ls "$1"/index.md.* >/dev/null 2>&1' _ "$INST/.ai-bridge/refresh" && echo 1 || echo 0)"
+  "$(sh -c 'ls "$1"/index.md.* >/dev/null 2>&1' _ "$INST/.loopd/refresh" && echo 1 || echo 0)"
 assert "the conflicted merge is kept there too" \
-  "$(yes_if sh -c 'ls "$1"/CLAUDE.md.* >/dev/null 2>&1' _ "$INST/.ai-bridge/refresh")"
+  "$(yes_if sh -c 'ls "$1"/CLAUDE.md.* >/dev/null 2>&1' _ "$INST/.loopd/refresh")"
 assert "…and it carries the conflict markers" \
-  "$(yes_if sh -c 'grep -qE "^(<<<<<<< |>>>>>>> )" "$1"/CLAUDE.md.*' _ "$INST/.ai-bridge/refresh")"
+  "$(yes_if sh -c 'grep -qE "^(<<<<<<< |>>>>>>> )" "$1"/CLAUDE.md.*' _ "$INST/.loopd/refresh")"
 assert "…and no .bak file was written into the bundle tree at all" \
-  "$(grep -q . <<<"$(find "$INST" -name '*.bak.*' -not -path '*/.ai-bridge/*')" && echo 1 || echo 0)"
+  "$(grep -q . <<<"$(find "$INST" -name '*.bak.*' -not -path '*/.loopd/*')" && echo 1 || echo 0)"
 assert "the report names the path it kept the conflicted merge at" \
-  "$(has '.ai-bridge/refresh/CLAUDE.md' "$APPLY")"
+  "$(has '.loopd/refresh/CLAUDE.md' "$APPLY")"
 assert "instance.config.json was NOT written"        "$(hasnt 'PORTED    instance.config.json' "$APPLY")"
 assert "…and is byte-identical after --apply"        "$(yes_if cmp -s "$TMP/config.pristine" "$INST/instance.config.json")"
 
@@ -236,15 +236,15 @@ assert "…and reports 0 ported"          "$(has '0 ported' "$THIRD")"
 assert "the conflict is still reported, not forgotten" "$(has 'CONFLICT  CLAUDE.md' "$THIRD")"
 
 echo "== a template with no git history falls back to the bundle's stamped-seed record =="
-# The bundle carries `.ai-bridge/seed-base/` — what the stamp copied — so a template with
+# The bundle carries `.loopd/seed-base/` — what the stamp copied — so a template with
 # no history of its own can still judge the drift. Report-only here: the write path is
 # covered above, and what is under test is which SOURCE answered.
 NOGIT="$TMP/tpl-nogit"
 cp -R "$TPL" "$NOGIT" && rm -rf "$NOGIT/.git"
 printf 'a further seed change\n' >> "$NOGIT/plugin/seed/index.md"
-assert "the stamp recorded what it seeded"  "$(yes_if test -f "$INST/.ai-bridge/seed-base/index.md")"
+assert "the stamp recorded what it seeded"  "$(yes_if test -f "$INST/.loopd/seed-base/index.md")"
 assert "…and the plugin version it stamped with" \
-  "$(yes_if test "$(cat "$INST/.ai-bridge/seed-base/VERSION" 2>/dev/null)" = "$(cat "$TPL/plugin/VERSION")")"
+  "$(yes_if test "$(cat "$INST/.loopd/seed-base/VERSION" 2>/dev/null)" = "$(cat "$TPL/plugin/VERSION")")"
 NOGIT_OUT="$(bash "$NOGIT/plugin/scripts/refresh-seeds.sh" "$INST" 2>&1)"
 assert "the run names the record as its source" "$(has "history:  this bundle's stamped-seed record" "$NOGIT_OUT")"
 assert "…and the drifted file is judged, not UNKNOWN" "$(hasnt 'UNKNOWN   index.md' "$NOGIT_OUT")"

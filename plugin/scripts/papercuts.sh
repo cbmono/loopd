@@ -9,6 +9,7 @@
 # (usage, an unreadable record). Record: knowledge/papercuts.md, appended, never edited.
 # Why: CONVENTIONS.md → the papercut bullet. Reasoning: ai-bridge-next/task-016.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 NOTE_MIN=15
 NOTE_MAX=160
@@ -37,7 +38,7 @@ done
 DIR="knowledge/papercuts"
 GIVEN="$FILE"
 [ -n "$FILE" ] || FILE="knowledge/papercuts.md"
-if [ -z "$GIVEN" ] && { [ -d "$DIR" ] || [ -d ".ai-bridge/kb.git" ]; }; then
+if [ -z "$GIVEN" ] && { [ -d "$DIR" ] || [ -d "$AB_DIR/kb.git" ]; }; then
   FILE="$DIR/${DATE%-*}.md"
 fi
 sources() {

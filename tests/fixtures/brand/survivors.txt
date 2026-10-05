@@ -5,50 +5,53 @@
 # leaves it does so in a PR that says why.
 #
 #   prov     provenance -- a task slug, a PR or run reference, a recorded measurement
-#   bundle   the bundle-owned directory `.ai-bridge/` (AB_DIR, bundle-paths.sh)
+#   bundle   the pre-`.loopd` bundle directory `.ai-bridge/`, which migrate-bundle.sh moves
 #   instdir  an instance directory name, `_ai-bridge-<group>`
 #   fname    a file whose own name carries `ai-bridge`
 #   frozen   a pre-rename identifier, an on-disk marker or schema literal, a release note
 #   harness  the check in section 5 below, which must name the string it sweeps for
 #   list     this file
 #
-# <reason(s)><TAB><path>
+# A third column pins how many `.ai-bridge` literals the file carries; absent means 0, and
+# § 5 compares it per file, because a file already listed is otherwise free to gain one.
+#
+# <reason(s)><TAB><path>[<TAB><count of .ai-bridge>]
 prov,instdir,fname,frozen	README.md
 prov,fname	docs/conventions.md
 frozen	docs/index.html
 prov,instdir,frozen	docs/migrating.md
-prov,bundle,instdir,fname,frozen	docs/operations.md
+prov,instdir,fname,frozen	docs/operations.md
 prov	docs/pm-design.md
 frozen	docs/releases/v1.0.0.md
-frozen	docs/releases/v3.0.0.md
-frozen	docs/releases/v3.1.0.md
+frozen	docs/releases/v3.0.0.md	2
+frozen	docs/releases/v3.1.0.md	3
 prov	docs/sharing.md
-prov,bundle,fname	plugin/README.md
+prov,fname	plugin/README.md
+fname	plugin/RETIRED
 prov	plugin/evals/README.md
 prov	plugin/hooks/deny-destructive.sh
-prov,bundle,instdir,fname,frozen	plugin/hooks/session-banner.sh
+prov,instdir,fname,frozen	plugin/hooks/session-banner.sh
 prov	plugin/scripts/agent-usage.sh
-fname	plugin/scripts/ai-bridge.sh
 frozen	plugin/scripts/board-serve.sh
-bundle,frozen	plugin/scripts/build-board.sh
+frozen	plugin/scripts/build-board.sh
 prov	plugin/scripts/build-kb-index.sh
-prov,bundle,instdir	plugin/scripts/bundle-paths.sh
+prov,instdir	plugin/scripts/bundle-paths.sh
 prov	plugin/scripts/check-dispatch.sh
 prov	plugin/scripts/cite-check.sh
 prov	plugin/scripts/clearance-receipt.sh
 prov,frozen	plugin/scripts/dispatch-brief.sh
 prov	plugin/scripts/do-not-repeat.sh
-prov,bundle,instdir,fname,frozen	plugin/scripts/init-bundle.sh
+prov,instdir,fname,frozen	plugin/scripts/init-bundle.sh
 prov	plugin/scripts/kb-migrate.sh
 prov,frozen	plugin/scripts/kb-sync.sh
 instdir	plugin/scripts/link-repos.sh
 prov	plugin/scripts/merge-permit.sh
-bundle	plugin/scripts/migrate-bundle.sh
-prov,bundle	plugin/scripts/papercuts.sh
+bundle	plugin/scripts/migrate-bundle.sh	3
+prov	plugin/scripts/papercuts.sh
 prov	plugin/scripts/pr-body-clearance.sh
 prov	plugin/scripts/pr-verdict-clearance.sh
 prov	plugin/scripts/rebase-pr.sh
-bundle,instdir,frozen	plugin/scripts/refresh-seeds.sh
+instdir,frozen	plugin/scripts/refresh-seeds.sh
 prov	plugin/scripts/release-bump.sh
 prov	plugin/scripts/required-checks.sh
 prov,fname	plugin/scripts/resolve-account.sh
@@ -58,43 +61,32 @@ prov	plugin/scripts/review-rounds.sh
 prov	plugin/scripts/stall-counter.sh
 prov	plugin/scripts/status-line.sh
 frozen	plugin/scripts/write-snapshot.sh
-fname	plugin/seed/.claude/ai-bridge-statusline.sh
-bundle	plugin/seed/.gitignore
-bundle	plugin/seed/CLAUDE.md
 prov	plugin/seed/CONVENTIONS.md
 prov	plugin/seed/README.md
-bundle	plugin/seed/SCHEMA.md
 instdir	plugin/seed/bridge.code-workspace
-prov,bundle,instdir	plugin/seed/instance.config.json
-bundle	plugin/seed/knowledge/index.md
+prov,instdir	plugin/seed/instance.config.json
 prov	plugin/seed/knowledge/papercuts.md
 prov	plugin/skills/answer/SKILL.md
-bundle	plugin/skills/board/SKILL.md
 prov	plugin/skills/close-project/SKILL.md
-bundle	plugin/skills/dispatch/SKILL.md
-fname	plugin/skills/welcome/SKILL.md
-bundle	plugin/tick-steps/step-8-render.md
 prov	tests/agent-control.test.sh
 prov	tests/agent-tool-allowlist.test.sh
 prov	tests/agent-usage.test.sh
-fname	tests/ai-bridge-command.test.sh
 prov	tests/approach-critique-trigger.test.sh
 prov,frozen	tests/artifact-board.test.sh
 prov	tests/awaiting-queue.test.sh
 prov	tests/awaiting-render.test.sh
 fname,frozen	tests/background-teardown.test.sh
-prov,bundle	tests/banner-board-line.test.sh
+prov	tests/banner-board-line.test.sh
 prov,instdir,fname,frozen	tests/banner-colour-channel.test.sh
 instdir,fname,frozen	tests/banner-logo.test.sh
 prov,instdir,fname,frozen	tests/banner-user-channel.test.sh
 prov	tests/blocked-vs-own-tools.test.sh
-bundle,frozen	tests/board-in-repo.test.sh
-bundle	tests/board-output-path.test.sh
+frozen	tests/board-in-repo.test.sh
 prov,instdir,frozen	tests/board-renderers.test.sh
 instdir,frozen	tests/board-serve.test.sh
 instdir	tests/build-board.test.sh
 instdir,fname	tests/bundle-group.test.sh
-prov,bundle	tests/bundle-paths.test.sh
+prov	tests/bundle-paths.test.sh
 prov	tests/check-dispatch.test.sh
 prov	tests/ci-workflow.test.sh
 prov	tests/cite-check.test.sh
@@ -109,10 +101,10 @@ frozen	tests/config-layer.test.sh
 prov,instdir,frozen	tests/config-override.test.sh
 prov	tests/decision-stamp.test.sh
 instdir,frozen	tests/deliverable-paths-vs-yaml.test.sh
-prov,bundle	tests/deny-baseline.test.sh
+prov	tests/deny-baseline.test.sh
 prov,instdir	tests/derived-indexes.test.sh
 prov	tests/explorer-tier.test.sh
-list	tests/fixtures/brand/survivors.txt
+list	tests/fixtures/brand/survivors.txt	3
 prov	tests/fixtures/dispatch/commented-pr.task.md
 prov	tests/fixtures/pr-body/ai-bridge-195.md
 prov	tests/fixtures/pr-body/loopd-task-025-criteria.md
@@ -123,20 +115,19 @@ prov	tests/fixtures/reviewer/rate-limit-refusal.pr30.md
 prov	tests/fixtures/reviewer/skip-beside-review.pr215.md
 prov	tests/fixtures/reviewer/skip-notice.pr229.md
 prov	tests/harness-read-paths.test.sh
-prov,bundle,frozen	tests/index-ignore-restamp.test.sh
+prov,frozen	tests/index-ignore-restamp.test.sh
 prov	tests/init-local-config.test.sh
 prov,instdir	tests/init-org-bundle.test.sh
 prov,instdir	tests/install-era-wording.test.sh
 prov,frozen	tests/installer-worktree-guard.test.sh
 prov	tests/kb-index-integrity.test.sh
-prov,bundle	tests/kb-mount.test.sh
-bundle	tests/kb-reflect.test.sh
+prov	tests/kb-mount.test.sh
 prov,frozen	tests/kb-sync-write.test.sh
 prov,instdir	tests/link-repos.test.sh
 prov	tests/local-tier-seed.test.sh
 prov	tests/local-vs-ci-testing.test.sh
 frozen	tests/loop-cadence.test.sh
-bundle	tests/migrate-bundle.test.sh
+bundle,fname	tests/migrate-bundle.test.sh	29
 prov,instdir,frozen	tests/moved-template.test.sh
 prov	tests/override-count-and-reason.test.sh
 instdir	tests/per-owner-board.test.sh
@@ -145,17 +136,13 @@ prov	tests/plugin-eval.test.sh
 prov,frozen	tests/plugin-manifest.test.sh
 frozen	tests/plugin-name.test.sh
 prov,instdir,frozen	tests/plugin-native-bootstrap.test.sh
-fname	tests/plugin-skills.test.sh
-prov,bundle	tests/pm-loop-launcher.test.sh
+prov	tests/pm-loop-launcher.test.sh
 prov	tests/pm-step-files.test.sh
 prov,fname	tests/pr-body-clearance.test.sh
 prov	tests/pr-comment-clearance.test.sh
 prov	tests/pr-verdict-clearance.test.sh
-bundle,fname	tests/printed-commands.test.sh
-bundle	tests/push-state.test.sh
 prov	tests/quiet-tick.test.sh
-prov,harness	tests/readme-brand-mark.test.sh
-fname	tests/readme-scripts-table.test.sh
+prov,harness	tests/readme-brand-mark.test.sh	4
 prov	tests/record-host-rendering.test.sh
 frozen	tests/release-bump.test.sh
 prov,instdir,fname	tests/retire-machinery.test.sh
@@ -164,8 +151,7 @@ prov	tests/review-rounds.test.sh
 prov	tests/review-route.test.sh
 prov	tests/scaffold-review-dispatched.test.sh
 prov	tests/scripts-executable.test.sh
-prov,bundle,instdir,fname,frozen	tests/seed-conflict-resolution.test.sh
-bundle	tests/seed-doc-links.test.sh
+prov,instdir,fname,frozen	tests/seed-conflict-resolution.test.sh
 prov	tests/seed-promoted-rules.test.sh
 prov	tests/seed-script-paths.test.sh
 prov	tests/seed-size.test.sh
@@ -183,6 +169,5 @@ prov	tests/test-runner.test.sh
 prov	tests/tick-delta.test.sh
 prov,instdir	tests/tick-lock.test.sh
 prov	tests/tools/fd-cliff.sh
-prov,bundle,instdir,fname,frozen	tests/upgrade.test.sh
-bundle	tests/validate-bundle.test.sh
+prov,instdir,fname,frozen	tests/upgrade.test.sh
 prov	tests/worktree-suite-parity.test.sh
