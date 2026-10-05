@@ -31,8 +31,8 @@ flat() { printf '%s' "$1" | tr '\n' ' ' | tr -s ' '; }
 # The section under test, and the template inside it: everything is scoped to these, so a
 # quoted counter-example elsewhere in the file is not mistaken for the thing it warns about.
 SECTION="$(awk '/^### Merging on the override/{f=1} f && /^### Cutting a release/{exit} f' "$OPS")"
-TEMPLATE="$(printf '%s\n' "$SECTION" | awk '/^```md$/{f=1;next} f && /^```$/{exit} f')"
-MARKER="$(printf '%s\n' "$TEMPLATE" | head -1)"
+TEMPLATE="$(awk '/^```md$/{f=1;next} f && /^```$/{exit} f' <<<"$SECTION")"
+MARKER="$(head -1 <<<"$TEMPLATE")"
 
 echo "1. docs/autonomy.md hand-types no count of override merges"
 # The grammar is "<a number> PRs have merged", in words or digits, however it is emphasised

@@ -445,36 +445,36 @@ printf '%s\n' "$FOUND"          | sed 's/^/    scanner said: /'
 sed 's/^/    coverage:     /' "$TMP/skips.txt"
 
 assert "A — flags the stale \$HERE-rooted read (the item-1 shape)" \
-  "$(printf '%s\n' "$FOUND" | grep -q "planted.test.sh:6  \[HERE\]  ../$GONE/.claude/settings.json" && echo 0 || echo 1)"
+  "$(grep -q "planted.test.sh:6  \[HERE\]  ../$GONE/.claude/settings.json" <<<"$FOUND" && echo 0 || echo 1)"
 assert "B — flags the MARKED stale check-ignore target (the item-2 shape)" \
-  "$(printf '%s\n' "$FOUND" | grep -q "\[CHECKIGNORE\]  $GONE/index.md" && echo 0 || echo 1)"
+  "$(grep -q "\[CHECKIGNORE\]  $GONE/index.md" <<<"$FOUND" && echo 0 || echo 1)"
 assert "C — does NOT flag the UNMARKED one: the check-ignore rule is genuinely opt-in" \
-  "$(printf '%s\n' "$FOUND" | grep -q "$GONE/other.md" && echo 1 || echo 0)"
+  "$(grep -q "$GONE/other.md" <<<"$FOUND" && echo 1 || echo 0)"
 assert "D — does NOT flag a path that resolves" \
-  "$(printf '%s\n' "$FOUND" | grep -q 'plugin/seed/.gitignore' && echo 1 || echo 0)"
+  "$(grep -q 'plugin/seed/.gitignore' <<<"$FOUND" && echo 1 || echo 0)"
 # Narrowed to the [ROOT] kind on purpose: finding B is a [CHECKIGNORE] on the same
 # spelling, and an assertion that matched the path alone would have been satisfied by B —
 # a vacuity of exactly the kind this file exists to refuse.
 assert "E — does NOT flag a deliberate absence carrying 'path-scan: absent'" \
-  "$(printf '%s\n' "$FOUND" | grep -q "\[ROOT\]  $GONE/index.md" && echo 1 || echo 0)"
+  "$(grep -q "\[ROOT\]  $GONE/index.md" <<<"$FOUND" && echo 1 || echo 0)"
 assert "F — does NOT flag install.sh: the stated limit, pinned so nobody assumes otherwise" \
-  "$(printf '%s\n' "$FOUND" | grep -q 'install.sh' && echo 1 || echo 0)"
+  "$(grep -q 'install.sh' <<<"$FOUND" && echo 1 || echo 0)"
 assert "G — reports the rebound-\$TPL harness as out of reach, never silently" \
   "$(grep -q 'PARTIAL rebound.test.sh' "$TMP/skips.txt" && echo 0 || echo 1)"
 assert "H — flags a stale \$REPO-rooted read: the 36 harnesses an earlier draft ignored" \
-  "$(printf '%s\n' "$FOUND" | grep -q "repo-rooted.test.sh:3  \[ROOT\]  $GONE/repo-rooted.md" && echo 0 || echo 1)"
+  "$(grep -q "repo-rooted.test.sh:3  \[ROOT\]  $GONE/repo-rooted.md" <<<"$FOUND" && echo 0 || echo 1)"
 assert "I — PROSE mentioning the marker does not arm it" \
-  "$(printf '%s\n' "$FOUND" | grep -q "$GONE/prose-armed.md" && echo 0 || echo 1)"
+  "$(grep -q "$GONE/prose-armed.md" <<<"$FOUND" && echo 0 || echo 1)"
 assert "J — an opted-in check-ignore with \`&& echo\` yields no bogus word-as-path finding" \
-  "$(printf '%s\n' "$FOUND" | grep -q 'operators.test.sh' && echo 1 || echo 0)"
+  "$(grep -q 'operators.test.sh' <<<"$FOUND" && echo 1 || echo 0)"
 assert "K — a root derived from an untrusted \$HERE is itself untrusted, and reported" \
-  "$(grep -q 'PARTIAL derived.test.sh' "$TMP/skips.txt" && printf '%s\n' "$FOUND" | grep -qv 'derived.test.sh' && echo 0 || echo 1)"
+  "$(grep -q 'PARTIAL derived.test.sh' "$TMP/skips.txt" && grep -qv 'derived.test.sh' <<<"$FOUND" && echo 0 || echo 1)"
 assert "L — \`export REPO=\` counts as an assignment, so the file is not trusted on silence" \
   "$(grep -q 'PARTIAL derived.test.sh (out of reach:.*REPO' "$TMP/skips.txt" && echo 0 || echo 1)"
 assert "M — a SCOPED marker exempts the path it names…" \
-  "$(printf '%s\n' "$FOUND" | grep -q "scoped.test.sh:.*$GONE/retired" && echo 1 || echo 0)"
+  "$(grep -q "scoped.test.sh:.*$GONE/retired" <<<"$FOUND" && echo 1 || echo 0)"
 assert "…and leaves every other literal on the same line live" \
-  "$(printf '%s\n' "$FOUND" | grep -q "scoped.test.sh:4  \[ROOT\]  $GONE/also-gone" && echo 0 || echo 1)"
+  "$(grep -q "scoped.test.sh:4  \[ROOT\]  $GONE/also-gone" <<<"$FOUND" && echo 0 || echo 1)"
 assert "…and finds exactly the five it claims and no sixth thing" \
   "$(eq "$(printf '%s\n' "$FOUND" | grep -c .)" 5)"
 

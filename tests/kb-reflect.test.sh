@@ -74,8 +74,8 @@ ok "exactly one AWAITING.md row appears"            "$(rows "$D/.ai-bridge/AWAIT
 ok "…and it is the report, asking the human"        "$(grep -c "answer.*Knowledge reflection" "$D/.ai-bridge/AWAITING.md")" 1
 ok "EVERY file under knowledge/ is byte-identical"  "$([ "$BEFORE" = "$(kbsum)" ] && echo yes || echo no)" yes
 ok "…and git sees no change there either"           "$(git status --porcelain knowledge/ | wc -l | tr -d ' ')" 0
-ok "the report is a task document, so the row has a source" "$(sed -n 's/^type: //p' "$REPORT" | head -1)" Task
-ok "…left as a draft the human never promotes"      "$(sed -n 's/^status: //p' "$REPORT" | head -1)" draft
+ok "the report is a task document, so the row has a source" "$(head -1 <<<"$(sed -n 's/^type: //p' "$REPORT")")" Task
+ok "…left as a draft the human never promotes"      "$(head -1 <<<"$(sed -n 's/^status: //p' "$REPORT")")" draft
 ok "…carrying the one proposal"                     "$(grep -c '^P1 · supersede · duplicate · ' "$REPORT")" 1
 ok "validate-bundle accepts the report"             "$("$VALIDATE" "$REPORT" 2>&1 | grep -c ERROR)" 0
 
@@ -110,14 +110,14 @@ bystander_before="$(cksum <knowledge/findings/bystander.md)"
 head_before="$(git rev-parse HEAD)"
 "$APPLY" --by example-user-007 "$REPORT" >/dev/null 2>"$TMP/apply.err"; rc=$?
 ok "it applies"                                     "$rc" 0
-ok "the proposed field is written"                  "$(sed -n 's/^status: //p' knowledge/findings/duplicate.md | head -1)" superseded
+ok "the proposed field is written"                  "$(head -1 <<<"$(sed -n 's/^status: //p' knowledge/findings/duplicate.md)")" superseded
 ok "a change the report does not name is not applied" "$(cksum <knowledge/findings/bystander.md)" "$bystander_before"
-ok "…and the keeper's own frontmatter is untouched" "$(sed -n 's/^status: //p' knowledge/findings/keeper.md | head -1)" current
+ok "…and the keeper's own frontmatter is untouched" "$(head -1 <<<"$(sed -n 's/^status: //p' knowledge/findings/keeper.md)")" current
 ok "the exclusion set: the per-item ledger entry"   "$(grep -c '^ledger:.*supersede.*items duplicate,keeper' knowledge/findings/duplicate.md)" 1
 ok "…recording the human, never a role"             "$(grep -c 'by example-user-007' knowledge/findings/duplicate.md)" 1
 ok "the exclusion set: the derived index is regenerated" \
   "$([ "$(cksum <knowledge/index.md)" != "$(git show "$head_before":knowledge/index.md | cksum)" ] && echo yes || echo no)" yes
-ok "the exclusion set: the report is closed"        "$(sed -n 's/^status: //p' "$REPORT" | head -1)" done
+ok "the exclusion set: the report is closed"        "$(head -1 <<<"$(sed -n 's/^status: //p' "$REPORT")")" done
 ok "the exclusion set: exactly one commit"          "$(git rev-list --count "$head_before"..HEAD)" 1
 ok "…and nothing it touched is left uncommitted"    "$(git status --porcelain knowledge/ "$REPORT" | wc -l | tr -d ' ')" 0
 ok "the commit touches only what the report + the exclusion set name" \
@@ -151,7 +151,7 @@ by_before="$(cksum <knowledge/findings/bystander.md)"
 ok "an item edited since the report refuses the WHOLE report" \
   "$("$APPLY" --by example-user-007 "$R2" >/dev/null 2>&1; echo $?)" 1
 ok "…applying none of it — the second item is untouched" "$(cksum <knowledge/findings/bystander.md)" "$by_before"
-ok "…and the report stays open"                     "$(sed -n 's/^status: //p' "$R2" | head -1)" draft
+ok "…and the report stays open"                     "$(head -1 <<<"$(sed -n 's/^status: //p' "$R2")")" draft
 ok "a role name as --by is refused"                 "$("$APPLY" --by cataloguer "$R2" >/dev/null 2>&1; echo $?)" 2
 ok "a report outside projects/*/tasks/ is refused"  "$("$APPLY" --by example-user-007 knowledge/index.md >/dev/null 2>&1; echo $?)" 1
 echo "== round 2: the write scope is closed, and a partial apply cannot start =="
@@ -206,8 +206,8 @@ rm -f "$SHORT"
 
 echo "== criterion 6: the command is namespaced, state-changing and documented =="
 ok "the skill ships"                                "$([ -f "$SKILL" ] && echo yes || echo no)" yes
-ok "…named for its directory"                       "$(sed -n 's/^name: //p' "$SKILL" | head -1)" kb-apply
-ok "…human-triggered, never model-invoked"          "$(sed -n 's/^disable-model-invocation: //p' "$SKILL" | head -1)" true
+ok "…named for its directory"                       "$(head -1 <<<"$(sed -n 's/^name: //p' "$SKILL")")" kb-apply
+ok "…human-triggered, never model-invoked"          "$(head -1 <<<"$(sed -n 's/^disable-model-invocation: //p' "$SKILL")")" true
 ok "…and it is in plugin-skills.test.sh's STATE_CHANGING list" \
   "$(grep -c '^STATE_CHANGING=.*kb-apply' "$REPO/tests/plugin-skills.test.sh")" 1
 ok "the README's command table carries the row"     "$(grep -c '^| `/loopd:kb-apply <report>` |' "$REPO/README.md")" 1

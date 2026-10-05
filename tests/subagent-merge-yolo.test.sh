@@ -113,8 +113,8 @@ verdict() { # <command> <agent_type> -> "allow" | "deny:<rule>" | "bad:<decision
   [ -n "$out" ] || { printf 'allow'; return 0; }
   dec="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)"
   [ "$dec" = deny ] || { printf 'bad:%s' "$dec"; return 0; }
-  rule="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
-          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p' | head -1)"
+  rule="$(head -1 <<<"$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
+          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p')")"
   printf 'deny:%s' "${rule:-UNNAMED}"
 }
 
@@ -147,7 +147,7 @@ REASON="$(payload "$GITREPO" "gh pr merge --squash --match-head-commit $SHA 227"
           | HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$BUNDLE" bash "$HOOK" 2>/dev/null \
           | jq -r '.hookSpecificOutput.permissionDecisionReason // ""')"
 ok "…and the refusal names the human as the merger" \
-   "$(printf '%s' "$REASON" | grep -qF "merge is the human's under \`gated\`" && echo yes || echo no)" yes
+   "$(grep -qF "merge is the human's under \`gated\`" <<<"$REASON" && echo yes || echo no)" yes
 
 echo
 echo "== (c) delegating mode, NO receipt ⇒ refused =="

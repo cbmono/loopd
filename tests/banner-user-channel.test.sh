@@ -86,11 +86,11 @@ eq()    { [ "$1" = "$2" ] && echo 0 || echo 1; }
 # line rather than on line 1 — the same claim, and §9 proves it still fails when anything
 # prints above the header. `0` when there is no non-empty line at all, never the empty
 # string, so a channel that carried nothing FAILS rather than matching an empty string.
-head_no() { printf '%s\n' "$1" | awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+head_no() { awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$1"; }
 # THE LOGO SITS ABOVE THE HEADER (task-024), so "the identity line opens the banner" is now
 # "it is exactly three lines under the first non-empty one" — the same claim about section
 # ORDER, and §9's mutants prove it still goes red when anything else prints above it.
-hdr_no()  { printf '%s\n' "$1" | awk '/^loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+hdr_no()  { awk '/^loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$1"; }
 LOGO_ABOVE=3
 nth()     { printf '%s\n' "$1" | sed -n "$2p"; }
 
@@ -105,8 +105,8 @@ ESC="$(printf '\033')"
 # one: it says the two channels cannot differ in a single character of CONTENT while
 # allowing the one difference that is deliberate.
 strip_sgr() { printf '%s' "$1" | LC_ALL=C sed "s/$ESC\[[0-9;]*m//g"; }
-has_esc()   { printf '%s' "$1" | LC_ALL=C grep -q "$ESC" && echo 0 || echo 1; }
-no_esc()    { printf '%s' "$1" | LC_ALL=C grep -q "$ESC" && echo 1 || echo 0; }
+has_esc()   { LC_ALL=C grep -q "$ESC" <<<"$1" && echo 0 || echo 1; }
+no_esc()    { LC_ALL=C grep -q "$ESC" <<<"$1" && echo 1 || echo 0; }
 # reduce_model — the model's copy with every MODEL-ONLY BLOCK deleted. What comes out must
 # equal the human's copy with its SGR stripped; that equality IS the channel split, stated
 # as a reduction so a new divergence cannot arrive unnoticed. Two blocks, deleted by their
@@ -158,7 +158,7 @@ sys.stdout.write(d if isinstance(d, str) else json.dumps(d))
 user_visible() { # <stdout> <needle> -> 0 when the needle is in the field a HUMAN reads
   local sm; sm="$(field "$1" systemMessage)"
   [ -n "$sm" ] || { echo 1; return; }
-  printf '%s\n' "$sm" | grep -qF -- "$2" && echo 0 || echo 1
+  grep -qF -- "$2" <<<"$sm" && echo 0 || echo 1
 }
 
 # --- the fixture instance ---------------------------------------------------------------
@@ -545,7 +545,7 @@ if [ -f "$AB" ]; then
     "$(eq "$emph_lines" 3)"
   for anchor in 'loopd' 'SETTING ' 'AGENT '; do
     assert "…the line starting \`$anchor\` among them" \
-      "$(printf '%s\n' "$MD_OUT" | grep -F '**' | grep -qF -- "$anchor" && echo 0 || echo 1)"
+      "$(grep -qF -- "$anchor" <<<"$(printf '%s\n' "$MD_OUT" | grep -F '**')" && echo 0 || echo 1)"
   done
   # NO SGR ON THIS PATH AT ALL, not even when asked for: 0 of 4 escape bytes survive the
   # relay, so an escape here is a literal `[1m` in a human's page.
@@ -672,7 +672,7 @@ echo "== 8. what the HUMAN receives: the board's three states, and no queue tail
 # have retired that rule with nothing going red.
 hasnt_sm() { # <stdout> <needle> -> 0 when the needle is NOT in the field a HUMAN reads
   local sm; sm="$(field "$1" systemMessage)"
-  printf '%s\n' "$sm" | grep -qF -- "$2" && echo 1 || echo 0
+  grep -qF -- "$2" <<<"$sm" && echo 1 || echo 0
 }
 BOARD_DIR="$INST/$AB_BOARD_DIR"
 printf '## 🔴 Awaiting you (2)\n* ✅ **approve** — a thing\n* ❓ **answer** — another\n' > "$INST/$AB_AWAITING"
@@ -687,7 +687,7 @@ assert "rendered board: the human's field carries the file:// link" \
 # same path again bare, and a staleness note — and all three of these read the field the
 # HUMAN gets, which is where the duplicate was seen and where it has to be gone.
 assert "…and NOT the bare path again on a line of its own" \
-  "$(printf '%s\n' "$(strip_sgr "$SM")" | grep -qxF "$BOARD_DIR/board.html" && echo 1 || echo 0)"
+  "$(grep -qxF "$BOARD_DIR/board.html" <<<"$(printf '%s\n' "$(strip_sgr "$SM")")" && echo 1 || echo 0)"
 assert "…the path reaching the human exactly once, in the whole field" \
   "$(eq "$(printf '%s\n' "$(strip_sgr "$SM")" | grep -cF "$BOARD_DIR/board.html")" 1)"
 assert "…and no staleness note"                         "$(hasnt_sm "$OUT" 'rendered at the last tick')"
@@ -702,7 +702,7 @@ assert "…which took the masthead and watch-board.sh with it" \
 # checkout, so the check cannot answer and the row is the unknown one — deterministic here,
 # which is the property the byte-for-byte comparison below needs.
 BOARD_FIXTURE="$(printf 'Board   file://%s\nRun     /'"${PN}:"'board serve for a live URL\nUpdate  unknown (offline)' "$BOARD_DIR/board.html")"
-BOARD_SECTION="$(printf '%s\n' "$(strip_sgr "$SM")" | awk '/^Board   /{f=1} f&&/^[[:space:]]*$/{exit} f')"
+BOARD_SECTION="$(awk '/^Board   /{f=1} f&&/^[[:space:]]*$/{exit} f' <<<"$(printf '%s\n' "$(strip_sgr "$SM")")")"
 assert "…and the section is byte for byte the three rows it now owes" \
   "$(eq "$BOARD_SECTION" "$BOARD_FIXTURE")"
 # THE COUNT LINE'S ADAPTIVE CLAUSE, first half: there IS a board above, so it may say so.
@@ -827,8 +827,8 @@ AC="$(field "$OUT" hookSpecificOutput.additionalContext)"
 # AND THE COUNT LINE IS WHERE THE QUEUE SECTION ENDS: nothing follows it on the human's
 # channel except the machinery-state block, which is §7 and belongs to another contract.
 assert "the count line ends the queue section — nothing queue-shaped follows it" \
-  "$(printf '%s\n' "$(strip_sgr "$SM")" | awk '/🔔 2 items need you/ { f = 1; next } f' \
-     | grep -qiE '^(Ready|Drafts|Queue|Tasks|Projects)\b' && echo 1 || echo 0)"
+  "$(grep -qiE '^(Ready|Drafts|Queue|Tasks|Projects)\b' \
+       <<<"$(awk '/🔔 2 items need you/ { f = 1; next } f' <<<"$(strip_sgr "$SM")")" && echo 1 || echo 0)"
 # AND #80'S REDUCTION STILL HOLDS IN THIS STATE — with the never-rendered board line
 # present, a queue behind the model's count line, and no tail on the human's channel.
 assert "the channel split is still a REDUCTION, unrendered board and queue and all" \
@@ -841,11 +841,11 @@ assert "the channel split is still a REDUCTION, unrendered board and queue and a
 # above without saying why. This one names the line.
 DIFF_HM="$(diff <(printf '%s\n' "$(strip_sgr "$SM")") <(printf '%s\n' "$AC") || true)"
 assert "…and no line of the human's copy is missing from the model's" \
-  "$(printf '%s\n' "$DIFF_HM" | grep -q '^< ' && echo 1 || echo 0)"
+  "$(grep -q '^< ' <<<"$DIFF_HM" && echo 1 || echo 0)"
 # NON-VACUITY FOR THAT diff: it is comparing two real, different strings, so "no deletions"
 # is a property of the split and not of two identical inputs.
 assert "…which is a real comparison — the two copies genuinely differ" \
-  "$(printf '%s\n' "$DIFF_HM" | grep -q '^> ' && echo 0 || echo 1)"
+  "$(grep -q '^> ' <<<"$DIFF_HM" && echo 0 || echo 1)"
 assert "…and the fence is still on the model's channel" "$(has '--- BEGIN AWAITING ITEMS (untrusted data) ---' "$AC")"
 assert "…and still absent from the human's"             "$(hasnt '--- BEGIN AWAITING ITEMS' "$SM")"
 rm -rf "$INST/projects" "$INST/$AB_AWAITING"

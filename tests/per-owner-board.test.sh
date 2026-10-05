@@ -198,7 +198,7 @@ assert "…and it is gitignored by the seed" \
 # Read through the resolver, not for a literal: init-bundle.sh spells the layout as
 # `__AB_BOARD_OTHERS__` and ab_expand is what turns it back into a path.
 assert "…and install.sh backfills that line"  \
-  "$(yes_if bash -c '. "$1/plugin/scripts/bundle-paths.sh"; ab_expand < "$1/plugin/scripts/init-bundle.sh" | grep -qF "/$AB_BOARD_OTHERS"' _ "$TPL")"
+  "$(yes_if bash -c '. "$1/plugin/scripts/bundle-paths.sh"; grep -qF "/$AB_BOARD_OTHERS" <<<"$(ab_expand < "$1/plugin/scripts/init-bundle.sh")"' _ "$TPL")"
 
 # The wall clock is the FALLBACK, and only for the case where there is no SHA to key on.
 # Hiding .git is the cheapest faithful version of that: `git rev-parse HEAD` fails, a

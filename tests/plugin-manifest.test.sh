@@ -90,7 +90,7 @@ ok "…and ships no hooks and no agents" \
    "$([ -e "$REPO/${ASRC#./}/hooks" ] || [ -e "$REPO/${ASRC#./}/agents" ] && echo no || echo yes)" yes
 ok "…its description says it is an alias"       "$(printf '%s' "$ADESC" | grep -c 'ALIAS')" 1
 ok "…and points at MIGRATION.md, which exists" \
-   "$(printf '%s' "$ADESC" | grep -q 'MIGRATION.md' && [ -f "$REPO/MIGRATION.md" ] && echo yes || echo no)" yes
+   "$(grep -q 'MIGRATION.md' <<<"$ADESC" && [ -f "$REPO/MIGRATION.md" ] && echo yes || echo no)" yes
 ok "exactly one entry is sourced from ./plugin" \
    "$(jq '[.plugins[] | select(.source=="./plugin")] | length' "$MJ")" 1
 

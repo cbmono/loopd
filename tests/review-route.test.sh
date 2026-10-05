@@ -84,7 +84,7 @@ tools_of() { # <file> — the tools: values, one per line; empty means "no key"
 
 # First body line number matching a FIXED string, or 0 when absent. Fixed-string, because
 # several needles here contain `/`, `.` or `-`.
-first_line_or0() { local n; n="$(body "$1" | grep -nF -- "$2" | head -1 | cut -d: -f1)"; echo "${n:-0}"; }
+first_line_or0() { local n; n="$(head -1 <<<"$(body "$1" | grep -nF -- "$2")" | cut -d: -f1)"; echo "${n:-0}"; }
 
 # Is <regex-b> within <window> body lines of some occurrence of the fixed string <needle-a>?
 # Used where what matters is that two things sit TOGETHER — a clause and the case it
@@ -94,7 +94,7 @@ near() { # <file> <needle-a> <regex-b> <window>
   body "$f" > "$TMP/body"
   while IFS= read -r ln; do
     [ -n "$ln" ] || continue
-    awk -v c="$ln" -v w="$w" 'NR>=c-w && NR<=c+w' "$TMP/body" | grep -qiE -- "$b" && return 0
+    grep -qiE -- "$b" <<<"$(awk -v c="$ln" -v w="$w" 'NR>=c-w && NR<=c+w' "$TMP/body")" && return 0
   done < <(grep -nF -- "$a" "$TMP/body" | cut -d: -f1)
   return 1
 }
@@ -268,7 +268,7 @@ mk 'Agent' 'ONE cheap review is the default opening move.'
 ok "…and a missing second one"                "$(yn before "$FX/a.md" 'default opening move' 'Escalate when')" no
 
 # 7d. the cheap literal must be IN the default branch: same file, far apart, must fail.
-mk 'Agent' "$(printf 'Run /code-review low.\n%s\nONE cheap review is the default opening move.\n' "$(yes '  filler' | head -40)")"
+mk 'Agent' "$(printf 'Run /code-review low.\n%s\nONE cheap review is the default opening move.\n' "$(printf '  filler\n%.0s' {1..40})")"
 ok "proximity rejects a distant literal"      "$(yn near "$FX/a.md" 'default opening move' '/code-review low' 6)" no
 ok "…and accepts a nearby one"                "$(yn near "$FX/a.md" 'default opening move' '/code-review low' 60)" yes
 

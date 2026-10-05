@@ -70,7 +70,7 @@ said()    { grep -q -- "$1" "$TMP/out" && echo yes || echo no; }
 # Did the roster prompt appear at all? The header is printed before the first read, so its
 # absence means nothing was asked — which is the property, not "the answer was refused".
 asked()   { grep -q 'Team roster for this instance' "$TMP/out" && echo yes || echo no; }
-owner()   { sed -n 's/.*"defaultOwner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1/instance.config.json" | head -n1; }
+owner()   { head -n1 <<<"$(sed -n 's/.*"defaultOwner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1/instance.config.json")"; }
 # The seeded config, byte for byte, so "unchanged" is a comparison rather than a spot check.
 SEED_CFG="$(cat "$TPL/plugin/seed/instance.config.json")"
 same_as_seed() { [ "$(cat "$1/instance.config.json")" = "$SEED_CFG" ] && echo yes || echo no; }
@@ -131,7 +131,7 @@ ok "…and it parses too"                   "$(yn jq -e . "$I/instance.config.lo
 ok "…and is gitignored"                   "$(yn grep -qxF 'instance.config.local.json' "$I/.gitignore")" yes
 # The property that matters is not the file's text but that the REAL consumer reads it.
 # task-owner.sh resolves "who is this clone?" from exactly these two files.
-ok "task-owner.sh --self resolves it"     "$( cd "$I" && bash "$TPL/plugin/scripts/task-owner.sh" --self 2>&1 | head -1 )" \
+ok "task-owner.sh --self resolves it"     "$( cd "$I" && head -1 <<<"$(bash "$TPL/plugin/scripts/task-owner.sh" --self 2>&1)" )" \
                                           "self: example-user-007 (from instance.config.local.json)"
 # commit-as.sh looks the address up in `people` via that login, with its own awk parser —
 # a shape it cannot read would strand every agent commit.

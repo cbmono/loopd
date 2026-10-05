@@ -1,0 +1,4 @@
+# <file>	<fixed text on the line>	<why it is not a pipe the harness runs>
+deny-baseline.test.sh	'rg TODO build/out | head -5'	a command string handed to the deny hook to judge, never run
+kb-index-integrity.test.sh	`grep | head | cut`	a Finding title written into a fixture
+kb-index-integrity.test.sh	'grep \| head \| cut'	the same title, escaped as the index renders it

@@ -116,8 +116,8 @@ assert "…while an ordinary project is still ignored"          "$(yes_if git_ch
 assert "…the derived index is still ignored"                  "$(yes_if git_check_ignore "$LEGACY" "$AB_INDEX")"
 # Order is the mechanism: the negation line must still appear strictly AFTER the two
 # blanket rule lines (i.e. after the block's END marker), not before or inside it.
-neg_line="$(grep -nxF '!projects/retained-example/index.md' "$LEGACY/.gitignore" | head -1 | cut -d: -f1)"
-end_line="$(grep -nxF '# <<< ai-bridge index ignore <<<' "$LEGACY/.gitignore" | head -1 | cut -d: -f1)"
+neg_line="$(head -1 <<<"$(grep -nxF '!projects/retained-example/index.md' "$LEGACY/.gitignore")" | cut -d: -f1)"
+end_line="$(head -1 <<<"$(grep -nxF '# <<< ai-bridge index ignore <<<' "$LEGACY/.gitignore")" | cut -d: -f1)"
 assert "…and the negation line sits after the block's END marker" \
   "$([[ -n "$neg_line" && -n "$end_line" && "$neg_line" -gt "$end_line" ]] && echo 0 || echo 1)"
 
@@ -187,7 +187,7 @@ bash "$TPL/plugin/scripts/init-bundle.sh" "$INST4" >"$TMP/out4a" 2>&1
 cp "$INST4/.gitignore" "$TMP/inst4.before"
 
 bash "$TPL/plugin/scripts/init-bundle.sh" "$INST4" >"$TMP/out4b" 2>&1
-between_markers="$(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST4/.gitignore" | head -1)"
+between_markers="$(head -1 <<<"$(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST4/.gitignore")")"
 assert "the block still closes at its OWN (first) END marker" \
   "$([[ -n "$between_markers" ]] && echo 0 || echo 1)"
 assert "…exactly ONE real block, not content swallowed to the stray END" \
@@ -235,7 +235,7 @@ assert "the malformed file is left BYTE-FOR-BYTE unchanged, not truncated" \
 assert "…the trailer AFTER the dangling BEGIN specifically survives" \
   "$(yes_if grep -qxF '/some/trailer/rule' "$INST5/.gitignore")"
 assert "…and the run reports the malformed marker pair" \
-  "$(printf '%s\n' "$err5" | grep -qi 'no.*matching END marker\|END marker' && echo 0 || echo 1)"
+  "$(grep -qi 'no.*matching END marker\|END marker' <<<"$err5" && echo 0 || echo 1)"
 
 # ---------------------------------------------------------------------------------
 # 7. An EARLIER, unrelated standalone `/index.md` line must not steal the adjacency
@@ -286,8 +286,8 @@ assert "…an ordinary project is still ignored" \
   "$(yes_if git_check_ignore "$INST6" projects/other-project/index.md)"
 assert "…root index.md is still ignored" \
   "$(yes_if git_check_ignore "$INST6" index.md)"
-neg_line6="$(grep -nxF '!projects/retained-example/index.md' "$INST6/.gitignore" | head -1 | cut -d: -f1)"
-end_line6="$(grep -nxF '# <<< ai-bridge index ignore <<<' "$INST6/.gitignore" | head -1 | cut -d: -f1)"
+neg_line6="$(head -1 <<<"$(grep -nxF '!projects/retained-example/index.md' "$INST6/.gitignore")" | cut -d: -f1)"
+end_line6="$(head -1 <<<"$(grep -nxF '# <<< ai-bridge index ignore <<<' "$INST6/.gitignore")" | cut -d: -f1)"
 assert "…and the negation still sits after the block's END marker" \
   "$([[ -n "$neg_line6" && -n "$end_line6" && "$neg_line6" -gt "$end_line6" ]] && echo 0 || echo 1)"
 

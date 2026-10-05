@@ -408,7 +408,7 @@ ok "the tick's step 4 names it"       "$(has "$REPO/plugin/tick-steps/step-4-adv
 # lines are excluded — the script's header discusses the flag it deliberately does not have,
 # and a scanner that could not tell prose from code would forbid saying so.
 ok "the cap is not configurable from the command line" \
-   "$(grep -vE '^[[:space:]]*#' "$SCRIPT" | grep -qE -- '--cap' && echo 1 || echo 0)" "0"
+   "$(grep -qE -- '--cap' <<<"$(grep -vE '^[[:space:]]*#' "$SCRIPT")" && echo 1 || echo 0)" "0"
 
 
 # A ROUND COUNT IS A QUESTION ABOUT THE PAST, so the sibling's mergeability check is

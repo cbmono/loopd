@@ -113,7 +113,7 @@ add 'the --apply flag is not in the header'           script:validate-bundle.sh 
 add 'reviewed a head that had already moved'          agent:qa-reviewer          p/t-3 2026-09-03 >/dev/null
 R="$(bash "$PC" report --file "$REC")"
 ok "the report counts both surfaces"        "$(printf '%s' "$R" | grep -c '3 entries · 2 surfaces')" 1
-ok "…the busiest surface leads"             "$(printf '%s\n' "$R" | grep -E '^(skill|agent|script):' | head -1 | awk '{print $1}')" "script:validate-bundle.sh"
+ok "…the busiest surface leads"             "$(head -1 <<<"$(printf '%s\n' "$R" | grep -E '^(skill|agent|script):')" | awk '{print $1}')" "script:validate-bundle.sh"
 ok "…with its entry count"                  "$(printf '%s' "$R" | grep -c 'script:validate-bundle.sh  (2)')" 1
 ok "…and every entry appears under a surface" "$(printf '%s' "$R" | grep -c '^  2026-09-0')" 3
 bash "$PC" pass --file "$REC" --date 2026-09-06 >/dev/null

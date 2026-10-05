@@ -90,7 +90,7 @@ ok "the plugin's copy is a regular file in the index, not a link" \
 
 ver="$(head -n 1 "$VERFILE" 2>/dev/null)"
 ok "it is version-shaped (MAJOR.MINOR.PATCH)" \
-  "$(printf '%s' "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' && echo yes || echo no)" yes
+  "$(grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' <<<"$ver" && echo yes || echo no)" yes
 ok "…and it is exactly one line"      "$(wc -l < "$VERFILE" | tr -d ' ')" 1
 # A file with no trailing newline reads as one line to `head` and as zero to `wc -l`; both
 # spellings are pinned so the value stays trivially `cat`-able and `read`-able.
@@ -280,7 +280,7 @@ ok "the two rule files cover exactly the core paths" \
 core_bullet="$(grep -F 'A change to `core` carries NO version bump' "$TPL/CLAUDE.md" || true)"
 missing=0
 for p in plugin plugin-yolo plugin-accounts plugin-llm plugin-alias config install.sh upgrade.sh; do
-  printf '%s' "$core_bullet" | grep -qF "\`$p" || { missing=$((missing+1)); printf '        NOT NAMED IN CLAUDE.md: %s\n' "$p" >&2; }
+  grep -qF "\`$p" <<<"$core_bullet" || { missing=$((missing+1)); printf '        NOT NAMED IN CLAUDE.md: %s\n' "$p" >&2; }
 done
 ok "…and CLAUDE.md's core bullet names every one of them" "$missing" 0
 
@@ -354,7 +354,7 @@ companion_faults() { # <marketplace.json> <tree root> <core MAJOR> -> "<shape> <
   rows="$(companion_rows "$1" "$2")" || { printf 'UNREADABLE'; return; }
   while IFS="$(printf '\t')" read -r name mver pver; do
     [ -n "$name" ] || continue
-    if printf '%s' "$mver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    if grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' <<<"$mver"; then
       [ "${mver%%.*}" = "$3" ] || { major=$((major+1)); printf '        %s IS %s, CORE MAJOR IS %s\n' "$name" "$mver" "$3" >&2; }
     else
       shape=$((shape+1)); printf '        %s VERSION NOT MAJOR.MINOR.PATCH: %s\n' "$name" "$mver" >&2
@@ -456,18 +456,18 @@ run_check "$behind"
 ok "behind: exit 0"                       "$RC" 0
 ok "…says so once"                        "$(printf '%s\n' "$OUT" | grep -c 'UPDATE')" 1
 ok "…naming the version this machine runs" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'runs 0.9.1' && echo yes || echo no)" yes
+  "$(grep -qF 'runs 0.9.1' <<<"$OUT" && echo yes || echo no)" yes
 ok "…and the version on the default branch" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'has 0.10.0' && echo yes || echo no)" yes
+  "$(grep -qF 'has 0.10.0' <<<"$OUT" && echo yes || echo no)" yes
 # 0.10.0 > 0.9.1 is FALSE as a string compare, and that is the whole reason this fixture
 # uses those two numbers rather than 1.0.0 and 2.0.0.
 ok "…so the compare is numeric per field, not lexicographic" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'UPDATE' && echo yes || echo no)" yes
+  "$(grep -qF 'UPDATE' <<<"$OUT" && echo yes || echo no)" yes
 # THE REPAIR IS TWO COMMANDS AND THE SECOND ONE IS STILL THE POINT: updating the plugin
 # refreshes the machinery, but a SEED change reaches a bundle only through a stamp. It was
 # `install.sh`; it is `/<plugin>:init` since the bundle stopped carrying machinery.
 ok "…and it names the RE-STAMP, not just the update" \
-  "$(printf '%s\n' "$OUT" | grep -qF '/'"${PN}:"'init' && echo yes || echo no)" yes
+  "$(grep -qF '/'"${PN}:"'init' <<<"$OUT" && echo yes || echo no)" yes
 
 equal="$(mkfixture equal 1.2.3 1.2.3)"
 run_check "$equal"
@@ -488,7 +488,7 @@ ok "1.0 vs 1.0.0: same version, byte-empty" "$(len)" 0
 nextbr="$(mkfixture nextbr 2.0.0 1.9.9 next)"
 run_check "$nextbr"
 ok "default branch 'next': still detected as behind" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'UPDATE' && echo yes || echo no)" yes
+  "$(grep -qF 'UPDATE' <<<"$OUT" && echo yes || echo no)" yes
 
 # =======================================================================================
 echo "== 5. a FAILURE is never 'behind' =="
@@ -509,7 +509,7 @@ ok "…and exit 0, not a failed hook"           "$RC" 0
 # unreachable in both runs, and only the one that asked to talk to it went quiet.
 run_check "$offline"
 ok "no --fetch: answered offline from the on-disk ref" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'UPDATE' && echo yes || echo no)" yes
+  "$(grep -qF 'UPDATE' <<<"$OUT" && echo yes || echo no)" yes
 
 # 5c. No remote-tracking ref at all — a checkout that has never fetched.
 noref="$(mkfixture noref 4.0.0 1.0.0)"
@@ -538,17 +538,17 @@ ok "…and exit 0"                                        "$RC" 0
 GIT -C "$assumed" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/master
 run_check "$assumed"
 ok "…and with origin/HEAD restored it DOES speak" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'UPDATE' && echo yes || echo no)" yes
+  "$(grep -qF 'UPDATE' <<<"$OUT" && echo yes || echo no)" yes
 # …against `master`, the branch origin/HEAD names — never the `main` that is still sitting
 # there. Both branches carry 6.0.0 here, so the ref NAMED in the line is what separates them.
 ok "…naming the default branch it actually resolved" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'origin/master' && echo yes || echo no)" yes
+  "$(grep -qF 'origin/master' <<<"$OUT" && echo yes || echo no)" yes
 
 # Same fixture, one more property: THE LABEL IS DERIVED FROM THE CHECKOUT, not hardcoded — `symlink/**` carries no repo
 # literals, and a renamed clone must name itself. The fixture directory is `assumed`, so
 # that is what the line says.
 ok "…and the line names the template checkout, not a hardcoded project" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'TEMPLATE UPDATE (assumed)' && echo yes || echo no)" yes
+  "$(grep -qF 'TEMPLATE UPDATE (assumed)' <<<"$OUT" && echo yes || echo no)" yes
 
 # 5d. Not a git checkout at all (a template copied, not cloned).
 plain="$TMP/plain"
@@ -638,13 +638,13 @@ ok "…prints the drift line"                    "$(printf '%s\n' "$OUT" | grep 
 # the logo's three lines sit above the header (task-024) — so "directly under the header
 # rule" is found from the IDENTITY line: it, its rule, §2b's own blank separator, then the
 # line. The claim is unchanged; only the anchor is.
-HEAD_NO="$(printf '%s\n' "$OUT" | awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }')"
-HDR_NO="$(printf '%s\n' "$OUT" | awk '/^loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }')"
+HEAD_NO="$(awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$OUT")"
+HDR_NO="$(awk '/^loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$OUT")"
 ok "…the banner opens with exactly ONE blank line"  "$HEAD_NO" 2
 ok "…and the drift line is directly under the header rule (line $((HDR_NO + 3)))" \
-  "$(printf '%s\n' "$OUT" | sed -n "$((HDR_NO + 3))p" | grep -qF 'UPDATE' && echo yes || echo no)" yes
+  "$(grep -qF 'UPDATE' <<<"$(printf '%s\n' "$OUT" | sed -n "$((HDR_NO + 3))p")" && echo yes || echo no)" yes
 ok "…and the header still carries this template's own version" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'loopd v0.9.1' && echo yes || echo no)" yes
+  "$(grep -qF 'loopd v0.9.1' <<<"$OUT" && echo yes || echo no)" yes
 
 wire "$equal"
 banner "$equal"
@@ -700,9 +700,9 @@ ok "…and the human line stays byte-empty"          "$(printf '%s' "$OUT" | wc 
 abcheck() { AOUT="$(CLAUDE_PLUGIN_ROOT="$PINST" bash "$PINST/scripts/ai-bridge.sh" check --instance "$TMP/inst" 2>/dev/null)"; }
 abcheck
 ok "welcome check agrees it is current" \
-  "$(printf '%s\n' "$AOUT" | grep -qF 'plugin version: 1.0.0 is what the marketplace' && echo yes || echo no)" yes
+  "$(grep -qF 'plugin version: 1.0.0 is what the marketplace' <<<"$AOUT" && echo yes || echo no)" yes
 ok "…and does not claim an update is waiting" \
-  "$(printf '%s\n' "$AOUT" | grep -qF 'is behind the marketplace' && echo yes || echo no)" no
+  "$(grep -qF 'is behind the marketplace' <<<"$AOUT" && echo yes || echo no)" no
 
 mkt_at 1.0.1
 rm -f "$PCACHE"; pcheck --state
@@ -710,9 +710,9 @@ ok "the marketplace moved ahead: state is behind"  "$(printf '%s' "$OUT" | cut -
 ok "…naming the version it would install"          "$(printf '%s' "$OUT" | cut -f3)" 1.0.1
 rm -f "$PCACHE"; abcheck
 ok "welcome check agrees it is behind, with both versions" \
-  "$(printf '%s\n' "$AOUT" | grep -qF 'plugin 1.0.0 is behind the marketplace, which carries 1.0.1' && echo yes || echo no)" yes
+  "$(grep -qF 'plugin 1.0.0 is behind the marketplace, which carries 1.0.1' <<<"$AOUT" && echo yes || echo no)" yes
 ok "…and names the one command that fixes it"       \
-  "$(printf '%s\n' "$AOUT" | grep -qF "claude plugin update $PN" && echo yes || echo no)" yes
+  "$(grep -qF "claude plugin update $PN" <<<"$AOUT" && echo yes || echo no)" yes
 
 # THE CACHE IS THE REASON A SESSION MAKES NO NETWORK CALL. With a fresh stamp the remote may
 # move as far as it likes and the answer does not — and `--fetch` is what forces past it.

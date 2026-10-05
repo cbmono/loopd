@@ -164,8 +164,8 @@ assert() { # <label> <0|1>
   if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1))
   else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi
 }
-saw() { printf '%s\n' "$OUT" | grep -q -- "$1" && echo 0 || echo 1; }
-not_seen() { printf '%s\n' "$OUT" | grep -q -- "$1" && echo 1 || echo 0; }
+saw() { grep -q -- "$1" <<<"$OUT" && echo 0 || echo 1; }
+not_seen() { grep -q -- "$1" <<<"$OUT" && echo 1 || echo 0; }
 
 echo "== failure classes are each reported =="
 assert "an invalid enum value is an error"        "$(saw "status 'activ' is not valid")"
@@ -181,9 +181,9 @@ echo "== artifacts warn, they do not fail =="
 assert "an unwritten declared artifact WARNS"     "$(saw 'declared artifact does not exist yet')"
 # The label and the message are on separate lines, so look at the pair.
 assert "the artifact finding is labelled WARN, not ERROR" \
-  "$(printf '%s\n' "$OUT" | grep -B1 'not-written-yet' | grep -q 'WARN' && echo 0 || echo 1)"
+  "$(grep -q 'WARN' <<<"$(printf '%s\n' "$OUT" | grep -B1 'not-written-yet')" && echo 0 || echo 1)"
 assert "no ERROR mentions the unwritten artifact" \
-  "$(printf '%s\n' "$OUT" | grep -B1 'not-written-yet' | grep -q 'ERROR' && echo 1 || echo 0)"
+  "$(grep -q 'ERROR' <<<"$(printf '%s\n' "$OUT" | grep -B1 'not-written-yet')" && echo 1 || echo 0)"
 
 echo "== classes found by review (each was a false negative) =="
 assert "a BLOCK-style dangling depends_on is an error" \
@@ -205,7 +205,7 @@ assert "…not even a malformed one"                   "$(not_seen 'task-015-own
 
 echo "== a Finding is bounded, and both bounds only WARN =="
 assert "a Finding with no lesson: warns"            "$(saw "no one-line 'lesson:'")"
-assert "…and it is a WARN, not an ERROR"            "$(printf '%s\n' "$OUT" | grep -q "WARN.*no-lesson.md" && echo 0 || echo 1)"
+assert "…and it is a WARN, not an ERROR"            "$(grep -q "WARN.*no-lesson.md" <<<"$OUT" && echo 0 || echo 1)"
 assert "a 48-line Finding warns"                    "$(saw 'Finding is 48 lines')"
 assert "…naming the cap"                            "$(saw "caps it at 40")"
 assert "--strict turns both into failures"          "$([[ $RC_STRICT -ne 0 ]] && echo 0 || echo 1)"
@@ -214,9 +214,9 @@ echo "== open_caveats holds a TERMINAL write, and holds nothing else =="
 assert "done with a non-empty open_caveats FAILS" \
   "$(saw 'the rollout did not fix the 500s')"
 assert "…as an ERROR, not a WARN" \
-  "$(printf '%s\n' "$OUT" | grep -B1 'the rollout did not fix the 500s' | grep -q 'ERROR' && echo 0 || echo 1)"
+  "$(grep -q 'ERROR' <<<"$(printf '%s\n' "$OUT" | grep -B1 'the rollout did not fix the 500s')" && echo 0 || echo 1)"
 assert "…and no WARN is emitted for it" \
-  "$(printf '%s\n' "$OUT" | grep -B1 'the rollout did not fix the 500s' | grep -q 'WARN' && echo 1 || echo 0)"
+  "$(grep -q 'WARN' <<<"$(printf '%s\n' "$OUT" | grep -B1 'the rollout did not fix the 500s')" && echo 1 || echo 0)"
 assert "…naming the status that is held"        "$(saw "status 'done' is held by an open caveat")"
 assert "cancelled with a non-empty open_caveats FAILS" \
   "$(saw "status 'cancelled' is held by an open caveat")"
@@ -239,7 +239,7 @@ done
 echo "== non-concept files are never validated =="
 for f in 'projects/live/index.md' 'projects/live/log.md' 'projects/live/sources/README.md' \
          'projects/live/deliverables/written.md' 'projects/live/HANDOVER.md' 'index.md' 'log.md'; do
-  assert "ignored: $f" "$(printf '%s\n' "$OUT" | grep -E "(ERROR|WARN) +$f\$" | grep -q . && echo 1 || echo 0)"
+  assert "ignored: $f" "$(grep -q . <<<"$(printf '%s\n' "$OUT" | grep -E "(ERROR|WARN) +$f\$")" && echo 1 || echo 0)"
 done
 
 echo "== exit codes =="
@@ -256,15 +256,15 @@ GOOD_ONE="$(bash "$VALIDATOR" ./knowledge/findings/good.md 2>&1)"
 ABS_ONE="$(bash "$VALIDATOR" "$B/knowledge/findings/too-long.md" 2>&1)"
 SKIP_ONE="$(bash "$VALIDATOR" projects/live/HANDOVER.md 2>&1)"; SKIP_RC=$?
 set -e
-one() { printf '%s\n' "$ONE" | grep -q -- "$1" && echo 0 || echo 1; }
+one() { grep -q -- "$1" <<<"$ONE" && echo 0 || echo 1; }
 assert "a named Finding is checked on its own"    "$(one 'Finding is 48 lines')"
-assert "…and only it"                             "$(printf '%s\n' "$ONE" | grep -q '1 documents checked' && echo 0 || echo 1)"
-assert "…so another document's error is not reported" "$(printf '%s\n' "$ONE" | grep -q 'unknown type' && echo 1 || echo 0)"
+assert "…and only it"                             "$(grep -q '1 documents checked' <<<"$ONE" && echo 0 || echo 1)"
+assert "…so another document's error is not reported" "$(grep -q 'unknown type' <<<"$ONE" && echo 1 || echo 0)"
 assert "…and a warning alone still exits 0"       "$([[ $ONE_RC -eq 0 ]] && echo 0 || echo 1)"
 assert "--strict gates the single document"       "$([[ $ONE_STRICT_RC -eq 1 ]] && echo 0 || echo 1)"
-assert "an absolute path names the same document" "$(printf '%s\n' "$ABS_ONE" | grep -q 'Finding is 48 lines' && echo 0 || echo 1)"
-assert "a clean named document is silent"         "$(printf '%s\n' "$GOOD_ONE" | grep -q '0 errors, 0 warnings' && echo 0 || echo 1)"
-assert "a named non-concept file is SKIPped"      "$(printf '%s\n' "$SKIP_ONE" | grep -q 'SKIP   projects/live/HANDOVER.md' && echo 0 || echo 1)"
+assert "an absolute path names the same document" "$(grep -q 'Finding is 48 lines' <<<"$ABS_ONE" && echo 0 || echo 1)"
+assert "a clean named document is silent"         "$(grep -q '0 errors, 0 warnings' <<<"$GOOD_ONE" && echo 0 || echo 1)"
+assert "a named non-concept file is SKIPped"      "$(grep -q 'SKIP   projects/live/HANDOVER.md' <<<"$SKIP_ONE" && echo 0 || echo 1)"
 assert "…not turned into an error"                "$([[ $SKIP_RC -eq 0 ]] && echo 0 || echo 1)"
 
 echo "== the knowledge/index.md drift check is bundle-level, so a named scope leaves it out =="
@@ -282,7 +282,7 @@ assert "a named document on a stale index: no index warning" "$(seen "$IDX_NAMED
 assert "a no-argument run on the same stale index still warns" "$(seen "$IDX_FULL" "$STALE")"
 assert "naming the index itself still checks it"  "$(seen "$IDX_SELF" "$STALE")"
 assert "…by absolute path too"                    "$(seen "$IDX_ABS" "$STALE")"
-assert "…without also SKIPping it"                "$(printf '%s\n' "$IDX_SELF" | grep -q 'SKIP' && echo 1 || echo 0)"
+assert "…without also SKIPping it"                "$(grep -q 'SKIP' <<<"$IDX_SELF" && echo 1 || echo 0)"
 
 echo "== --changed reads git, and refuses when it cannot =="
 # The ceiling keeps the answer the fixture's, not that of whatever TMPDIR sits under.
@@ -296,8 +296,8 @@ git init -q . && git add -A \
 { printf -- '---\ntype: Finding\ntitle: N\nlesson: l\nstatus: current\nprovenance: machine\ntimestamp: %s\n---\n' "$TS"
   for i in $(seq 1 50); do echo "line $i"; done; } > knowledge/findings/just-written.md
 set +e; CH="$(bash "$VALIDATOR" --changed 2>&1)"; set -e
-assert "an untracked over-long Finding is caught" "$(printf '%s\n' "$CH" | grep -q 'just-written.md' && echo 0 || echo 1)"
-assert "…and the committed clean one is not rechecked" "$(printf '%s\n' "$CH" | grep -q '1 documents checked' && echo 0 || echo 1)"
+assert "an untracked over-long Finding is caught" "$(grep -q 'just-written.md' <<<"$CH" && echo 0 || echo 1)"
+assert "…and the committed clean one is not rechecked" "$(grep -q '1 documents checked' <<<"$CH" && echo 0 || echo 1)"
 cd "$B"
 
 echo "== a clean bundle passes, and --strict still passes with no warnings =="
@@ -313,7 +313,7 @@ CLEAN="$(bash "$VALIDATOR" 2>&1)"; CRC=$?
 CLEAN_STRICT_RC=0; bash "$VALIDATOR" --strict >/dev/null 2>&1 || CLEAN_STRICT_RC=$?
 set -e
 assert "a clean bundle exits 0"                   "$([[ $CRC -eq 0 ]] && echo 0 || echo 1)"
-assert "a clean bundle reports 0 errors"          "$(printf '%s\n' "$CLEAN" | grep -q '0 errors, 0 warnings' && echo 0 || echo 1)"
+assert "a clean bundle reports 0 errors"          "$(grep -q '0 errors, 0 warnings' <<<"$CLEAN" && echo 0 || echo 1)"
 assert "--strict passes when there are no warnings" "$([[ $CLEAN_STRICT_RC -eq 0 ]] && echo 0 || echo 1)"
 
 echo "== objectives/ is optional: no directory, and a project anchored on its own criteria =="
@@ -335,12 +335,12 @@ NOOBJ_OUT="$(bash "$VALIDATOR" 2>&1)"; NOOBJ_RC=$?
 NOOBJ_STRICT_RC=0; bash "$VALIDATOR" --strict >/dev/null 2>&1 || NOOBJ_STRICT_RC=$?
 set -e
 assert "a bundle with no objectives/ exits 0"    "$([[ $NOOBJ_RC -eq 0 ]] && echo 0 || echo 1)"
-assert "…with 0 errors and 0 warnings"           "$(printf '%s\n' "$NOOBJ_OUT" | grep -q '0 errors, 0 warnings' && echo 0 || echo 1)"
+assert "…with 0 errors and 0 warnings"           "$(grep -q '0 errors, 0 warnings' <<<"$NOOBJ_OUT" && echo 0 || echo 1)"
 assert "…and --strict passes too"                "$([[ $NOOBJ_STRICT_RC -eq 0 ]] && echo 0 || echo 1)"
 assert "a project with success_criteria and no objective: is silent" \
-  "$(printf '%s\n' "$NOOBJ_OUT" | grep -q 'projects/solo/project.md' && echo 1 || echo 0)"
+  "$(grep -q 'projects/solo/project.md' <<<"$NOOBJ_OUT" && echo 1 || echo 0)"
 assert "…and its documents were actually checked, not skipped" \
-  "$(printf '%s\n' "$NOOBJ_OUT" | grep -q '2 documents checked' && echo 0 || echo 1)"
+  "$(grep -q '2 documents checked' <<<"$NOOBJ_OUT" && echo 0 || echo 1)"
 
 echo "== malformed frontmatter is an error, per measured fault class =="
 # Each of these four made a real document unreadable to every YAML consumer while
@@ -384,10 +384,10 @@ fmdoc projects/p/tasks/task-008-escaped-then-split.md '---' 'type: Task' 'title:
 fmdoc projects/p/tasks/task-009-inline-comment.md '---' 'type: Task' 'title: T' 'status: draft' \
   'acceptance_criteria:' '  - "ship it" # reviewer said "go"' '---' 'body'
 set +e; FM_OUT="$(bash "$VALIDATOR" 2>&1)"; set -e
-fm_saw() { printf '%s\n' "$FM_OUT" | grep -q -- "$1" && echo 0 || echo 1; }
+fm_saw() { grep -q -- "$1" <<<"$FM_OUT" && echo 0 || echo 1; }
 # The path and the message land on TWO lines, so a document counts as flagged only
 # when the message follows its own ERROR line. Grepping both on one line finds nothing.
-fm_flagged() { printf '%s\n' "$FM_OUT" | grep -A1 -- "$1" | grep -q 'malformed' && echo 0 || echo 1; }
+fm_flagged() { grep -q 'malformed' <<<"$(printf '%s\n' "$FM_OUT" | grep -A1 -- "$1")" && echo 0 || echo 1; }
 fm_clean() { [ "$(fm_flagged "$1")" = 1 ] && echo 0 || echo 1; }
 
 assert "a list entry opened on another entry's line is an error" "$(fm_saw "opened on another entry")"
@@ -402,10 +402,10 @@ assert "…and an escaped quote does not hide a real split entry"   "$(fm_flagge
 # A malformed document stops at the structure fault, the way an unterminated block does:
 # the field checks below it read lines, and lines lie about a broken block.
 assert "a malformed document is not also field-checked" \
-  "$(printf '%s\n' "$FM_OUT" | grep -q 'task-001-two-entries.md.*missing required' && echo 1 || echo 0)"
+  "$(grep -q 'task-001-two-entries.md.*missing required' <<<"$FM_OUT" && echo 1 || echo 0)"
 assert "an entry whose inline comment carries quotes is NOT flagged" "$(fm_clean task-009-inline-comment)"
 assert "…and that document is still field-checked" \
-  "$(printf '%s\n' "$FM_OUT" | grep -A1 'task-009-inline-comment.md' | grep -q 'missing required field: timestamp' && echo 0 || echo 1)"
+  "$(grep -q 'missing required field: timestamp' <<<"$(printf '%s\n' "$FM_OUT" | grep -A1 'task-009-inline-comment.md')" && echo 0 || echo 1)"
 
 cd "$B"
 
@@ -426,16 +426,16 @@ doc knowledge/teams/body-only.md '---' 'type: Team' 'title: T' "timestamp: $TS" 
 { printf '%s\n' '---' 'type: Finding' 'title: Forty' 'lesson: l' 'status: current' 'provenance: machine' "timestamp: $TS" '---'
   for i in $(seq 32); do echo "line $i"; done; } > knowledge/findings/forty.md
 set +e; POUT="$(bash "$VALIDATOR" 2>&1)"; set -e
-pmiss() { printf '%s\n' "$POUT" | grep -A1 "ERROR  knowledge/$1" | grep -q "requires provenance" && echo 0 || echo 1; }
+pmiss() { grep -q "requires provenance" <<<"$(printf '%s\n' "$POUT" | grep -A1 "ERROR  knowledge/$1")" && echo 0 || echo 1; }
 for k in teams/none runbooks/none services/none references/none findings/none; do
   assert "a missing provenance is an ERROR on $k" "$(pmiss "$k.md")"
 done
-assert "…and the message names the repair" "$(printf '%s\n' "$POUT" | grep -q 'migrate-bundle.sh --apply fills it from git' && echo 0 || echo 1)"
-assert "a value outside the set is an ERROR" "$(printf '%s\n' "$POUT" | grep -q "provenance 'bot' is not one of: machine mixed human" && echo 0 || echo 1)"
+assert "…and the message names the repair" "$(grep -q 'migrate-bundle.sh --apply fills it from git' <<<"$POUT" && echo 0 || echo 1)"
+assert "a value outside the set is an ERROR" "$(grep -q "provenance 'bot' is not one of: machine mixed human" <<<"$POUT" && echo 0 || echo 1)"
 assert "a body line is not the field" "$(pmiss teams/body-only.md)"
-assert "machine, mixed and human are all silent" "$(printf '%s\n' "$POUT" | grep -q 'ok-' && echo 1 || echo 0)"
-assert "the provenance line is not counted against the 40-line cap" "$(printf '%s\n' "$POUT" | grep -q 'forty.md' && echo 1 || echo 0)"
-assert "exactly the seven faulty documents error" "$(printf '%s\n' "$POUT" | grep -q ', 7 errors,' && echo 0 || echo 1)"
+assert "machine, mixed and human are all silent" "$(grep -q 'ok-' <<<"$POUT" && echo 1 || echo 0)"
+assert "the provenance line is not counted against the 40-line cap" "$(grep -q 'forty.md' <<<"$POUT" && echo 1 || echo 0)"
+assert "exactly the seven faulty documents error" "$(grep -q ', 7 errors,' <<<"$POUT" && echo 0 || echo 1)"
 cd "$B"
 
 echo "== refusing to run outside an instance root =="

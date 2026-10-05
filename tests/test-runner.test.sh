@@ -38,7 +38,7 @@ done <<EOF
 $(sed -n 's#.*\[ -[de] "\$workspace/\([A-Za-z0-9._-]*\)" \].*#\1#p' "$RUNNER" | sort -u)
 EOF
 assert "…and the extraction found some to check (not vacuous)" \
-  "$(sed -n 's#.*\[ -[de] "\$workspace/\([A-Za-z0-9._-]*\)" \].*#\1#p' "$RUNNER" | grep -q . && echo 0 || echo 1)"
+  "$(grep -q . <<<"$(sed -n 's#.*\[ -[de] "\$workspace/\([A-Za-z0-9._-]*\)" \].*#\1#p' "$RUNNER")" && echo 0 || echo 1)"
 assert "every probed path exists${probe_missing:+ (missing: $probe_missing)}" \
   "$([ -z "$probe_missing" ] && echo 0 || echo 1)"
 

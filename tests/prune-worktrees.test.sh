@@ -405,13 +405,13 @@ expect() { # <path> <extended-regex the decision line must match>
   # classification line this helper is asking about, so it must not win the
   # `head -1` race against REMOVABLE/RECLAIMABLE/KEEP for a fixture that has
   # both — see scenario F, the one fixture that does.
-  line="$(printf '%s\n' "$OUT" | grep -F -- "$path" | grep -v -F -- "$path/" \
-            | grep -v -F -- 'LIVE PROCESS' | head -1)"
+  line="$(head -1 <<<"$(printf '%s\n' "$OUT" | grep -F -- "$path" | grep -v -F -- "$path/" \
+            | grep -v -F -- 'LIVE PROCESS')")"
   if [[ -z "$line" ]]; then
     printf '  FAIL  %-34s no line mentioning it in the output\n' "$(basename "$path")"
     fail=$((fail + 1)); return
   fi
-  if printf '%s\n' "$line" | grep -Eq -- "$want"; then
+  if grep -Eq -- "$want" <<<"$line"; then
     printf '  PASS  %-34s %s\n' "$(basename "$path")" "$(printf '%s' "$line" | sed 's/  */ /g')"
     pass=$((pass + 1))
   else
@@ -470,8 +470,8 @@ expect "$WTROOT/stranded-plain-dir"           '^UNREGISTERED'
 never_auto_removed() { # <label> <path>...
   local label=$1 bad="" d; shift
   for d in "$@"; do
-    if printf '%s\n' "$OUT" | grep -F -- "$d" | grep -v -F -- "$d/" \
-         | grep -Eq '^REMOVABLE'; then
+    if grep -Eq '^REMOVABLE' \
+         <<<"$(printf '%s\n' "$OUT" | grep -F -- "$d" | grep -v -F -- "$d/")"; then
       bad="$bad $d"
     fi
   done
@@ -496,7 +496,7 @@ outside="$(printf '%s\n' "$roots" | grep -v -F -- "$TMP" || true)"
 assert "every scan root is inside the fixture tree" "$([[ -z "$outside" ]] && echo 0 || echo 1)"
 [[ -z "$outside" ]] || printf '        outside:\n%s\n' "$outside"
 assert "output never mentions a synced path" \
-  "$(printf '%s\n' "$OUT" | grep -q -E 'Dropbox|iCloud|OneDrive' && echo 1 || echo 0)"
+  "$(grep -q -E 'Dropbox|iCloud|OneDrive' <<<"$OUT" && echo 1 || echo 0)"
 assert "both roots were scanned (configured + legacy)" \
   "$([[ "$(printf '%s\n' "$roots" | wc -l | tr -d ' ')" == 2 ]] && echo 0 || echo 1)"
 
@@ -526,9 +526,9 @@ set -e
 assert "--reclaim exits 2 instead of sweeping" \
   "$([[ $B_RC -eq 2 ]] && echo 0 || echo 1)"
 assert "--reclaim says plainly that the script never deletes" \
-  "$(printf '%s\n' "$B_OUT" | grep -qi 'never deletes' && echo 0 || echo 1)"
+  "$(grep -qi 'never deletes' <<<"$B_OUT" && echo 0 || echo 1)"
 assert "--reclaim removed nothing" \
-  "$(printf '%s\n' "$B_OUT" | grep -Eqi '^REMOVED' && echo 1 || echo 0)"
+  "$(grep -Eqi '^REMOVED' <<<"$B_OUT" && echo 1 || echo 0)"
 
 # The detached set stays visible as RECLAIMABLE — a human decides each one — and
 # is never promoted to REMOVABLE, whatever flags are passed.
@@ -547,7 +547,7 @@ ACTIVE_MINUTES="" OUT="$(ACTIVE_MINUTES=120 run_pruner)"
 expect "$WTROOT/branch-merged-pr"       '^KEEP \(recently active\)'
 expect "$WTROOT/detached-squash-merged" '^KEEP \(recently active\)'
 assert "nothing is removable while worktrees are recently active" \
-  "$(printf '%s\n' "$OUT" | grep -Eq '^REMOVABLE' && echo 1 || echo 0)"
+  "$(grep -Eq '^REMOVABLE' <<<"$OUT" && echo 1 || echo 0)"
 
 # ---- scenario D: no worktreeRoot configured (older instances) ---------------
 echo "== scenario D: instance.config.json without worktreeRoot =="
@@ -557,9 +557,9 @@ JSON
 OUT="$(run_pruner)"
 expect "$LEGACY/legacy-branch-merged-pr" '^REMOVABLE'
 assert "legacy-only config still scans <reposRoot>/_wt" \
-  "$(printf '%s\n' "$OUT" | grep -q 'scan root' && echo 0 || echo 1)"
+  "$(grep -q 'scan root' <<<"$OUT" && echo 0 || echo 1)"
 assert "worktrees under the unconfigured root are left alone" \
-  "$(printf '%s\n' "$OUT" | grep -F -- "$WTROOT/" | grep -Eq '^REMOVABLE' && echo 1 || echo 0)"
+  "$(grep -Eq '^REMOVABLE' <<<"$(printf '%s\n' "$OUT" | grep -F -- "$WTROOT/")" && echo 1 || echo 0)"
 
 # ---- scenario E: the liveness veto reaches below the worktree root -----------
 # Restore the full config first (scenario D replaced it), then age the nested
@@ -571,7 +571,7 @@ echo "== scenario E: liveness is recursive (activity below the worktree root) ==
 write_config
 age_root "$NESTED"
 assert "the aged worktree's own root looks idle (fixture is still meaningful)" \
-  "$([[ -z "$(find "$NESTED" -maxdepth 1 -mmin -120 2>/dev/null | head -1)" ]] && echo 0 || echo 1)"
+  "$([[ -z "$(head -1 <<<"$(find "$NESTED" -maxdepth 1 -mmin -120 2>/dev/null)")" ]] && echo 0 || echo 1)"
 OUT="$(ACTIVE_MINUTES=120 run_pruner)"
 expect "$NESTED" '^KEEP \(recently active\)'
 
@@ -605,8 +605,8 @@ sleep 1
 OUT="$(run_pruner)"
 expect "$WTROOT/branch-live-process" '^REMOVABLE'
 assert "the live process is reported by PID, on its own LIVE PROCESS line, for a worktree that is ALSO REMOVABLE" \
-  "$(printf '%s\n' "$OUT" | grep -F 'LIVE PROCESS' | grep -F -- "$WTROOT/branch-live-process" \
-       | grep -q -F "pid=$LIVE_PID  " && echo 0 || echo 1)"
+  "$(grep -q -F "pid=$LIVE_PID  " \
+       <<<"$(printf '%s\n' "$OUT" | grep -F 'LIVE PROCESS' | grep -F -- "$WTROOT/branch-live-process")" && echo 0 || echo 1)"
 assert "nothing was killed by the scan (still alive after a report-only run)" \
   "$(kill -0 "$LIVE_PID" 2>/dev/null && echo 0 || echo 1)"
 
@@ -622,7 +622,7 @@ assert "the process is actually gone before re-checking (fixture is still meanin
 
 OUT="$(run_pruner)"
 assert "the same worktree is no longer reported once its process is killed" \
-  "$(printf '%s\n' "$OUT" | grep -F 'LIVE PROCESS' | grep -q -F -- "$WTROOT/branch-live-process" && echo 1 || echo 0)"
+  "$(grep -q -F -- "$WTROOT/branch-live-process" <<<"$(printf '%s\n' "$OUT" | grep -F 'LIVE PROCESS')" && echo 1 || echo 0)"
 
 # ---- scenario G: no false positive, on the whole matrix, with nothing running -
 # Every other fixture in this file is a plain git worktree — no process was ever
@@ -631,7 +631,7 @@ assert "the same worktree is no longer reported once its process is killed" \
 # noisy report will ignore the one that matters.
 echo "== scenario G: no false positive on a clean run (nothing left running) =="
 assert "no LIVE PROCESS line anywhere once the started process is gone" \
-  "$(printf '%s\n' "$OUT" | grep -q '^LIVE PROCESS' && echo 1 || echo 0)"
+  "$(grep -q '^LIVE PROCESS' <<<"$OUT" && echo 1 || echo 0)"
 
 # ---- verdict ----------------------------------------------------------------
 echo

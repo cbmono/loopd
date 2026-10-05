@@ -80,7 +80,7 @@ ok "…leaving no symlink behind"                          "$(find "$TMP/apart/s
 cfg_dest="$TMP/cfgdest"; mkdir -p "$cfg_dest"
 guard_out="$(CLAUDE_CONFIG_DIR="$cfg_dest" bash "$WT/plugin/scripts/init-bundle.sh" --config 2>&1)"; guard_rc=$?
 ok "--config still refuses to run from this worktree"    "$guard_rc" 2
-ok "…still says why"                                     "$(printf '%s' "$guard_out" | grep -qi 'refusing to link the config layer from a git worktree' && echo yes || echo no)" yes
+ok "…still says why"                                     "$(grep -qi 'refusing to link the config layer from a git worktree' <<<"$guard_out" && echo yes || echo no)" yes
 ok "…still linked nothing"                               "$(find "$cfg_dest" -mindepth 1 2>/dev/null | wc -l | tr -d ' ')" 0
 
 # --- half 2: none of the six below still depends on install.sh having run from a

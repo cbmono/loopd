@@ -75,9 +75,9 @@ set -e
 assert "validate-bundle exits 0 against the shipped roles/roleTiers asymmetry" \
   "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "validate-bundle reports 0 errors" \
-  "$(printf '%s\n' "$OUT" | grep -q '0 errors' && echo 0 || echo 1)"
+  "$(grep -q '0 errors' <<<"$OUT" && echo 0 || echo 1)"
 assert "validate-bundle says nothing about roles or roleTiers" \
-  "$(printf '%s\n' "$OUT" | grep -qi 'role' && echo 1 || echo 0)"
+  "$(grep -qi 'role' <<<"$OUT" && echo 1 || echo 0)"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

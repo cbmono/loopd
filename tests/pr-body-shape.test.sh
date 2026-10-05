@@ -102,7 +102,7 @@ SCHEMA_FLAT="$(flatten "$SCHEMA")"
 AUTONOMY_FLAT="$(flatten "$AUTONOMY")"
 
 saw() { # <haystack> <fixed string> -> yes|no
-  printf '%s' "$1" | grep -qF -- "$2" && echo yes || echo no
+  grep -qF -- "$2" <<<"$1" && echo yes || echo no
 }
 
 echo "== 1. the shape: the heading LITERAL, TL;DR, criteria table, flagged line =="

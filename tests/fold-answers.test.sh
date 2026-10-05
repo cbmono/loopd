@@ -24,7 +24,7 @@ doc() { # <path> <criteria> <open> <answered>
   printf -- '---\ntype: Task\ntitle: "T"\nstatus: draft\nacceptance_criteria: [ %s ]\nopen_questions: [ %s ]\nanswered_questions: [ %s ]\n---\n\n# Context\n\nbody\n' \
     "$2" "$3" "$4" > "$1"
 }
-field() { sed -n "s/^$2: //p" "$1" | head -n1; }
+field() { head -n1 <<<"$(sed -n "s/^$2: //p" "$1")"; }
 
 echo "== the move: every answered entry out, none left in both lists =="
 A="$TMP/a.md"
@@ -36,7 +36,7 @@ ok "the answered entries left open" "$(bash "$SH" --list "$A" open_questions | g
 ok "…and the unanswered one stayed" "$(bash "$SH" --list "$A" open_questions)" "Q2: open"
 ok "answered_questions grew by two" "$(bash "$SH" --list "$A" answered_questions | grep -c . | tr -d ' ')" 3
 ok "the pre-existing entry is untouched" \
-   "$(bash "$SH" --list "$A" answered_questions | head -n1)" "2020-01-01T00:00:00Z by x · Q0: old --- ok"
+   "$(head -n1 <<<"$(bash "$SH" --list "$A" answered_questions)")" "2020-01-01T00:00:00Z by x · Q0: old --- ok"
 ok "NO entry is in both lists" \
    "$(comm -12 <(bash "$SH" --list "$A" open_questions | sort) \
                <(bash "$SH" --list "$A" answered_questions | sed 's/^[^·]*· //' | sort) | grep -c . | tr -d ' ')" 0

@@ -306,7 +306,7 @@ scan() {
     printf '%s\n' "$asg" | grep -E '(^|[^[:alnum:]_])cd[[:space:]]+"?\$\(' \
       | sed "s|^|NESTED-CD ${f##*/}:\$$v:|"
     # (2) a `cd` canonicalisation is only safe over a guarded mktemp.
-    if printf '%s\n' "$asg" | grep -qE '(^|[^[:alnum:]_])cd[[:space:]]'; then
+    if grep -qE '(^|[^[:alnum:]_])cd[[:space:]]' <<<"$asg"; then
       printf '%s\n' "$asg" | grep -F 'mktemp' | grep -vF '||' \
         | sed "s|^|UNGUARDED ${f##*/}:\$$v:|"
     else
@@ -340,11 +340,11 @@ while IFS= read -r f; do
   [ -n "$f" ] || continue
   # Non-vacuity of the extractor itself: at least one harness must be seen to trap a
   # path, or every scan below is trivially clean because nothing was ever looked at.
-  grep -v '^[[:space:]]*#' "$f" | grep 'trap' | grep -qF 'rm -rf' && trapped=$((trapped+1))
+  grep -qF 'rm -rf' <<<"$(grep -v '^[[:space:]]*#' "$f" | grep 'trap')" && trapped=$((trapped+1))
   # And the normaliser must not have run away: a file that ends mid-statement, or that
   # joins an implausible number of lines into one, has had text swallowed into a buffer —
   # which would read as clean for the wrong reason.
-  logical_lines "$f" | grep -qE '^0:(UNCLOSED|WIDE)-STATEMENT-AT-' && unclosed=$((unclosed+1))
+  grep -qE '^0:(UNCLOSED|WIDE)-STATEMENT-AT-' <<<"$(logical_lines "$f")" && unclosed=$((unclosed+1))
   out="$(scan "$f")"
   [ -n "$out" ] && offences="${offences}${out}
 "
@@ -554,7 +554,7 @@ ok "TMPDIR real: path is normalised (no '//')"   "$([[ "$out" != *//* ]] && echo
 ABSENT="$TMP/no-such-tmpdir"
 out="$(TMPDIR="$ABSENT" bash "$IDIOM" 2>&1)"; rc=$?
 ok "TMPDIR absent: aborts non-zero"   "$([ "$rc" -ne 0 ] && echo yes || echo no)" yes
-ok "TMPDIR absent: says why"          "$(printf '%s' "$out" | grep -qi 'mktemp' && echo yes || echo no)" yes
+ok "TMPDIR absent: says why"          "$(grep -qi 'mktemp' <<<"$out" && echo yes || echo no)" yes
 ok "TMPDIR absent: created nothing"   "$([ -e "$ABSENT" ] && echo no || echo yes)" yes
 
 # --- the real regression, in a throwaway copy of the checkout -----------------
@@ -628,7 +628,7 @@ for h in board-renderers snapshot moved-template; do
   # "mktemp: …: No such file or directory" all by itself, so grepping for `mktemp` alone
   # passes just as well on the destructive version — measured, it did.
   ok "$h: TMPDIR absent ⇒ refuses in its own voice" \
-     "$(printf '%s\n' "$out" | grep -qE "^$h\.test:.*mktemp" && echo yes || echo no)" yes
+     "$(grep -qE "^$h\.test:.*mktemp" <<<"$out" && echo yes || echo no)" yes
   # And the reason the cd exists is still in the file: a "fix" that deleted the
   # canonicalisation would silently break the path assertions these harnesses rest on.
   ok "$h: still canonicalises through cd+pwd" \
@@ -682,7 +682,7 @@ for h in banner-board-line; do
   ok "$h: TMPDIR absent ⇒ never prints a false-green summary" \
      "$(printf '%s\n' "$out" | grep -c '^pass=[0-9]*[[:space:]]fail=0$' || true)" 0
   ok "$h: TMPDIR absent ⇒ refuses in its own voice" \
-     "$(printf '%s\n' "$out" | grep -qE "^$h\.test:.*mktemp" && echo yes || echo no)" yes
+     "$(grep -qE "^$h\.test:.*mktemp" <<<"$out" && echo yes || echo no)" yes
   rm -rf "$COPY"
 done
 

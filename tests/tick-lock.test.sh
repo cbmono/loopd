@@ -154,7 +154,7 @@ lock_files() { # <instance-dir>
 }
 
 lock_field_of() { # <file> <key>
-  sed -n "s/^$2: *//p" "$1" 2>/dev/null | head -1
+  head -1 <<<"$(sed -n "s/^$2: *//p" "$1" 2>/dev/null)"
 }
 
 # The same BSD-then-GNU order the script itself uses: `-r` is macOS's, `-d @…` is
@@ -213,7 +213,7 @@ ran() { # <instance-dir> -> how many ticks actually proceeded past step 0.5
   [ -f "$1/ran.log" ] && wc -l < "$1/ran.log" | tr -d ' ' || echo 0
 }
 said() { # <fixed-string> -> yes|no, against the last tick's output
-  printf '%s' "$TICK_OUT" | grep -qF -- "$1" && echo yes || echo no
+  grep -qF -- "$1" <<<"$TICK_OUT" && echo yes || echo no
 }
 
 echo "== absence is never an error: no lock, so it dispatches, in silence =="
@@ -232,8 +232,8 @@ echo "== the same attempt against a FRESH lock does not dispatch =="
 attempt "$A"
 ok "exit 1 — held"                       "$ATTEMPT_RC" 1
 ok "…and NO second tick was dispatched"  "$(dispatches "$A")" 1
-ok "…saying a tick is in flight"         "$(printf '%s' "$ATTEMPT_OUT" | grep -qF 'HELD' && echo yes || echo no)" yes
-ok "…and naming who holds it"            "$(printf '%s' "$ATTEMPT_OUT" | grep -qF 'project-manager' && echo yes || echo no)" yes
+ok "…saying a tick is in flight"         "$(grep -qF 'HELD' <<<"$ATTEMPT_OUT" && echo yes || echo no)" yes
+ok "…and naming who holds it"            "$(grep -qF 'project-manager' <<<"$ATTEMPT_OUT" && echo yes || echo no)" yes
 
 echo
 echo "== release, and the very same attempt dispatches again =="
@@ -283,10 +283,10 @@ BEFORE="$(cat "$S/$AB_LOCK")"
 attempt "$S"
 ok "exit 2 — a human decides"            "$ATTEMPT_RC" 2
 ok "…and NOTHING was dispatched"         "$(dispatches "$S")" 0
-ok "…it says STALE"                      "$(printf '%s' "$ATTEMPT_OUT" | grep -qF 'STALE' && echo yes || echo no)" yes
-ok "…surfacing the lock's timestamp"     "$(printf '%s' "$ATTEMPT_OUT" | grep -qF "$OLD_ISO" && echo yes || echo no)" yes
-ok "…and the agent id it names"          "$(printf '%s' "$ATTEMPT_OUT" | grep -qF 'agent:     project-manager' && echo yes || echo no)" yes
-ok "…and the age it computed"            "$(printf '%s' "$ATTEMPT_OUT" | grep -qF '2h30m' && echo yes || echo no)" yes
+ok "…it says STALE"                      "$(grep -qF 'STALE' <<<"$ATTEMPT_OUT" && echo yes || echo no)" yes
+ok "…surfacing the lock's timestamp"     "$(grep -qF "$OLD_ISO" <<<"$ATTEMPT_OUT" && echo yes || echo no)" yes
+ok "…and the agent id it names"          "$(grep -qF 'agent:     project-manager' <<<"$ATTEMPT_OUT" && echo yes || echo no)" yes
+ok "…and the age it computed"            "$(grep -qF '2h30m' <<<"$ATTEMPT_OUT" && echo yes || echo no)" yes
 ok "the lock was NOT deleted"            "$(yn test -f "$S/$AB_LOCK")" yes
 ok "…and NOT rewritten (not adopted)"    "$( [ "$(cat "$S/$AB_LOCK")" = "$BEFORE" ] && echo yes || echo no)" yes
 # The threshold is a knob, not a constant, and the same lock reads live under a bigger one
@@ -303,7 +303,7 @@ printf 'timestamp: %s\nagent: cataloguer\n' "$OLD_ISO" > "$T2/$AB_LOCK"
 attempt "$T2"
 ok "exit 2 from the timestamp alone"     "$ATTEMPT_RC" 2
 ok "…still no dispatch"                  "$(dispatches "$T2")" 0
-ok "…naming the agent the file records"  "$(printf '%s' "$ATTEMPT_OUT" | grep -qF 'cataloguer' && echo yes || echo no)" yes
+ok "…naming the agent the file records"  "$(grep -qF 'cataloguer' <<<"$ATTEMPT_OUT" && echo yes || echo no)" yes
 
 echo
 echo "== a lock that cannot answer, and one dated in the future, both ask a human =="
@@ -370,7 +370,7 @@ attempt "$H"
 ok "the launcher still just sees HELD"   "$ATTEMPT_RC" 1
 ok "…and dispatched nothing more"        "$(dispatches "$H")" 1
 ok "…and can see the tick is RUNNING, not merely dispatched" \
-  "$(printf '%s' "$ATTEMPT_OUT" | grep -qF 'it is RUNNING' && echo yes || echo no)" yes
+  "$(grep -qF 'it is RUNNING' <<<"$ATTEMPT_OUT" && echo yes || echo no)" yes
 
 echo
 echo "== the measured bug: a RESUMED tick is REFUSED, and never runs at all =="
@@ -548,8 +548,8 @@ ok "…and there is exactly one lock file"   "$(lock_files "$MINT")" 1
 # The dispatch window is 41-47s wide, and inside it the lock is the only thing on disk that
 # can say which tick is coming. `status` reads it out rather than making a human cat the file.
 SOUT="$(bash "$LOCKSH" status --instance "$MINT" 2>&1)"
-ok "status names the tick it was minted for" "$(printf '%s' "$SOUT" | grep -qF "minted for: $ID" && echo yes || echo no)" yes
-ok "…and still says nobody has claimed it"   "$(printf '%s' "$SOUT" | grep -qF 'No tick has claimed it yet' && echo yes || echo no)" yes
+ok "status names the tick it was minted for" "$(grep -qF "minted for: $ID" <<<"$SOUT" && echo yes || echo no)" yes
+ok "…and still says nobody has claimed it"   "$(grep -qF 'No tick has claimed it yet' <<<"$SOUT" && echo yes || echo no)" yes
 
 echo
 echo "== …so the tick that carries it RE-ENTERS (0) where it used to reach a human (2) =="
@@ -624,7 +624,7 @@ tick "$LA" project-manager L
 ok "a tick claims that lock as L"        "$TICK_RC" 0
 OUT="$(TICK_CLAIMANT=L bash "$LOCKSH" acquire --instance "$LA" 2>&1)"; RC=$?
 ok "the launcher is refused even as L"   "$RC" 1
-ok "…and is not offered a re-entry"      "$(printf '%s' "$OUT" | grep -qF 're-entered:' && echo yes || echo no)" no
+ok "…and is not offered a re-entry"      "$(grep -qF 're-entered:' <<<"$OUT" && echo yes || echo no)" no
 LB="$TMP/launcher-claim"; mkdir -p "$LB" "$LB/$AB_DIR"
 TICK_CLAIMANT=L bash "$LOCKSH" acquire --instance "$LB" >/dev/null 2>&1
 ok "…and a launcher never writes a claim" "$(yn test -e "$LB/$AB_LOCK_CLAIM")" no
@@ -668,26 +668,26 @@ EV="$TMP/env-id"; mkdir -p "$EV" "$EV/$AB_DIR"
 bash "$LOCKSH" acquire --instance "$EV" >/dev/null 2>&1
 OUT="$(CLAUDE_CODE_SESSION_ID=sess-aaa bash "$LOCKSH" acquire --as tick --instance "$EV" 2>&1)"; RC=$?
 ok "a session id is enough to claim"     "$RC" 0
-ok "…adopting the launcher's lock"       "$(printf '%s' "$OUT" | grep -qF 'adopted:' && echo yes || echo no)" yes
+ok "…adopting the launcher's lock"       "$(grep -qF 'adopted:' <<<"$OUT" && echo yes || echo no)" yes
 ok "…recording which source answered"    "$(has "$EV/$AB_LOCK_CLAIM" 'claimant-source: session')" yes
 OUT="$(CLAUDE_CODE_SESSION_ID=sess-aaa bash "$LOCKSH" acquire --as tick --instance "$EV" 2>&1)"; RC=$?
 ok "the same session does NOT proceed"   "$( [ "$RC" -eq 0 ] && echo yes || echo no)" no
 ok "…it is exit 2, a human's call"       "$RC" 2
-ok "…saying it cannot attribute the claim" "$(printf '%s' "$OUT" | grep -qF 'CANNOT ATTRIBUTE' && echo yes || echo no)" yes
-ok "…and never calling it a re-entry"    "$(printf '%s' "$OUT" | grep -qF 're-entered:' && echo yes || echo no)" no
+ok "…saying it cannot attribute the claim" "$(grep -qF 'CANNOT ATTRIBUTE' <<<"$OUT" && echo yes || echo no)" yes
+ok "…and never calling it a re-entry"    "$(grep -qF 're-entered:' <<<"$OUT" && echo yes || echo no)" no
 # The question an operator actually has, answerable from the output alone. Both sides, and
 # the source of each — without them, "is that a sibling or did my id move?" needs a probe,
 # which is exactly the probe that had to be run by hand to find this bug.
-ok "…printing this caller's identity"    "$(printf '%s' "$OUT" | grep -qF 'yours: sess-aaa (session)' && echo yes || echo no)" yes
-ok "…and the claim's, with its source"   "$(printf '%s' "$OUT" | grep -qF 'claim: sess-aaa (session)' && echo yes || echo no)" yes
-ok "…and how to make it decidable"       "$(printf '%s' "$OUT" | grep -qF -- '--claimant' && echo yes || echo no)" yes
+ok "…printing this caller's identity"    "$(grep -qF 'yours: sess-aaa (session)' <<<"$OUT" && echo yes || echo no)" yes
+ok "…and the claim's, with its source"   "$(grep -qF 'claim: sess-aaa (session)' <<<"$OUT" && echo yes || echo no)" yes
+ok "…and how to make it decidable"       "$(grep -qF -- '--claimant' <<<"$OUT" && echo yes || echo no)" yes
 OUT="$(CLAUDE_CODE_SESSION_ID=sess-bbb bash "$LOCKSH" acquire --as tick --instance "$EV" 2>&1)"; RC=$?
 ok "…while another session still HOLDS"  "$RC" 1
-ok "…naming both ids there too"          "$(printf '%s' "$OUT" | grep -qF 'yours: sess-bbb (session)' && echo yes || echo no)" yes
+ok "…naming both ids there too"          "$(grep -qF 'yours: sess-bbb (session)' <<<"$OUT" && echo yes || echo no)" yes
 # The drift half, said out loud: two DIFFERENT session ids can also be one tick whose
 # session forked or compacted. It holds either way — the safe half — but the human is told
 # which reading they are looking at instead of deducing it.
-ok "…and naming the id-moved reading"    "$(printf '%s' "$OUT" | grep -qF 'session id moved' && echo yes || echo no)" yes
+ok "…and naming the id-moved reading"    "$(grep -qF 'session id moved' <<<"$OUT" && echo yes || echo no)" yes
 
 echo
 echo "== the two tiers: a DECLARED match is proof, a mixed one is not =="
@@ -699,7 +699,7 @@ bash "$LOCKSH" acquire --instance "$TD" >/dev/null 2>&1
 bash "$LOCKSH" acquire --as tick --instance "$TD" --claimant tick-x >/dev/null 2>&1
 OUT="$(TICK_CLAIMANT=tick-x bash "$LOCKSH" acquire --as tick --instance "$TD" 2>&1)"; RC=$?
 ok "declared on both sides re-enters"    "$RC" 0
-ok "…as a re-entry, not a fresh claim"   "$(printf '%s' "$OUT" | grep -qF 're-entered:' && echo yes || echo no)" yes
+ok "…as a re-entry, not a fresh claim"   "$(grep -qF 're-entered:' <<<"$OUT" && echo yes || echo no)" yes
 OUT="$(CLAUDE_CODE_SESSION_ID=tick-x bash "$LOCKSH" acquire --as tick --instance "$TD" 2>&1)"; RC=$?
 ok "a DERIVED id matching a declared claim cannot clear it" "$RC" 2
 TM="$TMP/tier-mixed"; mkdir -p "$TM" "$TM/$AB_DIR"
@@ -708,7 +708,7 @@ CLAUDE_CODE_SESSION_ID=tick-y bash "$LOCKSH" acquire --as tick --instance "$TM" 
 OUT="$(bash "$LOCKSH" acquire --as tick --instance "$TM" --claimant tick-y 2>&1)"; RC=$?
 ok "…and a declared id cannot clear a DERIVED claim either" "$RC" 2
 ok "…because the claim on disk was never a promise" \
-  "$(printf '%s' "$OUT" | grep -qF 'claim: tick-y (session)' && echo yes || echo no)" yes
+  "$(grep -qF 'claim: tick-y (session)' <<<"$OUT" && echo yes || echo no)" yes
 
 echo
 echo "== THE SEQUENCE THE COLLISION WOULD HAVE RE-OPENED, counted end to end =="
@@ -737,10 +737,10 @@ bash "$LOCKSH" acquire --instance "$ST" >/dev/null 2>&1
 bash "$LOCKSH" acquire --as tick --instance "$ST" --claimant tick-s >/dev/null 2>&1
 OUT="$(CLAUDE_CODE_SESSION_ID=sess-other bash "$LOCKSH" status --instance "$ST" 2>&1)"; RC=$?
 ok "status on a claimed lock is still HELD" "$RC" 1
-ok "…and names the claim's owner"        "$(printf '%s' "$OUT" | grep -qF 'claim: tick-s (flag)' && echo yes || echo no)" yes
-ok "…and who is asking"                  "$(printf '%s' "$OUT" | grep -qF 'yours: sess-other (session)' && echo yes || echo no)" yes
+ok "…and names the claim's owner"        "$(grep -qF 'claim: tick-s (flag)' <<<"$OUT" && echo yes || echo no)" yes
+ok "…and who is asking"                  "$(grep -qF 'yours: sess-other (session)' <<<"$OUT" && echo yes || echo no)" yes
 OUT="$(bash "$LOCKSH" status --instance "$ST" 2>&1)"
-ok "…spelling out an absent identity"    "$(printf '%s' "$OUT" | grep -qF 'yours: <none> (none)' && echo yes || echo no)" yes
+ok "…spelling out an absent identity"    "$(grep -qF 'yours: <none> (none)' <<<"$OUT" && echo yes || echo no)" yes
 
 echo
 echo "== a claim that names a claimant always names its source =="
@@ -802,14 +802,14 @@ echo "== --claimant is validated, and belongs to acquire alone =="
 V="$TMP/claimant-args"; mkdir -p "$V" "$V/$AB_DIR"
 OUT="$(bash "$LOCKSH" acquire --as tick --instance "$V" --claimant 'two words' 2>&1)"; RC=$?
 ok "a non-id --claimant is refused"      "$RC" 3
-ok "…saying what an id may contain"      "$(printf '%s' "$OUT" | grep -qF 'plain id' && echo yes || echo no)" yes
+ok "…saying what an id may contain"      "$(grep -qF 'plain id' <<<"$OUT" && echo yes || echo no)" yes
 ok "…and it wrote no lock"               "$(yn test -e "$V/$AB_LOCK")" no
 OUT="$(bash "$LOCKSH" acquire --as tick --instance "$V" --claimant 2>&1)"; RC=$?
 ok "a bare trailing --claimant is refused" "$RC" 3
 for sub in release status; do
   OUT="$(bash "$LOCKSH" "$sub" --instance "$V" --claimant x 2>&1)"; RC=$?
   ok "$sub refuses an identity argument" "$RC" 3
-  ok "…saying it is unconditional"       "$(printf '%s' "$OUT" | grep -qF 'unconditional' && echo yes || echo no)" yes
+  ok "…saying it is unconditional"       "$(grep -qF 'unconditional' <<<"$OUT" && echo yes || echo no)" yes
 done
 
 echo
@@ -822,7 +822,7 @@ printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$(iso_of "$(date -u
   > "$SC/$AB_LOCK_CLAIM"
 attempt "$SC"
 ok "a fresh claim does not rejuvenate a stale lock" "$ATTEMPT_RC" 2
-ok "…and it still says STALE"            "$(printf '%s' "$ATTEMPT_OUT" | grep -qF 'STALE' && echo yes || echo no)" yes
+ok "…and it still says STALE"            "$(grep -qF 'STALE' <<<"$ATTEMPT_OUT" && echo yes || echo no)" yes
 tick "$SC"
 ok "…and a TICK gets the same verdict, not an adoption" "$TICK_RC" 2
 ok "…so it did not run"                  "$(ran "$SC")" 0
@@ -833,7 +833,7 @@ ok "release clears the lock"             "$(yn test -e "$SC/$AB_LOCK")" no
 ok "…and the claim with it"              "$(yn test -e "$SC/$AB_LOCK_CLAIM")" no
 OUT="$(bash "$LOCKSH" release --as tick --instance "$SC" 2>&1)"; RC=$?
 ok "release refuses an identity argument" "$RC" 3
-ok "…saying it is unconditional"         "$(printf '%s' "$OUT" | grep -qF 'unconditional' && echo yes || echo no)" yes
+ok "…saying it is unconditional"         "$(grep -qF 'unconditional' <<<"$OUT" && echo yes || echo no)" yes
 
 echo
 echo "== a claim that outlived its lock is residue, and must not deadlock the next tick =="
@@ -844,7 +844,7 @@ echo "== a claim that outlived its lock is residue, and must not deadlock the ne
 RS="$TMP/residue"; mkdir -p "$RS" "$RS/$AB_DIR"
 printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$OLD_ISO" "$OLD" > "$RS/$AB_LOCK_CLAIM"
 ok "status says the claim outlived its lock" \
-  "$(bash "$LOCKSH" status --instance "$RS" 2>&1 | grep -qF 'outlived' && echo yes || echo no)" yes
+  "$(grep -qF 'outlived' <<<"$(bash "$LOCKSH" status --instance "$RS" 2>&1)" && echo yes || echo no)" yes
 attempt "$RS"
 ok "the launcher still dispatches"       "$ATTEMPT_RC" 0
 ok "…having cleared the residue"         "$(yn test -e "$RS/$AB_LOCK_CLAIM")" no
@@ -871,7 +871,7 @@ OUT="$(bash "$LOCKSH" acquire --as sideways --instance "$N" 2>&1)"; RC=$?
 ok "an unknown --as is refused"          "$RC" 3
 # THREE since `--as loop` joined them (the interval-driven launcher). The refusal must name
 # the whole vocabulary or a typo reads as "not that one" rather than "one of these".
-ok "…naming the three it accepts"        "$(printf '%s' "$OUT" | grep -qF 'launcher, loop or tick' && echo yes || echo no)" yes
+ok "…naming the three it accepts"        "$(grep -qF 'launcher, loop or tick' <<<"$OUT" && echo yes || echo no)" yes
 OUT="$(bash "$LOCKSH" acquire --as --instance "$N" 2>&1)"; RC=$?
 ok "a bare trailing --as is refused too" "$RC" 3
 
@@ -890,13 +890,13 @@ else
   REL_OUT="$(bash "$LOCKSH" release --instance "$W" 2>&1)"; REL_RC=$?
   chmod u+w "$W/$AB_DIR"                    # …restored before anything else runs
   ok "the tick refuses with exit 3"        "$RC_RO" 3
-  ok "…naming the unwritable root"         "$(printf '%s' "$OUT_RO" | grep -qF 'not writable' && echo yes || echo no)" yes
-  ok "…and NOT blaming another tick"       "$(printf '%s' "$OUT_RO" | grep -qF 'HELD BY ANOTHER TICK' && echo yes || echo no)" no
+  ok "…naming the unwritable root"         "$(grep -qF 'not writable' <<<"$OUT_RO" && echo yes || echo no)" yes
+  ok "…and NOT blaming another tick"       "$(grep -qF 'HELD BY ANOTHER TICK' <<<"$OUT_RO" && echo yes || echo no)" no
   ok "…so it did not run"                  "$(ran "$W")" 0
   # And a release that cannot remove says which file it left, rather than reporting a
   # success the caller would take as "the lock is gone".
   ok "a release that cannot remove exits 3" "$REL_RC" 3
-  ok "…naming the file still on disk"      "$(printf '%s' "$REL_OUT" | grep -qF '.tick-lock' && echo yes || echo no)" yes
+  ok "…naming the file still on disk"      "$(grep -qF '.tick-lock' <<<"$REL_OUT" && echo yes || echo no)" yes
 fi
 
 echo
@@ -1061,11 +1061,11 @@ step05only() { awk '/^0\.5\. \*\*Take the tick lock/{p=1;next} p&&/^0\.9\. /{p=0
 step09() { awk '/^0\.9\. \*\*Probe the idle fast-path/{p=1;next} p&&/^1\. \*\*Orient/{p=0} p' "$TICK"; }
 ok "the tick still opens a ledger entry" "$(has "$TICK" '* TICK <ISO-8601 timestamp> by <login> open:')" yes
 ok "…and step 0.9 is what opens it" \
-  "$(step09 | grep -qF '* TICK <ISO-8601 timestamp> by <login> open:' && echo yes || echo no)" yes
+  "$(grep -qF '* TICK <ISO-8601 timestamp> by <login> open:' <<<"$(step09)" && echo yes || echo no)" yes
 ok "…step 0.5 no longer does" \
-  "$(step05only | grep -qF '* TICK <ISO-8601 timestamp> by <login> open:' && echo yes || echo no)" no
+  "$(grep -qF '* TICK <ISO-8601 timestamp> by <login> open:' <<<"$(step05only)" && echo yes || echo no)" no
 ok "…and the probe's reason for the move is stated" \
-  "$(step09 | grep -qF 'the probe reads a tree that append would have dirtied' && echo yes || echo no)" yes
+  "$(grep -qF 'the probe reads a tree that append would have dirtied' <<<"$(step09)" && echo yes || echo no)" yes
 ok "…still re-deriving from disk first"  "$(has "$TICK" 're-derive the in-flight set from disk')" yes
 
 echo
@@ -1077,58 +1077,58 @@ echo "== the second acquire site: the TICK takes the lock, and holds when it is 
 # same change that puts the acquire in the tick, so neither half can drift from the other.
 step05() { awk '/^0\.5\. \*\*Take the tick lock/{p=1;next} p&&/^1\. \*\*Orient/{p=0} p' "$TICK"; }
 ok "step 0.5 runs the tick's own acquire" \
-  "$(step05 | grep -qF 'scripts/tick-lock.sh acquire --as tick' && echo yes || echo no)" yes
-ok "…before it re-derives anything"      "$(step05 | grep -qF 'The lock comes first' && echo yes || echo no)" yes
+  "$(grep -qF 'scripts/tick-lock.sh acquire --as tick' <<<"$(step05)" && echo yes || echo no)" yes
+ok "…before it re-derives anything"      "$(grep -qF 'The lock comes first' <<<"$(step05)" && echo yes || echo no)" yes
 # Every exit code the script can return has a branch here too — the launcher's step 1 has
 # had one since #62, and a second caller with three of the four is a caller improvising on
 # the one that mattered.
 for code in 0 1 2 3 4; do
-  ok "step 0.5 handles exit $code"       "$(step05 | grep -qE "^   - \*\*$code\*\*" && echo yes || echo no)" yes
+  ok "step 0.5 handles exit $code"       "$(grep -qE "^   - \*\*$code\*\*" <<<"$(step05)" && echo yes || echo no)" yes
 done
 # Exit 4 is the resume refusal, and the tick's branch for it has to say the two things a
 # refused tick could still get wrong: run nothing, and take no lock of its own.
 ok "…and its exit-4 branch ends the tick" \
-  "$(step05 | grep -qF 'End the tick' && echo yes || echo no)" yes
-ok "…taking no lock of its own"          "$(step05 | grep -qF 'take no lock of your own' && echo yes || echo no)" yes
+  "$(grep -qF 'End the tick' <<<"$(step05)" && echo yes || echo no)" yes
+ok "…taking no lock of its own"          "$(grep -qF 'take no lock of your own' <<<"$(step05)" && echo yes || echo no)" yes
 ok "…and naming the rule it is the absolute of" \
-  "$(step05 | grep -qF 'never resumed' && echo yes || echo no)" yes
+  "$(grep -qF 'never resumed' <<<"$(step05)" && echo yes || echo no)" yes
 ok "…holding, not adopting, on a live sibling" \
-  "$(step05 | grep -qF 'adopt nothing as your in-flight set' && echo yes || echo no)" yes
+  "$(grep -qF 'adopt nothing as your in-flight set' <<<"$(step05)" && echo yes || echo no)" yes
 ok "…and opening no ledger entry when it holds" \
-  "$(step05 | grep -qF 'open no ledger entry' && echo yes || echo no)" yes
+  "$(grep -qF 'open no ledger entry' <<<"$(step05)" && echo yes || echo no)" yes
 ok "…and never deleting a stale lock itself" \
-  "$(step05 | grep -qF 'their answer, not' && echo yes || echo no)" yes
+  "$(grep -qF 'their answer, not' <<<"$(step05)" && echo yes || echo no)" yes
 # The claimant, in the one place a tick reads before it acts. A step that documented only
 # `took:`/`adopted:` would leave a tick meeting `re-entered:` to improvise — and this step
 # is the whole of what the tick knows about the lock.
 ok "…documenting the re-entry line on exit 0" \
-  "$(step05 | grep -qF 're-entered:' && echo yes || echo no)" yes
-ok "…saying a re-entry changed nothing"  "$(step05 | grep -qF 'nothing' && echo yes || echo no)" yes
+  "$(grep -qF 're-entered:' <<<"$(step05)" && echo yes || echo no)" yes
+ok "…saying a re-entry changed nothing"  "$(grep -qF 'nothing' <<<"$(step05)" && echo yes || echo no)" yes
 ok "…and that exit 1 therefore means somebody else" \
-  "$(step05 | grep -qF 'somebody else' && echo yes || echo no)" yes
+  "$(grep -qF 'somebody else' <<<"$(step05)" && echo yes || echo no)" yes
 # The one value the tick carries is its BRIEF's, passed verbatim on a fixed command line —
 # never one it invents, and never one it remembers between ticks.
 ok "…passing the brief's id and inventing none" \
-  "$(step05 | grep -qF 'not yours to invent' && echo yes || echo no)" yes
+  "$(grep -qF 'not yours to invent' <<<"$(step05)" && echo yes || echo no)" yes
 ok "…and running unchanged when the brief has none" \
-  "$(step05 | grep -qF 'drop the flag entirely' && echo yes || echo no)" yes
+  "$(grep -qF 'drop the flag entirely' <<<"$(step05)" && echo yes || echo no)" yes
 ok "…with nothing else carried between calls" \
-  "$(step05 | grep -qF 'Nothing else is carried between' && echo yes || echo no)" yes
+  "$(grep -qF 'Nothing else is carried between' <<<"$(step05)" && echo yes || echo no)" yes
 # Criterion 1's second call site, in the file that is the whole of what a tick knows.
 ok "…and step 0.5 declares the id" \
-  "$(step05 | grep -qF -- '--claimant <the tick id from your brief>' && echo yes || echo no)" yes
+  "$(grep -qF -- '--claimant <the tick id from your brief>' <<<"$(step05)" && echo yes || echo no)" yes
 ok "…and the command line unchanged from the one acquire above" \
   "$(step05 | grep -c 'scripts/tick-lock.sh acquire --as tick --agent project-manager' | tr -d ' ')" 1
 ok "…naming the path the launcher is not on" \
-  "$(step05 | grep -qF 'a resume never' && echo yes || echo no)" yes
+  "$(grep -qF 'a resume never' <<<"$(step05)" && echo yes || echo no)" yes
 # The tick now calls a script that a merge alone does not deliver: `scripts/tick-lock.sh` is
 # a per-file symlink `install.sh` creates, and it was measured ABSENT in all three instances
 # after it merged. A step that stopped dead on that would take every un-re-stamped loop with
 # it, and one that carried on silently would hide a missing guard — which is the failure
 # this whole step exists because of. So: carry on, and say so.
 ok "…and handles the script not being installed at all" \
-  "$(step05 | grep -qF 'TICK LOCK: absent' && echo yes || echo no)" yes
-ok "…visibly rather than silently"       "$(step05 | grep -qF 'Never silently' && echo yes || echo no)" yes
+  "$(grep -qF 'TICK LOCK: absent' <<<"$(step05)" && echo yes || echo no)" yes
+ok "…visibly rather than silently"       "$(grep -qF 'Never silently' <<<"$(step05)" && echo yes || echo no)" yes
 # The release obligation from #62 is unchanged and now has a second caller, so the tick has
 # to say which lock is its own to release. A tick that released an ADOPTED lock would free
 # one the launcher is still holding for it.
@@ -1136,9 +1136,9 @@ rel() { awk '/\*\*Finally, release the tick lock/{p=1} p&&/^9\. /{p=0} p' "$TICK
 ok "step 8 was extractable (or the next assertions are vacuous)" \
   "$([ -n "$(rel)" ] && echo yes || echo no)" yes
 ok "step 8 releases nothing, in every case" \
-  "$(rel | grep -qF 'a tick releases no lock, ever' && echo yes || echo no)" yes
+  "$(grep -qF 'a tick releases no lock, ever' <<<"$(rel)" && echo yes || echo no)" yes
 ok "…leaving the adopted one to the launcher" \
-  "$(rel | grep -qF 'adopted:' && echo yes || echo no)" yes
+  "$(grep -qF 'adopted:' <<<"$(rel)" && echo yes || echo no)" yes
 # A `grep 'releases'` matched "releases nothing" AND "releases it", so it passed on the
 # instruction's own inverse — the "test that cannot fail" shape this repo has hit repeatedly.
 # What has to hold is semantic and has two halves, a positive and a negative:
@@ -1147,9 +1147,9 @@ ok "…leaving the adopted one to the launcher" \
 #             that quietly covered only exit 1 fails here.
 unwrap() { tr '\n' ' ' | tr -s ' '; }   # the prose is hard-wrapped; the sentence is not
 ok "…and every non-dispatch exit is named as releasing nothing" \
-  "$(rel | unwrap | grep -qF 'all release nothing too' && echo yes || echo no)" yes
+  "$(grep -qF 'all release nothing too' <<<"$(rel | unwrap)" && echo yes || echo no)" yes
 for code in 1 2 4; do
-  ok "…exit $code among them"            "$(rel | grep -qF "exit $code" && echo yes || echo no)" yes
+  ok "…exit $code among them"            "$(grep -qF "exit $code" <<<"$(rel)" && echo yes || echo no)" yes
 done
 #   NEGATIVE  step 8's command block RUNS NOTHING — every line in it is a comment or blank.
 #             This is the assertion the old one should have been: put `tick-lock.sh release`
@@ -1162,17 +1162,17 @@ ok "…and it runs nothing at all"         "$(fence | grep -cvE '^[[:space:]]*(#
 # as something the tick may run. Asserted on that framing, because deleting the framing is
 # how the command comes back as an instruction.
 ok "…and the release command is named only as the human's" \
-  "$(rel | unwrap | grep -qF "not yours to run at the end of a tick" && echo yes || echo no)" yes
+  "$(grep -qF "not yours to run at the end of a tick" <<<"$(rel | unwrap)" && echo yes || echo no)" yes
 # The case that used to be here — a tick releasing a lock it created — must not come back
 # by itself: it can only exist again if a tick can take a lock, which step 0.5 refuses.
 ok "…with no surviving instruction to release a lock the tick took" \
-  "$(rel | grep -qF 'printed `took:`' && echo yes || echo no)" no
+  "$(grep -qF 'printed `took:`' <<<"$(rel)" && echo yes || echo no)" no
 
 echo
 echo "== the wiring: the launcher runs the acquire, and holds exactly the grant for it =="
 grants() { awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/,""); print}' "$1" \
   | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$'; }
-ok "allowed-tools grants the script"     "$(grants "$LAUNCHER" | grep -qx 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' && echo yes || echo no)" yes
+ok "allowed-tools grants the script"     "$(grep -qx 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' <<<"$(grants "$LAUNCHER")" && echo yes || echo no)" yes
 ok "…and grants nothing else new"        "$(grants "$LAUNCHER" | wc -l | tr -d ' ')" 7
 ok "step 1 runs the acquire"             "$(has "$LAUNCHER" 'scripts/tick-lock.sh acquire --agent project-manager')" yes
 ok "…and step 2 releases on the notification" "$(has "$LAUNCHER" 'scripts/tick-lock.sh release')" yes
@@ -1181,22 +1181,22 @@ ok "…only on the notification, nothing weaker" "$(has "$LAUNCHER" 'before you 
 # launcher would be improvising on the one that mattered.
 step1() { awk '/^1\. \*\*Take the lock/{p=1;next} p&&/^2\. /{p=0} p' "$LAUNCHER"; }
 for code in 0 1 2 3; do
-  ok "step 1 handles exit $code"         "$(step1 | grep -qE "^   - \*\*$code\*\*" && echo yes || echo no)" yes
+  ok "step 1 handles exit $code"         "$(grep -qE "^   - \*\*$code\*\*" <<<"$(step1)" && echo yes || echo no)" yes
 done
 # CRITERION 1, THE LAUNCHER HALF. It mints the literal, passes it to its OWN acquire, and
 # hands the same one to the tick — writing no file itself, because its allowed-tools cannot
 # and because `.tick-lock.claim` is the TICK's O_EXCL adopt record, not a launcher's to touch.
-ok "step 1 mints a per-tick id"          "$(step1 | grep -qF "mint this tick's id" && echo yes || echo no)" yes
+ok "step 1 mints a per-tick id"          "$(grep -qF "mint this tick's id" <<<"$(step1)" && echo yes || echo no)" yes
 ok "…passing it to its own acquire"      "$(has "$LAUNCHER" 'acquire --agent project-manager --claimant <id>')" yes
 ok "…handing the same literal to the tick" "$(has "$LAUNCHER" 'id you minted at step 1, verbatim')" yes
-ok "…recorded in the lock and nowhere else" "$(step1 | grep -qF 'the only place it lives' && echo yes || echo no)" yes
-ok "…and it writes no file of its own"   "$(step1 | grep -qF 'you write no file yourself' && echo yes || echo no)" yes
-ok "…nor is a mis-copy allowed to refuse the tick" "$(step1 | grep -qF 'never matches the id' && echo yes || echo no)" yes
+ok "…recorded in the lock and nowhere else" "$(grep -qF 'the only place it lives' <<<"$(step1)" && echo yes || echo no)" yes
+ok "…and it writes no file of its own"   "$(grep -qF 'you write no file yourself' <<<"$(step1)" && echo yes || echo no)" yes
+ok "…nor is a mis-copy allowed to refuse the tick" "$(grep -qF 'never matches the id' <<<"$(step1)" && echo yes || echo no)" yes
 ok "…and /loop declares one too"         "$(has "$LAUNCHER" 'acquire --as loop --agent project-manager --claimant <id>')" yes
-ok "step 1 forbids anything in between"  "$(step1 | grep -qF 'nothing may sit between the acquire and the spawn' && echo yes || echo no)" yes
-ok "…and names the window it closes"     "$(step1 | grep -qF 'seconds to minutes' && echo yes || echo no)" yes
+ok "step 1 forbids anything in between"  "$(grep -qF 'nothing may sit between the acquire and the spawn' <<<"$(step1)" && echo yes || echo no)" yes
+ok "…and names the window it closes"     "$(grep -qF 'seconds to minutes' <<<"$(step1)" && echo yes || echo no)" yes
 ok "…refusing to delete a stale lock itself" \
-  "$(step1 | grep -qF "the human's answer, not yours" && echo yes || echo no)" yes
+  "$(grep -qF "the human's answer, not yours" <<<"$(step1)" && echo yes || echo no)" yes
 
 # STOPPING THE LOOP MUST NOT RELEASE SOMEBODY ELSE'S LOCK. `release` holds no session
 # identity — it is the human's override and cannot have one — so the condition has to live
@@ -1205,11 +1205,11 @@ ok "…refusing to delete a stale lock itself" \
 # double-dispatch this file closes. Raised by review on ai-bridge#62.
 step5() { awk '/^5\. \*\*Stop\*\*/{p=1;next} p&&/^[A-Za-z]/{p=0} p' "$LAUNCHER"; }
 ok "step 5 releases only a lock this session took" \
-  "$(step5 | grep -qF 'only if THIS session took it' && echo yes || echo no)" yes
+  "$(grep -qF 'only if THIS session took it' <<<"$(step5)" && echo yes || echo no)" yes
 ok "…naming the sibling it would otherwise delete" \
-  "$(step5 | grep -qF 'live' && echo yes || echo no)" yes
+  "$(grep -qF 'live' <<<"$(step5)" && echo yes || echo no)" yes
 ok "…and leaves a dispatched tick's lock to age out" \
-  "$(step5 | grep -qF 'ages out' && echo yes || echo no)" yes
+  "$(grep -qF 'ages out' <<<"$(step5)" && echo yes || echo no)" yes
 # And clearance to dispatch is the lock being CREATED, not merely missing: an unwritable
 # root refuses rather than dispatching unguarded, which is the other way "absence is never
 # an error" gets read backwards.
@@ -1224,9 +1224,9 @@ echo "== the lock is one of the launcher's THREE allowed operations, and the lis
 # this is the one grant that was ever added back. The shape of the list, the deleted
 # blocklist and the further-entry regression are pm-loop-launcher.test.sh's.
 section() { awk '/^### The launcher reads nothing else/{p=1;next} p&&/^#/{p=0} p' "$LAUNCHER"; }
-ok "the lock is an allowed operation"    "$(section | grep -qF 'scripts/tick-lock.sh acquire' && echo yes || echo no)" yes
-ok "…and the list is closed against analogy" "$(section | grep -qF 'No other reader may be added by analogy' && echo yes || echo no)" yes
-ok "…keeping the economy justification"  "$(section | grep -qF "main session's context" && echo yes || echo no)" yes
+ok "the lock is an allowed operation"    "$(grep -qF 'scripts/tick-lock.sh acquire' <<<"$(section)" && echo yes || echo no)" yes
+ok "…and the list is closed against analogy" "$(grep -qF 'No other reader may be added by analogy' <<<"$(section)" && echo yes || echo no)" yes
+ok "…keeping the economy justification"  "$(grep -qF "main session's context" <<<"$(section)" && echo yes || echo no)" yes
 ok "…and it is an allowlist of exactly three" \
   "$(section | grep -c -E '^[0-9]+\. ' | tr -d ' ')" 3
 
@@ -1264,7 +1264,7 @@ printf 'agent: x\n' > "$INST/$AB_LOCK"
 ok "git itself ignores the lock"         "$( ( cd "$INST" && git check-ignore -q "$AB_LOCK" ) && echo yes || echo no)" yes
 ( cd "$INST" && git add -A >/dev/null 2>&1 )
 ok "…so a git add -A never stages it" \
-  "$( ( cd "$INST" && git diff --cached --name-only ) | grep -qxF "$AB_LOCK" && echo yes || echo no)" no
+  "$( grep -qxF "$AB_LOCK" <<<"$( ( cd "$INST" && git diff --cached --name-only ) )" && echo yes || echo no)" no
 # And it must reach an instance whose .gitignore predates the line — which is every
 # instance in existence — exactly once, not once per stamp.
 grep -v "^/${AB_LOCK//./\\.}\$" "$INST/.gitignore" > "$INST/.gi" && mv "$INST/.gi" "$INST/.gitignore"
@@ -1287,7 +1287,7 @@ printf 'agent: x\n' > "$INST/$AB_LOCK_CLAIM"
 ok "git itself ignores the claim"        "$( ( cd "$INST" && git check-ignore -q "$AB_LOCK_CLAIM" ) && echo yes || echo no)" yes
 ( cd "$INST" && git add -A >/dev/null 2>&1 )
 ok "…so a git add -A never stages it" \
-  "$( ( cd "$INST" && git diff --cached --name-only ) | grep -qxF "$AB_LOCK_CLAIM" && echo yes || echo no)" no
+  "$( grep -qxF "$AB_LOCK_CLAIM" <<<"$( ( cd "$INST" && git diff --cached --name-only ) )" && echo yes || echo no)" no
 grep -v "^/${AB_LOCK_CLAIM//./\\.}\$" "$INST/.gitignore" > "$INST/.gi" && mv "$INST/.gi" "$INST/.gitignore"
 ok "…(removed, with the lock's line left in place)" \
   "$(grep -cxF "/$AB_LOCK" "$INST/.gitignore" | tr -d ' ')" 1

@@ -118,9 +118,8 @@ readers_granted() { # <file> -> count of grants that are NOT on the approved lis
 }
 
 granted() { # <file> <tool> -> yes|no — is <tool> an exact grant in allowed-tools?
-  awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/,""); print}' "$1" \
-    | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
-    | grep -qx -- "$2" && echo yes || echo no
+  grep -qx -- "$2" <<<"$(awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/,""); print}' "$1" \
+    | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')" && echo yes || echo no
 }
 
 ok "no reader in allowed-tools" "$(readers_granted "$LAUNCHER")" 0
@@ -151,7 +150,7 @@ ok "…and FAILS on a different script grant" \
 # literally — the same reason `awaiting-queue.test.sh` greps a heading.
 ok "launcher carries the closed-list rule" "$(has "$LAUNCHER" 'The launcher reads nothing else')" yes
 section() { awk '/^### The launcher reads nothing else/{p=1;next} p&&/^#/{p=0} p' "$1"; }
-in_section() { section "$LAUNCHER" | grep -qF -- "$1" && echo yes || echo no; }
+in_section() { grep -qF -- "$1" <<<"$(section "$LAUNCHER")" && echo yes || echo no; }
 
 # THE RULE IS AN ALLOWLIST, AND ITS SIZE IS THE ASSERTION THE OLD FIX DID NOT HAVE. The
 # 2026-08-23 version enumerated the forbidden sources and said the list was closed. It
@@ -218,7 +217,7 @@ ok "…as an allowlist, not a set of refusals" "$(has "$TICK" 'allowlist of thre
 step0() { awk '/^0\. /{p=1} p&&/^1\. /{p=0} p' "$TICK"; }
 S0="$(step0)"
 ok "tick has a step 0" "$([ -n "$S0" ] && echo yes || echo no)" yes
-in_step0() { printf '%s' "$S0" | grep -qF -- "$1" && echo yes || echo no; }
+in_step0() { grep -qF -- "$1" <<<"$S0" && echo yes || echo no; }
 ok "step 0: from disk, not the brief"  "$(in_step0 'never from your brief')" yes
 ok "step 0: reads the tick ledger"     "$(in_step0 'tick ledger')" yes
 ok "step 0: reads task status:"        "$(in_step0 'own `status:`')" yes
@@ -283,7 +282,7 @@ ok "…and step 3 still follows it"        "$(grep -c '^3\. \*\*On completion' "
 # The noop rule lives in step 3, where `noop` is defined — not in a note beside it.
 step3() { awk '/^3\. \*\*On completion/{p=1; next} p&&/^4\. /{p=0} p' "$LAUNCHER"; }
 ok "step 3: a render is not a change" \
-  "$(step3 | grep -qF 'A board refresh or a render is not a change' && echo yes || echo no)" yes
+  "$(grep -qF 'A board refresh or a render is not a change' <<<"$(step3)" && echo yes || echo no)" yes
 
 # The tick's half: it holds no publish grant, re-checks the switch, renders the one board
 # to the one path, and repeats the noop rule where the work happens.
@@ -291,8 +290,8 @@ tick_tools() {
   awk '/^---$/{d++; next} d==1 && /^tools:/{print}' "$TICK" | tr ',' '\n' \
     | sed -e 's/^tools:[[:space:]]*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
 }
-ok "tick holds no publish tool"          "$(tick_tools | grep -qx 'Artifact' && echo yes || echo no)" no
-ok "…while still holding Bash to render" "$(tick_tools | grep -qx 'Bash' && echo yes || echo no)" yes
+ok "tick holds no publish tool"          "$(grep -qx 'Artifact' <<<"$(tick_tools)" && echo yes || echo no)" no
+ok "…while still holding Bash to render" "$(grep -qx 'Bash' <<<"$(tick_tools)" && echo yes || echo no)" yes
 # Step 8's render half is its own file since ai-bridge-v3/task-024 — the core keeps the
 # commit-and-sync half, which runs every tick; the board and the queue only run where
 # those artifacts exist.

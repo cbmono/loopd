@@ -82,7 +82,7 @@ WITH() { PATH="$BIN:$PATH" GHDIR="$GHDIR" "$SH" "$@" --instance "$INST"; }
 run() { # <check|record> -> "rc:<n> first-line"
   local out rc
   out="$(WITH "$1" 2>&1)"; rc=$?
-  printf 'rc:%s %s' "$rc" "$(printf '%s\n' "$out" | head -1 | cut -c1-12)"
+  printf 'rc:%s %s' "$rc" "$(head -1 <<<"$out" | cut -c1-12)"
 }
 
 echo "== no record yet: doubt resolves to the full tick, never to IDLE =="

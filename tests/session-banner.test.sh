@@ -70,10 +70,10 @@ eq()     { [ "$1" = "$2" ] && echo 0 || echo 1; }
 # `0` WHEN THERE IS NO NON-EMPTY LINE AT ALL, never the empty string: a banner that printed
 # nothing must FAIL these assertions rather than satisfy them with an empty string on both
 # sides of an equality.
-head_no() { printf '%s\n' "$1" | awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+head_no() { awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$1"; }
 # THE LOGO SITS ABOVE THE HEADER (task-024), so every claim anchored on the identity line
 # finds it with this rather than assuming it opens the banner. `0` when there is none at all.
-hdr_no()  { printf '%s\n' "$1" | awk '/^loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+hdr_no()  { awk '/^loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$1"; }
 LOGO_ABOVE=3
 nth()     { printf '%s\n' "$1" | sed -n "$2p"; }
 
@@ -189,7 +189,7 @@ except Exception: sys.exit(0)
 sys.stdout.write(d.get("hookSpecificOutput", {}).get("additionalContext", ""))'; }
 # The row for one setting, as printed. Anchored on the key at the start of the line so a
 # key merely MENTIONED in a comment or a value cannot answer for it.
-row() { printf '%s\n' "$OUT" | grep -E "^$1 " | head -1; }
+row() { head -1 <<<"$(printf '%s\n' "$OUT" | grep -E "^$1 ")"; }
 from() { printf '%s\n' "$(row "$1")" | awk '{print $NF}'; }
 # EVERYTHING BETWEEN THE KEY AND THE `FROM` CELL, not field 2. A value is not always one
 # token: the tier column renders `deep -> opus` with spaces around the arrow, and the
@@ -480,7 +480,7 @@ assert "…exactly three lines under the first NON-EMPTY one, the logo and nothi
 # width is not ours.
 h1="$(nth "$OUT" "$(hdr_no "$OUT")")"
 h2="$(nth "$OUT" "$(( $(hdr_no "$OUT") + 1 ))")"
-assert "the line under it is a rule"         "$(printf '%s' "$h2" | grep -qE '^─+$' && echo 0 || echo 1)"
+assert "the line under it is a rule"         "$(grep -qE '^─+$' <<<"$h2" && echo 0 || echo 1)"
 assert "…exactly as wide as the header"      "$(eq "${#h2}" "${#h1}")"
 # AND ITS WIDTH IS DERIVED FROM THE HEADER, which one run cannot show: a constant, or a width
 # measured against anything other than `head_line`, satisfies both assertions above on this
@@ -668,7 +668,7 @@ assert "…and still no 'Drafts' there — that one is deleted for both readers"
 # greps above, so the numbers themselves are pinned: nothing in the banner announces
 # how many tasks are in any state.
 assert "…and no bare tally of tasks under any other label" \
-  "$(printf '%s\n' "$OUT" | grep -qiE '[0-9]+ (task|draft|ready|dispatch)' && echo 1 || echo 0)"
+  "$(grep -qiE '[0-9]+ (task|draft|ready|dispatch)' <<<"$OUT" && echo 1 || echo 0)"
 assert "a task title never reaches session context"     "$(hasnt 'LEAK THIS TITLE' "$OUT")"
 assert "…nor its open-question text"                    "$(hasnt 'LEAK THIS QUESTION' "$OUT")"
 assert "…nor its body"                                  "$(hasnt 'LEAK THIS BODY' "$OUT")"
@@ -738,8 +738,8 @@ assert "…keyed off the banner's Ready-to-dispatch line" \
 assert "…bounded to once per session" \
   "$(grep -qi 'once per session' "$SEED" && echo 0 || echo 1)"
 assert "…and placed beside the ad-hoc-vs-tracked-work section" \
-  "$(awk '/^## Ad-hoc requests vs[.] the project loop/ { f=1; next } f && /^## / { f=0 } f' "$SEED" \
-      | grep -qF 'Ready to dispatch' && echo 0 || echo 1)"
+  "$(grep -qF 'Ready to dispatch' \
+      <<<"$(awk '/^## Ad-hoc requests vs[.] the project loop/ { f=1; next } f && /^## / { f=0 } f' "$SEED")" && echo 0 || echo 1)"
 # THE TWO HALVES SAY THE SAME STRING, and the hook's half is asserted from what it PRINTS,
 # never from its source. A rule keyed off a wording the hook does not use is exactly the
 # inert state above, reached by a typo — and grepping the hook for the phrase would pass on
@@ -756,7 +756,7 @@ CTX="$(model_ctx)"
 assert "…and the hook really EMITS that line, rather than merely naming it in a comment" \
   "$(has 'Ready to dispatch   2' "$CTX")"
 assert "…while the human's copy of the same instance does not" \
-  "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1 | grep -qF 'Ready to dispatch' && echo 1 || echo 0)"
+  "$(grep -qF 'Ready to dispatch' <<<"$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1)" && echo 1 || echo 0)"
 rm -rf "$INST/projects"
 
 # A PAUSED PROJECT OFFERS NOTHING, asked of project-paused.sh. Two projects, each with a
@@ -800,8 +800,8 @@ rm -rf "$INST/projects"; rm -f "$INST/$AB_AWAITING"
 # `printf` — rather than to every line in the file: `$?` ends a line with a question mark
 # and a header sentence may pose one, and neither is the hook asking the human anything.
 assert "the hook does not try to ask the question itself" \
-  "$(grep -E '^[[:space:]]*(echo|printf)' "$HOOK" \
-     | grep -qiE 'shall I|would you like|do you want|\?["'"'"']?[[:space:]]*$' && echo 1 || echo 0)"
+  "$(grep -qiE 'shall I|would you like|do you want|\?["'"'"']?[[:space:]]*$' \
+       <<<"$(grep -E '^[[:space:]]*(echo|printf)' "$HOOK")" && echo 1 || echo 0)"
 
 
 # =======================================================================================
@@ -846,8 +846,8 @@ PYTTY
 }
 ESC="$(printf '\033')"
 CR="$(printf '\r')"
-coloured() { printf '%s' "$1" | LC_ALL=C grep -q "$ESC" && echo 0 || echo 1; }
-plain()    { printf '%s' "$1" | LC_ALL=C grep -q "$ESC" && echo 1 || echo 0; }
+coloured() { LC_ALL=C grep -q "$ESC" <<<"$1" && echo 0 || echo 1; }
+plain()    { LC_ALL=C grep -q "$ESC" <<<"$1" && echo 1 || echo 0; }
 # `\033[…m` stripped, and the `\r` with it: a pty ends every line with CRLF.
 strip()    { printf '%s' "$1" | LC_ALL=C sed -e "s/$ESC\[[0-9;]*m//g" -e "s/$CR\$//"; }
 
@@ -1068,16 +1068,16 @@ assert "…and the role whose name began with a heading marker"  "$(has '?softwa
 # Matched with a gap, not a fixed one: the tier is padded to the widest tier in the table
 # (§2c), and this row's claim is the neutralised `|`, not the width.
 assert "…and the tier row whose model alias carried a pipe" \
-  "$(printf '%s\n' "$OUT" | grep -qE 'deep +→ opus\?x' && echo 0 || echo 1)"
+  "$(grep -qE 'deep +→ opus\?x' <<<"$OUT" && echo 0 || echo 1)"
 # NOT ONE MARKDOWN-ACTIVE CHARACTER IN A TABLE ROW. Scoped to the rows — a path elsewhere in
 # the banner may legitimately contain a `_`, and TMPDIR on a CI runner does.
 tbl_rows() { printf '%s\n' "$1" | awk '/^(SETTING|ROLE) /{f=1} f&&/^[[:space:]]*$/{f=0} f'; }
 for ch in '<' '>' '*' '_' '|'; do
   assert "…no '$ch' anywhere in either table" \
-    "$(printf '%s\n' "$(tbl_rows "$OUT")" | grep -qF -- "$ch" && echo 1 || echo 0)"
+    "$(grep -qF -- "$ch" <<<"$(printf '%s\n' "$(tbl_rows "$OUT")")" && echo 1 || echo 0)"
 done
 assert "…and no row begins with a heading marker" \
-  "$(printf '%s\n' "$(tbl_rows "$OUT")" | grep -q '^#' && echo 1 || echo 0)"
+  "$(grep -q '^#' <<<"$(printf '%s\n' "$(tbl_rows "$OUT")")" && echo 1 || echo 0)"
 assert "…and the columns still line up after the renderer's transform" \
   "$(eq "$(render_md "$OUT" | from_offsets)" 1)"
 
@@ -1130,10 +1130,10 @@ assert "…and the strikethrough key"                                 "$(has '??
 assert "…and the model alias carrying a character reference"        "$(has 'ops?amp;api' "$OUT")"
 for ch in '[' ']' '`' '(' ')' '~' '&'; do
   assert "…no '$ch' anywhere in either table" \
-    "$(printf '%s\n' "$(tbl_rows "$OUT")" | grep -qF -- "$ch" && echo 1 || echo 0)"
+    "$(grep -qF -- "$ch" <<<"$(printf '%s\n' "$(tbl_rows "$OUT")")" && echo 1 || echo 0)"
 done
 assert "…nor the emphasis marker byte itself" \
-  "$(printf '%s\n' "$(tbl_rows "$OUT")" | LC_ALL=C grep -qF -- "$STX" && echo 1 || echo 0)"
+  "$(LC_ALL=C grep -qF -- "$STX" <<<"$(printf '%s\n' "$(tbl_rows "$OUT")")" && echo 1 || echo 0)"
 # THE MD RENDERING IS WHERE A LINK AND A CODE SPAN ACTUALLY FIRE, so the alignment claim is
 # made against the rendering `/loopd:welcome` relays and not only against text mode.
 assert "…and the md rendering keeps ONE FROM offset once rendered" \
@@ -1141,7 +1141,7 @@ assert "…and the md rendering keeps ONE FROM offset once rendered" \
 # EMPHASIS IS THE BANNER'S TO DECIDE, and the alignment check catches this only incidentally:
 # a forged marker that happened to be width-neutral would still bold a row nobody marked.
 assert "…and the forged marker no longer bolds a row of its own" \
-  "$(printf '%s\n' "$MD_H" | grep -qE '^\*\*[^[:space:]]*sneaky' && echo 1 || echo 0)"
+  "$(grep -qE '^\*\*[^[:space:]]*sneaky' <<<"$MD_H" && echo 1 || echo 0)"
 # AND THE TWO NEWEST TRANSFORMS DISCRIMINATE, or the alignment assertion above is green for a
 # `render_md` that simply does not know the construct. Same shape as the pre-fix `WAS` fixture
 # in section 10: laid out with `printf` so the fixture cannot itself be the misaligned thing,
@@ -1295,7 +1295,7 @@ if mutate "mutant: a line printed above the identity line" "$HOOK" \
   # the line under the first non-empty one is a logo line in the intact banner too, so that
   # spelling would pass on both and prove nothing.
   assert "…and the rule assertions go with it — the rule is no longer where it belongs" \
-    "$(printf '%s' "$(nth "$M2_OUT" "$(( $(head_no "$M2_OUT") + LOGO_ABOVE + 1 ))")" | grep -qE '^─+$' && echo 1 || echo 0)"
+    "$(grep -qE '^─+$' <<<"$(printf '%s' "$(nth "$M2_OUT" "$(( $(head_no "$M2_OUT") + LOGO_ABOVE + 1 ))")")" && echo 1 || echo 0)"
   assert "…while the blank-line assertion stays GREEN, so the two claims do not overlap" \
     "$(eq "$(head_no "$M2_OUT")" 2)"
 fi

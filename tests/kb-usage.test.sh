@@ -97,7 +97,7 @@ ok "…because of category alone"                        "$(grep '^KEEP stale-go
 ok "no category: KEEP"                                 "$(verdict stale-nocat)" KEEP
 ok "old but cited 23 days ago: KEEP (the clock restarts)" "$(verdict cited-learning)" KEEP
 ok "…an UNREAD citation counts as use too"              "$(verdict cited-measure)" KEEP
-"$USAGE" sweep --today "$TODAY" --min-texts 11 | grep -q '^KEEP stale-learning .*fails texts$'
+grep -q '^KEEP stale-learning .*fails texts$' <<<"$("$USAGE" sweep --today "$TODAY" --min-texts 11)"
 ok "one text short of the floor: KEEP"                 "$?" 0
 ok "the thresholds are printed"                        "$(grep -c '^thresholds: category in {learning measurement} · uncited >= 180d' <<<"$out")" 1
 
@@ -110,8 +110,8 @@ ok "the sweep wrote nothing"                           "$(git status --porcelain
 echo
 echo "== criterion 8: the sweep rides inside kb-propose.sh, the command that derives the next id =="
 export KB_USAGE_TODAY="$TODAY"
-SWEEPLINE="$(code "$PROPOSE" | grep -n 'kb-usage\.sh' | head -1 | cut -d: -f1)"
-IDLINE="$(code "$PROPOSE" | grep -n '^id=' | head -1 | cut -d: -f1)"
+SWEEPLINE="$(head -1 <<<"$(code "$PROPOSE" | grep -n 'kb-usage\.sh')" | cut -d: -f1)"
+IDLINE="$(head -1 <<<"$(code "$PROPOSE" | grep -n '^id=')" | cut -d: -f1)"
 ok "kb-propose.sh calls the sweep before it derives the report id" \
   "$([ -n "$SWEEPLINE" ] && [ -n "$IDLINE" ] && [ "$SWEEPLINE" -lt "$IDLINE" ] && echo yes || echo no)" yes
 "$PROPOSE" --proposer 'echo kaputt; exit 7' >/dev/null 2>&1

@@ -79,7 +79,7 @@ ok() { # <name> <actual> <expected>
 flatten() { tr '\n' ' ' < "$1" | tr -s ' '; }
 
 saw() { # <haystack> <fixed string> -> yes|no
-  printf '%s' "$1" | grep -qF -- "$2" && echo yes || echo no
+  grep -qF -- "$2" <<<"$1" && echo yes || echo no
 }
 
 # Delete the bullet that starts with <marker> — from that line to the line before the

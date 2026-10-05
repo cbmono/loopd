@@ -395,7 +395,7 @@ mention_faults() { # <file> <tool> — "<body-line> SILENT|DIRECTIVE" per failin
   body "$file" | sed -E 's/<!--[[:space:]]*tool-mention:[^>]*-->//' > "$TMP/mwa.body"
   grep -nF "$m" "$TMP/mwa.body" | cut -d: -f1 | while IFS= read -r n; do
     lo=$(( n > 1 ? n - 1 : 1 ))
-    if ! sed -n "${lo},$(( n + 1 ))p" "$TMP/mwa.body" | tr '\n' ' ' | grep -qE "$ABSENCE_CUE"; then
+    if ! grep -qE "$ABSENCE_CUE" <<<"$(sed -n "${lo},$(( n + 1 ))p" "$TMP/mwa.body" | tr '\n' ' ')"; then
       printf '%s SILENT\n' "$n"; continue
     fi
     # Every occurrence on the line, not just the first: the counter-example that defeated
@@ -405,8 +405,8 @@ mention_faults() { # <file> <tool> — "<body-line> SILENT|DIRECTIVE" per failin
     while [ "$cur" != "${cur#*"$m"}" ]; do
       seg="${cur%%"$m"*}"
       win="$(last_words "$pre$seg")"
-      if printf '%s' "$win" | grep -qE "$DIRECTIVE_CUE" \
-         && ! printf '%s' "$win" | grep -qE "$NEGATOR"; then
+      if grep -qE "$DIRECTIVE_CUE" <<<"$win" \
+         && ! grep -qE "$NEGATOR" <<<"$win"; then
         printf '%s DIRECTIVE\n' "$n"; break
       fi
       pre="$pre$seg$m"; cur="${cur#*"$m"}"
@@ -490,7 +490,7 @@ audit() {
   for tool in "${mentioned[@]-}"; do
     [ -n "$tool" ] || continue
     covered "$tool" "$allow" && continue
-    if printf '%s\n' "${declared[@]-}" | grep -qxF "$tool"; then
+    if grep -qxF "$tool" <<<"$(printf '%s\n' "${declared[@]-}")"; then
       d=$((d+1))
       budget="$(declared_budget "$file" "$tool")"
       actual="$(mention_count "$file" "$tool")"
@@ -524,7 +524,7 @@ audit() {
     if covered "$tool" "$allow"; then
       r=$((r+1))
       note "        REDUNDANT    ${label} declares \`${tool}\`, which IS in its allowlist"
-    elif ! printf '%s\n' "${mentioned[@]-}" | grep -qxF "$tool"; then
+    elif ! grep -qxF "$tool" <<<"$(printf '%s\n' "${mentioned[@]-}")"; then
       s=$((s+1))
       note "        STALE        ${label} declares \`${tool}\`, which it no longer names"
     fi

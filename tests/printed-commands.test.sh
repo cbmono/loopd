@@ -193,7 +193,7 @@ while IFS='|' read -r f cmd; do
       GIT_CEILING_DIRECTORIES="$TMP" bash "$run" ${args[@]+"${args[@]}"} ) >"$CAP/out" 2>"$CAP/err" </dev/null
   marker="$(grep -ciE 'usage:|unknown (option|argument|flag|command|role)|unexpected argument|multiple target|needs (a value|a directory|an id)|no agent id|agent id (contains|is longer)|no such key' "$CAP/err" 2>/dev/null)"
   ok "$f: '$line' is accepted by $s" "${marker:-0}" 0
-  [ "${marker:-0}" = 0 ] || sed 's/^/           stderr: /' "$CAP/err" | head -2
+  [ "${marker:-0}" = 0 ] || head -2 <<<"$(sed 's/^/           stderr: /' "$CAP/err")"
   probed=$((probed+1))
 done <<<"$(printf '%s' "$found")"
 echo

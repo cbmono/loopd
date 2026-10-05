@@ -89,7 +89,7 @@ echo
 echo "== 3. both mutants go RED — the check discriminates =="
 # Delete the row for a script that really ships. Chosen at runtime rather than hard-coded,
 # so a rename cannot turn this half of the harness into a no-op that still passes.
-victim="$(documented "$README" | head -n1)"
+victim="$(head -n1 <<<"$(documented "$README")")"
 ok "picked a documented script to remove" "$([ -n "$victim" ] && echo yes || echo no)" yes
 grep -v "^| \`$victim\`" "$README" > "$TMP/missing-row.md"
 ok "mutant A: the removed script is reported undocumented" \

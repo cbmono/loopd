@@ -133,7 +133,7 @@ assert "…and never reported RESOLVED"         "$(hasnt 'RESOLVED  CLAUDE.md' "
 
 echo "== nothing with conflict markers is written into the bundle tree =="
 assert "no .bak file anywhere in the bundle" \
-  "$(find "$INST" -name '*.bak*' | grep -q . && echo 1 || echo 0)"
+  "$(grep -q . <<<"$(find "$INST" -name '*.bak*')" && echo 1 || echo 0)"
 assert "the bundle ROOT gained no .bak" \
   "$(sh -c 'ls "$1"/*.bak* >/dev/null 2>&1' _ "$INST" && echo 1 || echo 0)"
 assert "the conflicted merge is kept under .ai-bridge/refresh/" \

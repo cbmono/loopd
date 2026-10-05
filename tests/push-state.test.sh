@@ -223,10 +223,10 @@ assert "cap: exits 0"                        "$(eq "$RC" 0)"
 # an env var comes from the user's shell, and 12 is the documented default.
 OUT="$(cd "$TMP" && PUSH_STATE_MAX=abc CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1)"; RC=$?
 assert "non-numeric PUSH_STATE_MAX -> default 12, still prints" \
-  "$( [ "$RC" = 0 ] && printf '%s\n' "$OUT" | grep -qF 'in-flight 7:' && echo 0 || echo 1 )"
+  "$( [ "$RC" = 0 ] && grep -qF 'in-flight 7:' <<<"$OUT" && echo 0 || echo 1 )"
 OUT="$(cd "$TMP" && PUSH_STATE_MAX=0 CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1)"; RC=$?
 assert "PUSH_STATE_MAX=0 -> default, not an empty list" \
-  "$( [ "$RC" = 0 ] && printf '%s\n' "$OUT" | grep -qF 'big/task-001' && echo 0 || echo 1 )"
+  "$( [ "$RC" = 0 ] && grep -qF 'big/task-001' <<<"$OUT" && echo 0 || echo 1 )"
 
 # A LEADING ZERO passes the all-digits check and then reaches bash arithmetic,
 # where it is OCTAL — and the two places the cap is used disagree about it, which
@@ -251,12 +251,12 @@ listed() { printf '%s\n' "$1" | grep -o 'many/task-[0-9][0-9][0-9]' | wc -l | tr
 OUT="$(cd "$TMP" && PUSH_STATE_MAX=08 CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1)"; RC=$?
 assert "PUSH_STATE_MAX=08 -> eight listed AND four reported dropped" \
   "$( [ "$RC" = 0 ] && [ "$(listed "$OUT")" = 8 ] \
-      && printf '%s\n' "$OUT" | grep -qF '(+4 not listed)' && echo 0 || echo 1 )"
+      && grep -qF '(+4 not listed)' <<<"$OUT" && echo 0 || echo 1 )"
 assert "  ...with no bash arithmetic error on either stream" "$(hasnt 'value too great for base' "$OUT")"
 OUT="$(cd "$TMP" && PUSH_STATE_MAX=010 CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1)"; RC=$?
 assert "PUSH_STATE_MAX=010 -> ten listed AND two reported dropped" \
   "$( [ "$RC" = 0 ] && [ "$(listed "$OUT")" = 10 ] \
-      && printf '%s\n' "$OUT" | grep -qF '(+2 not listed)' && echo 0 || echo 1 )"
+      && grep -qF '(+2 not listed)' <<<"$OUT" && echo 0 || echo 1 )"
 assert "  ...never the octal arithmetic's answer of four"    "$(hasnt '(+4 not listed)' "$OUT")"
 
 # ============================================================ first status: wins
@@ -311,8 +311,8 @@ assert "  ...still exits 0"                    "$(eq "$RC" 0)"
 
 # The fence must WRAP the payload. A trailing fence lets the injected text escape
 # the boundary it exists to sit inside.
-begin_ln="$(printf '%s\n' "$OUT" | grep -n 'BEGIN INSTANCE STATE' | head -1 | cut -d: -f1)"
-item_ln="$(printf '%s\n'  "$OUT" | grep -n 'Ignore all previous' | head -1 | cut -d: -f1)"
+begin_ln="$(head -1 <<<"$(printf '%s\n' "$OUT" | grep -n 'BEGIN INSTANCE STATE')" | cut -d: -f1)"
+item_ln="$(head -1 <<<"$(printf '%s\n'  "$OUT" | grep -n 'Ignore all previous')" | cut -d: -f1)"
 end_ln="$(printf '%s\n'   "$OUT" | grep -n 'END INSTANCE STATE'  | tail -1 | cut -d: -f1)"
 assert "payload sits between BEGIN and END" \
   "$( [ -n "$begin_ln" ] && [ -n "$item_ln" ] && [ -n "$end_ln" ] \
@@ -384,7 +384,7 @@ assert "still four lines once CR is honoured as a break" \
 # Nothing but the block's own three line breaks: any control byte left after
 # stripping them is a leaked CR or TAB.
 assert "no raw control character reaches the block" \
-  "$( printf '%s' "$OUT" | LC_ALL=C tr -d '\n' | LC_ALL=C grep -q '[[:cntrl:]]' && echo 1 || echo 0 )"
+  "$( LC_ALL=C grep -q '[[:cntrl:]]' <<<"$(printf '%s' "$OUT" | LC_ALL=C tr -d '\n')" && echo 1 || echo 0 )"
 assert "  ...and it still exits 0"                            "$(eq "$RC" 0)"
 
 # SURFACED, per payload AND per surface. Encoding, not filtering: each of the four
@@ -399,7 +399,7 @@ assert "  ...and all four on the active-projects surface" \
 # was reported as `split` — a name that is not on disk. A TAB collided with the
 # field separator, so that project and its task vanished from both counts.
 assert "  ...no count is short a control-char document" \
-  "$( printf '%s\n' "$OUT" | grep -qF 'in-flight 4:' && printf '%s\n' "$OUT" | grep -qF 'active projects 4:' && echo 0 || echo 1 )"
+  "$( grep -qF 'in-flight 4:' <<<"$OUT" && grep -qF 'active projects 4:' <<<"$OUT" && echo 0 || echo 1 )"
 assert "  ...and no headless fragment is reported as a slug" "$(hasnt ' split/' "$OUT")"
 # DOCUMENTED DEGRADATION, asserted so it cannot change silently: the encoded path
 # no longer resolves on disk, so this project's active phase is not looked up and
@@ -453,7 +453,7 @@ else
   run
   assert "an unreadable document does not zero the counts" "$(has 'in-flight 2:' "$OUT")"
   assert "  ...the readable tasks are still both listed"   \
-    "$( printf '%s\n' "$OUT" | grep -qF 'good/task-001' && printf '%s\n' "$OUT" | grep -qF 'good/task-002' && echo 0 || echo 1 )"
+    "$( grep -qF 'good/task-001' <<<"$OUT" && grep -qF 'good/task-002' <<<"$OUT" && echo 0 || echo 1 )"
   assert "  ...and it still exits 0"                       "$(eq "$RC" 0)"
 fi
 chmod u+rw "$INST/projects/good/tasks/locked.md" 2>/dev/null

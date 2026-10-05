@@ -47,9 +47,9 @@ check_dispatches_not_waits() {
   local block="$1"
   # "and wait for it" is the original blocking phrase verbatim — matched narrowly so a
   # negated form ("don't wait for it", the fixed wording) does not self-trip the check.
-  printf '%s' "$block" | grep -qi 'and wait for it'      && return 1
-  printf '%s' "$block" | grep -qi 'run it synchronously' && return 1
-  printf '%s' "$block" | grep -q  'run_in_background'    || return 1
+  grep -qi 'and wait for it' <<<"$block"      && return 1
+  grep -qi 'run it synchronously' <<<"$block" && return 1
+  grep -q  'run_in_background' <<<"$block"    || return 1
   return 0
 }
 

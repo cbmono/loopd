@@ -65,7 +65,7 @@ shipped_surface() {
   ( cd "$REPO" && git ls-files -- README.md docs .claude plugin 'plugin-*' config \
       install.sh upgrade.sh ':!docs/releases' 2>/dev/null )
 }
-in_surface() { shipped_surface | grep -qxF -- "$1" && echo yes || echo no; }
+in_surface() { grep -qxF -- "$1" <<<"$(shipped_surface)" && echo yes || echo no; }
 
 echo
 echo "== 1. the README opens with the mark, copied =="

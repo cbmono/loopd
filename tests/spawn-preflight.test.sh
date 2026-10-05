@@ -132,9 +132,9 @@ ok "neither file names a settings or grant write" \
 
 echo
 echo "== step 3: the preflight runs before the wave, through task-003's channel =="
-pre_at="$(grep -n 'scripts/spawn-preflight.sh --instance' "$S3" | head -n1 | cut -d: -f1)"
-write_at="$(grep -n 'set `assignee` +' "$S3" | head -n1 | cut -d: -f1)"
-spawn_at="$(grep -n 'claude --bg "<the whole brief>"' "$S3" | head -n1 | cut -d: -f1)"
+pre_at="$(head -n1 <<<"$(grep -n 'scripts/spawn-preflight.sh --instance' "$S3")" | cut -d: -f1)"
+write_at="$(head -n1 <<<"$(grep -n 'set `assignee` +' "$S3")" | cut -d: -f1)"
+spawn_at="$(head -n1 <<<"$(grep -n 'claude --bg "<the whole brief>"' "$S3")" | cut -d: -f1)"
 ok "the preflight is named in step 3"        "$([ -n "$pre_at" ] && echo yes || echo no)" yes
 ok "…before the first status write"          "$([ "${pre_at:-999}" -lt "${write_at:-0}" ] && echo yes || echo no)" yes
 ok "…and so before the first spawn"          "$([ "${pre_at:-999}" -lt "${spawn_at:-0}" ] && echo yes || echo no)" yes
@@ -150,13 +150,13 @@ ok "the remedy is stated once, in one place" \
 row1="$(awk '/\| The text carries \|/ { t = 1; next } t && /^[[:space:]]*\|---/ { next } t { print; exit }' "$S3")"
 cell() { printf '%s' "$row1" | awk -F' [|] ' -v n="$1" '{ gsub(/^[[:space:]]*[|] | [|][[:space:]]*$/, ""); print $n }' | sed 's/^`//; s/`$//'; }
 which="$(cell 2)"; remedy="$(cell 3)"
-line_tpl="$(sed -n 's/^[[:space:]]*\(dispatch refused: <which>\. .*\)$/\1/p' "$S3" | head -n1)"
+line_tpl="$(head -n1 <<<"$(sed -n 's/^[[:space:]]*\(dispatch refused: <which>\. .*\)$/\1/p' "$S3")")"
 line="${line_tpl//<which>/$which}"; line="${line//<remedy>/$remedy}"; line="${line//<k>/3}"
 ok "the report line template is there"       "$([ -n "$line_tpl" ] && echo yes || echo no)" yes
 ok "…carrying the shift+tab remedy"          "$(yn grep -qF 'shift+tab' <<<"$line")" yes
 ok "…never a claude --bg or bypass grant"    "$(yn grep -qE 'claude --bg|bypassPermissions' <<<"$line")" no
 ok "…never a cap"                            "$( { grep -qiw 'cap' || grep -qiE 'in[- ]flight'; } <<<"$line" && echo yes || echo no)" no
-entry_tpl="$(sed -n 's/^[[:space:]]*\(Q<n>: dispatch refused: .*\)$/\1/p' "$S3" | head -n1)"
+entry_tpl="$(head -n1 <<<"$(sed -n 's/^[[:space:]]*\(Q<n>: dispatch refused: .*\)$/\1/p' "$S3")")"
 entry="${entry_tpl//<n>/1}"; entry="${entry//<which>/$which}"; entry="${entry//<remedy>/$remedy}"
 D="$TMP/aw"; mkdir -p "$D/projects/demo/tasks" "$D/$AB_DIR"; printf '{ "org": "demo" }\n' > "$D/instance.config.json"
 printf '# SCHEMA\n' > "$D/$AB_SCHEMA"; : > "$D/$AB_AWAITING"
