@@ -388,7 +388,7 @@ echo '# Schema' > SCHEMA.md; echo '# Log' > log.md; echo v > .ai-bridge/seed-bas
 git init -q -b main . && git add -A && git commit -qm init
 P1="$(bash "$MIGRATE" --apply 2>&1)"
 assert "the root files go INTO .ai-bridge/, not beside it" "$([[ -f .ai-bridge/SCHEMA.md && -f .ai-bridge/log.md && ! -e .loopd ]] && echo 0 || echo 1)"
-assert "…and the rename waits for the commit"            "$(printf '%s\n' "$P1" | grep -q 'waits until the layout move' && echo 0 || echo 1)"
+assert "…and the rename waits for the commit"            "$(grep -q 'waits until the layout move' <<<"$P1" && echo 0 || echo 1)"
 git commit -qam layout
 P2_RC=0; bash "$MIGRATE" --apply >/dev/null 2>&1 || P2_RC=$?
 assert "the second run renames, exit 0"                  "$([[ $P2_RC -eq 0 && ! -e .ai-bridge && -f $AB_SCHEMA && -f $AB_LEDGER && -f .loopd/seed-base/VERSION ]] && echo 0 || echo 1)"

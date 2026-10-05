@@ -136,7 +136,7 @@ prov	tests/plugin-eval.test.sh
 prov,frozen	tests/plugin-manifest.test.sh
 frozen	tests/plugin-name.test.sh
 prov,instdir,frozen	tests/plugin-native-bootstrap.test.sh
-prov	tests/pm-loop-launcher.test.sh
+prov,bundle	tests/pm-loop-launcher.test.sh	1
 prov	tests/pm-step-files.test.sh
 prov,fname	tests/pr-body-clearance.test.sh
 prov	tests/pr-comment-clearance.test.sh
