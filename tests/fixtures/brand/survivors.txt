@@ -25,6 +25,7 @@ prov	docs/pm-design.md
 frozen	docs/releases/v1.0.0.md
 frozen	docs/releases/v3.0.0.md	2
 frozen	docs/releases/v3.1.0.md	3
+bundle,frozen	docs/releases/v3.3.0.md	6
 prov	docs/sharing.md
 prov,fname	plugin/README.md
 fname	plugin/RETIRED
