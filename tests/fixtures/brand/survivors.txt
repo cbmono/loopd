@@ -146,7 +146,7 @@ prov,harness	tests/readme-brand-mark.test.sh	4
 prov	tests/record-host-rendering.test.sh
 frozen	tests/release-bump.test.sh
 prov,instdir,fname	tests/retire-machinery.test.sh
-prov	tests/review-clearance.test.sh
+prov	tests/review-clearance.lib.sh
 prov	tests/review-rounds.test.sh
 prov	tests/review-route.test.sh
 prov	tests/scaffold-review-dispatched.test.sh

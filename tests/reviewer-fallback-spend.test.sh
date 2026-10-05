@@ -20,9 +20,10 @@
 #
 # WHAT IS DRIVEN RATHER THAN READ. The classifier itself is not asserted here — exit 1 vs
 # exit 5 is driven end-to-end against real bodies in tests/review-clearance.test.sh, which
-# owns the `gh` stub. What this file adds is the half that file cannot see: that the
-# READERS of those codes route them differently, and that no caller silently mis-reads the
-# new one (section 4, paired with a mutant in 6c).
+# owns the `gh` stub (tests/review-clearance.lib.sh, shared with its two sibling harnesses).
+# What this file adds is the half that file cannot see: that the READERS of those codes
+# route them differently, and that no caller silently mis-reads the new one (section 4,
+# paired with a mutant in 6c).
 #
 # EVERY MUTATION IS GUARDED. A mutation whose anchor has moved prints SKIP and is never
 # counted as caught: a check that has silently stopped checking is worse than no check.
