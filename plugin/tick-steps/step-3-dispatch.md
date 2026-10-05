@@ -65,7 +65,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    ```bash
    cd <worktree> && claude --bg "<the whole brief>" \
      --agent loopd:<assignee> --model <the alias you resolved> \
-     --permission-mode bypassPermissions --add-dir <bundle root> < /dev/null
+     --permission-mode auto --add-dir <bundle root> < /dev/null
    ```
 
    It returns in about a second printing `backgrounded · <id>`. **Record that id as
@@ -85,16 +85,26 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      positional, so drop `--print`.
    - **`--session-id` is ignored beside `--bg`**, which mints its own; that is why the
      id is recorded after the spawn and not before it.
-   - **`--permission-mode bypassPermissions` with the plugin's `deny-destructive.sh`
-     PreToolUse hook is the only posture measured to work.** Hooks fire in a `--bg`
+   - **`--permission-mode auto`, and never `bypassPermissions`.** A spawn that asks for a
+     bypass agent is what auto mode's own classifier refuses (`[Create Unsafe Agents]`):
+     one bundle logged nine refusals against one success in three days and fell back to
+     running role agents inside the main session — the thing this step exists to stop.
+     Measured 2026-10-05 on 2.1.289: a `--bg` session on `sonnet` or `opus` HOLDS auto
+     mode, takes a branch-commit-push to the end unprompted, and has a force-push to a
+     default branch refused by the plugin's `deny-destructive.sh` hook, the second layer.
+     **Never on `haiku`**: there the session records `auto`, is demoted to `default` at
+     once and parks in `state: blocked` before its first turn — so a role agent is never
+     spawned on an alias that resolves to `haiku`. Resolve one tier up
+     (`resolve-model.sh` → the `standard` alias) and say on the dispatch line that you did.
+     Hooks fire in a `--bg`
      session, **and they find this bundle from the worktree only through the
      `.git/loopd-bundle` marker `link-repos.sh` writes into each linked repo** — the
      session's project dir is the worktree, which holds no `instance.config.json`. A
      repo with no marker (a bundle not re-stamped since the marker shipped, or a repo
      outside `reposRoot`) leaves its agents with NO baseline: the hook fires and allows.
-     `/loopd:init` writes it; `test -f <repo>/.git/loopd-bundle` reads it. A mode that can prompt parks the agent in `state: blocked` with nobody to
-     answer, and it holds its slot until `claude stop` — this machine still lists two
-     such sessions from August.
+     `/loopd:init` writes it; `test -f <repo>/.git/loopd-bundle` reads it. An agent whose
+     action auto mode or the hook refuses may still end in `state: blocked` with nobody
+     to answer, and it holds its slot until `claude stop` — step 4 surfaces it.
    - **`--add-dir <bundle root>`**, or the agent cannot reach its own task document: its
      cwd is the worktree, and the bundle is outside it.
    - **The namespace is not optional** — the role agents ship in the `loopd` plugin
@@ -159,7 +169,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
      | The text carries | `<which>` | `<remedy>` |
      |---|---|---|
-     | `Reason: [Create Unsafe Agents]` | `auto-mode classifier (Reason: [Create Unsafe Agents])` | `exit auto mode for the WHOLE tick, not just the spawn (shift+tab cycles it), then run the tick again` |
+     | `Reason: [Create Unsafe Agents]` | `auto-mode classifier (Reason: [Create Unsafe Agents])` | `check the spawn asked for --permission-mode auto, this step's form: a spawn that asks for a permission-bypass agent is what the classifier refuses, and an installed plugin older than 3.3 still asks for one (claude plugin update, then restart). Never leave auto mode for it` |
      | `Workspace not trusted` | `workspace trust (Workspace not trusted)` | `run claude once, interactively, in the product repo's MAIN clone and accept the trust prompt; it covers every worktree of that clone` |
      | neither | `unrecognised, verbatim: <the refusal text, sanitised>` | `unknown, read the refusal text` |
 
@@ -170,10 +180,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      live blocker into `answered_questions` and clears the only row telling the human
      that dispatch is refused. The report line below may still quote the refusal raw.
 
-     **The auto mode here is the mode of the session RUNNING THE TICK** — the one
-     `shift+tab` cycles — not the child's `--permission-mode bypassPermissions` above,
-     which stays exactly as it is. **Never print an allow rule for `claude --bg`, or
-     running the tick under `bypassPermissions`, as a remedy.** A grant is the
+     **The classifier that refuses is the one of the session RUNNING THE TICK** — the mode
+     `shift+tab` cycles — and what it judges is the child the command asks for, which is
+     why the child's mode above is `auto`. **Never print an allow rule for `claude --bg`,
+     leaving auto mode, or running anything under `bypassPermissions`, as a remedy.** A grant is the
      operator's to write, never the plugin's, because a plugin must not be able to grant
      itself a bypass (owner, 2026-09-25 and 2026-09-30); `/loopd:init` prints the
      one notice there is. The `Bash(claude --bg ' *)` rule once cited as "measured to

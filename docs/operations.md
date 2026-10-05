@@ -1400,7 +1400,7 @@ fixes drifted into because this was never written down (task-019).
 | | Do this | Why it is yours |
 |---|---|---|
 | **Trust** (required) | run `claude` interactively **once in each product repo's main clone** and accept the prompt | trust is a `~/.claude.json` key; a plugin writing it grants itself trust |
-| **Grant** (optional) | add `Bash(claude --bg * --agent ai-bridge:* --permission-mode bypassPermissions --add-dir *)` to the bundle's `.claude/settings.local.json` | it lets any brief run as any role with `bypassPermissions`, unprompted |
+| **Grant** (optional) | add `Bash(claude --bg * --agent ai-bridge:* --permission-mode auto --add-dir *)` to the bundle's `.claude/settings.local.json` | it lets the tick spawn any role, in auto mode, unprompted — it matters when the session running the tick is NOT in auto mode; in auto mode the classifier decides and accepts this spawn. A rule naming `bypassPermissions` from before 3.3 matches nothing the tick runs now |
 
 To run the role agents unattended inside a container or VM, with auto mode set in
 managed settings by the operator, see
@@ -1419,6 +1419,7 @@ are the spawn's brief as `"one line"`, `'one line'`, and `"multi-line"` — step
 | `Bash(claude --bg '*)` | ✗ | ✓ | ✓ |
 | `Bash(claude --bg * --agent ai-bridge:*)` | ✗ | ✗ | ✗ |
 | **`Bash(claude --bg * --agent ai-bridge:* --permission-mode bypassPermissions --add-dir *)`** — narrowest | ✓ | ✓ | ✓ |
+| **`Bash(claude --bg * --agent ai-bridge:* --permission-mode auto --add-dir *)`** — the spawn since 3.3, re-measured 2026-10-05 on 2.1.289 (it also matches behind `cd <worktree> &&`, and does NOT match a spawn asking for `bypassPermissions`) | ✓ | ✓ | ✓ |
 | `Bash(claude --bg *)`, `Bash(claude --bg:*)`, `Bash(claude *)` | ✓ | ✓ | ✓ |
 
 Three traps it found:

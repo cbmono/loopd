@@ -138,7 +138,10 @@ ok "…the exited one is named EXITED"                  "$(grep -c 'has EXITED' 
 echo "== the tick's own instructions carry the clauses a wave costs =="
 ok "step 3 spawns with claude --bg"       "$(has "$S3" 'claude --bg "<the whole brief>"')" yes
 ok "…and names the --bg/-p conflict"      "$(has "$S3" '**`--bg` and `-p` conflict**')"    yes
-ok "…and --permission-mode bypassPermissions" "$(has "$S3" '--permission-mode bypassPermissions')" yes
+ok "…in auto mode: the command line asks for it" "$(has "$S3" '--permission-mode auto --add-dir <bundle root>')" yes
+ok "…and never for a bypass agent"         "$(has "$S3" '--permission-mode bypassPermissions --add-dir')" no
+ok "…saying why, in one clause"            "$(has "$S3" '**`--permission-mode auto`, and never `bypassPermissions`.**')" yes
+ok "…and that haiku cannot hold auto mode" "$(has "$S3" '**Never on `haiku`**')" yes
 ok "…and the cap counts sessions"         "$(has "$S3" 'agent-sessions.sh in-flight')"      yes
 ok "step 4 reads state, never a notification" "$(has "$S4" 'COMPLETION IS READ, NEVER AWAITED')" yes
 ok "…and refuses \`claude rm\` on a role agent" "$(has "$S4" 'Never `claude rm` a role agent')" yes

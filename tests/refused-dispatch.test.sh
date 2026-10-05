@@ -122,8 +122,14 @@ ok "the verbatim text is sanitised first"            "$(has "$S3" 'is copied ont
 ok "…because a separator would fold the blocker away" "$(has "$S3" '` --- ` makes `fold-answers.sh` read the entry as ANSWERED')" yes
 ok "a later successful spawn clears it"              "$(has "$S3" 'cleared: a spawn succeeded')" yes
 ok "…said where the spawn succeeds, too"             "$(has "$S3" 'A spawn that succeeds also clears every open `dispatch refused:` entry')" yes
-ok "the remedy: exit auto mode for the WHOLE tick"   "$(has "$S3" 'exit auto mode for the WHOLE tick, not just the spawn (shift+tab cycles it)')" yes
-ok "…in the tick's session, not the child's flag"    "$(has "$S3" 'the mode of the session RUNNING THE TICK')" yes
+# The remedy used to be "exit auto mode for the whole tick". The owner never leaves auto
+# mode, and the cause was the spawn asking for a bypass agent — so the remedy now points at
+# the spawn's own mode, and leaving auto mode is named as NOT a remedy.
+ok "the remedy: check the spawn asked for auto mode" "$(has "$S3" 'check the spawn asked for --permission-mode auto')" yes
+ok "…and never leaving auto mode for it"             "$(has "$S3" 'Never leave auto mode for it')" yes
+ok "…the old remedy is gone"                         "$(has "$S3" 'exit auto mode for the WHOLE tick')" no
+ok "…the classifier is the tick session's, judging the child" "$(has "$S3" 'The classifier that refuses is the one of the session RUNNING THE TICK')" yes
+ok "…and leaving auto mode is not printed as a remedy" "$(has "$S3" 'leaving auto mode, or running anything under `bypassPermissions`, as a remedy')" yes
 ok "an allow rule for claude --bg is NOT the remedy" "$(has "$S3" 'Never print an allow rule for `claude --bg`')" yes
 ok "…nor bypassPermissions: the grant is the operator's" "$(has "$S3" 'A grant is the')" yes
 

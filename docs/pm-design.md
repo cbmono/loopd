@@ -481,12 +481,24 @@ now, but still keys on `agent_id`, which a top-level session never carries — s
 `maxRepeatedToolCalls` and `maxAgentMinutes` bound a role agent's own *subagents* (a
 reviewer's lenses) and nothing bounds the role agent itself but `claude stop <id>`.
 
-**Why `bypassPermissions` and not an allowlist.** task-026 measured that a prefix
-allowlist cannot cover a real tick and that hooks fire regardless, leaving
-`--permission-mode bypassPermissions` plus `deny-destructive.sh` as the only posture that
-works. For a `--bg` session there is a second reason: a mode that can prompt parks the
-agent in `state: blocked` with nobody to answer, holding a `maxAgentsInFlight` slot
-indefinitely. This machine still lists two such sessions from August.
+**Why the child runs in auto mode, and why it used to run in `bypassPermissions`.**
+task-026 measured that a prefix allowlist cannot cover a real tick and that hooks fire
+regardless, and a mode that can prompt parks a `--bg` agent in `state: blocked` with nobody
+to answer, holding a `maxAgentsInFlight` slot indefinitely. That left
+`--permission-mode bypassPermissions` plus `deny-destructive.sh`, and it was the spawn
+until 3.3. It collided with the target itself: with auto mode always on in the session
+running the tick, the classifier refuses a command that asks for a bypass agent
+(`[Create Unsafe Agents]`). One bundle recorded **nine refusals and one success in three
+days**, and worked around them by running role agents in-process — the `Agent`-tool
+children this design exists to avoid. **Measured 2026-10-05 on 2.1.289**: a `--bg` session
+started with `--permission-mode auto` on `sonnet` or `opus` holds auto mode, finishes a
+branch-commit-push unprompted, and still has a force-push to a default branch refused by
+`deny-destructive.sh`; the same spawn was accepted in the bundle that had refused bypass.
+So the child asks for `auto`: the classifier in front, the hook behind it, and no bypass
+anywhere. **`haiku` is the exception** — auto mode is unavailable there, the session is
+demoted to `default` at once and parks — so a role agent is never spawned on it. An earlier
+note in this repo said auto mode "is not honoured for a detached session"; that was this
+same haiku effect, measured with the cheapest model.
 
 **The in-session view, and why it asks the process rather than the registry.** Detaching
 emptied the in-session agent panel; `agent-sessions.sh view <bundle>` and the status line's
