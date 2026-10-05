@@ -266,7 +266,7 @@ MUT_SRC="$WT/tests/link-repos.test.sh"
 MUT="$TMP/mutants"; mkdir -p "$MUT"
 mut_span="$(routing_span "$MUT_SRC")"; mut_first="${mut_span% *}"; mut_last="${mut_span#* }"
 landed()  { if [ -s "$1" ] && ! cmp -s "$1" "$MUT_SRC"; then echo yes; else echo no; fi; }
-flagged() { if routing_defects "$1" | grep -qx "$2"; then echo yes; else echo no; fi; }
+flagged() { if grep -qx "$2" <<<"$(routing_defects "$1")"; then echo yes; else echo no; fi; }
 
 # The defect this file was written for: a stamp handed the checkout's own installer.
 awk 'done != 1 && /^bash "\$BRIDGE_INSTALL" / { sub(/"\$BRIDGE_INSTALL"/, "\"$TPL/plugin/scripts/init-bundle.sh\""); done = 1 } { print }' \
