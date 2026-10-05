@@ -499,7 +499,7 @@ simple "severity-tiebreak: grant unblock answer approve merge close" "$(overbs)"
 cp "$TMP/inst/$AB_AWAITING" "$TMP/sev.md"
 # A seventh class would sort silently; the table must name exactly the classes add() emits.
 simple "severity-tiebreak: table names exactly the row classes" \
-  "$(sed -n '/^sev_of()/,/esac; }/p' "$RENDER" | grep -oE '[a-z]+\) echo [0-5]' | cut -d')' -f1 | sort | tr '\n' ' ')" \
+  "$(sed -n '/^sev_of()/,/esac; }/p' "$RENDER" | grep -oE '[a-z]+\) echo [0-9]' | cut -d')' -f1 | sort | tr '\n' ' ')" \
   "$(grep -oE 'add "[^"]*" [a-z]+' "$RENDER" | awk '{print $NF}' | sort -u | tr '\n' ' ')"
 
 # 3 — glob order is the last key, and the page is stable.
