@@ -410,7 +410,7 @@ simple "every item carries a URL or a path"   "$(pm_has 'EVERY ITEM IN THE "AWAI
 simple "…a PR as a markdown link, a task as its path"   "$(pm_has 'A PR as `[<repo>#<n>](<url>)`, a task as its')" yes
 simple "…one that can name neither is not rendered" \
   "$(pm_has 'can name neither is not rendered at all')" yes
-simple "…and it adds NO new report heading"   "$(pm_has 'This is not a new heading and there is no `Needs you` section to add')" yes
+simple "…and they sit in the Needs you: list the report check reads"   "$(pm_has '3. **`Needs you:`** — a numbered list holding everything that awaits the human')" yes
 
 # A PAUSED PROJECT GOES QUIET EXCEPT FOR `merge`, asked of project-paused.sh by
 # plugin/scripts/build-awaiting.sh. Four rows per project, asserted one by one, so a gate
