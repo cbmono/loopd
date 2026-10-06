@@ -1066,8 +1066,8 @@ TARGET="$(cd "$_want" 2>/dev/null && pwd || true)"
 if [ "$MODE" = install ] && ab_is_bundle "$TARGET" && [ -d "$TARGET/$AB_DIR_BEFORE" ]; then
   echo "error: this bundle still keeps its state in $AB_DIR_BEFORE/, and this plugin reads $AB_DIR/." >&2
   echo "       Nothing was written. Migrate it first, from the bundle root:" >&2
-  ab_say_run "        " migrate-bundle.sh >&2
-  ab_say_run "        " migrate-bundle.sh --apply >&2
+  ab_say_run "        " migrate-bundle.sh --layout-only >&2
+  ab_say_run "        " migrate-bundle.sh --layout-only --apply >&2
   [ ! -e "$TARGET/$AB_DIR" ] || echo "       $AB_DIR/ exists too (an earlier stamp made it): move it aside first, or the migration stops." >&2
   exit 2
 fi

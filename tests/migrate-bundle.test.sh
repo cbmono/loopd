@@ -104,6 +104,7 @@ assert "the dangling ref names /close-project step 6" \
 echo "== valid documents are not mentioned =="
 assert "knowledge/findings/ok.md untouched"  "$(grep -q 'findings/ok.md' <<<"$DRY" && echo 1 || echo 0)"
 assert "knowledge/services/ok.md untouched" "$(grep -q 'services/ok.md' <<<"$DRY" && echo 1 || echo 0)"
+assert "the bundle's OWN knowledge/ is never called a mount" "$(grep -q 'knowledge mount' <<<"$DRY" && echo 1 || echo 0)"
 
 echo "== --apply writes, and only the right things =="
 cp projects/live/tasks/task-003-unterminated.md "$TMP/unterminated.pristine"
@@ -392,6 +393,77 @@ assert "…and the rename waits for the commit"            "$(grep -q 'waits unt
 git commit -qam layout
 P2_RC=0; bash "$MIGRATE" --apply >/dev/null 2>&1 || P2_RC=$?
 assert "the second run renames, exit 0"                  "$([[ $P2_RC -eq 0 && ! -e .ai-bridge && -f $AB_SCHEMA && -f $AB_LEDGER && -f .loopd/seed-base/VERSION ]] && echo 0 || echo 1)"
+
+# =========================================================================================
+# --layout-only — the two directory steps and NOTHING about content. Three bundles needed
+# the rename on 2026-10-05 and got 865 and 341 content edits in a mounted knowledge/ with it.
+# =========================================================================================
+mk_lo() { # <dir> — a 3.x bundle with its OWN knowledge/ and one Finding the content pass would repair
+  mkdir -p "$1/.ai-bridge" "$1/knowledge/findings" && cd "$1"
+  echo '{ "org": "x" }' > instance.config.json
+  echo '# Schema' > .ai-bridge/SCHEMA.md
+  printf '/.ai-bridge/AWAITING.md\n' > .gitignore
+  doc knowledge/findings/open.md '---' 'type: Finding' 'title: F' 'status: open' "timestamp: $TS" '---' 'body'
+  git init -q -b main . && git add -A && git commit -qm init
+}
+# The ordinary summary shapes, either mode. A layout-only run must print NEITHER: a reader
+# who sees "0 need a human" would take it for a clean content pass.
+content_summary() { grep -cE '^migrate-bundle: [0-9]+ (fixed|would be fixed),' <<<"$1" || true; }
+
+echo "== --layout-only without --apply reports the directory steps and nothing else =="
+mk_lo "$TMP/lo"
+BEFORE="$(treesum)"; LD_RC=0; LD="$(bash "$MIGRATE" --layout-only 2>&1)" || LD_RC=$?
+assert "it exits 0"                              "$([[ $LD_RC -eq 0 ]] && echo 0 || echo 1)"
+assert "it wrote nothing"                        "$([[ "$BEFORE" == "$(treesum)" ]] && echo 0 || echo 1)"
+assert "it names the directory move"             "$(grep -q 'WOULD MOVE .ai-bridge -> .loopd' <<<"$LD" && echo 0 || echo 1)"
+assert "it says nothing about the Finding"       "$(grep -q 'findings/open.md' <<<"$LD" && echo 1 || echo 0)"
+assert "it prints no WOULD FIX at all"           "$(grep -q 'WOULD FIX' <<<"$LD" && echo 1 || echo 0)"
+assert "it says content was NOT checked"         "$(grep -q 'content NOT checked' <<<"$LD" && echo 0 || echo 1)"
+assert "the summary is not the content one"      "$([[ "$(content_summary "$LD")" == 0 ]] && echo 0 || echo 1)"
+assert "it points at --layout-only --apply"      "$(grep -q 'migrate-bundle.sh --layout-only --apply$' <<<"$LD" && echo 0 || echo 1)"
+
+echo "== --layout-only --apply moves and commits the directory, and the Finding is untouched =="
+LA_RC=0; LA="$(bash "$MIGRATE" --layout-only --apply 2>&1)" || LA_RC=$?
+assert "it exits 0"                              "$([[ $LA_RC -eq 0 ]] && echo 0 || echo 1)"
+assert ".ai-bridge/ is gone, .loopd/ holds it"   "$([[ ! -e .ai-bridge && -f .loopd/SCHEMA.md ]] && echo 0 || echo 1)"
+assert "the move is committed"                   "$([[ -z "$(git status --porcelain)" ]] && grep -q 'move .ai-bridge/ to .loopd/' <<<"$(git log -1 --format=%s)" && echo 0 || echo 1)"
+assert "the Finding still says open"             "$(grep -qx 'status: open' knowledge/findings/open.md && echo 0 || echo 1)"
+assert "nothing was reported FIXED"              "$(grep -q 'FIXED' <<<"$LA" && echo 1 || echo 0)"
+assert "it says content was NOT checked"         "$(grep -q 'content NOT checked' <<<"$LA" && echo 0 || echo 1)"
+assert "the summary is not the content one"      "$([[ "$(content_summary "$LA")" == 0 ]] && echo 0 || echo 1)"
+assert "…and names the content report as the next step" "$(grep -q 'migrate-bundle.sh$' <<<"$LA" && echo 0 || echo 1)"
+LN="$(bash "$MIGRATE" 2>&1)"
+assert "the content pass still finds the Finding afterwards" "$(grep -q "Finding status 'open' -> current" <<<"$LN" && echo 0 || echo 1)"
+
+echo "== --layout-only on a migrated bundle says so and exits 0 =="
+BEFORE="$(treesum)"; LM_RC=0; LM="$(bash "$MIGRATE" --layout-only --apply 2>&1)" || LM_RC=$?
+assert "it exits 0"                              "$([[ $LM_RC -eq 0 ]] && echo 0 || echo 1)"
+assert "it says already migrated"                "$(grep -q 'already migrated' <<<"$LM" && echo 0 || echo 1)"
+assert "and wrote nothing"                       "$([[ "$BEFORE" == "$(treesum)" ]] && echo 0 || echo 1)"
+
+echo "== --layout-only keeps the refusals: a dirty tracked tree =="
+mk_lo "$TMP/lo-dirty"; echo edited >> .ai-bridge/SCHEMA.md
+BEFORE="$(treesum)"; LR="$(bash "$MIGRATE" --layout-only --apply 2>&1 || true)"
+assert "REFUSED on a dirty tracked tree"         "$(grep -q 'REFUSED.*tracked tree is dirty' <<<"$LR" && echo 0 || echo 1)"
+assert "and moved nothing"                       "$([[ "$BEFORE" == "$(treesum)" && -d .ai-bridge ]] && echo 0 || echo 1)"
+assert "the summary counts the refusal, not content" "$(grep -q 'directory steps reported, 1 need a human; content NOT checked' <<<"$(bash "$MIGRATE" --layout-only 2>&1)" && echo 0 || echo 1)"
+assert "--help lists the flag"                   "$(grep -q -- '--layout-only' <<<"$(bash "$MIGRATE" --help 2>&1)" && echo 0 || echo 1)"
+assert "an unknown flag is still usage, exit 2"  "$(bash "$MIGRATE" --layout >/dev/null 2>&1; [[ $? -eq 2 ]] && echo 0 || echo 1)"
+
+echo "== a MOUNTED knowledge/ is skipped by name in both modes, never repaired here =="
+# $R is the renamed bundle above, its knowledge/ a mount of $KBBARE. A Finding written into
+# the mount is another repository's file: the report names it SKIPPED with the reason, and
+# --apply leaves every byte of it alone.
+cd "$R"; doc knowledge/findings/theirs.md '---' 'type: Finding' 'title: T' 'status: open' '---' 'body'
+MD="$(bash "$MIGRATE" 2>&1)"
+assert "the report says knowledge/ lives in a mount" "$(grep -q 'SKIPPED  knowledge/ (2 document(s))' <<<"$MD" && grep -q 'lives in a knowledge mount; repair it from that repository' <<<"$MD" && echo 0 || echo 1)"
+assert "and never offers to fix the mounted Finding" "$(grep -q 'findings/theirs.md' <<<"$MD" && echo 1 || echo 0)"
+assert "the summary counts them as skipped"       "$(grep -q '0 would be fixed, 0 need a human, 2 skipped' <<<"$MD" && echo 0 || echo 1)"
+MA_RC=0; MA="$(bash "$MIGRATE" --apply 2>&1)" || MA_RC=$?
+assert "--apply exits 0"                          "$([[ $MA_RC -eq 0 ]] && echo 0 || echo 1)"
+assert "the mounted Finding is untouched"         "$(grep -qx 'status: open' knowledge/findings/theirs.md && ! grep -q '^provenance:' knowledge/findings/theirs.md && echo 0 || echo 1)"
+assert "nothing was reported FIXED"               "$(grep -q 'FIXED' <<<"$MA" && echo 1 || echo 0)"
+rm -f knowledge/findings/theirs.md
 unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL   # provenance below names its own authors
 
 # =========================================================================================

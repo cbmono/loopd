@@ -101,6 +101,7 @@ is already the identifier, so a second one can only drift) and renaming `timesta
 | `scripts/validate-bundle.sh` | reports schema errors and dangling frontmatter references. Run it after any structural edit, and always before closing a project |
 | `scripts/migrate-bundle.sh` | reports the mechanical fixes it *can* make; `--apply` writes them |
 | `scripts/migrate-bundle.sh --apply` | normalises a closed set of status values and fills a missing `timestamp` and knowledge `provenance` from git |
+| `scripts/migrate-bundle.sh --layout-only [--apply]` | only the directory steps (the 3.0 layout move, the 3.3 rename of the state directory to `.loopd/`); no content repair, and the report says so. A mounted `knowledge/` is skipped by name in every mode |
 
 `migrate-bundle.sh` refuses three things by design — an unrecognised status, a file git
 cannot date, and a dangling reference. Each needs a decision, not a rewrite. See

@@ -129,7 +129,7 @@ prov,instdir	tests/link-repos.test.sh
 prov	tests/local-tier-seed.test.sh
 prov	tests/local-vs-ci-testing.test.sh
 frozen	tests/loop-cadence.test.sh
-bundle,fname	tests/migrate-bundle.test.sh	29
+bundle,fname	tests/migrate-bundle.test.sh	38
 prov,instdir,frozen	tests/moved-template.test.sh
 prov	tests/override-count-and-reason.test.sh
 instdir	tests/per-owner-board.test.sh
