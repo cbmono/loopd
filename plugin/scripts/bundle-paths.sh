@@ -132,14 +132,14 @@ ab_unmigrated_notice() { # <root> — names what is still at the root, and the o
     echo "loopd: this bundle still keeps its state in $AB_DIR_BEFORE/ — this plugin reads $AB_DIR/:" >&2
     echo "             $AB_DIR_BEFORE/ -> $AB_DIR/" >&2
     [ ! -e "$r/$AB_DIR" ] || echo "             $AB_DIR/ exists too — it was stamped before the migration; move it aside first" >&2
-    ab_say_run "           Fix it with:" migrate-bundle.sh --apply >&2
+    ab_say_run "           Fix it with:" migrate-bundle.sh --layout-only --apply >&2
     return 0
   fi
   echo "loopd: this bundle still has plugin-owned files at its root:" >&2
   for pair in $AB_MOVES; do
     old="${pair%%:*}"; [ -e "$r/$old" ] && echo "             $old -> ${pair#*:}" >&2
   done
-  ab_say_run "           Fix it with:" migrate-bundle.sh --apply >&2
+  ab_say_run "           Fix it with:" migrate-bundle.sh --layout-only --apply >&2
 }
 
 ab_expand() {   # stdin -> stdout, __AB_SCHEMA__ and friends replaced by their values.

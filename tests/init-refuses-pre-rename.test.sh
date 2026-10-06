@@ -42,8 +42,11 @@ out="$(stamp "$B")"; rc=$?
 ok "the stamp exits 2"                               "$rc" 2
 ok "…names the directory it found"                   "$(has "$out" "still keeps its state in $AB_DIR_BEFORE/")" yes
 ok "…says nothing was written"                       "$(has "$out" 'Nothing was written')" yes
-ok "…prints the report command"                      "$(grep -cE '^ +migrate-bundle\.sh$' <<<"$out")" 1
-ok "…and the apply command, flag and all"            "$(grep -cE '^ +migrate-bundle\.sh --apply$' <<<"$out")" 1
+# --layout-only, not --apply: the content repairs are a separate decision, and on a bundle
+# with a mounted knowledge/ they landed as hundreds of edits in another repository's tree.
+ok "…prints the report command, layout only"         "$(grep -cE '^ +migrate-bundle\.sh --layout-only$' <<<"$out")" 1
+ok "…and the apply command, flags and all"           "$(grep -cE '^ +migrate-bundle\.sh --layout-only --apply$' <<<"$out")" 1
+ok "…and never the content pass"                     "$(grep -cE 'migrate-bundle\.sh( --apply)?$' <<<"$out")" 0
 ok "…and the tree is exactly as it was"              "$([ "$(listing "$B")" = "$before" ] && echo same || echo CHANGED)" same
 ok "…in particular no second state directory"        "$([ -e "$B/$AB_DIR" ] && echo made || echo none)" none
 ok "…and the real ledger is untouched"               "$(cat "$B/$AB_DIR_BEFORE/log.md")" ledger
@@ -72,7 +75,7 @@ ok "…the migrated one does not"                      "$(ab_unmigrated "$N" && 
 ok "…nor does a non-bundle holding the old name"     "$(ab_unmigrated "$P" && echo yes || echo no)" no
 notice="$(ab_unmigrated_notice "$B" 2>&1)"
 ok "the notice names the move"                       "$(has "$notice" "$AB_DIR_BEFORE/ -> $AB_DIR/")" yes
-ok "…and the command, flag and all"                  "$(grep -cE 'migrate-bundle\.sh --apply$' <<<"$notice")" 1
+ok "…and the command, flags and all"                 "$(grep -cE 'migrate-bundle\.sh --layout-only --apply$' <<<"$notice")" 1
 ok "…and stays quiet about a stray directory that is not there" "$(has "$notice" 'exists too')" no
 ok "…but names it in the half-stamped shape"         "$(has "$(ab_unmigrated_notice "$H" 2>&1)" 'exists too')" yes
 

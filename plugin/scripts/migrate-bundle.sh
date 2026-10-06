@@ -3,12 +3,18 @@
 # migrate-bundle.sh — repair the mechanical schema violations `validate-bundle.sh`
 # reports, in this instance's bundle.
 #
-#   Usage: migrate-bundle.sh            # report what it WOULD change (default)
-#          migrate-bundle.sh --apply    # write the changes
+#   Usage: migrate-bundle.sh                          # report what it WOULD change (default)
+#          migrate-bundle.sh --apply                  # write the changes
+#          migrate-bundle.sh --layout-only [--apply]  # ONLY the two directory steps; no content
 #
 # REPORT-ONLY BY DEFAULT, for the same reason `prune-worktrees.sh` is: a script that
 # edits many files should not be one keystroke away from doing it. Read the report,
 # then re-run with --apply.
+#
+# --layout-only exists because the 3.3 rename was required on three bundles (2026-10-05)
+# and the content repairs rode along as 865 and 341 uncommitted edits in a mounted
+# knowledge/ — another repository's working tree — reverted by hand. A document under a
+# MOUNTED knowledge/ (kb.git) is now SKIPPED and named in every mode, never repaired here.
 #
 # WHAT IT FIXES (mechanical — one right answer, no judgement):
 #   · Finding `status` of exactly `open` or `active` — both mean "still applies" ⇒
@@ -46,12 +52,13 @@
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
-APPLY=0
+APPLY=0; LAYOUT_ONLY=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --apply) APPLY=1 ;;
+    --layout-only) LAYOUT_ONLY=1 ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit 0 ;;
-    *) echo "usage: $0 [--apply]" >&2; exit 2 ;;
+    *) echo "usage: $0 [--layout-only] [--apply]" >&2; exit 2 ;;
   esac
   shift
 done
@@ -417,7 +424,7 @@ if [[ -n "$PENDING" ]]; then
     while IFS= read -r pair; do echo "             $pair"; done <<< "$conflicts"
     human=$((human+1))
   elif [[ -n "$refusal" ]]; then
-    echo "  REFUSED  $refusal"
+    echo "  REFUSED  $refusal"; human=$((human+1))
     echo "           Run these by hand once it clears, from $(pwd):"
     echo "             mkdir -p $LAYOUT_DIR $LAYOUT_DIR/$(basename "$(dirname "$AB_ROSTER")")"
     while IFS=$'\t' read -r old new; do echo "             $(layout_cmd "$old") $old $new"; done <<< "$PENDING"
@@ -460,7 +467,33 @@ elif [[ -z "$PENDING" && -d "$RENAME_TO" ]]; then
   echo "---"
 fi
 
+if [[ $LAYOUT_ONLY -eq 1 ]]; then
+  echo "content: NOT CHECKED (--layout-only) — no status, timestamp or provenance repair was run or reported."
+  echo "---"
+  if [[ $APPLY -eq 1 ]]; then
+    printf 'migrate-bundle --layout-only: directory steps done, %d left for a human, %d FAILED; content NOT checked.\n' "$human" "$failed"
+    ab_say_run "Report the content repairs with:" migrate-bundle.sh
+    [[ $failed -eq 0 ]] || exit 1
+  else
+    printf 'migrate-bundle --layout-only: directory steps reported, %d need a human; content NOT checked. (report only — nothing changed)\n' "$human"
+    ab_say_run "Move the directory with:" migrate-bundle.sh --layout-only --apply
+  fi
+  exit 0
+fi
+
 FILE_LIST="$(collect_files | grep -vE '/(index|log)\.md$' | sort -u || true)"
+
+# A MOUNTED knowledge/ is another repository's working tree, and `git log` from inside it
+# reaches THIS bundle's history, which ignores it — so 326 documents read as "unresolved"
+# and were labelled human (2026-10-05). This script repairs only this bundle's own files.
+if [[ -d "$AB_DIR/kb.git" || -d "$RENAME_FROM/kb.git" ]]; then
+  mounted="$(grep -c '^\./knowledge/' <<<"$FILE_LIST" || true)"
+  if [[ "$mounted" -gt 0 ]]; then
+    FILE_LIST="$(grep -v '^\./knowledge/' <<<"$FILE_LIST" || true)"
+    printf '  SKIPPED  knowledge/ (%d document(s))\n           lives in a knowledge mount; repair it from that repository, not here\n' "$mounted"
+    skipped=$((skipped+mounted))
+  fi
+fi
 
 while IFS= read -r file; do
   [[ -n "$file" ]] || continue
