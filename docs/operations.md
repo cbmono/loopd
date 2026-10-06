@@ -1138,7 +1138,7 @@ owner asked three times in one session, for three different instances.
    ▄▄▄▄
 ◀━▐    ▌
   ▝▄▄▄▄▘
-loopd v3.3.1 · _loopd-example · org: cbmono
+loopd v3.3.2 · _loopd-example · org: cbmono
 ───────────────────────────────────────────
 
 SETTING               VALUE                               FROM
