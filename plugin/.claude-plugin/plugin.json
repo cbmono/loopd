@@ -1,7 +1,7 @@
 {
   "name": "loopd",
   "displayName": "loopd",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "description": "The OKF control panel as a Claude Code plugin: brief yourself (/brief-me), capture decisions (/capture), work a task in-session (/work), run the gated loop (/dispatch), hand projects over (/handoff).",
   "author": {
     "name": "cbmono"
