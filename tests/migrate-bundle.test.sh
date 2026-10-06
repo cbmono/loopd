@@ -467,7 +467,11 @@ rm -f knowledge/findings/theirs.md
 unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL   # provenance below names its own authors
 
 # =========================================================================================
-# PROVENANCE — from git history, and every doubt lands on human.
+# PROVENANCE — from git history. A doubt lands on human; an author git cannot name lands on
+# NOTHING. Measured 2026-10-05: the one human commit that moved knowledge/ out of a bundle —
+# deleting every file from its tree — made 291 of 334 role documents `mixed`, and 865 wrong
+# values reached a shared repository. A delete, a pure rename and a person's bulk commit
+# (more than 50 Markdown documents) are therefore not touches.
 # =========================================================================================
 V="$TMP/prov"; mkdir -p "$V/knowledge"/{findings,services,teams,runbooks,references}; cd "$V"
 echo '{ "org": "x" }' > instance.config.json
@@ -481,33 +485,99 @@ kdoc findings/dirty Finding 'status: current'
 kdoc findings/already Finding 'status: current'; sed -i.bak 's/^status: current$/status: current\nprovenance: human/' knowledge/findings/already.md
 kdoc runbooks/bot Runbook 'provenance: bot'; rm -f knowledge/findings/*.bak
 kdoc services/edited Service 'status: active'
+kdoc findings/swept Finding 'status: current'
+kdoc findings/moved Finding 'status: current'
+# A body no sibling shares, and longer than the frontmatter: with less than half in common,
+# --follow cannot read the restore below as a COPY of a look-alike, and the delete stays in view.
+kdoc findings/restored Finding 'status: current' "$(printf 'restored line %d of its own\n' 1 2 3 4 5 6 7 8 9 10)"
 as cataloguer add
 git mv knowledge/references/old.md knowledge/references/renamed.md && as cataloguer rename
 echo 'a person was here' >> knowledge/services/edited.md && as "A Person" edit
 kdoc teams/person Team && as "A Person" add
 kdoc runbooks/claude Runbook && as Claude add
+# Sixty labelled documents: a commit over them is BULK, and none of them is ever reported.
+for ((i=1; i<=60; i++)); do kdoc "references/bulk-$i" Reference 'provenance: machine'; done
+as cataloguer "catalogue sixty references"
+# A person's sweep over all sixty and one role document — a bulk edit is not a touch.
+for f in knowledge/references/bulk-*.md knowledge/findings/swept.md; do echo 'relinked' >> "$f"; done
+as "A Person" "relink 61 documents"
+# A person deletes ONE role document and a role restores it: a delete is never a touch, bulk or not.
+git rm -q knowledge/findings/restored.md && as "A Person" "drop one"
+git checkout -q HEAD~1 -- knowledge/findings/restored.md && as cataloguer restore
+# THE PRE-MOUNT SHAPE: knowledge/ leaves the bundle in one human commit that deletes every
+# file, and a mount puts the same files back on disk — untracked here, with a D in their past.
+git rm -q knowledge/references/bulk-*.md knowledge/findings/moved.md && as "A Person" "knowledge/ moves to a mounted repository"
+kdoc findings/moved Finding 'status: current'
 echo 'pending' >> knowledge/findings/dirty.md
 kdoc findings/untracked Finding 'status: current'
 line() { printf '%s\n' "$1" | grep -A1 "knowledge/$2.md" | tail -1; }
+UNKNOWABLE='provenance unknowable from git'
 
 echo "== provenance: the report classifies from git, and writes nothing =="
 PD="$(bash "$MIGRATE" 2>&1)"
 assert "a role-created, untouched document is machine" "$(grep -q -- '-> machine (created by cataloguer' <<<"$(line "$PD" findings/machine)" && echo 0 || echo 1)"
-assert "a rename is followed, not read as unresolved" "$(grep -q -- '-> machine' <<<"$(line "$PD" references/renamed)" && echo 0 || echo 1)"
+assert "a rename is followed, not read as unknowable" "$(grep -q -- '-> machine' <<<"$(line "$PD" references/renamed)" && echo 0 || echo 1)"
 assert "a person's later edit makes it mixed" "$(grep -q -- '-> mixed (created by cataloguer, later edited by A Person)' <<<"$(line "$PD" services/edited)" && echo 0 || echo 1)"
 assert "an uncommitted edit makes it mixed" "$(grep -q -- '-> mixed' <<<"$(line "$PD" findings/dirty)" && echo 0 || echo 1)"
 # person.md and claude.md are near-copies of role-created files: --follow alone calls them COPIES.
 assert "a person's document is human, not its look-alike's" "$(grep -q -- '-> human (created by A Person)' <<<"$(line "$PD" teams/person)" && echo 0 || echo 1)"
 assert "a non-role name (Claude) is human" "$(grep -q -- '-> human' <<<"$(line "$PD" runbooks/claude)" && echo 0 || echo 1)"
-assert "a file git does not know is human, never machine" "$(grep -q -- '-> human (unresolved' <<<"$(line "$PD" findings/untracked)" && echo 0 || echo 1)"
 assert "a value outside the set is held for a human" "$(grep -q "provenance 'bot' is not machine|mixed|human" <<<"$PD" && echo 0 || echo 1)"
 assert "an existing value is never re-derived" "$(grep -q 'findings/already.md' <<<"$PD" && echo 1 || echo 0)"
-assert "the tally counts each class and the unresolved" "$(grep -qx 'provenance: 3 machine, 2 mixed, 3 human (1 of them unresolved in git).' <<<"$PD" && echo 0 || echo 1)"
+
+echo "== provenance: a delete, a rename and a person's bulk commit are not touches =="
+assert "the role document deleted with knowledge/ and put back by a mount is machine, not mixed" \
+  "$(grep -q -- '-> machine (created by cataloguer, no other author)' <<<"$(line "$PD" findings/moved)" && echo 0 || echo 1)"
+assert "a single human delete, then a role restore, is machine" \
+  "$(grep -q -- '-> machine (created by cataloguer' <<<"$(line "$PD" findings/restored)" && echo 0 || echo 1)"
+assert "a person's 61-document sweep is not an edit of any one of them" \
+  "$(grep -q -- '-> machine (created by cataloguer' <<<"$(line "$PD" findings/swept)" && echo 0 || echo 1)"
+assert "…while a person's one-file edit still is (both directions)" "$(grep -q -- '-> mixed' <<<"$(line "$PD" services/edited)" && echo 0 || echo 1)"
+assert "the sixty labelled documents are never mentioned" "$(grep -q 'references/bulk-' <<<"$PD" && echo 1 || echo 0)"
+
+echo "== provenance: an author git cannot name is SKIPPED, never written as human =="
+assert "a file git does not know is SKIPPED" "$(grep -q 'SKIPPED  knowledge/findings/untracked.md' <<<"$PD" && echo 0 || echo 1)"
+assert "…with the unknowable wording"       "$(grep -q -- "$UNKNOWABLE — git has no commit that wrote it" <<<"$(line "$PD" findings/untracked)" && echo 0 || echo 1)"
+assert "…and never a WOULD FIX"              "$(grep -q 'WOULD FIX knowledge/findings/untracked.md' <<<"$PD" && echo 1 || echo 0)"
+assert "the tally counts each class and the unknowable apart" \
+  "$(grep -qx 'provenance: 6 machine, 2 mixed, 2 human; 1 unknowable, skipped with no value written.' <<<"$PD" && echo 0 || echo 1)"
+
+echo "== provenance: a squashed import by a person is unknowable, a small one is theirs =="
+W="$TMP/import"; mkdir -p "$W/knowledge/findings" && cd "$W"
+echo '{ "org": "x" }' > instance.config.json
+git init -q -b main .
+for ((i=1; i<=60; i++)); do kdoc "findings/import-$i" Finding 'provenance: human'; done
+kdoc findings/imported Finding 'status: current'
+as "An Importer" "import the bundle's knowledge base (61 files)"
+ID="$(bash "$MIGRATE" 2>&1)"
+assert "the imported document is SKIPPED, not labelled" "$(grep -q 'SKIPPED  knowledge/findings/imported.md' <<<"$ID" && echo 0 || echo 1)"
+assert "…naming the bulk commit and its size" \
+  "$(grep -q -- "$UNKNOWABLE — its only history is a bulk commit by An Importer (61 documents)" <<<"$(line "$ID" findings/imported)" && echo 0 || echo 1)"
+assert "the tally has nothing to write"  "$(grep -qx 'provenance: 0 machine, 0 mixed, 0 human; 1 unknowable, skipped with no value written.' <<<"$ID" && echo 0 || echo 1)"
+IA_RC=0; IA="$(bash "$MIGRATE" --apply 2>&1)" || IA_RC=$?
+assert "--apply exits 0 and reports it skipped" "$([[ $IA_RC -eq 0 ]] && grep -q '0 fixed, 0 left for a human, 1 skipped' <<<"$IA" && echo 0 || echo 1)"
+assert "and wrote NO provenance into it"      "$(grep -q '^provenance:' knowledge/findings/imported.md && echo 1 || echo 0)"
+set +e; IV="$(bash "$VALIDATE" 2>&1)"; set -e
+assert "the validator's error is left standing, as for a date" "$(grep -q 'requires provenance' <<<"$(printf '%s\n' "$IV" | grep -A1 'ERROR  knowledge/findings/imported.md')" && echo 0 || echo 1)"
+cd "$V"
+
+echo "== provenance: NON-VACUITY — the old derivation, built from the shipped script, fails these =="
+# One mutant, two edits: the D/R100 filter removed and the bulk threshold out of reach — which is
+# the derivation as it shipped. Each assertion above that it fails is one the fix is answering for.
+MUT="$TMP/mutant"; cp -R "$SCRIPTS" "$MUT"
+sed -i.bak -e 's/^BULK_DOCS=50$/BULK_DOCS=1000000/' -e 's/ \&\& \$1 != "D" \&\& \$1 != "R100"//' "$MUT/migrate-bundle.sh"
+assert "the mutant differs from the shipped script"  "$(cmp -s "$MUT/migrate-bundle.sh" "$MIGRATE" && echo 1 || echo 0)"
+MD="$(bash "$MUT/migrate-bundle.sh" 2>&1)"
+assert "mutant: the moved document reads mixed (the 2026-10-05 defect)" "$(grep -q -- '-> mixed (created by cataloguer, later edited by A Person)' <<<"$(line "$MD" findings/moved)" && echo 0 || echo 1)"
+assert "mutant: the restored document reads mixed" "$(grep -q -- '-> mixed' <<<"$(line "$MD" findings/restored)" && echo 0 || echo 1)"
+assert "mutant: the swept document reads mixed"    "$(grep -q -- '-> mixed' <<<"$(line "$MD" findings/swept)" && echo 0 || echo 1)"
+MI="$(cd "$W" && bash "$MUT/migrate-bundle.sh" 2>&1)"
+assert "mutant: the import reads human (created by An Importer), a value on disk" "$(grep -q -- '-> human (created by An Importer)' <<<"$(line "$MI" findings/imported)" && echo 0 || echo 1)"
 
 echo "== provenance: without commit-as.sh there is no role list, so nothing is machine =="
 mkdir -p "$TMP/lonely" && cp "$MIGRATE" "$HERE/../plugin/scripts/bundle-paths.sh" "$TMP/lonely/"
 LD="$(bash "$TMP/lonely/migrate-bundle.sh" 2>&1)"
-assert "every document falls to human" "$(grep -q '^provenance: 0 machine, 0 mixed, 8 human' <<<"$LD" && echo 0 || echo 1)"
+assert "every document git can name falls to human, the rest to nothing" "$(grep -qx 'provenance: 0 machine, 0 mixed, 10 human; 1 unknowable, skipped with no value written.' <<<"$LD" && echo 0 || echo 1)"
 
 echo "== provenance: --apply writes inside the frontmatter, and the validator agrees =="
 bash "$MIGRATE" --apply >/dev/null 2>&1 || true
@@ -515,12 +585,16 @@ fmp() { awk '/^---$/{n++; next} n==1 && /^provenance:/{sub(/^provenance: */,"");
 assert "machine written" "$([[ "$(fmp findings/machine)" == machine ]] && echo 0 || echo 1)"
 assert "mixed written" "$([[ "$(fmp services/edited)" == mixed ]] && echo 0 || echo 1)"
 assert "human written" "$([[ "$(fmp teams/person)" == human ]] && echo 0 || echo 1)"
+assert "machine written for the moved, restored and swept documents" "$([[ "$(fmp findings/moved)$(fmp findings/restored)$(fmp findings/swept)" == machinemachinemachine ]] && echo 0 || echo 1)"
+assert "NOTHING written for the untracked document" "$([[ -z "$(fmp findings/untracked)" ]] && echo 0 || echo 1)"
 assert "the field landed inside the --- block, not after a body line" "$([[ "$(fmp findings/body)" == machine ]] && grep -qx 'provenance: human' knowledge/findings/body.md && echo 0 || echo 1)"
 assert "the out-of-set value survived" "$(grep -qx 'provenance: bot' knowledge/runbooks/bot.md && echo 0 || echo 1)"
 assert "the existing human label survived" "$([[ "$(fmp findings/already)" == human ]] && echo 0 || echo 1)"
 set +e; PV="$(bash "$VALIDATE" 2>&1)"; set -e
-assert "only the out-of-set value still errors" "$([[ "$(printf '%s\n' "$PV" | grep -c 'provenance')" == 1 ]] && echo 0 || echo 1)"
-assert "a second run derives nothing" "$(grep -q '^provenance:' <<<"$(bash "$MIGRATE" 2>&1)" && echo 1 || echo 0)"
+assert "only the out-of-set value and the unknowable one still error" "$([[ "$(printf '%s\n' "$PV" | grep -c 'provenance')" == 2 ]] && echo 0 || echo 1)"
+SECOND_PD="$(bash "$MIGRATE" 2>&1)"
+assert "a second run derives nothing new" "$(grep -q 'provenance missing ->' <<<"$SECOND_PD" && echo 1 || echo 0)"
+assert "…and still names the unknowable one, skipped" "$(grep -q -- "$UNKNOWABLE" <<<"$(line "$SECOND_PD" findings/untracked)" && echo 0 || echo 1)"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

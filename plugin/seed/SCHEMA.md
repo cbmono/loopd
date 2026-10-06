@@ -406,7 +406,10 @@ A role agent writes `machine`; the in-thread session and a person write `human`;
 editing a `machine` document sets it to `mixed`. **Ambiguity is `human`**: a wrong `human`
 label costs nothing, a wrong `machine` one licenses rewriting what a person wrote.
 `migrate-bundle.sh --apply` fills a missing value from git — the file's authors, a
-`commit-as.sh` role name being the only one that reads as machine. `author:` and
+`commit-as.sh` role name being the only one that reads as machine; a commit that only
+deleted or renamed the file, or a person's bulk commit (an import, a move, a sweep), is
+not an author. When git cannot name one it writes **nothing** and says so, and the
+`human` row above is then a person's call, never the script's. `author:` and
 `source:` are unrelated and unchanged: a login and a URL, neither of which says which.
 
 ### The ledger — why an item changed  (`ledger:`, in the item's own frontmatter)
