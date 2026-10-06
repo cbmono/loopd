@@ -30,7 +30,9 @@
 #     is reported and skipped — inventing a date would be worse than leaving the
 #     error, because a wrong timestamp is indistinguishable from a right one.
 #   · A missing knowledge-document `provenance`, from the file's git history (SCHEMA.md,
-#     "provenance:"): `machine` only when a role created it and no one else touched it.
+#     "provenance:"): `machine` only when a role created it and no one else touched it. A
+#     delete, a pure rename and a BULK commit by a person are not touches, and a file whose
+#     author git cannot name is SKIPPED, like the timestamp — never labelled `human` here.
 #   · THE 3.0 LAYOUT. Plugin-owned files still sitting at the bundle root move under
 #     `.loopd/`, and the links pointing at them are rewritten. See that step.
 #   · THE .loopd RENAME. `.ai-bridge/` moves to `.loopd/` in one `git mv`, with its ignore
@@ -372,29 +374,56 @@ MACHINE_AUTHORS="$(awk -F'[()]' '/^VALID_ROLES=\(/ { print $2; exit }' \
 # No pipe: under pipefail, `grep -q` quitting early SIGPIPEs printf and reads as "not a role".
 is_machine() { [[ -n "$1" && $'\n'"$MACHINE_AUTHORS"$'\n' == *$'\n'"$1"$'\n'* ]]; }
 
-prov_machine=0; prov_mixed=0; prov_human=0; prov_unresolved=0
-# <file> -> machine | mixed | human, and the reason. `git -C` the file's own directory, so a
-# mounted knowledge/ is read from its own repository.
+# THE BULK RULE: a commit by a NON-ROLE author touching more than BULK_DOCS Markdown documents
+# is a move, an import or a sweep — evidence about none of them (docs/conventions.md §9).
+BULK_DOCS=50
+bulk_docs() { # <dir> <sha> -> how many .md files the commit touches; cached per sha (bash 3.2: no maps)
+  local v="bulk_$2" n
+  eval "n=\${$v:-}"
+  if [[ -z "$n" ]]; then
+    n="$(git -C "$1" show --format= --name-only "$2" 2>/dev/null | grep -c '\.md$' || true)"
+    eval "$v=\$n"
+  fi
+  printf '%s' "${n:-0}"
+}
+is_bulk() { [[ "$(bulk_docs "$1" "$2")" -gt $BULK_DOCS ]]; }
+
+prov_machine=0; prov_mixed=0; prov_human=0; prov_unknowable=0
+# <file> -> machine | mixed | human | unknowable, a TAB, and the reason. The caller writes the
+# first three and SKIPS the fourth. `git -C` the file's own directory, so a mounted knowledge/
+# is read from its own repository.
 provenance_from_git() {
-  local d b authors creator a
+  local d b entries oldest st who sha creator csha n
   d="$(dirname "$1")"; b="$(basename "$1")"
   # --follow also pairs a new file with a SIMILAR one (status C) and hands it that file's
-  # creator — a person's document read as machine. So history stops at a copy.
-  authors="$(git -C "$d" log --follow --format='@%an' --name-status -- "$b" 2>/dev/null \
-    | awk '/^@/ { print substr($0, 2); next } /^C[0-9]*\t/ { exit }' || true)"
-  creator="$(printf '%s\n' "$authors" | sed '/^$/d' | tail -1)"
-  if [[ -z "$creator" ]]; then
-    printf 'human\tunresolved: git has no commit for it'; return 0
+  # creator — a person's document read as machine. So the copying commit IS the creation and
+  # history stops there. A delete (D) and a pure rename (R100) leave the content alone, so
+  # neither is a touch by its author: the one commit that moved knowledge/ out of a bundle
+  # made 291 of 334 role documents `mixed`.
+  entries="$(git -C "$d" log --follow --format='@%H %an' --name-status -- "$b" 2>/dev/null \
+    | awk -F'\t' '/^@/ { sha=substr($1,2,40); who=substr($1,43); next }
+                  $1 ~ /^C/ { print $1 "\t" who "\t" sha; exit }
+                  NF>=2 && $1 != "D" && $1 != "R100" { print $1 "\t" who "\t" sha }' || true)"
+  oldest="$(printf '%s\n' "$entries" | sed '/^$/d' | tail -1)"
+  if [[ -z "$oldest" ]]; then
+    printf 'unknowable\tgit has no commit that wrote it'; return 0
   fi
-  # AMBIGUITY BIASES TO HUMAN: anything but a role name as the creator is a person.
+  IFS=$'\t' read -r st creator csha <<< "$oldest"
+  # AMBIGUITY BIASES TO HUMAN: anything but a role name as the creator is a person — unless the
+  # creating commit is bulk (a squashed import), which says nothing about who wrote THIS file.
   if ! is_machine "$creator"; then
+    if is_bulk "$d" "$csha"; then
+      printf 'unknowable\tits only history is a bulk commit by %s (%s documents)' "$creator" "$(bulk_docs "$d" "$csha")"
+      return 0
+    fi
     printf 'human\tcreated by %s' "$creator"; return 0
   fi
-  while IFS= read -r a; do
-    [[ -z "$a" ]] || is_machine "$a" || {
-      printf 'mixed\tcreated by %s, later edited by %s' "$creator" "$a"; return 0
-    }
-  done <<< "$authors"
+  while IFS=$'\t' read -r st who sha; do
+    [[ -n "$who" && "$sha" != "$csha" ]] || continue
+    is_machine "$who" && continue
+    is_bulk "$d" "$sha" && continue
+    printf 'mixed\tcreated by %s, later edited by %s' "$creator" "$who"; return 0
+  done <<< "$entries"
   if ! git -C "$d" diff --quiet HEAD -- "$b" 2>/dev/null; then
     printf 'mixed\tcreated by %s, with an uncommitted edit' "$creator"; return 0
   fi
@@ -536,15 +565,20 @@ while IFS= read -r file; do
       case "$prov" in
         machine|mixed|human) : ;;
         "")
-          derived="$(provenance_from_git "$file")"
-          case "$derived" in
-            machine*) prov_machine=$((prov_machine+1)) ;;
-            mixed*)   prov_mixed=$((prov_mixed+1)) ;;
-            *)        prov_human=$((prov_human+1)) ;;
+          derived="$(provenance_from_git "$file")"; value="${derived%%$'\t'*}"; why="${derived#*$'\t'}"
+          case "$value" in
+            machine) prov_machine=$((prov_machine+1)) ;;
+            mixed)   prov_mixed=$((prov_mixed+1)) ;;
+            human)   prov_human=$((prov_human+1)) ;;
+            *)       value="" ;;   # unknowable, or anything unexpected: never a value on disk
           esac
-          if [[ "$derived" == *$'\tunresolved:'* ]]; then prov_unresolved=$((prov_unresolved+1)); fi
-          fix_field "$file" "$rel" "provenance missing -> ${derived%%$'\t'*} (${derived#*$'\t'})" \
-            provenance "${derived%%$'\t'*}" add ;;
+          if [[ -n "$value" ]]; then
+            fix_field "$file" "$rel" "provenance missing -> $value ($why)" provenance "$value" add
+          else
+            # Same posture as the timestamp: a label that reads as a fact is worse than the error.
+            prov_unknowable=$((prov_unknowable+1))
+            skip "$rel" "provenance unknowable from git — $why; refusing to invent a value, a person decides"
+          fi ;;
         *) hold "$rel" "provenance '$prov' is not machine|mixed|human — decide it by hand" ;;
       esac ;;
   esac
@@ -573,9 +607,9 @@ while IFS= read -r file; do
 done <<< "$FILE_LIST"
 
 echo "---"
-if [[ $((prov_machine+prov_mixed+prov_human)) -gt 0 ]]; then
-  printf 'provenance: %d machine, %d mixed, %d human (%d of them unresolved in git).\n' \
-    "$prov_machine" "$prov_mixed" "$prov_human" "$prov_unresolved"
+if [[ $((prov_machine+prov_mixed+prov_human+prov_unknowable)) -gt 0 ]]; then
+  printf 'provenance: %d machine, %d mixed, %d human; %d unknowable, skipped with no value written.\n' \
+    "$prov_machine" "$prov_mixed" "$prov_human" "$prov_unknowable"
 fi
 if [[ $APPLY -eq 1 ]]; then
   printf 'migrate-bundle: %d fixed, %d left for a human, %d skipped, %d FAILED.\n' \
