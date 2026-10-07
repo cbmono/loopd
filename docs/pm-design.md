@@ -457,6 +457,21 @@ launcher's release point are untouched.
    line, measured at 2.2 lines per message, so a per-line sum doubles the figure — and
    **UNKNOWN on any doubt**, because the transcript is a Claude Code internal and a
    changed format must read as unknown, never as a smaller number.
+   **The settled line says where the calls went and how many failed.** Its grammar is
+   `usage tokens=N tools=N ms=N cached=N errors=N by=Bash:152,Agent:30,…`: the first four
+   keys keep their place, because `agent-usage.sh total` and `series` match them where they
+   are, and the two new ones append. `by` is the top five tool names by count, descending,
+   ties by name, each `Name:N` with no space anywhere — `-` when the session called no tool
+   — so it sums to `tools` whenever five names cover them; `errors` is the distinct
+   `tool_result` blocks flagged `is_error`, counted once per call like everything else.
+   Measured on one real tick, 2026-10-07: 236 calls — Bash 152, Agent 30, ScheduleWakeup
+   21, Edit 13, Read 6 — and 7 errors on a healthy round. **Thrashing has one threshold,
+   stated here and in step 4 and nowhere else:
+   `errors` above 20% of `tools` with `tools` at least 20.** The step then writes one
+   `# Notes` line, `thrashing: errors=N of tools=N`, and nothing more — no status change and
+   no re-dispatch, because a checker that re-ran a round on its own reading would automate
+   the loop's most expensive failure, the same reason `check-dispatch.sh` is report-only.
+   The number is for the human.
 3. **`agent-control.sh` no longer reaches a role agent.** It keys on `agent_id`, which is
    present only on a subagent's tool call, and a `--bg` session is top-level. Operator
    `halt`/`gate`/`steer` therefore apply to nothing the tick dispatches. The blunt

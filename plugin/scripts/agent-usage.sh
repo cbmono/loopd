@@ -4,7 +4,8 @@
 # `dispatch <task>` appends one `# Notes` line per role dispatch; `total <task>` sums
 # those lines against the merged PR(s) at reflect time; `settle <task>` fills the LAST
 # `usage UNKNOWN` dispatch line once a detached session's numbers exist (session-usage.sh
-# supplies them — this file still reads no transcript); `series` prints the monthly
+# supplies them, `--cached`/`--errors`/`--by` appended after the fixed three — this file
+# still reads no transcript); `series` prints the monthly
 # figures from log.md's TICK pairs and the task docs' dispatch lines — file reads only,
 # no `gh`, no transcript. Denominated in TOKENS: no money anywhere, ever.
 # Exit: 0 done, 1 refused (already written), 2 cannot answer, 3 usage.
@@ -29,7 +30,7 @@ case "$cmd" in
     [ -f "$doc" ] && [ -w "$doc" ] || die2 "no writable task document: $doc" ;;
 esac
 
-inst="."; tokens=""; tools=""; ms=""; role=""; model=""; prs=""; cached=""
+inst="."; tokens=""; tools=""; ms=""; role=""; model=""; prs=""; cached=""; errors=""; by=""
 while [ $# -gt 0 ]; do
   [ $# -ge 2 ] || die3 "$1 needs a value"
   case "$1" in
@@ -38,6 +39,8 @@ while [ $# -gt 0 ]; do
     --tools)       tools="$2" ;;
     --duration-ms) ms="$2" ;;
     --cached)      cached="$2" ;;
+    --errors)      errors="$2" ;;
+    --by)          by="$2" ;;
     --role)        role="$2" ;;
     --model)       model="$2" ;;
     --pr)          prs="${prs:+$prs }$2" ;;
@@ -97,6 +100,12 @@ case "$cmd" in
     grep -q "^\* DISPATCH .*$UNKNOWN\$" "$doc" || {
       echo "REFUSED: $doc has no dispatch line still recording $UNKNOWN." >&2; exit 1; }
     new="$(fmt "$tokens" "$tools" "$ms")"; num "$cached" && new="$new cached=$cached"
+    # `by` is the one value that is not a number: it must stay one space-free token, in the
+    # shape session-usage.sh prints, or the line it lands on stops being one key=value line.
+    by_re='^(-|[A-Za-z0-9_.-]+:[0-9]+(,[A-Za-z0-9_.-]+:[0-9]+){0,4})$'
+    [ -z "$by" ] || [[ $by =~ $by_re ]] || die3 "settle: --by takes Name:N,… (at most five) or -"
+    num "$errors" && new="$new errors=$errors"
+    [ -n "$by" ] && new="$new by=$by"
     tmp="$doc.usage.$$"
     NEW="$new" UNK="$UNKNOWN" awk '
       { buf[NR] = $0; if ($0 ~ /^\* DISPATCH / && substr($0, length($0) - length(ENVIRON["UNK"]) + 1) == ENVIRON["UNK"]) last = NR }
