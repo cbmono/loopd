@@ -35,11 +35,17 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    ```
 
    It reads that one session's transcript, counts each message once, and fills the line:
-   `usage tokens=N tools=N ms=N cached=N` — `tokens` is fresh input, cache writes and
-   output; `cached` is cache reads, kept apart. **Exit 1 printed `usage UNKNOWN`: leave the
-   line exactly as it is** — no transcript, two candidates or an unreadable one is not a
-   zero, and you never compose the numbers yourself. A line that already carries numbers is
-   never settled again.
+   `usage tokens=N tools=N ms=N cached=N errors=N by=Bash:152,Agent:30,…` — `tokens` is
+   fresh input, cache writes and output; `cached` is cache reads, kept apart; `errors` is
+   the tool calls whose result came back `is_error`; `by` is the top five tool names by
+   call count (`-` when the session called none). **Exit 1 printed `usage UNKNOWN`: leave
+   the line exactly as it is** — no transcript, two candidates or an unreadable one is not
+   a zero, and you never compose the numbers yourself. A line that already carries numbers
+   is never settled again. **A round that thrashed is REPORTED, never re-run:** when
+   `errors` is more than 20% of `tools` and `tools` is at least 20, add one `# Notes` line
+   to that task — `thrashing: errors=N of tools=N` — and change nothing else, neither the
+   status nor the dispatch, for the same reason `check-dispatch.sh` is report-only
+   (`CONVENTIONS.md`); the figure is the human's to read (`docs/pm-design.md#step-3-background`).
 
    **Never `claude rm` a role agent's session** — it deletes the session **and its
    worktree**, which belongs to `reclaim-worktree.sh` once the task is `done` with every PR
