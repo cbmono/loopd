@@ -1,0 +1,4 @@
+{
+  "description": "loopd-mod-usage — the hooks module that records a session's usage in the plugin store",
+  "modules": ["./register.ts"]
+}

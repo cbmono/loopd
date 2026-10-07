@@ -16,8 +16,13 @@
 #     appended after `cached=`, each call counted once by its own id, `by` the top five by
 #     count then name and summing to `tools`, `-` for none; a name outside the grammar is
 #     UNKNOWN. Every reader of the old line (`total`, `series`) still reads the new one.
+#   * THE MOD'S STORE IS READ FIRST, AND ANY DOUBT ABOUT IT FALLS BACK TO THE TRANSCRIPT:
+#     a record from `loopd-mod-usage` prints the same six-key line; a corrupt file, two
+#     records, a non-number, a name outside the grammar or only the `.ended` flag is "not
+#     there" — never a figure, and never UNKNOWN while a transcript can still answer.
 #   * TOKENS, NEVER MONEY.
-# Fixtures live under mktemp; no real transcript is read. ok() compares actual to expected.
+# Fixtures live under mktemp; no real transcript and no real store is read. ok() compares
+# actual to expected.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -58,7 +63,9 @@ T="$P/-work-wt-task-001/$SID.jsonl"
   printf '%s\n' '{"type":"assistant","timestamp":"2026-01-01T00:00:10.000Z","message":{"id":"msg_B","model":"m","usage":{"input_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":2000,"output_tokens":3},"content":[{"type":"text","text":"done"}]}}'
 } > "$T"
 
-run() { bash "$SU" "$@" --projects-dir "$P" 2>/dev/null; }
+# An EMPTY store dir for the transcript cases: the default is the real ~/.claude store.
+S="$TMP/store"; mkdir -p "$S"
+run() { bash "$SU" "$@" --projects-dir "$P" --store-dir "$S" 2>/dev/null; }
 LINE="usage tokens=124 tools=5 ms=10000 cached=3000 errors=2 by=Bash:3,Edit:1,Read:1"
 val() { # <line> <key> -> the value, or `none`
   awk -v k="$2" '{ for (i = 1; i <= NF; i++) if (index($i, k "=") == 1) { print substr($i, length(k) + 2); exit } ; print "none" }' <<<"$1"; }
@@ -120,6 +127,63 @@ ok "an id with a glob character is a usage error" "$(bash "$SU" '0a1b*' --projec
 ok "…and so is one too short to be an id"         "$(bash "$SU" 'ab' --projects-dir "$P" >/dev/null 2>&1; echo $?)" 3
 ok "no argument is a usage error"                 "$(bash "$SU" >/dev/null 2>&1; echo $?)" 3
 
+echo "== the mod's store is read FIRST, and the transcript is the fallback =="
+# One flat {key: value} file per plugin, named <plugin>_<marketplace>-<hash>.json — the shape
+# measured on the built-in diff mod's store file. A record that AGREES with the transcript
+# above (14+100+10 = 124, cache reads 3000, 10 s, Bash×3 Edit Read, 2 errors), so the two
+# sources are compared on the same session.
+ST="$S/loopd-mod-usage_loopd-0123456789ab.json"
+rec() { # <input> <cacheWrite> <output> <cacheRead> <ms> <toolErrors> <tools-json>
+  printf '{"input":%s,"cacheWrite":%s,"output":%s,"cacheRead":%s,"ms":%s,"toolErrors":%s,"model":"m","requests":2,"turns":1,"tools":%s}' "$@"
+}
+AGREE="$(rec 14 100 10 3000 10000 2 '{"Bash":3,"Edit":1,"Read":1}')"
+printf '{"loopd.usage.%s":%s,"loopd.usage.%s.ended":true}\n' "$SID" "$AGREE" "$SID" > "$ST"
+ok "store and transcript present and agreeing: the same line" "$(run "$SID")" "$LINE"
+ok "…exit 0"                                                   "$(run "$SID" >/dev/null; echo $?)" 0
+ok "the short id finds the store record too"                   "$(run "0a1b2c3d")" "$LINE"
+# Disagreeing: the store's figure is what prints, which is what "first" means.
+printf '{"loopd.usage.%s":%s}\n' "$SID" "$(rec 889 100 10 3000 10000 2 '{"Bash":3,"Edit":1,"Read":1}')" > "$ST"
+ok "when the two disagree the STORE is printed"               "$(run "$SID")" "usage tokens=999 tools=5 ms=10000 cached=3000 errors=2 by=Bash:3,Edit:1,Read:1"
+# A session with a record and NO transcript — a role agent whose transcript is elsewhere.
+O="abababab-0000-0000-0000-000000000009"
+printf '{"loopd.usage.%s":%s}\n' "$O" "$(rec 5 0 2 0 7 1 '{"Bash":3}')" > "$ST"
+ok "a store record with no transcript at all is read"         "$(run "$O")" "usage tokens=7 tools=3 ms=7 cached=0 errors=1 by=Bash:3"
+printf '{"loopd.usage.%s":%s}\n' "$O" '{"input":1,"cacheWrite":0,"output":1,"cacheRead":0,"ms":1,"toolErrors":0}' > "$ST"
+ok "no tools key: tools=0 and by=-"                            "$(run "$O")" "usage tokens=2 tools=0 ms=1 cached=0 errors=0 by=-"
+printf '{"loopd.usage.%s":%s}\n' "$O" "$(rec 1 0 1 0 1 0 '{"Zeta":2,"Gamma":1,"Alpha":1,"Eps":1,"Beta":1,"mcp__x-y__z.w":1}')" > "$ST"
+ok "by= from the store is the same top five, count-desc then name" "$(run "$O")" "usage tokens=2 tools=7 ms=1 cached=0 errors=0 by=Zeta:2,Alpha:1,Beta:1,Eps:1,Gamma:1"
+echo "== …and every doubt about the store falls back, never a figure and never a false UNKNOWN =="
+printf 'not json at all\n' > "$ST"
+ok "a corrupt store file -> the transcript"                    "$(run "$SID")" "$LINE"
+printf '{"loopd.usage.%s":%s}\n' "$SID" '{"input":"14","cacheWrite":100,"output":10,"cacheRead":3000,"ms":10000,"toolErrors":2,"tools":{}}' > "$ST"
+ok "a string where a number should be -> the transcript"       "$(run "$SID")" "$LINE"
+printf '{"loopd.usage.%s":%s}\n' "$SID" '{"input":14,"cacheWrite":100,"output":10,"cacheRead":3000,"ms":10000.5,"toolErrors":2,"tools":{}}' > "$ST"
+ok "a fraction -> the transcript"                              "$(run "$SID")" "$LINE"
+printf '{"loopd.usage.%s":%s}\n' "$SID" '{"input":14,"cacheWrite":100,"output":10,"cacheRead":3000,"tools":{},"toolErrors":2}' > "$ST"
+ok "a missing figure -> the transcript"                        "$(run "$SID")" "$LINE"
+printf '{"loopd.usage.%s":%s}\n' "$SID" '{"input":14,"cacheWrite":100,"output":10,"cacheRead":3000,"ms":10000,"tools":{}}' > "$ST"
+ok "a missing error count -> the transcript"                   "$(run "$SID")" "$LINE"
+printf '{"loopd.usage.%s":%s}\n' "$SID" "$(rec 14 100 10 3000 10000 2 '{"Bash":"3"}')" > "$ST"
+ok "a tool count that is not a number -> the transcript"       "$(run "$SID")" "$LINE"
+printf '{"loopd.usage.%s":%s}\n' "$SID" "$(rec 14 100 10 3000 10000 2 '{"a tool,with:junk":1}')" > "$ST"
+ok "a tool name outside the grammar -> the transcript"         "$(run "$SID")" "$LINE"
+printf '{"loopd.usage.%s":%s}\n' "$SID" "$AGREE" > "$ST"
+printf '{"loopd.usage.%s":%s}\n' "$SID" "$(rec 1 1 1 1 1 0 '{}')" > "$S/loopd-mod-usage_loopd-ffffffffffff.json"
+ok "two store files carrying the id -> the transcript"         "$(run "$SID")" "$LINE"
+rm -f "$S/loopd-mod-usage_loopd-ffffffffffff.json"
+printf '{"loopd.usage.%s.ended":true}\n' "$O" > "$ST"
+ok "only the .ended flag, no transcript -> UNKNOWN"            "$(run "$O")" "usage UNKNOWN"
+printf '{"loopd.usage.%s":%s}\n' "$O" "$(rec 5 0 2 0 7 1 '{"Bash":3}')" > "$S/some-other-mod_loopd-0123456789ab.json"
+printf '{}\n' > "$ST"
+ok "another plugin's store file carrying the key is not read"  "$(run "$O")" "usage UNKNOWN"
+rm -f "$S/some-other-mod_loopd-0123456789ab.json"
+printf '[1,2,3]\n' > "$ST"
+ok "a store file that is JSON but not an object -> the transcript" "$(run "$SID")" "$LINE"
+rm -f "$ST"
+ok "no store file at all -> the transcript, as before"         "$(run "$SID")" "$LINE"
+ok "a store dir that does not exist -> the transcript"         "$(bash "$SU" "$SID" --projects-dir "$P" --store-dir "$TMP/nowhere" 2>/dev/null)" "$LINE"
+ok "no figure out of the store path is ever a bare zero"       "$({ run "$O"; run "$SID"; } | grep -c 'tokens=0')" 0
+
 echo "== settle fills the LAST UNKNOWN dispatch line, and nothing else =="
 DOC="$TMP/task.md"
 mk() { printf '%s\n' '---' 'type: Task' 'status: in-progress' '---' '' '# Context' '' 'x' '' '# Notes' '' "$@" > "$DOC"; }
@@ -147,6 +211,13 @@ ok "…with six names too"                          "$(bash "$AU" settle "$DOC" 
 ok "…and the line is still UNKNOWN"               "$(grep -c 'usage UNKNOWN$' "$DOC")" 1
 ok "settle without the new keys writes the old line (an older reader's call)" \
    "$(bash "$AU" settle "$DOC" --tokens 1 --tools 2 --duration-ms 3 --cached 4 >/dev/null 2>&1; grep -c 'model opus · usage tokens=1 tools=2 ms=3 cached=4$' "$DOC")" 1
+
+echo "== settle through the STORE path writes the same six-key line =="
+mk '* DISPATCH 2026-01-03T00:00:00Z · qa-reviewer · model opus · usage UNKNOWN'
+printf '{"loopd.usage.%s":%s}\n' "$O" "$(rec 5 0 2 0 7 1 '{"Bash":3}')" > "$ST"
+ok "settle from a store-only session succeeds"    "$(run "$O" --settle "$DOC" >/dev/null; echo $?)" 0
+ok "…and the line carries the store's figures"    "$(grep -c '· usage tokens=7 tools=3 ms=7 cached=0 errors=1 by=Bash:3$' "$DOC")" 1
+rm -f "$ST"
 
 echo "== total and series still read a settled line =="
 mk '* DISPATCH 2026-01-03T00:00:00Z · qa-reviewer · model opus · usage UNKNOWN'

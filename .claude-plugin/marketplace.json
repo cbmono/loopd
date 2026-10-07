@@ -82,6 +82,22 @@
         "deepseek",
         "llm"
       ]
+    },
+    {
+      "name": "loopd-mod-usage",
+      "source": "./plugin-mod-usage",
+      "description": "COMPANION to loopd, a mod. Records each session's token usage, request count, tool calls by name, tool errors, wall time and model in the plugin store under loopd.usage.<session id>; core's session-usage.sh reads that record before the transcript. Observes only: no model call, no permission decision, no process, no network, no file. Not installed = the transcript is read as before. A companion ADDS behaviour and never removes a core gate.",
+      "version": "3.0.0",
+      "author": {
+        "name": "cbmono"
+      },
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "loopd-companion",
+        "mod",
+        "usage"
+      ]
     }
   ]
 }
