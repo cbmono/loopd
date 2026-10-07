@@ -828,6 +828,20 @@ check_config_layers() {
 # decision. `fix` prints it and does nothing. No template seed to compare against — a
 # hand-copied deployment, a moved checkout — degrades to a reported non-answer, never a
 # guess in either direction.
+#
+# ONE LEVEL DOWN, THE SAME FACT FOR A RETIRED ROLE. `roles` and `roleTiers` are known
+# top-level keys, so a retired agent's name inside either one is invisible to the key scan
+# above while being exactly the state it exists to name: `roleTiers.advisor` sat in every
+# live bundle's per-machine file after the `advisor` was retired (2026-10-08; enabled in no
+# bundle, so no dispatch ever read it), looking like a spend decision for an agent nothing
+# can dispatch. The retired names live HERE and nowhere else — no validator reads them, no
+# installer rewrites them, `resolve-model.sh` still answers for one (an inert key is not an
+# error), and this row reports each occurrence once with the edit that removes it. Same
+# tier, same no-fixer, same single headline: a retired role joins the unknown-key line when
+# there is one and takes the headline when there is not. Never prune this list — a bundle
+# stamped before the retirement still carries the key, and a pruned entry stops answering for
+# exactly the bundles that need it.
+RETIRED_ROLES="advisor"
 check_config_unknown_keys() {
   _warned=0
   if ! command -v jq >/dev/null 2>&1; then
@@ -862,7 +876,7 @@ boardInstances"
   # which is precisely the "looks authoritative, configures nothing" state this check
   # exists to name. Adding it to the global set would have made that state pass as
   # healthy, and it is the exact shape the key was deleted for the first time round.
-  unknown=""; unparsed=""; fkeys=""
+  unknown=""; unparsed=""; fkeys=""; retired=""
   for f in instance.config.json instance.config.local.json; do
     [ -f "$ROOT/$f" ] || continue
     fknown="$known"
@@ -883,9 +897,20 @@ boardArtifactUrl"
     done <<EOF
 $fkeys
 EOF
+    # The retired-role scan, one level down (see RETIRED_ROLES above). Only a string entry
+    # counts — a `roleTiers` map key, or a `roles` array element — so a malformed value
+    # (`"roles": "advisor"`, `"roleTiers": null`) names nothing here rather than guessing.
+    for r in $RETIRED_ROLES; do
+      if jq -e --arg r "$r" '(.roleTiers // {}) | type == "object" and has($r)' "$ROOT/$f" >/dev/null 2>&1; then
+        retired="${retired:+$retired }$f:roleTiers.$r"
+      fi
+      if jq -e --arg r "$r" '(.roles // []) | type == "array" and index($r) != null' "$ROOT/$f" >/dev/null 2>&1; then
+        retired="${retired:+$retired }$f:roles[$r]"
+      fi
+    done
   done
 
-  if [ -z "$unknown" ]; then
+  if [ -z "$unknown" ] && [ -z "$retired" ]; then
     # Exactly ONE headline either way — the banner's row count depends on it. A corrupt
     # file is a non-answer about ITS keys, not a clean bill for the instance.
     if [ -n "$unparsed" ]; then
@@ -895,13 +920,24 @@ EOF
     fi
     return 0
   fi
-  warn "config carries key(s) nothing reads: $unknown"
+  if [ -n "$unknown" ]; then
+    warn "config carries key(s) nothing reads: $unknown"
+    [ -n "$unparsed" ] && note "(and no answer for $unparsed — not parseable as JSON)"
+    [ -n "$retired" ] && note "(and names retired role(s) nothing dispatches: $retired — remove each entry)"
+    note "a retired or typo'd key looks authoritative and configures nothing; the known set"
+    note "is the template seed's key list, plus ownerGithubUser in either file and"
+    note "boardArtifactUrl in instance.config.local.json only — nothing reads a tracked one"
+    note "THIS IS A QUESTION, NOT A DEFECT — the key may be a decision; fix will not touch it"
+    hint "yours, not fix's: edit the file, or compare: jq -r 'keys[]' $ROOT/instance.config.json"
+    return "$_warned"
+  fi
+  # Only retired roles: the headline is theirs, and it is still a report. Nothing errors on
+  # the entry, nothing dispatches the role, and `fix` does not touch a config file.
+  warn "config names retired role(s) nothing dispatches: $retired"
   [ -n "$unparsed" ] && note "(and no answer for $unparsed — not parseable as JSON)"
-  note "a retired or typo'd key looks authoritative and configures nothing; the known set"
-  note "is the template seed's key list, plus ownerGithubUser in either file and"
-  note "boardArtifactUrl in instance.config.local.json only — nothing reads a tracked one"
-  note "THIS IS A QUESTION, NOT A DEFECT — the key may be a decision; fix will not touch it"
-  hint "yours, not fix's: edit the file, or compare: jq -r 'keys[]' $ROOT/instance.config.json"
+  note "the agent was retired from the plugin, so the entry is inert — it configures nothing"
+  note "and errors nowhere; remove it to stop this line. fix will not touch it"
+  hint "yours, not fix's: delete the entry from the file named above (roles and/or roleTiers)"
   return "$_warned"
 }
 

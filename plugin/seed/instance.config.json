@@ -37,7 +37,6 @@
   "prReviewSlackChannel": null,
   "board": true,
   "$board": "ON BY DEFAULT, and it is read at BOTH ends of the lifecycle. true (or absent) => /loopd:init creates SNAPSHOT.json when missing on any stamp, so this instance appears on the terminal board, AND each /loopd:dispatch tick re-renders the page to .loopd/.board-live/board.html (derived and gitignored, served by bundle-paths.sh) and reports that path. false => the snapshot is never created, the installer says so, and the tick renders nothing and says nothing. NOTHING IS COMMITTED AND NOTHING IS ACCOUNT-SCOPED: the page is derived, so no copy leaves this machine unless you publish one yourself. (The account-scoped publish path, and the config key that recorded its URL, were deleted: only the publishing account could ever update the page, and it vanished from under its own owner at the next login.) Question TEXT is never in the snapshot or the page file; only scripts/board-serve.sh's localhost response shows it. scripts/watch-board.sh renders the same file continuously if you want it live between ticks.",
-  "$advisor": "OPTIONAL read-only tick observer. Add \"advisor\" to roles to enable it, and set roleTiers.advisor to pick its model (absent => light, the cheapest tier). Omit it and /loopd:dispatch skips that step silently. Its concerns are adjudicated by the deep-tier project-manager before any human sees them, and it has no channel to worker agents, so a cheap model can never steer an expensive one.",
   "roles": [
     "project-manager",
     "software-engineer",

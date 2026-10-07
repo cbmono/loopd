@@ -533,7 +533,7 @@ root="${CLAUDE_PROJECT_DIR:-$PWD}"
 # in precisely the case the machinery section exists for. That leaves ONE marker, and it is
 # `instance.config.json` — COPIED seed content, the one part a moved template cannot touch.
 # The second half of the old pair was `.claude/agents/`, and the name swap retired it: the
-# eight role agents ship in the `loopd` plugin now, so keying on that directory would
+# role agents ship in the `loopd` plugin now, so keying on that directory would
 # silence the banner in every instance the moment it re-stamps. Same marker, same
 # reasoning, as the two plugin enforcement hooks. A non-bridge project has no
 # instance.config.json and sees nothing — including no awaiting queue, which is a

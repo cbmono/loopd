@@ -103,7 +103,7 @@ for a in "$REPO"/plugin/agents/*.md; do
   agents=$((agents + 1))
   ok "$(basename "$a") points at the section" "$(saw "$a" "$POINTER")" yes
 done
-ok "every agent file was checked (8 today)" "$([ "$agents" -ge 8 ] && echo yes || echo no)" yes
+ok "every agent file was checked (7 today)" "$([ "$agents" -ge 7 ] && echo yes || echo no)" yes
 
 echo
 echo "== the plugin comment-share ratchet =="

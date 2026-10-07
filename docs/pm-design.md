@@ -193,7 +193,18 @@ that already finished, the most expensive failure observed in loops of this shap
 caught one context deeper, where the read is free.
 
 <a id="launcher-advisor"></a>
-### Step 2b — why the advisor's asymmetry matters
+### Step 2b (retired) — why the advisor's asymmetry mattered
+
+**Retired 2026-10-08.** The `advisor` was a read-only observer dispatched once per tick,
+opt-in via `roles` + `roleTiers.advisor`. Measured 2026-10-07: enabled in none of the three
+real bundles, four `advisor:` log lines in one of them from an earlier configuration and
+none acted on. It failed the "name the architectural reason for this agent" test — same
+inputs as the project-manager, read-only, adjudicated by the PM: a second opinion from the
+same context. `plugin/agents/advisor.md` and the launcher's step 2b are gone; a bundle that
+still names `advisor` in `roles` or `roleTiers` is reported by `/loopd:welcome check`, never
+errored; `advisor_notes` and the `advisor:` prefix stay, because the `plan-architect`
+approach critique (step 2) writes them too. The reasoning below is kept as recorded, because
+it governs the shape of any future observer of this kind.
 
 The owner is one person and the loop parallelises across tasks, so a mechanism that
 routes every concern to a human makes the human the bottleneck and the advisor a net

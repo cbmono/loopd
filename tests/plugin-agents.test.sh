@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# plugin-agents.test.sh — the eight role agents ship in the plugin, and the plugin is
-# now the ONLY place they ship from.
+# plugin-agents.test.sh — the seven role agents ship in the plugin, and the plugin is
+# now the ONLY place they ship from. (Eight until the `advisor` was retired, 2026-10-08.)
 #
 # WHAT THIS FILE USED TO BE, and why it is smaller: agent precedence is the REVERSE of
 # skills — a same-named project agent SHADOWS the plugin copy (plugins are the lowest
@@ -34,7 +34,7 @@ ok() { # <name> <actual> <expected>
   else printf '  FAIL  %-64s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi
 }
 
-AGENTS="advisor auditor cataloguer devops-engineer failure-analyst project-manager qa-reviewer software-engineer"
+AGENTS="auditor cataloguer devops-engineer failure-analyst project-manager qa-reviewer software-engineer"
 
 fm() { # <file> <key> — frontmatter value from between the first `---` pair only
   awk -v k="$2" 'NR==1 && $0=="---" {infm=1; next}
@@ -43,9 +43,9 @@ fm() { # <file> <key> — frontmatter value from between the first `---` pair on
 }
 
 # =======================================================================================
-echo "== 1. the plugin carries exactly the eight role agents, and is the only copy =="
+echo "== 1. the plugin carries exactly the seven role agents, and is the only copy =="
 # =======================================================================================
-ok "plugin/agents carries exactly the eight role agents" \
+ok "plugin/agents carries exactly the seven role agents" \
   "$(ls "$PA" | sed 's/\.md$//' | sort | tr '\n' ' ' | sed 's/ $//')" \
   "$(printf '%s\n' $AGENTS | sort | tr '\n' ' ' | sed 's/ $//')"
 # Phase 2's whole point. A second copy under symlink/ SHADOWS the plugin one in every
@@ -84,7 +84,7 @@ done
 echo "== 3. every dispatch string is NAMESPACED =="
 # =======================================================================================
 # The measured fact this whole slice turns on (2026-09-02, from a bare directory):
-# `<plugin>:advisor` dispatched and replied; the BARE name did NOT resolve, which
+# `<plugin>:advisor` (a role since retired) dispatched and replied; the BARE name did NOT resolve, which
 # contradicts the plugin docs. So a document that tells an agent to dispatch a role by
 # its bare name describes something that fails at runtime, and it fails SILENTLY — the
 # caller sees "no such agent", never "you forgot the namespace".
@@ -111,10 +111,10 @@ ok "the namespace, plugin.json's name, is the marketplace's ./plugin entry" \
   "$(jq -r '.plugins[] | select(.source == "./plugin") | .name' "$TPL/.claude-plugin/marketplace.json")"
 
 # =======================================================================================
-echo "== 4. each of the eight roles, BY NAME, dispatches only under ${PN}: =="
+echo "== 4. each of the seven roles, BY NAME, dispatches only under ${PN}: =="
 # =======================================================================================
 # A rename that misses one role's namespace fails at dispatch with "no such agent", so the
-# eight are asserted one by one (loopd/task-007): each is spelled ${PN}:<role> somewhere
+# seven are asserted one by one (loopd/task-007): each is spelled ${PN}:<role> somewhere
 # the plugin ships, and no <other-name>:<role> survives on the shipped surface. `agent:`
 # is prose ("`agent:project-manager` has…"), not a namespace.
 surface() {

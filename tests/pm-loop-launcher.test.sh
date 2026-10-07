@@ -301,8 +301,9 @@ ok "launcher names no config URL key"    "$(has "$LAUNCHER" "$URL_KEY")" no
 step2c() { awk '/^2c\. /{p=1; next} p&&/^3\. /{p=0} p' "$1"; }
 ok "launcher has no step 2c at all"      "$([ -z "$(step2c "$LAUNCHER")" ] && echo yes || echo no)" yes
 # …and the steps that are not about publishing are untouched, so "no 2c" is a deletion
-# rather than a file that stopped parsing.
-ok "…while step 2b is still there"       "$(grep -c '^2b\. ' "$LAUNCHER" | tr -d ' ')" 1
+# rather than a file that stopped parsing. (Step 2b, the per-tick advisor, was retired on
+# 2026-10-08 — tests/retire-advisor.test.sh pins its absence — so step 2 is the control.)
+ok "…while step 2 is still there"        "$(grep -c '^2\. \*\*Wait for it to finish' "$LAUNCHER" | tr -d ' ')" 1
 ok "…and step 3 still follows it"        "$(grep -c '^3\. \*\*On completion' "$LAUNCHER" | tr -d ' ')" 1
 
 # The noop rule lives in step 3, where `noop` is defined — not in a note beside it.

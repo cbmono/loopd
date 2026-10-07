@@ -76,9 +76,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **This is the form for EVERY role agent this document tells you to dispatch** — the
    `qa-reviewer` at step 4, the `cataloguer` at step 7, a rebase round, a resume —
    because each of them would hold the tick open exactly as a first dispatch does. The
-   two exceptions are the `advisor` and the `plan-architect` critique: they are short,
-   they produce no artifact, and you read their answer inside the tick, so they stay
-   `Agent`-tool dispatches.
+   one exception is the `plan-architect` critique: it is short, it produces no artifact,
+   and you read its answer inside the tick, so it stays an `Agent`-tool dispatch. (The
+   tick `advisor` was the other exception until it was retired on 2026-10-08.)
 
    Seven things about that command line, each of which costs a wave if you get it wrong:
    - **The brief is SINGLE-quoted**, and every `'` inside it is written `'\''`. Inside
@@ -114,7 +114,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    - **The namespace is not optional** — the role agents ship in the `loopd` plugin
      and a bare agent name does NOT resolve (measured 2026-09-02); it fails with "no
      such agent", never with "you forgot the namespace". **It applies to every one of
-     the eight** — `loopd:cataloguer`, `loopd:advisor`, `loopd:qa-reviewer`
+     the seven** — `loopd:cataloguer`, `loopd:auditor`, `loopd:qa-reviewer`
      and the rest, wherever this document tells you to dispatch one. The three
      USER-level agents `init-bundle.sh --config` puts in `~/.claude/agents/` —
      `code-architect`, `deep-bug-scan`, `plan-architect` — are not plugin agents, stay
