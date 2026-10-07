@@ -29,7 +29,11 @@ that reads as a pass, which is why `--all` is still the answer before the PR.
 **Two tiers and a pool** (ai-bridge-v3/task-038). A harness declares `# serial` in its
 header to run alone, and `# deep` to leave the merge gate altogether — `--deep` and the
 nightly `tests-deep.yml` are the only things that run a `# deep` harness, and every other
-mode puts a refusing shim in front of `claude` so no gate run can spend a paid eval.
+mode puts a refusing shim in front of `claude` so no gate run can spend a paid eval. The shim
+lets exactly two argument shapes through to the real binary, `claude plugin test …` and
+`claude plugin validate …` — no session, no sign-in, no network, nothing spent — and
+`AB_CLAUDE_REAL` names that binary (empty where the machine has none, as CI's runners do),
+so a harness that needs it prints a SKIP by name instead of a vacuous pass.
 Everything else runs in a bounded pool, output replayed in file order.
 **A third marker, `# iced`, pauses a subject without retiring it.** The owner put the board
 on hold on 2026-10-05, and its twelve harnesses were still 241 of 3,015 harness-seconds on

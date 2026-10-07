@@ -292,6 +292,40 @@ assert "a harness in a gate tier is told so"                  "$(has "$P_OUT" 't
 assert "…and 'claude' on its PATH resolves to the runner's refusing shim, not the real CLI" \
   "$(grep -qE 'tier=gate claude=.*run-shim[^ ]*/claude' <<<"$P_OUT" && echo 0 || echo 1)"
 
+echo "== …except `plugin test` and `plugin validate`, which reach the REAL binary and spend nothing =="
+# Both directions, because each half alone passes a wrong shim: a shim that lets everything
+# through spends money in the gate, and one that lets nothing through leaves the mod
+# harness unable to run `claude plugin test` anywhere but --deep. The "real" CLI is a
+# fixture earlier on PATH that prints its arguments, so what reached it is read, not inferred.
+FAKE="$TMP/fake-real-bin"; mkdir -p "$FAKE"
+printf '#!/bin/sh\necho "fake-real got: $*"\n' > "$FAKE/claude"; chmod +x "$FAKE/claude"
+cat > "$A/work/tests/fp-cli.test.sh" <<'FIX'
+#!/usr/bin/env bash
+claude plugin test ./x; echo "test rc=$?"
+claude plugin validate ./x --strict; echo "validate rc=$?"
+claude -p hi; echo "p rc=$?"
+claude plugin eval ./x; echo "eval rc=$?"
+claude plugin install x@y; echo "install rc=$?"
+echo "real=[${AB_CLAUDE_REAL-unset}]"
+echo "pass=1 fail=0"
+FIX
+CLI_OUT="$( cd "$A/work" && PATH="$FAKE:$PATH" bash tests/run.sh --all 2>&1 )"
+assert "claude plugin test reaches the real binary with its arguments" "$(has "$CLI_OUT" 'fake-real got: plugin test ./x')"
+assert "…and so does claude plugin validate"                           "$(has "$CLI_OUT" 'fake-real got: plugin validate ./x --strict')"
+assert "…while claude -p is still refused at exit 99"                  "$(has "$CLI_OUT" 'p rc=99')"
+assert "…and never reaches the real binary"                            "$(lacks "$CLI_OUT" 'fake-real got: -p')"
+assert "…and claude plugin eval is refused too (it spends)"            "$(has "$CLI_OUT" 'eval rc=99')"
+assert "…and claude plugin install is refused too"                     "$(has "$CLI_OUT" 'install rc=99')"
+assert "…AB_CLAUDE_REAL names the real binary the shim fronts"         "$(has "$CLI_OUT" "real=[$FAKE/claude]")"
+# The machine with NO claude at all — CI's runners. The two shapes are told so at a code of
+# their own, and AB_CLAUDE_REAL is set and empty, which is what a harness reads to SKIP.
+NOCLI_OUT="$( cd "$A/work" && PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash tests/run.sh --all 2>&1 )"
+assert "with no real CLI, plugin test gets exit 98, not a silent pass" "$(has "$NOCLI_OUT" 'test rc=98')"
+assert "…and plugin validate the same"                                 "$(has "$NOCLI_OUT" 'validate rc=98')"
+assert "…and AB_CLAUDE_REAL is set and empty"                          "$(has "$NOCLI_OUT" 'real=[]')"
+assert "…while -p is still 99"                                         "$(has "$NOCLI_OUT" 'p rc=99')"
+rm -f "$A/work/tests/fp-cli.test.sh"
+
 echo "== the pool: bounded, '# serial' honoured, output replayed in FILE order =="
 assert "the run says how it was split"                        "$(has "$P_OUT" 'serial,')"
 assert "…with the serial harness counted as serial"           "$(has "$P_OUT" '1 serial,')"

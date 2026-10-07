@@ -326,12 +326,27 @@ trap 'rm -rf "$RUN_OUT_DIR" ${shim:+"$shim"}' EXIT
 
 # The merge gate must not be able to spend a paid `claude` run. AB_TIER tells a harness
 # which tier it is in (absent, it is a by-hand run and deep), and the shim makes a spawn
-# that ignores it exit 99 loudly instead of billing — the guarantee is structural.
+# that ignores it exit 99 loudly instead of billing — the guarantee is structural. The one
+# exception is `claude plugin test …` and `claude plugin validate …`, which make no session,
+# no sign-in and no network and spend nothing: the shim execs the real binary for exactly
+# those two argument shapes, and AB_CLAUDE_REAL names that binary — resolved BEFORE the
+# shim is put on PATH, and empty where the machine has none (CI's runners), so the mod
+# harness prints a SKIP by name rather than a vacuous pass.
+export AB_CLAUDE_REAL="$(command -v claude 2>/dev/null || true)"
 export AB_TIER=deep
 if [ "$mode" != deep ]; then
   export AB_TIER=gate
   shim="$(mktemp -d "${TMPDIR:-/tmp}/run-shim.XXXXXX")" || { fatal "mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}"; exit 2; }
-  printf '#!/bin/sh\necho "run.sh: the claude CLI is --deep only; this tier does not spawn it" >&2\nexit 99\n' > "$shim/claude"
+  cat > "$shim/claude" <<SHIM
+#!/bin/sh
+case "\${1:-} \${2:-}" in
+  "plugin test"|"plugin validate")
+    [ -n "$AB_CLAUDE_REAL" ] && exec "$AB_CLAUDE_REAL" "\$@"
+    echo "run.sh: no claude CLI on this machine, so plugin test/validate cannot run" >&2; exit 98 ;;
+esac
+echo "run.sh: the claude CLI is --deep only; this tier does not spawn it" >&2
+exit 99
+SHIM
   chmod +x "$shim/claude"
   PATH="$shim:$PATH"; export PATH
 fi
