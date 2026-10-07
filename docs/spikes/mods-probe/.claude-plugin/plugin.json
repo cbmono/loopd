@@ -1,0 +1,6 @@
+{
+  "name": "loopd-probe",
+  "version": "0.0.1",
+  "description": "Throwaway probe: which mod events fire in a non-interactive session, and what they carry",
+  "author": { "name": "probe" }
+}
