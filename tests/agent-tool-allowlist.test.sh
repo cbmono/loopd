@@ -24,7 +24,8 @@
 #   tool names — `Workflow`, `Agent`, `Skill`, ... plus `mcp__*`.
 #
 # Backticks are what this codebase already uses to mean "the identifier, not the word"
-# (`Read`/`Glob`/`Grep` in `advisor.md:22-23` are exactly that), so an unbackticked prose
+# (a role agent's "you have `Read`, `Glob` and `Grep` and nothing else" sentence is exactly
+# that — the since-retired `advisor.md` was the worked example), so an unbackticked prose
 # word can never become a violation. A backticked CAPITALISED one is a different matter and
 # the vocabulary is no longer closed against it: it must be CLASSIFIED by one of the four
 # rules in the lexicon below, or it fails. Both halves are asserted against fixtures,
@@ -606,7 +607,7 @@ done <<EOF
 $AGENTS
 EOF
 ok "every shipped agent declares tools:" "$SKIPPED" 0
-ok "shipped agents scanned"              "$([ "$SCANNED" -ge 8 ] && echo yes || echo no)" yes
+ok "shipped agents scanned"              "$([ "$SCANNED" -ge 7 ] && echo yes || echo no)" yes
 
 # =============================================== 2. the shared docs an agent is told to read
 # DERIVED, NOT LISTED. Two paths used to be hardcoded here, and a hardcoded list can only

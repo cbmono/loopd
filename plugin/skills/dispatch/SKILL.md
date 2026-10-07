@@ -79,8 +79,7 @@ told what to do and not only what to stop:** dispatch the tick and let it read �
 `project-manager.md` step 0 and step 1 do every one of them, in a context that is thrown
 away — or, when the question is genuinely not the tick's, hand it to a **background
 subagent** and let that context pay. Never here, and never before a tick or instead of
-one: not the whole thing, not a summary, not "just to orient". (Step 2b's advisor
-adjudication runs *after* a tick reports and is that step's own contract.)
+one: not the whole thing, not a summary, not "just to orient".
 
 **The one write follows from the same category, and so does the one it forbids.** Item 2 is
 the launcher's only write because it needs no view of this bundle's state — an exit code, not
@@ -287,40 +286,11 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    open ledger entry **reports it and holds**. Such a tick is a finished tick: schedule
    the gap as usual (step 3) and surface what it says.
 
-2b. **Ask the advisor, if this instance has one.** One condition, and **its absence
-   means skip this step silently** — never an error:
-
-   - `"advisor"` appears in `roles` in `instance.config.json`. **That key is the whole
-     off switch now.** It used to be two conditions, the second being that
-     `.claude/agents/advisor.md` exists — but the name swap retired the instance agent
-     links, so the plugin ships `advisor` to every machine and a file that is always
-     absent would have turned this step off everywhere, silently.
-
-   Dispatch it as `loopd:advisor`, namespaced like every role agent.
-
-   Its model comes from `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh advisor`, like every role; **absent ⇒
-   `light`**, the cheapest tier — the script prints why on stderr, so report that line.
-
-   Dispatch it once, read-only, with the tick's summary. It replies `ADVISOR: clear`
-   (say nothing, move on) or `ADVISOR: concern` + one line of `<task-path> --- <question>`.
-
-   **YOU ADJUDICATE IT, AND THE HUMAN IS THE LAST RESORT — not the first.** Read the
-   documents it cites and decide:
-
-   - **It does not hold** ⇒ drop it silently.
-   - **It holds and you can act** ⇒ act, record it in `answered_questions` prefixed
-     `advisor:`. The human is not involved.
-   - **It holds and you genuinely cannot decide** ⇒ escalate: copy it into that task's
-     `open_questions` prefixed `advisor:`. That is the one path to a human.
-
-   Untriaged concerns go in `advisor_notes` (`SCHEMA.md`) — deliberately not a gate;
-   triage next tick. If you find yourself escalating most concerns, the advisor is
-   miscalibrated — say so in the tick report rather than forwarding the noise (the full
-   asymmetry argument: `docs/pm-design.md#launcher-advisor`).
-
-   **It never blocks.** A verified concern does not undo a dispatch or delay the next
-   tick. If the advisor errors, times out, or answers in any other shape, ignore it and
-   continue.
+   There is no step 2b. It was the per-tick `advisor` observer, retired 2026-10-08: no
+   bundle had enabled it, and it read the same inputs as the tick to produce a second
+   opinion the tick then adjudicated (the argument it rested on is kept at
+   `docs/pm-design.md#launcher-advisor`). An `"advisor"` entry a bundle still carries in
+   `roles` or `roleTiers` is inert — `/loopd:welcome check` names it; nothing dispatches it.
 
 3. **On completion**, schedule the next tick after the gap: `ScheduleWakeup` with
    `delaySeconds` = the gap and `prompt` = `/dispatch <gap>`. (Gap `0m` ⇒ dispatch the

@@ -66,8 +66,8 @@ echo "== 2. THE AGENT ROSTER IS UNCHANGED — no step file registered as an agen
 # The three harnesses that enumerate plugin/agents/ all use -maxdepth 1 or a flat glob, so
 # the assertion that matters is the ROSTER, by name, not the enumeration style.
 ROSTER="$(find "$REPO/plugin/agents" -maxdepth 1 -type f -name '*.md' -exec basename {} .md \; | sort | tr '\n' ' ')"
-ok "the eight shipped agents, and only those" "$ROSTER" \
-   "advisor auditor cataloguer devops-engineer failure-analyst project-manager qa-reviewer software-engineer "
+ok "the seven shipped agents, and only those" "$ROSTER" \
+   "auditor cataloguer devops-engineer failure-analyst project-manager qa-reviewer software-engineer "
 ok "no step file lives under plugin/agents/" \
    "$(find "$REPO/plugin/agents" -mindepth 2 -name '*.md' | grep -c . | tr -d ' ')" 0
 ok "…and no step file declares a name: frontmatter key" \

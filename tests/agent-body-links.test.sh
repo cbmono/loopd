@@ -90,15 +90,15 @@ cp -R "$TPL/plugin" "$MUT/plugin"
 
 ok "the copy is green before mutation" "$(scan "$MUT/plugin" | grep -c . | tr -d ' ')" 0
 
-printf '%s\n' 'See [`CONVENTIONS.md`](../../CONVENTIONS.md) for the rest.' >> "$MUT/plugin/agents/advisor.md"
+printf '%s\n' 'See [`CONVENTIONS.md`](../../CONVENTIONS.md) for the rest.' >> "$MUT/plugin/agents/auditor.md"
 printf '%s\n' 'Run `${CLAUDE_PLUGIN_ROOT}/scripts/no-such-script.sh` first.' >> "$MUT/plugin/agents/cataloguer.md"
-ADV_LN="$(grep -c '' "$MUT/plugin/agents/advisor.md")"
+AUD_LN="$(grep -c '' "$MUT/plugin/agents/auditor.md")"
 CAT_LN="$(grep -c '' "$MUT/plugin/agents/cataloguer.md")"
 MFOUND="$(scan "$MUT/plugin")"
 [ -z "$MFOUND" ] || printf '%s\n' "$MFOUND" | sed 's/^/        /'
 
-ok "the dead link is reported at advisor.md:$ADV_LN" \
-  "$(printf '%s\n' "$MFOUND" | grep -cF "agents/advisor.md:$ADV_LN: ../../CONVENTIONS.md" | tr -d ' ')" 1
+ok "the dead link is reported at auditor.md:$AUD_LN" \
+  "$(printf '%s\n' "$MFOUND" | grep -cF "agents/auditor.md:$AUD_LN: ../../CONVENTIONS.md" | tr -d ' ')" 1
 ok "the dead plugin-root path is reported at cataloguer.md:$CAT_LN" \
   "$(printf '%s\n' "$MFOUND" | grep -cF "agents/cataloguer.md:$CAT_LN: \${CLAUDE_PLUGIN_ROOT}/scripts/no-such-script.sh" | tr -d ' ')" 1
 ok "…and no untouched agent body is reported" \
