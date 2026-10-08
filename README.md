@@ -80,6 +80,19 @@ mods in **one** command, install the bundle instead: `/plugin install loopd-all@
 ([`plugin-all/README.md`](plugin-all/README.md) — it ships nothing of its own, so turning
 a mod off later never touches `loopd`).
 
+Or add a **mod** on its own — a hooks module Claude Code runs inside every session that
+loads it, each doing one thing and nothing else, each off by uninstalling it:
+
+| Mod | What it does |
+|---|---|
+| `loopd-mod-usage` | records what a session spent, so `session-usage.sh` can read it back [→](plugin-mod-usage/README.md) |
+| `loopd-mod-pane` | adds `/board`: opens the board in a pane beside the transcript [→](plugin-mod-pane/README.md) |
+| `loopd-mod-signal` | lets a role agent's session tell the PM's session its turn is over, the moment it is [→](plugin-mod-signal/README.md) |
+
+```text
+/plugin install loopd-mod-usage@loopd
+```
+
 Every command is namespaced: `/loopd:dispatch`, `/loopd:new-project`, and
 the rest of the table [below](#commands); so is every role agent —
 `loopd:software-engineer` and the rest — because a bare agent name does not resolve.
@@ -118,19 +131,19 @@ It does three things, and **none of them is a symlink into a checkout**:
 | # | Action | Detail |
 |---|---|---|
 | 1 | **Copies** `plugin/seed/` content — only if absent | never clobbers bundle data |
-| 2 | **Converts** a bundle stamped by the retired `/loopd:init` | removes its machinery links and the managed `.gitignore` block; the data is untouched |
+| 2 | **Converts** a bundle stamped by the retired `install.sh` | removes its machinery links and the managed `.gitignore` block; the data is untouched |
 | 3 | **Links** the group's repos into `<bundle>/repos/` | skipped while `reposRoot` is the seeded placeholder. **The only symlinks a stamped bundle holds.** |
 
 It is idempotent. It backs up any conflicting real file as `<name>.bak.<epoch>`.
 `--refresh-seeds` additionally 3-way merges a seed change this repo has made since the
 bundle was stamped; without it that drift is reported and nothing is written.
 
-> **This replaced `/loopd:init`, and the reason is structural.** A plugin-shipped installer
+> **This replaced `install.sh`, and the reason is structural.** A plugin-shipped installer
 > cannot stamp absolute symlinks into a plugin cache whose path changes on every update —
 > every one of them would dangle. The symlinks existed so a `git pull` of this repo
 > propagated into every bundle; `claude plugin update` gives that property for the whole
-> tree, so they lost their reason to exist. `/loopd:init` and `/loopd:welcome fix` ship for one
-> version as stubs that print the command to run instead.
+> tree, so they lost their reason to exist. The replaced `install.sh` and `upgrade.sh` ship
+> for one version as stubs that print the command to run instead.
 
 #### It also asks who the team is — once
 
@@ -534,11 +547,11 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 
 | Script | Does | Writes? |
 |---|---|---|
-| `init-bundle.sh` | `<dir>` — creates or refreshes a bundle, and converts one stamped by the retired `/loopd:init`: seed content copied where absent, machinery links removed, `repos/` linked. `--config` links the `~/.claude` layer instead | yes, that bundle |
+| `init-bundle.sh` | `<dir>` — creates or refreshes a bundle, and converts one stamped by the retired `install.sh`: seed content copied where absent, machinery links removed, `repos/` linked. `--config` links the `~/.claude` layer instead | yes, that bundle |
 | `refresh-seeds.sh` | `<dir>` — 3-way merges a seed change this repo made since the bundle was stamped; a hand-diverged file is reported, never forced, and its conflicted merge is saved as `.bak.<epoch>` | only with `--apply` |
 | `validate-bundle.sh` | schema errors + dangling frontmatter references | no |
 | `normalise-config.sh` | `<dir>` — reports what is out of place across the two config files: MISPLACED (a per-machine key in the tracked `instance.config.json`, or a tracked-only key such as `defaultOwner` in `instance.config.local.json`), MISSING (a seed key the tracked file lacks) and ORDER. Values are never changed — only placed, ordered, or added when absent — and the tracked file is left **staged**, never committed. Run by every `/loopd:init` stamp | only with `--apply` |
-| `migrate-bundle.sh` | mechanical schema repairs | only with `--apply` |
+| `migrate-bundle.sh` | mechanical schema repairs; `--layout-only` runs just the two directory steps (the `.loopd/` move) and no content repair | only with `--apply` |
 | `ledger.sh` | `append` / `show` a knowledge item's append-only `ledger:` line — why it changed, who applied it, which items; no verb edits or removes an entry | `append` only, that one item |
 | `kb-propose.sh` | the scheduled half of the reflector: runs the instance's proposer and writes the surviving proposals to ONE draft task — the report. It writes nothing under `knowledge/`, never `AWAITING.md`, and never reaches the apply path. 0 a report was written · 1 nothing to propose · 2 usage | yes, one task document |
 | `kb-compare.sh` | `[--instance DIR] <candidate.md>` — compares ONE candidate Finding against every `type: Finding` under `knowledge/`: the instance proposer behind `kb-propose.sh --proposer`. The key is the content words of title + description + `lesson:`, and only an EQUAL key is the same. Prints at most one proposal (merge, or patch as `edit`) on stdout and one verdict on stderr — merge · patch · append as new · human-authored, review only. 0 compared · 1 unreadable · 2 usage | no |
@@ -560,7 +573,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `cite-check.sh` | keeps the `[[finding-slug]]` citations a brief actually carried, drops the rest, and exits 1 when a citing line ends up with none. Reports a dropped id as `UNREAD` (in `knowledge/index.md`, not in the brief) or `FABRICATED` (in no row) | no |
 | `check-dispatch.sh` | `<task-doc>` — did the dispatch actually produce the PR it promised | **never** |
 | `control.sh` | the live kill switch for one dispatched agent — `agents`, then `halt`, `gate` or `steer` it | yes, `.claude/control/` |
-| `resolve-model.sh` | `<agent>` — prints the model alias it should run on, from `roleTiers`/`models` (local file first; the bundle stamp seeds both there). No entry ⇒ nothing on stdout, exit 1, and **a line on stderr** saying the caller would otherwise inherit the session model | no |
+| `resolve-model.sh` | `<agent>` (or `--all`: every role in one process) — prints the model alias it should run on, from `roleTiers`/`models` (local file first; the bundle stamp seeds both there). No entry ⇒ nothing on stdout, exit 1, and **a line on stderr** saying the caller would otherwise inherit the session model | no |
 | `tick-lock.sh` | `acquire [--as launcher\|tick]`/`release`/`status` — the per-clone PM dispatch lock; exit 0 is the only clearance to dispatch or to run a tick | `acquire`/`release` only, `.tick-lock` + `.tick-lock.claim` (gitignored) |
 | `tick-delta.sh` | `check [--gap <interval>]`/`record`/`digest` — the idle-tick fast-path probe and the tick's one-command orientation: a full tick records a fingerprint (bundle HEAD, task statuses, open-PR heads/states/decisions), the next tick compares — only a byte-for-byte match (exit 0) permits skipping the full walk, and every doubt is the full tick. The `IDLE:` line is ONE line and IS the quiet tick's whole report, so `--gap` makes it name the next check; `digest` prints the same walk enriched (project/task fields + PR facts) so step 1 is one read instead of N. `record --close "<summary>" [--tick ISO] [--tokens N --tools N --duration-ms N]` is the ledger half: it appends the `close:` line **beside** the tick's own `open:` line (never over it, so the pair carries the tick's wall duration), copying that line's timestamp and `by <login>`, with the three notification numbers in the one fixed form `agent-usage.sh fmt` owns — offline, and refused if the entry is already closed. `--tick` names which open entry to close, matched exactly; without it a close is taken only when exactly one entry is open, never guessed between two | `record` only, `.tick-state` (gitignored) and `log.md` on `--close` |
 | `agent-usage.sh` | `fmt`/`dispatch`/`total`/`settle`/`series` — what the harness handed back, **in tokens and never in money**: `fmt` is the one fixed `usage tokens=N tools=N ms=N` form every other writer calls, `dispatch <task-doc> --role R --model M` appends one `# Notes` line per role dispatch from that agent's notification (a re-dispatch appends a second), `total <task-doc> --pr <url>` sums those lines against the merged PR at reflect time (no dispatch lines ⇒ `usage UNKNOWN`, never zero), and `series` prints the month-by-month figures from `log.md`'s `TICK` pairs and those dispatch lines — file reads only, no `gh` and no transcript | `dispatch`/`total` only, that task document |
