@@ -1,0 +1,4 @@
+{
+  "description": "loopd-mod-pane — the hooks module that draws the bundle's board in a pane of the session",
+  "modules": ["./register.ts"]
+}

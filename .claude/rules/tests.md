@@ -33,7 +33,11 @@ mode puts a refusing shim in front of `claude` so no gate run can spend a paid e
 lets exactly two argument shapes through to the real binary, `claude plugin test …` and
 `claude plugin validate …` — no session, no sign-in, no network, nothing spent — and
 `AB_CLAUDE_REAL` names that binary (empty where the machine has none, as CI's runners do),
-so a harness that needs it prints a SKIP by name instead of a vacuous pass.
+so a harness that needs it prints a SKIP by name instead of a vacuous pass. **`AB_NO_CLAUDE=1`
+makes that probe answer empty on a machine that HAS one** — a binary that hangs at exec (a
+fresh Gatekeeper quarantine) is found by `command -v` and sits a harness at the 600s kill
+bound; the operator says so and gets the SKIP instead. It is a flag of its own rather than a
+pre-set `AB_CLAUDE_REAL` because `run.sh` exports that, and a nested run would inherit it.
 Everything else runs in a bounded pool, output replayed in file order.
 **A third marker, `# iced`, pauses a subject without retiring it.** The owner put the board
 on hold on 2026-10-05, and its twelve harnesses were still 241 of 3,015 harness-seconds on

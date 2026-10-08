@@ -309,7 +309,9 @@ claude plugin install x@y; echo "install rc=$?"
 echo "real=[${AB_CLAUDE_REAL-unset}]"
 echo "pass=1 fail=0"
 FIX
-CLI_OUT="$( cd "$A/work" && PATH="$FAKE:$PATH" bash tests/run.sh --all 2>&1 )"
+# AB_NO_CLAUDE is pinned EMPTY on both cases below, so an operator who exported it for
+# their own run does not turn the "reaches the real binary" case into the opt-out case.
+CLI_OUT="$( cd "$A/work" && AB_NO_CLAUDE= PATH="$FAKE:$PATH" bash tests/run.sh --all 2>&1 )"
 assert "claude plugin test reaches the real binary with its arguments" "$(has "$CLI_OUT" 'fake-real got: plugin test ./x')"
 assert "…and so does claude plugin validate"                           "$(has "$CLI_OUT" 'fake-real got: plugin validate ./x --strict')"
 assert "…while claude -p is still refused at exit 99"                  "$(has "$CLI_OUT" 'p rc=99')"
@@ -319,11 +321,19 @@ assert "…and claude plugin install is refused too"                     "$(has 
 assert "…AB_CLAUDE_REAL names the real binary the shim fronts"         "$(has "$CLI_OUT" "real=[$FAKE/claude]")"
 # The machine with NO claude at all — CI's runners. The two shapes are told so at a code of
 # their own, and AB_CLAUDE_REAL is set and empty, which is what a harness reads to SKIP.
-NOCLI_OUT="$( cd "$A/work" && PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash tests/run.sh --all 2>&1 )"
+NOCLI_OUT="$( cd "$A/work" && AB_NO_CLAUDE= PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash tests/run.sh --all 2>&1 )"
 assert "with no real CLI, plugin test gets exit 98, not a silent pass" "$(has "$NOCLI_OUT" 'test rc=98')"
 assert "…and plugin validate the same"                                 "$(has "$NOCLI_OUT" 'validate rc=98')"
 assert "…and AB_CLAUDE_REAL is set and empty"                          "$(has "$NOCLI_OUT" 'real=[]')"
 assert "…while -p is still 99"                                         "$(has "$NOCLI_OUT" 'p rc=99')"
+# The machine whose claude is on PATH but unusable (a Gatekeeper-quarantined binary hangs
+# at exec, 2026-10-08): AB_NO_CLAUDE=1 makes the probe answer empty, so the two shapes get
+# 98 and the harness SKIPs by name instead of sitting at the kill bound. The fake real
+# binary is STILL on PATH here, so this is the opt-out doing it, not an absent CLI.
+NOCLI2_OUT="$( cd "$A/work" && AB_NO_CLAUDE=1 PATH="$FAKE:$PATH" bash tests/run.sh --all 2>&1 )"
+assert "AB_NO_CLAUDE=1 with a claude on PATH: plugin test gets exit 98" "$(has "$NOCLI2_OUT" 'test rc=98')"
+assert "…and never reaches that binary"                                "$(lacks "$NOCLI2_OUT" 'fake-real got:')"
+assert "…and AB_CLAUDE_REAL is set and empty"                          "$(has "$NOCLI2_OUT" 'real=[]')"
 rm -f "$A/work/tests/fp-cli.test.sh"
 
 echo "== the pool: bounded, '# serial' honoured, output replayed in FILE order =="
