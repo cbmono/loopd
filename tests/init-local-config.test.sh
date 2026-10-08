@@ -167,8 +167,10 @@ ok "the file is byte-identical"            "$([ "$(cat "$I/$LOCAL")" = "$BEFORE"
 ok "…so a flag does not reach it either"   "$(jget "$I/$LOCAL" ownerGithubUser)" example-user-007
 ok "…and the step says nothing about it"   "$(said 'exists — left alone')" no
 ok "…nor asks for anything"                "$(grep -c '  needs ' "$TMP/out" | tr -d ' ')" 0
-# A file that exists but is short of a key: still not rewritten, and the key is reported
-# so the human knows what their own file is missing.
+# A file that exists but is short of a key: the one key the tracked `people` map already
+# answers — `authorEmail`, for the login the file names — is FILLED (measured 2026-10-09: a
+# second clone typed it by hand although `people` held it); everything else is reported so
+# the human knows what their own file is missing.
 I="$(newinst 8)"
 cat > "$I/$LOCAL" <<'JSON'
 {
@@ -177,10 +179,36 @@ cat > "$I/$LOCAL" <<'JSON'
   "roleTiers": { "software-engineer": "deep" }
 }
 JSON
+stamp "$I"
+ok "authorEmail is filled from people[ownerGithubUser]" "$(jget "$I/$LOCAL" authorEmail)" example-user-007@example.com
+ok "…and it says so, naming the source"    "$(said 'set   authorEmail example-user-007@example.com (from people.example-user-007)')" yes
+ok "…the other keys survive"               "$(jget "$I/$LOCAL" ownerGithubUser)-$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["models"]["deep"])' "$I/$LOCAL")" example-user-007-opus
+ok "…and the key it cannot fill is still named" "$(said 'it has no reposRoot')" yes
+ok "…with no needs line for authorEmail"   "$(said 'needs  authorEmail')" no
 BEFORE="$(cat "$I/$LOCAL")"
 stamp "$I"
-ok "a partial file is still untouched"     "$([ "$(cat "$I/$LOCAL")" = "$BEFORE" ] && echo yes || echo no)" yes
-ok "…and the absent keys are named"        "$(said 'it has no authorEmail reposRoot')" yes
+ok "a second stamp changes nothing"        "$([ "$(cat "$I/$LOCAL")" = "$BEFORE" ] && echo yes || echo no)" yes
+# The login is not in `people`: nothing is guessed, the file is byte-identical, and ONE
+# needs line names both halves of what is missing. The tracked config is written here so
+# the roster holds one login only (the seed's holds both placeholders); the welcome pass a
+# non-first stamp runs is skipped, since only step 4c's lines are read.
+one_person_cfg() { printf '{ "org": "acme", "group": "acme", "people": { "example-user-007": "example-user-007@example.com" } }\n' > "$1/$TRACKED"; }
+I="$(newinst 8b)"; one_person_cfg "$I"
+printf '{\n  "ownerGithubUser": "example-user-008",\n  "models": { "deep": "opus" },\n  "roleTiers": { "software-engineer": "deep" }\n}\n' > "$I/$LOCAL"
+BEFORE="$(cat "$I/$LOCAL")"
+AI_BRIDGE_INIT_PASS=1 stamp "$I"
+ok "a login absent from people: untouched" "$([ "$(cat "$I/$LOCAL")" = "$BEFORE" ] && echo yes || echo no)" yes
+ok "…and the needs line names the login"   "$(said "names ownerGithubUser 'example-user-008' and \`people\`")" yes
+ok "…and the flag that fills it"           "$(said 'needs  authorEmail — re-run with: --email <commit-address>')" yes
+AI_BRIDGE_INIT_PASS=1 stamp "$I" --email second@example.org
+ok "--email fills an existing file's missing authorEmail" "$(jget "$I/$LOCAL" authorEmail)" second@example.org
+ok "…saying where it came from"            "$(said 'set   authorEmail second@example.org (from --email)')" yes
+# No ownerGithubUser at all: the same one line, with the absence spelled out.
+I="$(newinst 8c)"; one_person_cfg "$I"
+printf '{\n  "reposRoot": "/x"\n}\n' > "$I/$LOCAL"
+AI_BRIDGE_INIT_PASS=1 stamp "$I"
+ok "no login in the file: nothing is guessed" "$(jget "$I/$LOCAL" authorEmail)" -
+ok "…and the needs line says so"           "$(said "names ownerGithubUser '<unset>'")" yes
 
 # =========================================================================== #
 echo

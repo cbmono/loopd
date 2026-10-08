@@ -54,9 +54,11 @@ plugin/scripts/control.sh|control.sh clear --all
 plugin/scripts/control.sh|control.sh halt '<agent-id>' '\"<why>\"'
 plugin/scripts/init-bundle.sh|bash \"\$BIN_DIR/kb-sync.sh\" status
 plugin/scripts/init-bundle.sh|init-bundle.sh '--email <commit-address>'
+plugin/scripts/init-bundle.sh|init-bundle.sh '--email <commit-address>'
 plugin/scripts/init-bundle.sh|init-bundle.sh '--owner <github-login>'
 plugin/scripts/init-bundle.sh|init-bundle.sh '--repos-root <absolute path>'
 plugin/scripts/init-bundle.sh|kb-sync.sh commit --message '\"<message>\"' -- '<path>...'
+plugin/scripts/init-bundle.sh|kb-sync.sh pull
 plugin/scripts/init-bundle.sh|loopd/plugin/scripts/init-bundle.sh --config
 plugin/scripts/init-bundle.sh|migrate-bundle.sh --layout-only
 plugin/scripts/init-bundle.sh|migrate-bundle.sh --layout-only --apply

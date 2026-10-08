@@ -587,6 +587,76 @@ ok "…and the whole report is this script's two lines" \
   "$(printf '%s\n' "$out" | grep -c . | tr -d ' ')" \
   "$(printf '%s\n' "$out" | grep -c '^kb-sync:' | tr -d ' ')"
 
+echo "== the stamp mounts a configured KB instead of seeding placeholders into it =="
+
+# Measured 2026-10-09 on a second clone: `knowledge` named a repo, nothing was mounted yet,
+# /loopd:init seeded the nine placeholder files, and the mount then refused "knowledge/ is
+# already a real folder" and pointed at kb-migrate.sh — which would have pushed nine blank
+# seeds into the company's knowledge repo. The stamp is driven from this checkout with its
+# HOME pinned (step 1g writes a link under it) and the welcome pass skipped, so only the
+# stamp's own lines are read.
+INIT="$REPO/plugin/scripts/init-bundle.sh"
+STUBG="$TMP/stubbin"; mkdir -p "$STUBG" "$TMP/stamphome"; printf '#!/bin/sh\nexit 1\n' > "$STUBG/gh"; chmod +x "$STUBG/gh"
+stamp() { # <instance> -> combined output in $out, status in $rc
+  out="$(cd "$TMP" && PATH="$STUBG:$PATH" HOME="$TMP/stamphome" XDG_CONFIG_HOME="$TMP/stamphome" \
+    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/stamphome/none" AI_BRIDGE_INIT_PASS=1 \
+    bash "$INIT" "$1" </dev/null 2>&1)"; rc=$?
+}
+kb_cfg() { # <dir> <repo> — a bundle whose tracked config names a KB and nothing else of note
+  mkdir -p "$1"
+  printf '{ "org": "acme", "group": "acme", "knowledge": { "repo": "%s", "path": "/", "ref": "main" } }\n' "$2" > "$1/instance.config.json"
+}
+
+SM="$TMP/stamp-mount"; kb_cfg "$SM" "$BARE"
+stamp "$SM"
+ok "configured and unmounted: the stamp exits 0" "$rc" 0
+ok "…seeds no placeholder under knowledge/" "$(has "$out" 'seed  knowledge/')" no
+ok "…and says why, once" "$(printf '%s\n' "$out" | grep -c 'skip  knowledge/ placeholders' | tr -d ' ')" 1
+ok "…then mounts, in the stamp's own vocabulary" "$(printf '%s\n' "$out" | grep -c '^  mount .* at knowledge/$' | tr -d ' ')" 1
+ok "…so the KB's documents are there" "$([ -f "$SM/knowledge/findings/alpha.md" ] && echo yes || echo no)" yes
+ok "…and the seed-only placeholder is not" "$([ -e "$SM/knowledge/papercuts.md" ] && echo yes || echo no)" no
+ok "…with the gitdir under .loopd/" "$([ -d "$SM/$AB_DIR/kb.git" ] && echo yes || echo no)" yes
+ok "…and knowledge/ ignored by the bundle" "$(grep -cxF '/knowledge/' "$SM/.gitignore" | tr -d ' ')" 1
+ok "…never a kb-migrate pointer" "$(has "$out" 'kb-migrate')" no
+stamp "$SM"
+ok "a second stamp keeps the mount" "$(has "$out" 'keep  knowledge/ (mounted)')" yes
+ok "…and still seeds nothing into it" "$(has "$out" 'seed  knowledge/')" no
+
+SU="$TMP/stamp-unconfigured"; mkdir -p "$SU"
+printf '{ "org": "acme", "group": "acme" }\n' > "$SU/instance.config.json"
+stamp "$SU"
+ok "no knowledge key: the placeholders are seeded as before" "$([ -f "$SU/knowledge/papercuts.md" ] && echo yes || echo no)" yes
+ok "…reported as seeds" "$(has "$out" 'seed  knowledge/vocab.md')" yes
+ok "…with no mount line and no gitdir" "$(has "$out" '  mount ')$([ -e "$SU/$AB_DIR/kb.git" ] && echo yes || echo no)" nono
+
+SR="$TMP/stamp-real"; make_bundle "$SR"
+kb_cfg "$SR" "$BARE"
+nfiles="$(find "$SR/knowledge" -type f | wc -l | tr -d ' ')"
+stamp "$SR"
+ok "real knowledge content: the stamp still exits 0" "$rc" 0
+ok "…the mount is refused in kb-sync's own words" "$(has "$out" 'already a real folder')" yes
+ok "…pointing at kb-migrate.sh" "$(has "$out" 'kb-migrate.sh')" yes
+ok "…nothing moved or deleted" "$(find "$SR/knowledge" -type f | wc -l | tr -d ' ')" "$nfiles"
+ok "…no gitdir was made" "$([ -e "$SR/$AB_DIR/kb.git" ] && echo yes || echo no)" no
+ok "…and the placeholder-only hint is NOT given" "$(has "$out" 'rm -r ')" no
+
+# The exact shape the measured stamp left behind: placeholders only. Named, with the rm.
+kb_cfg "$SU" "$BARE"
+nfiles="$(find "$SU/knowledge" -type f | wc -l | tr -d ' ')"
+stamp "$SU"
+ok "placeholders only: still refused, nothing deleted" "$(find "$SU/knowledge" -type f | wc -l | tr -d ' ')" "$nfiles"
+ok "…and named as the seed's own placeholders" "$(has "$out" 'holds only the placeholders an earlier stamp seeded')" yes
+ok "…with the exact command" "$(has "$out" "rm -r $(cd "$SU" && pwd)/knowledge")" yes
+rm -r "$SU/knowledge"; stamp "$SU"
+ok "…after which the same stamp mounts" "$([ -f "$SU/knowledge/findings/alpha.md" ] && echo yes || echo no)" yes
+
+SO="$TMP/stamp-offline"; kb_cfg "$SO" "https://10.255.255.1/x/kb.git"
+AI_BRIDGE_KB_TIMEOUT=2 stamp "$SO"
+ok "an unreachable remote: the stamp exits 0" "$rc" 0
+ok "…names the empty mount" "$(has "$out" 'knowledge/ is mounted but EMPTY')" yes
+ok "…and the command that completes it later" "$(has "$out" 'kb-sync.sh pull')" yes
+ok "…without a stale-edits warning" "$(has "$out" 'uncommitted edits')" no
+
 echo "== push-state.sh was NOT extended for any of this =="
 ok "push-state.sh names no KB sync" \
   "$(grep -c 'kb-sync' "$REPO/plugin/hooks/push-state.sh" | tr -d ' ')" 0
