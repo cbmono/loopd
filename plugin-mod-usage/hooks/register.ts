@@ -51,9 +51,9 @@ function add(u: unknown): boolean {
 
 // Without a session id there is no key, and a record under a made-up key would be a
 // number nothing can attribute — so nothing is written.
-async function save($: any, ended: boolean): Promise<void> {
-  let id: unknown = null
-  try { id = await $.session.id() } catch { id = null }
+async function save($: any, ended: boolean, knownId?: unknown): Promise<void> {
+  let id: unknown = typeof knownId === 'string' && knownId ? knownId : null
+  if (!id) { try { id = await $.session.id() } catch { id = null } }
   if (typeof id !== 'string' || !id) return
   await $.store.set('loopd.usage.' + id, { ...acc, tools: { ...acc.tools } })
   if (ended) await $.store.set('loopd.usage.' + id + '.ended', true)
@@ -75,13 +75,14 @@ export function register(on: any) {
     return result
   })
 
+  // A gating hook: if this one throws, the call still goes through (fail open).
   on('tool.call', async ($: any, e: any, next: any) => {
     const result = await next(e)
     const name = e && typeof e.tool === 'string' && e.tool ? e.tool : 'unknown'
     acc.tools[name] = (acc.tools[name] || 0) + 1
     if (result && result.isError === true) acc.toolErrors += 1
     return result
-  })
+  }).catch(($: any, e: any, next: any) => next(e))
 
   on('turn.complete', async ($: any, e: any, next: any) => {
     acc.turns += 1
@@ -92,8 +93,9 @@ export function register(on: any) {
     return next(e)
   })
 
+  // session.end carries the ending session's id itself (measured 2026-10-09, 2.1.293).
   on('session.end', async ($: any, e: any, next: any) => {
-    await save($, true)
+    await save($, true, e ? e.sessionId : null)
     return next(e)
   })
 }

@@ -20,7 +20,7 @@ function stubs(on: any, saved: Map<string, unknown>, logged: string[], sid: unkn
   on('tool.call', (_$: any, e: any) => (e.tool === 'Bash' ? { result: 'exit 1', isError: true } : { result: 'ok' }))
   on('turn.start', (_$: any, e: any) => ({ turnId: e.turnId }))
   on('turn.complete', () => ({ text: '' }))
-  on('session.end', () => ({}))
+  on('session.end', (_$: any, e: any) => ({ sessionId: e.sessionId }))
   on('turn.step', async function* (_$: any, e: any) {
     yield { kind: 'text', index: 0, text: 'ok' }
     return { turnId: e.turnId, index: e.index, answer: 'ok', toolUses: [], stopReason: 'end_turn', usage: STEP_USAGE }
@@ -105,7 +105,7 @@ test('session.end marks the record ended and leaves the numbers', async ($, on) 
 
   await step($, 't1', 0)
   await $.turn.complete({ turnId: 't1', answer: 'ok', durationMs: 10, isAborted: false, usage: null })
-  await $.session.end({ reason: 'other' })
+  await $.session.end({ reason: 'other', sessionId: SID, resume: null })
 
   expect(saved.get(KEY + '.ended')).toBe(true)
   expect(saved.get(KEY)).toMatchObject({ input: 10, requests: 1 })
@@ -113,7 +113,8 @@ test('session.end marks the record ended and leaves the numbers', async ($, on) 
 
 test('without a session id nothing is written', async ($, on) => {
   const saved = new Map<string, unknown>()
-  stubs(on, saved, [], undefined)
+  // An empty id is 'no id': the mod must not invent a key for it.
+  stubs(on, saved, [], '')
 
   await step($, 't1', 0)
   await $.turn.complete({ turnId: 't1', answer: 'ok', durationMs: 10, isAborted: false, usage: null })
