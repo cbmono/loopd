@@ -132,7 +132,7 @@ if [ -n "$SERVICE" ] && [ -f "$SERVICE" ]; then
     fi
   } | awk -v max="$GROUNDING_MAX_LINES" '
       NR < max { print; next }
-      NR == max { print "… truncated at " max " lines — open the Service doc for the rest"; exit }'
+      NR == max { print "… truncated at " max " lines — open the Service doc for the rest" }'
 else
   # shellcheck disable=SC2016  # backticks are markdown, not a subshell
   printf 'No Service doc for %s. Draft `knowledge/services/%s.md` in the bundle alongside this task, for the `cataloguer` to review.\n' \
