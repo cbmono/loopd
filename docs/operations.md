@@ -247,7 +247,7 @@ where nothing was denied. Do step 1 on the machine before you pull, or accept th
 knowingly. After the conversion the question cannot arise again — all five hooks are
 registered by `plugin/hooks/hooks.json`, per machine.
 
-### Why `/loopd:init` no longer exists, and what is left of it
+### Why `install.sh` was retired, and what replaced it
 
 The command layer left first, and the obvious next question was whether the installer went
 with it. **It did — but as a relocation, not a deletion**, and the count is what forced the
@@ -263,13 +263,13 @@ shape. Measured before the move:
 
 The two facts that decided it: a plugin-shipped installer **cannot** stamp absolute
 symlinks into a plugin cache whose path changes on every update, and `claude plugin
-update` already gives the propagation the symlinks existed for. Everything `/loopd:init`
-did that a plugin genuinely could not — seeding `plugin/seed/` if absent, the bundle
+update` already gives the propagation the symlinks existed for. Everything the
+retired `install.sh` did that a plugin genuinely could not — seeding `plugin/seed/` if absent, the bundle
 `.gitignore`, the `repos/` links, the first-stamp roster prompt — moved into
 `plugin/scripts/init-bundle.sh` and is reached as `/loopd:init`.
 
-`/loopd:init` and `/loopd:welcome fix` remain at the repo root for **one version**, as one-screen
-stubs that print the command to run and exit 2. Delete them at the next version.
+The retired `install.sh` and `upgrade.sh` remain at the repo root as one-screen stubs that
+print the command to run (`/loopd:init`, `/loopd:welcome fix`) and exit 2.
 
 ---
 
