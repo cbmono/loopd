@@ -28,6 +28,10 @@ jobs:
     # .github/required-checks.txt and by scripts/required-checks.sh. Renaming this job
     # is a merge-gate change: update the declared name in the same commit.
     name: harness suite
+    # LINUX RUNNER TRIAL BRANCH (audit/linux-runner-trial) — MEASUREMENT ONLY, MUST NOT
+    # MERGE AS IS: `runs-on` below is ubuntu-latest so the suite's Linux cost and failure
+    # set can be measured on a real runner. The comment that follows is main's reasoning
+    # for macos-latest, kept verbatim so the trial's findings can be read against it.
     # macos-latest, not ubuntu-latest: this suite has never had CI, and a first real
     # run on Linux turned up FOUR harnesses (deliverable-paths-vs-yaml, migrate-bundle,
     # push-state, reclaim-worktree) failing for reasons that look environment-specific
@@ -38,7 +42,7 @@ jobs:
     # tests/*.test.sh), so macOS is the platform its baseline was actually measured on.
     # Investigating and fixing each Linux-specific gap is real work belonging to its
     # own task, not silently absorbed into "wire up CI" — see the PR body.
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     # MEASURED, not guessed (ai-bridge-v3/task-040): the worst case since the pool landed
@@ -62,6 +66,28 @@ jobs:
         with:
           # The plugin-only scope check diffs against the PR base; 0 keeps it able to.
           fetch-depth: 0
+
+      # Linux trial only: the runner's shape, so the measurement can be read against the
+      # 3-CPU macOS baseline. Not part of the suite, not kept past the trial.
+      - name: Runner facts (Linux trial)
+        shell: bash
+        run: |
+          set -u
+          echo "nproc: $(nproc)"
+          uname -a
+          id
+          bash --version | head -1
+          sed --version 2>&1 | head -1
+          stat --version 2>&1 | head -1
+          awk --version 2>&1 | head -1 || awk -W version 2>&1 | head -1
+          jq --version
+          python3 --version
+          python3 -c 'import yaml; print("PyYAML", yaml.__version__)' 2>&1 || echo "PyYAML: absent"
+          ruby --version 2>&1 || echo "ruby: absent"
+          perl --version | sed -n 2p
+          command -v timeout gtimeout md5 md5sum shasum readlink greadlink gsed gstat actionlint claude 2>&1 || true
+          echo "umask: $(umask)"
+          echo "TMPDIR=${TMPDIR:-<unset>} RUNNER_TEMP=${RUNNER_TEMP:-<unset>} HOME=$HOME"
 
       - name: Run tests/*.test.sh
         shell: bash
