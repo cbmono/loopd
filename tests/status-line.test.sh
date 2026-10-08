@@ -106,10 +106,10 @@ else                  HM="$(date -d 2026-09-13T16:41:05Z '+%H:%M' 2>/dev/null)";
 echo
 echo "== 1. the whole line, character for character =="
 ok "the healthy bundle" "$(plain "$INST")" \
-   "AI Bridge · 2 in flight · agents 0 running · 3 need you · lock free · last tick $HM"
+   "loopd · 2 in flight · agents 0 running · 3 need you · lock free · last tick $HM"
 : > "$INST/$AB_LOCK"
 ok "…and with a tick holding the lock" "$(plain "$INST")" \
-   "AI Bridge · 2 in flight · agents 0 running · 3 need you · lock held · last tick $HM"
+   "loopd · 2 in flight · agents 0 running · 3 need you · lock held · last tick $HM"
 rm -f "$INST/$AB_LOCK"
 ok "exactly one line of output" "$(plain "$INST" | wc -l | tr -d ' ')" 1
 
@@ -120,7 +120,7 @@ ok 'an `open:` TICK is still the last tick (it is the newest)' \
 printf '{"counts":{"awaiting":99}}\n' > "$INST/$AB_SNAPSHOT"
 printf 'recorded: 2001-01-01T00:00:00Z\n'    > "$INST/$AB_STATE_DIR"
 ok "SNAPSHOT.json and .tick-state change nothing" "$(plain "$INST")" \
-   "AI Bridge · 2 in flight · agents 0 running · 3 need you · lock free · last tick $HM"
+   "loopd · 2 in flight · agents 0 running · 3 need you · lock free · last tick $HM"
 ok "…and neither is named in the source" \
    "$(grep -c 'SNAPSHOT\.json\|\.tick-state' "$SL" | tr -d ' ')" 2
 ok "…which is twice, in comments saying why not" \
@@ -133,29 +133,29 @@ D="$TMP/d1"; mk "$D"; rm -f "$D/$AB_AWAITING"
 ok "no AWAITING.md ⇒ the queue is off, so the segment is GONE" \
    "$(plain "$D" | grep -c 'need you\|AWAITING' | tr -d ' ')" 0
 ok "…and the rest of the line is untouched" "$(plain "$D")" \
-   "AI Bridge · 2 in flight · agents 0 running · lock free · last tick $HM"
+   "loopd · 2 in flight · agents 0 running · lock free · last tick $HM"
 D="$TMP/d2"; mk "$D"; rm -f "$D/$AB_LEDGER"
 ok "no log.md ⇒ the time is unknown"       "$(plain "$D" | sed 's/.*· //')" "last tick ?"
 D="$TMP/d3"; mk "$D"; printf '# Log\n\nnothing yet\n' > "$D/$AB_LEDGER"
 ok "a log with no TICK line ⇒ unknown"     "$(plain "$D" | sed 's/.*· //')" "last tick ?"
 D="$TMP/d4"; mk "$D"; rm -rf "$D/projects"
-ok "no projects/ ⇒ in-flight is unknown"   "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "? in flight"
+ok "no projects/ ⇒ in-flight is unknown"   "$(plain "$D" | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "? in flight"
 
 echo
 echo "== 4. …and zero is still printed when zero is what the files SAY =="
 D="$TMP/d5"; mk "$D"
 for f in "$D"/projects/proj-a/tasks/*.md; do printf -- '---\nstatus: ready\n---\n' > "$f"; done
-ok "no task in progress ⇒ 0, not ?" "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
+ok "no task in progress ⇒ 0, not ?" "$(plain "$D" | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
 D="$TMP/d6"; mk "$D"
 printf '# Awaiting you\n\n## 🔴 Awaiting you (0)\n\n*nothing waits*\n' > "$D/$AB_AWAITING"
 ok "an empty queue ⇒ 0, not ?"      "$(plain "$D" | sed 's/.*· \([^·]*need you\) ·.*/\1/')" "0 need you"
 D="$TMP/d7"; mk "$D"; rm -f "$D"/projects/proj-a/tasks/*.md
-ok "a project with no tasks ⇒ 0"    "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
+ok "a project with no tasks ⇒ 0"    "$(plain "$D" | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
 
 D="$TMP/d9"; mk "$D"
 if unreadable "$D/projects/proj-a/tasks/task-001.md"; then
   ok "an UNREADABLE task doc ⇒ ?, never a quiet undercount" \
-     "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "? in flight"
+     "$(plain "$D" | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "? in flight"
 else
   no_fixture "an UNREADABLE task doc ⇒ ?, never a quiet undercount" 1
 fi
@@ -183,7 +183,7 @@ D="$TMP/d8"; mk "$D"
 printf -- '---\nstatus: done\n---\n\nstatus: in-progress\n' > "$D/projects/proj-a/tasks/task-001.md"
 printf -- '---\nstatus: done\n---\n'                        > "$D/projects/proj-a/tasks/task-002.md"
 ok "only the first frontmatter block counts" \
-   "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
+   "$(plain "$D" | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
 
 echo
 echo "== 6. outside a bundle it prints NOTHING, and it is not an error =="
@@ -192,7 +192,7 @@ ok "no instance.config.json anywhere above ⇒ no output" "${OUT%rc=*}" ""
 ok "…and exit 0, because a status line never fails a session" "${OUT##*rc=}" 0
 mkdir -p "$INST/projects/proj-a/tasks/deep/deeper"
 ok "…while a SUBDIRECTORY of a bundle still finds it" \
-   "$(plain "$INST/projects/proj-a/tasks/deep/deeper" | cut -d' ' -f1-2)" "AI Bridge"
+   "$(plain "$INST/projects/proj-a/tasks/deep/deeper" | cut -d' ' -f1)" "loopd"
 
 echo
 echo "== 7. colour: a bare non-TTY keeps it; NO_COLOR and --color never do not =="
@@ -266,10 +266,10 @@ echo "== 10. the session JSON on stdin: drained, and read only for a directory =
 SJ="$(printf '{"session_id":"x","workspace":{"current_dir":"%s"},"cost":{"total_cost_usd":1.5}}' "$INST")"
 ok "\`current_dir\` locates the bundle" \
    "$(printf '%s' "$SJ" | SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" --color never 2>/dev/null)" \
-   "AI Bridge · 2 in flight · agents 0 running · 3 need you · lock free · last tick $HM"
+   "loopd · 2 in flight · agents 0 running · 3 need you · lock free · last tick $HM"
 ok "…and --instance wins over it" \
    "$(printf '%s' "$SJ" | SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" --instance "$TMP/d5" --color never 2>/dev/null \
-      | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
+      | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
 ok "no dollar figure is ever echoed back" \
    "$(printf '%s' "$SJ" | SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" --color never 2>/dev/null | grep -c '1\.5\|usd' | tr -d ' ')" 0
 
@@ -291,7 +291,7 @@ echo
 echo "== 12. the mutants — these assertions discriminate =="
 D="$TMP/m1"; mk "$D"; printf -- '---\nstatus: in-progress\n---\n' > "$D/projects/proj-a/tasks/task-003.md"
 ok "a third in-progress task moves the number" \
-   "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "3 in flight"
+   "$(plain "$D" | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "3 in flight"
 D="$TMP/m2"; mk "$D"
 printf '%s\n' '* ❓ **answer** — [d](/projects/proj-a/tasks/task-002.md)' >> "$D/$AB_AWAITING"
 ok "…and an item outside the block does NOT" \
