@@ -74,6 +74,11 @@ This repo is its own marketplace. In any Claude Code session:
 /plugin install loopd@loopd
 ```
 
+That is the minimal install — core alone. For core plus the autonomy companion and the
+mods in **one** command, install the bundle instead: `/plugin install loopd-all@loopd`
+([`plugin-all/README.md`](plugin-all/README.md) — it ships nothing of its own, so turning
+a mod off later never touches `loopd`).
+
 Every command is namespaced: `/loopd:dispatch`, `/loopd:new-project`, and
 the rest of the table [below](#commands); so is every role agent —
 `loopd:software-engineer` and the rest — because a bare agent name does not resolve.
@@ -607,7 +612,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `/loopd:dispatch` reports "Unknown command" | the **plugin** is not installed on this machine (or Claude Code has not restarted since) — never the stamp, which delivers no commands at all now | `/plugin marketplace add cbmono/loopd`, `/plugin install loopd@loopd`, then `/exit` and relaunch |
+| `/loopd:dispatch` reports "Unknown command" | the **plugin** is not installed on this machine (or Claude Code has not restarted since) — never the stamp, which delivers no commands at all now | `/plugin marketplace add cbmono/loopd`, `/plugin install loopd@loopd` (or `loopd-all@loopd` for core plus every companion), then `/exit` and relaunch |
 | A command or agent is missing after a pull | it is a **new** `plugin/` file, so no symlink exists yet | `/loopd:init <bundle>` |
 | A seed change from a pull never arrived | seed is copied only when absent, by design | `/loopd:init` and port what it reports |
 | Commands and hooks vanished later, having worked | the installer was run from a git **worktree** | re-run `/loopd:init` from the main working tree |

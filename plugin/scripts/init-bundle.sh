@@ -3006,7 +3006,8 @@ echo "       re-run /${PLUGIN_NAME}:init to fill in repos/.)"
 # fire at all. See docs/operations.md § 1.
 echo "      (The commands are the loopd PLUGIN, installed once per machine:"
 echo "       /plugin marketplace add cbmono/loopd, then"
-echo "       /plugin install ${PLUGIN_NAME}@${PLUGIN_MARKETPLACE} — then restart Claude Code.)"
+echo "       /plugin install ${PLUGIN_NAME}@${PLUGIN_MARKETPLACE} — then restart Claude Code."
+echo "       Or /plugin install ${PLUGIN_NAME}-all@${PLUGIN_MARKETPLACE}: core plus every companion, one command.)"
 
 # Retired seed content — REPORT, never remove. See RETIRED for why the conversion sweep
 # above may delete and this may not: a machinery symlink into a template checkout has one

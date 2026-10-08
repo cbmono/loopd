@@ -1,0 +1,22 @@
+{
+  "name": "loopd-all",
+  "displayName": "loopd — all (every loopd plugin in one install)",
+  "version": "3.0.0",
+  "description": "Everything loopd ships, in one install: the control panel, the autonomy companion and the mods",
+  "author": {
+    "name": "cbmono"
+  },
+  "repository": "https://github.com/cbmono/loopd",
+  "license": "MIT",
+  "keywords": [
+    "loopd-companion",
+    "bundle"
+  ],
+  "dependencies": [
+    "loopd",
+    "loopd-yolo",
+    "loopd-mod-usage",
+    "loopd-mod-pane",
+    "loopd-mod-signal"
+  ]
+}

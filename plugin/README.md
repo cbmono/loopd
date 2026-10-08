@@ -13,6 +13,10 @@ and converts one stamped by the retired `install.sh`.
 /plugin install loopd@loopd
 ```
 
+That is the **minimal** install — core alone, gated, no mods. The recommended one is the
+bundle, [`loopd-all@loopd`](../plugin-all/README.md): one command that installs core, the
+autonomy companion and the three mods as dependencies, and ships nothing of its own.
+
 Updates ship by version bump (no ambient auto-update): `/plugin` → Marketplaces.
 
 **It also ships a colour theme.** `themes/loopd.json`, declared by `experimental.themes`
@@ -151,6 +155,7 @@ halves for every companion entry in the marketplace, so a companion cannot drift
 | [`loopd-mod-usage`](../plugin-mod-usage/README.md) | `hooks/register.ts` — a mod that records each session's tokens, requests, tool calls, tool errors, wall time and model in the plugin store under `loopd.usage.<session id>` | `scripts/session-usage.sh`, which reads that store record before the transcript and falls back to the transcript on any doubt |
 | [`loopd-mod-pane`](../plugin-mod-pane/README.md) | `hooks/register.ts` — a mod whose `/board` opens a pane drawing this bundle's board from `.loopd/SNAPSHOT.json` in the session's cwd: a **fourth renderer** over `scripts/write-snapshot.sh`'s contract, with a Tick button that runs `/loopd:dispatch` in that session and a Refresh button | nothing — core reads its presence nowhere. It reads core's snapshot (never the bundle), and absent, the three core renderers are all there is |
 | [`loopd-mod-signal`](../plugin-mod-signal/README.md) | `hooks/register.ts` — a mod that records the PM session of a bundle under `loopd.pm.<bundle root>`, and from a role agent's marked worktree writes `loopd.signal.<session id>` on every `turn.complete` and sends that PM session **one** `loopd-signal:` line | nothing in code — `tick-steps/step-4-advance.md` tells the tick what the line is worth (the order of its sweep, never a verdict); absent, no line arrives and step 4 runs exactly as before |
+| [`loopd-all`](../plugin-all/README.md) | nothing — a **bundle**: `.claude-plugin/plugin.json` carries a `dependencies` list (`loopd`, `loopd-yolo`, the three mods) and no hook, skill, agent, command or `companion/` file, so disabling one dependency disables only this empty plugin and never `loopd`. `loopd-accounts` and `loopd-llm` are left out on purpose: per-machine decisions their READMEs make the human take by hand | nothing — core reads its presence nowhere. It is the one-command install, and its one maintenance rule is to stay component-free |
 
 `scripts/resolve-autonomy.sh` is the **one** reader of "does delegated autonomy exist
 here": the **bundle root wins outright** (a v1-era bundle carrying its own real
