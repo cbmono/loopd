@@ -168,7 +168,7 @@ fi
 n_colour() { case "$1" in "$UNKNOWN") printf '%s' "$C_PINK" ;; 0) printf '%s' "$C_DIM" ;; *) printf '%s' "$2" ;; esac; }
 SEP="$(paint "$C_DIM" ' · ')"
 
-printf '%s' "$(paint "$C_B" 'AI Bridge')"
+printf '%s' "$(paint "$C_B" 'loopd')"
 printf '%s%s' "$SEP" "$(paint "$(n_colour "$inflight" "$C_BLUE")" "$inflight in flight")"
 if [ "$agents" = "$UNKNOWN" ]; then
   printf '%s%s' "$SEP" "$(paint "$C_PINK" "agents $UNKNOWN")"
