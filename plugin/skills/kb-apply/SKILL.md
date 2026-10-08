@@ -3,7 +3,7 @@ name: kb-apply
 disable-model-invocation: true
 description: Apply one knowledge/ reflection report after you have read it — the human half of the reflector. A scheduled run proposes into a draft report; this is the only path that writes the proposals to knowledge/. Applies exactly what the report names, in one commit.
 argument-hint: "<path to the report, e.g. projects/knowledge-reflection/tasks/task-001-knowledge-reflection.md>"
-allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/kb-apply.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Read, Glob, Grep
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/kb-apply.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Read, Glob, Grep
 ---
 
 Apply one reflection report to `knowledge/`, after a human has read it.
@@ -15,8 +15,9 @@ Apply one reflection report to `knowledge/`, after a human has read it.
 brief is built from (`SCHEMA.md` → "Two human authorities").
 
 ## Preconditions
-Run from a control-panel instance root — confirm `SCHEMA.md` and `instance.config.json`
-exist in the cwd; if not, tell the user to `cd` into the instance and stop.
+Run from a control-panel instance root — confirm `instance.config.json` in the cwd and
+`SCHEMA.md` at the resolved schema path (`AB_SCHEMA`; the root on a legacy layout) with exactly
+`ls instance.config.json "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`; if it fails, tell the user to `cd` into the instance and stop.
 
 ## Steps
 1. **Resolve the report.** `$ARGUMENTS` is a path to a task document under

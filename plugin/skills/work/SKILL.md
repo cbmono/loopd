@@ -11,8 +11,9 @@ only where the work happens.
 
 ## Preconditions
 
-Run from a control-panel instance root (`SCHEMA.md` + `instance.config.json` in the
-cwd). Resolve `$ARGUMENTS` to exactly one task under `projects/*/tasks/`; if it
+Run from a control-panel instance root (`instance.config.json` in the cwd,
+`SCHEMA.md` at the resolved schema path — `AB_SCHEMA`; the root on a legacy layout — checked
+with exactly `ls instance.config.json "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`). Resolve `$ARGUMENTS` to exactly one task under `projects/*/tasks/`; if it
 matches none or several, list the candidates and stop. The task must be `ready` or
 `in-progress` — a `draft` is not yours to work (say so: the human promotes it first),
 and a `done`/`cancelled` task is finished.

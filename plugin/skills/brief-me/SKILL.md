@@ -9,8 +9,9 @@ You never dispatch, promote, merge, or edit anything here.
 
 ## Preconditions
 
-Run from a control-panel instance root: `SCHEMA.md` and `instance.config.json` must
-exist in the cwd. If not, say which instance directories exist nearby (if any) and stop.
+Run from a control-panel instance root: `instance.config.json` must exist in the cwd and
+`SCHEMA.md` at the resolved schema path (`AB_SCHEMA`; the root on a legacy layout) — check with exactly
+`ls instance.config.json "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`. If it fails, say which instance directories exist nearby (if any) and stop.
 
 ## Gather — cheaply, in this order
 

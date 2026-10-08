@@ -11,8 +11,9 @@ This is intake, not execution: you create drafts and stop.
 
 ## Preconditions
 
-Run from a control-panel instance root (`SCHEMA.md` + `instance.config.json` in the
-cwd); otherwise say so and stop. The input is `$ARGUMENTS`, or — when empty — the
+Run from a control-panel instance root (`instance.config.json` in the cwd,
+`SCHEMA.md` at the resolved schema path — `AB_SCHEMA`; the root on a legacy layout — checked
+with exactly `ls instance.config.json "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`); otherwise say so and stop. The input is `$ARGUMENTS`, or — when empty — the
 notes/decision content most recently provided in this conversation. If there is
 neither, ask for the notes; do not invent work.
 
