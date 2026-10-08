@@ -599,6 +599,24 @@ Full reasoning, including why one drifted instance must not blank the board for 
 One hard rule holds regardless of `maxAgentsInFlight`: never two package installs against
 the **same repo's store** at once (the PM staggers deps-touching tasks across ticks).
 
+### Mods (optional companions)
+
+A mod is a companion plugin Claude Code runs **inside** each session that loads it. Each is
+installed only if you choose to (`/plugin install <name>@loopd`, or all three with
+`loopd-all`), changes no gate, and is deletable; core runs exactly as before without it.
+Each README owns its detail.
+
+| Mod | One line | Detail |
+|---|---|---|
+| `loopd-mod-usage` | records a session's usage in the plugin store after every turn; `session-usage.sh` reads the store first and the transcript second | [`plugin-mod-usage/README.md`](../plugin-mod-usage/README.md) |
+| `loopd-mod-pane` | `/board` opens a pane drawing `SNAPSHOT.json`, with **Tick** and **Refresh** buttons | [`plugin-mod-pane/README.md`](../plugin-mod-pane/README.md) |
+| `loopd-mod-signal` | a role agent's session tells the PM's session its turn is over; step 4 settles that session first | [`plugin-mod-signal/README.md`](../plugin-mod-signal/README.md) |
+
+**What a mod may do here** is the same short list for all three — no model call, no
+permission decision, no process, network or environment, no file write, and file reads
+only for the paths a README's "What it reads" declares — enforced by `tests/mods.test.sh`
+and stated in each README's "What it never does".
+
 ### Local code intelligence (codegraph, optional)
 
 Role agents navigate product repos faster with a local CodeGraph index than with blind
@@ -610,6 +628,13 @@ grep. Opt-in, 100% local — no code leaves the machine.
 
 Add infra/assets repos with no useful call graph via `codegraphSkip` (space-separated) or
 `$CODEGRAPH_SKIP`. With no index present, agents just grep as before.
+
+### Is the knowledge mount clean?
+
+`scripts/kb-sync.sh status` says `KB mount is clean and pushed.` only when no tracked file
+under the knowledge path has uncommitted changes **and** no KB commit is unpushed; either
+one prints the count and the `kb-sync.sh commit` to run, and exits 1. An **untracked** new
+document still reads as clean.
 
 ### A knowledge-base migration that stopped part-way
 
@@ -1398,13 +1423,17 @@ fixes drifted into because this was never written down (task-019).
 - **Role agents are detached `claude --bg` sessions, never `Agent`-tool children.** An
   `Agent`-tool child holds the dispatch lock until it stops — ticks of 49, 75, 84 and 125
   minutes whose own work ended inside ~5 (2026-09-13). Not reopened to dodge the classifier.
+- **They are spawned with `--permission-mode auto`, never `bypassPermissions`, and never
+  on `haiku`.** The classifier refuses a spawn that asks for a bypass agent; a `--bg`
+  session on `sonnet` or `opus` holds auto mode, while on `haiku` it is demoted to
+  `default` and parks, so step 3 resolves one tier up (`plugin/tick-steps/step-3-dispatch.md`).
 - **The spawn preflight runs on every dispatching tick, permanently.** The auto-mode
   refusal `[Create Unsafe Agents]` is **intermittent**: one task, role, model and command
   shape was refused on 2026-09-30 and spawned on 2026-10-01. A refusal is rolled back and
   reported (`plugin/tick-steps/step-3-dispatch.md`), never retried in another shape.
 - **It writes a `claude --bg` grant on exactly one path — a human's yes — and never a
   trust key.** A plugin must not grant itself a bypass (owner, 2026-09-25 and
-  2026-09-30), so until 3.4 `/loopd:init` only printed the rule and the operator added it.
+  2026-09-30), so until 3.5.0 `/loopd:init` only printed the rule and the operator added it.
   **Changed 2026-10-09, by the owner's decision** — "let loopd:init ask during installation
   with Y as default" — after the measured onboarding cost: the second operator on a shared
   bundle, who is not an engineer, had to edit `.claude/settings.local.json` by hand, and
