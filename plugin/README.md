@@ -125,7 +125,7 @@ held to it too, and a companion that could remove a core gate would not be a com
 | **How it registers** | An entry in [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) with its own `source: ./<dir>` and `.claude-plugin/plugin.json` — installed with `/plugin install <name>@loopd`. |
 | **Where core looks** | `<companion plugin root>/companion/<file>` — a **fixed relative path**, so a companion's own `README.md` or docs can never be mistaken for something core reads. |
 | **Which plugins count** | Only those installed from the **same marketplace core itself came from**, read out of `~/.claude/plugins/installed_plugins.json`. An unrelated plugin that happens to carry that path is not a companion. |
-| **What core reads** | Only names it already knows. Core never executes a companion's code, and a companion ships no hook and no agent — a second copy of a `PreToolUse` hook fires in every session on the machine. |
+| **What core reads** | Only names it already knows. Core never executes a companion's code, and a companion ships no settings hook and no agent — a second copy of a `PreToolUse` hook fires in every session on the machine. A **mod** companion (`plugin-mod-*/`, a hooks module Claude Code runs in-process) is the one shape that does ship under `hooks/`, and it is held to a narrower rule by `tests/mods.test.sh`: it observes and records, never calls a model and never answers the permission event. |
 | **When it is absent** | The gated default, silently. Absence is never an error, and every unknown (no registry, an unreadable one, a root gone from disk) resolves to absence. |
 
 ### How a companion is versioned
@@ -148,6 +148,7 @@ halves for every companion entry in the marketplace, so a companion cannot drift
 | [`loopd-yolo`](../plugin-yolo/README.md) | `companion/AUTONOMY.md` — the delegated-autonomy capability and the `yolo` preflight | `scripts/resolve-autonomy.sh`, and through it `scripts/commit-as.sh`'s promotion guard |
 | [`loopd-accounts`](../plugin-accounts/README.md) | `companion/accounts.md` — the per-bundle account capability — and `bin/ai-bridge-claude`, the launcher the **human** runs | `scripts/resolve-account.sh`, and through it the SessionStart banner's account line |
 | [`loopd-llm`](../plugin-llm/README.md) | `companion/llm.md` — the alternative-LLM-backend capability — and `bin/ai-bridge-deepseek`, the launcher the **human** runs, opt-in per machine | nothing — core reads its presence nowhere. The banner's backend warning reads `ANTHROPIC_BASE_URL` from its own environment, so it fires with or without this companion |
+| [`loopd-mod-usage`](../plugin-mod-usage/README.md) | `hooks/register.ts` — a mod that records each session's tokens, requests, tool calls, tool errors, wall time and model in the plugin store under `loopd.usage.<session id>` | `scripts/session-usage.sh`, which reads that store record before the transcript and falls back to the transcript on any doubt |
 
 `scripts/resolve-autonomy.sh` is the **one** reader of "does delegated autonomy exist
 here": the **bundle root wins outright** (a v1-era bundle carrying its own real

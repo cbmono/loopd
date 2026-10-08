@@ -1,0 +1,16 @@
+{
+  "name": "loopd-mod-usage",
+  "displayName": "loopd — usage (a mod that records what a session spent)",
+  "version": "3.0.0",
+  "description": "COMPANION, a mod. Records each session's token usage, request count, tool calls by name, tool errors, wall time and model in the plugin store under loopd.usage.<session id>; core's session-usage.sh reads that record before it falls back to the transcript. Observes only: no model call, no permission decision, no process, no network, no file. Not installed = session-usage.sh reads the transcript as before.",
+  "author": {
+    "name": "cbmono"
+  },
+  "repository": "https://github.com/cbmono/loopd",
+  "license": "MIT",
+  "keywords": [
+    "loopd-companion",
+    "mod",
+    "usage"
+  ]
+}
