@@ -332,7 +332,14 @@ trap 'rm -rf "$RUN_OUT_DIR" ${shim:+"$shim"}' EXIT
 # those two argument shapes, and AB_CLAUDE_REAL names that binary — resolved BEFORE the
 # shim is put on PATH, and empty where the machine has none (CI's runners), so the mod
 # harness prints a SKIP by name rather than a vacuous pass.
-export AB_CLAUDE_REAL="$(command -v claude 2>/dev/null || true)"
+# AB_NO_CLAUDE=1 makes the probe answer empty on a machine that HAS one: a binary that
+# hangs at exec (a fresh Gatekeeper quarantine, 2026-10-08) is not usable, and the probe
+# cannot tell — `command -v` finds it, the shim execs it, and the mod harness sits at the
+# 600s kill bound with no summary. A SKIP by name is the honest answer, so the operator
+# can say so. Not an inherited AB_CLAUDE_REAL: run.sh exports that, so a nested run (the
+# test-runner harness drives this file from inside it) would read its parent's answer.
+if [ -n "${AB_NO_CLAUDE:-}" ]; then export AB_CLAUDE_REAL=""
+else export AB_CLAUDE_REAL="$(command -v claude 2>/dev/null || true)"; fi
 export AB_TIER=deep
 if [ "$mode" != deep ]; then
   export AB_TIER=gate
