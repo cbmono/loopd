@@ -96,6 +96,15 @@ jobs:
           mkdir -p "$TMPDIR"
           tests/run.sh --ci
 
+      # Linux trial only: reproduce the one failure the suite reports without a diff.
+      - name: Diagnostics (Linux trial)
+        if: always()
+        shell: bash
+        continue-on-error: true
+        run: |
+          export TMPDIR="${RUNNER_TEMP:-/tmp}"
+          bash .github/linux-trial/probe-awaiting.sh
+
       # ai-bridge-v4/task-022: `--check` re-asks github.com's own Markdown endpoint what it
       # does with each recorded body and diffs the answer against
       # tests/fixtures/reviewer/host-rendering.txt. Before this step it could only be run by
