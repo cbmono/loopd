@@ -65,20 +65,26 @@ type World = {
   files: Map<string, { text: string; mtimeMs: number }>
   logged: string[]
   submitted: unknown[]
+  prompted: unknown[]
   reads: number
   opened: number
 }
 
 // Every stub the mod's hooks can reach, registered before the first call on `$`.
 // `placed` is what the surface answers $.ui.open with: false is a terminal too narrow.
-function stubs(on: any, w: World, placed = true) {
+// `hold` makes the dispatch run stay in flight until the test lets it go (a mock-clock sleep).
+function stubs(on: any, w: World, placed = true, hold?: () => Promise<void>) {
   on('session.start', () => ({ cwd: CWD }))
   on('command.register', () => ({ value: undefined }))
   on('session.cwd', () => ({ value: CWD }))
   on('ui.log', (_$: any, e: any) => { w.logged.push(e.text); return { value: undefined } })
   on('ui.open', () => { w.opened += 1; return { value: placed ? { isPlaced: true } : { isPlaced: false, reason: 'the terminal is 80 columns' } } })
   on('ui.close', () => ({}))
-  on('prompt.submit', (_$: any, e: any) => { w.submitted.push(e); return { text: e.text } })
+  // Tick runs the dispatch COMMAND through the engine (prompt.submit refuses a text that
+  // begins with `/`); the stub records what reached it. The prompt.submit stub stays so a
+  // regression back to a prompt is counted too (asserted zero).
+  on('command.run', async (_$: any, e: any) => { w.submitted.push(e); if (hold) await hold(); return {} })
+  on('prompt.submit', (_$: any, e: any) => { w.prompted.push(e); return { text: e.text } })
   on('fs.exists', (_$: any, e: any) => ({ value: w.files.has(e.path) }))
   on('fs.stat', (_$: any, e: any) => {
     const f = w.files.get(e.path)
@@ -95,7 +101,7 @@ function world(snapshot: unknown | null, withConfig = true): World {
   const files = new Map<string, { text: string; mtimeMs: number }>()
   if (withConfig) files.set(CONFIG, { text: '{}', mtimeMs: 1 })
   if (snapshot !== null) files.set(SNAPSHOT, { text: typeof snapshot === 'string' ? snapshot : JSON.stringify(snapshot), mtimeMs: 1000 })
-  return { files, logged: [], submitted: [], reads: 0, opened: 0 }
+  return { files, logged: [], submitted: [], prompted: [], reads: 0, opened: 0 }
 }
 
 async function open($: any) {
@@ -205,25 +211,43 @@ test('a title carrying a newline, a tab, ESC and a bidi override is drawn withou
   await open($)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const text = await shown(ui)
-  expect(text).toContain('Ship the [2Jwidget now please')
+  // print-board.sh's rule, matched exactly: every category-C code point is dropped and
+  // the whitespace controls become one space \u2014 so the newline is a space, the tab is a
+  // space, ESC and the bidi override are gone, and the `[2J` that followed ESC arrives as
+  // inert text (its own docstring says so). A CSI stripper would be a blocklist of known
+  // sequences, which conventions 11 rejects; a terminal acts on none of this without ESC.
+  expect(text).toContain('Ship the[2Jwidget now please')
   expect(text).toContain('Alphaproject')
   expect(text).not.toContain('\u001b')
   expect(text).not.toContain('\u202e')
+  expect(text).not.toContain('\n  alpha/task-001 \u00b7 software-engineer \u00b7 in-progress \u00b7 PR UNKNOWN \u00b7 Ship\n')  // no forged row
   expect(text).toContain('1234567890 task(s)')
   await ui.unmount()
 })
 
-test('Tick submits exactly /loopd:dispatch, once per press, and the pane shows it queued', async ($, on) => {
+test('Tick runs exactly /loopd:dispatch, once per press, never as a prompt', async ($, on) => {
   const w = world(SNAP)
-  stubs(on, w)
-  mock.clock(on)
+  const clock = mock.clock(on)
+  // The real engine queues a plugin's command run until the session is idle; the stub
+  // stands in for that wait by sleeping on the mock clock until the test advances it.
+  stubs(on, w, true, () => clock.sleep(1000))
   await open($)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'tick' })
+  // A refused run is drawn, so a failure here shows the engine's reason in the dump.
+  expect(await shown(ui)).not.toContain('tick refused')
   expect(w.submitted.length).toBe(1)
-  expect((w.submitted[0] as any).text).toBe('/loopd:dispatch')
-  expect((w.submitted[0] as any).asUser).toBe(true)
-  // Nothing else was submitted by anything but the press — the poll never does.
+  expect((w.submitted[0] as any).command).toBe('loopd:dispatch')
+  expect(w.prompted).toEqual([])            // never as a prompt: the engine refuses a `/` text there
+  expect(await shown(ui)).toContain('tick queued')
+  // A second press while the first is still in flight is one tick, not two.
+  await ui.press({ key: 'tick' })
+  expect(w.submitted.length).toBe(1)
+  // Once the run has gone through, the footer clears and the next press is a new tick.
+  await clock.advance(1000)
+  expect(await shown(ui)).not.toContain('tick queued')
+  await ui.press({ key: 'tick' })
+  expect(w.submitted.length).toBe(2)
   await ui.unmount()
 })
 
@@ -248,8 +272,9 @@ test('the poll re-reads only when the mtime moved, and Refresh re-reads regardle
   // Refresh reads even with no mtime change.
   await ui.press({ key: 'refresh' })
   expect(w.reads).toBe(3)
-  // No prompt was ever submitted by a timer or a refresh.
+  // Nothing was run or submitted by a timer or a refresh.
   expect(w.submitted).toEqual([])
+  expect(w.prompted).toEqual([])
   await ui.unmount()
 })
 

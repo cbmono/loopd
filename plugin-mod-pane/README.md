@@ -62,7 +62,7 @@ names is listed in this section.
 
 | Button | Does |
 |---|---|
-| **Tick** (`t`) | `$.prompt.submit({ text: '/loopd:dispatch', asUser: true })` — starts one dispatch turn in **this** session. The engine queues a plugin's prompt until the session is idle, so this is idle-only by contract. **It is the human pressing a key at their own prompt, not automation**: nothing here runs on a timer, and no message goes to another session. One press, one queued tick; a second press while one is queued is ignored and the footer says `tick queued`. |
+| **Tick** (`t`) | `$.command.run({ command: 'loopd:dispatch' })` — runs `/loopd:dispatch` once in **this** session, as if you had typed it. The engine queues a plugin's command run until the session is idle, so this is idle-only by contract. (Not `$.prompt.submit`: the host refuses a prompt text that begins with `/`, measured on 2.1.293.) A refused run is drawn in the footer as `tick refused: <reason>`, never swallowed. **It is the human pressing a key at their own prompt, not automation**: nothing here runs on a timer, and no message goes to another session. One press, one queued tick; a second press while one is queued is ignored and the footer says `tick queued`. |
 | **Refresh** (`r`) | re-read the snapshot now, mtime or not. |
 
 Where no surface places the pane (a terminal under the width floor, a `claude -p` run),
@@ -79,23 +79,22 @@ source and on what `claude plugin validate` reads out of it:
 - **No process, no network, no environment** — `$.process`, `$.http` and `$.env` are never called.
 - **No write** — `$.fs.write` is never called, and `$.fs.ancestors` (which walks UP from the cwd) is never called either. The two reads above are the whole file-system footprint, and they are the one widening of the mod rule `tests/mods.test.sh` grants, to a mod whose README names its paths here.
 - **No cross-session message** — `$.session.send` is not used; the cross-session half is unmeasured (`docs/spikes/mods-in-background-sessions.md`).
-- **No timer-driven prompt** — the poll reads a file; only a press submits.
+- **No timer-driven run** — the poll reads a file; only a press runs the command, and nothing here ever submits a prompt.
 
 ## Tested with
 
-Written against the mods docs and the `claude-code.d.ts` of Claude Code **2.1.289** on
-2026-10-08; the 2.1.293 binary on the build machine was Gatekeeper-quarantined that night, so
-`claude plugin validate` and `claude plugin test` were **not** run before the PR opened.
-Mods need v2.1.287 or later. After a CLI update run, from this directory:
+Claude Code **2.1.293** (`claude plugin validate . --strict` passes, `claude plugin test`
+9/9, 2026-10-09), written against the mods docs and the 2.1.289 `claude-code.d.ts`. Mods need
+v2.1.287 or later. After a CLI update run, from this directory:
 
 ```
 claude plugin validate . --strict
 claude plugin test
 ```
 
-Assumptions a run would settle: that a `$.prompt.submit` text beginning with `/` runs as a
-slash command (else Tick is a prompt the model reads, and the human types the command);
-that `ui.close` fires with `e.id` for a pane the person closes (else the poll outlives the
+Settled by that run: `$.prompt.submit` refuses a text beginning with `/` ("would run a
+command as the user; run one with `$.command.run`"), so Tick is a `$.command.run`. Still
+assumed: that `ui.close` fires with `e.id` for a pane the person closes (else the poll outlives the
 pane until reload); that `$.fs.stat` rejects rather than resolving for a missing file (the
 code handles both).
 

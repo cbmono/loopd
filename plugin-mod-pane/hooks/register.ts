@@ -19,10 +19,11 @@
 // one 0 and never a throw, and a number is never truncated — a clipped count is a wrong
 // count (conventions 11d, 11e).
 //
-// TWO ACTIONS, both the human's, both idle-only by the engine's own contract: Tick submits
-// `/loopd:dispatch` in THIS session (`$.prompt.submit` waits for the session to be idle
-// before it starts the turn), Refresh re-reads now. No timer ever submits a prompt, and no
-// message goes to another session.
+// TWO ACTIONS, both the human's, both idle-only by the engine's own contract: Tick runs
+// `/loopd:dispatch` in THIS session (`$.command.run` is "queued and run once the session is
+// idle"; `$.prompt.submit` is not used — the host refuses a prompt text beginning with `/`,
+// measured 2.1.293), Refresh re-reads now. No timer ever runs a command or submits a
+// prompt, and no message goes to another session.
 //
 // NEVER: a model call, a hook on the permission event, a process, the network, the
 // environment, a file write, a walk up from the cwd — tests/mods.test.sh asserts each
@@ -34,7 +35,7 @@ const TITLE = 'loopd board'
 const CONFIG = 'instance.config.json'
 const SNAPSHOT = '.loopd/SNAPSHOT.json'
 const POLL_MS = 5000
-const DISPATCH = '/loopd:dispatch'
+const DISPATCH = 'loopd:dispatch'   // the command, without its slash, as $.command.run names it
 // write-snapshot.sh's verb set, minus nothing: the pane names the verb, never the reason.
 const VERBS = ['approve', 'answer', 'merge', 'unblock', 'close'] as const
 
@@ -77,6 +78,7 @@ let mtimeMs = -1         // the snapshot's mtime at the last read; -1 = never re
 let reads = 0            // how many times the file was actually read (the poll skips an unchanged one)
 let timer: { cancel: () => void } | null = null
 let tickQueued = false
+let tickRefused = ''     // why the last Tick's submit was refused, drawn in the footer; '' = it was not
 
 // ---------------------------------------------------------------- untrusted input
 // The TERMINAL sink's one sanitising point, the same rule print-board.sh applies: drop
@@ -229,23 +231,32 @@ function draw($: any, e: any): any {
     rows.push(line(' '))
     rows.push(line('snapshot written ' + (b.generated_at || 'unknown') + (tickQueued ? ' · tick queued' : ''), { dimColor: true }))
   }
+  // A refused submit is said, not swallowed: a Tick that silently did nothing is the
+  // silent wrong answer convention 12 is about.
+  if (tickRefused) rows.push(line('tick refused: ' + tickRefused, { dimColor: true }))
 
   rows.push(line(' '))
   rows.push(Box({
     flexDirection: 'row', columnGap: 2, children: [
       Button({
         key: 'tick', label: 'Tick', hotkey: 't',
-        // The human pressed a key in their own session: one /loopd:dispatch turn, started
-        // when the session is idle (the engine queues it until then). Not awaited — a
-        // handler that waits for a turn to start would block the press. Never on a timer.
+        // The human pressed a key in their own session: one /loopd:dispatch run, queued
+        // until the session is idle (the engine's own contract for a plugin's command.run).
+        // Not awaited — a handler that waits for the run would block the press. Never on
+        // a timer. A COMMAND run, not a prompt: the host refuses a `/` text as a prompt.
         onPress: () => {
           if (tickQueued) return
           tickQueued = true
-          $.ui.invalidate('ui.render')
+          tickRefused = ''
+          const done = (err?: unknown) => {
+            tickQueued = false
+            if (err !== undefined) tickRefused = clean(err && (err as any).message ? (err as any).message : String(err)) || 'refused'
+            try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
+          }
           let p: any = null
-          try { p = $.prompt.submit({ text: DISPATCH, asUser: true }) } catch { p = null }
-          const done = () => { tickQueued = false; $.ui.invalidate('ui.render') }
-          if (p && typeof p.then === 'function') p.then(done, done); else done()
+          try { p = $.command.run({ command: DISPATCH }) } catch (err) { done(err); return }
+          if (p && typeof p.then === 'function') p.then(() => done(), (err: unknown) => done(err ?? 'refused')); else done()
+          try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
         },
       }),
       Button({
@@ -283,12 +294,12 @@ export function register(on: any) {
     // Where no surface draws a pane (a narrow terminal, a `-p` run), one transcript line.
     if (!placed) $.ui.log(summary())
     return {}
-  })
+  }).catch(async (_$: any, e: any, next: any) => next(e))   // fail OPEN: a broken pane never eats the command
 
   on('ui.close', { id: PANE }, async (_$: any, e: any, next: any) => {
     if (timer) { try { timer.cancel() } catch { /* already gone */ } timer = null }
     return next(e)
-  })
+  }).catch(async (_$: any, e: any, next: any) => next(e))   // fail OPEN: the pane still closes
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($: any, e: any) => {
     if (kind === 'unread') {
