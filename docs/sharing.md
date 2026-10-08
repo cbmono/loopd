@@ -47,7 +47,7 @@ own owner at the next login, and the whole path was deleted.)
 every step — never an error.
 
 **The second human's own first hour — install, the skills, the two gates — is
-[onboarding.md](onboarding.md).** This page is only the shared-instance half that goes on
+[first-hour.md](first-hour.md).** This page is only the shared-instance half that goes on
 top of it: steps 1, 2 and 5 of the table below are the same steps they read there.
 
 ---
