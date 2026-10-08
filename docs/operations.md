@@ -703,7 +703,8 @@ rather than dispatching on a guess.** The fix goes in `instance.config.local.jso
 one from a main session, which is the path the prose version of this rule never reached.
 To see every role at once, `scripts/resolve-model.sh --all` prints one tab-separated row
 per `roleTiers` entry (`role`, which file won, tier, model — the model empty where a role
-resolves to nothing) through the same code path, and exits 1 if any row is empty.
+resolves to nothing) through the same code path, and exits 1 if any row is empty. It is
+what `/loopd:init` reads, once, instead of one call per role.
 
 ### Running the loop on a cadence
 
