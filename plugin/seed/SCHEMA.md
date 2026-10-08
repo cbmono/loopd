@@ -1095,6 +1095,10 @@ All three are read by a script rather than by whoever remembered to look:
 `scripts/resolve-model.sh <agent>` for the first two, `scripts/resolve-max-agents.sh` for
 the cap. Neither script invents a value it cannot find; both print nothing on stdout and
 exit 1 instead, and the caller applies its own documented fallback.
+`resolve-model.sh --all` answers for every `roleTiers` entry in one call — one row per
+role, `<role> TAB <from> TAB <tier> TAB <model>`, the model column empty for a role that
+resolves to nothing and exit 1 if any did — which is what `/loopd:init` asks at the end
+of a stamp; the same code path as the single call, so the two cannot disagree.
 
 **PR size is TWO numbers, because the reviewer counts the one nobody was counting.**
 `maxPrLoc` (**500** when the key is absent) bounds the diff in **lines**; `maxPrFiles`

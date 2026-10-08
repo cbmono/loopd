@@ -2931,20 +2931,19 @@ PY
   # bytes we just wrote. A role that resolves to nothing would otherwise inherit the
   # session model in silence, which is the one outcome this section is against; so it
   # is named here, at the only moment a human is reading this script's output.
-  spend_unresolved=""
-  # `|| true` on the ASSIGNMENT, not inside it: under `set -e` with `pipefail` a pipeline
-  # assigned to a variable outside an `if` condition kills the whole script when any stage
-  # exits non-zero, and an instance with no roleTiers at all is exactly that case. Recorded
-  # in this codebase once already (a `grep|head|cut` assignment beside a guard that was fine).
-  spend_roles="$(bash "$BIN_DIR/resolve-config.sh" --instance "$TARGET" --dump 2>/dev/null \
-                 | awk -F'\t' '$2=="roleTiers" && $3!="" { print $3 }')" || true
-  while IFS= read -r spend_role; do
+  spend_unresolved=""; spend_roles=""
+  # ONE call, `--all`: every roleTiers entry as `<role> TAB <from> TAB <tier> TAB <model>`,
+  # the model column EMPTY for a role that resolves to nothing (resolve-model.sh's header
+  # says why the empty fields are the trailing ones); eight single calls cost 0.49 s of a
+  # 1.14 s stamp. `|| true` on the ASSIGNMENT, not inside it: under `set -e` a substitution
+  # assigned outside an `if` kills the script when it exits non-zero — an unresolved role.
+  spend_all="$(bash "$BIN_DIR/resolve-model.sh" --instance "$TARGET" --all 2>/dev/null)" || true
+  while IFS=$'\t' read -r spend_role spend_from spend_tier spend_model; do
     [ -n "$spend_role" ] || continue
-    if [ -z "$(bash "$BIN_DIR/resolve-model.sh" --instance "$TARGET" "$spend_role" 2>/dev/null)" ]; then
-      spend_unresolved="$spend_unresolved $spend_role"
-    fi
+    spend_roles="$spend_roles $spend_role"
+    [ -n "$spend_model" ] || spend_unresolved="$spend_unresolved $spend_role"
   done <<EOF
-$spend_roles
+$spend_all
 EOF
   if [ -z "$spend_roles" ]; then
     # THE EMPTY CASE IS THE LOUDEST ONE, and it is the case a per-role loop cannot see:

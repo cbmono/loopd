@@ -672,6 +672,9 @@ the agent, the lookup that failed and that consequence — report that line to t
 rather than dispatching on a guess.** The fix goes in `instance.config.local.json`, which
 `/loopd:init` seeds with both keys. This applies to **every** dispatch, including an ad-hoc
 one from a main session, which is the path the prose version of this rule never reached.
+To see every role at once, `scripts/resolve-model.sh --all` prints one tab-separated row
+per `roleTiers` entry (`role`, which file won, tier, model — the model empty where a role
+resolves to nothing) through the same code path, and exits 1 if any row is empty.
 
 ### Running the loop on a cadence
 
