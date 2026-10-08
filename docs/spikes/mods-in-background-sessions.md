@@ -69,3 +69,30 @@ job is the two commands that verify them (`claude plugin validate ./plugin-mod-u
 Until (3) is measured, **the morning tick reads the transcript**: role agents are
 `claude --bg` sessions that load the companion only if the operator installs it on that
 machine, and nothing here installs anything.
+
+
+## Live result — 2026-10-09, Claude Code 2.1.293
+
+The binary launched (the Gatekeeper hold from the night of 2026-10-08 was cleared by the
+operator), and the probe ran in both shapes. **Answer: yes — a mod loaded with
+`--plugin-dir` fires in a non-interactive session and in a detached `--bg` session.**
+
+| Shape | Loaded | Events recorded, in order | Notes |
+|---|---|---|---|
+| `claude -p … --plugin-dir` (two runs) | yes | `session.start` (`isInteractive: false`, `surface: null`, `surfaces: []`), `turn.start`, `session.measure`, `turn.step` (result carries `usage` and `model`), `turn.complete` (`usage`, `durationMs`), `session.end` (`reason: "other"`, `sessionId`) | the `/probe-dump` run fired only `session.start` + `session.end` |
+| `claude --bg … --plugin-dir`, from a trusted directory | yes | `session.start` (**`isInteractive: true`, `surface: "terminal"`**), `turn.start`, `session.measure`, `turn.step`, `turn.complete`, `session.measure` | **no `session.end`**: the session stays alive and idle (`claude agents`: `state: done, status: idle`) after its turn. The probe script's own step 4 failed only because its temp cwd was untrusted (`Workspace not trusted`). |
+
+**Consequences for loopd's mods.**
+- `turn.complete` is the end-of-work signal for a role agent, not `session.end`: a `--bg`
+  session does not end when its brief is answered. The usage mod's record is written on
+  every `turn.complete`, so it is complete without `.ended`; a signal mod must send on
+  `turn.complete` too.
+- A `--bg` session reports `isInteractive: true` with a terminal surface. Nothing may key
+  "is this a role agent" on that flag; the usage mod's one `$.ui.log` line will appear in a
+  role agent's transcript (harmless: a dim line Claude does not read).
+- `$.store` is shared across every session on the machine, so a role agent's record is
+  readable from the PM's session at once. The store file for a `--plugin-dir` mod is named
+  `<plugin>_inline-<hash>.json`; an installed one `<plugin>_<marketplace>-<hash>.json`.
+- `agent.spawn` was not among the events: loopd launches role agents from Bash, not through
+  `$.agent.spawn`, so a spawn-policy mod would never see them (recorded 2026-10-09; the
+  spawn mod was dropped for this reason).
