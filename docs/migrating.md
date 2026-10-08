@@ -13,7 +13,7 @@ reaches it. [§ Converting a symlink-era bundle](#converting-a-symlink-era-bundl
 below is the one command that fixes it, in place, without touching your data.
 
 **And for a bundle that still keeps its state in `.ai-bridge`** — any bundle stamped before
-3.3.0. [§ The state directory is `.loopd`](#the-state-directory-is-loopd-300-onward) below
+3.3.0. [§ The state directory is `.loopd`](#the-state-directory-is-loopd-330-onward) below
 is the migration; `/loopd:init` refuses such a bundle until it has run.
 
 **There are two ways forward and they are not equally safe.** Pick with the table, then
