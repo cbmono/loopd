@@ -561,6 +561,22 @@ never re-earned — re-reviewing an unchanged head reaches the same verdict by
 construction and costs a full reviewer session, the same economics as the role agents'
 "one review per PR" rule.
 
+**Why a `loopd-signal:` line orders the sweep and decides nothing.** The optional
+`loopd-mod-signal` companion (`plugin-mod-signal/`) lets a role agent's session send the
+PM session one line the moment its `turn.complete` fires — a detached `--bg` session stays
+alive and idle after its brief is answered and never fires `session.end`, measured
+2026-10-09 on 2.1.293 (`docs/spikes/mods-in-background-sessions.md`), so that is the
+end-of-work moment. Step 4 reads the line as a hint about **order**: settle the named
+session first, with the same three reads it always ran, then sweep the rest as before. It
+is never a fact about status, for the reason `check-dispatch.sh` is report-only — a turn
+that ended is not a PR that exists, and the 2026-08-28 parked agents above had each ended
+a turn while their work sat uncommitted. The mod itself reads no task document, decides
+no status, submits no prompt and consumes no message; delivery is best-effort
+(`isDelivered: false` is normal for a session that holds or refuses inbound messages, and
+the mod stops sending after two) and the store record `loopd.signal.<session id>` is
+written before the message so the durable half never depends on it. Absent the companion,
+no line arrives and step 4 runs exactly as before.
+
 **Why HOLD is the default and the ASK fires only on the spend, measured 2026-08-31 on
 four PRs (#85–#88)**: the external reviewer was rate-limited on all four and reviewed
 all four properly within the hour, so an automatic `qa-reviewer` fallback would have

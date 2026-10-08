@@ -1,0 +1,4 @@
+{
+  "description": "loopd-mod-signal — the hooks module that tells the project-manager session a role agent's turn is over",
+  "modules": ["./register.ts"]
+}

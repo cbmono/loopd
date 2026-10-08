@@ -27,3 +27,10 @@ tmp/
 # the eval dir on every run. Run artifacts, never sources — and this repo is public, so
 # a transcript of a model run is not something to commit by accident.
 /plugin/evals/results/
+
+# A `claude --plugin-dir <mod>` session writes that build's TypeScript declarations into
+# the mod's `.claude-plugin/types/`, and a one-line `tsconfig.json` that only `extends`
+# them. The copy for YOUR binary, never a source: the mods trust it over the docs while
+# developing and nobody else's build should read it, and the tsconfig dangles without it.
+/plugin-mod-*/.claude-plugin/types/
+/plugin-mod-*/tsconfig.json

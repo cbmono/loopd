@@ -11,15 +11,18 @@
 # see a call routed through a helper that a grep cannot. Where the CLI is absent that half
 # is a SKIP by name, never a pass. `claude plugin test` runs the mod's own tests the same way.
 #
-# THE ONE WIDENING, AND ITS SHAPE (2026-10-08, loopd-mod-pane). The third prohibition used
-# to be every way out of the process — `$.process`, `$.http`, `$.fs`, `$.env` — in one
-# pattern. A renderer over the board snapshot has to READ one file, so the file half is now
-# split in two: `$.fs.write` and `$.fs.ancestors` (which walks UP from the cwd) stay refused
-# for every mod, and `$.fs.read`/`stat`/`exists`/`list` are admitted ONLY for a mod whose
-# README carries a `## What it reads` section naming every path literal the module spells.
-# The section is the declaration a reviewer reads; the grep below is what keeps it honest —
-# a path the module names and the README does not is a FAIL naming the path. A read without
-# the section is refused outright, which is the mutant planted at the end.
+# THE ONE WIDENING, AND ITS SHAPE (2026-10-08, loopd-mod-pane; 2026-10-09, loopd-mod-signal).
+# The third prohibition used to be every way out of the process — `$.process`, `$.http`,
+# `$.fs`, `$.env` — in one pattern. A renderer over the board snapshot has to READ one file,
+# and the signal mod has to read git's own worktree layout to find the bundle a worktree
+# belongs to, so the file half is now split in two: `$.fs.write` and `$.fs.ancestors` (which
+# walks UP from the cwd) stay refused for every mod, and `$.fs.read`/`stat`/`exists`/`list`
+# are admitted ONLY for a mod whose README carries a `## What it reads` section naming every
+# path literal the module spells. The section is the declaration a reviewer reads; the grep
+# below is what keeps it honest — a path the module names and the README does not is a FAIL
+# naming the path. A read without the section is refused outright, which is the mutant
+# planted at the end. The mutants run against EVERY declared reader shipped, so the sweep
+# is not vacuous for whichever of them this checkout carries.
 #
 # WHICH `claude`. Under tests/run.sh the shim on PATH execs the real binary for exactly
 # these two shapes and AB_CLAUDE_REAL names it (empty = none on this machine); by hand, PATH.
@@ -54,9 +57,10 @@ FSWRITE_CALLS='(^|[^A-Za-z0-9_])fs\.(write|ancestors)'
 
 # The README's `## What it reads` section, up to the next `## `.
 reads_section() { awk '/^## What it reads/ { p = 1; next } /^## / { p = 0 } p' "$1" 2>/dev/null; }
-# Every quoted `.json`/`.md` literal a module spells, either quote style — the paths a
-# reader can name.
-path_literals() { grep -oE "['\"][^'\"]*\.(json|md)['\"]" "$1" 2>/dev/null | tr -d "'\"" | LC_ALL=C sort -u; }
+# Every quoted path literal a module spells, either quote style — the paths a reader can
+# name: a `.json`/`.md` file, and the three names of git's own worktree layout that the
+# plugin's deny hook walks too (`.git`, `commondir`, the `loopd-bundle` marker).
+path_literals() { grep -oE "['\"][^'\"]*(\.(json|md)|\.git|commondir|loopd-bundle)['\"]" "$1" 2>/dev/null | tr -d "'\"" | LC_ALL=C sort -u; }
 # yes when the README has the section AND every path literal the module names is in it.
 # Prints the missing ones on stderr so a FAIL names the path rather than a count.
 reads_declared() { # <module> <readme>
@@ -69,8 +73,11 @@ reads_declared() { # <module> <readme>
   done <<<"$(path_literals "$1")"
   if [ "$missing" -eq 0 ]; then echo yes; else echo no; fi
 }
+# A copy of a README with its `## What it reads` section removed (up to the next `## `).
+without_reads_section() { awk '/^## What it reads/ { p = 1; next } /^## / { p = 0 } !p' "$1"; }
 
 n=0
+READERS=""   # the declared readers, "<module>|<readme>" per line, for the mutants below
 for d in "$REPO"/plugin-mod-*/; do
   d="${d%/}"; name="${d##*/}"; n=$((n+1))
   echo
@@ -87,6 +94,11 @@ for d in "$REPO"/plugin-mod-*/; do
      "$([ "$(find "$d" -name '*.test.ts' 2>/dev/null | grep -c .)" -ge 1 ] && echo yes || echo no)" yes
   ok "$name: ships no agents and no skills" \
      "$([ -e "$d/agents" ] || [ -e "$d/skills" ] && echo no || echo yes)" yes
+  # TRACKED, not present: a `--plugin-dir` session writes `.claude-plugin/types/` and a
+  # `tsconfig.json` that extends it into the mod directory on every developer's machine
+  # (.gitignore covers both), so the question is what git carries, never what the disk holds.
+  ok "$name: commits no generated types directory or tsconfig" \
+     "$(git -C "$REPO" ls-files -- "$d/.claude-plugin/types" "$d/tsconfig.json" 2>/dev/null | grep -c . | tr -d ' ')" 0
   [ -f "$mod" ] || continue
   ok "$name: the module never calls \$.model."            "$(count "$MODEL" "$mod")" 0
   ok "$name: …never hooks the permission event"           "$(count "$CHECK" "$mod")" 0
@@ -102,8 +114,15 @@ for d in "$REPO"/plugin-mod-*/; do
       ok "$name: …and spells the snapshot path as bundle-paths.sh does ('$AB_SNAPSHOT')" \
          "$([ "$(count "'$AB_SNAPSHOT'" "$mod")" -ge 1 ] && echo yes || echo no)" yes
     fi
+    READERS="$READERS$mod|$d/README.md
+"
   else
     ok "$name: …reads no file"                            "$(count '\$\.fs\.' "$mod")" 0
+  fi
+  # A message to another session is a line Claude there reads, never a prompt this mod
+  # submits in its place: a mod that sends may not also submit.
+  if [ "$(count '\$\.session\.send' "$mod")" -gt 0 ]; then
+    ok "$name: …sends a message, so it never submits a prompt" "$(count '\$\.prompt\.submit' "$mod")" 0
   fi
   ok "$name: …and hands at least one event on with next"  \
      "$([ "$(count 'next\(' "$mod")" -ge 1 ] && echo yes || echo no)" yes
@@ -144,50 +163,56 @@ ok "at least one mod companion exists" "$([ "$n" -ge 1 ] && echo yes || echo no)
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/mods.XXXXXX")" || { echo "mods.test: mktemp failed" >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 SRC="$REPO/plugin-mod-usage/hooks/register.ts"
-PANE_SRC="$REPO/plugin-mod-pane/hooks/register.ts"
-PANE_README="$REPO/plugin-mod-pane/README.md"
 ok "the shipped usage module is clean of all four, and reads nothing" \
    "$(( $(count "$MODEL" "$SRC") + $(count "$CHECK" "$SRC") + $(count "$REACH" "$SRC") + $(count "$FSWRITE" "$SRC") + $(count "$FSREAD" "$SRC") ))" 0
-ok "the shipped pane module is clean of all four" \
-   "$(( $(count "$MODEL" "$PANE_SRC") + $(count "$CHECK" "$PANE_SRC") + $(count "$REACH" "$PANE_SRC") + $(count "$FSWRITE" "$PANE_SRC") ))" 0
-ok "…and is a declared reader"                    "$([ "$(count "$FSREAD" "$PANE_SRC")" -ge 1 ] && echo yes || echo no)" yes
 { cat "$SRC"; printf '\nasync function spend($: any) { return $.model.complete({ prompt: "x" }) }\n'; } > "$TMP/model.ts"
 { cat "$SRC"; printf '\nexport function extra(on: any) { on(%s, async ($: any, e: any, next: any) => next(e)) }\n' "'tool.check'"; } > "$TMP/check.ts"
 { cat "$SRC"; printf '\nasync function leak($: any) { return $.process.run(["ls"]) }\n'; } > "$TMP/reach.ts"
 { cat "$SRC"; printf '\nasync function env($: any) { return $.env.get("HOME") }\n'; } > "$TMP/env.ts"
+{ cat "$SRC"; printf '\nasync function push($: any) { await $.session.send({ to: "x", text: "y" }); return $.prompt.submit({ text: "/loopd:dispatch" }) }\n'; } > "$TMP/submit.ts"
 ok "…a planted \$.model. call is caught"          "$(count "$MODEL" "$TMP/model.ts")" 1
 ok "…a planted tool.check hook is caught"         "$(count "$CHECK" "$TMP/check.ts")" 1
 ok "…a planted \$.process. call is caught"        "$(count "$REACH" "$TMP/reach.ts")" 1
 ok "…a planted \$.env. call is caught"            "$(count "$REACH" "$TMP/env.ts")" 1
-
-echo
-echo "== the fs widening is read-only and declared — the mutants that must stay red =="
-# The write and the walk-up are refused for EVERY mod, declared reader or not.
-{ cat "$PANE_SRC"; printf '\nasync function save($: any) { await $.fs.write("/tmp/x.json", "{}") }\n'; } > "$TMP/write.ts"
-{ cat "$PANE_SRC"; printf '\nasync function up($: any) { return $.fs.ancestors({ names: ["CLAUDE.md"] }) }\n'; } > "$TMP/ancestors.ts"
-ok "…a planted \$.fs.write in the pane module is caught"     "$(count "$FSWRITE" "$TMP/write.ts")" 1
-ok "…a planted \$.fs.ancestors in the pane module is caught" "$(count "$FSWRITE" "$TMP/ancestors.ts")" 1
-ok "…and neither is admitted by the read pattern"            "$(( $(count "$FSREAD" "$TMP/write.ts") - $(count "$FSREAD" "$PANE_SRC") ))" 0
+ok "…a planted send-then-submit is caught"        "$(( $(count '\$\.session\.send' "$TMP/submit.ts") > 0 ? $(count '\$\.prompt\.submit' "$TMP/submit.ts") : 0 ))" 1
 # A read in a mod whose README has no `## What it reads` is refused (the usage mod's README).
 { cat "$SRC"; printf '\nasync function peek($: any) { return $.fs.read("instance.config.json") }\n'; } > "$TMP/undeclared.ts"
 ok "…a \$.fs.read in a mod with no 'What it reads' section is refused" \
    "$(reads_declared "$TMP/undeclared.ts" "$REPO/plugin-mod-usage/README.md" 2>/dev/null)" no
-# A read of a path the README does not name is refused, and the FAIL names the path.
-{ cat "$PANE_SRC"; printf '\nasync function stray($: any) { return $.fs.read("secrets/other.json") }\n'; } > "$TMP/stray.ts"
-named="$(reads_declared "$TMP/stray.ts" "$PANE_README" 2>&1 >/dev/null)"
-ok "…a path the README does not name is refused"             "$(reads_declared "$TMP/stray.ts" "$PANE_README" 2>/dev/null)" no
-ok "…and the refusal names the path"                         "$(grep -c 'secrets/other.json' <<<"$named")" 1
-# The shipped pane README passes the same reader, so the refusals above are not a reader
-# that says no to everything.
-ok "…while the shipped pane module and README agree"         "$(reads_declared "$PANE_SRC" "$PANE_README")" yes
-# A README that drops the section loses the declaration.
-sed '/^## What it reads/,/^## The two buttons/{/^## The two buttons/!d;}' "$PANE_README" > "$TMP/README-nosection.md"
-ok "…and the pane module against a README without the section is refused" \
-   "$(reads_declared "$PANE_SRC" "$TMP/README-nosection.md" 2>/dev/null)" no
-# The snapshot spelling check bites: a hand-spelled old root path is caught.
-sed "s#'$AB_SNAPSHOT'#'SNAPSHOT.json'#" "$PANE_SRC" > "$TMP/oldpath.ts"
-ok "…a module spelling the snapshot's pre-3.0 root path is caught" \
-   "$(count "'$AB_SNAPSHOT'" "$TMP/oldpath.ts")" 0
+
+echo
+echo "== the fs widening is read-only and declared — the mutants that must stay red, per declared reader =="
+ok "at least one declared reader ships, so the mutants below run against something" \
+   "$([ -n "$READERS" ] && echo yes || echo no)" yes
+while IFS='|' read -r RSRC RREADME; do
+  [ -n "$RSRC" ] || continue
+  rname="$(basename "$(dirname "$(dirname "$RSRC")")")"
+  ok "$rname: is clean of the other four"                "$(( $(count "$MODEL" "$RSRC") + $(count "$CHECK" "$RSRC") + $(count "$REACH" "$RSRC") + $(count "$FSWRITE" "$RSRC") ))" 0
+  # The write and the walk-up are refused for EVERY mod, declared reader or not.
+  { cat "$RSRC"; printf '\nasync function save($: any) { await $.fs.write("/tmp/x.json", "{}") }\n'; } > "$TMP/write.ts"
+  { cat "$RSRC"; printf '\nasync function up($: any) { return $.fs.ancestors({ names: ["CLAUDE.md"] }) }\n'; } > "$TMP/ancestors.ts"
+  ok "$rname: …a planted \$.fs.write is caught"          "$(count "$FSWRITE" "$TMP/write.ts")" 1
+  ok "$rname: …a planted \$.fs.ancestors is caught"      "$(count "$FSWRITE" "$TMP/ancestors.ts")" 1
+  ok "$rname: …and neither is admitted by the read pattern" "$(( $(count "$FSREAD" "$TMP/write.ts") - $(count "$FSREAD" "$RSRC") ))" 0
+  # A read of a path the README does not name is refused, and the FAIL names the path.
+  { cat "$RSRC"; printf '\nasync function stray($: any) { return $.fs.read("secrets/other.json") }\n'; } > "$TMP/stray.ts"
+  named="$(reads_declared "$TMP/stray.ts" "$RREADME" 2>&1 >/dev/null)"
+  ok "$rname: …a path the README does not name is refused" "$(reads_declared "$TMP/stray.ts" "$RREADME" 2>/dev/null)" no
+  ok "$rname: …and the refusal names the path"           "$(grep -c 'secrets/other.json' <<<"$named")" 1
+  # The shipped README passes the same reader, so the refusals above are not a reader that
+  # says no to everything.
+  ok "$rname: …while the shipped module and README agree" "$(reads_declared "$RSRC" "$RREADME")" yes
+  # A README that drops the section loses the declaration.
+  without_reads_section "$RREADME" > "$TMP/README-nosection.md"
+  ok "$rname: …and the module against a README without the section is refused" \
+     "$(reads_declared "$RSRC" "$TMP/README-nosection.md" 2>/dev/null)" no
+  # The snapshot spelling check bites: a hand-spelled old root path is caught.
+  if grep -q 'SNAPSHOT.json' "$RSRC"; then
+    sed "s#'$AB_SNAPSHOT'#'SNAPSHOT.json'#" "$RSRC" > "$TMP/oldpath.ts"
+    ok "$rname: …a module spelling the snapshot's pre-3.0 root path is caught" \
+       "$(count "'$AB_SNAPSHOT'" "$TMP/oldpath.ts")" 0
+  fi
+done <<<"$READERS"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
