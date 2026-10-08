@@ -370,7 +370,7 @@ stop it from firing.
 
 ---
 
-## 4. Worktrees: one script deletes, the pruner still reports
+## 4. Worktrees: two scripts delete, the pruner still reports
 
 ```bash
 scripts/reclaim-worktree.sh --dry-run <task-path>   # verify every guard, touch nothing
@@ -398,6 +398,19 @@ worktrees. **Do not reintroduce a delete there, not even behind a flag** — the
 forbidden because that script SCANS and INFERS. `reclaim-worktree.sh` never scans, which is
 why it is a different object and not that flag. The accepted cost is that a worktree no
 task record names still grows the root, and draining those is a periodic human job.
+**`/loopd:prune-wt` drains the `REMOVABLE` set when you decide to** — run it when the tick
+or a closeout reports finished worktrees piling up, instead of pasting the printed commands
+into a shell. Only a human can start it (`disable-model-invocation: true`). It previews, asks
+once, then runs `prune-wt.sh --yes`, which re-runs the pruner and re-checks every
+`REMOVABLE` path at removal time with `reclaim-worktree.sh`'s guards, removes what passes
+without a forced-removal flag, and runs `git worktree prune` once per repo it removed from.
+It **refuses** — removes nothing, exit 1 — while a tick holds the dispatch lock, and it
+**skips**, leaving the path for you to inspect: any `KEEP`, `RECLAIMABLE`, `STALE` or
+`UNREGISTERED` worktree; a live process in the tree (from the report, or found at removal
+time); an ignored file that is not a known cache, such as a `.env`, which plain
+`git worktree remove` deletes with rc=0; uncommitted, untracked or unpushed work; a
+`git worktree lock`; a detached HEAD. Branches are never deleted.
+
 `worktreeRoot` is optional; absent it is **`<reposRoot>/_wt`**. Full reasoning, including all four
 classification guards:
 [conventions.md invariant 7](conventions.md#7-prune-worktreessh-is-report-only-and-that-is-load-bearing).

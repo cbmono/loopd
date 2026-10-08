@@ -90,7 +90,7 @@ echo
 echo "== 3. every command is documented, and only under /${PN}: =="
 # The baseline is EXPLICIT, never derived from plugin/skills/: a derived list would let a
 # deleted skill take its README line with it and stay green. The first check keeps it honest.
-COMMANDS="answer audit board brief-me capture close-project dispatch fanout handoff init kb-apply new-project pr-review-request welcome work"
+COMMANDS="answer audit board brief-me capture close-project dispatch fanout handoff init kb-apply new-project pr-review-request prune-wt welcome work"
 ok "the baseline is exactly plugin/skills/" "$(ls "$REPO/plugin/skills" | tr '\n' ' ' | sed 's/ $//')" "$COMMANDS"
 undocumented() { # <file> -> each baseline command it never names as /$PN:<cmd>, or none
   local c miss=""
