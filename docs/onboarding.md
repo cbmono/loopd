@@ -131,10 +131,12 @@ record — so the reasoning behind a task survives the session it was decided in
 
 ## Plugins that pair well
 
-**loopd bundles no third-party plugin, and cannot.** Claude Code has no plugin
-dependency mechanism (`claude plugin install --help`, 2.1.263, takes one `<plugin>` and no
-dependency option), and the core is domain-agnostic. So this is a list. Verdicts are the
-owner's, 2026-09-06.
+**loopd bundles no third-party plugin.** Claude Code gained a plugin `dependencies` field
+after this list was written (there was none on 2.1.263; `loopd-all@loopd` uses it on
+2.1.293 to install core, `loopd-yolo` and the three mods in one command), but a dependency
+resolves inside the declaring plugin's **own** marketplace unless the root marketplace
+allowlists another, and the core is domain-agnostic — so the plugins below stay a list a
+human reads, never a dependency the install forces. Verdicts are the owner's, 2026-09-06.
 
 | Plugin | What it adds, and to whom | Verdict |
 |---|---|---|

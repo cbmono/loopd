@@ -363,5 +363,67 @@ ok "…while 4(c)'s non-cache fixture lets the mutant survive" \
    "$(mutant_rc "$CFG")" 1
 
 echo
+echo "== 10. loopd-all is a BUNDLE: a dependencies list this marketplace resolves, and =="
+echo "==     NO component of its own                                                   =="
+# THE FAILURE THIS EXISTS FOR. The bundle is a plugin whose manifest is a `name` and a
+# `dependencies` list — the shape the host docs call a bundle. The host disables a
+# dependent when one of its dependencies is disabled, so the ONE property that lets a human
+# turn a mod off in `/plugin` at no cost is that the bundle ships nothing to lose: a hook or
+# a skill added here would be the first thing gone the day a mod is disabled. The list has
+# to resolve too — a bare name is looked up in THIS marketplace, so a name no entry carries
+# fails the install for everyone who runs the one command this plugin exists to provide.
+ALL="$REPO/plugin-all"
+ALLM="$ALL/.claude-plugin/plugin.json"
+ok "plugin-all ships a manifest" "$(yn test -f "$ALLM")" yes
+ok "…and a README"               "$(yn test -f "$ALL/README.md")" yes
+for d in hooks skills agents commands companion bin scripts; do
+  ok "…and no $d/ (component-free by contract)" "$(yn test -e "$ALL/$d")" no
+done
+if command -v jq >/dev/null 2>&1; then
+  COMPONENT_KEYS='["hooks","skills","agents","commands","mcpServers","lspServers","outputStyles","workflows","experimental","settings","userConfig"]'
+  ok "the manifest declares no component key" \
+     "$(jq -r --argjson ck "$COMPONENT_KEYS" '[keys[] | select(. as $k | $ck | index($k))] | length' "$ALLM")" 0
+  ok "…and a non-empty dependencies list" \
+     "$(jq -r '(.dependencies // []) | length > 0' "$ALLM")" true
+  # Every entry is a BARE NAME some entry of this marketplace carries. A `name@market` or an
+  # object form would be a cross-marketplace claim this bundle has no business making.
+  # `$d` is bound FIRST: inside `$names | index(.)` jq rebinds `.` to `$names`, which
+  # searches the array for itself and finds it at 0 — the planted control below caught that.
+  UNRESOLVED='($mkt[0].plugins | map(.name)) as $names
+              | .dependencies[] | . as $d
+              | select(($d | type) != "string" or ($d | contains("@")) or (($names | index($d)) == null))'
+  ok "…every dependency is a bare name this marketplace resolves" \
+     "$(jq -r --slurpfile mkt "$MJ" "$UNRESOLVED" "$ALLM" | grep -c . || true)" 0
+  ok "…core is among them"              "$(jq -r --arg pn "$PN" '.dependencies | index($pn) != null' "$ALLM")" true
+  ok "…and the bundle never lists itself" "$(jq -r '.dependencies | index("loopd-all") == null' "$ALLM")" true
+  # THE OTHER DIRECTION, and the reason the bundle is a separate plugin at all: core carries
+  # no `dependencies`. Put the list on core and a disabled mod would disable the loop —
+  # every command, both enforcement hooks, the agents.
+  ok "core declares no dependencies (a disabled mod must never disable the loop)" \
+     "$(jq -r 'has("dependencies") | not' "$REPO/plugin/.claude-plugin/plugin.json")" true
+  # The two launcher companions are OUT by decision — per-machine choices their READMEs make
+  # the human take by hand — so the list is pinned closed in that direction too. Adding one
+  # means changing this line and saying why in the PR.
+  ok "…and neither launcher companion is forced on a default install" \
+     "$(jq -r '[.dependencies[] | select(. == "loopd-accounts" or . == "loopd-llm")] | length' "$ALLM")" 0
+  ok "the marketplace lists loopd-all" \
+     "$(jq -r '[.plugins[].name] | index("loopd-all") | if . == null then "no" else "yes" end' "$MJ")" yes
+  ok "…with a same-repo source that is this directory" \
+     "$(jq -r '.plugins[] | select(.name=="loopd-all") | .source' "$MJ")" "./plugin-all"
+  # Non-vacuity: the resolver check must fire on a name no entry carries, or the 0 above is
+  # a jq filter that matches nothing.
+  ok "…and that resolution check catches a planted unknown name" \
+     "$(printf '{"dependencies":["%s","no-such-plugin"]}\n' "$PN" \
+        | jq -r --slurpfile mkt "$MJ" "$UNRESOLVED" | grep -c . || true)" 1
+else
+  echo "  SKIP  jq not installed — the bundle manifest checks need it"
+fi
+# `resolve-autonomy.sh` reads what is INSTALLED (section 9), and a plugin disabled from
+# `/plugin` is still installed — so for loopd-yolo the off switch is uninstall, and the
+# bundle's README is where a human who installed everything in one line will look for it.
+ok "its README says loopd-yolo's off switch is uninstall, not disable" \
+   "$(grep -c 'uninstall\*\* — not disable' "$ALL/README.md" | tr -d ' ')" 1
+
+echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

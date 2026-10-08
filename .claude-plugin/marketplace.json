@@ -130,6 +130,21 @@
         "mod",
         "signal"
       ]
+    },
+    {
+      "name": "loopd-all",
+      "source": "./plugin-all",
+      "description": "BUNDLE of loopd. Everything loopd ships, in one install: the control panel, the autonomy companion and the mods — loopd, loopd-yolo, loopd-mod-usage, loopd-mod-pane and loopd-mod-signal, as dependencies. Ships no component of its own (no hooks, skills, agents or commands), so disabling one dependency disables only this empty bundle and never loopd itself. loopd-accounts and loopd-llm are deliberately NOT in it: both are per-machine decisions their READMEs make the human take by hand.",
+      "version": "3.0.0",
+      "author": {
+        "name": "cbmono"
+      },
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "loopd-companion",
+        "bundle"
+      ]
     }
   ]
 }

@@ -11,7 +11,7 @@ board. Procedures here; the reasoning behind each one is linked.
 
 | Half | What it carries | Scope | Installed / refreshed by |
 |---|---|---|---|
-| the **plugin** (`loopd`) | every slash command — `/loopd:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:board`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd`; `/plugin` to update it later |
+| the **plugin** (`loopd`) | every slash command — `/loopd:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:board`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd` — or `/plugin install loopd-all@loopd`, the component-free bundle that installs core, `loopd-yolo` and the three mods in one command ([`plugin-all/README.md`](../plugin-all/README.md)); `/plugin` to update it later |
 | the **bundle** (`plugin/seed/` content + your data) | `projects/`, `knowledge/`, `objectives/`, `instance.config*.json`, the seed docs (`CLAUDE.md`, `README.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, `.claude/settings.json`), the managed `.gitignore` lines, and the `repos/` links | **per bundle** | `/loopd:init <dir>` |
 
 **THE SECOND HALF NO LONGER CARRIES MACHINERY, AND THAT IS THE CHANGE.** A bundle used to
@@ -199,6 +199,8 @@ deliberately.
 # 1. per MACHINE, in any Claude Code session
 /plugin marketplace add cbmono/loopd
 /plugin install loopd@loopd
+#    or `/plugin install loopd-all@loopd` — core plus loopd-yolo and the three mods,
+#    one command; the core-only line above stays the minimal install.
 #    on ai-bridge-v2 already? uninstall it from /plugin -> Manage. Its stub was
 #    removed in 1.0.0, so the old name no longer resolves from the marketplace.
 

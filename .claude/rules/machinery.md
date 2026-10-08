@@ -7,14 +7,18 @@ paths:
   - "/plugin-mod-usage/**"
   - "/plugin-mod-pane/**"
   - "/plugin-mod-signal/**"
+  - "/plugin-all/**"
   - "/plugin-alias/**"
 ---
 
 # Machinery under `plugin/` (and under any companion plugin)
 
 Loads when you read anything under `plugin/` or under a **companion** plugin's directory
-(`plugin-yolo/`, `plugin-accounts/`, `plugin-llm/`, `plugin-mod-usage/`, `plugin-mod-pane/` and `plugin-mod-signal/` today; the contract is in [`plugin/README.md`](../../plugin/README.md) →
-"Companion plugins"). **Everything here ships to every machine
+(`plugin-yolo/`, `plugin-accounts/`, `plugin-llm/`, `plugin-mod-usage/`, `plugin-mod-pane/`, `plugin-mod-signal/` and `plugin-all/` today; the contract is in [`plugin/README.md`](../../plugin/README.md) →
+"Companion plugins"). `plugin-all/` is the **bundle** — a manifest with a `dependencies` list and
+no component at all, so that disabling one dependency can disable only the empty bundle and
+never `loopd`; a hook, skill, agent or command added there would be the first thing lost when a
+human turns a mod off, so it stays component-free. **Everything here ships to every machine
 that installs the plugin** — one install per machine, not one stamp per bundle, so a
 change reaches every bundle on that machine at the next `claude plugin update` with no
 per-bundle step at all. There is no staging and no per-bundle review.
