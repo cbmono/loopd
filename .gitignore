@@ -27,8 +27,3 @@ tmp/
 # the eval dir on every run. Run artifacts, never sources — and this repo is public, so
 # a transcript of a model run is not something to commit by accident.
 /plugin/evals/results/
-
-# A `claude --plugin-dir <mod>` session writes the build's TypeScript declarations beside
-# the mod it loaded, as `<mod>/.claude-plugin/types/` (claude-code/index.d.ts and friends),
-# for the editor. Generated per machine and per CLI version — never a source, never shipped.
-/plugin-mod-*/.claude-plugin/types/
