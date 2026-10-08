@@ -12,8 +12,10 @@
 #   --jobs N                  harnesses in parallel (default: CPUs); `# serial` runs alone
 # Each harness is bounded by HARNESS_TIMEOUT seconds (600, 1800 under --deep): one that
 # never returns is killed and fails as ITSELF, and the rest of the suite still reports.
-# A full run also reports its harness-seconds against SUITE_BUDGET_S (3600) — a warning,
+# A full run also reports its harness-seconds against SUITE_BUDGET_S (2000) — a warning,
 # never a failure: the runner's own speed varies by a third between two runs of one tree.
+# The gate runs on ubuntu-latest (since 2026-10-09) and nightly on macos-latest; the
+# numbers here are the Linux ones, and the pool behaves the same on both.
 # Exit: 0 all green · 1 a harness failed · 2 refused (no harnesses, or a dead checkout).
 # Why, the core list and the measured numbers: .claude/rules/tests.md.
 set -uo pipefail
@@ -45,23 +47,38 @@ CORE=(
 )
 
 # The per-harness wall-clock bound, in seconds, named once for the whole suite. The slowest
-# gating harness is review-clearance: 311s in a pool of 3 on run 34783957083, and 455s
-# standalone after #226 grew it — though that figure shared a machine with a sibling suite,
-# so treat it as an upper bound. Re-measure it in CI before trimming 600. A `# deep`
-# harness spawns a paid CLI call and measures ~10m.
+# gating harness on macOS is review-clearance: 311s in a pool of 3 on run 34783957083, and
+# 455s standalone after #226 grew it — though that figure shared a machine with a sibling
+# suite, so treat it as an upper bound. On the Linux gate (4 CPUs, run 37817944377) the
+# slowest were session-banner 50s, welcome-command 48s and review-clearance-gates 45s, so
+# 600 is now a large margin there — but the same tree still runs nightly on macos-latest,
+# where welcome-command measured 184s (run 37748780764), and ONE bound serves both.
+# Re-measure on macOS before trimming 600. A `# deep` harness spawns a paid CLI call and
+# measures ~10m.
 HARNESS_TIMEOUT="${HARNESS_TIMEOUT:-600}"
 HARNESS_TIMEOUT_DEEP="${HARNESS_TIMEOUT_DEEP:-1800}"
 
 # The budget for a FULL run, in harness-seconds (the sum of every harness's own wall time;
 # divide by the pool size for minutes). The suite had none, and grew from 3,178 to 4,108
 # harness-seconds in one day (2026-10-04 to -05) until a green run was cancelled at the
-# job limit. 3600 is 20 minutes on the 3-CPU runner. It WARNS and never fails: two runs of
-# the same tree measured 3,015 and 4,108 on that runner, so a failing bound would be a coin.
+# job limit. It WARNS and never fails: two runs of the same tree measured 3,015 and 4,108
+# on the 3-CPU macOS runner, so a failing bound would be a coin.
+#
+# RE-CUT 2026-10-09 for the Linux gate (was 3600 — 20 minutes on the 3-CPU macOS runner,
+# which now runs the suite nightly and is not what this number is for). Measured there:
+# 1,285 harness-seconds for the full tree (run 37817944377, 4 CPUs) and 935 one run
+# earlier (run 37814543343, the tree before #367, nine harnesses failing) — 37% apart,
+# the same variance macOS showed, so the bound stays a warning. 2000 is ~1.55x the measured
+# full run: room for the next dozen harnesses at today's average (~8.5s), and a warning
+# well before the job's 20-minute ceiling (2000 harness-seconds in a pool of 4 is about
+# 8.5 minutes of pool). A nightly macOS run of the same tree is about 2,500 and is NOT
+# judged against this: it runs under --all too, so expect the warning there and read it
+# as "macOS is twice as slow", which is known, not as a regression.
 # One harness over HARNESS_WARN_S is named too — half the kill bound, while there is room.
-SUITE_BUDGET_S="${SUITE_BUDGET_S:-3600}"
+SUITE_BUDGET_S="${SUITE_BUDGET_S:-2000}"
 HARNESS_WARN_S="${HARNESS_WARN_S:-300}"
 
-usage() { sed -n '3,18p' "$0" | sed 's/^#\{1,\} \{0,1\}//'; }
+usage() { sed -n '3,20p' "$0" | sed 's/^#\{1,\} \{0,1\}//'; }
 
 mode=all
 base=""
@@ -110,8 +127,11 @@ declares() { head -20 "$2" 2>/dev/null | grep -qE "^# $1( |$)"; }
 # when it trips. The bound has to kill the process GROUP, not the harness: a harness
 # blocked in a child leaves that child holding the capture's pipe, so `out="$( )"` below
 # goes on blocking past the bound (measured: 60s under a 3s bound). `perl`, not
-# `timeout(1)`, because macos-latest ships the first and not the second; and the exit
-# status is re-encoded because a bare `$?>>8` turns every signal death into 0.
+# `timeout(1)`: macos-latest ships the first and not the second, and although the Linux
+# gate has had `timeout` since 2026-10-09 the suite still runs nightly on macOS, so one
+# implementation keeps the pool's kill behaviour identical on both — a bound that fires
+# through two different tools is two behaviours to measure. The exit status is re-encoded
+# because a bare `$?>>8` turns every signal death into 0.
 bounded() {
   command -v perl >/dev/null 2>&1 || { bash "$1"; return; }
   perl -e '$t=shift; $p=fork; exit 127 unless defined $p; if(!$p){setpgrp(0,0); exec @ARGV; exit 127} $SIG{ALRM}=sub{kill "KILL",-$p; waitpid $p,0; exit 142}; alarm $t; waitpid $p,0; $s=$?; exit(($s & 127) ? 128+($s & 127) : ($s>>8))' \

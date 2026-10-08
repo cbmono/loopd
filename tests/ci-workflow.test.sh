@@ -130,6 +130,54 @@ assert "a step invokes tests/fixtures/reviewer/record-host-rendering.sh --check"
 assert "…and that step is continue-on-error, so host drift never fails the required check" \
   "$(grep -qF 'continue-on-error: true' <<<"$(grep -B8 -F 'record-host-rendering.sh --check' <<<"$WF_TEXT")" && echo 0 || echo 1)"
 
+echo "== the gate runs on Linux, and macOS coverage survives as the nightly job =="
+# 2026-10-09: the required check moved to ubuntu-latest (2.5x faster, and the platform
+# where two shipped bugs were visible — #367; the account is on the job's `runs-on`).
+# Both halves are pinned, because each one can be lost silently: a `runs-on` edited back
+# to macos-latest doubles the gate's wall time with no test going red, and a `macos` job
+# dropped from tests-deep.yml takes bash 3.2 and the BSD tools out from under test with
+# no test going red either — operators run exactly that half. Read off the code lines,
+# comments stripped, since the history comment on the job names both platforms.
+assert "the \"$CHECK_NAME\" job runs on ubuntu-latest" \
+  "$(grep -qE '^[[:space:]]+runs-on:[[:space:]]*ubuntu-latest[[:space:]]*$' <<<"$(wf_code)" && echo 0 || echo 1)"
+assert "…and on nothing else: the gate names no macos runner" \
+  "$(grep -qE '^[[:space:]]+runs-on:[[:space:]]*macos' <<<"$(wf_code)" && echo 1 || echo 0)"
+
+DEEP_WF="$REPO/.github/workflows/tests-deep.yml"
+assert "$DEEP_WF exists" "$([ -f "$DEEP_WF" ] && echo 0 || echo 1)"
+if [[ -f "$DEEP_WF" ]]; then
+  DEEP_CODE="$(grep -v '^[[:space:]]*#' "$DEEP_WF")"
+  # The job is identified by what it DOES — a macos-latest job whose run step is the gate
+  # tier (`--all`: deep excluded structurally, iced skipped unless named, the shim in
+  # front) — not by its display name, which is free to change. The runner line and the
+  # invocation must sit inside the same job: the `deep` and `iced` jobs are macos-latest
+  # too, and neither runs the gate tier, so "both strings somewhere in the file" would
+  # pass a file that dropped the job.
+  macos_suite_job() { # <code> — 0 when some job carries BOTH the runner and the suite call
+    awk '
+      /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { if (r && s) found=1; r=0; s=0 }
+      /^[[:space:]]+runs-on:[[:space:]]*macos-latest[[:space:]]*$/ { r=1 }
+      /tests\/run\.sh --all([[:space:]]|$)/ { s=1 }
+      END { if (r && s) found=1; exit(found ? 0 : 1) }' <<<"$1"
+  }
+  assert "a macos-latest job in tests-deep.yml runs the gate tier (tests/run.sh --all)" \
+    "$(macos_suite_job "$DEEP_CODE" && echo 0 || echo 1)"
+  # Non-vacuity, both ways: the identical check fails when the runner and the call are in
+  # DIFFERENT jobs, and when the macos job is absent altogether.
+  SPLIT=$'jobs:\n  a:\n    runs-on: macos-latest\n    steps:\n      - run: true\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - run: tests/run.sh --all\n'
+  assert "…and that check discriminates: runner and call in different jobs FAIL it" \
+    "$(macos_suite_job "$SPLIT" && echo 1 || echo 0)"
+  assert "…and a tests-deep.yml without the job FAILS it" \
+    "$(macos_suite_job "$(grep -v 'macos-latest' <<<"$DEEP_CODE")" && echo 1 || echo 0)"
+  assert "…and that job never runs the deep tier (no model call rides on the nightly macOS suite)" \
+    "$(awk '
+      /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { if (r && s && d) bad=1; r=0; s=0; d=0 }
+      /^[[:space:]]+runs-on:[[:space:]]*macos-latest[[:space:]]*$/ { r=1 }
+      /tests\/run\.sh --all([[:space:]]|$)/ { s=1 }
+      /tests\/run\.sh --deep([[:space:]]|$)/ { d=1 }
+      END { if (r && s && d) bad=1; exit(bad ? 1 : 0) }' <<<"$DEEP_CODE" && echo 0 || echo 1)"
+fi
+
 echo "== the check name is declared as a required check, verbatim, on both sides =="
 # CHECK_NAME above is the pin; both the workflow and the declared-checks file are
 # verified against it, so a rename on either side that forgets the other goes red here

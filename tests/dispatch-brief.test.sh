@@ -107,7 +107,14 @@ reset 4
 { echo '# Entry points'; echo; for i in $(seq 1 30); do echo "- entry $i"; done; } | service
 OUT="$(run "$DOC")"
 BODY="$(grounding_body "$OUT")"
-assert "a 31-line entry-points section is capped at 15 lines" "$(eq "$(printf '%s\n' "$BODY" | grep -c '')" 15)"
+BODY_LINES="$(printf '%s\n' "$BODY" | grep -c '')"
+assert "a 31-line entry-points section is capped at 15 lines" "$(eq "$BODY_LINES" 15)"
+# A bare count tells nobody WHAT the extra or missing line was. The first Linux gate run
+# (37822380634, 2026-10-09) failed exactly this assertion with the "truncated" marker still
+# present — a 16th line of something, invisible in the log. `run()` merges stderr into the
+# capture on purpose, so a stray diagnostic from the script lands inside the body and is
+# counted; that is the defect this assertion exists to catch, and the body is the evidence.
+[ "$BODY_LINES" = 15 ] || printf '        body was %s lines:\n%s\n' "$BODY_LINES" "$(sed 's/^/        | /' <<<"$BODY")"
 assert "…and the 15th line says it was truncated"             "$(has "truncated at 15 lines" "$BODY")"
 assert "…so a later entry is dropped rather than pasted"      "$(hasnt "- entry 20" "$OUT")"
 
