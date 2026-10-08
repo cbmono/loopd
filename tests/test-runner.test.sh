@@ -46,6 +46,15 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/test-runner.XXXXXX")" || {
   echo "test-runner.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 
+# A git identity for every fixture commit, through the environment. build() configures one
+# in the BASE repo, but a local config is not cloned, so commit_on_branch's commits in the
+# clone fell back to auto-detection — which needs a hostname with a domain. A macOS runner
+# has one; a Linux runner (`runnervm…`) does not, and there the commit silently failed:
+# --changed still saw the staged edit, but --ci reads only origin/main...HEAD, which was
+# empty, so every fast-path assertion went red (2026-10-08).
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com
+export GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
+
 # The fixture's harness set is read out of the runner, so a name added to the core
 # cannot leave the fixture behind.
 core_names="$(grep -oE 'tests/[A-Za-z0-9_-]+\.test\.sh' "$RUNNER" | sort -u)"

@@ -458,6 +458,25 @@ else
 fi
 chmod u+rw "$INST/projects/good/tasks/locked.md" 2>/dev/null
 
+# THE SAME GUARD, MADE ORDER-INDEPENDENT. The case above only bit when the unreadable file
+# was the LAST one `find` emitted: the hook runs under `set -e`, its collect loop ended in
+# `[ -r "$f" ] && FILES+=…`, and a `while` returns its last body command's status — so the
+# function returned 1 and errexit killed the hook with NO output. `find` does not sort, so
+# ext4 put locked.md last and Linux CI went red (2026-10-08) while APFS had hidden it for
+# months. With the unreadable document the ONLY one, it is last on every filesystem.
+new_instance
+mkdir -p "$INST/projects/good/tasks"
+printf -- '---\nstatus: in-progress\n---\n' > "$INST/projects/good/tasks/only-locked.md"
+chmod 000 "$INST/projects/good/tasks/only-locked.md"
+if [ -r "$INST/projects/good/tasks/only-locked.md" ]; then
+  printf '  SKIP  the only document unreadable -> still speaks (cannot chmod 000 as this user)\n'
+else
+  run
+  assert "the only document unreadable -> the hook still prints its state line" "$(has 'in-flight 0' "$OUT")"
+  assert "  ...and exits 0, whatever order find chose"                           "$(eq "$RC" 0)"
+fi
+chmod u+rw "$INST/projects/good/tasks/only-locked.md" 2>/dev/null
+
 # ============================================================ registration
 echo "-- registration in the plugin's hooks.json"
 # IT MOVED, AND THE MOVE IS THE POINT. This hook used to be registered by the bundle's

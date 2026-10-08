@@ -366,7 +366,17 @@ write_task task-pr-unknown done "$WT_PR" okf/demo-pr fixture-org/proj \
 refusal "G11 gh cannot read the PR" task-pr-unknown 'refuse:.*could not read' "$WT_PR"
 
 write_task task-pr-nogh done "$WT_PR" okf/demo-pr fixture-org/proj "$PR1"
-STUB_PATH="$TMP/nogh:/usr/bin:/bin" run "projects/demo/tasks/task-pr-nogh.md"
+# $TMP/nogh is the stock directories as a farm of symlinks WITHOUT `gh` — on Debian/Ubuntu
+# apt installs `gh` to /usr/bin, so `…:/usr/bin:/bin` still found one there and the script
+# refused for a different reason (Linux CI, 2026-10-08). The precondition is asserted.
+for d in /usr/bin /bin; do
+  [ -d "$d" ] || continue
+  entries=(); for f in "$d"/*; do [ "${f##*/}" = gh ] || entries+=("$f"); done
+  [ "${#entries[@]}" -eq 0 ] || ln -s "${entries[@]}" "$TMP/nogh/" 2>/dev/null || true
+done
+assert "G11 no gh available: precondition — the farmed PATH really has no gh" \
+  "$(PATH="$TMP/nogh" command -v gh >/dev/null 2>&1 && echo 1 || echo 0)"
+STUB_PATH="$TMP/nogh" run "projects/demo/tasks/task-pr-nogh.md"
 assert "G11 no gh available: exits 1"  "$(eq "$RC" 1)"
 assert "G11 no gh available: says why" "$(has 'refuse: gh is not available')"
 assert "G11 no gh available: survives" "$(yes_if test -d "$WT_PR")"

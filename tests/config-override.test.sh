@@ -426,12 +426,16 @@ assert "…and no longer files them under 'everything else'" \
   "$(grep -qE 'models|roleTiers|maxAgentsInFlight' <<<"$(grep '^| everything else' "$SCHEMA")" && echo 1 || echo 0)"
 # And the one that deliberately did NOT move, with the reason stated — an override there
 # is a change to where code may be sent, which is the disagreement that breaks it.
+# The backtick is UNESCAPED inside these single quotes: `\`` is a GNU regex anchor (the
+# start of the buffer), so the escaped spelling matched on BSD grep and never on GNU grep
+# (Linux CI, 2026-10-08). The double-quoted patterns above are unaffected — the shell
+# strips their backslash before grep sees it.
 assert "…and its table row marks externalReviewer NOT overridable, by design" \
-  "$(grep -q '^| \`externalReviewer\` | \*\*no, by design\*\*' "$SCHEMA" && echo 0 || echo 1)"
+  "$(grep -q '^| `externalReviewer` | \*\*no, by design\*\*' "$SCHEMA" && echo 0 || echo 1)"
 assert "…and its table row marks board NOT overridable" \
-  "$(grep -q '^| \`board\` | \*\*no\*\*' "$SCHEMA" && echo 0 || echo 1)"
+  "$(grep -q '^| `board` | \*\*no\*\*' "$SCHEMA" && echo 0 || echo 1)"
 assert "…and says the installer reads it from the tracked file at stamp time" \
-  "$(grep -q '^| \`board\` | .*tracked file at stamp time' "$SCHEMA" && echo 0 || echo 1)"
+  "$(grep -q '^| `board` | .*tracked file at stamp time' "$SCHEMA" && echo 0 || echo 1)"
 assert "…and says why: it names where this code may be sent" \
   "$(grep -q 'where this code may be sent' "$SCHEMA" && echo 0 || echo 1)"
 assert "…and states the worktreeRoot fallback" \

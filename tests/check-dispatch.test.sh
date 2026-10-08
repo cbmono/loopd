@@ -318,7 +318,16 @@ echo "== the parked catch must not depend on the network; a needed-but-unavailab
 # from PATH entirely proves the catch survives an offline machine, a missing CLI and a
 # rate limit — and, in the same breath, that the success verdict does NOT quietly clear
 # when the one thing that could contradict it cannot be asked.
-BARE_PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+# The stock directories as a farm of symlinks WITHOUT `gh`: on Debian/Ubuntu apt installs
+# `gh` to /usr/bin, so the bare directories still carried it there and the precondition
+# below went red on Linux (2026-10-08); on macOS (Homebrew, /opt/homebrew/bin) the farm
+# changes nothing.
+BARE_PATH="$TMP/nogh-farm"; mkdir -p "$BARE_PATH"
+for d in /usr/bin /bin /usr/sbin /sbin; do
+  [ -d "$d" ] || continue
+  entries=(); for f in "$d"/*; do [ "${f##*/}" = gh ] || entries+=("$f"); done
+  [ "${#entries[@]}" -eq 0 ] || ln -s "${entries[@]}" "$BARE_PATH/" 2>/dev/null || true
+done
 GH_IN_BARE="$(PATH="$BARE_PATH" command -v gh 2>/dev/null || true)"
 ok "precondition: no gh on the bare PATH (else the next two prove nothing)" \
    "$([ -z "$GH_IN_BARE" ] && echo yes || echo no)" yes

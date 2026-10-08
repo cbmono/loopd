@@ -64,7 +64,13 @@ assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1))
 
 # A distinctive mode, to catch a repair that silently rewrites permissions.
 chmod 664 knowledge/findings/open.md
-MODE_BEFORE="$(stat -f '%Lp' knowledge/findings/open.md 2>/dev/null || stat -c '%a' knowledge/findings/open.md)"
+# GNU `-c` first, BSD `-f` second, validated to an octal mode — the same shape as the
+# script's temp_beside. BSD-first is wrong on GNU: there `stat -f` is --file-system and
+# "%Lp" is read as a file, so the capture was a filesystem block plus the mode.
+mode_of() { local m; m="$(stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null || true)"
+            case "$m" in [0-7][0-7][0-7]|[0-7][0-7][0-7][0-7]) printf '%s' "$m" ;; *) printf '?' ;; esac; }
+MODE_BEFORE="$(mode_of knowledge/findings/open.md)"
+assert "the fixture's mode was read as an octal number (664)" "$([[ "$MODE_BEFORE" == 664 ]] && echo 0 || echo 1)"
 
 BEFORE="$(find . -name '*.md' -exec shasum {} \; | sort)"
 DRY="$(bash "$MIGRATE" 2>&1)"
@@ -127,7 +133,7 @@ assert "an unknown Finding status survived --apply" \
 assert "an unknown Service status survived --apply" \
   "$(grep -q '^status: retired' knowledge/services/unsupported.md && echo 0 || echo 1)"
 assert "a repaired file keeps its original mode" \
-  "$([[ "$(stat -f '%Lp' knowledge/findings/open.md 2>/dev/null || stat -c '%a' knowledge/findings/open.md)" == "$MODE_BEFORE" ]] && echo 0 || echo 1)"
+  "$([[ "$(mode_of knowledge/findings/open.md)" == "$MODE_BEFORE" ]] && echo 0 || echo 1)"
 assert "no temp file was left behind" \
   "$(grep -q . <<<"$(find . -name '.migrate-bundle.*')" && echo 1 || echo 0)"
 assert "the unterminated file is byte-identical to before" \
