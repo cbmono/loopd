@@ -18,7 +18,7 @@ for f in "$REPO"/plugin/skills/*/SKILL.md; do
   # A precondition that never mentions SCHEMA.md (handoff) has nothing to resolve.
   ctx="$(grep -E -A3 "$PRE" "$f")"
   if grep -q 'SCHEMA\.md' <<<"$ctx"; then
-    ok "$s: names the resolved schema path" "$(grep -Eq "$RESOLVED" "$f" && echo yes || echo no)" yes
+    ok "$s: names the resolved schema path" "$(grep -Eq "$RESOLVED" <<<"$ctx" && echo yes || echo no)" yes
   fi
   ok "$s: no bare cwd SCHEMA.md" \
     "$(grep -Ec 'SCHEMA\.md` (\+|and) `instance\.config\.json`|`instance\.config\.json` (\+|and) `SCHEMA\.md`' "$f")" 0
