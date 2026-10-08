@@ -11,6 +11,8 @@
 #     init-bundle.sh --owner LOGIN --email ADDR --repos-root DIR [TARGET]
 #                                       # supply any of this clone's three per-machine
 #                                       # identity values instead of deriving them (4c)
+#     init-bundle.sh --spawn-grant [TARGET]  # "yes" to the spawn-grant question (1f) from
+#                                       # a session with no terminal; never written otherwise
 #     init-bundle.sh --org ORG [--name REPO] [TARGET]
 #                                       # the ORG'S bundle: clone <ORG>/<REPO> when it is
 #                                       # there, else create it private and push (step 0).
@@ -40,6 +42,12 @@
 #      data (objectives/projects/knowledge/log/config/CLAUDE.md/SCHEMA.md/CONVENTIONS.md).
 #      `objectives/` is NOT seeded: SCHEMA.md makes it an optional layer, so only
 #      `--with-objectives` creates it. An existing one is data and is never touched.
+#      `knowledge/` is NOT seeded either when a `knowledge` key names a mounted
+#      repository: step 8 mounts it (kb-sync.sh) instead of writing placeholders into it.
+#   2f. At a terminal, ASKS before writing the `claude --bg` spawn grant into the bundle's
+#      .claude/settings.local.json — Enter is yes — and names any stale grant it would
+#      replace. Not at a terminal it writes nothing and prints the rule; `--spawn-grant`
+#      is the human's yes relayed from a session (owner's decision, 2026-10-09).
 #   3. Writes the derived-ignore lines, the awaiting queue and the board snapshot.
 #   4. LINKS the group's product repos into TARGET/repos/ — one symlink each, via
 #      link-repos.sh. Gitignored, and skipped while reposRoot is still the seeded
@@ -52,7 +60,10 @@
 #   5b. WRITES `instance.config.local.json` when it is ABSENT — this clone's identity,
 #      DERIVED (`gh api user`, the tracked `people` map, the bundle's parent directory)
 #      and never guessed: what it cannot derive it names, and --owner/--email/--repos-root
-#      supply it without a terminal. An existing local file is never rewritten here.
+#      supply it without a terminal. An existing local file is never rewritten here —
+#      except that a missing `authorEmail` is FILLED from the tracked `people` map when
+#      that map has this clone's `ownerGithubUser`, which is the one derivation a second
+#      clone used to type by hand.
 #   6. Reports seed DRIFT — a seed doc this repo has changed since the bundle was stamped
 #      — via refresh-seeds.sh, report-only unless `--refresh-seeds` is given.
 #   7. Its ONE write outside TARGET: re-points the per-machine link
@@ -146,6 +157,9 @@ NORMALISE_CONFIG=0
 ID_OWNER_FLAG=""
 ID_EMAIL_FLAG=""
 ID_REPOS_FLAG=""
+# The human's "yes" to step 1f's question, given from a session that has no terminal to
+# ask it in. 0 means ask at a terminal, and write nothing anywhere else.
+SPAWN_GRANT_FLAG=0
 # The ORGANISATION whose bundle this is, and the repo name under it. Empty means the old
 # behaviour exactly: a local folder, no host call, no remote.
 ORG_FLAG=""
@@ -165,6 +179,7 @@ while [ "$#" -gt 0 ]; do
     # APPLY the config findings step 4d reports, instead of only printing them. Off by
     # default for the same reason --refresh-seeds is: this one rewrites a TRACKED file.
     --normalise-config) NORMALISE_CONFIG=1 ;;
+    --spawn-grant) SPAWN_GRANT_FLAG=1 ;;
     --config|--instance)
       # Mutually exclusive, and said so rather than letting the last flag win: the two
       # write to completely different places, so a run that meant one and did the other
@@ -178,7 +193,7 @@ while [ "$#" -gt 0 ]; do
       # line) — extend it when you add lines there, or --help truncates silently.
       # tests/config-layer.test.sh asserts the flags appear in the output, which is
       # what notices a stale range instead of leaving --help quietly truncated.
-      sed -n '3,74p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '3,85p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     --owner|--email|--repos-root|--org|--name)
       [ "$#" -ge 2 ] || { echo "error: $arg needs a value" >&2; exit 2; }
@@ -1343,6 +1358,30 @@ cfg_bool() { # <key> <default> <config-path>
 FIRST_STAMP=no
 [ -e "$TARGET/instance.config.json" ] || FIRST_STAMP=yes
 
+# Does this file parse as JSON?  0 = yes, 1 = NO, 2 = no parser on this machine.
+# The three answers are distinguished on purpose: "we could not check" must never be
+# reported as "it is fine" — the required-checks.sh discipline, applied to a write.
+team_json_ok() { # <file>
+  if command -v jq >/dev/null 2>&1; then
+    jq -e . "$1" >/dev/null 2>&1 && return 0
+    return 1
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json,sys; json.load(sys.stdin)' >/dev/null 2>&1 <"$1" && return 0
+    return 1
+  fi
+  return 2
+}
+
+# IS THE KNOWLEDGE BASE A MOUNT? Read once, the way kb-sync.sh reads it (resolve-config.sh,
+# both config files), and reused by step 1 (seed nothing under knowledge/) and step 8 (mount
+# it). A first stamp has no config yet, so it reads as no and the placeholders are seeded.
+KB_CONFIGURED=no
+if [ -f "$BIN_DIR/resolve-config.sh" ] && [ -f "$TARGET/instance.config.json" ] \
+   && [ -n "$(bash "$BIN_DIR/resolve-config.sh" --instance "$TARGET" knowledge repo 2>/dev/null || true)" ]; then
+  KB_CONFIGURED=yes
+fi
+
 # THE STAMPED-SEED RECORD — the merge base a machine with no clone still has.
 #
 # `refresh-seeds.sh` 3-way merges a later seed change into a bundle, and to do that it
@@ -1405,6 +1444,14 @@ if [ -d "$SEED_SRC" ]; then
     dest="$(ab_seed_dest "$rel")"
     src="$SEED_SRC/$rel"; dst="$TARGET/$dest"
     dstdir="${dst%/*}"
+    # A mounted KB's content is its repository's: a placeholder seeded into knowledge/
+    # here is what made kb-sync.sh refuse the mount below as "already a real folder".
+    case "$dest" in knowledge/*)
+      if [ "$KB_CONFIGURED" = yes ]; then
+        [ "${kb_said_skip:-}" = 1 ] || echo "  skip  knowledge/ placeholders (a \`knowledge\` key names a mounted repository — step 8 mounts it)"
+        kb_said_skip=1; continue
+      fi ;;
+    esac
     if [ -e "$dst" ]; then
       echo "  keep  $dest (exists)"
     elif [ "${rel##*/}" = ".gitkeep" ] && [ -d "$dstdir" ] && [ -n "$(ls -A "$dstdir" 2>/dev/null)" ]; then
@@ -1646,22 +1693,110 @@ else
   fi
 fi
 
-# 1f. THE `claude --bg` GRANT IS NOTICED, NEVER WRITTEN: a plugin must not grant itself a
-# permissions bypass (owner, 2026-09-25/30). tests/no-bg-grant.test.sh pins it; task-019.
+# 1f. THE `claude --bg` GRANT IS ASKED FOR, NEVER ASSUMED. A plugin must not grant itself a
+# bypass (owner, 2026-09-25/30), so until 2026-10-09 this only printed the rule — and the
+# second human on a shared bundle edited the JSON by hand, with two stale rules already in
+# it that nothing named. The owner's decision that day: ask at a terminal, Y by default;
+# write nothing on any other path. `--spawn-grant` is that yes relayed by a session that
+# has no terminal. docs/operations.md -> "The supported shape"; tests/no-bg-grant.test.sh.
 BG_RULE="Bash(claude --bg * --agent ${PLUGIN_NAME}:* --permission-mode auto --add-dir *)"
-BG_OLD="Bash(claude --bg * --agent ${PLUGIN_NAME}:* --permission-mode bypassPermissions --add-dir *)"
+BG_BROAD="Bash(claude --bg *)"
 BG_INERT="Bash(claude --bg ' *)"
-if grep -qF "\"$BG_INERT\"" "$AL_FILE" 2>/dev/null; then
-  echo "  note  .claude/settings.local.json has \`$BG_INERT\`; it matches no spawn form measured (Claude Code 2.1.285)."
-  echo "        The narrowest that does: $BG_RULE"
-elif grep -qF "\"$BG_OLD\"" "$AL_FILE" 2>/dev/null; then
-  echo "  note  .claude/settings.local.json grants a \`bypassPermissions\` spawn; the tick spawns in auto mode now, so it matches nothing."
-  echo "        The narrowest that does: $BG_RULE"
-elif ! grep -qE '"Bash\(claude --bg' "$AL_FILE" 2>/dev/null; then
-  echo "  note  init writes no \`claude --bg\` grant. The narrowest rule measured to match the tick's spawn:"
-  echo "          $BG_RULE"
-  echo "        It lets the tick spawn any ${PLUGIN_NAME} role, in auto mode, unprompted."
-  echo "        Adding it to .claude/settings.local.json is yours, not the plugin's."
+bg_has() { grep -qF "\"$1\"" "$AL_FILE" 2>/dev/null; }
+# Every spawn rule in the file that matches far too much or nothing at all, as
+# "<rule>\t<why>": the bare wildcard, a bypassPermissions spawn, a retired agent namespace.
+bg_stale=""
+if [ -f "$AL_FILE" ]; then
+  bg_stale="$( { grep -o "\"${BG_BROAD%\*)}[^\"]*)\"" "$AL_FILE" || true; } | sed 's/^"//; s/"$//' \
+    | awk -v broad="$BG_BROAD" -v pn="$PLUGIN_NAME" '
+        $0 == broad { print $0 "\tover-broad: it allows ANY claude --bg command"; next }
+        index($0, "--permission-mode bypassPermissions") { print $0 "\tstale: the tick spawns in auto mode now, so it matches nothing"; next }
+        match($0, /--agent [^:* ]+:/) { ns = substr($0, RSTART + 8, RLENGTH - 9); if (ns != pn) print $0 "\tstale: names the retired " ns ": namespace" }')"
+fi
+bg_stale_rules="$(printf '%s\n' "$bg_stale" | cut -f1 | grep . || true)"
+bg_write_json() { # -> stdout: the file with $BG_RULE in and $bg_stale_rules out; non-zero = not safe
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$AL_FILE" "$BG_RULE" "$bg_stale_rules" <<'PY' 2>/dev/null
+import json, os, sys
+p, rule = sys.argv[1], sys.argv[2]
+stale = [s for s in sys.argv[3].split("\n") if s]
+d = {}
+if os.path.exists(p) and open(p).read().strip():
+    d = json.load(open(p))          # unreadable means refuse, never "treat as empty"
+if not isinstance(d, dict): sys.exit(1)
+perm = d.setdefault("permissions", {})
+allow = perm.setdefault("allow", []) if isinstance(perm, dict) else None
+if not isinstance(allow, list): sys.exit(1)
+allow[:] = [a for a in allow if a not in stale]
+if rule not in allow: allow.append(rule)
+json.dump(d, sys.stdout, indent=2); print()
+PY
+  elif command -v jq >/dev/null 2>&1; then
+    { [ -s "$AL_FILE" ] && cat "$AL_FILE" || echo '{}'; } | jq --arg r "$BG_RULE" --arg s "$bg_stale_rules" '
+      ($s | split("\n") | map(select(length > 0))) as $st
+      | .permissions.allow = (((.permissions.allow // []) - $st) | if index($r) then . else . + [$r] end)'
+  else return 1; fi
+}
+bg_verify() { # <file> — parses, carries the rule once, and none of the stale ones
+  team_json_ok "$1" || return 1
+  [ "$(grep -cF "\"$BG_RULE\"" "$1" | tr -d ' ')" = 1 ] || return 1
+  while IFS= read -r bg_s; do
+    [ -z "$bg_s" ] || ! grep -qF "\"$bg_s\"" "$1" || return 1
+  done <<EOF
+$bg_stale_rules
+EOF
+}
+bg_note_stale() { printf '%s\n' "$bg_stale" | awk -F'\t' 'NF { printf "  note  .claude/settings.local.json has `%s` — %s. Remove it: re-run with --spawn-grant, or edit the file.\n", $1, $2 }'; }
+bg_want=no; bg_has "$BG_RULE" || bg_want=yes
+if [ "$bg_want" = yes ] || [ -n "$bg_stale" ]; then
+  if bg_has "$BG_INERT"; then
+    echo "  note  .claude/settings.local.json has \`$BG_INERT\`; it matches no spawn form measured (Claude Code 2.1.285)."
+  fi
+  bg_write=no
+  if [ "$SPAWN_GRANT_FLAG" = 1 ]; then
+    bg_write=yes
+  elif [ "$bg_want" = yes ] && { [ -t 0 ] || [ "${BG_GRANT_STDIN:-}" = 1 ]; }; then
+    # The question, on stderr like the roster's; the result lines go to stdout with the
+    # report. BG_GRANT_STDIN=1 is the harness's way past the TTY test, exactly as
+    # TEAM_SETUP_STDIN is for the roster, and a forced read carries a timeout.
+    {
+      echo ""
+      echo "  Role agents are \`claude --bg\` sessions the tick starts. Without this rule in"
+      echo "  .claude/settings.local.json, every spawn stops at a permission prompt."
+      if [ -n "$bg_stale" ]; then
+        echo "  These rules there match nothing the tick runs now, or far too much, and would be REMOVED:"
+        printf '%s\n' "$bg_stale" | awk -F'\t' 'NF { printf "    - %s  (%s)\n", $1, $2 }'
+      fi
+      printf 'Write "%s" to .claude/settings.local.json so the tick can start role agents without a prompt? [Y/n] ' "$BG_RULE"
+    } >&2
+    bg_answer=""
+    if [ "${BG_GRANT_STDIN:-}" = 1 ]; then IFS= read -r -t 10 bg_answer || bg_answer=n
+    else IFS= read -r bg_answer || bg_answer=n; fi
+    case "$(printf '%s' "$bg_answer" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')" in
+      ""|y|yes) bg_write=yes ;;
+    esac
+  fi
+  if [ "$bg_write" = yes ]; then
+    bg_tmp="$AL_FILE.bg.$$"
+    if [ ! -L "$AL_FILE" ] && mkdir -p "$TARGET/.claude" && bg_write_json > "$bg_tmp" \
+       && bg_verify "$bg_tmp" && mv "$bg_tmp" "$AL_FILE" && bg_verify "$AL_FILE"; then
+      echo "  wrote spawn grant into .claude/settings.local.json:"
+      echo "          $BG_RULE"
+      printf '%s\n' "$bg_stale" | awk -F'\t' 'NF { printf "  removed %s  (%s)\n", $1, $2 }'
+    else
+      rm -f "$bg_tmp"
+      echo "  warn  spawn grant not written: no safe edit of $AL_FILE (it must parse as JSON, and a parser must be here)." >&2
+      echo "        Add to permissions.allow by hand: $BG_RULE" >&2
+    fi
+  else
+    if [ "$bg_want" = yes ]; then
+      echo "  note  init writes no \`claude --bg\` grant without your yes. The narrowest rule measured to match the tick's spawn:"
+      echo "          $BG_RULE"
+      echo "        It lets the tick spawn any ${PLUGIN_NAME} role, in auto mode, unprompted. Adding it to"
+      echo "        .claude/settings.local.json is yours: answer Y when a terminal stamp asks, or re-run with --spawn-grant."
+    fi
+    bg_note_stale
+  fi
 fi
 
 # 1g. A STABLE PATH TO THE SCRIPTS, for the operator's terminal only: a link this stamp
@@ -2195,21 +2330,6 @@ team_valid_email() { # <value>
   printf '%s' "$1" | grep -qE '^[A-Za-z0-9._%+-]+@[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}$'
 }
 
-# Does this file parse as JSON?  0 = yes, 1 = NO, 2 = no parser on this machine.
-# The three answers are distinguished on purpose: "we could not check" must never be
-# reported as "it is fine" — the required-checks.sh discipline, applied to a write.
-team_json_ok() { # <file>
-  if command -v jq >/dev/null 2>&1; then
-    jq -e . "$1" >/dev/null 2>&1 && return 0
-    return 1
-  fi
-  if command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import json,sys; json.load(sys.stdin)' >/dev/null 2>&1 <"$1" && return 0
-    return 1
-  fi
-  return 2
-}
-
 # The inner text of the `people` object, flattened onto one line. Same problem
 # commit-as.sh's people_email() solves, and awk for the same reason it uses awk: this is
 # a nested object, so a same-named key elsewhere in the file must not answer.
@@ -2601,17 +2721,68 @@ id_valid_path() { # <value>
   return 0
 }
 
+# What it could NOT derive, named one key at a time. `needs` is the marker
+# /<plugin>:init reads: one batched question for exactly these, then re-run with the
+# flags. Never a guess, and never a question about a value that was derived.
+id_answered=""
+id_needs() { # <key> <value> <flag>
+  [ -z "$2" ] || return 0
+  case " $id_answered " in *" $1 "*) return 0 ;; esac
+  echo "  needs  $1 — re-run with: $3"
+}
+# The address `people` holds for one login, read with the roster's own extractor.
+id_people_email() { # <login>
+  [ -n "$1" ] && [ -f "$TEAM_CFG" ] || return 0
+  team_people_segment "$TEAM_CFG" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n1
+}
+
 if [ -e "$ID_LCFG" ]; then
-  # Never rewritten. Only ever reported, so a clone that already has the file but not the
-  # keys still learns which ones are missing.
+  # Never rewritten — with ONE exception, measured 2026-10-09: a second clone whose file
+  # named its `ownerGithubUser` still had to type `authorEmail`, although the tracked
+  # `people` map already held it under that login. That one key is FILLED, from `people`
+  # or `--email`, and read back; everything else is only ever reported, so a clone that
+  # has the file but not the keys still learns which ones are missing.
   id_absent=""
   for id_k in ownerGithubUser authorEmail reposRoot; do
     grep -q "\"$id_k\"[[:space:]]*:" "$ID_LCFG" 2>/dev/null || id_absent="$id_absent $id_k"
   done
+  case "$id_absent" in *" authorEmail"*)
+    id_who="$(id_read ownerGithubUser "$ID_LCFG")"; team_valid_login "$id_who" || id_who=""
+    id_from=""; id_fill=""
+    if [ -n "$ID_EMAIL_FLAG" ] && team_valid_email "$ID_EMAIL_FLAG"; then id_fill="$ID_EMAIL_FLAG"; id_from="--email"
+    else
+      [ -z "$ID_EMAIL_FLAG" ] || echo "  warn  --email '$ID_EMAIL_FLAG' is not an address this can write safely; not written." >&2
+      id_fill="$(id_people_email "$id_who")"
+      team_valid_email "$id_fill" && id_from="people.$id_who" || id_fill=""
+    fi
+    id_vrc=0; team_json_ok "$ID_LCFG" >/dev/null 2>&1 || id_vrc=$?
+    if [ -n "$id_fill" ] && [ "$id_vrc" = 0 ]; then
+      id_tmp="$ID_LCFG.tmp.$$"
+      cp -p "$ID_LCFG" "$id_tmp" 2>/dev/null || cp "$ID_LCFG" "$id_tmp"   # keeps a 0600 file 0600
+      if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d["authorEmail"]=sys.argv[2]; json.dump(d,sys.stdout,indent=2); print()' \
+          "$ID_LCFG" "$id_fill" > "$id_tmp" 2>/dev/null || : > "$id_tmp"
+      else
+        jq --arg e "$id_fill" '. + {authorEmail: $e}' "$ID_LCFG" > "$id_tmp" 2>/dev/null || : > "$id_tmp"
+      fi
+      # Read back before it lands and again after: the write this claims is the one made.
+      if team_json_ok "$id_tmp" && [ "$(id_read authorEmail "$id_tmp")" = "$id_fill" ] \
+         && mv "$id_tmp" "$ID_LCFG" && [ "$(id_read authorEmail "$ID_LCFG")" = "$id_fill" ]; then
+        echo "  set   authorEmail $id_fill (from $id_from)"
+        id_absent="$(printf '%s' "$id_absent" | sed 's/ authorEmail//')"
+      else
+        rm -f "$id_tmp"
+        echo "error: authorEmail did not verify in instance.config.local.json, so nothing was written." >&2
+      fi
+    elif [ -z "$id_fill" ]; then
+      echo "  note  instance.config.local.json names ownerGithubUser '${id_who:-<unset>}' and \`people\` in instance.config.json has no entry for it — add both, or:"
+      id_needs authorEmail "" "--email <commit-address>"
+    fi ;;
+  esac
   if [ -n "$id_absent" ]; then
     echo "  keep  instance.config.local.json (exists — left alone; it has no$id_absent)"
-    if [ -n "$ID_OWNER_FLAG$ID_EMAIL_FLAG$ID_REPOS_FLAG" ]; then
-      echo "        --owner/--email/--repos-root only apply when that file is absent."
+    if [ -n "$ID_OWNER_FLAG$ID_REPOS_FLAG" ]; then
+      echo "        --owner/--repos-root only apply when that file is absent."
     fi
   fi
 else
@@ -2647,11 +2818,7 @@ else
   else
     # The tracked `people` map first: that address says which ENTITY this instance's work
     # belongs to, and is never derived from the login (docs/sharing.md).
-    if [ -n "$id_owner" ] && [ -f "$TEAM_CFG" ]; then
-      id_seg="$(team_people_segment "$TEAM_CFG")"
-      id_email="$(printf '%s' "$id_seg" \
-        | sed -n "s/.*\"$id_owner\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n1)"
-    fi
+    id_email="$(id_people_email "$id_owner")"
     [ -n "$id_email" ] || id_email="$(git -C "$TARGET" config --get user.email 2>/dev/null || true)"
     team_valid_email "$id_email" || id_email=""
   fi
@@ -2733,14 +2900,6 @@ else
     fi
   fi
 
-  # What it could NOT derive, named one key at a time. `needs` is the marker
-  # /<plugin>:init reads: one batched question for exactly these, then re-run with the
-  # flags. Never a guess, and never a question about a value that was derived.
-  id_needs() { # <key> <value> <flag>
-    [ -z "$2" ] || return 0
-    case " $id_answered " in *" $1 "*) return 0 ;; esac
-    echo "  needs  $1 — re-run with: $3"
-  }
   id_needs ownerGithubUser "$id_owner" "--owner <github-login>"
   id_needs authorEmail     "$id_email" "--email <commit-address>"
   id_needs reposRoot       "$id_repos" "--repos-root <absolute path>"
@@ -3188,21 +3347,46 @@ if [ -n "$ORG_SLUG" ]; then
   echo "        https://github.com/cbmono/ai-bridge/blob/main/docs/sharing.md"
 fi
 
-# 8. The mount, and one WARNING when it carries uncommitted edits or unpushed commits. It reports, it never
-# writes: a local KB commit is somebody's work, and pushing it on their behalf from an
-# installer is exactly the surprise this pass exists to avoid.
-if [ -f "$BIN_DIR/kb-sync.sh" ]; then
-  # The mount runs FIRST: it refuses a bundle still awaiting kb-migrate.sh, and ignoring
-  # knowledge/ with no mount behind it would hide ~200 untracked documents from `git add`.
+# 8. The knowledge mount, where a `knowledge` key names one, reported in this stamp's own
+# vocabulary; and one WARNING when it carries uncommitted edits or unpushed commits. It
+# never writes a KB commit: that is somebody's work, and pushing it from an installer is
+# exactly the surprise this pass exists to avoid. A stamp never fails on the network: a
+# mount whose fetch failed is named, with the command that completes it later (the
+# SessionStart hook runs that same `pull`, so a reconnected machine heals on its own).
+if [ -f "$BIN_DIR/kb-sync.sh" ] && [ "$KB_CONFIGURED" = yes ]; then
+  kb_out="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-kb.XXXXXX")"
   mrc=0
-  bash "$BIN_DIR/kb-sync.sh" --instance "$TARGET" mount || mrc=$?
-  if [ "$mrc" -eq 0 ] \
-     && [ -n "$(bash "$BIN_DIR/resolve-config.sh" --instance "$TARGET" knowledge repo 2>/dev/null)" ] \
-     && ! grep -qxF '/knowledge/' "$TARGET/.gitignore" 2>/dev/null; then
-    printf '\n# The knowledge base is MOUNTED from another repository (`knowledge` in\n# instance.config.json). A clone that has not synced yet has no knowledge/ at all;\n# make one with: scripts/kb-sync.sh mount\n/knowledge/\n/knowledge-sources/\n' >> "$TARGET/.gitignore"
+  bash "$BIN_DIR/kb-sync.sh" --instance "$TARGET" mount >"$kb_out" 2>&1 || mrc=$?
+  if [ "$mrc" -eq 0 ]; then
+    if grep -q '^kb-sync: fetching' "$kb_out"; then
+      sed -n 's/^kb-sync: fetching \(.*\) failed: \(.*\)$/  warn  knowledge\/ is mounted but EMPTY — fetching \1 failed: \2/p' "$kb_out"
+      ab_say_run "        Once the remote is reachable:" kb-sync.sh pull
+    elif grep -q '^kb-sync: mounted' "$kb_out"; then
+      sed -n 's/^kb-sync: mounted /  mount /p' "$kb_out"
+    else
+      echo "  keep  knowledge/ (mounted)"
+    fi
+    # Ignoring knowledge/ with no mount behind it would hide ~200 untracked documents from
+    # `git add`, so the line lands only once the mount is there.
+    if ! grep -qxF '/knowledge/' "$TARGET/.gitignore" 2>/dev/null; then
+      printf '\n# The knowledge base is MOUNTED from another repository (`knowledge` in\n# instance.config.json). A clone that has not synced yet has no knowledge/ at all;\n# make one with: scripts/kb-sync.sh mount\n/knowledge/\n/knowledge-sources/\n' >> "$TARGET/.gitignore"
+    fi
+  else
+    echo "  warn  knowledge/ was not mounted — nothing was moved or deleted. kb-sync says:"
+    sed 's/^kb-sync: /        /' "$kb_out"
+    # The one shape this stamp used to CAUSE: a knowledge/ holding nothing but the seed's
+    # own placeholders. Named with the exact command; a file that differs from its seed is
+    # somebody's and keeps kb-sync's kb-migrate.sh answer above.
+    if [ -d "$TARGET/knowledge" ] && [ -z "$(cd "$TARGET" && find knowledge -type f | while IFS= read -r f; do
+          [ -f "$SEED_SRC/$f" ] && cmp -s "$f" "$SEED_SRC/$f" || { printf '%s\n' "$f"; break; }; done)" ]; then
+      echo "  note  knowledge/ holds only the placeholders an earlier stamp seeded, nothing of yours. Remove them"
+      echo "        and re-run /${PLUGIN_NAME}:init, which mounts the configured repository instead:"
+      echo "          rm -r $TARGET/knowledge"
+    fi
   fi
+  rm -f "$kb_out"
   krc=0
-  bash "$BIN_DIR/kb-sync.sh" --instance "$TARGET" status >/dev/null 2>&1 || krc=$?
+  [ ! -d "$TARGET/$AB_DIR/kb.git" ] || bash "$BIN_DIR/kb-sync.sh" --instance "$TARGET" status >/dev/null 2>&1 || krc=$?
   if [ "$krc" -eq 1 ]; then
     echo "warn  the mounted knowledge base has uncommitted edits or unpushed commits. To see and push them:"
     ab_say_run "     " bash "$BIN_DIR/kb-sync.sh" status

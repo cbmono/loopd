@@ -1012,9 +1012,10 @@ settings (before v2.1.257 `bypassPermissions` took effect from any file), and th
 classifier reads no `autoMode` block from a project file either
 ([settings](https://code.claude.com/docs/en/settings),
 [auto mode](https://code.claude.com/docs/en/auto-mode-config)). **The operator installs
-that file.** The plugin never writes a `claude --bg` grant or a workspace-trust key, inside
-a box or out of it: `/loopd:init` prints the notice and `tests/no-bg-grant.test.sh` asserts
-the absence. See [The supported shape](#the-supported-shape-one-main-thread-auto-mode-always-on).
+that file.** The plugin writes a `claude --bg` grant only on a human's yes at the
+`/loopd:init` prompt, and never a workspace-trust key, inside a box or out of it: with no
+terminal the stamp prints the rule and writes nothing, and `tests/no-bg-grant.test.sh`
+asserts both. See [The supported shape](#the-supported-shape-one-main-thread-auto-mode-always-on).
 
 **Forward credentials; never copy them.** Mount nothing that holds a secret. Forward the
 host's SSH agent socket (`SSH_AUTH_SOCK`), so private keys never enter the box; pass the
@@ -1359,8 +1360,9 @@ matches the command text, so it covers `<abs>/scripts/x.sh args` and never a `~`
 The scripts directory is version-pinned, so a literal `PATH` entry rots at the next plugin
 update. **`/loopd:init` re-points `${CLAUDE_CONFIG_DIR:-~/.claude}/plugins/loopd/bin` at
 the running plugin's `scripts/` on every stamp from a plugin-cache install**, and prints
-the one line to add to your shell rc — it never edits the rc itself (the same boundary as
-the `claude --bg` grant: the plugin delivers a notice, never the grant):
+the one line to add to your shell rc — it never edits the rc itself (a stricter boundary
+than the `claude --bg` grant, which the stamp writes on your yes: the rc line it only ever
+prints):
 
 ```sh
 if [ -d "$HOME/.claude/plugins/loopd/bin" ]; then export PATH="$HOME/.claude/plugins/loopd/bin:$PATH"; fi
@@ -1396,16 +1398,30 @@ fixes drifted into because this was never written down (task-019).
   refusal `[Create Unsafe Agents]` is **intermittent**: one task, role, model and command
   shape was refused on 2026-09-30 and spawned on 2026-10-01. A refusal is rolled back and
   reported (`plugin/tick-steps/step-3-dispatch.md`), never retried in another shape.
-- **It never writes a `claude --bg` grant or a trust key**, on any surface — a plugin must
-  not grant itself a bypass (owner, 2026-09-25 and 2026-09-30). `/loopd:init` prints a
-  notice instead; `tests/no-bg-grant.test.sh` asserts it.
+- **It writes a `claude --bg` grant on exactly one path — a human's yes — and never a
+  trust key.** A plugin must not grant itself a bypass (owner, 2026-09-25 and
+  2026-09-30), so until 3.4 `/loopd:init` only printed the rule and the operator added it.
+  **Changed 2026-10-09, by the owner's decision** — "let loopd:init ask during installation
+  with Y as default" — after the measured onboarding cost: the second operator on a shared
+  bundle, who is not an engineer, had to edit `.claude/settings.local.json` by hand, and
+  his file already held a bare `Bash(claude --bg *)` and a `bypassPermissions` spawn from
+  before 3.3 that the stamp recognised as neither right nor wrong. Now a stamp **at a
+  terminal** asks, verbatim, `Write "Bash(claude --bg * --agent loopd:* --permission-mode
+  auto --add-dir *)" to .claude/settings.local.json so the tick can start role agents
+  without a prompt? [Y/n]` — Enter or `y` writes exactly that rule into
+  `permissions.allow` (JSON-parsed, verified after it lands, never duplicated) and removes
+  the stale shapes the question listed; `n` prints the rule as before. A stamp with **no
+  terminal** — a session, a script, CI, the harnesses — asks nothing and writes nothing: it
+  prints the rule, and `/loopd:init` relays the question and re-runs with `--spawn-grant`
+  on a yes. The trust key is still never written by anything here.
+  `tests/no-bg-grant.test.sh` asserts every half.
 
 **What the operator does, because the plugin must not:**
 
 | | Do this | Why it is yours |
 |---|---|---|
 | **Trust** (required) | run `claude` interactively **once in each product repo's main clone** and accept the prompt | trust is a `~/.claude.json` key; a plugin writing it grants itself trust |
-| **Grant** (optional) | add `Bash(claude --bg * --agent ai-bridge:* --permission-mode auto --add-dir *)` to the bundle's `.claude/settings.local.json` | it lets the tick spawn any role, in auto mode, unprompted — it matters when the session running the tick is NOT in auto mode; in auto mode the classifier decides and accepts this spawn. A rule naming `bypassPermissions` from before 3.3 matches nothing the tick runs now |
+| **Grant** (optional) | answer **Y** when `/loopd:init` asks — or add `Bash(claude --bg * --agent loopd:* --permission-mode auto --add-dir *)` to the bundle's `.claude/settings.local.json` yourself | it lets the tick spawn any role, in auto mode, unprompted — it matters when the session running the tick is NOT in auto mode; in auto mode the classifier decides and accepts this spawn. The stamp asks and never assumes; a rule naming `bypassPermissions`, the bare `Bash(claude --bg *)` and the old `ai-bridge:` namespace are named by it and replaced on the same yes |
 
 To run the role agents unattended inside a container or VM, with auto mode set in
 managed settings by the operator, see

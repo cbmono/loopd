@@ -18,6 +18,7 @@ bundle, [`loopd-all@loopd`](../plugin-all/README.md): one command that installs 
 autonomy companion and the three mods as dependencies, and ships nothing of its own.
 
 Updates ship by version bump (no ambient auto-update): `/plugin` → Marketplaces.
+Joining somebody's bundle and running two commands, no more: [`docs/onboarding.md`](../docs/onboarding.md).
 
 **It also ships a colour theme.** `themes/loopd.json`, declared by `experimental.themes`
 and listed in `/theme` as `custom:loopd:loopd` — select it there, because nothing
