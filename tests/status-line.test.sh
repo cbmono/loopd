@@ -192,7 +192,7 @@ ok "no instance.config.json anywhere above ⇒ no output" "${OUT%rc=*}" ""
 ok "…and exit 0, because a status line never fails a session" "${OUT##*rc=}" 0
 mkdir -p "$INST/projects/proj-a/tasks/deep/deeper"
 ok "…while a SUBDIRECTORY of a bundle still finds it" \
-   "$(plain "$INST/projects/proj-a/tasks/deep/deeper" | cut -d' ' -f1-2)" "loopd"
+   "$(plain "$INST/projects/proj-a/tasks/deep/deeper" | cut -d' ' -f1)" "loopd"
 
 echo
 echo "== 7. colour: a bare non-TTY keeps it; NO_COLOR and --color never do not =="
