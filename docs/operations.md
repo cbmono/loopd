@@ -428,10 +428,14 @@ scripts/build-board.sh --standalone --out /tmp/board.html .  # ...the same page,
 scripts/watch-board.sh                                       # a local page, re-rendered on every change
 ```
 
-`/loopd:board publish` is the fifth way to look at it and the only one that leaves the
-machine:
-it renders the same body and publishes it as a **private artifact** at a URL that does not
-change between runs ([below](#opening-the-board-laptop-phone-published-live)).
+`/loopd:board` — bare, or `serve` — is the **local board server** (`board-serve.sh`). It
+binds `127.0.0.1` on `boardPort` from `instance.config.local.json` (absent, a port derived
+from the bundle path, 40000–49999), renders the page from `SNAPSHOT.json` into
+`.loopd/.board-live/`, re-renders when that file changes, and fills in each open question's
+text as the page is served, never into the file. No model is in that path and nothing is
+published. `/loopd:board publish` is the only form that leaves the machine: it renders the
+same body and publishes it as a **private artifact** at a URL that does not change between
+runs ([below](#opening-the-board-laptop-phone-published-live)).
 
 Each `/loopd:dispatch` tick refreshes the snapshot at the end of the tick, so on a looping
 instance you never run the writer by hand — and unless `board` is `false`, the same tick
@@ -439,15 +443,15 @@ re-renders the local page and reports its path ([below](#rendering-it-from-each-
 
 ### Which renderer to reach for
 
-| | `print-board.sh` | `build-board.sh --standalone` | `build-board.sh` | `watch-board.sh` | `/loopd:board publish` |
-|---|---|---|---|---|---|
-| Output | columns in your terminal | one HTML **file**, openable in a browser | the same page as a **body**, no `<html>` wrapper | the same page, kept fresh | the same body, as a **private artifact** at a fixed URL |
-| Freshness | the moment you ran it | the moment you ran it — or **every tick**, on a looping instance | the moment you ran it | live, to the second | the last time you ran it — no tick can refresh it |
-| Leaves the machine | no | no | only if you carry it somewhere | no | **yes — titles go to claude.ai** |
-| Costs | nothing | a re-run, or a looping instance | a re-run to refresh | **a resident process** | a re-run, and it must be a human typing |
-| Reach for it | by default, when you are already in a terminal | you want to open the page — and it is what each tick renders | you are embedding the markup in something else | while actively working a queue | somebody needs the board on a phone, or without a clone |
+| | `print-board.sh` | `build-board.sh --standalone` | `build-board.sh` | `watch-board.sh` | `/loopd:board` (`serve`) | `/loopd:board publish` |
+|---|---|---|---|---|---|---|
+| Output | columns in your terminal | one HTML **file**, openable in a browser | the same page as a **body**, no `<html>` wrapper | the same page, kept fresh | the same page at `http://localhost:<port>`, with open questions' text | the same body, as a **private artifact** at a fixed URL |
+| Freshness | the moment you ran it | the moment you ran it — or **every tick**, on a looping instance | the moment you ran it | live, to the second | re-rendered within seconds of the snapshot changing | the last time you ran it — no tick can refresh it |
+| Leaves the machine | no | no | only if you carry it somewhere | no | no — `127.0.0.1` only | **yes — titles go to claude.ai** |
+| Costs | nothing | a re-run, or a looping instance | a re-run to refresh | **a resident process** | **a resident process**, no tokens | a re-run, and it must be a human typing |
+| Reach for it | by default, when you are already in a terminal | you want to open the page — and it is what each tick renders | you are embedding the markup in something else | while actively working a queue | you want the board in a browser — the banner's `Run` row names it | somebody needs the board on a phone, or without a clone |
 
-**The watcher needs a process you keep alive, and that is a real cost, not a detail.**
+**The watcher and the server need a process you keep alive, and that is a real cost, not a detail.**
 loopd deliberately has no resident process: its agents are ephemeral subagents inside
 one Claude Code session, nothing runs between sessions, and no daemon is installed or
 supervised. It is the same constraint that made munder-difflin's live telemetry
@@ -589,7 +593,7 @@ Full reasoning, including why one drifted instance must not blank the board for 
 | `PRUNE_ACTIVE_MINUTES` | env | the recursive mtime veto in the worktree report |
 | `worktreeRoot` | `instance.config.json` | **`<reposRoot>/_wt`** |
 | `boardInstances` | `instance.config.json` | just this instance |
-| `board` | `instance.config.json` (tracked; read by `/loopd:init` **and** by each tick) | **on** — `SNAPSHOT.json` is seeded, each tick renders `.board-live/board.html`, and a tick that changed something commits the tracked `/board.html` |
+| `board` | `instance.config.json` (tracked; read by `/loopd:init` **and** by each tick) | **on** — `SNAPSHOT.json` is seeded, each tick renders `.loopd/.board-live/board.html`, which `/loopd:board serve` serves; nothing is committed |
 | `codegraphSkip` | `instance.config.json` | index every product repo |
 
 One hard rule holds regardless of `maxAgentsInFlight`: never two package installs against
@@ -1546,10 +1550,10 @@ The old `/status` command and `DASHBOARD.md` are gone. In each existing instance
 
 **How fresh does it have to be, and who has to reach it?** Two questions now, and the
 second one has exactly two answers. **Every renderer in the table below writes to the
-machine it runs on**; the two copies that travel are `/board.html`, which the tick
-*commits* — audience: this repo's permission list — and the page `/loopd:board publish`
-publishes as a private artifact — audience: you, plus anyone you shared it with. Nothing
-is *served*: no Pages site, no host, no URL that works without one of those two grants.
+machine it runs on**, and `/loopd:board serve` serves to that machine alone; the one copy
+that travels is the page `/loopd:board publish` publishes as a private artifact —
+audience: you, plus anyone you shared it with. No tracked `board.html`, no Pages site, no
+URL that works off this machine without that grant.
 
 | | Reach | Process | Use it when |
 |---|---|---|---|
@@ -1557,6 +1561,7 @@ is *served*: no Pages site, no host, no URL that works without one of those two 
 | `build-board.sh --standalone` | a local HTML file | none | you want to open the page — and it is what each tick renders |
 | `build-board.sh` | a page **body**, no wrapper | none | you are embedding the markup in something else |
 | `watch-board.sh` | this machine only | **a resident one** | you want the page to follow your work *between* ticks |
+| `/loopd:board` (`serve`) | `http://localhost:<port>`, this machine only | **a resident one** | you want the page in a browser, kept fresh |
 | `/loopd:board publish` | a private artifact URL | none | somebody needs the board on a phone, or without a clone |
 
 **The compliance question is a per-instance decision, and it is decided by not running one
@@ -1585,16 +1590,11 @@ masthead timestamp is the only thing that admits how old it is. So each
 re-renders it as its last act, right after `write-snapshot.sh` refreshes the data:
 
 ```sh
-scripts/build-board.sh --standalone --out .board-live/board.html
+scripts/build-board.sh --standalone      # no --out: it writes .loopd/.board-live/board.html
 ```
 
-…and, **on a tick that actually changed something**, a second render to a **tracked**
-path, committed with the tick's own curation commit:
-
-```sh
-scripts/build-board.sh --standalone --out board.html .
-scripts/commit-as.sh project-manager "chore: refresh board.html" -- board.html
-```
+Nothing is committed: the page is derived and gitignored, and `/loopd:board serve` serves
+that same file.
 
 Six properties, and the first is the one to remember:
 
@@ -1609,10 +1609,10 @@ Six properties, and the first is the one to remember:
    [conventions.md invariant 4](conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file)
    ends on: machinery is re-linked unconditionally, so a file-shaped switch gets switched
    back on by the next `/loopd:init`.)
-2. **The path is the one the watcher already uses.** `.board-live/board.html` is
-   `watch-board.sh`'s default output and is gitignored by `/loopd:init`, so the tick and
-   the watcher keep **one** board rather than two, and there is nothing new to ignore.
-   Never commit it.
+2. **The path is the one the watcher and the server already use.** `.loopd/.board-live/board.html`
+   is `watch-board.sh`'s default output, what `board-serve.sh` serves, and gitignored by
+   `/loopd:init`, so the tick, the watcher and the server keep **one** board rather than
+   three. Never commit it.
 3. **The tick reports the path, not a promise of freshness.** One line —
    `BOARD: rendered <path>` — and the `SessionStart` hook below prints the same path at
    the start of every session. Between ticks the page is stale, and the masthead is what
@@ -1620,31 +1620,29 @@ Six properties, and the first is the one to remember:
 4. **A render is not a change.** The tick still reports `noop: true` when the documents
    did not move — a board refresh alone must not wake anybody, or an idle loop starts
    scrolling and gets switched off.
-5. **`/board.html` is TRACKED, and committing it IS the publishing step.** There is no
-   second access-control system to get wrong: a file in a private repo is readable by
-   that repo's permission list and by nobody else. **GitHub Pages is not the route, and
-   not a "later" either** — access-controlled Pages is an Enterprise Cloud feature, so a
-   Pages site on a private bundle would serve the page to the WORLD at an unlisted URL,
+5. **No tracked `/board.html`, and committing one is not the publishing step any more.**
+   The tick committed it from 2026-09-02 until the local server replaced it: a derived page
+   every clone re-renders and pushes is contended on every tick. `/loopd:init` now appends
+   a `/board.html` ignore (git's last match beats an older `!/board.html`) and, where a
+   bundle still tracks the file, removes it from the index and says to commit. **GitHub
+   Pages is still not the route** — access-controlled Pages is an Enterprise Cloud feature,
+   so a Pages site on a private bundle would serve the page to the WORLD at an unlisted URL,
    which is not what the snapshot's field allowlist was ever scoped for. Measured
    2026-09-02 on the three private bundles: `has_pages: false`, and
-   `GET /repos/<owner>/<repo>/pages` → 404 on each. `plugin/seed/.gitignore` therefore does
-   **not** ignore `board.html`, and `/loopd:init` appends a `!/board.html` un-ignore to
-   instances stamped while it did.
-6. **The trailing `.` is load-bearing, and the tracked copy is why.** Given no instance
-   directory `build-board.sh` discovers instances from `boardInstances`, which on a real
-   machine names **sibling bundles** — so a bare render would commit another bundle's
-   project titles into a repo with a different permission list. That is a governance
-   breach, not a cosmetic bug. `.` renders this instance's `SNAPSHOT.json` and nothing
-   else. **And the commit is gated on `noop: false`**: the masthead timestamp moves on
-   every render, so an unconditional commit would be one content-free blob per gap — 144
-   a day at the default `10m` — and would leave the tracked tree dirty, which makes the
-   next tick defer its `git pull --rebase`.
+   `GET /repos/<owner>/<repo>/pages` → 404 on each.
+6. **The trailing `.` is load-bearing wherever the page leaves the machine.** Given no
+   instance directory `build-board.sh` discovers instances from `boardInstances` (absent:
+   just this instance), which on a real machine names **sibling bundles**. The tick's local
+   render passes none, so this machine's page shows every bundle it lists; `/loopd:board
+   publish` passes `.`, so a published page carries this instance's `SNAPSHOT.json` and
+   nothing else — another bundle's project titles on a page with a different audience
+   would be a governance breach, not a cosmetic bug.
 
 **The tick does not publish, and that is measured rather than assumed.** Measured
 2026-09-05 on Claude Code 2.1.261: a headless `claude -p` session's tool inventory carries
 **no artifact tool**, and a tool search for one returns nothing — while the same search
 returns a tool for a query it can answer, so the probe discriminates. A dispatch tick is
-that session. So the tick renders the two local pages exactly as before and adds **one
+that session. So the tick renders the local page exactly as before and adds **one
 line** when this machine has published a board:
 
 ```text
@@ -1717,17 +1715,16 @@ count and nothing else**: no title, no question text, no project slug, no queue 
 
 ### Opening the board (laptop, phone, published, live)
 
-The board is a **page in four places**, and which one you want depends on where you are
-standing. `/board.html` at the bundle root is the tracked one — the tick commits it, so
-`git pull` is how it reaches another machine. The **published artifact** is the one that
-reaches a device with no checkout on it.
+The board is a **page in three places**, and which one you want depends on where you are
+standing. The **local server** and the **rendered file** are on the machine that rendered
+them; the **published artifact** is the one that reaches a device with no checkout on it.
 
 | Where you are | Do this | Freshness |
 |---|---|---|
-| **Laptop** (the canonical route) | `git pull`, then open `board.html` — `open board.html` on macOS | the last tick that changed something |
+| **Laptop** (the canonical route) | `/loopd:board`, then open the `http://localhost:<port>` it prints — the next session's banner shows it as the `Live` row | within seconds of the snapshot changing, while the server runs |
+| **Laptop, no server** | open the `file://` path the banner's `Board` row prints (`.loopd/.board-live/board.html`) | the last tick that rendered it |
 | **Phone** | open the artifact URL — the session banner prints it, and it is the same URL every time | the last `/loopd:board publish` you ran |
-| **No Claude access** (the fallback) | `git pull`, then a git client that previews HTML (e.g. Working Copy on iOS) — tap `board.html` | the last tick that changed something |
-| **Between ticks** | `scripts/watch-board.sh` → `.board-live/board.html`, on this machine | live, while the watcher runs |
+| **Between ticks, no browser tab** | `scripts/watch-board.sh` → `.loopd/.board-live/board.html`, on this machine | live, while the watcher runs |
 
 **The phone row used to be a download**, and that is what `/loopd:board publish`
 replaces:
@@ -1737,10 +1734,10 @@ would draw it. The artifact is a page, so there is nothing to download. (`htmlpr
 friends fetch through a third party and are **not** a route for a private bundle — the
 page would leave the repo's permission list to be rendered.)
 
-**`board.html` stays, and it is the fallback on purpose.** A published artifact needs a
-Claude account; the tracked file needs a clone. Anyone who has the second and not the first
-reads the same page from the repo, which is why the tick keeps committing it and why the
-banner keeps printing its path under the URL.
+**A clone does not carry the page any more.** The tick used to commit `board.html` so
+`git pull` brought it to another machine; now every clone renders its own from its own
+snapshot, and the cross-owner half comes from the tracked task documents at that clone's
+git `HEAD`.
 
 ### Sharing it with a second human — one step
 
@@ -1757,12 +1754,10 @@ the tracked config is ignored. Neither of you is missing anything by that: the c
 half of the board is read from the tracked task documents at your git `HEAD`, not from
 anybody's published page.
 
-**Nothing is *served*.** No Pages site is enabled on any bundle repo, and there is no URL
-that works without either a clone of the repo or a share of the artifact. Those are the
-only two access-control systems in play, and both are lists you granted by hand.
+**Nothing is served off the machine.** `board-serve.sh` binds `127.0.0.1` only, no Pages
+site is enabled on any bundle repo, and there is no URL that works elsewhere without a
+share of the artifact — a list you granted by hand.
 
-**If `board.html` is missing or stale after a pull:** the tick commits it only when it
-changed something, so a quiet day leaves the file where the last real tick left it — its
-masthead timestamp says which. An instance stamped before the file was tracked also needs
-one `/loopd:init` run to pick up the `!/board.html` un-ignore; until then the tick renders
-the page and stages nothing. `board: false` means it is never rendered at all.
+**A bundle that still tracks `board.html`:** the next `/loopd:init` prints `drop  board.html —
+removed and STAGED; commit it`, and the page lives under `.loopd/.board-live/` from then on.
+`board: false` means it is never rendered at all.
