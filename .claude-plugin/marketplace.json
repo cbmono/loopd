@@ -98,6 +98,22 @@
         "mod",
         "usage"
       ]
+    },
+    {
+      "name": "loopd-mod-pane",
+      "source": "./plugin-mod-pane",
+      "description": "COMPANION to loopd, a mod. /board opens a pane that draws this bundle's board — in-flight tasks, the need-you rail, per-project counts, the last snapshot time — from .loopd/SNAPSHOT.json in the session's cwd, a fourth renderer over the snapshot writer's contract. Two buttons: Tick submits /loopd:dispatch in THIS session, Refresh re-reads. No model call, no permission decision, no process, no network, no write. Not installed = the three core renderers are all there is. A companion ADDS behaviour and never removes a core gate.",
+      "version": "3.0.0",
+      "author": {
+        "name": "cbmono"
+      },
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "loopd-companion",
+        "mod",
+        "board"
+      ]
     }
   ]
 }
