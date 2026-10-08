@@ -295,7 +295,7 @@ bash <plugin>/scripts/migrate-bundle.sh --layout-only --apply   # move it, and c
 
 | | |
 |---|---|
-| **Before** | commit or stash: the migration refuses a dirty tracked tree, and a live `.tick-lock` |
+| **Before** | commit or stash: the migration refuses a dirty tracked tree and a live `.tick-lock` |
 | **What moves** | the directory, in one `git mv`, with its ignore lines, the status-line pin and any knowledge mount's `core.worktree`; a pre-3.0 bundle's root files move into it first. Then it commits |
 | **What does not** | any document. `--layout-only` runs only the two directory steps and prints `content: NOT CHECKED`; the plain run also repairs documents ([schema.md § Keeping a bundle valid](schema.md#keeping-a-bundle-valid)) |
 | **A mounted `knowledge/`** | skipped by the content pass in every mode and reported once: *lives in a knowledge mount; repair it from that repository, not here* |

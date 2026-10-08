@@ -220,7 +220,7 @@ guessed resolution writes a `status:` nobody chose. And **nothing force-pushes**
 *you* commit by hand outside a tick is still yours to push. Ownership stops two loops
 dispatching the same task; it was never a lock on pushing.
 
-### Handing off a project with work in flight
+## Handing off a project with work in flight
 
 `/loopd:handoff <path> <github-login> [context]` moves `owner:` and records why. An
 `in-progress` task whose `worktree:`, `branch:` and `session:` live on the old owner's

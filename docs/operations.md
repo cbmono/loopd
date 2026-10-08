@@ -1651,8 +1651,8 @@ Six properties, and the first is the one to remember:
    did not move — a board refresh alone must not wake anybody, or an idle loop starts
    scrolling and gets switched off.
 5. **No tracked `/board.html`, and committing one is not the publishing step any more.**
-   The tick committed it from 2026-09-02 until the local server replaced it: a derived page
-   every clone re-renders and pushes is contended on every tick. `/loopd:init` now appends
+   The tick used to commit it, and the local server replaced it: a derived page every
+   clone re-renders and pushes is contended on every tick. `/loopd:init` now appends
    a `/board.html` ignore (git's last match beats an older `!/board.html`) and, where a
    bundle still tracks the file, removes it from the index and says to commit. **GitHub
    Pages is still not the route** — access-controlled Pages is an Enterprise Cloud feature,
@@ -1754,7 +1754,7 @@ them; the **published artifact** is the one that reaches a device with no checko
 | **Laptop** (the canonical route) | `/loopd:board`, then open the `http://localhost:<port>` it prints — the next session's banner shows it as the `Live` row | within seconds of the snapshot changing, while the server runs |
 | **Laptop, no server** | open the `file://` path the banner's `Board` row prints (`.loopd/.board-live/board.html`) | the last tick that rendered it |
 | **Phone** | open the artifact URL — the session banner prints it, and it is the same URL every time | the last `/loopd:board publish` you ran |
-| **Between ticks, no browser tab** | `scripts/watch-board.sh` → `.loopd/.board-live/board.html`, on this machine | live, while the watcher runs |
+| **Between ticks** | `scripts/watch-board.sh` → `.loopd/.board-live/board.html`, on this machine | live, while the watcher runs |
 
 **The phone row used to be a download**, and that is what `/loopd:board publish`
 replaces:
