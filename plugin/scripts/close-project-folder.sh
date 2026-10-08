@@ -145,7 +145,11 @@ temp_beside() { # <file>
   local f="$1" d t m
   d="$(dirname "$f")"
   t="$(mktemp "$d/.close-project-folder.XXXXXX" 2>/dev/null)" || return 1
-  m="$(stat -f '%Lp' "$f" 2>/dev/null || stat -c '%a' "$f" 2>/dev/null || echo 644)"
+  # GNU first, BSD second, validated — GNU `stat -f` is --file-system and the BSD-first
+  # spelling made every rewritten file 0600 on Linux. Same fix as migrate-bundle.sh's
+  # temp_beside, which says why in full.
+  m="$(stat -c '%a' "$f" 2>/dev/null || stat -f '%Lp' "$f" 2>/dev/null || true)"
+  case "$m" in [0-7][0-7][0-7]|[0-7][0-7][0-7][0-7]) ;; *) m=644 ;; esac
   chmod "$m" "$t" 2>/dev/null || true
   printf '%s\n' "$t"
 }

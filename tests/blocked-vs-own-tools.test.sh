@@ -56,13 +56,23 @@ ok() { # <name> <actual> <expected>
 # reason check-dispatch.test.sh pins the parked catch without a network.
 mkdir -p "$TMP/bin"
 BASH_BIN="$(command -v bash)"
-# The stock utility directories and nothing else: `awk`, `sed`, `grep` and `dirname` all
-# live here on both platforms CI runs, and `gh` does not — it installs to /usr/local/bin or
-# /opt/homebrew/bin. Asserted below rather than assumed, because a PATH that still carried
-# `gh` would make this section quietly claim a property it never tested. `bash` itself is
-# invoked by ABSOLUTE path: the assignment is a command prefix, so a PATH without the
-# interpreter's directory would fail the invocation with 127 before the script ever ran.
-BARE_PATH="$TMP/bin:/usr/bin:/bin"
+# The stock utility directories and nothing else — MINUS `gh`. `awk`, `sed`, `grep` and
+# `dirname` all live in /usr/bin and /bin on both platforms CI runs; `gh` lives there too
+# on Debian/Ubuntu (apt installs it to /usr/bin), while Homebrew puts it in
+# /opt/homebrew/bin. So the stock directories are copied as a directory of symlinks that
+# leaves `gh` out, and that farm is the PATH. Asserted below rather than assumed, because
+# a PATH that still carried `gh` would make this section quietly claim a property it never
+# tested — which is exactly what the bare `/usr/bin:/bin` did on Linux (2026-10-08).
+# `bash` itself is invoked by ABSOLUTE path: the assignment is a command prefix, so a PATH
+# without the interpreter's directory would fail the invocation with 127 before the
+# script ever ran.
+FARM="$TMP/nogh-farm"; mkdir -p "$FARM"
+for d in /usr/bin /bin; do
+  [ -d "$d" ] || continue
+  entries=(); for f in "$d"/*; do [ "${f##*/}" = gh ] || entries+=("$f"); done
+  [ "${#entries[@]}" -eq 0 ] || ln -s "${entries[@]}" "$FARM/" 2>/dev/null || true
+done
+BARE_PATH="$TMP/bin:$FARM"
 run() { PATH="$BARE_PATH" "$BASH_BIN" "$SCRIPT" "$1" 2>&1; }
 rc_of() { PATH="$BARE_PATH" "$BASH_BIN" "$SCRIPT" "$1" >/dev/null 2>&1; echo $?; }
 ok "the offline PATH really has no \`gh\`" \

@@ -441,7 +441,11 @@ write_beside() { # <merged> <target-file>
   local src="$1" f="$2" d t m
   d="$(dirname "$f")"
   t="$(mktemp "$d/.upgrade.XXXXXX" 2>/dev/null)" || return 1
-  m="$(stat -f '%Lp' "$f" 2>/dev/null || stat -c '%a' "$f" 2>/dev/null || echo 644)"
+  # GNU first, BSD second, validated — GNU `stat -f` is --file-system and the BSD-first
+  # spelling made every refreshed seed 0600 on Linux. Same fix as migrate-bundle.sh's
+  # temp_beside, which says why in full.
+  m="$(stat -c '%a' "$f" 2>/dev/null || stat -f '%Lp' "$f" 2>/dev/null || true)"
+  case "$m" in [0-7][0-7][0-7]|[0-7][0-7][0-7][0-7]) ;; *) m=644 ;; esac
   chmod "$m" "$t" 2>/dev/null || true
   cat "$src" > "$t" && mv "$t" "$f"
 }

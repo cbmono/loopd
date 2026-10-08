@@ -327,7 +327,14 @@ temp_beside() { # <file> — prints a temp path, or returns 1 if it cannot make 
   local f="$1" d t m
   d="$(dirname "$f")"
   t="$(mktemp "$d/.migrate-bundle.XXXXXX" 2>/dev/null)" || return 1
-  m="$(stat -f '%Lp' "$f" 2>/dev/null || stat -c '%a' "$f" 2>/dev/null || echo 644)"
+  # GNU first, BSD second, and the answer VALIDATED. GNU `stat -f` means --file-system:
+  # with `%Lp` read as a file it printed a filesystem block for "$f" to stdout and exited
+  # 1, so the BSD-first spelling fell through to `-c` and `m` became that block plus the
+  # mode — `chmod` refused it and every repaired file on Linux came out 0600 (mktemp's
+  # mode). BSD `stat -c` fails on stderr with nothing on stdout, so probing it first is
+  # safe on macOS, and only an octal mode is accepted either way.
+  m="$(stat -c '%a' "$f" 2>/dev/null || stat -f '%Lp' "$f" 2>/dev/null || true)"
+  case "$m" in [0-7][0-7][0-7]|[0-7][0-7][0-7][0-7]) ;; *) m=644 ;; esac
   chmod "$m" "$t" 2>/dev/null || true
   printf '%s\n' "$t"
 }

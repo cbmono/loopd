@@ -147,9 +147,14 @@ FM_PROG='
 # tells the model it SUPERSEDES the true count it still had. A silent false zero
 # is the worst thing this hook can emit, so the test for it (push-state.test.sh)
 # is a regression guard, not a nicety.
+# `if`, not `[ -r ] && …`: under `set -e` a `while` returns its LAST body command's status,
+# so an unreadable file that `find` emitted last (ext4 did; APFS happened not to) returned
+# 1 here and errexit killed the hook with no output at all. An `if` with no else returns 0.
 collect() { # <find-args...> -> populates FILES
   FILES=()
-  while IFS= read -r -d '' f; do [ -r "$f" ] && FILES+=("$f"); done < <(find "$@" -print0 2>/dev/null || true)
+  while IFS= read -r -d '' f; do
+    if [ -r "$f" ]; then FILES+=("$f"); fi
+  done < <(find "$@" -print0 2>/dev/null || true)
 }
 
 # ---------------------------------------------------------------- in-flight

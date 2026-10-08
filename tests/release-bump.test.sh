@@ -52,6 +52,13 @@ ok() { # <name> <actual> <expected>
 # Identity is forced rather than inherited: a machine with no `user.email` would otherwise
 # fail every fixture commit for a reason that has nothing to do with this change.
 GIT() { git -c user.email=test@example.com -c user.name=Test -c commit.gpgsign=false "$@"; }
+# …and forced through the ENVIRONMENT too, because the script under test commits with
+# whatever identity the machine has, and `-c` on the fixture's own calls does not reach
+# it. Git auto-detects an identity from user@hostname only when the hostname carries a
+# domain: a macOS runner's does (`Mac-….local`), a Linux runner's does not (`runnervm…`),
+# so release-bump.sh's commit "failed" there with every write already made.
+export GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.com
+export GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.com
 run() { "$BUMP" "$@" >/dev/null 2>&1; echo $?; }
 
 fixture() { # <dir> — this repo at HEAD, committed, on `main`, with an origin/HEAD to match
