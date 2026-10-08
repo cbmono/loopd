@@ -114,6 +114,22 @@
         "mod",
         "board"
       ]
+    },
+    {
+      "name": "loopd-mod-signal",
+      "source": "./plugin-mod-signal",
+      "description": "COMPANION to loopd, a mod. A role agent's session tells the project-manager's session that its turn is over, the moment it is over: in a bundle root it records the PM session under loopd.pm.<bundle root>; in a marked worktree it writes loopd.signal.<session id> on every turn.complete and sends the PM ONE `loopd-signal:` line, the same delivery as SendMessage. The line orders step 4's sweep and decides nothing — no task document read, no status written, no prompt submitted. No model call, no permission decision, no process, no network, no file write. Not installed = step 4 reads sessions exactly as before. A companion ADDS behaviour and never removes a core gate.",
+      "version": "3.0.0",
+      "author": {
+        "name": "cbmono"
+      },
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "loopd-companion",
+        "mod",
+        "signal"
+      ]
     }
   ]
 }

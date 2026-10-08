@@ -6,13 +6,14 @@ paths:
   - "/plugin-llm/**"
   - "/plugin-mod-usage/**"
   - "/plugin-mod-pane/**"
+  - "/plugin-mod-signal/**"
   - "/plugin-alias/**"
 ---
 
 # Machinery under `plugin/` (and under any companion plugin)
 
 Loads when you read anything under `plugin/` or under a **companion** plugin's directory
-(`plugin-yolo/`, `plugin-accounts/`, `plugin-llm/`, `plugin-mod-usage/` and `plugin-mod-pane/` today; the contract is in [`plugin/README.md`](../../plugin/README.md) →
+(`plugin-yolo/`, `plugin-accounts/`, `plugin-llm/`, `plugin-mod-usage/`, `plugin-mod-pane/` and `plugin-mod-signal/` today; the contract is in [`plugin/README.md`](../../plugin/README.md) →
 "Companion plugins"). **Everything here ships to every machine
 that installs the plugin** — one install per machine, not one stamp per bundle, so a
 change reaches every bundle on that machine at the next `claude plugin update` with no

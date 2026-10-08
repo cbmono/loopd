@@ -24,6 +24,19 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    | `gone` | absent | never started, or its record was removed. Same verdict as `done`+absent, and the same recovery. |
    | exit 2 | either | unknown, which is not "finished". Report it and change nothing. |
 
+   **A `loopd-signal:` line changes the ORDER of this sweep and nothing else.** Where the
+   optional `loopd-mod-signal` companion is installed on this machine, a role agent's
+   session sends this session one line the moment its turn ends — `loopd-signal: role
+   session <id> finished a turn in <worktree> (reason …, … ms) — settle it first …`. When
+   such a line has arrived naming a session, run the reads above for that task **first**
+   — `agent-sessions.sh state`, then `session-usage.sh --settle` and `check-dispatch.sh`
+   exactly as written below — and then sweep every other `in-progress` task as before.
+   The line is a hint about order, never a fact about status: a turn that ended is not a
+   PR that exists, so nothing is advanced on the message itself, a named session that
+   `agent-sessions.sh` still calls `working` is left alone, and the rule above stands —
+   the line is not something a tick waits for. Absent the companion, no line ever
+   arrives and this step runs exactly as before (`docs/pm-design.md#step-4`).
+
    **Settle the round's usage once, when its session has ended.** A dispatch line is
    written at the spawn and records `usage UNKNOWN` (step 3). For a task whose session
    has ended — `agent-sessions.sh state` prints `done`, `gone` or `stopped` (a session
