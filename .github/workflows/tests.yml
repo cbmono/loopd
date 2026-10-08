@@ -28,40 +28,90 @@ jobs:
     # .github/required-checks.txt and by scripts/required-checks.sh. Renaming this job
     # is a merge-gate change: update the declared name in the same commit.
     name: harness suite
-    # macos-latest, not ubuntu-latest: this suite has never had CI, and a first real
-    # run on Linux turned up FOUR harnesses (deliverable-paths-vs-yaml, migrate-bundle,
-    # push-state, reclaim-worktree) failing for reasons that look environment-specific
-    # (GNU vs BSD tool behaviour, a different YAML oracle, PATH/root-permission
-    # differences) rather than defects — on top of the one known, already-fixed-in-#41
-    # failure. This repo's own tests are heavily macOS-authored (BSD stat, macOS
-    # mktemp/symlink quirks, decomposed-filename handling are all named explicitly in
-    # tests/*.test.sh), so macOS is the platform its baseline was actually measured on.
-    # Investigating and fixing each Linux-specific gap is real work belonging to its
-    # own task, not silently absorbed into "wire up CI" — see the PR body.
-    runs-on: macos-latest
+    # ubuntu-latest since 2026-10-09. THE HISTORY OF THIS LINE, kept because the next
+    # reader will otherwise re-derive one half of it:
+    #
+    # WHY IT WAS macos-latest (2026-08, when CI was wired up): this suite had never had
+    # CI, and a first real run on Linux turned up FOUR harnesses (deliverable-paths-vs-yaml,
+    # migrate-bundle, push-state, reclaim-worktree) failing for reasons that looked
+    # environment-specific (GNU vs BSD tool behaviour, a different YAML oracle,
+    # PATH/root-permission differences) rather than defects — on top of the one known,
+    # already-fixed-in-#41 failure. This repo's own tests are heavily macOS-authored (BSD
+    # stat, macOS mktemp/symlink quirks, decomposed-filename handling are all named
+    # explicitly in tests/*.test.sh), so macOS was the platform its baseline was actually
+    # measured on, and investigating each Linux-specific gap was real work belonging to
+    # its own task, not something to absorb silently into "wire up CI".
+    #
+    # WHY IT MOVED (measured both ways on 2026-10-09, draft PR #366 — the instrument, never
+    # merged): the same tree, 150 harnesses, 0 failures on each side after #367 —
+    #   macos-latest  3 CPUs  16m 37s of job  2,494 harness-seconds  (run 37748780764)
+    #   ubuntu-latest 4 CPUs   6m 32s of job  1,285 harness-seconds  (run 37817944377)
+    # 2.5x faster on the job and about half the harness-seconds, and the "environment-
+    # specific" failures the first Linux run had been read as were, once classified, TWO
+    # SHIPPED BUGS and one harness idiom, all fixed in #367: GNU `stat -f` is
+    # --file-system, so the BSD-first `stat -f '%Lp' || stat -c '%a'` fed chmod a filesystem
+    # block and every file migrate-bundle.sh (and close-project-folder.sh, refresh-seeds.sh)
+    # repaired on Linux came out 0600; push-state.sh's `while … [ -r ] && …` under `set -e`
+    # returned 1 when `find` emitted an unreadable file LAST — ext4 did, APFS happened not
+    # to — and the hook died with no output, which is the false-silence that hook exists to
+    # never produce; and a single-quoted grep pattern in config-override's harness carried a
+    # backquote GNU grep reads as a buffer-start anchor. The rest were runner facts (no git
+    # identity, a hostname without a dot, apt's `gh` under /usr/bin) that the harnesses now
+    # provide for themselves. A platform that only ever ran the suite where those bugs were
+    # invisible was the wrong gate; Linux is the one the role agents' hooks also run on.
+    #
+    # macOS IS NOT DROPPED: bash 3.2 and the BSD tools are what operators actually run, so
+    # the whole suite still runs on macos-latest nightly — the `macos` job in tests-deep.yml,
+    # advisory, and tests/ci-workflow.test.sh fails if that job disappears.
+    #
+    # THE ONE OPEN FLAKE TO WATCH: awaiting-queue failed 1 of 2 Linux runs (run 37814543343)
+    # and passed the next with nothing touching it; a probe showed the two banners it
+    # compares byte-identical on Linux. Unexplained. If it fires here, re-run the failed job
+    # once and record it in the PR body; if it fires twice, it is a bug, not a flake.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-    # MEASURED, not guessed (ai-bridge-v3/task-040): the worst case since the pool landed
-    # is 879s of suite (111 harnesses, pass=8581, run 34788244534 attempt 1; #211 has since
-    # taken the suite to 114) — which was
-    # CANCELLED at 15 anyway, as were three other first attempts inside one hour. 25 is
-    # ~1.7x that worst case, and it is also 879s plus one harness dying at the 600s
-    # HARNESS_TIMEOUT in tests/run.sh, which is the case this ceiling must survive to
-    # report. It is a backstop now, not the instrument: the per-harness bound is.
+    # MEASURED, not guessed (ai-bridge-v3/task-040), and re-cut at every platform or size
+    # change — the history, so the next cut has something to be read against:
     #
-    # RE-MEASURED 2026-10-05, because 25 had stopped being a backstop: the suite is 154
-    # harnesses and 4,108 harness-seconds on this 3-CPU runner (run 37304822869), about 23
-    # minutes of pool before the replay — that run was CANCELLED at 25 with every harness
-    # passed and zero failures, and the two green runs before it took 24 and 25 minutes.
-    # 45 is the same ~1.7x over today's worst case that 25 was over 879s. If the suite
-    # reaches 26 minutes again, cut the suite; do not raise this a third time.
-    timeout-minutes: 45
+    # 2026-09 (macos-latest, 111 harnesses): the worst case since the pool landed was 879s
+    # of suite (pass=8581, run 34788244534 attempt 1) — CANCELLED at 15 anyway, as were
+    # three other first attempts inside one hour. 25 was ~1.7x that worst case, and also
+    # 879s plus one harness dying at the 600s HARNESS_TIMEOUT in tests/run.sh, which is the
+    # case this ceiling must survive to report. It is a backstop, not the instrument: the
+    # per-harness bound is.
+    #
+    # 2026-10-05 (macos-latest, 154 harnesses): 25 had stopped being a backstop — 4,108
+    # harness-seconds on the 3-CPU runner (run 37304822869), about 23 minutes of pool
+    # before the replay; that run was CANCELLED at 25 with every harness passed, and the
+    # two green runs before it took 24 and 25 minutes. 45 was the same ~1.7x over that.
+    #
+    # 2026-10-09 (ubuntu-latest, 150 harnesses): the Linux worst case so far is 6m 32s of
+    # job (run 37817944377, 1,285 harness-seconds on 4 CPUs). ~1.7x that is 11, but a
+    # harness dying at the 600s per-harness bound must still be REPORTED, and 6.5 minutes
+    # plus one 10-minute kill is 16.5 — so 20, which covers both numbers. If the suite
+    # reaches 12 minutes here, cut the suite; do not raise this.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           # The plugin-only scope check diffs against the PR base; 0 keeps it able to.
           fetch-depth: 0
+
+      # The runner's shape, printed on every run so a timing or a tool-behaviour change
+      # can be read against the image that produced it — the 2026-10-09 measurement above
+      # is only comparable because #366 recorded nproc and the tool versions beside it.
+      - name: Runner facts
+        shell: bash
+        run: |
+          set -u
+          echo "nproc: $(nproc)"
+          uname -a
+          bash --version | head -1
+          sed --version | head -1
+          jq --version
+          python3 --version
 
       - name: Run tests/*.test.sh
         shell: bash

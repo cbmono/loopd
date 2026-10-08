@@ -7,7 +7,8 @@ name: Tests (deep)
 # nobody is waiting on. `tests/run.sh --deep` is the same selection a local run takes.
 #
 # NOT a required check, and it does not gate anything: the PR job (`harness suite`) is
-# this repo's one required check.
+# this repo's one required check. Since 2026-10-09 this file also carries the nightly
+# macOS run of the gate tier (`macos`, below) — the gate itself runs on Linux.
 #
 # THE RUNNER SHIPS NO `claude`, so this job installs one (ai-bridge-v3/task-033) and the
 # eval needs a credential to make its model calls. Both are reported, never assumed:
@@ -56,6 +57,49 @@ jobs:
           tests/run.sh --deep
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+  # The gate tier on macOS, nightly. The required check (`harness suite`, tests.yml) moved
+  # to ubuntu-latest on 2026-10-09 — 2.5x faster, and the platform where two shipped bugs
+  # were visible (#367; the full account is on that job's `runs-on`). What Linux cannot
+  # see is the other half of what operators actually run: /bin/bash 3.2.57, BSD stat, sed,
+  # awk and mktemp, APFS. This job keeps that half under test a day late, which is the
+  # price of a nightly, and tests/ci-workflow.test.sh fails if it goes missing.
+  #
+  # ADVISORY, not a required check, and it gates nothing — the one required check is the
+  # Linux job. `tests/run.sh --all` here is exactly the set a push to main runs on Linux:
+  # a `# deep` harness is excluded structurally (only --deep runs one, and that is the
+  # `deep` job above, with the credential), a `# iced` harness is skipped unless a changed
+  # path names it (the `iced` job below is what runs those), and the refusing `claude` shim
+  # is in front of every harness, so this run can spawn no session and spend nothing.
+  # 45 minutes is the ceiling the gate carried on this runner (16m 37s measured, run
+  # 37748780764, against a 3-CPU pool), re-used rather than re-cut: a nightly nobody waits
+  # on does not need a tight backstop, it needs to finish.
+  macos:
+    name: macOS suite (nightly)
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Runner facts
+        shell: bash
+        run: |
+          set -u
+          echo "ncpu: $(sysctl -n hw.ncpu)"
+          uname -a
+          bash --version | head -1
+          jq --version
+          python3 --version
+
+      - name: Run tests/run.sh --all
+        shell: bash
+        run: |
+          export TMPDIR="${RUNNER_TEMP:-/tmp}"
+          mkdir -p "$TMPDIR"
+          tests/run.sh --all
 
   # The `# iced` tier: harnesses whose subject is on hold. tests/run.sh keeps them out of
   # every pull request that does not name their subject, so this run is what notices one

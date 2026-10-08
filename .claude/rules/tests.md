@@ -50,21 +50,34 @@ that delay is the accepted price. A pull request whose diff cannot be read runs 
 `push-state` run in every session and stay in the gate. Thawing is deleting the marker.
 
 **The time budget.** A run prints its harness-seconds and its five slowest; a **full** run
-over `SUITE_BUDGET_S` (**3600** when unset — 20 minutes on the 3-CPU runner) is warned, and
-so is any one harness over `HARNESS_WARN_S` (**300** when unset, half the kill bound). It
-**warns and never fails**: two runs of the same tree measured 3,015 and 4,108
-harness-seconds on that runner, so a failing bound would be a coin. The suite had no budget
-and grew 3,178 → 4,108 in a day. **A PR that adds a harness says in its body what the
-harness costs in seconds** (the `took` line of a local run) and, when the suite is over
-budget, what it replaces. CI writes the fifteen slowest to the job's step summary.
+over `SUITE_BUDGET_S` (**2000** when unset) is warned, and so is any one harness over
+`HARNESS_WARN_S` (**300** when unset, half the kill bound). It **warns and never fails**:
+two runs of the same tree measured 3,015 and 4,108 harness-seconds on the 3-CPU macOS
+runner, and 935 against 1,285 on the Linux one, so a failing bound would be a coin. The
+suite had no budget and grew 3,178 → 4,108 in a day. The budget was **3600** (20 minutes
+of the macOS pool) until 2026-10-09, when the gate moved to `ubuntu-latest` and the full
+tree measured **1,285** there (run 37817944377, 4 CPUs); 2000 is ~1.55× that — room for a
+dozen harnesses at today's ~8.5 s average, and a warning well before the job's 20-minute
+ceiling. The nightly macOS run of the same tree is about 2,500 and will show the warning;
+read that as "macOS is twice as slow", which is known. **A PR that adds a harness says in
+its body what the harness costs in seconds** (the `took` line of a local run) and, when
+the suite is over budget, what it replaces. CI writes the fifteen slowest to the job's
+step summary.
 **Each harness is also bounded in wall clock** (`HARNESS_TIMEOUT`, 600s; 1800s under
 `--deep`): the pool replays nothing until every worker is done, so a harness that never
 returns would otherwise take the whole job down with an empty log — ai-bridge-v3/task-040.
 Measured on an M3 Pro, 2026-09-13, `claude` masked off PATH: a one-line edit to
 `plugin/scripts/commit-as.sh` selects 18 harnesses and takes **1m 21s** (was 2m 25s
 sequential, and 9m 12s with the eval in the core); all 111 take **6m 15s** in a pool of
-11, against **39m 47s** sequential. In CI, where the runner has 3 CPUs: **10m 35s**,
-against 29m 45s sequential (run 34774374082).
+11, against **39m 47s** sequential. In CI on the 3-CPU macOS runner: **10m 35s**, against
+29m 45s sequential (run 34774374082). **The gate runs on `ubuntu-latest` since
+2026-10-09** (4 CPUs, bash 5.2, GNU coreutils, gawk): the same 150-harness tree measured
+**6m 32s of job and 1,285 harness-seconds** there (run 37817944377) against **16m 37s and
+2,494** on `macos-latest` (run 37748780764) — and two of the three recurring "Linux
+failures" were shipped bugs (#367). macOS keeps the suite **nightly**, as the advisory
+`macOS suite (nightly)` job in `tests-deep.yml`, because bash 3.2 and the BSD tools are
+what operators run; `ci-workflow.test.sh` fails if either half is lost. One flake is open:
+`awaiting-queue` failed 1 of 2 Linux runs and passed the next untouched — unexplained.
 
 The full suite is CI's job: `harness suite` is a required check, a push to `main` always
 runs everything, and so does a PR whose diff touches anything outside `plugin/`. **That
@@ -74,7 +87,8 @@ linked, on brand?" and name none. Admitting `tests/*.test.sh` to the fast path (
 a new script through without its README row and turned `main` red the same day. So
 `--changed` is a local convenience, never proof — which is why `--all` is run once before
 a PR. A full CI run measured **20m 10s** on 2026-10-04 (3,178 harness-seconds on the
-3-CPU runner; the 10m 35s above was 111 harnesses, it is 141 now). Branch protection's
+3-CPU macOS runner; the 10m 35s above was 111 harnesses, it was 141 then) and **6m 32s**
+on the Linux gate on 2026-10-09 (1,285 harness-seconds, 150 harnesses). Branch protection's
 `strict` flag is **off** (read from the API on 2026-10-05) — a `pull_request` run tests the
 merge of the branch into the base as of that run, and nothing re-runs it when the base moves. Locally the same loop measured **39m 47s and
 269.4k tokens** (2026-08-29) before the pool, and tokens are still spent on a local run

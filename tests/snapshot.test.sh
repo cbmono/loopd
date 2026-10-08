@@ -1925,10 +1925,11 @@ import json,sys
 d = json.load(open(sys.argv[1]))["closed"][0]["deliverables"]
 sys.exit(0 if d[0]["url"] == sys.argv[2] else 1)' "$CLJ" "$CLURL")"
 done
-# The loop can only pin the awks a machine HAS, and CI is macos-latest — BSD awk, no
-# gawk, no mawk — so the invariant is asserted statically as well: the offset past the
-# separator is DERIVED from its length and never a literal, which is the one property
-# that holds in either unit.
+# The loop can only pin the awks a machine HAS, and no one runner has them all — the
+# Linux gate (since 2026-10-09) has gawk and no BSD awk, the nightly macOS run has BSD
+# awk and no gawk or mawk — so the invariant is asserted statically as well: the offset
+# past the separator is DERIVED from its length and never a literal, which is the one
+# property that holds in either unit.
 assert "…and the parse derives that offset, never hardcodes it" "$(yes_if python3 -c '
 import re, sys
 prog = open(sys.argv[1], encoding="utf-8").read().split("closed_records()", 1)[1].split("\n}", 1)[0]
