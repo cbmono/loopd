@@ -135,6 +135,7 @@ body_lines() { # <file>
 # =========================================================================================
 ALLOWED='
 .claude/rules/installer.md	4	the paths: globs that load this rule for the two stubs, the sentence naming them AS the stubs, and the conversion sweep /symlink/ target test
+README.md	4	the three lines naming install.sh as the thing /'"${PN}:"'init replaced or converts a bundle from, past tense, and the Scripts row for init-bundle.sh
 docs/conventions.md	2	the relocation History blockquote, and the retired unstamped-machinery row, both past tense
 docs/operations.md	2	the /symlink/ target test the conversion sweep STILL applies, and the eight commands that became skills
 docs/pm-design.md	1	where the two step files moved FROM, past tense
