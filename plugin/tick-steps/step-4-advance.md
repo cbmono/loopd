@@ -82,9 +82,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    with the same flags step 3 lists. **`--resume` takes the FULL session id, never the
    short one**: a short id is a picker search term, the picker finds "No sessions match",
    and a `--bg` session parks `blocked` on it with no turn taken (three times on
-   2026-10-08/09). `resolve` exits 1 when no session or more than one matches — then do
-   not resume; dispatch fresh. Resume only a session `agent-sessions.sh state` calls
-   `done`. Every resume prints a **new** id (measured on CLI 2.1.295, an exited session
+   2026-10-08/09). **A non-zero `resolve` is neither a resume nor a re-dispatch**: exit 1
+   (no session, or more than one, matches) and exit 2 (unknown) leave the task as it is —
+   name it in the tick report and surface it as a 🔴 item. Resume only a session
+   `agent-sessions.sh state` calls `done`. Every resume prints a **new** id (measured on CLI 2.1.295, an exited session
    included): before the tick moves on, write `agent-sessions.sh resolve <the new id>` —
    the full UUID — as `session:` on the task, and one `# Notes` line `resumed <that
    UUID>`. **`claude stop` and `claude logs` refuse a full UUID** ("No job matching"),
@@ -93,7 +94,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
    **A STALLED RESUME falls back on the next tick — the one named exception to the
    `blocked` row above.** For each task whose `session:` is the UUID on its last
-   `resumed` note, run `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh stalled <the task's `session:`>`
+   `resumed` note, run `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh stalled <the task's session UUID>`
    at this sweep. It reads `claude agents --json` and that session's transcript — never
    `session-usage.sh`, which prints `usage UNKNOWN` for a live session. **Exit 0**
    (`stalled <uuid>`: `blocked`, no turn since the resume):

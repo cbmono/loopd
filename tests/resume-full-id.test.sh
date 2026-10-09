@@ -95,6 +95,9 @@ printf '%s\n' '{"type":"user","timestamp":"2026-10-09T14:55:00.000Z"}' \
 ok "…a copied history older than the resume -> stalled" "$(st aaaa1111)" "stalled $U1 rc=0 "
 printf '%s\n' '{"type":"assistant","timestamp":"2026-10-09T14:54:10.000Z"}' '{"type":"assi' >> "$PD/-wt/$U1.jsonl"
 ok "a turn after the resume -> not stalled"    "$(st aaaa1111)" "not-stalled took-a-turn rc=1 "
+# A permission prompt follows a tool call, and a tool call is written as an assistant entry.
+printf '%s\n' '{"type":"assistant","timestamp":"2026-10-09T14:54:12.000Z","message":{"content":[{"type":"tool_use"}]}}' > "$PD/-wt/$U1.jsonl"
+ok "blocked on a permission prompt -> not stalled" "$(st aaaa1111)" "not-stalled took-a-turn rc=1 "
 printf '%s\n' '{"type":"user"}' 'garbage' '{"type":"user"}' > "$PD/-wt/$U1.jsonl"
 ok "an unreadable line mid-transcript -> unknown" "$(st aaaa1111)" "rc=2 "
 rm "$PD/-wt/$U1.jsonl"; mkdir -p "$PD/-a" "$PD/-b"; : > "$PD/-a/$U1.jsonl"; : > "$PD/-b/$U1.jsonl"
@@ -111,7 +114,10 @@ ok "…stops by the UUID's first field"          "$(has "$S4" '`claude stop <the
 ok "…records the stall with stall-counter"     "$(has "$S4" "stall-counter.sh record <task-doc> --blocker 'resume stalled'")" yes
 ok "…and escalates a second one"               "$(has "$S4" 'exit 1 ⇒ `stall-counter.sh escalate <task-doc>`')" yes
 ok "a new id becomes session: as the full UUID" "$(has "$S4" 'resolve <the new id>` —')" yes
-ok "the never-wait rule is unchanged"          "$(has "$S4" 'COMPLETION IS READ, NEVER AWAITED')" yes
+ok "a failed resolve is never a re-dispatch"   "$(has "$S4" '**A non-zero `resolve` is neither a resume nor a re-dispatch**')" yes
+ok "…and no line tells it to dispatch fresh"   "$(grep -c 'not resume; dispatch fresh' "$S4")" 0
+ok "the stalled command is one code span"     "$(has "$S4" 'agent-sessions.sh stalled <the task'"'"'s session UUID>`')" yes
+ok "the never-wait rule is unchanged"         "$(has "$S4" 'COMPLETION IS READ, NEVER AWAITED')" yes
 ok "the no-re-dispatch rule is unchanged"      "$(has "$S4" 'A non-zero verdict is never a re-dispatch.')" yes
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
