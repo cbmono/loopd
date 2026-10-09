@@ -88,7 +88,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `agent-sessions.sh state` calls `done`. Every resume prints a **new** id (measured on CLI 2.1.295, an exited session
    included): before the tick moves on, write `agent-sessions.sh resolve <the new id>` —
    the full UUID — as `session:` on the task, and one `# Notes` line `resumed <that
-   UUID>`. **`claude stop` and `claude logs` refuse a full UUID** ("No job matching"),
+   UUID>`. **If that second `resolve` exits 1 or 2, the resume has launched anyway**: set
+   the task `blocked`, write `resume launched; session id unresolved: <the printed id>`
+   under `# Notes`, report it as a 🔴 item, and never resume the old recorded session.
+   **`claude stop` and `claude logs` refuse a full UUID** ("No job matching"),
    so give them its first field. Anything beyond that is the human's
    call — surface it in `AWAITING.md` (measured case: `docs/pm-design.md#step-4`).
 

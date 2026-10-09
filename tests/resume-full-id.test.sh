@@ -117,6 +117,7 @@ ok "…stops by the UUID's first field"          "$(has "$S4" '`claude stop <the
 ok "…records the stall with stall-counter"     "$(has "$S4" "stall-counter.sh record <task-doc> --blocker 'resume stalled'")" yes
 ok "…and escalates a second one"               "$(has "$S4" 'exit 1 ⇒ `stall-counter.sh escalate <task-doc>`')" yes
 ok "a new id becomes session: as the full UUID" "$(has "$S4" 'resolve <the new id>` —')" yes
+ok "…a failed second resolve blocks, never resumes old" "$(has "$S4" 'write `resume launched; session id unresolved: <the printed id>`')" yes
 ok "a failed resolve is never a re-dispatch"   "$(has "$S4" '**A non-zero `resolve` is neither a resume nor a re-dispatch**')" yes
 ok "…and no line tells it to dispatch fresh"   "$(grep -c 'not resume; dispatch fresh' "$S4")" 0
 ok "a waitingFor prompt stays the human's"      "$(has "$S4" 'on a login or other `waitingFor` prompt before its first turn')" yes
