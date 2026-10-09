@@ -178,7 +178,7 @@ footer nav{gap:16px;font-size:13px}
     <div>
       <div class="kicker">loopd · the loop, running</div>
       <h1>You steer.<br>They build.<br><span class="pink">Two gates stay yours.</span></h1>
-      <p class="lede">loopd is a Claude Code plugin that runs a small team of AI agents on your repositories. You describe the work. A project-manager agent breaks it into tasks. Engineer agents build them in the background, open pull requests and get reviewed. You promote, and you merge — nothing else needs you.</p>
+      <p class="lede">loopd is a Claude Code plugin that runs a small team of AI agents on your repositories. You describe the work. A project-manager agent breaks it into tasks. Engineer agents build them in the background, open pull requests and get reviewed. You promote, and you merge; everything else reaches you as a result or a question.</p>
       <div class="actions">
         <a class="btn" href="#install">Install the plugin</a>
         <a class="btn quiet" href="#loop">Walk the loop</a>
@@ -223,7 +223,7 @@ footer nav{gap:16px;font-size:13px}
           <path d="M382 211 H638" stroke="#ff7ac2"/>
         </g>
         <text class="ref" x="22" y="56">/loopd:new-project</text>
-        <text class="step" x="22" y="82">The PM scaffolds the work</text>
+        <text class="step" x="22" y="82">Scaffold, then PM refines</text>
         <text class="note" x="22" y="104">phases, draft tasks, criteria</text>
         <text class="gate" x="392" y="56">GATE 1 · YOU</text>
         <text class="step" x="392" y="82">Promote draft → ready</text>
@@ -273,7 +273,7 @@ footer nav{gap:16px;font-size:13px}
           <path d="M22 561 H278" stroke="#ff7ac2"/>
         </g>
         <text class="ref" x="30" y="36">/loopd:new-project</text>
-        <text class="step" x="30" y="62">The PM scaffolds the work</text>
+        <text class="step" x="30" y="62">Scaffold, then PM refines</text>
         <text class="note" x="30" y="84">phases, draft tasks, criteria</text>
         <text class="gate" x="30" y="176">GATE 1 · YOU</text>
         <text class="step" x="30" y="202">Promote draft → ready</text>
@@ -301,7 +301,7 @@ footer nav{gap:16px;font-size:13px}
       <li class="card">
         <div class="num">01 · agents</div>
         <h3><code>/loopd:new-project</code></h3>
-        <p>One sentence is enough. The project-manager agent scaffolds phases and <code>draft</code> tasks, then refines each one: acceptance criteria, and the questions only you can answer.</p>
+        <p>One sentence is enough. You and the main session scaffold phases and <code>draft</code> tasks; the project-manager agent then refines each one: acceptance criteria, and the questions only you can answer.</p>
       </li>
       <li class="card human">
         <div class="num">02 · gate 1</div>
@@ -336,7 +336,7 @@ footer nav{gap:16px;font-size:13px}
       </div>
       <div class="card human">
         <div class="label">You · pink</div>
-        <p>Two decisions, ever: promote <code>draft → ready</code>, and merge. Anything waiting on you lands in <code>AWAITING.md</code> and on the session banner.</p>
+        <p>Two gates, by default: promote <code>draft → ready</code>, and merge. Anything waiting on you lands in <code>AWAITING.md</code> and on the session banner.</p>
       </div>
     </div>
     <div class="needs" aria-label="Example of an AWAITING.md block">
@@ -357,6 +357,10 @@ footer nav{gap:16px;font-size:13px}
   ▝▄▄▄▄▘</span><span class="c"># once per machine</span>
 <span class="cmd">/plugin marketplace add cbmono/loopd</span>
 <span class="cmd">/plugin install loopd@loopd</span>
+<span class="c"># or core + autonomy companion + mods, in one</span>
+<span class="cmd">/plugin install loopd-all@loopd</span>
+<span class="c"># or add one mod on its own</span>
+<span class="cmd">/plugin install loopd-mod-usage@loopd</span>
 
 <span class="c"># once per group of repositories</span>
 <span class="cmd">/loopd:init ~/workspace/&lt;group&gt;/_loopd-&lt;group&gt;</span>
@@ -378,8 +382,8 @@ footer nav{gap:16px;font-size:13px}
       <div class="card"><h3>Exit 0 is the only clearance</h3><p>Missing, pending, skipped and unreadable checks all refuse. A green check from a reviewer that declined to review is not verification.</p></div>
       <div class="card"><h3>Done means a PR exists</h3><p>An agent's "done" is not evidence. The dispatch check asks whether the status moved and the PR resolves — and only reports.</p></div>
       <div class="card"><h3>One tick at a time</h3><p>A lock refuses a second orchestrator. Stale or unattributable means ask the human — never delete, never adopt.</p></div>
-      <div class="card"><h3>Reports, never deletes</h3><p>The worktree pruner and the bundle repair are report-only by default. A false success is worse than the error it claims to fix.</p></div>
-      <div class="card human"><h3>The gates can be delegated</h3><p>Only by installing a separate companion plugin. Uninstall it and every project is gated again, with no other edits.</p></div>
+      <div class="card"><h3>Never deletes on a guess</h3><p>The worktree pruner only reports. A worktree goes when its task is done with every PR merged, or when you say yes to <code>/loopd:prune-wt</code>. The bundle repair is report-only by default.</p></div>
+      <div class="card human"><h3>The gates can be delegated</h3><p>Only through the separate <code>loopd-yolo</code> companion plugin, which <code>loopd-all</code> includes; each project stays gated until it opts in. Uninstall it and every project is gated again, with no other edits.</p></div>
     </div>
   </section>
 
