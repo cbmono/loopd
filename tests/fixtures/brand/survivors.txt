@@ -19,7 +19,7 @@
 prov,instdir,fname,frozen	README.md
 prov,fname	docs/conventions.md
 frozen	docs/index.html
-prov,instdir,frozen	docs/migrating.md
+prov,bundle,instdir,frozen	docs/migrating.md	3
 prov,instdir,fname,frozen	docs/operations.md
 prov	docs/pm-design.md
 frozen	docs/releases/v1.0.0.md

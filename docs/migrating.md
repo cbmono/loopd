@@ -12,6 +12,10 @@ template checkout is frozen at whatever that clone last pulled and no plugin upd
 reaches it. [§ Converting a symlink-era bundle](#converting-a-symlink-era-bundle-in-place)
 below is the one command that fixes it, in place, without touching your data.
 
+**And for a bundle that still keeps its state in `.ai-bridge`** — any bundle stamped before
+3.3.0. [§ The state directory is `.loopd`](#the-state-directory-is-loopd-330-onward) below
+is the migration; `/loopd:init` refuses such a bundle until it has run.
+
 **There are two ways forward and they are not equally safe.** Pick with the table, then
 read only that section.
 
@@ -86,7 +90,7 @@ Every command is namespaced — `/loopd:dispatch`, `/loopd:welcome`,
 ## Path A — upgrade in place (the default)
 
 **Written once, in one place, and not repeated here:**
-[operations.md § Moving a stamped instance into the plugin era](operations.md#moving-a-stamped-instance-into-the-plugin-era--run-this-once).
+[operations.md § Moving a stamped bundle into the plugin era](operations.md#moving-a-stamped-bundle-into-the-plugin-era--run-this-once).
 
 Three steps — plugin install (per machine), `/loopd:init <bundle>`, restart. The
 stamp converts, so the sweep below removes the symlink-era command links for you, and it
@@ -275,6 +279,28 @@ installed companion, so such a bundle behaves byte for byte as it did — with o
 nothing to migrate: leave the file where it is. Turning it off there means deleting **that
 file**, because uninstalling the companion alone would not reach it.
 ([autonomy.md](autonomy.md#the-onoff-switch-is-one-plugin))
+
+---
+
+## The state directory is `.loopd` (3.3.0 onward)
+
+**A plugin at 3.3.0 or later reads a bundle's state from `.loopd` and does not resolve the
+old `.ai-bridge` directory.** `/loopd:init` on a bundle that still has it exits 2, writes
+nothing, and prints the two commands to run from the bundle root:
+
+```
+bash <plugin>/scripts/migrate-bundle.sh --layout-only           # report what would move
+bash <plugin>/scripts/migrate-bundle.sh --layout-only --apply   # move it, and commit
+```
+
+| | |
+|---|---|
+| **Before** | commit or stash: the migration refuses a dirty tracked tree and a live `.tick-lock` |
+| **What moves** | the directory, in one `git mv`, with its ignore lines, the status-line pin and any knowledge mount's `core.worktree`; a pre-3.0 bundle's root files move into it first. Then it commits |
+| **What does not** | any document. `--layout-only` runs only the two directory steps and prints `content: NOT CHECKED`; the plain run also repairs documents ([schema.md § Keeping a bundle valid](schema.md#keeping-a-bundle-valid)) |
+| **A mounted `knowledge/`** | skipped by the content pass in every mode and reported once: *lives in a knowledge mount; repair it from that repository, not here* |
+| **Both directories exist** | an earlier stamp made an empty `.loopd` beside the old one, but a dispatch tick may have written state there since then. Inspect and reconcile it before moving it aside — the migration stops while it is there. The session banner and `/loopd:welcome check` name this state too |
+| **Check it** | `test -d .loopd && ! test -e .ai-bridge`, then `/loopd:init` runs as usual |
 
 ---
 

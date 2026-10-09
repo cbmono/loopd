@@ -103,6 +103,14 @@ exactly where it is — a derived value never shadows an answer somebody gave �
 `worktreeRoot` and `boardInstances` stay optional: absent, they mean `<reposRoot>/_wt` and
 this instance alone.
 
+**Since 3.5.0 the stamp also does the three things a second human used to do by hand.**
+
+| | What `/loopd:init` does |
+|---|---|
+| **The knowledge base** | with `knowledge.repo` in the config and no mount, it seeds no `knowledge/` placeholders and runs `kb-sync.sh mount` itself. Real content in `knowledge/` is refused; a placeholder-only folder from an earlier stamp is named with the `rm` to run, never removed; an unreachable remote is a `warn` plus the `pull` to run later |
+| **`authorEmail`** | filled from `people[ownerGithubUser]` into an *existing* local file that lacks it — the one key that step writes there, verified after the write, never overwriting a value |
+| **The spawn grant** | at a terminal, when the exact auto-mode rule is absent, it asks `… [Y/n]` (Enter is yes) and writes it to `.claude/settings.local.json`, replacing the stale shapes on the same yes. With no terminal it writes nothing; `--spawn-grant` is the yes relayed from a session ([operations.md § The supported shape](operations.md#the-supported-shape-one-main-thread-auto-mode-always-on)) |
+
 **The shared, tracked half is done once, from either clone:**
 
 | # | Step | Where | Command / value |
@@ -211,6 +219,15 @@ auto-resolved — conflicted task documents are contested state between two huma
 guessed resolution writes a `status:` nobody chose. And **nothing force-pushes**. Work
 *you* commit by hand outside a tick is still yours to push. Ownership stops two loops
 dispatching the same task; it was never a lock on pushing.
+
+## Handing off a project with work in flight
+
+`/loopd:handoff <path> <github-login> [context]` moves `owner:` and records why. An
+`in-progress` task whose `worktree:`, `branch:` and `session:` live on the old owner's
+machine is **named, not handed over silently** — the new owner's clone can neither observe
+nor settle that session — with its two routes: the old owner finishes it, or releases it
+(`status: ready`, drop `worktree:`/`branch:`/`session:`) and pushes. The skill changes
+nothing on that task itself.
 
 ---
 

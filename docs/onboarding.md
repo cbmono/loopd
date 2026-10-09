@@ -14,8 +14,8 @@ In any Claude Code session:
 /plugin install loopd-all@loopd
 ```
 
-Then **restart Claude Code.** (`loopd-all` is the bundle: the core plugin and every
-companion in one command.)
+Then **restart Claude Code.** (`loopd-all` is the bundle: the core plugin, `loopd-yolo`
+and the three mods in one command.)
 
 ## 2. Stamp your copy of the bundle — once, per bundle
 

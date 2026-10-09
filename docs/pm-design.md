@@ -462,8 +462,10 @@ launcher's release point are untouched.
    line records `usage UNKNOWN` — the honest answer, and not a zero.
    **Closed since:** the numbers were never gone, only unreported. A top-level session
    writes its own transcript, one file per session id, with a usage block on every
-   assistant message; `session-usage.sh` reads that one file after the session ends and
-   `agent-usage.sh settle` fills the line (step 4). Two things it must hold: **one
+   assistant message; `session-usage.sh` reads that one file after the session ends —
+   or, where the optional `loopd-mod-usage` companion was loaded in the session, its
+   plugin-store record first ([`plugin-mod-usage/README.md`](../plugin-mod-usage/README.md))
+   — and `agent-usage.sh settle` fills the line (step 4). Two things it must hold: **one
    message, one count** — a transcript repeats a message's usage on each content block's
    line, measured at 2.2 lines per message, so a per-line sum doubles the figure — and
    **UNKNOWN on any doubt**, because the transcript is a Claude Code internal and a

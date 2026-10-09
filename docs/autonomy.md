@@ -25,8 +25,13 @@ companion plugin** carries, and core finds it by presence:
 | `AUTONOMY.md` **found** | a project's `autonomy:` field is honoured |
 | `AUTONOMY.md` **not found** | every project is `gated`, whatever its `autonomy:` says |
 
-**Uninstalling `loopd-yolo` disables delegated autonomy with no other edits** — that
-is the point of the design, and it is the whole of turning it off. `commit-as.sh` gates
+**Uninstalling `loopd-yolo` disables delegated autonomy with no other edits** on a
+bundle that carries no `AUTONOMY.md` of its own — that is the point of the design, and
+for such a bundle it is the whole of turning it off. A bundle with its own root
+`AUTONOMY.md` keeps delegating regardless (root wins, below); delete that file to turn
+it off there. **Disabling it in
+`/plugin` is not**: `resolve-autonomy.sh` reads `installed_plugins.json`, what is
+installed, so a disabled companion still delegates. `commit-as.sh` gates
 its promotion guard on the same lookup, fail-closed. Full reasoning, including the one
 hazard the pattern does not cover:
 [conventions.md invariant 4](conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file).
