@@ -63,12 +63,14 @@ U1=aaaa1111-0000-4000-8000-000000000001
 U2=bbbb2222-0000-4000-8000-000000000002
 U3=bbbb2222-0000-4000-8000-000000000003
 U4=cccc3333-0000-4000-8000-000000000004
+U5=eeee5555-0000-4000-8000-000000000005
 STARTED=1791557649233   # 2026-10-09T14:54:09.233Z
 cat > "$TMP/agents.json" <<JSON
 [ {"id":"aaaa1111","sessionId":"$U1","kind":"background","state":"blocked","startedAt":$STARTED},
   {"id":"bbbb2222","sessionId":"$U2","kind":"background","state":"done","startedAt":$STARTED},
   {"id":"bbbb2222","sessionId":"$U3","kind":"background","state":"done","startedAt":$STARTED},
-  {"id":"cccc3333","sessionId":"$U4","kind":"background","state":"working","startedAt":$STARTED} ]
+  {"id":"cccc3333","sessionId":"$U4","kind":"background","state":"working","startedAt":$STARTED},
+  {"id":"eeee5555","sessionId":"$U5","kind":"background","state":"blocked","waitingFor":"login","startedAt":$STARTED} ]
 JSON
 export STUB_JSON="$TMP/agents.json"
 run() { PATH="$P" bash "$SESS" "$@" 2>/dev/null; echo "rc=$?"; }
@@ -89,7 +91,8 @@ ok "no claude on PATH -> exit 2"               "$(PATH="/usr/bin:/bin" bash "$SE
 echo "== stalled: blocked AND no assistant turn since the session started =="
 PD="$TMP/projects"; mkdir -p "$PD/-wt"
 st() { run stalled "$1" --projects-dir "$PD" | tr '\n' ' '; }
-ok "blocked, no transcript -> stalled"         "$(st aaaa1111)" "stalled $U1 rc=0 "
+ok "blocked, no transcript, no waitingFor -> stalled" "$(st aaaa1111)" "stalled $U1 rc=0 "
+ok "blocked on waitingFor before a turn -> not stalled" "$(st eeee5555)" "not-stalled waiting-for rc=1 "
 printf '%s\n' '{"type":"user","timestamp":"2026-10-09T14:55:00.000Z"}' \
   '{"type":"assistant","timestamp":"2026-10-09T14:50:00.000Z"}' > "$PD/-wt/$U1.jsonl"
 ok "…a copied history older than the resume -> stalled" "$(st aaaa1111)" "stalled $U1 rc=0 "
@@ -116,6 +119,7 @@ ok "…and escalates a second one"               "$(has "$S4" 'exit 1 ⇒ `stall
 ok "a new id becomes session: as the full UUID" "$(has "$S4" 'resolve <the new id>` —')" yes
 ok "a failed resolve is never a re-dispatch"   "$(has "$S4" '**A non-zero `resolve` is neither a resume nor a re-dispatch**')" yes
 ok "…and no line tells it to dispatch fresh"   "$(grep -c 'not resume; dispatch fresh' "$S4")" 0
+ok "a waitingFor prompt stays the human's"      "$(has "$S4" 'on a login or other `waitingFor` prompt before its first turn')" yes
 ok "the stalled command is one code span"     "$(has "$S4" 'agent-sessions.sh stalled <the task'"'"'s session UUID>`')" yes
 ok "the never-wait rule is unchanged"         "$(has "$S4" 'COMPLETION IS READ, NEVER AWAITED')" yes
 ok "the no-re-dispatch rule is unchanged"      "$(has "$S4" 'A non-zero verdict is never a re-dispatch.')" yes

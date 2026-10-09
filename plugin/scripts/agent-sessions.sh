@@ -7,8 +7,9 @@
 #   agent-sessions.sh resolve <session-id>    -> the full session UUID `--resume` needs;
 #                                                exit 1 when none or more than one matches
 #   agent-sessions.sh stalled <session-id> [--projects-dir <dir>]
-#                                             -> exit 0 `stalled <uuid>`: blocked, and no
-#                                                assistant turn since it started; 1 not
+#                                             -> exit 0 `stalled <uuid>`: blocked, no
+#                                                `waitingFor`, and no assistant turn since
+#                                                it started; 1 not
 #   agent-sessions.sh in-flight <bundle-root> -> how many recorded sessions still hold a
 #                                                slot, on stdout; one line per recorded
 #                                                session on stderr
@@ -24,7 +25,7 @@
 # tests/resume-full-id.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,18p' "$0" >&2; exit 2; }
+usage() { sed -n '3,19p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 command -v python3 >/dev/null 2>&1 || {
@@ -132,6 +133,10 @@ sid, started = r["sessionId"], r.get("startedAt")
 state = str(r.get("state") or r.get("status") or "")
 if state != "blocked":
     print("not-stalled " + (state or "unknown"))
+    sys.exit(1)
+# A login or other live prompt parks a fresh round too, so it stays the human's.
+if r.get("waitingFor"):
+    print("not-stalled waiting-for")
     sys.exit(1)
 if not isinstance(started, (int, float)) or isinstance(started, bool):
     sys.exit(2)
@@ -305,6 +310,6 @@ PY
       echo "agent-sessions: could not read the session list" >&2; exit 2; }
     ;;
 
-  -h|--help) sed -n '3,18p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,19p' "$0"; exit 0 ;;
   *) usage ;;
 esac

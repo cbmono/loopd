@@ -97,7 +97,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `resumed` note, run `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh stalled <the task's session UUID>`
    at this sweep. It reads `claude agents --json` and that session's transcript — never
    `session-usage.sh`, which prints `usage UNKNOWN` for a live session. **Exit 0**
-   (`stalled <uuid>`: `blocked`, no turn since the resume):
+   (`stalled <uuid>`: `blocked`, no turn since the resume, and no `waitingFor`):
    1. `claude stop <the UUID's first field>`, then `agent-sessions.sh state <the UUID>`
       once; anything but `stopped`, `done` or `gone` means the stop has not landed —
       report it and leave the rest to the next tick.
@@ -106,7 +106,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
       <uuid> stopped` under `# Notes` and dispatch ONE fresh round in the same worktree,
       exactly as step 3 spawns. Anything else is a second stall — dispatch nothing:
       exit 1 ⇒ `stall-counter.sh escalate <task-doc>`; exit 0 ⇒ a 🔴 `AWAITING.md` item.
-   **Exit 1** is not a stall, and the rows above apply. **Exit 2** is unknown: change
+   **Exit 1** is not a stall, and the rows above apply — **including a session `blocked`
+   on a login or other `waitingFor` prompt before its first turn**: a fresh round would
+   park on the same prompt, so it stays the human's. **Exit 2** is unknown: change
    nothing. The never-wait rule and the no-re-dispatch rule above are unchanged — this
    is a read at the sweep, and no `check-dispatch.sh` verdict is a fallback.
 
