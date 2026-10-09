@@ -299,7 +299,7 @@ bash <plugin>/scripts/migrate-bundle.sh --layout-only --apply   # move it, and c
 | **What moves** | the directory, in one `git mv`, with its ignore lines, the status-line pin and any knowledge mount's `core.worktree`; a pre-3.0 bundle's root files move into it first. Then it commits |
 | **What does not** | any document. `--layout-only` runs only the two directory steps and prints `content: NOT CHECKED`; the plain run also repairs documents ([schema.md § Keeping a bundle valid](schema.md#keeping-a-bundle-valid)) |
 | **A mounted `knowledge/`** | skipped by the content pass in every mode and reported once: *lives in a knowledge mount; repair it from that repository, not here* |
-| **Both directories exist** | an earlier stamp made an empty `.loopd` beside the old one. Move it aside first — the migration stops while it is there. The session banner and `/loopd:welcome check` name this state too |
+| **Both directories exist** | an earlier stamp made an empty `.loopd` beside the old one, but a dispatch tick may have written state there since then. Inspect and reconcile it before moving it aside — the migration stops while it is there. The session banner and `/loopd:welcome check` name this state too |
 | **Check it** | `test -d .loopd && ! test -e .ai-bridge`, then `/loopd:init` runs as usual |
 
 ---
