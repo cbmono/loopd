@@ -4,7 +4,8 @@
 #
 # It acts only on what prune-worktrees.sh reports REMOVABLE, and only after re-checking
 # each path itself, so most of this file proves refusals: a held tick lock, an ignored
-# .env, a live process (reported, and one the report never showed), KEEP and RECLAIMABLE.
+# .env, a live process (reported, and one the report never showed), a git status that
+# fails silently, KEEP and RECLAIMABLE.
 # Then the safe set goes, and `git worktree prune` runs once per repo it came from.
 # gh and git are shimmed first on PATH; nothing outside an mktemp tree is touched.
 set -uo pipefail
@@ -33,6 +34,7 @@ REAL_GIT="$(command -v git)"
 cat > "$BIN/git" <<SHIM
 #!/usr/bin/env bash
 case " \$* " in *" worktree prune "*) printf '%s\n' "\$*" >> "$GITLOG" ;; esac
+[ -n "\${FAIL_STATUS_IN:-}" ] && [ "\$1 \$2 \$3" = "-C \$FAIL_STATUS_IN status" ] && exit 128
 exec "$REAL_GIT" "\$@"
 SHIM
 cat > "$BIN/gh" <<'STUB'
@@ -144,6 +146,20 @@ for p in $PIDS; do kill "$p" 2>/dev/null; wait "$p" 2>/dev/null; done; PIDS=""
 run "$BIN/blind-pruner.sh" --yes
 ok "the process was the reason: once it is gone, a-live is removed" "$(there a-live)" no
 ok "a-env is still spared on every run" "$(there a-env)" yes
+
+echo "== a git status that fails silently is a refusal, not a clean tree =="
+wt alpha a-gs MERGED; sleep 1
+cat > "$BIN/status-pruner.sh" <<STRIP
+#!/usr/bin/env bash
+env -u FAIL_STATUS_IN bash "$PRUNER" "\$@"
+STRIP
+export FAIL_STATUS_IN="$WTROOT/a-gs"
+run "$BIN/status-pruner.sh" --yes
+unset FAIL_STATUS_IN
+ok "with git status exiting 128 and printing nothing, a-gs is spared" "$(there a-gs)" yes
+ok "…with the failing status named as the reason" "$(grep -c "^skip: .*/a-gs .*git status fails" <<<"$OUT")" 1
+run "$BIN/status-pruner.sh" --yes
+ok "the failure was the reason: once status works, a-gs is removed" "$(there a-gs)" no
 
 echo "== the pruner stays report-only; the remover never forces =="
 ok "prune-worktrees.sh still refuses --reclaim with exit 2" \

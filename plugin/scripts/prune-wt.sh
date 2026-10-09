@@ -84,7 +84,7 @@ EOF
 
 # Sets REPO and BRANCH, or WHY and returns 1. Every refusal leaves the path alone.
 check() { # <worktree>
-  local wt=$1 r inside=1 common line cur found=1 is_main=1 seen=0 locked=0 prunable=0 detached=0
+  local wt=$1 r inside=1 common line cur found=1 is_main=1 seen=0 locked=0 prunable=0 detached=0 st
   REPO=""; BRANCH=""; WHY=""
   case "$wt" in *..*) WHY="the path contains '..'"; return 1 ;; esac
   [ -d "$wt" ] || { WHY="it is already gone"; return 1; }
@@ -117,7 +117,8 @@ EOF
   [ "$locked" -eq 0 ]   || { WHY="it is locked"; return 1; }
   [ "$prunable" -eq 0 ] || { WHY="git calls it prunable"; return 1; }
   [ "$detached" -eq 0 ] && [ -n "$BRANCH" ] || { WHY="it is at a detached HEAD"; return 1; }
-  [ -z "$(git -C "$wt" status --porcelain 2>&1)" ] || { WHY="it has uncommitted or untracked files"; return 1; }
+  st="$(git -C "$wt" status --porcelain 2>/dev/null)" || { WHY="git status fails in it"; return 1; }
+  [ -z "$st" ] || { WHY="it has uncommitted or untracked files"; return 1; }
   [ "$(git -C "$wt" rev-list --count HEAD --not --remotes 2>/dev/null)" = 0 ] \
     || { WHY="it has commits no remote holds"; return 1; }
   local ignored entry keepers=""
