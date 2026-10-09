@@ -4,6 +4,11 @@
 #
 #   agent-sessions.sh state <session-id>      -> the raw state `claude agents` reports
 #                                                (working|blocked|done|gone, …) on stdout
+#   agent-sessions.sh resolve <session-id>    -> the full session UUID `--resume` needs;
+#                                                exit 1 when none or more than one matches
+#   agent-sessions.sh stalled <session-id> [--projects-dir <dir>]
+#                                             -> exit 0 `stalled <uuid>`: blocked, and no
+#                                                assistant turn since it started; 1 not
 #   agent-sessions.sh in-flight <bundle-root> -> how many recorded sessions still hold a
 #                                                slot, on stdout; one line per recorded
 #                                                session on stderr
@@ -15,10 +20,11 @@
 # Exit 0 answered · 2 unknown (no `claude`, no `python3`, unreadable JSON) — and unknown is
 # never a zero, because "nothing is running" is what a broken read and an idle loop both
 # look like. Reasoning: docs/pm-design.md#step-3-background.
-# Verified by tests/background-dispatch.test.sh and tests/agent-view.test.sh.
+# Verified by tests/background-dispatch.test.sh, tests/agent-view.test.sh and
+# tests/resume-full-id.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,13p' "$0" >&2; exit 2; }
+usage() { sed -n '3,18p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 command -v python3 >/dev/null 2>&1 || {
@@ -51,6 +57,35 @@ print("gone")
 ' "$1" "$2"
 }
 
+# `--resume` reads a short id as a picker SEARCH TERM, and a `--bg` session parks on the
+# picker — so this counts matches rather than taking the first, as `state_of` does.
+match_of() { # <session-id> <json> -> the one matching row as JSON; 1 none/several, 2 unreadable
+  python3 -c '
+import json, re, sys
+want = sys.argv[1]
+try:
+    rows = json.loads(sys.argv[2])
+    assert isinstance(rows, list)
+except Exception:
+    sys.exit(2)
+hits = {}
+for r in rows:
+    if not isinstance(r, dict):
+        continue
+    sid = r.get("sessionId") or ""
+    if want == r.get("id") or want == sid or sid.split("-")[0] == want:
+        hits[sid] = r
+if len(hits) != 1:
+    print("agent-sessions: %d sessions match %s, not resolving" % (len(hits), want), file=sys.stderr)
+    sys.exit(1)
+sid, r = hits.popitem()
+if not re.fullmatch(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", sid):
+    print("agent-sessions: %s has no full session id" % want, file=sys.stderr)
+    sys.exit(2)
+print(json.dumps(r))
+' "$1" "$2"
+}
+
 # Only an explicitly terminal value frees a slot. Anything else holds one — `idle`
 # included, since a waiting session still holds work and counting it free dispatches past
 # the cap — and a value outside the known vocabulary is named, so a change in what
@@ -71,6 +106,61 @@ case "$1" in
     [ $# -eq 2 ] || usage
     json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
     state_of "$2" "$json" || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
+    ;;
+
+  resolve)
+    [ $# -eq 2 ] || usage
+    json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
+    row="$(match_of "$2" "$json")" || exit $?
+    python3 -c 'import json, sys; print(json.loads(sys.argv[1])["sessionId"])' "$row"
+    ;;
+
+  stalled)
+    [ $# -eq 2 ] || [ $# -eq 4 ] || usage
+    projects="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
+    if [ $# -eq 4 ]; then [ "$3" = "--projects-dir" ] || usage; projects="$4"; fi
+    json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
+    row="$(match_of "$2" "$json" 2>/dev/null)"; rc=$?
+    [ $rc -eq 1 ] && { echo "not-stalled unresolved"; exit 1; }
+    [ $rc -eq 0 ] || exit 2
+    # Every resume mints a new id (measured on CLI 2.1.295), so `startedAt` IS the resume.
+    python3 - "$row" "$projects" <<'PY'
+import glob, json, os, sys
+from datetime import datetime
+r, projects = json.loads(sys.argv[1]), sys.argv[2]
+sid, started = r["sessionId"], r.get("startedAt")
+state = str(r.get("state") or r.get("status") or "")
+if state != "blocked":
+    print("not-stalled " + (state or "unknown"))
+    sys.exit(1)
+if not isinstance(started, (int, float)) or isinstance(started, bool):
+    sys.exit(2)
+found = glob.glob(os.path.join(glob.escape(projects), "*", sid + ".jsonl"))
+if len(found) > 1:
+    sys.exit(2)
+try:
+    lines = open(found[0], encoding="utf-8").read().splitlines() if found else []
+except (OSError, UnicodeDecodeError):
+    sys.exit(2)
+for i, line in enumerate(lines):
+    try:
+        e = json.loads(line)
+    except ValueError:
+        # Only a half-written LAST line is expected; any other could be hiding a turn.
+        if i == len(lines) - 1:
+            continue
+        sys.exit(2)
+    if not isinstance(e, dict) or e.get("type") != "assistant":
+        continue
+    try:
+        t = datetime.fromisoformat(str(e.get("timestamp")).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        sys.exit(2)
+    if t * 1000 >= started:
+        print("not-stalled took-a-turn")
+        sys.exit(1)
+print("stalled " + sid)
+PY
     ;;
 
   in-flight)
@@ -215,6 +305,6 @@ PY
       echo "agent-sessions: could not read the session list" >&2; exit 2; }
     ;;
 
-  -h|--help) sed -n '3,13p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,18p' "$0"; exit 0 ;;
   *) usage ;;
 esac

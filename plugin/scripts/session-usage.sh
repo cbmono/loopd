@@ -23,7 +23,7 @@
 # per content block, each repeating the message's usage — measured at 2.2 lines per
 # message. Summing lines doubles the figure, so usage is keyed on the message id and a
 # tool call on its own id.
-# This is the one file that knows where a transcript lives. It is a Claude Code internal,
+# It and `agent-sessions.sh stalled` know where a transcript lives — a Claude Code internal,
 # so everything here fails to UNKNOWN rather than guessing at a changed format.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"

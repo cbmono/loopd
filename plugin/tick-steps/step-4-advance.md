@@ -20,7 +20,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    | `working` | absent | live. Leave it. Not a stall, not a re-dispatch. |
    | `done` | present | finished — advance the task as above. |
    | `done` | absent | it exited without the artifact: `check-dispatch.sh` exit 1. |
-   | `blocked` | either | parked on a prompt nobody can answer. It holds a slot until `claude stop <id>` — surface it, and run `stop` only on the human's say-so. |
+   | `blocked` | either | parked on a prompt nobody can answer. It holds a slot until `claude stop <id>` — surface it, and run `stop` only on the human's say-so. **One named exception: a stalled resume** (below). |
    | `gone` | absent | never started, or its record was removed. Same verdict as `done`+absent, and the same recovery. |
    | exit 2 | either | unknown, which is not "finished". Report it and change nothing. |
 
@@ -77,12 +77,36 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    and `claude logs <id>` first: the work is usually already committed, and one message
    asking it to open the PR on what it has recovers it — the same task and same PR,
    which is the resume step 3 allows. **The resume is
-   `cd <worktree> && claude --bg --resume <the recorded session> '<the message>'`**,
-   with the same flags step 3 lists. It continues that session under the same id when it
-   has exited, and **starts a COPY and says so when it is still running** — so resume
-   only a session `agent-sessions.sh state` calls `done`, and when the output names a
-   new id, that id replaces `session:` on the task. Anything beyond that is the human's
+   `full="$(${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh resolve <the recorded session>)" && cd <worktree> && claude --bg --resume "$full" '<the message>'`**,
+   with the same flags step 3 lists. **`--resume` takes the FULL session id, never the
+   short one**: a short id is a picker search term, the picker finds "No sessions match",
+   and a `--bg` session parks `blocked` on it with no turn taken (three times on
+   2026-10-08/09). `resolve` exits 1 when no session or more than one matches — then do
+   not resume; dispatch fresh. Resume only a session `agent-sessions.sh state` calls
+   `done`. Every resume prints a **new** id (measured on CLI 2.1.295, an exited session
+   included): before the tick moves on, write `agent-sessions.sh resolve <the new id>` —
+   the full UUID — as `session:` on the task, and one `# Notes` line `resumed <that
+   UUID>`. **`claude stop` and `claude logs` refuse a full UUID** ("No job matching"),
+   so give them its first field. Anything beyond that is the human's
    call — surface it in `AWAITING.md` (measured case: `docs/pm-design.md#step-4`).
+
+   **A STALLED RESUME falls back on the next tick — the one named exception to the
+   `blocked` row above.** For each task whose `session:` is the UUID on its last
+   `resumed` note, run `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh stalled <the task's `session:`>`
+   at this sweep. It reads `claude agents --json` and that session's transcript — never
+   `session-usage.sh`, which prints `usage UNKNOWN` for a live session. **Exit 0**
+   (`stalled <uuid>`: `blocked`, no turn since the resume):
+   1. `claude stop <the UUID's first field>`, then `agent-sessions.sh state <the UUID>`
+      once; anything but `stopped`, `done` or `gone` means the stop has not landed —
+      report it and leave the rest to the next tick.
+   2. `${CLAUDE_PLUGIN_ROOT}/scripts/stall-counter.sh record <task-doc> --blocker 'resume stalled'`.
+      A count of **1** on stdout is this round's one fallback: write `resume stalled:
+      <uuid> stopped` under `# Notes` and dispatch ONE fresh round in the same worktree,
+      exactly as step 3 spawns. Anything else is a second stall — dispatch nothing:
+      exit 1 ⇒ `stall-counter.sh escalate <task-doc>`; exit 0 ⇒ a 🔴 `AWAITING.md` item.
+   **Exit 1** is not a stall, and the rows above apply. **Exit 2** is unknown: change
+   nothing. The never-wait rule and the no-re-dispatch rule above are unchanged — this
+   is a read at the sweep, and no `check-dispatch.sh` verdict is a fallback.
 
    **An `in-progress` task nobody reported on: ask the session, not the disk.** Run
    `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>` over **every** build `in-progress` task, not
