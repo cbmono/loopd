@@ -300,6 +300,8 @@ session: <id>                          # optional, BUILD only. MACHINE-READ by s
 # IMMEDIATELY AFTER the spawn, because `--bg` MINTS the id and prints it (`--session-id` is
 # ignored alongside `--bg`, measured on CLI 2.1.270) — so it cannot be pre-written the way
 # `worktree:`/`branch:` are, and the window it leaves is the ~1 second the spawn takes.
+# After a RESUME it holds the full session UUID (`agent-sessions.sh resolve`): `--resume`
+# refuses the short id, while `stop` and `logs` take only the UUID's first field.
 #
 # A tick that dies inside that window is still recoverable, and NOT from this field: the
 # worktree path was written before the spawn and is unique per task, so

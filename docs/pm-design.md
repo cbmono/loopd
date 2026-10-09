@@ -552,6 +552,20 @@ reached review), and the completion notification *was* the failure. The work was
 committed, one branch pushed — one message asking each to open the PR on what it had
 recovered it.
 
+**Why a resume passes the full session id, and a stalled one is stopped without the
+human.** `claude --bg` prints an 8-character short id, and `--resume` reads anything that
+is not a full session id as a picker search term: "No sessions match", and a `--bg`
+session cannot answer a picker, so it parks `blocked` with no transcript at all. That
+happened three times on 2026-10-08/09, each costing at least one tick cycle. Measured on
+CLI 2.1.295: `--resume <uuid>` continues the conversation under a new id (an exited
+session included), `--resume <short>` parks, and `claude stop`/`logs` take the short id
+and refuse the UUID. `agent-sessions.sh resolve` refuses on zero or two matches rather
+than taking the first, which is what `state` does. A resumed session that is `blocked`,
+has taken no turn since it started and carries no `waitingFor` cannot be waiting on
+anything a human could answer, which is why it alone is stopped without one — a login or
+other `waitingFor` prompt would park a fresh round too, so it stays the human's — once per round, and a second
+stall goes to `stall-counter.sh`.
+
 **The two-round cap's price tag**: the pull request the cap comes from ran **eight**
 review rounds, was closed unmerged, and with its siblings cost roughly **70% of a
 week's account budget**. An unresolved disagreement costs the human one decision; an
