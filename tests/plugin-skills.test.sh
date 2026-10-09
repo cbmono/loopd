@@ -54,7 +54,7 @@ body() { # <skill> — everything after the closing `---`
     "$SK/$1/SKILL.md"
 }
 
-STATE_CHANGING="capture work dispatch handoff audit answer fanout pr-review-request new-project close-project board init kb-apply"
+STATE_CHANGING="capture work dispatch handoff audit answer fanout pr-review-request new-project close-project board init kb-apply prune-wt"
 READ_ONLY="brief-me welcome"
 ALL="$STATE_CHANGING $READ_ONLY"
 
