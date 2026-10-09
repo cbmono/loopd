@@ -404,7 +404,8 @@ into a shell. Only a human can start it (`disable-model-invocation: true`). It p
 once, then runs `prune-wt.sh --yes`, which re-runs the pruner and re-checks every
 `REMOVABLE` path at removal time with `reclaim-worktree.sh`'s guards, removes what passes
 without a forced-removal flag, and runs `git worktree prune` once per repo it removed from.
-It **refuses** — removes nothing, exit 1 — while a tick holds the dispatch lock, and it
+It **refuses** — removes nothing, exit 1 — while a tick holds the dispatch lock; when `ps`
+cannot list processes it spares every path and exits 1, as reclaim's G13 does; and it
 **skips**, leaving the path for you to inspect: any `KEEP`, `RECLAIMABLE`, `STALE` or
 `UNREGISTERED` worktree; a live process in the tree (from the report, or found at removal
 time); an ignored file that is not a known cache, such as a `.env`, which plain

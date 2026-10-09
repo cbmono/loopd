@@ -5,9 +5,9 @@
 # It acts only on what prune-worktrees.sh reports REMOVABLE, and only after re-checking
 # each path itself, so most of this file proves refusals: a held tick lock, an ignored
 # .env, a live process (reported, and one the report never showed), a git status that
-# fails silently, KEEP and RECLAIMABLE.
+# fails silently, a `ps` that cannot list processes, KEEP and RECLAIMABLE.
 # Then the safe set goes, and `git worktree prune` runs once per repo it came from.
-# gh and git are shimmed first on PATH; nothing outside an mktemp tree is touched.
+# gh, git and ps are shimmed first on PATH; nothing outside an mktemp tree is touched.
 set -uo pipefail
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
@@ -44,7 +44,13 @@ for a in "$@"; do [ "$prev" = --head ] && br="$a"; prev="$a"; done
 [ -n "$br" ] || { echo "gh-stub: unhandled: $*" >&2; exit 1; }
 awk -v b="$br" '$1 == b { print $2 }' "$GH_FIXTURES"
 STUB
-chmod +x "$BIN/git" "$BIN/gh"
+REAL_PS="$(command -v ps)"
+cat > "$BIN/ps" <<SHIM
+#!/usr/bin/env bash
+[ -n "\${FAIL_PS:-}" ] && exit 1
+exec "$REAL_PS" "\$@"
+SHIM
+chmod +x "$BIN/git" "$BIN/gh" "$BIN/ps"
 
 mkrepo() { # <name>
   local r="$REPOS/$1" o="$TMP/$1.git"
@@ -160,6 +166,21 @@ ok "with git status exiting 128 and printing nothing, a-gs is spared" "$(there a
 ok "…with the failing status named as the reason" "$(grep -c "^skip: .*/a-gs .*git status fails" <<<"$OUT")" 1
 run "$BIN/status-pruner.sh" --yes
 ok "the failure was the reason: once status works, a-gs is removed" "$(there a-gs)" no
+
+echo "== a ps that cannot list processes is a refusal, not 'nothing running' =="
+wt alpha a-ps MERGED; sleep 1
+cat > "$BIN/ps-pruner.sh" <<STRIP
+#!/usr/bin/env bash
+env -u FAIL_PS bash "$PRUNER" "\$@"
+STRIP
+export FAIL_PS=1
+run "$BIN/ps-pruner.sh" --yes
+unset FAIL_PS
+ok "with ps failing, a-ps is spared" "$(there a-ps)" yes
+ok "…and the run exits non-zero" "$([ "$RC" -ne 0 ] && echo yes || echo no)" yes
+ok "…with the unlistable processes named as the reason" "$(grep -c "^skip: .*/a-ps .*processes cannot be listed" <<<"$OUT")" 1
+run "$BIN/ps-pruner.sh" --yes
+ok "ps was the reason: once it works, a-ps is removed and the run exits 0" "$(there a-ps) $RC" "no 0"
 
 echo "== the pruner stays report-only; the remover never forces =="
 ok "prune-worktrees.sh still refuses --reclaim with exit 2" \

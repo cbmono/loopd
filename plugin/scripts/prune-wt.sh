@@ -5,9 +5,9 @@
 #   prune-wt.sh          preview: each REMOVABLE path and whether it would go; touches nothing
 #   prune-wt.sh --yes    remove every one that still passes, then `git worktree prune` per repo
 #
-# Exit: 0 done (a skip is reported, not a failure) · 1 REFUSED (a tick holds the lock) or a
-# removal failed · 2 cannot answer. Each path is re-checked here with reclaim-worktree.sh's
-# guards; no forced removal, ever. Reasoning: docs/conventions.md invariant 7.
+# Exit: 0 done (a skip is reported, not a failure) · 1 REFUSED (a tick holds the lock), a
+# removal failed or processes cannot be listed · 2 cannot answer. Each path is re-checked
+# here with reclaim-worktree.sh's guards; no forced removal, ever. Reasoning: docs/conventions.md invariant 7.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
@@ -61,8 +61,8 @@ REPORTED_LIVE="$(paths_of 'LIVE PROCESS')"
 IGNORE_OK=" node_modules .pnpm-store .pnpm-store-task .bun-cache .venv venv __pycache__ \
 .pytest_cache .mypy_cache .next .nuxt .turbo .cache .gradle tmp temp .DS_Store "
 
-live_processes_in() { # <worktree> — one line per live process whose cwd or argv is inside it
-  local wt=$1 pid cmd line
+live_processes_in() { # <worktree> — one line per live process whose cwd or argv is inside it; 1 if ps fails
+  local wt=$1 pid cmd line ps_all
   if command -v lsof >/dev/null 2>&1; then
     pid=""
     while IFS= read -r line; do
@@ -74,18 +74,19 @@ live_processes_in() { # <worktree> — one line per live process whose cwd or ar
 $(lsof -a -d cwd -n -P -Fpn 2>/dev/null)
 EOF
   fi
+  ps_all="$(ps -axo pid=,command= 2>/dev/null)" || return 1
   while read -r pid cmd; do
     [ -n "$pid" ] && [ "$pid" != "$$" ] || continue
     case "$cmd" in *"$wt"*) printf '%s\n' "$pid" ;; esac
   done <<EOF
-$(ps -axo pid=,command= 2>/dev/null)
+$ps_all
 EOF
 }
 
 # Sets REPO and BRANCH, or WHY and returns 1. Every refusal leaves the path alone.
 check() { # <worktree>
   local wt=$1 r inside=1 common line cur found=1 is_main=1 seen=0 locked=0 prunable=0 detached=0 st
-  REPO=""; BRANCH=""; WHY=""
+  REPO=""; BRANCH=""; WHY=""; UNSURE=0
   case "$wt" in *..*) WHY="the path contains '..'"; return 1 ;; esac
   [ -d "$wt" ] || { WHY="it is already gone"; return 1; }
   while IFS= read -r r; do
@@ -132,14 +133,19 @@ EOF
 $ignored
 EOF
   [ -z "$keepers" ] || { WHY="it holds ignored files git would delete without asking:$keepers"; return 1; }
-  [ -z "$(live_processes_in "$wt")" ] || { WHY="a live process is running in it now"; return 1; }
+  local live
+  live="$(live_processes_in "$wt")" \
+    || { WHY="processes cannot be listed, so a live one cannot be ruled out"; UNSURE=1; return 1; }
+  [ -z "$live" ] || { WHY="a live process is running in it now"; return 1; }
 }
 
 removed=0; skipped=0; failed=0; PRUNE_REPOS=""
 while IFS= read -r wt; do
   [ -n "$wt" ] || continue
   if ! check "$wt"; then
-    printf 'skip: %s — %s\n' "$wt" "$WHY"; skipped=$((skipped + 1)); continue
+    printf 'skip: %s — %s\n' "$wt" "$WHY"; skipped=$((skipped + 1))
+    [ "$UNSURE" -eq 0 ] || failed=$((failed + 1))
+    continue
   fi
   if [ "$YES" -eq 0 ]; then printf 'would remove: %s  [%s]\n' "$wt" "$BRANCH"; continue; fi
   lock_free || { printf 'refuse: a tick took the lock mid-run; stopping. %s\n' "$LOCK_MSG" >&2; failed=$((failed + 1)); break; }
