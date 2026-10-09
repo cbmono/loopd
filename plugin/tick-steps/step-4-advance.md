@@ -76,8 +76,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **A non-zero verdict is never a re-dispatch.** On exit 1, read the agent's worktree
    and `claude logs <id>` first: the work is usually already committed, and one message
    asking it to open the PR on what it has recovers it — the same task and same PR,
-   which is the resume step 3 allows. **The resume is
-   `full="$(${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh resolve <the recorded session>)" && cd <worktree> && claude --bg --resume "$full" '<the message>'`**,
+   which is the resume step 3 allows. **The resume is two calls:
+   `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh resolve <the recorded session>`, then
+   `cd <worktree> && claude --bg --resume <the UUID resolve printed> '<the message>'`**,
    with the same flags step 3 lists. **`--resume` takes the FULL session id, never the
    short one**: a short id is a picker search term, the picker finds "No sessions match",
    and a `--bg` session parks `blocked` on it with no turn taken (three times on

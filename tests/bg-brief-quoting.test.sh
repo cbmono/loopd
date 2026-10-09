@@ -64,7 +64,7 @@ ok 'the backtick span ran' "$(yn test -e "$TMP/ran")" yes
 echo "== the docs say so, and no double-quoted spawn is left =="
 ok 'step 3 spells an embedded quote the escaped way' "$(yn grep -qF "'\\''" "$S3")" yes
 ok 'step 3 says backticks and $ are literal' "$(yn grep -qF 'a backtick and a `$` are literal' "$S3")" yes
-ok 'step 4 resume message is single-quoted' "$(yn grep -qF -e "--resume \"\$full\" '<the message>'" "$S4")" yes
+ok 'step 4 resume message is single-quoted' "$(yn grep -qF -e "--resume <the UUID resolve printed> '<the message>'" "$S4")" yes
 ok 'no claude --bg "…" form left in plugin/' "$(grep -rlF 'claude --bg "' "$REPO/plugin" | wc -l | tr -d ' ')" 0
 
 echo "pass=$pass fail=$fail"

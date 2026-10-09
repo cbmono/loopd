@@ -26,25 +26,27 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/resume-full-id.XXXXXX")" || {
 trap 'rm -rf "$TMP"' EXIT
 
 echo "== static: every claude --resume in plugin/ is given the resolved full id =="
-# Prints each offending `file:line`; the canonical form resolves on the same line and
-# chains with `&&`, so an exit-1 resolve never reaches `--resume ""` (the picker again).
-CANON_RESOLVE='full="$(${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh resolve '
+# Prints each offending `file:line`: a resume whose id is anything but what `resolve`
+# printed, or one in a file that never calls `resolve`.
+ARG='--resume <the UUID resolve printed>'
+RESOLVE='${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh resolve <'
 offenders() { # <dir>
   grep -rnE 'claude[^`]*[[:space:]](--resume|-r)([[:space:]=]|$)' "$1" 2>/dev/null \
     | while IFS= read -r hit; do
-        line="${hit#*:*:}"
+        f="${hit%%:*}"; rest="${hit#*:}"; n="${rest%%:*}"; line="${rest#*:}"
         case "$line" in
-          *"$CANON_RESOLVE"*'&& '*'--resume "$full"'*) ;;
-          *) printf '%s\n' "${hit%%:*}:$(cut -d: -f2 <<<"$hit")" ;;
+          *"$ARG"*) grep -qF -- "$RESOLVE" "$f" && continue ;;
         esac
+        printf '%s:%s\n' "$f" "$n"
       done
 }
 ok "no resume takes a recorded or short id"   "$(offenders "$REPO/plugin" | wc -l | tr -d ' ')" 0
-ok "…and the check is not vacuous: step 4 has one" \
-  "$(grep -cF -- '--resume "$full"' "$S4")" 1
+ok "…and the check is not vacuous: step 4 has one" "$(grep -cF -- "$ARG" "$S4")" 1
 mkdir -p "$TMP/mut"
-sed 's|claude --bg --resume "$full"|claude --bg --resume <the recorded session>|' "$S4" > "$TMP/mut/s4.md"
+sed "s|$ARG|--resume <the recorded session>|" "$S4" > "$TMP/mut/s4.md"
 ok "a resume of the recorded session fails it" "$(offenders "$TMP/mut" | wc -l | tr -d ' ')" 1
+mkdir -p "$TMP/mut2"; grep -vF -- "$RESOLVE" "$S4" > "$TMP/mut2/s4.md"
+ok "…and so does a file that never calls resolve" "$(offenders "$TMP/mut2" | wc -l | tr -d ' ')" 1
 printf '   `cd <wt> && claude --bg -r abcd1234 msg`\n' > "$TMP/mut/r.md"
 ok "…and so does the -r spelling"              "$(offenders "$TMP/mut" | wc -l | tr -d ' ')" 2
 
