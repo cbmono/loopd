@@ -382,7 +382,7 @@ footer nav{gap:16px;font-size:13px}
       <div class="card"><h3>Exit 0 is the only clearance</h3><p>Missing, pending, skipped and unreadable checks all refuse. A green check from a reviewer that declined to review is not verification.</p></div>
       <div class="card"><h3>Done means a PR exists</h3><p>An agent's "done" is not evidence. The dispatch check asks whether the status moved and the PR resolves — and only reports.</p></div>
       <div class="card"><h3>One tick at a time</h3><p>A lock refuses a second orchestrator. Stale or unattributable means ask the human — never delete, never adopt.</p></div>
-      <div class="card"><h3>Deletes only on proof</h3><p>The worktree pruner only reports. A worktree goes when its task is done with every PR merged, or when you say yes to <code>/loopd:prune-wt</code>. The bundle repair is report-only by default.</p></div>
+      <div class="card"><h3>Never deletes on a guess</h3><p>The worktree pruner only reports. A worktree goes when its task is done with every PR merged, or when you say yes to <code>/loopd:prune-wt</code>. The bundle repair is report-only by default.</p></div>
       <div class="card human"><h3>The gates can be delegated</h3><p>Only through the separate <code>loopd-yolo</code> companion plugin, which <code>loopd-all</code> includes; each project stays gated until it opts in. Uninstall it and every project is gated again, with no other edits.</p></div>
     </div>
   </section>
