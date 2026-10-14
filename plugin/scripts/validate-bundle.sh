@@ -323,7 +323,7 @@ question_blocks() { # <file> -> "Q<n> <options> <depths>" per block under `## Qu
     /^### / { flush(); if ($0 ~ /^### Q[0-9]+[[:space:]]*$/) { q = $2; opts = 0; inopt = 0; d1 = d2 = d3 = "" }; next }
     q == "" { next }
     /^Options:/ { inopt = 1; next }
-    /^(Context|Recommendation):/ { inopt = 0 }
+    /^[A-Za-z][^:]*:/ { inopt = 0 }
     inopt && /^[0-9]+\.[[:space:]]+[^[:space:]]/ { opts++ }
     /^[-*]?[[:space:]]*Depth 1:[[:space:]]*[^[:space:]]/ { d1 = "x" }
     /^[-*]?[[:space:]]*Depth 2:[[:space:]]*[^[:space:]]/ { d2 = "x" }

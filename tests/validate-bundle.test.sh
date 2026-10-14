@@ -455,6 +455,8 @@ qtask complete.md 'open_questions: [ "Q1: which region?", "Q2: which tier? --- s
 qtask missing.md 'open_questions: [ "Q1: which region?" ]' '# Context' '```' '## Question details' '### Q1' '```'
 qtask no-options.md 'open_questions: [ "Q1: which region?" ]' '## Question details' '### Q1' \
   'Recommendation: eu-central-1' 'Options:' "${DEPTHS[@]}"
+qtask other-label.md 'open_questions: [ "Q1: which region?" ]' '## Question details' '### Q1' \
+  'Recommendation: eu-central-1' 'Options:' 'Rationale:' '1. a numbered line under another field' "${DEPTHS[@]}"
 qtask two-depths.md 'open_questions: [ "Q1: which region?" ]' '## Question details' '### Q1' \
   'Recommendation: eu-central-1' 'Options:' '1. eu-central-1' 'Context:' '- Depth 1: s.' '- Depth 2: p.' '- Depth 3:'
 qtask exempt.md 'open_questions: [ "Promote the proposed Finding?", "advisor: Q3: is the approach sound?" ]' 'body'
@@ -462,14 +464,19 @@ set +e
 QOUT="$(bash "$VALIDATOR" 2>&1)"; QRC=$?
 QSTRICT_RC=0; bash "$VALIDATOR" --strict >/dev/null 2>&1 || QSTRICT_RC=$?
 set -e
-qsaw() { grep -A1 "WARN   projects/q/tasks/$1" <<<"$QOUT" | grep -q -- "$2" && echo 0 || echo 1; }
+qsaw() {
+  local ctx
+  ctx="$(grep -A1 "WARN   projects/q/tasks/$1" <<<"$QOUT" || true)"
+  grep -q -- "$2" <<<"$ctx" && echo 0 || echo 1
+}
 qsilent() { grep -q "projects/q/tasks/$1" <<<"$QOUT" && echo 1 || echo 0; }
 assert "a complete block validates clean (a fenced example is not a block)" "$(qsilent complete.md)"
 assert "a missing block warns"                      "$(qsaw missing.md "open question Q1 has no '### Q1' block")"
 assert "empty options warn"                         "$(qsaw no-options.md "'### Q1' has an empty 'Options:' list")"
+assert "a numbered line under a later field is not an option" "$(qsaw other-label.md "'### Q1' has an empty 'Options:' list")"
 assert "two depths warn"                            "$(qsaw two-depths.md "'### Q1' has 2 of 3 context depths")"
 assert "unlabelled and advisor: questions get no warning" "$(qsilent exempt.md)"
-assert "exactly three warnings, no errors"          "$(grep -q '0 errors, 3 warnings' <<<"$QOUT" && echo 0 || echo 1)"
+assert "exactly four warnings, no errors"           "$(grep -q '0 errors, 4 warnings' <<<"$QOUT" && echo 0 || echo 1)"
 assert "…so a plain run exits 0"                    "$([[ $QRC -eq 0 ]] && echo 0 || echo 1)"
 assert "…and only --strict fails it"                "$([[ $QSTRICT_RC -eq 1 ]] && echo 0 || echo 1)"
 cd "$B"
