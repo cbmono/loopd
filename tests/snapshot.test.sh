@@ -138,6 +138,7 @@ eq()     { [[ "$1" == "$2" ]] && echo 0 || echo 1; }
 SECRET_DESC="SECRET-TASK-DESCRIPTION"
 SECRET_BODY="SECRET-DOCUMENT-BODY"
 SECRET_QUESTION="SECRET-QUESTION-TEXT"
+SECRET_BLOCK="SECRET-QUESTION-BLOCK"
 SECRET_BLOCKER="SECRET-BLOCKER-REASON"
 SECRET_EMAIL="secret-person@example.com"
 OUT_OF_BUNDLE="/tmp/SECRET-OUT-OF-BUNDLE-ROOT"
@@ -293,6 +294,17 @@ pr: []
 ---
 # Notes
 $SECRET_BODY
+
+## Question details
+
+### Q1
+Recommendation: $SECRET_BLOCK recommendation
+Options:
+1. $SECRET_BLOCK option
+Context:
+- Depth 1: $SECRET_BLOCK one
+- Depth 2: $SECRET_BLOCK two
+- Depth 3: $SECRET_BLOCK three
 TSK
 # in-review + a PR + the tick's MERGEABLE read ⇒ awaiting "merge". Without that last
 # term this used to be `status` plus a link, which is how three CONFLICTING pull requests
@@ -942,6 +954,7 @@ assert "…and one with a space, nested inside a list" "$(eq "$BADKEY2" "documen
 assert "a task description never reaches the snapshot"   "$(fhasnt "$SECRET_DESC" "$SNAP")"
 assert "no document body reaches the snapshot"           "$(fhasnt "$SECRET_BODY" "$SNAP")"
 assert "open-question TEXT never reaches the snapshot"    "$(fhasnt "$SECRET_QUESTION" "$SNAP")"
+assert "…nor any of its ### Q<n> block"                  "$(fhasnt "$SECRET_BLOCK" "$SNAP")"
 # SCOPED TO THE TASK IT NAMES, not a whole-file grep for `"open_questions": 2`. As a
 # file-wide grep this is the positive half of a privacy pair — the text never travels,
 # the count does — and ANY later fixture that happens to carry two questions satisfies

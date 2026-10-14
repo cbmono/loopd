@@ -438,6 +438,42 @@ assert "the provenance line is not counted against the 40-line cap" "$(grep -q '
 assert "exactly the seven faulty documents error" "$(grep -q ', 7 errors,' <<<"$POUT" && echo 0 || echo 1)"
 cd "$B"
 
+echo "== a Q<n> open question needs a '### Q<n>' block: warned, never an error =="
+QB="$TMP/questions"
+mkdir -p "$QB/projects/q/tasks" && cd "$QB"
+echo '{ "org": "x", "reposRoot": "/tmp" }' > instance.config.json
+echo '# Schema' > SCHEMA.md
+qtask() { # <file> <open_questions line> <body lines...>
+  local f="$1" oq="$2"; shift 2
+  doc "projects/q/tasks/$f" '---' 'type: Task' 'title: Q' 'status: draft' "$oq" "timestamp: $TS" '---' "$@"
+}
+DEPTHS=( 'Context:' '- Depth 1: one sentence.' '- Depth 2: one paragraph.' '- Depth 3: everything.' )
+qtask complete.md 'open_questions: [ "Q1: which region?", "Q2: which tier? --- standard" ]' \
+  '# Context' '```markdown' '### Q2' '```' '## Question details' '' \
+  '### Q1' 'Recommendation: eu-central-1' 'Options:' '1. eu-central-1' '2. us-east-1' "${DEPTHS[@]}" '' \
+  '### Q2' 'Recommendation: standard' 'Options:' '1. standard' "${DEPTHS[@]}" '' '# Notes' 'n'
+qtask missing.md 'open_questions: [ "Q1: which region?" ]' '# Context' '```' '## Question details' '### Q1' '```'
+qtask no-options.md 'open_questions: [ "Q1: which region?" ]' '## Question details' '### Q1' \
+  'Recommendation: eu-central-1' 'Options:' "${DEPTHS[@]}"
+qtask two-depths.md 'open_questions: [ "Q1: which region?" ]' '## Question details' '### Q1' \
+  'Recommendation: eu-central-1' 'Options:' '1. eu-central-1' 'Context:' '- Depth 1: s.' '- Depth 2: p.' '- Depth 3:'
+qtask exempt.md 'open_questions: [ "Promote the proposed Finding?", "advisor: Q3: is the approach sound?" ]' 'body'
+set +e
+QOUT="$(bash "$VALIDATOR" 2>&1)"; QRC=$?
+QSTRICT_RC=0; bash "$VALIDATOR" --strict >/dev/null 2>&1 || QSTRICT_RC=$?
+set -e
+qsaw() { grep -A1 "WARN   projects/q/tasks/$1" <<<"$QOUT" | grep -q -- "$2" && echo 0 || echo 1; }
+qsilent() { grep -q "projects/q/tasks/$1" <<<"$QOUT" && echo 1 || echo 0; }
+assert "a complete block validates clean (a fenced example is not a block)" "$(qsilent complete.md)"
+assert "a missing block warns"                      "$(qsaw missing.md "open question Q1 has no '### Q1' block")"
+assert "empty options warn"                         "$(qsaw no-options.md "'### Q1' has an empty 'Options:' list")"
+assert "two depths warn"                            "$(qsaw two-depths.md "'### Q1' has 2 of 3 context depths")"
+assert "unlabelled and advisor: questions get no warning" "$(qsilent exempt.md)"
+assert "exactly three warnings, no errors"          "$(grep -q '0 errors, 3 warnings' <<<"$QOUT" && echo 0 || echo 1)"
+assert "…so a plain run exits 0"                    "$([[ $QRC -eq 0 ]] && echo 0 || echo 1)"
+assert "…and only --strict fails it"                "$([[ $QSTRICT_RC -eq 1 ]] && echo 0 || echo 1)"
+cd "$B"
+
 echo "== refusing to run outside an instance root =="
 mkdir -p "$TMP/notabundle" && cd "$TMP/notabundle"
 set +e; bash "$VALIDATOR" >/dev/null 2>&1; OUTSIDE=$?; set -e

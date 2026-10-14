@@ -328,7 +328,7 @@ interfaces:                           # optional, BUILD-shaped. NOT machine-read
 # spellings of the same function, route or column, and the mismatch surfaces at
 # review. Write exact identifiers, never prose. Omit the key entirely when a task
 # shares no surface with its siblings — an empty block is noise.
-open_questions:                       # PM-managed; ONLY still-unanswered questions. Number every entry (Q1, Q2, …). The human answers an entry by appending ` --- <answer>` to it on the same line (e.g. "Q1: Which region should we default to? --- eu-central-1"); the PM treats any text after the ` --- ` delimiter as the answer, folds it into the task (Context / acceptance_criteria / Notes) and MOVES that entry to `answered_questions`, stamped `by <login>` with the human who answered ("Decisions name the human" below) — this list still EMPTIES, because that is the signal promotion keys on. (Answering in-session works too.)
+open_questions:                       # PM-managed; ONLY still-unanswered questions. Number every entry (Q1, Q2, …), and give each its `### Q<n>` block under "Question details" below. The human answers an entry by appending ` --- <answer>` to it on the same line (e.g. "Q1: Which region should we default to? --- eu-central-1"); the PM treats any text after the ` --- ` delimiter as the answer, folds it into the task (Context / acceptance_criteria / Notes) and MOVES that entry to `answered_questions`, stamped `by <login>` with the human who answered ("Decisions name the human" below) — this list still EMPTIES, because that is the signal promotion keys on. (Answering in-session works too.)
   - "Q1: <blocking question for the human>"
   - "Q2: ..."
 advisor_notes:                        # optional, PM-managed. Concerns raised by an ADVISORY agent — the `plan-architect` approach critique the PM runs at refine time — that the PM has NOT yet triaged. (The per-tick `advisor` observer also wrote here until it was RETIRED on 2026-10-08 — enabled in no bundle, and a second opinion drawn from the PM's own inputs; its entries in existing documents stay valid and this field stays, unchanged, with no new check.) DELIBERATELY NOT A GATE: unlike `open_questions` this does NOT block promotion, does NOT put a row in AWAITING.md, and `validate-bundle.sh` adds no check for it — a concern is the loop's problem first, not the human's. On the next tick the PM triages each entry and it leaves this list one of two ways: RESOLVED, moving to `answered_questions` prefixed `advisor:` so the provenance survives; or ESCALATED, copied into `open_questions` prefixed `advisor:` because the PM genuinely cannot decide — and only then does it reach the human and the board. Absent means no concern is outstanding, which is the normal state. **No customer PII**, same rule as every other document field.
@@ -365,6 +365,33 @@ timestamp: <ISO 8601>
 The task **body** uses these conventional headings: `# Context`, `# Notes`
 (PM refinement notes), `# Result` (role agent summary, or — for research — a
 pointer to the finished deliverable(s) on completion).
+
+### Question details
+
+Every `Q<n>:` entry in `open_questions` has a block in the task body, under one
+`## Question details` section, headed `### Q<n>` with the same label. The PM writes it at
+refine time, so answering never needs a model call:
+
+```markdown
+## Question details
+
+### Q1
+Recommendation: <one line, the same text as option 1>
+Options:
+1. <the recommendation>
+2. <alternative>
+Context:
+- Depth 1: <one sentence>
+- Depth 2: <one paragraph>
+- Depth 3: <everything the human needs to decide>
+```
+
+The frontmatter line stays the flat `Q<n>: …` string and is still what the human answers
+(` --- <answer>`) and what `fold-answers.sh` moves. The block is never removed: once its
+question is answered it stays as the record. Readers find it by the `### Q<n>` heading
+alone. `validate-bundle.sh` **warns** — never errors — on a `Q<n>:` question with no
+block, a block with no options, or one with fewer than three depths; an unlabelled or
+`advisor:` question is exempt. The published snapshot never carries any of it.
 
 ## type: Agent  (`agents/index.md` lists the roster)
 

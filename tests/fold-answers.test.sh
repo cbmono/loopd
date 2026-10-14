@@ -279,6 +279,23 @@ ok "an indented non-entry line is refused (exit 3)" "$(bash "$SH" "$M" >/dev/nul
 ok "…and nothing was written" "$(cmp -s "$M" "$TMP/mixed.before" && echo yes || echo no)" yes
 
 echo
+echo "== a '### Q<n>' block in the body: the line folds exactly as before, the block stays =="
+QD="$TMP/qd.md"; QP="$TMP/qp.md"
+doc "$QP" '"c1"' '"Q1: region? --- eu-central-1", "Q2: open"' ''
+cp "$QP" "$QD"
+printf '%s\n' '## Question details' '' '### Q1' 'Recommendation: eu-central-1' 'Options:' '1. eu-central-1' \
+  'Context:' '- Depth 1: s.' '- Depth 2: p.' '- Depth 3: f.' >> "$QD"
+cp "$QD" "$TMP/qd.before"
+bash "$SH" "$QD" >/dev/null 2>&1; bash "$SH" "$QP" >/dev/null 2>&1
+ok "open_questions is what a block-less doc leaves" \
+   "$(bash "$SH" --list "$QD" open_questions)" "$(bash "$SH" --list "$QP" open_questions)"
+ok "…and the answered line moved verbatim" \
+   "$(bash "$SH" --list "$QD" answered_questions | sed 's/^[^·]*· //')" 'Q1: region? --- eu-central-1'
+ok "the body, block included, is byte-identical" \
+   "$(diff <(sed '1,/^---$/d' "$TMP/qd.before") <(sed '1,/^---$/d' "$QD") >/dev/null && echo yes || echo no)" yes
+ok "…and it still carries the block" "$(sed '1,/^---$/d' "$QD" | grep -cE '^### Q1$|^- Depth 3: f\.$' | tr -d ' ')" 2
+
+echo
 echo "== usage =="
 ok "no argument is exit 2" "$(bash "$SH" >/dev/null 2>&1; echo $?)" 2
 ok "an unreadable path is exit 2" "$(bash "$SH" "$TMP/nope.md" >/dev/null 2>&1; echo $?)" 2

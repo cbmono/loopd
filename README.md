@@ -356,6 +356,8 @@ use. **Don't restore a question for symmetry** —
 ## Answering the PM's questions
 
 When a `draft` is blocked it lists numbered `open_questions` (`Q1:`, `Q2:`, …).
+Each has a `### Q<n>` block under the task's `## Question details` with a recommendation,
+the options and three depths of context; the answer still goes on the question line.
 
 1. Open the task doc.
 2. Append ` --- <answer>` to the question line:
