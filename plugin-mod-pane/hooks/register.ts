@@ -261,8 +261,8 @@ function draw($: any, e: any): any {
 }
 
 // ---------------------------------------------------------------- simple mode
-type Question = { label: string; text: string; rec: string; options: string[]; first: boolean }
-type Item = { slug: string; file: string; title: string; status: string; questions: Question[]; unreadable: boolean }
+type Question = { label: string; text: string; options: string[]; first: boolean }
+type Item = { slug: string; file: string; mtimeMs: number; title: string; status: string; questions: Question[]; unreadable: boolean }
 type Simple = { slug: string; title: string; done: number; total: number; items: Item[] }
 type Doc = { title: string; status: string; open: string[] | null; body: string } | null
 
@@ -271,6 +271,9 @@ let docs = new Map<string, { mtimeMs: number; doc: Doc }>()
 let sig = ''             // names and mtimes of every file the last scan saw; a change redraws
 let sending = ''         // the question whose /loopd:answer run is queued; '' = none
 let sendNote = ''        // the line drawn after a run: a refusal, or where `more` printed
+// The run resolves once the command is queued, before answer.sh has written (measured on
+// 2.1.300), so an answered question stays held until its document's mtime moves.
+let held = new Map<string, number>()
 
 // The YAML subset fold-answers.sh's --list reads (a flow or block list of scalars, its
 // escapes only). Anything else is null, drawn as "could not read" — never a guess.
@@ -332,25 +335,24 @@ function parse(text: string): Doc {
 }
 // The `### Q<n>` block, read as answer.sh reads it: lines up to the next h1–h3, a bare
 // `Name:` line switches field, options are `n. text` numbered 1 up without a gap.
-function qblock(body: string, label: string): { rec: string; options: string[] } {
+// Option 1 is the recommendation (SCHEMA.md → "Question details").
+function qblock(body: string, label: string): string[] {
   const lines = body.split('\n')
   const at = lines.findIndex(l => /^###\s+/.test(l) && l.replace(/^###\s+/, '').trim() === label)
   const opts: Record<number, string> = {}
-  let rec = '', field = ''
+  let field = ''
   if (at >= 0) {
     for (const l of lines.slice(at + 1)) {
       if (/^#{1,3}\s/.test(l)) break
       const f = l.match(/^(\w+):\s*$/)
       if (f) { field = f[1]; continue }
-      const r = l.match(/^Recommendation:\s*(.*\S)/)
-      if (r) rec = r[1]
       const o = field === 'Options' ? l.match(/^\s*(\d+)\.\s+(.*\S)/) : null
       if (o) opts[parseInt(o[1], 10)] = o[2]
     }
   }
   const options: string[] = []
   while (opts[options.length + 1] !== undefined) options.push(clean(opts[options.length + 1]))
-  return { rec: clean(rec), options }
+  return options
 }
 function questions(d: Doc): Question[] {
   const out: Question[] = []
@@ -360,8 +362,7 @@ function questions(d: Doc): Question[] {
     const m = e.match(/^(Q[0-9]+):\s*/)
     const label = m ? m[1] : ''
     const text = clean((m ? e.slice(m[0].length) : e).replace(/ ---\s*$/, ''))
-    const { rec, options } = label ? qblock(d!.body, label) : { rec: '', options: [] as string[] }
-    out.push({ label, text, rec, options, first: out.length === 0 })
+    out.push({ label, text, options: label ? qblock(d!.body, label) : [], first: out.length === 0 })
   }
   return out
 }
@@ -413,11 +414,17 @@ async function refreshSimple($: any): Promise<boolean> {
       if (status === 'cancelled') continue
       row.total += 1
       if (status === 'done') row.done += 1
-      row.items.push({ slug: p.name, file: t.name, title: (d && clean(d.title)) || t.name, status, questions: questions(d), unreadable: !d || d.open === null })
+      row.items.push({ slug: p.name, file: t.name, mtimeMs: t.mtimeMs, title: (d && clean(d.title)) || t.name, status, questions: questions(d), unreadable: !d || d.open === null })
     }
     next.push(row)
   }
   docs = seen
+  const live = new Map<string, number>()
+  for (const r of next) for (const it of r.items) for (const q of it.questions) {
+    const id = it.slug + '/' + it.file + '#' + q.label
+    if (held.get(id) === it.mtimeMs) live.set(id, it.mtimeMs)
+  }
+  held = live
   const was = kind
   kind = 'ok'; detail = ''; simple = next
   if (s === sig && was === 'ok') return false
@@ -437,6 +444,7 @@ function send($: any, it: Item, q: Question, reply: string): void {
   const args = PROJECTS_DIR + '/' + it.slug + '/' + TASKS_DIR + '/' + it.file + (q.label ? ' ' + q.label : '') + ' ' + reply
   const done = async (err?: unknown) => {
     sending = ''
+    if (err === undefined && reply !== 'more') held.set(it.slug + '/' + it.file + '#' + q.label, it.mtimeMs)
     if (err !== undefined) sendNote = 'Could not send that answer: ' + (clean(err && (err as any).message ? (err as any).message : String(err)) || 'refused')
     else if (reply === 'more') sendNote = 'More detail on "' + q.text + '" is in the conversation.'
     try { await refreshSimple($) } catch { /* the next poll reads again */ }
@@ -470,12 +478,12 @@ function drawSimple($: any, e: any): any {
         rows.push(line(' '))
         rows.push(line('  ' + p.title + ' · ' + it.title, { dimColor: true }))
         rows.push(line('  ' + q.text, { bold: true }))
-        if (sending === id) { rows.push(line('  Sending your answer…', { dimColor: true })); continue }
+        if (sending === id || held.get(id) === it.mtimeMs) { rows.push(line('  Sending your answer…', { dimColor: true })); continue }
         if (sending) continue
         if (!q.label && !q.first) { rows.push(line('  Answer the question above first.', { dimColor: true })); continue }
         const k = 'q' + n
         if (q.options.length) {
-          rows.push(Button({ key: k + '-opt1', label: 'Recommended: ' + (q.rec || q.options[0]), onPress: () => send($, it, q, '1') }))
+          rows.push(Button({ key: k + '-opt1', label: 'Recommended: ' + q.options[0], onPress: () => send($, it, q, '1') }))
           q.options.slice(1).forEach((o, i) => rows.push(Button({ key: k + '-opt' + (i + 2), label: o, onPress: () => send($, it, q, String(i + 2)) })))
         }
         if (Input) rows.push(Input({ key: k + '-text', placeholder: 'or type your own answer', submitLabel: 'send',

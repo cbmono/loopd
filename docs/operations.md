@@ -623,7 +623,7 @@ Each README owns its detail.
 | Mod | One line | Detail |
 |---|---|---|
 | `loopd-mod-usage` | records a session's usage in the plugin store after every turn; `session-usage.sh` reads the store first and the transcript second | [`plugin-mod-usage/README.md`](../plugin-mod-usage/README.md) |
-| `loopd-mod-pane` | `/board` opens a pane drawing `SNAPSHOT.json`, with **Tick** and **Refresh** buttons | [`plugin-mod-pane/README.md`](../plugin-mod-pane/README.md) |
+| `loopd-mod-pane` | `/board` opens a pane drawing `SNAPSHOT.json`, with **Tick** and **Refresh** buttons; `mode: simple` in `/config` shows only projects, questions and blocked tasks | [`plugin-mod-pane/README.md`](../plugin-mod-pane/README.md) |
 | `loopd-mod-signal` | a role agent's session tells the PM's session its turn is over; step 4 settles that session first | [`plugin-mod-signal/README.md`](../plugin-mod-signal/README.md) |
 
 **What a mod may do here** is the same short list for all three — no model call, no

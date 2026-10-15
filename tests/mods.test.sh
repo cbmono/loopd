@@ -22,7 +22,9 @@
 # below is what keeps it honest — a path the module names and the README does not is a FAIL
 # naming the path. A read without the section is refused outright, which is the mutant
 # planted at the end. The mutants run against EVERY declared reader shipped, so the sweep
-# is not vacuous for whichever of them this checkout carries.
+# is not vacuous for whichever of them this checkout carries. A `$.fs.list` walk names no
+# file, so a module that lists must spell its walk as a quoted glob, which is then a path
+# literal like any other (2026-10-15, the pane's simple mode).
 #
 # WHICH `claude`. Under tests/run.sh the shim on PATH execs the real binary for exactly
 # these two shapes and AB_CLAUDE_REAL names it (empty = none on this machine); by hand, PATH.
@@ -58,9 +60,11 @@ FSWRITE_CALLS='(^|[^A-Za-z0-9_])fs\.(write|ancestors)'
 # The README's `## What it reads` section, up to the next `## `.
 reads_section() { awk '/^## What it reads/ { p = 1; next } /^## / { p = 0 } p' "$1" 2>/dev/null; }
 # Every quoted path literal a module spells, either quote style — the paths a reader can
-# name: a `.json`/`.md` file, and the three names of git's own worktree layout that the
-# plugin's deny hook walks too (`.git`, `commondir`, the `loopd-bundle` marker).
-path_literals() { grep -oE "['\"][^'\"]*(\.(json|md)|\.git|commondir|loopd-bundle)['\"]" "$1" 2>/dev/null | tr -d "'\"" | LC_ALL=C sort -u; }
+# name: a `.json`/`.md` file, the three names of git's own worktree layout that the
+# plugin's deny hook walks too (`.git`, `commondir`, the `loopd-bundle` marker), and any
+# glob (a quoted string carrying `*`).
+path_literals() { grep -oE "['\"][^'\"]*(\.(json|md)|\.git|commondir|loopd-bundle|\*[^'\"]*)['\"]" "$1" 2>/dev/null | tr -d "'\"" | LC_ALL=C sort -u; }
+globs() { grep -oE "['\"][^'\"]*\*[^'\"]*['\"]" "$1" 2>/dev/null | grep -c . | tr -d ' '; }
 # yes when the README has the section AND every path literal the module names is in it.
 # Prints the missing ones on stderr so a FAIL names the path rather than a count.
 reads_declared() { # <module> <readme>
@@ -110,6 +114,10 @@ for d in "$REPO"/plugin-mod-*/; do
     # day the layout moved and read a file nobody writes.
     ok "$name: …reads a file, so its README's 'What it reads' names every path it spells" \
        "$(reads_declared "$mod" "$d/README.md")" yes
+    if [ "$(count '\$\.fs\.list' "$mod")" -gt 0 ]; then
+      ok "$name: …lists a directory, so it spells its walk as a quoted glob" \
+         "$([ "$(globs "$mod")" -ge 1 ] && echo yes || echo no)" yes
+    fi
     if grep -q 'SNAPSHOT.json' "$mod"; then
       ok "$name: …and spells the snapshot path as bundle-paths.sh does ('$AB_SNAPSHOT')" \
          "$([ "$(count "'$AB_SNAPSHOT'" "$mod")" -ge 1 ] && echo yes || echo no)" yes
@@ -131,6 +139,14 @@ for d in "$REPO"/plugin-mod-*/; do
      "$([ "$(count 'Claude Code \*{0,2}v?[0-9]+\.[0-9]+\.[0-9]+' "$d/README.md")" -ge 1 ] && echo yes || echo no)" yes
   ok "$name: …and says what it never does" "$([ "$(grep -ci 'never' "$d/README.md" 2>/dev/null | tr -d ' ')" -ge 1 ] && echo yes || echo no)" yes
   pn="$(jq -r .name "$d/.claude-plugin/plugin.json" 2>/dev/null)"
+  # The pane's one switch: a /config choice the module reads off register's options, and
+  # from nowhere else — no file, no environment.
+  if [ "$name" = plugin-mod-pane ]; then
+    ok "$name: …declares userConfig.mode, a choice of operator|simple, default operator" \
+       "$(jq -c '.userConfig.mode | [.type, .default, .options]' "$d/.claude-plugin/plugin.json" 2>/dev/null)" '["string","operator",["operator","simple"]]'
+    ok "$name: …and reads mode only off register's options" \
+       "$(count '\.mode\b' "$mod")/$(count 'options\.mode' "$mod")/$(count 'export function register\(on: any, options' "$mod")" 1/1/1
+  fi
   ok "$name: is a marketplace entry under its own name" \
      "$(jq -r --arg n "$pn" '[.plugins[] | select(.name == $n and .source == "./'"$name"'")] | length' "$MJ")" 1
 
@@ -179,6 +195,8 @@ ok "…a planted send-then-submit is caught"        "$(( $(count '\$\.session\.s
 { cat "$SRC"; printf '\nasync function peek($: any) { return $.fs.read("instance.config.json") }\n'; } > "$TMP/undeclared.ts"
 ok "…a \$.fs.read in a mod with no 'What it reads' section is refused" \
    "$(reads_declared "$TMP/undeclared.ts" "$REPO/plugin-mod-usage/README.md" 2>/dev/null)" no
+{ cat "$SRC"; printf '\nasync function walk($: any, d: string) { return $.fs.list(d + "/tasks") }\n'; } > "$TMP/unglobbed.ts"
+ok "…a \$.fs.list in a mod that spells no glob is caught" "$(globs "$TMP/unglobbed.ts")" 0
 
 echo
 echo "== the fs widening is read-only and declared — the mutants that must stay red, per declared reader =="
@@ -199,6 +217,9 @@ while IFS='|' read -r RSRC RREADME; do
   named="$(reads_declared "$TMP/stray.ts" "$RREADME" 2>&1 >/dev/null)"
   ok "$rname: …a path the README does not name is refused" "$(reads_declared "$TMP/stray.ts" "$RREADME" 2>/dev/null)" no
   ok "$rname: …and the refusal names the path"           "$(grep -c 'secrets/other.json' <<<"$named")" 1
+  # A walk the README does not name is refused the same way: the glob is the path.
+  { cat "$RSRC"; printf '\nconst STRAY = %s\nasync function walk($: any) { return $.fs.list(STRAY.split("/")[0]) }\n' "'secrets/*/keys'"; } > "$TMP/strayglob.ts"
+  ok "$rname: …a glob the README does not name is refused" "$(reads_declared "$TMP/strayglob.ts" "$RREADME" 2>/dev/null)" no
   # The shipped README passes the same reader, so the refusals above are not a reader that
   # says no to everything.
   ok "$rname: …while the shipped module and README agree" "$(reads_declared "$RSRC" "$RREADME")" yes
