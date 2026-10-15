@@ -55,11 +55,10 @@ printf 'claude --bg --resume "$sid" "$msg"\n' > "$TMP/mut/r.sh"
 ok "…and so does a script"                     "$(offenders "$TMP/mut" | wc -l | tr -d ' ')" 3
 
 echo "== step 3 records the full id, never the printed short one =="
-ok "step 3 runs full on the printed id"        "$(has "$S3" '${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh full <the printed id>`')" yes
-ok "…records what full prints as session:"     "$(has "$S3" 'record the
-   36-character id it prints as `session:`')" yes
+ok "step 3 runs full on the printed id"        "$(has "$S3" '${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh full <the printed id>')" yes
+ok "…records what full prints as session:"     "$(has "$S3" '36-character id it prints as')" yes
 ok "…and never the printed id itself"          "$(grep -c 'Record that id as' "$S3")" 0
-ok "…a failed full records nothing, and says so" "$(has "$S3" '`spawned; session id unresolved: <the')" yes
+ok "…a failed full records nothing, and says so" "$(has "$S3" 'spawned; session id unresolved: <the')" yes
 
 # A stub `claude`: `agents` prints $STUB_JSON, anything else exits 1.
 mkdir -p "$TMP/bin"
@@ -132,8 +131,7 @@ ok "…and escalates a second one"               "$(has "$S4" 'exit 1 ⇒ `stall
 ok "a new id becomes session: as the full UUID" "$(has "$S4" 'full <the new id>` —')" yes
 ok "…a failed second resolve blocks, never resumes old" "$(has "$S4" 'write `resume launched; session id unresolved: <the printed id>`')" yes
 ok "a failed full is never a re-dispatch"      "$(has "$S4" '**A non-zero `full` is neither a resume nor a re-dispatch**')" yes
-ok "…and a short session: is resolved first"   "$(has "$S4" 'its `session:` still the short
-   one — is resolved before any resume')" yes
+ok "…and a short session: is resolved first"   "$(has "$S4" '`full` runs on every recorded value')" yes
 ok "…and no line tells it to dispatch fresh"   "$(grep -c 'not resume; dispatch fresh' "$S4")" 0
 ok "a waitingFor prompt stays the human's"      "$(has "$S4" 'on a login or other `waitingFor` prompt before its first turn')" yes
 ok "the stalled command is one code span"     "$(has "$S4" 'agent-sessions.sh stalled <the task'"'"'s session UUID>`')" yes
