@@ -68,8 +68,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      --permission-mode auto --add-dir <bundle root> < /dev/null
    ```
 
-   It returns in about a second printing `backgrounded · <id>`. **Record that id as
-   `session:` on the task as the very next thing you do** (`SCHEMA.md`), then move on.
+   It returns in about a second printing `backgrounded · <id>` — the 8-character short
+   id. **As the very next thing you do, run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh full <the printed id>` and record the
+   36-character id it prints as `session:`** (`SCHEMA.md`), then move on. A short id alone
+   is never recorded: step 4's resume needs the full one. A non-zero `full` gets one
+   retry; a second leaves `session:` empty, writes `spawned; session id unresolved: <the
+   printed id>` under `# Notes`, and the tick reports it as a 🔴 item.
    A spawn that succeeds also clears every open `dispatch refused:` entry in the bundle
    (below).
 

@@ -4,8 +4,9 @@
 #
 #   agent-sessions.sh state <session-id>      -> the raw state `claude agents` reports
 #                                                (working|blocked|done|gone, …) on stdout
-#   agent-sessions.sh resolve <session-id>    -> the full session UUID `--resume` needs;
-#                                                exit 1 when none or more than one matches
+#   agent-sessions.sh full <session-id>       -> the full session UUID, for either spelling;
+#                                                exit 1 several match, 2 none (`resolve`
+#                                                is its older name)
 #   agent-sessions.sh stalled <session-id> [--projects-dir <dir>]
 #                                             -> exit 0 `stalled <uuid>`: blocked, no
 #                                                `waitingFor`, and no assistant turn since
@@ -25,7 +26,7 @@
 # tests/resume-full-id.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,19p' "$0" >&2; exit 2; }
+usage() { sed -n '3,20p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 command -v python3 >/dev/null 2>&1 || {
@@ -60,7 +61,7 @@ print("gone")
 
 # `--resume` reads a short id as a picker SEARCH TERM, and a `--bg` session parks on the
 # picker — so this counts matches rather than taking the first, as `state_of` does.
-match_of() { # <session-id> <json> -> the one matching row as JSON; 1 none/several, 2 unreadable
+match_of() { # <session-id> <json> -> the one matching row as JSON; 1 several, 2 unreadable, 3 none
   python3 -c '
 import json, re, sys
 want = sys.argv[1]
@@ -78,7 +79,7 @@ for r in rows:
         hits[sid] = r
 if len(hits) != 1:
     print("agent-sessions: %d sessions match %s, not resolving" % (len(hits), want), file=sys.stderr)
-    sys.exit(1)
+    sys.exit(1 if hits else 3)
 sid, r = hits.popitem()
 if not re.fullmatch(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", sid):
     print("agent-sessions: %s has no full session id" % want, file=sys.stderr)
@@ -109,10 +110,12 @@ case "$1" in
     state_of "$2" "$json" || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
     ;;
 
-  resolve)
+  full|resolve)
     [ $# -eq 2 ] || usage
     json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
-    row="$(match_of "$2" "$json")" || exit $?
+    row="$(match_of "$2" "$json")"; rc=$?
+    [ $rc -eq 3 ] && exit 2
+    [ $rc -eq 0 ] || exit $rc
     python3 -c 'import json, sys; print(json.loads(sys.argv[1])["sessionId"])' "$row"
     ;;
 
@@ -122,7 +125,7 @@ case "$1" in
     if [ $# -eq 4 ]; then [ "$3" = "--projects-dir" ] || usage; projects="$4"; fi
     json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
     row="$(match_of "$2" "$json" 2>/dev/null)"; rc=$?
-    [ $rc -eq 1 ] && { echo "not-stalled unresolved"; exit 1; }
+    case $rc in 1|3) echo "not-stalled unresolved"; exit 1 ;; esac
     [ $rc -eq 0 ] || exit 2
     # Every resume mints a new id (measured on CLI 2.1.295), so `startedAt` IS the resume.
     python3 - "$row" "$projects" <<'PY'
@@ -310,6 +313,6 @@ PY
       echo "agent-sessions: could not read the session list" >&2; exit 2; }
     ;;
 
-  -h|--help) sed -n '3,19p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,20p' "$0"; exit 0 ;;
   *) usage ;;
 esac

@@ -80,14 +80,17 @@ mk reviewing in-review   bbbb2222
 mk finished  in-progress cccc3333
 mk vanished  in-progress deadbeef
 mk merged    done        aaaa1111
+mk fullid    in-progress bbbb2222-0000-4000-8000-000000000002
 printf -- '---\ntype: Task\nstatus: in-progress\n---\n' > "$TMP/bundle/projects/p/tasks/nosession.md"
 ok "working + blocked hold a slot; done/gone do not" \
-  "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/bundle" 2>/dev/null)" 2
+  "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/bundle" 2>/dev/null)" 3
 ok "a \`done\` task's stale id is history, not a slot" \
   "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/bundle" 2>&1 >/dev/null \
      | grep -c merged)" 0
 ok "every live-eligible session is reported by name" \
-  "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/bundle" 2>&1 >/dev/null | wc -l | tr -d ' ')" 4
+  "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/bundle" 2>&1 >/dev/null | wc -l | tr -d ' ')" 5
+ok "…a full id in session: is counted like a short one" \
+  "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/bundle" 2>&1 >/dev/null | grep -c '^blocked .*fullid')" 1
 ok "an empty bundle is 0, not an error" \
   "$(mkdir -p "$TMP/none" && PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/none" 2>/dev/null)" 0
 
@@ -128,12 +131,16 @@ parked "session: aaaa1111
 "                              > "$TMP/live.md"
 parked "session: cccc3333
 "                              > "$TMP/exited.md"
+parked "session: aaaa1111-0000-4000-8000-000000000001
+"                              > "$TMP/live-full.md"
 PATH="$PATH_WITH" bash "$CHECK" "$TMP/no-session.md" >/dev/null 2>"$TMP/e1"; ok "no session: still exit 1" "$?" 1
 PATH="$PATH_WITH" bash "$CHECK" "$TMP/live.md"       >/dev/null 2>"$TMP/e2"; ok "a WORKING session: still exit 1" "$?" 1
 PATH="$PATH_WITH" bash "$CHECK" "$TMP/exited.md"     >/dev/null 2>"$TMP/e3"; ok "an exited session: still exit 1" "$?" 1
 ok "…and the field-less report gains no SESSION line" "$(grep -c SESSION "$TMP/e1")" 0
 ok "…the live one is named WORKING"                   "$(grep -c 'is WORKING' "$TMP/e2")" 1
 ok "…the exited one is named EXITED"                  "$(grep -c 'has EXITED' "$TMP/e3")" 1
+PATH="$PATH_WITH" bash "$CHECK" "$TMP/live-full.md"  >/dev/null 2>"$TMP/e4"; ok "a full id in session: still exit 1" "$?" 1
+ok "…and is named WORKING like its short form"        "$(grep -c 'is WORKING' "$TMP/e4")" 1
 
 echo "== the tick's own instructions carry the clauses a wave costs =="
 ok "step 3 spawns with claude --bg"       "$(has "$S3" "claude --bg '<the whole brief>'")" yes
