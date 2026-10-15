@@ -295,18 +295,21 @@ branch:   <branch-name>                # optional, BUILD only. MACHINE-READ. Req
 # `done` and every URL in `pr:` has MERGED — which is why `worktree:` without `branch:`,
 # and an empty `pr:`, are both refusals rather than silence.
 session: <id>                          # optional, BUILD only. MACHINE-READ by scripts/agent-sessions.sh.
-# The `claude --bg` background session running this task's role agent — the id that
-# `claude agents`, `attach`, `logs` and `stop` take. Written by the project-manager
-# IMMEDIATELY AFTER the spawn, because `--bg` MINTS the id and prints it (`--session-id` is
-# ignored alongside `--bg`, measured on CLI 2.1.270) — so it cannot be pre-written the way
-# `worktree:`/`branch:` are, and the window it leaves is the ~1 second the spawn takes.
-# After a RESUME it holds the full session UUID (`agent-sessions.sh resolve`): `--resume`
-# refuses the short id, while `stop` and `logs` take only the UUID's first field.
+# The `claude --bg` background session running this task's role agent, as its FULL
+# 36-character `sessionId` (`agent-sessions.sh full <the id --bg printed>`). Written by the
+# project-manager IMMEDIATELY AFTER the spawn, because `--bg` MINTS the id and prints only
+# its 8-character first field (`--session-id` is ignored alongside `--bg`, measured on CLI
+# 2.1.270) — so it cannot be pre-written the way `worktree:`/`branch:` are, and the window
+# it leaves is the ~1 second the spawn takes. Full, because `--resume` reads a short id as
+# a picker search term and the session parks; `stop` and `logs` take only the first field.
+# A short id from an older dispatch still matches every reader, and is resolved by `full`
+# before any resume — never passed to `--resume` itself.
 #
 # A tick that dies inside that window is still recoverable, and NOT from this field: the
 # worktree path was written before the spawn and is unique per task, so
-# `claude agents --json --cwd <worktree>` finds the orphan. That is why the pre-write of
-# the other two fields is the load-bearing one.
+# `claude agents --json --all --cwd <worktree>` finds the orphan, and its `sessionId` is
+# the full id to record. That is why the pre-write of the other two fields is the
+# load-bearing one.
 #
 # ONE VALUE: the session working this task NOW. A later round on the same task — a resume
 # under a new id, a rebase round, the `qa-reviewer` — REPLACES it, which is correct because

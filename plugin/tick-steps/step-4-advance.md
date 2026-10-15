@@ -74,21 +74,24 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    host does not resolve. **4** — status and `pr:` contradict each other. **2** — it
    could not answer; treat as unknown, not as fine.
    **A non-zero verdict is never a re-dispatch.** On exit 1, read the agent's worktree
-   and `claude logs <id>` first: the work is usually already committed, and one message
-   asking it to open the PR on what it has recovers it — the same task and same PR,
+   and `claude logs <the session's first field>` first: the work is usually already
+   committed, and one message asking it to open the PR on what it has recovers it — the
+   same task and same PR,
    which is the resume step 3 allows. **The resume is two calls:
-   `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh resolve <the recorded session>`, then
-   `cd <worktree> && claude --bg --resume <the UUID resolve printed> '<the message>'`**,
-   with the same flags step 3 lists. **`--resume` takes the FULL session id, never the
+   `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh full <the recorded session>`, then
+   `cd <worktree> && claude --bg --resume <the UUID full printed> '<the message>'`**,
+   with the same flags step 3 lists. `full` runs on every recorded value, so a task
+   dispatched before step 3 recorded the full id — its `session:` still the short
+   one — is resolved before any resume. **`--resume` takes the FULL session id, never the
    short one**: a short id is a picker search term, the picker finds "No sessions match",
    and a `--bg` session parks `blocked` on it with no turn taken (three times on
-   2026-10-08/09). **A non-zero `resolve` is neither a resume nor a re-dispatch**: exit 1
-   (no session, or more than one, matches) and exit 2 (unknown) leave the task as it is —
+   2026-10-08/09). **A non-zero `full` is neither a resume nor a re-dispatch**: exit 1
+   (more than one session matches) and exit 2 (none, or unknown) leave the task as it is —
    name it in the tick report and surface it as a 🔴 item. Resume only a session
    `agent-sessions.sh state` calls `done`. Every resume prints a **new** id (measured on CLI 2.1.295, an exited session
-   included): before the tick moves on, write `agent-sessions.sh resolve <the new id>` —
+   included): before the tick moves on, write `agent-sessions.sh full <the new id>` —
    the full UUID — as `session:` on the task, and one `# Notes` line `resumed <that
-   UUID>`. **If that second `resolve` exits 1 or 2, the resume has launched anyway**: set
+   UUID>`. **If that second `full` exits 1 or 2, the resume has launched anyway**: set
    the task `blocked`, write `resume launched; session id unresolved: <the printed id>`
    under `# Notes`, report it as a 🔴 item, and never resume the old recorded session.
    **`claude stop` and `claude logs` refuse a full UUID** ("No job matching"),

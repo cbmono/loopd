@@ -446,7 +446,7 @@ launcher's release point are untouched.
 | `claude --bg "…"` | **exit 0 in ~1s**, prints `backgrounded · <8-hex id>`, stdout not held |
 | `--session-id <uuid>` beside `--bg` | **ignored**, with a warning — `--bg` mints its own |
 | `claude agents --json` `state` | `working` · `blocked` · `done`; `--all` keeps a finished session listed |
-| `sessionId` vs the printed id | the id is `sessionId`'s first field, so one recorded value matches both |
+| `sessionId` vs the printed id | the id is `sessionId`'s first field, so the readers match either; `session:` records the full one (below) |
 | plugin hooks under `--bg` | fire — four `Stop` hooks ran in the probe |
 | `claude logs <id>` | a raw **TUI screen dump**, ANSI and all: readable by a human, not by a script |
 
@@ -559,8 +559,12 @@ session cannot answer a picker, so it parks `blocked` with no transcript at all.
 happened three times on 2026-10-08/09, each costing at least one tick cycle. Measured on
 CLI 2.1.295: `--resume <uuid>` continues the conversation under a new id (an exited
 session included), `--resume <short>` parks, and `claude stop`/`logs` take the short id
-and refuse the UUID. `agent-sessions.sh resolve` refuses on zero or two matches rather
-than taking the first, which is what `state` does. A resumed session that is `blocked`,
+and refuse the UUID. `agent-sessions.sh full` refuses on zero or two matches rather
+than taking the first, which is what `state` does. **So step 3 records the full id in
+`session:` right after the spawn**: a recorded short id was resumed by its short form on
+2026-10-14 and 2026-10-15 and parked each time, and only an id that is already full can
+never reach `--resume` short. The readers still match either spelling, and step 4 runs
+`full` before every resume, so a task dispatched before this still resumes. A resumed session that is `blocked`,
 has taken no turn since it started and carries no `waitingFor` cannot be waiting on
 anything a human could answer, which is why it alone is stopped without one — a login or
 other `waitingFor` prompt would park a fresh round too, so it stays the human's — once per round, and a second
