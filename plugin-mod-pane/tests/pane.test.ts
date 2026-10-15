@@ -68,6 +68,7 @@ type World = {
   prompted: unknown[]
   reads: number
   opened: number
+  onRun?: (e: any) => void
 }
 
 // Every stub the mod's hooks can reach, registered before the first call on `$`.
@@ -83,12 +84,23 @@ function stubs(on: any, w: World, placed = true, hold?: () => Promise<void>) {
   // Tick runs the dispatch COMMAND through the engine (prompt.submit refuses a text that
   // begins with `/`); the stub records what reached it. The prompt.submit stub stays so a
   // regression back to a prompt is counted too (asserted zero).
-  on('command.run', async (_$: any, e: any) => { w.submitted.push(e); if (hold) await hold(); return {} })
+  on('command.run', async (_$: any, e: any) => { w.submitted.push(e); if (hold) await hold(); if (w.onRun) w.onRun(e); return {} })
   on('prompt.submit', (_$: any, e: any) => { w.prompted.push(e); return { text: e.text } })
   on('fs.exists', (_$: any, e: any) => ({ value: w.files.has(e.path) }))
   on('fs.stat', (_$: any, e: any) => {
     const f = w.files.get(e.path)
     return f ? { value: { kind: 'file', size: f.text.length, mtimeMs: f.mtimeMs, isLink: false } } : { deny: 'ENOENT' }
+  })
+  on('fs.list', (_$: any, e: any) => {
+    const dir = e.path.replace(/\/+$/, '') + '/'
+    const out = new Map<string, any>()
+    for (const [path, f] of w.files) {
+      if (!path.startsWith(dir)) continue
+      const rest = path.slice(dir.length), slash = rest.indexOf('/')
+      const name = slash < 0 ? rest : rest.slice(0, slash)
+      out.set(name, slash < 0 ? { name, kind: 'file', size: f.text.length, mtimeMs: f.mtimeMs, isLink: false } : { name, kind: 'dir', size: 0, mtimeMs: 0, isLink: false })
+    }
+    return out.size ? { value: [...out.values()] } : { deny: 'ENOENT' }
   })
   on('fs.read', (_$: any, e: any) => {
     const f = w.files.get(e.path)
@@ -294,4 +306,138 @@ test('a non-interactive session registers the command and says nothing', async (
   expect(w.logged).toEqual([])
   expect(w.reads).toBe(0)
   expect(w.submitted).toEqual([])
+})
+
+// ---------------------------------------------------------------- simple mode
+// The task documents the simple mode reads, shaped as a bundle writes them. Everything an
+// operator sees — roles, worktrees, branches, PR links, blocker text — is in them on purpose,
+// so the absence assertions below are about what the pane DRAWS, not what the fixture lacks.
+const P = CWD + '/projects'
+function task(fm: string, body = ''): string { return '---\ntype: Task\n' + fm + '\n---\n\n# Context\n\nx\n' + body }
+const DOCS: Record<string, string> = {
+  [P + '/alpha/project.md']: '---\ntype: Project\ntitle: "Alpha project"\nstatus: active\n---\n',
+  [P + '/alpha/tasks/task-001-widget.md']: task('title: "Ship the widget"\nstatus: in-progress\nassignee: software-engineer\nworktree: /work/_wt/task-001\nbranch: alpha-task-001\nsession: 0e2a071d\npr: [ "https://github.com/o/r/pull/7" ]\nopen_questions: [ ]'),
+  [P + '/alpha/tasks/task-002-colour.md']: task(
+    'title: "Decide the colour"\nstatus: draft\nopen_questions: [ "Q1: Which colour, given the brand, ships first?", "Q2: Old one? --- already answered" ]',
+    '\n## Question details\n\n### Q1\nRecommendation: Blue, the brand colour\nOptions:\n1. Blue, the brand colour\n2. Green\n3. Let the designer pick\nContext:\n- Depth 1: one\n- Depth 2: two\n- Depth 3: three\n'),
+  [P + '/alpha/tasks/task-003-stuck.md']: task('title: "Import the archive"\nstatus: blocked\nassignee: devops-engineer\nlast_blocker: "PR checks red in the worktree after round 2 of the agent session"\nopen_questions: [ ]'),
+  [P + '/alpha/tasks/task-004-done.md']: task("title: 'Done already'\nstatus: done\nopen_questions: [ ]"),
+  [P + '/alpha/tasks/task-005-dropped.md']: task('title: "Dropped"\nstatus: cancelled\nopen_questions: [ ]'),
+  [P + '/alpha/tasks/task-006-name.md']: task('title: "Name it"\nstatus: draft\nopen_questions:\n  - "Q1: What should it be called?"'),
+  [P + '/beta/project.md']: '---\ntype: Project\ntitle: "Beta closed"\nstatus: done\n---\n',
+  [P + '/beta/tasks/task-001-x.md']: task('title: "Never shown"\nstatus: blocked\nopen_questions: [ "Q1: hidden?" ]'),
+  [P + '/gamma/tasks/task-001-broken.md']: task('title: "Broken list"\nstatus: draft\nopen_questions: [ "Q1: unterminated'),
+}
+function bundle(snapshot: unknown | null = SNAP): World {
+  const w = world(snapshot)
+  for (const [path, text] of Object.entries(DOCS)) w.files.set(path, { text, mtimeMs: 1000 })
+  return w
+}
+const SIMPLE = { options: { mode: 'simple' } }
+// Everything the pane shows: Text, and the labels of its Buttons and Inputs.
+async function everything(ui: any): Promise<string> {
+  const els = [...await ui.findAll({ type: 'Text' }), ...await ui.findAll({ type: 'Button' }), ...await ui.findAll({ type: 'Input' })]
+  return els.map((el: any) => [el.text, el.props.label, el.props.placeholder].filter(Boolean).join(' ')).join('\n')
+}
+
+test('ONE SWITCH: with no option stored, the manifest default draws the operator board', async ($, on) => {
+  const w = bundle()
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = await shown(ui)
+  expect(text).toContain('need you: approve 0')
+  expect(text).not.toContain('Questions for you')
+  await ui.unmount()
+})
+
+test('ONE SWITCH: instance.config.json saying simple does not switch the mode — only the option does', async ($, on) => {
+  const w = bundle()
+  w.files.set(CONFIG, { text: '{"mode":"simple","pane":{"mode":"simple"}}', mtimeMs: 1 })
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await shown(ui)).toContain('need you:')
+  await ui.unmount()
+})
+
+test('SIMPLE SHOWS THREE THINGS: a bar per project, each open question, each blocked task — nothing else', SIMPLE, async ($, on) => {
+  const w = bundle()
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = await everything(ui)
+  // Projects: done/total off the task statuses (cancelled is not counted), a closed project left out.
+  expect(text).toContain('██░░░░░░░░ 1/5 done · Alpha project')
+  expect(text).toContain('0/1 done · gamma')
+  expect(text).not.toContain('Beta closed')
+  expect(text).not.toContain('Never shown')
+  // A question: its text, the recommendation first, the other options, a text field, More.
+  expect(text).toContain('Which colour, given the brand, ships first?')
+  const labels = (await ui.findAll({ type: 'Button' })).map((b: any) => b.props.label)
+  expect(labels.slice(0, 4)).toEqual(['Recommended: Blue, the brand colour', 'Green', 'Let the designer pick', 'More'])
+  expect(await ui.find({ key: 'q1-text' })).toBeDefined()
+  // A question with no details block: the text field and More, no options.
+  expect(text).toContain('What should it be called?')
+  expect(await ui.find({ key: 'q2-opt1' })).toBeUndefined()
+  expect(await ui.find({ key: 'q2-text' })).toBeDefined()
+  expect(await ui.find({ key: 'q2-more' })).toBeDefined()
+  // An answered entry is not a question; an unparseable list is said, not guessed at.
+  expect(text).not.toContain('Old one?')
+  expect(text).toContain('Could not read the questions in "Broken list"')
+  // A blocked task: one plain sentence with its verb, and never the blocker text.
+  expect(text).toContain('Unblock "Import the archive" in Alpha project: it cannot move until you do.')
+  // NOTHING ELSE: no operator vocabulary anywhere the pane draws.
+  for (const banned of [/agent/i, /tick/i, /\bPR\b/, /pull/i, /session/i, /usage/i, /\bround/i, /worktree/i, /branch/i, /engineer/i, /snapshot/i, /github/i]) {
+    expect(text).not.toMatch(banned)
+  }
+  // Read from the task documents, never from the snapshot.
+  expect(w.files.has(SNAPSHOT)).toBe(true)
+  await ui.unmount()
+})
+
+test('EVERY ACTION IS A COMMAND: option, text and more each run /loopd:answer, one at a time', SIMPLE, async ($, on) => {
+  const w = bundle()
+  const clock = mock.clock(on)
+  stubs(on, w, true, () => clock.sleep(1000))
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'q1-opt2' })
+  expect(w.submitted.length).toBe(1)
+  expect(w.submitted[0]).toMatchObject({ command: 'loopd:answer', args: 'projects/alpha/tasks/task-002-colour.md Q1 2' })
+  // While it is queued the question says so and offers nothing: a second press cannot answer it twice.
+  expect(await shown(ui)).toContain('Sending your answer…')
+  expect(await ui.find({ key: 'q1-opt1' })).toBeUndefined()
+  expect(await ui.find({ key: 'q2-text' })).toBeUndefined()
+  await clock.advance(1000)
+  await ui.input({ key: 'q2-text', text: '  Widget\tPro  ' })
+  expect(w.submitted[1]).toMatchObject({ command: 'loopd:answer', args: 'projects/alpha/tasks/task-006-name.md Q1 --text Widget Pro' })
+  await clock.advance(1000)
+  await ui.press({ key: 'q1-more' })
+  expect(w.submitted[2]).toMatchObject({ command: 'loopd:answer', args: 'projects/alpha/tasks/task-002-colour.md Q1 more' })
+  await clock.advance(1000)
+  expect(await shown(ui)).toContain('is in the conversation')
+  expect(w.submitted.length).toBe(3)
+  expect(w.prompted).toEqual([])
+  await ui.unmount()
+})
+
+test('an answered question leaves the pane on the next read; a refused run is said', SIMPLE, async ($, on) => {
+  const w = bundle()
+  const path = P + '/alpha/tasks/task-002-colour.md'
+  w.onRun = () => w.files.set(path, { text: DOCS[path].replace('open_questions: [ "Q1:', 'open_questions: [ ]\nanswered: [ "Q1:'), mtimeMs: 2000 })
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'q1-opt1' })
+  expect(await shown(ui)).not.toContain('Which colour')
+  w.onRun = () => { throw new Error('the command is not available') }
+  await ui.press({ key: 'q1-more' })
+  expect(await shown(ui)).toContain('Could not send that answer: ')
+  expect(await shown(ui)).toContain('What should it be called?')
+  await ui.unmount()
 })
