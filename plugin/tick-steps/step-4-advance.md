@@ -63,8 +63,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **A `blocked` session whose round is RECORDED is the tick's to stop.** The CLI also
    calls a session `blocked` when its turn ENDED with a message addressed to the human
    (measured on 2.1.296: nearly every round whose criteria owe a merge or an answer).
-   **After** the advance above has written what the agent reported — a `4` read before it
-   is a `0` after it — run, for each such task:
+   **After** the advance above has written what the agent reported — a `check-dispatch.sh`
+   4 that advance fixes reads 0 — run, for each such task:
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh recorded <the task's `session:`> <task-path>
@@ -80,7 +80,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      runs **before** any resume replaces `session:`.
    - **Resume it only when a round is OWED** — a rule in this step sends that task's
      agent a message this tick: a missing criteria table, a `rebase-pr.sh` exit 3, a
-     `pr-verdict-clearance.sh` exit 3 for the `qa-reviewer`. That message is the resume's,
+     `qa-reviewer` re-run on a malformed checker table (below). That message is the resume's,
      by the two calls below, and **only to the session that round addresses**: when the
      role on the task's last `* DISPATCH` line is not the round's role, the round is a
      fresh dispatch as step 3 spawns it. **Write no `* DISPATCH` line for the resume** —
@@ -90,7 +90,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      and this is the only `blocked` that puts a `claude stop` in `AWAITING.md`.
    - **`prompt <uuid> <why>`** — the round is recorded but the session is on a live
      prompt (`needs`, `waitingFor`), or nothing shows its turn ended. Never stopped by
-     the tick: surface it as `claude attach <the UUID's first field>` to answer it.
+     the tick: surface it as `claude attach <the UUID's first field>` to answer it. A
+     stalled resume (below) is checked first.
    - **`not-blocked <state>`** — the rows above apply. **Exit 2** — unknown: change nothing.
 
    **Never `claude rm` a role agent's session** — it deletes the session **and its
