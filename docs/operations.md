@@ -1455,10 +1455,13 @@ fixes drifted into because this was never written down (task-019).
   his file already held a bare `Bash(claude --bg *)` and a `bypassPermissions` spawn from
   before 3.3 that the stamp recognised as neither right nor wrong. Now a stamp **at a
   terminal** asks, verbatim, `Write "Bash(claude --bg * --agent loopd:* --permission-mode
-  auto --add-dir *)" to .claude/settings.local.json so the tick can start role agents
-  without a prompt? [Y/n]` — Enter or `y` writes exactly that rule into
+  auto --add-dir *)" and "Bash(claude stop *)" to .claude/settings.local.json so the tick
+  can start and stop role agents without a prompt? [Y/n]` — naming only the rules still
+  missing — and Enter or `y` writes exactly those into
   `permissions.allow` (JSON-parsed, verified after it lands, never duplicated) and removes
-  the stale shapes the question listed; `n` prints the rule as before. A stamp with **no
+  the stale shapes the question listed; `n` prints the rules as before. The stop rule is
+  the tick's standing grant to stop a session whose round is recorded
+  (`docs/pm-design.md#step-4`); a rule cannot name one session, so step 4 is its scope. A stamp with **no
   terminal** — a session, a script, CI, the harnesses — asks nothing and writes nothing: it
   prints the rule, and `/loopd:init` relays the question and re-runs with `--spawn-grant`
   on a yes. The trust key is still never written by anything here.

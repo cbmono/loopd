@@ -44,7 +44,7 @@
 #      `--with-objectives` creates it. An existing one is data and is never touched.
 #      `knowledge/` is NOT seeded either when a `knowledge` key names a mounted
 #      repository: step 8 mounts it (kb-sync.sh) instead of writing placeholders into it.
-#   2f. At a terminal, ASKS before writing the `claude --bg` spawn grant into the bundle's
+#   2f. At a terminal, ASKS before writing the `claude --bg` spawn grant and `claude stop` rule into its
 #      .claude/settings.local.json — Enter is yes — and names any stale grant it would
 #      replace. Not at a terminal it writes nothing and prints the rule; `--spawn-grant`
 #      is the human's yes relayed from a session (owner's decision, 2026-10-09).
@@ -1702,7 +1702,9 @@ fi
 BG_RULE="Bash(claude --bg * --agent ${PLUGIN_NAME}:* --permission-mode auto --add-dir *)"
 BG_BROAD="Bash(claude --bg *)"
 BG_INERT="Bash(claude --bg ' *)"
+STOP_RULE="Bash(claude stop *)"
 bg_has() { grep -qF "\"$1\"" "$AL_FILE" 2>/dev/null; }
+bg_missing="$(for r in "$BG_RULE" "$STOP_RULE"; do bg_has "$r" || printf '%s\n' "$r"; done)"
 # Every spawn rule in the file that matches far too much or nothing at all, as
 # "<rule>\t<why>": the bare wildcard, a bypassPermissions spawn, a retired agent namespace.
 bg_stale=""
@@ -1714,11 +1716,11 @@ if [ -f "$AL_FILE" ]; then
         match($0, /--agent [^:* ]+:/) { ns = substr($0, RSTART + 8, RLENGTH - 9); if (ns != pn) print $0 "\tstale: names the retired " ns ": namespace" }')"
 fi
 bg_stale_rules="$(printf '%s\n' "$bg_stale" | cut -f1 | grep . || true)"
-bg_write_json() { # -> stdout: the file with $BG_RULE in and $bg_stale_rules out; non-zero = not safe
+bg_write_json() { # -> stdout: the file with $bg_missing in and $bg_stale_rules out; non-zero = not safe
   if command -v python3 >/dev/null 2>&1; then
-    python3 - "$AL_FILE" "$BG_RULE" "$bg_stale_rules" <<'PY' 2>/dev/null
+    python3 - "$AL_FILE" "$bg_missing" "$bg_stale_rules" <<'PY' 2>/dev/null
 import json, os, sys
-p, rule = sys.argv[1], sys.argv[2]
+p, rules = sys.argv[1], [r for r in sys.argv[2].split("\n") if r]
 stale = [s for s in sys.argv[3].split("\n") if s]
 d = {}
 if os.path.exists(p) and open(p).read().strip():
@@ -1728,18 +1730,19 @@ perm = d.setdefault("permissions", {})
 allow = perm.setdefault("allow", []) if isinstance(perm, dict) else None
 if not isinstance(allow, list): sys.exit(1)
 allow[:] = [a for a in allow if a not in stale]
-if rule not in allow: allow.append(rule)
+allow.extend(r for r in rules if r not in allow)
 json.dump(d, sys.stdout, indent=2); print()
 PY
   elif command -v jq >/dev/null 2>&1; then
-    { [ -s "$AL_FILE" ] && cat "$AL_FILE" || echo '{}'; } | jq --arg r "$BG_RULE" --arg s "$bg_stale_rules" '
+    { [ -s "$AL_FILE" ] && cat "$AL_FILE" || echo '{}'; } | jq --arg r "$bg_missing" --arg s "$bg_stale_rules" '
       ($s | split("\n") | map(select(length > 0))) as $st
-      | .permissions.allow = (((.permissions.allow // []) - $st) | if index($r) then . else . + [$r] end)'
+      | ($r | split("\n") | map(select(length > 0))) as $add
+      | .permissions.allow = (((.permissions.allow // []) - $st) as $a | $a + ($add - $a))'
   else return 1; fi
 }
-bg_verify() { # <file> — parses, carries the rule once, and none of the stale ones
+bg_verify() { # <file> — parses, carries each rule once, and none of the stale ones
   team_json_ok "$1" || return 1
-  [ "$(grep -cF "\"$BG_RULE\"" "$1" | tr -d ' ')" = 1 ] || return 1
+  for bg_r in "$BG_RULE" "$STOP_RULE"; do [ "$(grep -cF "\"$bg_r\"" "$1" | tr -d ' ')" = 1 ] || return 1; done
   while IFS= read -r bg_s; do
     [ -z "$bg_s" ] || ! grep -qF "\"$bg_s\"" "$1" || return 1
   done <<EOF
@@ -1747,7 +1750,7 @@ $bg_stale_rules
 EOF
 }
 bg_note_stale() { printf '%s\n' "$bg_stale" | awk -F'\t' 'NF { printf "  note  .claude/settings.local.json has `%s` — %s. Remove it: re-run with --spawn-grant, or edit the file.\n", $1, $2 }'; }
-bg_want=no; bg_has "$BG_RULE" || bg_want=yes
+bg_want=no; [ -z "$bg_missing" ] || bg_want=yes
 if [ "$bg_want" = yes ] || [ -n "$bg_stale" ]; then
   if bg_has "$BG_INERT"; then
     echo "  note  .claude/settings.local.json has \`$BG_INERT\`; it matches no spawn form measured (Claude Code 2.1.285)."
@@ -1761,13 +1764,14 @@ if [ "$bg_want" = yes ] || [ -n "$bg_stale" ]; then
     # TEAM_SETUP_STDIN is for the roster, and a forced read carries a timeout.
     {
       echo ""
-      echo "  Role agents are \`claude --bg\` sessions the tick starts. Without this rule in"
-      echo "  .claude/settings.local.json, every spawn stops at a permission prompt."
+      echo "  Role agents are \`claude --bg\` sessions the tick starts, and stops once a round is recorded."
+      echo "  Without these rules in .claude/settings.local.json, each spawn or stop waits on a permission prompt."
       if [ -n "$bg_stale" ]; then
         echo "  These rules there match nothing the tick runs now, or far too much, and would be REMOVED:"
         printf '%s\n' "$bg_stale" | awk -F'\t' 'NF { printf "    - %s  (%s)\n", $1, $2 }'
       fi
-      printf 'Write "%s" to .claude/settings.local.json so the tick can start role agents without a prompt? [Y/n] ' "$BG_RULE"
+      printf 'Write %s to .claude/settings.local.json so the tick can start and stop role agents without a prompt? [Y/n] ' \
+        "$(printf '%s\n' "$bg_missing" | sed 's/.*/"&"/' | paste -sd ' ' - | sed 's/" "/" and "/g')"
     } >&2
     bg_answer=""
     if [ "${BG_GRANT_STDIN:-}" = 1 ]; then IFS= read -r -t 10 bg_answer || bg_answer=n
@@ -1781,18 +1785,18 @@ if [ "$bg_want" = yes ] || [ -n "$bg_stale" ]; then
     if [ ! -L "$AL_FILE" ] && mkdir -p "$TARGET/.claude" && bg_write_json > "$bg_tmp" \
        && bg_verify "$bg_tmp" && mv "$bg_tmp" "$AL_FILE" && bg_verify "$AL_FILE"; then
       echo "  wrote spawn grant into .claude/settings.local.json:"
-      echo "          $BG_RULE"
+      printf '%s\n' "$bg_missing" | sed 's/^/          /'
       printf '%s\n' "$bg_stale" | awk -F'\t' 'NF { printf "  removed %s  (%s)\n", $1, $2 }'
     else
       rm -f "$bg_tmp"
       echo "  warn  spawn grant not written: no safe edit of $AL_FILE (it must parse as JSON, and a parser must be here)." >&2
-      echo "        Add to permissions.allow by hand: $BG_RULE" >&2
+      printf '%s\n' "$bg_missing" | sed 's/^/        Add to permissions.allow by hand: /' >&2
     fi
   else
     if [ "$bg_want" = yes ]; then
-      echo "  note  init writes no \`claude --bg\` grant without your yes. The narrowest rule measured to match the tick's spawn:"
-      echo "          $BG_RULE"
-      echo "        It lets the tick spawn any ${PLUGIN_NAME} role, in auto mode, unprompted. Adding it to"
+      echo "  note  init writes no \`claude --bg\` grant without your yes. The narrowest rules for the tick's spawn and its stop of a recorded round:"
+      printf '%s\n' "$bg_missing" | sed 's/^/          /'
+      echo "        They let the tick spawn any ${PLUGIN_NAME} role in auto mode, and stop a session, unprompted. Adding them to"
       echo "        .claude/settings.local.json is yours: answer Y when a terminal stamp asks, or re-run with --spawn-grant."
     fi
     bg_note_stale

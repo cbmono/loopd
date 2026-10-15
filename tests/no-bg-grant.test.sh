@@ -55,7 +55,9 @@ OLD_RULE="Bash(claude --bg * --agent ${PN}:* --permission-mode bypassPermissions
 BROAD="Bash(claude --bg *)"
 NS_RULE="Bash(claude --bg * --agent old-plugin:* --permission-mode auto --add-dir *)"
 INERT="Bash(claude --bg ' *)"
-PROMPT="Write \"$RULE\" to .claude/settings.local.json so the tick can start role agents without a prompt? [Y/n]"
+STOP="Bash(claude stop *)"
+PROMPT="Write \"$RULE\" and \"$STOP\" to .claude/settings.local.json so the tick can start and stop role agents without a prompt? [Y/n]"
+STOP_PROMPT="Write \"$STOP\" to .claude/settings.local.json so the tick can start and stop role agents without a prompt? [Y/n]"
 grants() { # <instance> -> count of claude allow entries across every settings file it has
   cat "$1"/.claude/*.json 2>/dev/null | grep -cE '"Bash\(claude[ :]' | tr -d ' '
 }
@@ -73,6 +75,7 @@ I="$TMP/i1"; git init -q "$I"; stamp "$MK" "$I"; rc=$?
 ok "stamp exits 0" "$rc" 0
 ok "no claude allow entry in any .claude/*.json" "$(grants "$I")" 0
 ok "the notice names the narrowest measured rule" "$(cnt -F "$RULE" "$TMP/out")" 1
+ok "…and the stop rule" "$(cnt -F "          $STOP" "$TMP/out")" 1
 ok "the notice says init writes none without a yes" "$(cnt -F 'init writes no `claude --bg` grant without your yes' "$TMP/out")" 1
 ok "…and names both ways to give one" "$(cnt -F 'answer Y when a terminal stamp asks, or re-run with --spawn-grant' "$TMP/out")" 1
 ok "no question was printed" "$(cnt -F "$PROMPT" "$TMP/out")" 0
@@ -91,15 +94,25 @@ ok "the operator's rule is kept, once" "$(cnt -F "\"$INERT\"" "$L")" 1
 ok "no other claude allow entry was added" "$(grants "$I")" 1
 ok "it is reported as matching no measured spawn form" "$(cnt -F 'matches no spawn form measured' "$TMP/out")" 1
 
-echo "== 3. an operator's own working rule is not second-guessed =="
-I="$TMP/i3"; with_rules "$I" "$RULE"; L="$I/.claude/settings.local.json"
+echo "== 3. an operator's own working rules are not second-guessed =="
+I="$TMP/i3"; with_rules "$I" "$RULE" "$STOP"; L="$I/.claude/settings.local.json"
 stamp "$MK" "$I"
-ok "still exactly one claude allow entry" "$(grants "$I")" 1
+ok "still exactly two claude allow entries" "$(grants "$I")" 2
 ok "no notice printed" "$(cnt -F 'claude --bg' "$TMP/out")" 0
 BEFORE="$(cat "$L")"   # after the first stamp: step 1e's script allowlist has landed by now
 tty_stamp "" "$I"
 ok "…and a terminal stamp asks nothing either" "$(cnt -F "$PROMPT" "$TMP/out")" 0
 ok "…leaving the file byte-identical" "$([ "$(cat "$L")" = "$BEFORE" ] && echo yes || echo no)" yes
+
+echo "== 3a. a bundle holding only the spawn rule is asked for the stop rule alone =="
+I="$TMP/i3a"; with_rules "$I" "$RULE"; L="$I/.claude/settings.local.json"
+tty_stamp "" "$I"
+ok "the question names only the stop rule" "$(cnt -F "$STOP_PROMPT" "$TMP/out")" 1
+ok "two claude allow entries after the yes" "$(grants "$I")" 2
+ok "…the spawn rule still once" "$(cnt -F "\"$RULE\"" "$L")" 1
+ok "…and the stop rule once" "$(cnt -F "\"$STOP\"" "$L")" 1
+tty_stamp "" "$I"
+ok "a second stamp asks nothing" "$(cnt -F 'Write "' "$TMP/out")" 0
 
 echo "== 3b. the stale shapes are NAMED, each with why, and left alone without a yes =="
 I="$TMP/i3b"; with_rules "$I" "$OLD_RULE" "$BROAD" "$NS_RULE" "Bash(ls:*)"; L="$I/.claude/settings.local.json"
@@ -140,7 +153,7 @@ ok "no shipped JSON allows a claude command" "$json_hits" 0
 # Outside markdown, `Bash(claude` may only appear in a line that prints it or in one of the
 # named constants — the writer reaches the rule through $BG_RULE and nowhere else.
 code_hits="$(printf '%s\n' "$SURF" | grep -v '\.md$' | while IFS= read -r f; do
-  grep -nF 'Bash(claude' "$f" | grep -vE '^[0-9]+:[[:space:]]*(echo|printf|#|BG_RULE=|BG_INERT=|BG_BROAD=)' | sed "s|^|$f:|"
+  grep -nF 'Bash(claude' "$f" | grep -vE '^[0-9]+:[[:space:]]*(echo|printf|#|BG_RULE=|BG_INERT=|BG_BROAD=|STOP_RULE=)' | sed "s|^|$f:|"
 done)"
 [ -z "$code_hits" ] || printf '%s\n' "$code_hits" | sed 's/^/        /'
 ok "no script line spells a claude rule outside the constants" "$(printf '%s' "$code_hits" | grep -c . | tr -d ' ')" 0
@@ -153,24 +166,25 @@ ok "no claude allow entry" "$(grants "$I")" 0
 ok "…and the rule is printed for the human" "$(cnt -F "          $RULE" "$TMP/out")" 1
 ok "no trust key anywhere" "$(trust_written "$I")" 0
 
-echo "== 7. at a terminal, Enter is yes: exactly that one rule, and nothing else =="
+echo "== 7. at a terminal, Enter is yes: exactly those two rules, and nothing else =="
 I="$TMP/i7"; mkdir -p "$I"; tty_stamp "" "$I"; rc=$?
 L="$I/.claude/settings.local.json"
 ok "exits 0" "$rc" 0
 ok "the question is asked, verbatim" "$(cnt -F "$PROMPT" "$TMP/out")" 1
 ok "it says what it wrote" "$(cnt -F 'wrote spawn grant into .claude/settings.local.json' "$TMP/out")" 1
-ok "exactly one claude allow entry" "$(grants "$I")" 1
-ok "…and it is the measured rule" "$(cnt -F "\"$RULE\"" "$L")" 1
+ok "exactly two claude allow entries" "$(grants "$I")" 2
+ok "…the measured rule" "$(cnt -F "\"$RULE\"" "$L")" 1
+ok "…and the stop rule" "$(cnt -F "\"$STOP\"" "$L")" 1
 ok "the file parses as JSON" "$(yn python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$L")" yes
 ok "the script allowlist written beside it survives" "$(cnt -F '/scripts/*)"' "$L")" 2
 ok "no trust key anywhere" "$(trust_written "$I")" 0
 BEFORE="$(cat "$L")"
 tty_stamp "" "$I"
 ok "a second terminal stamp asks nothing" "$(cnt -F "$PROMPT" "$TMP/out")" 0
-ok "…and never duplicates the rule" "$(grants "$I")" 1
+ok "…and never duplicates a rule" "$(grants "$I")" 2
 ok "…byte-identical" "$([ "$(cat "$L")" = "$BEFORE" ] && echo yes || echo no)" yes
 I="$TMP/i7y"; mkdir -p "$I"; tty_stamp "y" "$I"
-ok "a typed y is the same yes" "$(grants "$I")" 1
+ok "a typed y is the same yes" "$(grants "$I")" 2
 I="$TMP/i7e"; mkdir -p "$I"; tty_stamp "" "$I"
 ok "…and the write lands as the ONLY claude entry on a bare dir" "$(cnt -F "\"$RULE\"" "$I/.claude/settings.local.json")" 1
 
@@ -179,7 +193,7 @@ I="$TMP/i8"; with_rules "$I" "$OLD_RULE" "$BROAD" "$NS_RULE" "Bash(ls:*)"; L="$I
 tty_stamp "" "$I"
 ok "the question listed what would be removed" "$(cnt -F 'would be REMOVED' "$TMP/out")" 1
 ok "…naming all three" "$(cnt -E "^    - Bash\(claude --bg .*\((over-broad|stale)" "$TMP/out")" 3
-ok "exactly one claude allow entry remains" "$(grants "$I")" 1
+ok "exactly two claude allow entries remain" "$(grants "$I")" 2
 ok "…the measured rule" "$(cnt -F "\"$RULE\"" "$L")" 1
 ok "the bypass rule is gone" "$(cnt -F "\"$OLD_RULE\"" "$L")" 0
 ok "the bare wildcard is gone" "$(cnt -F "\"$BROAD\"" "$L")" 0
@@ -193,7 +207,7 @@ I="$TMP/i9"; with_rules "$I" "$BROAD"; L="$I/.claude/settings.local.json"
 stamp "$MK" "$I" --spawn-grant; rc=$?
 ok "exits 0" "$rc" 0
 ok "no question was printed" "$(cnt -F "$PROMPT" "$TMP/out")" 0
-ok "exactly one claude allow entry" "$(grants "$I")" 1
+ok "exactly two claude allow entries" "$(grants "$I")" 2
 ok "…the measured rule" "$(cnt -F "\"$RULE\"" "$L")" 1
 ok "…and the over-broad one was removed" "$(cnt -F "\"$BROAD\"" "$L")" 0
 bash "$MK/scripts/init-bundle.sh" --help >"$TMP/help" 2>&1
