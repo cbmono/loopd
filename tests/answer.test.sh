@@ -118,7 +118,8 @@ OUT="$(run "$B" more 2>/dev/null)"; RC=$?
 ok "a depth it cannot save fails at exit 6"  "$RC" 6
 ok "…and shows no depth"                     "$(printf '%s' "$OUT" | grep -c 'Depth' | tr -d ' ')" 0
 rm -f "$B/.loopd/.answer-depth"; mkdir -p "$B/.loopd/.answer-depth"; : > "$B/.loopd/.answer-depth/.gitignore"
-ok "once it can, the count starts at depth 1" "$(run "$B" more 2>&1 | head -n1)" "Depth 1 of 3 · Q1"
+OUT="$(run "$B" more 2>&1)"
+ok "once it can, the count starts at depth 1" "$(head -n1 <<<"$OUT")" "Depth 1 of 3 · Q1"
 ok "…and an emptied ignore rule is restored" "$(git -C "$B" status --porcelain | wc -l | tr -d ' ')" 0
 
 echo
