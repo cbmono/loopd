@@ -7,6 +7,7 @@
 # No Q<n> ⇒ the first unanswered entry. A bare integer is an option of its `### Q<n>` block.
 # Exit: 0 done · 1 refused, one sentence · 2 usage · 3 the move refused, nothing written
 #       4 committed, but the commit, rebase or push failed — nothing forced · 5 `more` is past the stored depths
+#       6 `more` could not save its depth, nothing printed
 # Reasoning: simple-board/task-002.
 set -uo pipefail
 
@@ -81,7 +82,7 @@ for l in blk:
         if m:
             cur = int(m.group(1))
             items[cur] = [m.group(2).strip()]
-        elif cur and (not l.strip() or l[:1] in " \t"):
+        elif cur:
             items[cur].append(l.strip())
 n = 0
 while n + 1 in items:
@@ -101,8 +102,9 @@ if [ "$forced" -eq 0 ] && [ "$reply" = "more" ]; then
     echo "${qlabel:-This question} has no stored depth past $stored — answer it from the task in this session."
     exit 5
   fi
-  mkdir -p "$state" && { [ -f "$state/.gitignore" ] || echo '*' > "$state/.gitignore"; }
-  echo "$((seen + 1))" > "$depth_file"
+  { mkdir -p "$state" && { grep -qx '\*' "$state/.gitignore" 2>/dev/null || echo '*' > "$state/.gitignore"; } &&
+    echo "$((seen + 1))" > "$depth_file.tmp" && mv -f "$depth_file.tmp" "$depth_file"; } 2>/dev/null ||
+    { echo "answer: could not save the depth under $state, so nothing is shown" >&2; exit 6; }
   echo "Depth $((seen + 1)) of $stored · ${qlabel}"
   tail -n +2 <<<"$out"
   exit 0
@@ -130,8 +132,18 @@ git -C "$root" rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1 || { echo "committe
 in_rebase() { [ -d "$(git -C "$root" rev-parse --git-path rebase-merge)" ] || [ -d "$(git -C "$root" rev-parse --git-path rebase-apply)" ]; }
 # Never abort a rebase this script did not start: a tick may own one in the same tree.
 in_rebase && { echo "answer: committed; a rebase is already in progress, so nothing pulled or pushed" >&2; exit 4; }
-if ! git -C "$root" pull --rebase --quiet >/dev/null 2>&1; then
-  in_rebase && git -C "$root" rebase --abort >/dev/null 2>&1
+# Ownership is the reflog's `<action> (start)` line of the running rebase, tagged with a nonce;
+# a pre-check alone cannot tell this pull's rebase from one a tick started a moment later.
+nonce="answer.sh $$.$RANDOM.$(date +%s)"
+if ! GIT_REFLOG_ACTION="$nonce" git -C "$root" pull --rebase --quiet >/dev/null 2>&1; then
+  if in_rebase; then
+    started="$(git -C "$root" log -g --format=%gs HEAD 2>/dev/null | grep -m1 ' (start): ')"
+    case "$started" in
+      "$nonce (start): "*) git -C "$root" rebase --abort >/dev/null 2>&1 ;;
+      *) echo "answer: committed locally; a rebase this command did not start is in progress — left alone, nothing pushed" >&2
+         exit 4 ;;
+    esac
+  fi
   echo "answer: committed locally; pull --rebase failed, so nothing was pushed — rebase and push by hand, never force" >&2
   exit 4
 fi

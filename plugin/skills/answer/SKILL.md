@@ -42,7 +42,8 @@ the record. `more` prints the next stored depth (1, then 2, then 3) and changes 
   the task document and its sources, one level deeper than depth 3. Write nothing.
 - **Exit 1** — relay its one sentence and stop. **Exit 3** — the move was refused,
   nothing written. **Exit 4** — the answer is recorded but not pushed: relay the line
-  and stop. Never force-push, never resolve a rebase for the human.
+  and stop; a rebase it did not start is left alone. **Exit 6** — `more` could not save
+  its depth: relay the line and stop. Never force-push, never resolve a rebase for the human.
 
 ## Steps
 1. **Gather.** Within the scope above, collect every task with a non-empty
