@@ -3,9 +3,9 @@
 # fold-answers.sh — move every ` --- `-answered `open_questions` entry into
 # `answered_questions`, stamped `<ISO 8601> by <login> · <entry verbatim>`.
 #
-#   Usage: fold-answers.sh [--instance DIR] <task-doc>
+#   Usage: fold-answers.sh [--instance DIR] [--answer <entry> <text>] <task-doc>
 #          fold-answers.sh --list <task-doc> <frontmatter-key>   # read-only
-#
+# `--answer` appends ` --- <text>` to that one open entry first (answer.sh's in-session answer).
 # Exit: 0 done (nothing to move is also 0) · 2 usage · 3 a list it could not round-trip,
 # nothing written · 4 the move would leave one entry in BOTH lists, nothing written.
 #
@@ -14,14 +14,15 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-usage() { sed -n '4,6p' "$0" >&2; exit 2; }
+usage() { sed -n '6,8p' "$0" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "fold-answers: python3 is required" >&2; exit 2; }
 
-inst="."; doc=""; list_key=""
+inst="."; doc=""; list_key=""; ans_entry=""; ans_text=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) [ $# -ge 2 ] || usage; inst="$2"; shift 2 ;;
     --list)     [ $# -ge 3 ] || usage; doc="$2"; list_key="$3"; shift 3 ;;
+    --answer)   [ $# -ge 3 ] || usage; ans_entry="$2"; ans_text="$3"; shift 3 ;;
     -h|--help)  usage ;;
     -*)         usage ;;
     *)          [ -z "$doc" ] || usage; doc="$1"; shift ;;
@@ -63,13 +64,13 @@ if [ -z "$list_key" ] && [ -x "$HERE/decision-stamp.sh" ]; then
 fi
 
 python3 - "$doc" "$list_key" "$login_self" "$login_author" "$committed_state" \
-         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" <<'PY'
+         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ans_entry" "$ans_text" <<'PY'
 import os, re, sys, tempfile
 
 ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "/": "/"}
 
 path, list_key = sys.argv[1], sys.argv[2]
-login_self, login_author, committed_state, committed_file, stamp = sys.argv[3:8]
+login_self, login_author, committed_state, committed_file, stamp, ans_entry, ans_text = sys.argv[3:10]
 src = open(path, encoding="utf-8").read()
 
 
@@ -270,6 +271,14 @@ if open_q is None:
     sys.exit(0)
 if ans_q is None:
     ans_q, a_at, a_end = [], None, None
+if ans_entry:
+    hits = [i for i, e in enumerate(open_q) if e == ans_entry]
+    if len(hits) != 1:
+        die(3, "the entry to answer is not in open_questions exactly once")
+    if not ans_text.strip() or "\n" in ans_text:
+        die(3, "an answer must be one non-empty line")
+    open_q = list(open_q)
+    open_q[hits[0]] += " --- " + ans_text
 
 # AN ANSWER MUST HAVE CONTENT. The test was `" --- " in e`, so an entry that merely
 # ENDED with the separator — the shape you get when the separator is pre-placed as an
