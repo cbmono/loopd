@@ -36,11 +36,12 @@ integer records that option's **text** from the `### Q<n>` block (`SCHEMA.md` �
 details"), `--text <words>` records the words even when they are a number or `more`, and
 any other words are the answer. It moves the entry exactly as step 3 does, commits it as
 you through `commit-as.sh human`, then `git pull --rebase` and pushes when the clone has
-an upstream. `more` prints the next stored depth (1, then 2, then 3) and writes nothing.
+an upstream. It bakes nothing into the body: the moved line and the `### Q<n>` block are
+the record. `more` prints the next stored depth (1, then 2, then 3) and changes no tracked file.
 - **Exit 5** — `more` is past the stored depths: answer the question yourself, here, from
   the task document and its sources, one level deeper than depth 3. Write nothing.
 - **Exit 1** — relay its one sentence and stop. **Exit 3** — the move was refused,
-  nothing written. **Exit 4** — the answer is committed but not pushed: relay the line
+  nothing written. **Exit 4** — the answer is recorded but not pushed: relay the line
   and stop. Never force-push, never resolve a rebase for the human.
 
 ## Steps

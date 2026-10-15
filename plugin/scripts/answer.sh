@@ -46,6 +46,8 @@ if [ -z "$entry" ]; then
   refuse "$task has no open question."
 fi
 qlabel=""; [[ "$entry" =~ ^(Q[0-9]+): ]] && qlabel="${BASH_REMATCH[1]}"
+state="$inst/$AB_ANSWER_DEPTH"
+depth_file="$state/$(printf '%s\n%s' "$(cd "$(dirname "$doc")" && pwd -P)/$task" "$entry" | cksum | awk '{print $1}')"
 
 # block <option|depth> <k> — prints how many are stored, then item k when it exists.
 block() {
@@ -92,9 +94,7 @@ PY
 }
 
 if [ "$forced" -eq 0 ] && [ "$reply" = "more" ]; then
-  state="$inst/$AB_ANSWER_DEPTH"
-  key="$(printf '%s\n%s' "$(cd "$(dirname "$doc")" && pwd -P)/$task" "$entry" | cksum | awk '{print $1}')"
-  seen="$(cat "$state/$key" 2>/dev/null || echo 0)"
+  seen="$(cat "$depth_file" 2>/dev/null || echo 0)"
   out="$(block depth $((seen + 1)))"
   stored="$(head -n1 <<<"$out")"
   if [ "$((seen + 1))" -gt "$stored" ]; then
@@ -102,7 +102,7 @@ if [ "$forced" -eq 0 ] && [ "$reply" = "more" ]; then
     exit 5
   fi
   mkdir -p "$state" && { [ -f "$state/.gitignore" ] || echo '*' > "$state/.gitignore"; }
-  echo "$((seen + 1))" > "$state/$key"
+  echo "$((seen + 1))" > "$depth_file"
   echo "Depth $((seen + 1)) of $stored · ${qlabel}"
   tail -n +2 <<<"$out"
   exit 0
@@ -119,7 +119,7 @@ if [ "$forced" -eq 0 ] && [[ "$reply" =~ ^[0-9]+$ ]]; then
 fi
 
 bash "$HERE/fold-answers.sh" --instance "$inst" --answer "$entry" "$answer" "$doc" >/dev/null || exit 3
-rm -f "$inst/$AB_ANSWER_DEPTH/$(printf '%s\n%s' "$(cd "$(dirname "$doc")" && pwd -P)/$task" "$entry" | cksum | awk '{print $1}')"
+rm -f "$depth_file"
 echo "answered ${qlabel:-the question} on $task: $answer"
 
 dir="$(cd "$(dirname "$doc")" && pwd -P)"
