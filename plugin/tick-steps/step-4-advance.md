@@ -74,14 +74,15 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    host does not resolve. **4** — status and `pr:` contradict each other. **2** — it
    could not answer; treat as unknown, not as fine.
    **A non-zero verdict is never a re-dispatch.** On exit 1, read the agent's worktree
-   and `claude logs <the session's first field>` first: the work is usually already committed, and one message
-   asking it to open the PR on what it has recovers it — the same task and same PR,
+   and `claude logs <the session's first field>` first: the work is usually already
+   committed, and one message asking it to open the PR on what it has recovers it — the
+   same task and same PR,
    which is the resume step 3 allows. **The resume is two calls:
    `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh full <the recorded session>`, then
    `cd <worktree> && claude --bg --resume <the UUID full printed> '<the message>'`**,
-   with the same flags step 3 lists. `full` is run even on a 36-character `session:`,
-   because a task dispatched before step 3 recorded the full id still holds the short
-   one. **`--resume` takes the FULL session id, never the
+   with the same flags step 3 lists. `full` runs on every recorded value, so a task
+   dispatched before step 3 recorded the full id — its `session:` still the short
+   one — is resolved before any resume. **`--resume` takes the FULL session id, never the
    short one**: a short id is a picker search term, the picker finds "No sessions match",
    and a `--bg` session parks `blocked` on it with no turn taken (three times on
    2026-10-08/09). **A non-zero `full` is neither a resume nor a re-dispatch**: exit 1
