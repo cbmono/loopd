@@ -2,8 +2,8 @@
 name: answer
 disable-model-invocation: true
 description: Answer the PM's pending open_questions interactively — gather the unanswered questions (all projects, one project, or one task), ask them in one batch, then fold the answers back into the tasks (clearing them). In-session convenience instead of editing each task file by hand.
-argument-hint: "[<project-slug> | projects/<slug> | <task path>]  omit for every project"
-allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Read, Edit, Glob, Grep, AskUserQuestion
+argument-hint: "[<project-slug> | projects/<slug> | <task path> [Q<n>] <n | more | text>]  omit for every project"
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh:*), Read, Edit, Glob, Grep, AskUserQuestion
 ---
 
 Answer the Project Manager's pending `open_questions` **interactively**, instead of
@@ -27,6 +27,21 @@ wins", row 1.)
 - Anything that resolves to no project directory and no task file: say what didn't
   match, list the project slugs that exist, and stop — never fall back to all
   projects on a typo, silently widening what gets edited.
+
+## One answer from the arguments — `<task path> [Q<n>] <n | more | text>`
+When a task path is followed by more words, run exactly
+`bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path> [Q<n>] <the rest>` and relay its
+output; skip the steps below. It answers `Q<n>`, else the first open question: a bare
+integer records that option's **text** from the `### Q<n>` block (`SCHEMA.md` → "Question
+details"), `--text <words>` records the words even when they are a number or `more`, and
+any other words are the answer. It moves the entry exactly as step 3 does, commits it as
+you through `commit-as.sh human`, then `git pull --rebase` and pushes when the clone has
+an upstream. `more` prints the next stored depth (1, then 2, then 3) and writes nothing.
+- **Exit 5** — `more` is past the stored depths: answer the question yourself, here, from
+  the task document and its sources, one level deeper than depth 3. Write nothing.
+- **Exit 1** — relay its one sentence and stop. **Exit 3** — the move was refused,
+  nothing written. **Exit 4** — the answer is committed but not pushed: relay the line
+  and stop. Never force-push, never resolve a rebase for the human.
 
 ## Steps
 1. **Gather.** Within the scope above, collect every task with a non-empty

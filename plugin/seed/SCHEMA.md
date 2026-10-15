@@ -389,8 +389,10 @@ Context:
 The frontmatter line stays the flat `Q<n>: …` string and is still what the human answers
 (` --- <answer>`) and what `fold-answers.sh` moves. The block is never removed: once its
 question is answered it stays as the record. Readers find it by the `### Q<n>` heading
-alone. `validate-bundle.sh` **warns** — never errors — on a `Q<n>:` question with no
-block, a block with no options, or one with fewer than three depths; an unlabelled or
+alone. `/loopd:answer <task> [Q<n>] <n | more | text>` (`answer.sh`) records option `n`'s
+text from it, and `more` prints the next depth, counted per clone in the ignored
+`.loopd/.answer-depth/`. `validate-bundle.sh` **warns** — never errors — on a `Q<n>:`
+question with no block, a block with no options, or one with fewer than three depths; an unlabelled or
 `advisor:` question is exempt. The published snapshot never carries any of it.
 
 ## type: Agent  (`agents/index.md` lists the roster)
