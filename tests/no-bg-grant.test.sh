@@ -114,6 +114,24 @@ ok "…and the stop rule once" "$(cnt -F "\"$STOP\"" "$L")" 1
 tty_stamp "" "$I"
 ok "a second stamp asks nothing" "$(cnt -F 'Write "' "$TMP/out")" 0
 
+echo "== 3d. a rule under permissions.deny is never read as a grant, and is reported =="
+I="$TMP/i3d"; mkdir -p "$I/.claude"; L="$I/.claude/settings.local.json"
+printf '{ "permissions": { "allow": [ "%s" ], "deny": [ "%s" ] } }\n' "$RULE" "$STOP" > "$L"
+stamp "$MK" "$I"
+ok "the denied stop rule is still missing: the notice names it" "$(cnt -F "          $STOP" "$TMP/out")" 1
+ok "…and the conflicting deny is reported" "$(cnt -F "lists \`$STOP\` under permissions.deny" "$TMP/out")" 1
+ok "…without a yes, nothing is written" "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["permissions"]["allow"]))' "$L")" 1
+tty_stamp "" "$I"
+ok "at a terminal it asks for the stop rule" "$(cnt -F "$STOP_PROMPT" "$TMP/out")" 1
+ok "…the yes lands it under allow, once" "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["permissions"]["allow"].count(sys.argv[2]))' "$L" "$STOP")" 1
+ok "…leaves the human's deny alone" "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["permissions"]["deny"].count(sys.argv[2]))' "$L" "$STOP")" 1
+ok "…and still reports it" "$(cnt -F "lists \`$STOP\` under permissions.deny" "$TMP/out")" 1
+ok "…no refusal" "$(cnt -F 'spawn grant not written' "$TMP/out")" 0
+I="$TMP/i3e"; mkdir -p "$I/.claude"
+printf '{ "permissions": { "deny": [ "%s", "%s" ] } }\n' "$RULE" "$STOP" > "$I/.claude/settings.local.json"
+stamp "$MK" "$I"
+ok "both denied: both still asked for" "$(cnt -E "^          Bash\(claude (--bg|stop) " "$TMP/out")" 2
+
 echo "== 3b. the stale shapes are NAMED, each with why, and left alone without a yes =="
 I="$TMP/i3b"; with_rules "$I" "$OLD_RULE" "$BROAD" "$NS_RULE" "Bash(ls:*)"; L="$I/.claude/settings.local.json"
 stamp "$MK" "$I"

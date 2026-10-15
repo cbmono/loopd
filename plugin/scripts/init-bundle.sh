@@ -1703,13 +1703,30 @@ BG_RULE="Bash(claude --bg * --agent ${PLUGIN_NAME}:* --permission-mode auto --ad
 BG_BROAD="Bash(claude --bg *)"
 BG_INERT="Bash(claude --bg ' *)"
 STOP_RULE="Bash(claude stop *)"
-bg_has() { grep -qF "\"$1\"" "$AL_FILE" 2>/dev/null; }
+# A rule under permissions.deny is not a grant, so only the named list is read.
+bg_list() { # <file> <allow|deny> -> its string entries, one per line
+  [ -f "$1" ] || return 0
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$1" "$2" <<'PY' 2>/dev/null
+import json, sys
+try: d = json.load(open(sys.argv[1]))
+except Exception: sys.exit(0)
+l = (d.get("permissions") or {}).get(sys.argv[2]) if isinstance(d, dict) and isinstance(d.get("permissions"), dict) else None
+for a in (l if isinstance(l, list) else []):
+    if isinstance(a, str) and "\n" not in a: print(a)
+PY
+  elif command -v jq >/dev/null 2>&1; then
+    jq -r --arg k "$2" '.permissions[$k] // [] | .[] | strings' "$1" 2>/dev/null
+  elif [ "$2" = allow ]; then grep -o "\"${BG_BROAD%% *}[^\"]*)\"" "$1" | sed 's/^"//; s/"$//'; fi
+}
+bg_has() { bg_list "$AL_FILE" allow | grep -qxF -- "$1"; }
 bg_missing="$(for r in "$BG_RULE" "$STOP_RULE"; do bg_has "$r" || printf '%s\n' "$r"; done)"
+bg_denied="$(bg_list "$AL_FILE" deny | grep -xF -e "$BG_RULE" -e "$STOP_RULE" || true)"
 # Every spawn rule in the file that matches far too much or nothing at all, as
 # "<rule>\t<why>": the bare wildcard, a bypassPermissions spawn, a retired agent namespace.
 bg_stale=""
 if [ -f "$AL_FILE" ]; then
-  bg_stale="$( { grep -o "\"${BG_BROAD%\*)}[^\"]*)\"" "$AL_FILE" || true; } | sed 's/^"//; s/"$//' \
+  bg_stale="$( { bg_list "$AL_FILE" allow | grep -E '^Bash\(claude --bg ' || true; } \
     | awk -v broad="$BG_BROAD" -v pn="$PLUGIN_NAME" '
         $0 == broad { print $0 "\tover-broad: it allows ANY claude --bg command"; next }
         index($0, "--permission-mode bypassPermissions") { print $0 "\tstale: the tick spawns in auto mode now, so it matches nothing"; next }
@@ -1742,15 +1759,16 @@ PY
 }
 bg_verify() { # <file> — parses, carries each rule once, and none of the stale ones
   team_json_ok "$1" || return 1
-  for bg_r in "$BG_RULE" "$STOP_RULE"; do [ "$(grep -cF "\"$bg_r\"" "$1" | tr -d ' ')" = 1 ] || return 1; done
+  for bg_r in "$BG_RULE" "$STOP_RULE"; do [ "$(bg_list "$1" allow | grep -cxF -- "$bg_r")" = 1 ] || return 1; done
   while IFS= read -r bg_s; do
-    [ -z "$bg_s" ] || ! grep -qF "\"$bg_s\"" "$1" || return 1
+    [ -z "$bg_s" ] || ! bg_list "$1" allow | grep -qxF -- "$bg_s" || return 1
   done <<EOF
 $bg_stale_rules
 EOF
 }
 bg_note_stale() { printf '%s\n' "$bg_stale" | awk -F'\t' 'NF { printf "  note  .claude/settings.local.json has `%s` — %s. Remove it: re-run with --spawn-grant, or edit the file.\n", $1, $2 }'; }
 bg_want=no; [ -z "$bg_missing" ] || bg_want=yes
+printf '%s\n' "$bg_denied" | awk 'NF { printf "  note  .claude/settings.local.json lists `%s` under permissions.deny, which overrides any allow — the tick is refused until you remove it.\n", $0 }'
 if [ "$bg_want" = yes ] || [ -n "$bg_stale" ]; then
   if bg_has "$BG_INERT"; then
     echo "  note  .claude/settings.local.json has \`$BG_INERT\`; it matches no spawn form measured (Claude Code 2.1.285)."
