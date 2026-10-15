@@ -74,7 +74,8 @@
 # A `Finding` over 40 lines, or without a one-line `lesson:`, WARNS for the same reason —
 # `CONVENTIONS.md` -> "Write less" sets both, and the 133 findings that predate the rule
 # average 110 lines. A warning puts them on the cataloguer's list; an error would fail
-# every bundle that has one, which is every bundle.
+# every bundle that has one, which is every bundle. So does a `Q<n>:` open question whose
+# `### Q<n>` block under `## Question details` is missing, has no options or under 3 depths.
 #
 # EVERY PER-DOCUMENT CHECK RUNS ON EVERY SCOPE — full bundle, `--changed`, or the paths
 # you name. The Finding cap reached only a full run while nothing else could name one
@@ -310,6 +311,27 @@ fm_wellformed() { # <frontmatter>
   '
 }
 
+question_blocks() { # <file> -> "Q<n> <options> <depths>" per block under `## Question details`
+  awk '
+    function flush() { if (q != "") print q, opts, length(d1) + length(d2) + length(d3); q = "" }
+    NR == 1 && $0 == "---" { fm = 1; next }
+    fm { if ($0 == "---") fm = 0; next }
+    /^[[:space:]]*(```|~~~)/ { fence = !fence; next }
+    fence { next }
+    /^## / { flush(); sec = ($0 ~ /^## Question details[[:space:]]*$/); next }
+    !sec { next }
+    /^### / { flush(); if ($0 ~ /^### Q[0-9]+[[:space:]]*$/) { q = $2; opts = 0; inopt = 0; d1 = d2 = d3 = "" }; next }
+    q == "" { next }
+    /^Options:/ { inopt = 1; next }
+    /^[A-Za-z][^:]*:/ { inopt = 0 }
+    inopt && /^[0-9]+\.[[:space:]]+[^[:space:]]/ { opts++ }
+    /^[-*]?[[:space:]]*Depth 1:[[:space:]]*[^[:space:]]/ { d1 = "x" }
+    /^[-*]?[[:space:]]*Depth 2:[[:space:]]*[^[:space:]]/ { d2 = "x" }
+    /^[-*]?[[:space:]]*Depth 3:[[:space:]]*[^[:space:]]/ { d3 = "x" }
+    END { flush() }
+  ' "$1"
+}
+
 fail() { printf '  ERROR  %s\n         %s\n' "$1" "$2"; errors=$((errors+1)); }
 warn() { printf '  WARN   %s\n         %s\n' "$1" "$2"; warns=$((warns+1)); }
 
@@ -465,6 +487,21 @@ while IFS= read -r file; do
         fail "$rel" "status '$status' is held by an open caveat ($AB_SCHEMA 'open_caveats' — clear it with evidence, in its own edit): $caveat"
       done <<< "$(list_entries "$fm" open_caveats)"
     fi
+
+    blocks=""
+    while IFS= read -r question; do
+      label="$(sed -n 's/^\(Q[0-9][0-9]*\):.*/\1/p' <<<"$question")"
+      [[ -n "$label" ]] || continue
+      [[ -n "$blocks" ]] || blocks="$(question_blocks "$file")"
+      row="$(awk -v q="$label" '$1 == q { print; exit }' <<<"$blocks")"
+      if [[ -z "$row" ]]; then
+        warn "$rel" "open question $label has no '### $label' block under '## Question details' ($AB_SCHEMA, 'Question details')"
+        continue
+      fi
+      read -r _ nopt ndepth <<<"$row"
+      [[ "$nopt" -gt 0 ]] || warn "$rel" "'### $label' has an empty 'Options:' list ($AB_SCHEMA, 'Question details')"
+      [[ "$ndepth" -ge 3 ]] || warn "$rel" "'### $label' has $ndepth of 3 context depths ($AB_SCHEMA, 'Question details')"
+    done <<< "$(list_entries "$fm" open_questions)"
   fi
 
   structural="$(refs_for "$fm" 'objective|project|phase|depends_on' '/(objectives|projects|knowledge|agents)/[A-Za-z0-9._/-]+[.]md')"

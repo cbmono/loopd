@@ -358,7 +358,9 @@ state, and act only on deltas.
    (instance not re-stamped): same fallback, plus the one-line
    `TICK DELTA: absent — re-stamp this instance` you already owe from step 0.9.
 
-2. **Refine drafts** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-2-refine-drafts.md`.
+2. **Refine drafts** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-2-refine-drafts.md`. Every
+   `Q<n>:` question you raise there gets its `### Q<n>` block — recommendation, options,
+   three depths of context — written in the same edit (`SCHEMA.md` → "Question details").
 
 2.5. **Stamp promotions — every task past `draft`, once.** For each task whose status is
    `ready` or beyond and whose `# Notes` carries no `promoted … by …` line yet, append

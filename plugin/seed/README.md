@@ -171,6 +171,8 @@ merge the PR when satisfied (the PM then marks the task `done`).
 The next tick treats anything after the ` --- ` as your answer, folds it into the
 task, and clears the question; the `draft` becomes promotable once the list empties.
 (Answering in chat during a session works too.)
+The recommendation, the options and three depths of context for each question are in
+its `### Q<n>` block under the task's `## Question details`.
 
 The cleared entry is **moved, not deleted**: it lands in the task's
 `answered_questions` list as one flat line, `<ISO 8601> by <login> · <the entry

@@ -11,9 +11,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    For **`kind: research`** instead turn the project's `deliverables` into concrete,
    reviewable `acceptance_criteria` — no `target_repo`, no code `assignee`. If it has
    blocking ambiguities, fill `open_questions`, **numbering every entry (`Q1:`,
-   `Q2:`, …)**; otherwise leave it a clean `draft`. **Promotion follows the owning
-   project's `autonomy`** (see Authority boundaries): leave it `draft` for the human
-   unless that project delegates promotion and `AUTONOMY.md` defines the mode.
+   `Q2:`, …)**, and for each new `Q<n>` write its `### Q<n>` block under the body's
+   `## Question details` (`SCHEMA.md` → "Question details"): choose the recommendation,
+   list it first under `Options:`, and write `Depth 1`, `Depth 2` and `Depth 3` once,
+   now — nothing calls a model at answer time; otherwise leave it a clean `draft`.
+   **Promotion follows the owning project's `autonomy`** (see Authority boundaries):
+   leave it `draft` for the human unless that project delegates promotion and
+   `AUTONOMY.md` defines the mode.
 
 
    **Bake the answer in FIRST, then run the script for the move.** The human answers by
