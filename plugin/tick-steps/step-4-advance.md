@@ -20,7 +20,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    | `working` | absent | live. Leave it. Not a stall, not a re-dispatch. |
    | `done` | present | finished — advance the task as above. |
    | `done` | absent | it exited without the artifact: `check-dispatch.sh` exit 1. |
-   | `blocked` | either | parked on a prompt nobody can answer. It holds a slot until `claude stop <id>` — surface it, and run `stop` only on the human's say-so. **One named exception: a stalled resume** (below). |
+   | `blocked` | either | holds a slot until `claude stop <id>`. **`agent-sessions.sh recorded` decides whose stop it is** (below): a recorded round is the tick's; anything else is surfaced, and stopped only on the human's say-so. **One named exception: a stalled resume** (below). |
    | `gone` | absent | never started, or its record was removed. Same verdict as `done`+absent, and the same recovery. |
    | exit 2 | either | unknown, which is not "finished". Report it and change nothing. |
 
@@ -60,6 +60,40 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    status nor the dispatch, for the same reason `check-dispatch.sh` is report-only
    (`CONVENTIONS.md`); the figure is the human's to read (`docs/pm-design.md#step-3-background`).
 
+   **A `blocked` session whose round is RECORDED is the tick's to stop.** The CLI also
+   calls a session `blocked` when its turn ENDED with a message addressed to the human
+   (measured on 2.1.296: nearly every round whose criteria owe a merge or an answer).
+   **After** the advance above has written what the agent reported — a `check-dispatch.sh`
+   4 that advance fixes reads 0 — run, for each such task:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh recorded <the task's `session:`> <task-path>
+   ```
+
+   - **`recorded <uuid>` (exit 0)** — blocked, `check-dispatch.sh` exit 0, and the job
+     record shows a finished turn with no live prompt. **Stop it, unconditionally:**
+     `claude stop <the UUID's first field>`, then `agent-sessions.sh state <the UUID>`
+     once. `stopped`, `done` or `gone` means it landed — a "No job matching" from a
+     session the CLI already retired included. Anything else: report it, resume nothing,
+     and leave the rest to the next tick. Then settle its dispatch line exactly as above:
+     a session the tick stopped is `stopped` like one the human stopped, and the settle
+     runs **before** any resume replaces `session:`.
+   - **Resume it only when a round is OWED** — a rule in this step sends that task's
+     agent a message this tick: a missing criteria table, a `rebase-pr.sh` exit 3, a
+     `qa-reviewer` re-run on a malformed checker table (below). That message is the resume's,
+     by the two calls below, and **only to the session that round addresses**: when the
+     role on the task's last `* DISPATCH` line is not the round's role, the round is a
+     fresh dispatch as step 3 spawns it. **Write no `* DISPATCH` line for the resume** —
+     its transcript opens with a copy of the round it continues, so settling it would
+     count that round twice. Nothing owed ⇒ stop only; nothing reaches `AWAITING.md`.
+   - **`unrecorded <uuid> check-dispatch=<n>`** — the human gate, as before: surface it,
+     and this is the only `blocked` that puts a `claude stop` in `AWAITING.md`.
+   - **`prompt <uuid> <why>`** — the round is recorded but the session is on a live
+     prompt (`needs`, `waitingFor`), or nothing shows its turn ended. Never stopped by
+     the tick: surface it as `claude attach <the UUID's first field>` to answer it. A
+     stalled resume (below) is checked first.
+   - **`not-blocked <state>`** — the rows above apply. **Exit 2** — unknown: change nothing.
+
    **Never `claude rm` a role agent's session** — it deletes the session **and its
    worktree**, which belongs to `reclaim-worktree.sh` once the task is `done` with every PR
    merged, and to `prune-worktrees.sh` plus a human in every other case.
@@ -88,7 +122,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    2026-10-08/09). **A non-zero `full` is neither a resume nor a re-dispatch**: exit 1
    (more than one session matches) and exit 2 (none, or unknown) leave the task as it is —
    name it in the tick report and surface it as a 🔴 item. Resume only a session
-   `agent-sessions.sh state` calls `done`. Every resume prints a **new** id (measured on CLI 2.1.295, an exited session
+   `agent-sessions.sh state` calls `done`, or `stopped` after the tick's own stop of a
+   recorded round above — never one still `blocked` or `working`. Every resume prints a **new** id (measured on CLI 2.1.295, an exited session
    included): before the tick moves on, write `agent-sessions.sh full <the new id>` —
    the full UUID — as `session:` on the task, and one `# Notes` line `resumed <that
    UUID>`. **If that second `full` exits 1 or 2, the resume has launched anyway**: set

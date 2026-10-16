@@ -321,6 +321,11 @@ session: <id>                          # optional, BUILD only. MACHINE-READ by s
 # the state beside a PARKED verdict. A stale id reads as `gone`, which is not an error —
 # `claude rm` removes a session record, and a merged task's id is expected to disappear.
 #
+# A `blocked` session is the TICK's to `claude stop` only when `agent-sessions.sh recorded`
+# says so: its turn ended addressing the human and this task already records the round
+# (`check-dispatch.sh` exit 0), so nothing is left to send it and the stop frees a slot.
+# With nothing recorded, or a live prompt, the stop stays the human's (step 4).
+#
 # NEVER run `claude rm` on one of these: it deletes a session AND its worktree, while a
 # role agent's worktree belongs to `prune-worktrees.sh` and the human who runs it.
 interfaces:                           # optional, BUILD-shaped. NOT machine-read.

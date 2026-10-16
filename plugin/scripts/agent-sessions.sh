@@ -11,6 +11,11 @@
 #                                             -> exit 0 `stalled <uuid>`: blocked, no
 #                                                `waitingFor`, and no assistant turn since
 #                                                it started; 1 not
+#   agent-sessions.sh recorded <session-id> <task-doc> [--jobs-dir <dir>]
+#                                             -> exit 0 `recorded <uuid>`: blocked, the task's
+#                                                round recorded (check-dispatch exit 0) and the
+#                                                turn ended; 1 `unrecorded …`, `prompt …` or
+#                                                `not-blocked <state>`
 #   agent-sessions.sh in-flight <bundle-root> -> how many recorded sessions still hold a
 #                                                slot, on stdout; one line per recorded
 #                                                session on stderr
@@ -22,11 +27,11 @@
 # Exit 0 answered · 2 unknown (no `claude`, no `python3`, unreadable JSON) — and unknown is
 # never a zero, because "nothing is running" is what a broken read and an idle loop both
 # look like. Reasoning: docs/pm-design.md#step-3-background.
-# Verified by tests/background-dispatch.test.sh, tests/agent-view.test.sh and
-# tests/resume-full-id.test.sh.
+# Verified by tests/background-dispatch.test.sh, tests/agent-view.test.sh,
+# tests/resume-full-id.test.sh and tests/blocked-recorded.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,20p' "$0" >&2; exit 2; }
+usage() { sed -n '3,25p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 command -v python3 >/dev/null 2>&1 || {
@@ -168,6 +173,46 @@ for i, line in enumerate(lines):
         print("not-stalled took-a-turn")
         sys.exit(1)
 print("stalled " + sid)
+PY
+    ;;
+
+  recorded)
+    [ $# -eq 3 ] || [ $# -eq 5 ] || usage
+    task="$3"; jobs="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/jobs"
+    if [ $# -eq 5 ]; then [ "$4" = "--jobs-dir" ] || usage; jobs="$5"; fi
+    [ -f "$task" ] || { echo "agent-sessions: no such task document: $task" >&2; exit 2; }
+    json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
+    row="$(match_of "$2" "$json" 2>/dev/null)"; rc=$?
+    [ $rc -eq 3 ] && { echo "not-blocked gone"; exit 1; }
+    [ $rc -eq 0 ] || exit 2
+    st="$(python3 -c 'import json, sys; r = json.loads(sys.argv[1]); print(r.get("state") or r.get("status") or "unknown")' "$row")" || exit 2
+    sid="$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["sessionId"])' "$row")" || exit 2
+    [ "$st" = blocked ] || { echo "not-blocked $st"; exit 1; }
+    # Only a blocked session reaches the host read check-dispatch may make; it never calls back here.
+    bash "$(dirname "${BASH_SOURCE[0]:-$0}")/check-dispatch.sh" "$task" >/dev/null 2>&1 </dev/null; cd_rc=$?
+    [ $cd_rc -eq 0 ] || { echo "unrecorded $sid check-dispatch=$cd_rc"; exit 1; }
+    # A Claude Code internal (2.1.296-2.1.300): `needs` is a live prompt, `suggestedReply` a
+    # turn that ENDED addressing the human. Anything less stays the human's.
+    python3 - "$row" "$jobs" <<'PY'
+import json, os, sys
+r, jobs = json.loads(sys.argv[1]), sys.argv[2]
+sid = r["sessionId"]
+if r.get("waitingFor"):
+    print("prompt %s waiting-for" % sid); sys.exit(1)
+p = os.path.join(jobs, str(r.get("id") or sid.split("-")[0]), "state.json")
+try:
+    d = json.load(open(p, encoding="utf-8"))
+except FileNotFoundError:
+    print("prompt %s no-job-record" % sid); sys.exit(1)
+except (OSError, ValueError):
+    sys.exit(2)
+if not isinstance(d, dict):
+    sys.exit(2)
+if d.get("needs"):
+    print("prompt %s needs" % sid); sys.exit(1)
+if not d.get("suggestedReply"):
+    print("prompt %s no-finished-turn" % sid); sys.exit(1)
+print("recorded " + sid)
 PY
     ;;
 
@@ -313,6 +358,6 @@ PY
       echo "agent-sessions: could not read the session list" >&2; exit 2; }
     ;;
 
-  -h|--help) sed -n '3,20p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,25p' "$0"; exit 0 ;;
   *) usage ;;
 esac

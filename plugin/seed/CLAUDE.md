@@ -80,6 +80,8 @@ this file so product-repo sessions aren't told they are a control panel. -->
   deletes) and **proposes** closing finished projects — never closes them itself.
 - **Two human authorities** (`SCHEMA.md`): only the human promotes `draft → ready`,
   and only the human merges. The PM never sets `ready` and never merges.
+- **Standing grant: the tick runs `claude stop`, never `rm`, on a role session whose
+  round is recorded** (`agent-sessions.sh recorded`); an unrecorded one stays yours.
 - **One active `/loopd:dispatch` loop per clone**, run from a session **in this
   repo**. The one-tick-at-a-time guarantee is backed by `.tick-lock` (per clone, gitignored) —
   the launcher takes it before dispatching and the tick checks it on entry — but the

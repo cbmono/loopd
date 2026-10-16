@@ -85,16 +85,17 @@ could not derive it prints as a `needs` line naming the key and its flag.
 
 ## The spawn grant: one yes/no question, asked here on the script's behalf
 
-Role agents are `claude --bg` sessions the tick starts, and without one rule in the
-bundle's `.claude/settings.local.json` every spawn stops at a permission prompt. **At a
+Role agents are `claude --bg` sessions the tick starts — and stops, once a round is
+recorded — and without their rules in the bundle's `.claude/settings.local.json` each spawn
+or stop waits on a permission prompt. **At a
 terminal the script asks for it itself, Enter is yes.** Run from here there is no terminal,
 so it writes nothing and prints a `note` that begins `init writes no \`claude --bg\` grant
-without your yes`, followed by the rule. When you see that note:
+without your yes`, followed by the rules still missing. When you see that note:
 
-- Ask the human exactly this, with the rule the note printed in place of `<rule>`: *Write
-  `<rule>` to `.claude/settings.local.json` so the tick can start role agents without a
-  prompt?* — once, together with any `needs` keys.
-- On a yes, re-run the same command with `--spawn-grant`. The script writes the rule,
+- Ask the human exactly this, with the rules the note printed in place of `<rules>`: *Write
+  `<rules>` to `.claude/settings.local.json` so the tick can start and stop role agents
+  without a prompt?* — once, together with any `needs` keys.
+- On a yes, re-run the same command with `--spawn-grant`. The script writes the rules,
   verifies it, and removes any stale grant it named (a bare `Bash(claude --bg *)`, a
   `bypassPermissions` spawn, a retired agent namespace), saying what it removed.
 - On a no, nothing: the rule stays printed for them. **Never write the rule yourself**, and

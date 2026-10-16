@@ -66,7 +66,10 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # `Needs you:` reply vocabulary and its carve-out — promote and merge are never inferred
 # from a glyph. The main thread reads replies, and only this file reaches it on every
 # install; the task capped the addition at 20 lines. Measured, not rounded.
-CEILING=16102
+# 16102 -> 16264 (blocked-rounds-resume/task-001). +170 bytes, 2 lines: the standing grant
+# for the tick's `claude stop` on a recorded round, which the task's criterion 5 requires the
+# seed to state where the human reads it. Trimmed from 6 lines first. Measured, not rounded.
+CEILING=16264
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

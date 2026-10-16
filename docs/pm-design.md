@@ -570,6 +570,22 @@ anything a human could answer, which is why it alone is stopped without one — 
 other `waitingFor` prompt would park a fresh round too, so it stays the human's — once per round, and a second
 stall goes to `stall-counter.sh`.
 
+**Why a recorded `blocked` is the tick's, and an unrecorded one is not.** Measured
+2026-10-15 on CLI 2.1.296: a session whose turn ended normally, with a final message
+addressed to the human, is also `blocked` — its job record (`~/.claude/jobs/<id>/state.json`)
+gains a `suggestedReply`. On one bundle that was nearly every round, so each became an
+`AWAITING.md` item until the human ran `claude stop`, and the next round waited on it.
+When `check-dispatch.sh` also clears the task, the round's result is already on the
+record and nothing can be sent to the session, so stopping it decides nothing — it frees a
+slot, and `stop` keeps the conversation resumable. `agent-sessions.sh recorded` answers it
+in one read, and refuses on two cases the task document alone cannot see: a `needs` or
+`waitingFor` prompt (measured on 2.1.300: a startup dialog), and a job record with no
+`suggestedReply`, where a permission refusal mid-round would otherwise be stopped as
+finished. The stop and the resume are two decisions: the stop is unconditional, the resume
+waits for a round with a message to send, and goes only to the role that round addresses.
+The tick's grant is `Bash(claude stop *)`, written by `/loopd:init` on the same yes as the
+spawn grant; a permission rule cannot name one session, so the scope lives in step 4.
+
 **The two-round cap's price tag**: the pull request the cap comes from ran **eight**
 review rounds, was closed unmerged, and with its siblings cost roughly **70% of a
 week's account budget**. An unresolved disagreement costs the human one decision; an
