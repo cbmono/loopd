@@ -119,6 +119,7 @@ write_task() { # <id> <status> <worktree|-> <branch|-> <target_repo|-> <pr-urls.
     [ "$tr" = "-" ] || echo "target_repo: $tr"
     [ "$wt" = "-" ] || echo "worktree: $wt"
     [ "$br" = "-" ] || echo "branch: $br"
+    [ -z "${TASK_SESSION:-}" ] || echo "session: $TASK_SESSION"
     if [ "${1:-}" = "-" ] || [ "$#" -eq 0 ]; then
       echo "pr: [ ]"
     else
@@ -156,7 +157,7 @@ OUT=""; RC=0
 run() { # <args...>   → sets OUT and RC
   OUT="$( cd "$INSTANCE" \
     && PATH="${STUB_PATH:-$TMP/bin:$PATH}" \
-       GH_FIXTURES="$FIXTURES" \
+       GH_FIXTURES="$FIXTURES" CLAUDE_CONFIG_DIR="$TMP/claude" \
        bash "${SCRIPT:-$RECLAIM}" "$@" 2>&1 )"
   RC=$?
 }
@@ -457,6 +458,45 @@ kill "$LIVE_PID" 2>/dev/null; wait "$LIVE_PID" 2>/dev/null
 run --dry-run "projects/demo/tasks/task-live.md"
 assert "G13 the process is what refused (the same fixture clears once it is gone)" \
   "$(eq "$RC" 0)"
+
+echo "== G13: the task's OWN session is a retry (exit 4), anything else stays exit 1 =="
+OWN_SID=aaaa1111-0000-4000-8000-000000000001
+ROSTER="$TMP/claude/daemon/roster.json"; mkdir -p "${ROSTER%/*}"
+roster() { printf '{"workers":{"%s":{"pid":%s,"sessionId":"%s","cwd":"%s"}}}\n' \
+             "${2%%-*}" "$1" "$2" "$WT_LIVE" > "$ROSTER"; }
+own_task() { TASK_SESSION="$1" write_task task-own done "$WT_LIVE" okf/demo-live fixture-org/proj "$PR1"; }
+own_task "$OWN_SID"
+# The worker and a child of it, both with their cwd in the tree: the daemon process and,
+# say, an MCP server it started.
+( cd "$WT_LIVE" && exec bash -c 'sleep 45 & wait' 2>/dev/null ) & OWN_PID=$!
+( sleep 60; pkill -P "$OWN_PID" 2>/dev/null; kill "$OWN_PID" 2>/dev/null ) >/dev/null 2>&1 &
+sleep 0.3
+roster "$OWN_PID" "$OWN_SID"
+run --dry-run "projects/demo/tasks/task-own.md"
+assert "G13 only the task's own roster worker (and its child) live: exits 4" "$(eq "$RC" 4)"
+assert "G13 …with its own refuse: line naming the short id" "$(has 'refuse: own session aaaa1111 ')"
+roster "$OWN_PID" bbbb2222-0000-4000-8000-000000000002
+run --dry-run "projects/demo/tasks/task-own.md"
+assert "G13 a roster worker of ANOTHER session: exits 1" "$(eq "$RC" 1)"
+roster "$OWN_PID" "$OWN_SID"; own_task ""
+run --dry-run "projects/demo/tasks/task-own.md"
+assert "G13 a task that records no session: exits 1" "$(eq "$RC" 1)"
+own_task "$OWN_SID"; rm -f "$ROSTER"
+run --dry-run "projects/demo/tasks/task-own.md"
+assert "G13 no roster at all: exits 1" "$(eq "$RC" 1)"
+printf 'not json' > "$ROSTER"
+run --dry-run "projects/demo/tasks/task-own.md"
+assert "G13 an unreadable roster: exits 1" "$(eq "$RC" 1)"
+roster "$OWN_PID" "$OWN_SID"
+( cd "$WT_LIVE" && exec sleep 45 ) & STRAY_PID=$!
+( sleep 60; kill "$STRAY_PID" 2>/dev/null ) >/dev/null 2>&1 &
+run --dry-run "projects/demo/tasks/task-own.md"
+assert "G13 own session PLUS a process it did not start: exits 1" "$(eq "$RC" 1)"
+assert "G13 …with today's refusal, not the retry line" "$(has 'refuse:.*live process inside it')"
+kill "$STRAY_PID" 2>/dev/null; wait "$STRAY_PID" 2>/dev/null
+pkill -P "$OWN_PID" 2>/dev/null; kill "$OWN_PID" 2>/dev/null; wait "$OWN_PID" 2>/dev/null
+run --dry-run "projects/demo/tasks/task-own.md"
+assert "G13 once the session is stopped the retry clears: exits 0" "$(eq "$RC" 0)"
 
 echo "== blanket: the refusal matrix removed nothing =="
 MATRIX_WT="$(git -C "$REPO" worktree list --porcelain | grep -c '^worktree ')"
