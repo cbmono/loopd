@@ -5,6 +5,13 @@ runs **inside** every session that loads it. This one adds `/board`, which opens
 drawing this bundle's board beside the transcript (or above the prompt in a narrow
 terminal), and nothing else.
 
+**One switch, `mode`**, in `/config` (the plugin's `userConfig`; nothing else decides it):
+
+| `mode` | Draws | Reads |
+|---|---|---|
+| `operator` (default) | the board below, with Tick and Refresh | the snapshot |
+| `simple` | projects, questions for you, blocked tasks — nothing else | the task documents |
+
 ```
 /plugin marketplace add cbmono/loopd     # already added? skip
 /plugin install loopd-mod-pane@loopd
@@ -14,7 +21,7 @@ Uninstall it (`/plugin` → Installed) and the three core renderers — `build-b
 `print-board.sh`, `watch-board.sh` — are all there is, with **no other edits** anywhere.
 Absence is the safe behaviour, never an error.
 
-## What it draws
+## What it draws — operator mode
 
 The **fourth renderer** over the one board contract, `plugin/scripts/write-snapshot.sh` →
 `.loopd/SNAPSHOT.json` (`docs/conventions.md` §11 in `cbmono/loopd`). It reads the snapshot,
@@ -44,21 +51,51 @@ every number passes one `toint()`, so a `"tasks": "many"` draws as `0` and never
 The pane redraws from the file every **5 seconds**, by `stat` first and `read` only when
 the mtime moved; the poll starts when the pane opens and stops when it closes.
 
+## What it draws — simple mode
+
+For someone who answers questions and does not run the loop. Three sections, in plain words:
+
+| Section | Shows |
+|---|---|
+| Projects | per open project, a done/total bar over its tasks (`cancelled` not counted) and its title; a `done` or `cancelled` project is left out |
+| Questions for you | each unanswered `open_questions` entry: its text, then **Recommended: …** (option 1 of its `### Q<n>` block), the other options, a text field and **More** |
+| Blocked | each `status: blocked` task as one sentence — *Unblock "…" in …: it cannot move until you do.* — never its blocker text |
+
+No role, tick, pull request, session, usage, round, worktree or branch is drawn; the kit
+test asserts their absence against task documents that carry all of them.
+
+**Every action is one `/loopd:answer` run** (`$.command.run`, as Tick is): an option runs
+`/loopd:answer <task> Q<n> <n>`, the text field `… Q<n> --text <words>`, More `… Q<n> more`.
+`answer.sh` does the writing; this pane writes nothing. The run is a model turn queued until
+the session is idle, and it resolves when queued, before the document moves (measured on
+2.1.300), so while one is queued every answer control is hidden, and an answered question
+stays *Sending your answer…* until its document's mtime moves — or until the turn that ran
+it ends with the document unmoved (`answer.sh` refused), when its controls come back with a
+note. A refused run is drawn. A read that fails is retried on the next scan.
+
 ## What it reads
 
-Exactly two paths, both under the session's working directory as `$.session.cwd()` gives it,
-and nothing else — never a parent directory, never a path a config file names:
+Only under the session's working directory as `$.session.cwd()` gives it — never a parent
+directory, never a path a config file names:
 
-| Path | Why |
-|---|---|
-| `instance.config.json` | exists? — the cwd is a loopd bundle. Absent ⇒ the pane says *not a loopd bundle* and draws nothing else. |
-| `.loopd/SNAPSHOT.json` | `stat` every poll, `read` when the mtime moved. Absent ⇒ the pane says *board OFF* with the `touch` that turns it on (absence is the off switch — conventions 3 and 11) and draws nothing else. Unparseable ⇒ one line, and the next `write-snapshot.sh` run overwrites it. |
+| Path | Mode | Why |
+|---|---|---|
+| `instance.config.json` | both | exists? — the cwd is a loopd bundle. Absent ⇒ *not a loopd bundle* and nothing else. |
+| `.loopd/SNAPSHOT.json` | operator | `stat` every poll, `read` when the mtime moved. Absent ⇒ *board OFF* with the `touch` that turns it on (absence is the off switch — conventions 3 and 11) and nothing else. Unparseable ⇒ one line, and the next `write-snapshot.sh` run overwrites it. |
+| `projects/*/project.md` | simple | `title` and `status`. |
+| `projects/*/tasks/*.md` | simple | `title`, `status`, `open_questions` and the `### Q<n>` blocks. Listed every poll, read when an mtime moved. A list it cannot parse is drawn as *could not read*, never guessed. |
+
+Simple mode reads the task documents and not the snapshot because the snapshot carries no
+question text by design (conventions 11b) and is rewritten only by a clone that dispatches.
+The pane is local, never published — it shows what `AWAITING.md` and `/loopd:answer` already
+show this clone.
 
 The `.loopd/SNAPSHOT.json` spelling is `AB_SNAPSHOT` in `plugin/scripts/bundle-paths.sh`;
-`tests/mods.test.sh` asserts the module and that file agree, and that every path the module
-names is listed in this section.
+`tests/mods.test.sh` asserts the module and that file agree, that every path the module
+names — every quoted literal an fs call is given included — is listed in this section, and
+that a module which lists a directory spells its walk as a glob.
 
-## The two buttons
+## The two buttons — operator mode
 
 | Button | Does |
 |---|---|
@@ -77,14 +114,14 @@ source and on what `claude plugin validate` reads out of it:
 - **No model call** — nothing here spends the plan.
 - **No permission decision** — it never hooks `tool.check`; every event it sees is handed on.
 - **No process, no network, no environment** — `$.process`, `$.http` and `$.env` are never called.
-- **No write** — `$.fs.write` is never called, and `$.fs.ancestors` (which walks UP from the cwd) is never called either. The two reads above are the whole file-system footprint, and they are the one widening of the mod rule `tests/mods.test.sh` grants, to a mod whose README names its paths here.
+- **No write** — `$.fs.write` is never called, and `$.fs.ancestors` (which walks UP from the cwd) is never called either. The reads above are the whole file-system footprint, and they are the one widening of the mod rule `tests/mods.test.sh` grants, to a mod whose README names its paths here.
 - **No cross-session message** — `$.session.send` is not used; the cross-session half is unmeasured (`docs/spikes/mods-in-background-sessions.md`).
-- **No timer-driven run** — the poll reads a file; only a press runs the command, and nothing here ever submits a prompt.
+- **No timer-driven run** — the poll reads files; only a press runs a command, and nothing here ever submits a prompt.
 
 ## Tested with
 
-Claude Code **2.1.293** (`claude plugin validate . --strict` passes, `claude plugin test`
-9/9, 2026-10-09), written against the mods docs and the 2.1.289 `claude-code.d.ts`. Mods need
+Claude Code **2.1.300** (`claude plugin validate . --strict` passes, `claude plugin test`
+17/17, 2026-10-16), written against the mods docs and the 2.1.289 `claude-code.d.ts`. Mods need
 v2.1.287 or later. After a CLI update run, from this directory:
 
 ```
@@ -93,8 +130,11 @@ claude plugin test
 ```
 
 Settled by that run: `$.prompt.submit` refuses a text beginning with `/` ("would run a
-command as the user; run one with `$.command.run`"), so Tick is a `$.command.run`. Still
-assumed: that `ui.close` fires with `e.id` for a pane the person closes (else the poll outlives the
+command as the user; run one with `$.command.run`"), so Tick is a `$.command.run`. Measured on
+2.1.300: an interactive session lists `loopd-mod-pane.mode` in `/config` as a choice (a `-p`
+run lists no plugin rows), and a plugin's `$.command.run` runs a `disable-model-invocation`
+skill. Still assumed: that a `/config` change reaches a loaded module without a reload; that
+`ui.close` fires with `e.id` for a pane the person closes (else the poll outlives the
 pane until reload); that `$.fs.stat` rejects rather than resolving for a missing file (the
 code handles both).
 
