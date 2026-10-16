@@ -40,11 +40,25 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `${CLAUDE_PLUGIN_ROOT}/scripts/reclaim-worktree.sh <task-path>` — one task per call,
    driven by the task's own `worktree:`/`branch:`/`pr:` record, never by a scan.
    **Exit 0 only when that task is `done` AND every URL in its `pr:` has MERGED**; run it
-   for each task you just moved to `done`, and report what it removed. **Exit 1 is a
+   for each task you just moved to `done`, and report what it removed. **Stop the task's
+   own finished session first**: when
+   `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh worker <the task's session:>` prints
+   `worker <short> <pid>` (the daemon roster's live process for that session), run
+   `claude stop <short>` — `stop` refuses the full UUID — then
+   reclaim. That one recorded session only: never a process the task does not record,
+   never `claude rm`. **Exit 4 is a RETRY**: every live process in the tree is that
+   session's own, which can outlive the stop by a moment — no `# Notes` line, no
+   `AWAITING.md` row, nothing for the human. **Exit 1 is a
    REFUSAL** — a PR CLOSED-UNMERGED, an empty `pr:`, a dirty tree, an unpushed commit, an
-   ignored `.env`, a detached HEAD, a live process inside the tree. Record it on the task
-   as one `# Notes` line, `worktree retained: <reason>`, and never retry around it. Exit 3
-   is nothing to do.
+   ignored `.env`, a detached HEAD, a live process the session does not own. Record it,
+   and an exit 2, on the task as one `# Notes` line, `worktree retained: <reason>`, and
+   never retry around it. Exit 3 is nothing to do.
+
+   **The retry is the one time step 5 revisits a `done` task.** A `done` task whose
+   recorded `worktree:` is still on disk and whose `# Notes` hold no `worktree retained:`
+   line gets the same stop-then-reclaim on every tick — `tick-delta.sh` names this step
+   for it and never calls that tick IDLE — until reclaim exits 0 or 3, or a 1 or 2
+   writes the note.
 
    **`${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh` is unchanged and still report-only**,
    and it is still the only thing that sees a worktree no task record names: it classifies
@@ -54,8 +68,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `PRUNE_ACTIVE_MINUTES` mtime veto (default 120) is a backstop for the pruner, not the
    guard; your in-flight count is the guard. **The veto does not apply to
    `reclaim-worktree.sh`**: step 5 runs for `in-review` tasks, so a fast merge is always
-   reflected inside the window and no later tick revisits a `done` task — the live-process
-   check replaces it there.
+   reflected inside the window and only the retry above revisits a `done` task — the
+   live-process check replaces it there.
 
    **Sum what that task cost, against the PR(s) that merged.** For each task you move to
    `done`, once:

@@ -299,7 +299,7 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs url inflight=0 urls="" ntask nterm
+  local p d pst f st prs inflight=0 urls="" ntask nterm wtp
   for d in "$inst"/projects/*/; do
     [ -d "$d" ] || continue
     p="$d/project.md"
@@ -315,7 +315,7 @@ fingerprint() { # <probe|digest>
     # A done project is skipped at its FRONTMATTER, in both walks — the same rule the
     # tick and write-snapshot.sh already apply: nothing in a done project can need a
     # tick, and the point is the read that never happens.
-    [ "$pst" = done ] && continue
+    [ "$pst" = "done" ] && continue
 
     ntask=0; nterm=0
     for f in "$d"tasks/*.md; do
@@ -330,6 +330,11 @@ fingerprint() { # <probe|digest>
         printf 'task %s %s\n' "${f#"$inst"/}" "${st:-unset}"
       fi
       [ "$st" = "in-progress" ] && inflight=1
+      # Step 5's reclaim retry: nothing else on disk moves while an own-session refusal waits.
+      if [ "$st" = "done" ] && wtp="$(fmfirst "$f" worktree)" && [ -n "$wtp" ] && [ -d "$wtp" ] \
+         && ! grep -qF 'worktree retained:' "$f"; then
+        printf 'reclaim owed %s\n' "${f#"$inst"/}"; step5=1
+      fi
       if [ "$mode" = digest ]; then
         ntask=$((ntask + 1))
         case "${st:-unset}" in
@@ -408,6 +413,10 @@ case "$cmd" in
   check)
     if printf '%s\n' "$FP" | grep -qx 'inflight yes'; then
       echo "DELTA: task(s) in-progress — a live dispatch is owed its monitoring."
+      exit 1
+    fi
+    if printf '%s\n' "$FP" | grep -q '^reclaim owed '; then
+      echo "DELTA: a done task's worktree is still on disk — step 5 owes its reclaim a retry."
       exit 1
     fi
     [ -f "$STATE" ] || fail2 "no $STATE_NAME record yet (first tick, or an upgrade)"
