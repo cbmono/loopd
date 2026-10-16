@@ -29,7 +29,7 @@ reads its presence nowhere.
 | `loopd` | the control panel: every `/loopd:*` command, the two `PreToolUse` enforcement hooks, the role agents | the thing everything else is a companion **of** |
 | `loopd-yolo` | `companion/AUTONOMY.md`, the file that makes a project's `autonomy: yolo` mean something | the one companion a running loop is usually installed for; per project it is still opt-in (`autonomy:` defaults to `gated`), and the machine-wide off switch is below |
 | `loopd-mod-usage` | a mod that records each session's usage in the plugin store | observe-only, no cost, and `session-usage.sh` reads it before the transcript |
-| `loopd-mod-pane` | a mod whose `/board` draws this bundle's board in a pane | reads core's snapshot; its `simple` mode reads the task documents and answers through `/loopd:answer` |
+| `loopd-mod-pane` | a mod whose `/pane` draws this bundle's board in a pane | reads core's snapshot; its `simple` mode reads the task documents and answers through `/loopd:answer` |
 | `loopd-mod-signal` | a mod that tells the PM session a role agent's turn is over | observe-only; orders step 4's sweep and decides nothing |
 
 **Deliberately not in the list — `loopd-accounts` and `loopd-llm`.** Both are

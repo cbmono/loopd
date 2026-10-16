@@ -1,7 +1,7 @@
 # loopd-mod-pane — the board-in-a-pane companion (a mod)
 
 A [mod](https://code.claude.com/docs/en/plugins/mods/overview): a hooks module Claude Code
-runs **inside** every session that loads it. This one adds `/board`, which opens a pane
+runs **inside** every session that loads it. This one adds `/pane`, which opens a pane
 drawing this bundle's board beside the transcript (or above the prompt in a narrow
 terminal), and nothing else.
 
@@ -103,7 +103,7 @@ that a module which lists a directory spells its walk as a glob.
 | **Refresh** (`r`) | re-read the snapshot now, mtime or not. |
 
 Where no surface places the pane (a terminal under the width floor, a `claude -p` run),
-`/board` prints one dim `● loopd-mod-pane:` line with the header counts instead.
+`/pane` prints one dim `● loopd-mod-pane:` line with the header counts instead.
 
 ## What it never does
 

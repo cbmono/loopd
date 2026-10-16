@@ -68,6 +68,7 @@ type World = {
   prompted: unknown[]
   reads: number
   opened: number
+  registered: string[]
   onRun?: (e: any) => void
   failReads?: Set<string>
 }
@@ -77,7 +78,7 @@ type World = {
 // `hold` makes the dispatch run stay in flight until the test lets it go (a mock-clock sleep).
 function stubs(on: any, w: World, placed = true, hold?: () => Promise<void>) {
   on('session.start', () => ({ cwd: CWD }))
-  on('command.register', () => ({ value: undefined }))
+  on('command.register', (_$: any, e: any) => { w.registered.push(e.name); return { value: undefined } })
   on('session.cwd', () => ({ value: CWD }))
   on('ui.log', (_$: any, e: any) => { w.logged.push(e.text); return { value: undefined } })
   on('ui.open', () => { w.opened += 1; return { value: placed ? { isPlaced: true } : { isPlaced: false, reason: 'the terminal is 80 columns' } } })
@@ -116,12 +117,12 @@ function world(snapshot: unknown | null, withConfig = true): World {
   const files = new Map<string, { text: string; mtimeMs: number }>()
   if (withConfig) files.set(CONFIG, { text: '{}', mtimeMs: 1 })
   if (snapshot !== null) files.set(SNAPSHOT, { text: typeof snapshot === 'string' ? snapshot : JSON.stringify(snapshot), mtimeMs: 1000 })
-  return { files, logged: [], submitted: [], prompted: [], reads: 0, opened: 0 }
+  return { files, logged: [], submitted: [], prompted: [], reads: 0, opened: 0, registered: [] }
 }
 
 async function open($: any) {
   await $.session.start({ surface: 'terminal', isInteractive: true, cwd: CWD })
-  const out = await $.command.run({ command: 'board', args: '' })
+  const out = await $.command.run({ command: 'pane', args: '' })
   return out
 }
 
@@ -132,7 +133,7 @@ async function shown(ui: any): Promise<string> {
   return all.map((el: any) => el.text).join('\n')
 }
 
-test('/board opens the pane and draws the counts, the rail, in-flight tasks and projects', async ($, on) => {
+test('/pane opens the pane and draws the counts, the rail, in-flight tasks and projects', async ($, on) => {
   const w = world(SNAP)
   stubs(on, w)
   mock.clock(on)
@@ -306,6 +307,7 @@ test('a non-interactive session registers the command and says nothing', async (
   stubs(on, w)
   mock.clock(on)
   await $.session.start({ surface: 'terminal', isInteractive: false, cwd: CWD })
+  expect(w.registered).toEqual(['pane'])
   expect(w.logged).toEqual([])
   expect(w.reads).toBe(0)
   expect(w.submitted).toEqual([])
