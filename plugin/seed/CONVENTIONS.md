@@ -70,7 +70,8 @@ above it so none may grow its share.
      the gap once; reporting it fixes nothing, and the same gap blocks the next task and
      the one after.
   3. **Only then hand back exact instructions** — the commands, the paths, the output to
-     expect — for a human to run, and only when no tool could have let you do it.
+     expect — for a human to run, and only when no tool could have let you do it. They
+     go in the task's `open_questions`, never only in your final message.
 
   **THE LADDER COVERS CAPABILITY GAPS ONLY. AN AUTHORITY GAP STAYS HUMAN REGARDLESS OF
   WHAT TOOL IS AVAILABLE.** "I can't" has two meanings and only one of them is yours:
@@ -682,8 +683,9 @@ above it so none may grow its share.
     findings outside that set are **recorded, not blocking**.
   - **There is no round 3.** Anything still unresolved after round 2 **stops and goes to
     the human**, with both positions stated in one short block: what the reviewer wants,
-    what the implementer says, and what the criterion actually asks for. The human
-    decides; the agents do not converge on it.
+    what the implementer says, and what the criterion actually asks for. The block goes in
+    the task's `open_questions`, not the final message. The human decides; the agents do
+    not converge on it.
   **Why this is a hard number and not a guideline.** ai-bridge#34 ran **eight rounds**,
   and rounds 3-8 produced adversary-shaped findings against a change that already met its
   criteria — the reviewer kept finding new ground to contest because nothing told it to
@@ -895,6 +897,15 @@ above it so none may grow its share.
   non-empty). It is not a promotion gate and never blocks your round.
 - Write the PR URL and a `# Result` summary back into the task document, and set
   the task `status: in-review` (or `blocked`, with why, if you can't proceed).
+- **A round's final message is a report, not an ask** — `software-engineer`,
+  `devops-engineer` and `qa-reviewer`, the roles a tick runs as `claude --bg` sessions.
+  It says what exists — the PRs, the criteria tally, the task note you wrote — and ends
+  with **one status line**. **Anything the human must decide or provide goes in the task's
+  `open_questions`**, the only field that reaches `AWAITING.md`; `# Notes` is for the
+  record. A final message nobody reads is an ask that is lost. Measured 2026-10-15, as a
+  correlation: every round whose final message addressed the human ended `blocked`, every
+  one that reported an artifact ended `done`. Unconfirmed; the CLI's verdict is read
+  through `agent-sessions.sh state`, never predicted.
 - **No customer PII** in code, commits, or PR text; **never echo, print, or log
   secrets or environment variables** (rely on existing env / `.npmrc` for auth).
 - **Capture knowledge:** if you discover something durable and reusable, write or
