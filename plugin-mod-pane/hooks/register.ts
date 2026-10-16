@@ -21,6 +21,7 @@ const DISPATCH = 'loopd:dispatch'   // the command, without its slash, as $.comm
 // write-snapshot.sh's verb set, minus nothing: the pane names the verb, never the reason.
 const VERBS = ['approve', 'answer', 'merge', 'unblock', 'close'] as const
 const ANSWER = 'loopd:answer'
+const NEW_PROJECT = 'loopd:new-project'
 // The simple mode's whole walk. The list and read calls below are derived from these two
 // globs, so the README's declaration of them is the declaration of the walk.
 const TASK_DOCS = 'projects/*/tasks/*.md'
@@ -263,8 +264,8 @@ function draw($: any, e: any): any {
 // ---------------------------------------------------------------- simple mode
 type Question = { label: string; text: string; options: string[]; first: boolean }
 type Item = { slug: string; file: string; mtimeMs: number; title: string; status: string; questions: Question[]; unreadable: boolean }
-type Simple = { slug: string; title: string; done: number; total: number; items: Item[] }
-type Doc = { title: string; status: string; open: string[] | null; body: string } | null
+type Simple = { slug: string; title: string; autonomy: string; done: number; total: number; items: Item[] }
+type Doc = { title: string; status: string; autonomy: string; open: string[] | null; body: string } | null
 
 let simple: Simple[] = []
 let docs = new Map<string, { mtimeMs: number; doc: Doc }>()
@@ -275,6 +276,11 @@ let sendNote = ''        // the line drawn after a run: a refusal, or where `mor
 // 2.1.300), so an answered question is held until its document's mtime moves, or until a
 // turn that started after the press completes without moving it (answer.sh refused).
 let held = new Map<string, { mtimeMs: number; at: number; text: string }>()
+const FIELDS = [['title', 'Title', 'a short name'], ['what', 'What', 'what it should do, in a line'],
+  ['whom', 'For whom', 'who needs it'], ['done', 'Done when', 'how you will know; separate several with ;']] as const
+let form: Record<string, string> = { title: '', what: '', whom: '', done: '' }
+let creating: { at: number; slugs: Set<string>; title: string } | null = null
+let createNote = ''
 
 // The YAML subset fold-answers.sh's --list reads (a flow or block list of scalars, its
 // escapes only). Anything else is null, drawn as "could not read" — never a guess.
@@ -330,6 +336,7 @@ function parse(text: string): Doc {
   return {
     title: scalar((fm.match(/^title:(.*)$/m) || [])[1]),
     status: scalar((fm.match(/^status:(.*)$/m) || [])[1]),
+    autonomy: scalar((fm.match(/^autonomy:(.*)$/m) || [])[1]),
     open: oq ? list(fm, oq.index! + oq[0].length) : [],
     body: text.slice(end + 4),
   }
@@ -405,7 +412,7 @@ async function refreshSimple($: any): Promise<boolean> {
     const pd = pf ? await doc($, pdir + '/' + PROJECT_FILE, pf.mtimeMs) : null
     if (pf) { const c = docs.get(pdir + '/' + PROJECT_FILE); if (c) seen.set(pdir + '/' + PROJECT_FILE, c); s += pdir + ':' + pf.mtimeMs + (c ? ';' : '!;') }
     if (pd && (pd.status === 'done' || pd.status === 'cancelled')) continue
-    const row: Simple = { slug: p.name, title: (pd && clean(pd.title)) || p.name, done: 0, total: 0, items: [] }
+    const row: Simple = { slug: p.name, title: (pd && clean(pd.title)) || p.name, autonomy: pd ? pd.autonomy : '', done: 0, total: 0, items: [] }
     for (const t of await entries($, pdir + '/' + TASKS_DIR)) {
       if (t.kind !== 'file' || !t.name.endsWith(TASK_SUFFIX) || !SAFE.test(t.name)) continue
       const path = pdir + '/' + TASKS_DIR + '/' + t.name
@@ -428,6 +435,14 @@ async function refreshSimple($: any): Promise<boolean> {
     if (h && h.mtimeMs === it.mtimeMs) live.set(id, h)
   }
   held = live
+  if (creating) {
+    const made = next.find(r => r.autonomy && !creating!.slugs.has(r.slug))
+    if (made) {
+      createNote = 'Created "' + made.title + '". ' + (made.autonomy === 'yolo' ? 'Its first questions will appear here.' : 'It moves only as far as the operator approves.')
+      creating = null
+      for (const f of FIELDS) form[f[0]] = ''
+    }
+  }
   const was = kind
   kind = 'ok'; detail = ''; simple = next
   if (s === sig && was === 'ok') return false
@@ -458,6 +473,29 @@ async function send($: any, it: Item, q: Question, reply: string): Promise<void>
   let p: any = null
   try { p = $.command.run({ command: ANSWER, args }) } catch (err) { void done(err); return }
   if (p && typeof p.then === 'function') p.then(() => done(), (err: unknown) => done(err ?? 'refused')); else void done()
+  try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
+}
+
+function q(s: string): string { return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"' }
+
+async function create($: any): Promise<void> {
+  if (creating) return
+  const v: Record<string, string> = {}
+  for (const f of FIELDS) v[f[0]] = clean(form[f[0]])
+  if (FIELDS.some(f => !v[f[0]])) { createNote = 'Fill in all four fields to create a project.'; $.ui.invalidate('ui.render'); return }
+  let at = 0
+  try { at = await $.clock.now() } catch { at = 0 }
+  creating = { at, slugs: new Set(simple.map(p => p.slug)), title: v.title }
+  createNote = ''
+  const args = q(v.what) + ' kind=build autonomy=yolo title=' + q(v.title) + ' need=' + q(v.whom) + ' success_criteria=' + q(v.done) + ' --no-ask'
+  const failed = (err: unknown) => {
+    creating = null
+    createNote = 'Could not create the project: ' + (clean(err && (err as any).message ? (err as any).message : String(err)) || 'refused')
+    try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
+  }
+  let p: any = null
+  try { p = $.command.run({ command: NEW_PROJECT, args }) } catch (err) { failed(err); return }
+  if (p && typeof p.then === 'function') p.then(() => undefined, (err: unknown) => failed(err ?? 'refused'))
   try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
 }
 
@@ -508,6 +546,18 @@ function drawSimple($: any, e: any): any {
       rows.push(line('  Unblock "' + it.title + '" in ' + p.title + ': it cannot move until you do.'))
     }
     if (b === 0) rows.push(line('Nothing is blocked.', { dimColor: true }))
+
+    rows.push(line(' '))
+    rows.push(line('New project', { bold: true }))
+    if (creating) rows.push(line('  Creating "' + creating.title + '"…', { dimColor: true }))
+    else {
+      for (const [k, label, hint] of FIELDS) {
+        if (Input) rows.push(Input({ key: 'new-' + k, label, placeholder: hint, value: form[k], submitLabel: 'keep',
+          onInput: (v: string) => { form[k] = v }, onSubmit: (v: string) => { form[k] = v; $.ui.invalidate('ui.render') } }))
+      }
+      rows.push(Button({ key: 'new-create', label: 'Create', onPress: () => create($) }))
+    }
+    if (createNote) rows.push(line('  ' + createNote, { dimColor: true }))
   }
   if (sendNote) rows.push(line(sendNote, { dimColor: true }))
   rows.push(line(' '))
@@ -518,9 +568,10 @@ function drawSimple($: any, e: any): any {
 // A main-loop turn that started after a held answer's press is that answer's turn (a plugin's
 // command runs once the session is idle); if it ends with the document unmoved, release it.
 async function settle($: any, e: any): Promise<void> {
-  if (MODE !== 'simple' || held.size === 0 || (e && e.agentId)) return
+  if (MODE !== 'simple' || (held.size === 0 && !creating) || (e && e.agentId)) return
   const started = (await $.clock.now()) - toint(e && e.durationMs)
   await refreshSimple($)
+  if (creating && started >= creating.at) { creating = null; createNote = 'The project was not created — the conversation says why.' }
   let dropped = ''
   for (const [id, h] of held) if (started >= h.at) { held.delete(id); dropped = h.text }
   if (dropped) sendNote = 'Your answer to "' + dropped + '" did not change the task — see the conversation, then answer again.'
