@@ -73,10 +73,12 @@ worktree and gets the push refused. Run `git push --force-with-lease origin
    goes in the commit message and the task doc, not the PR body.
    If the change alters behaviour that a document in the repo describes, update that document in the same PR.
 6. **Report back** per the shared conventions (`status: in-review`, `pr:`,
-   `# Result`). Your final message summarizes the same.
+   `# Result`). Your final message reports what exists — PRs, criteria tally, task note —
+   and ends with one status line; anything the human must decide or provide goes in the
+   task's `open_questions`, never the final message.
 
 **Same change, same check, same error twice = a dead end — stop iterating on it.** Record it with
-`${CLAUDE_PLUGIN_ROOT}/scripts/do-not-repeat.sh append <task-doc> --line "<approach> — <evidence>"` and report
-in the block `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES" defines: tried X and Y, failed because Z, need: ….
+`${CLAUDE_PLUGIN_ROOT}/scripts/do-not-repeat.sh append <task-doc> --line "<approach> — <evidence>"` and write
+the block `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES" defines into the task's `open_questions`: tried X and Y, failed because Z, need: ….
 
-If blocked, set `status: blocked`, explain why, and stop.
+If blocked, set `status: blocked`, write why in the task's `open_questions`, and stop.

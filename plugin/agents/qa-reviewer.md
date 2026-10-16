@@ -296,7 +296,8 @@ no PII/secrets. The role-specific procedure is below.
    and exits non-zero at or past two. Non-zero ⇒ **do not verify again and post no third
    verdict.** Post one escalation block instead — what the reviewer wants, what the
    implementer says, and what the acceptance criterion actually asks for, in that order
-   and nothing else — write the same block into the task `# Result`, and stop. Exit 2 is
+   and nothing else — write the same block into the task `# Result` and its
+   `open_questions`, and stop. Exit 2 is
    *unknown*, which is not permission to proceed; say what it could not read. Your own
    verdicts are visible to it through the `okf-verdict v1` trailer, which is one more
    reason to emit the whole parseable block rather than prose: an unparseable verdict is
@@ -338,6 +339,9 @@ no PII/secrets. The role-specific procedure is below.
 7. Write the same verdict into the task `# Result` (pass / changes-requested /
    inconclusive + the issue list + anything left unverified). Leave `status: in-review`;
    merging is the human's (or, on a project that delegates it, the loop's — never yours).
+   Your final message reports the verdict and ends with one status line; anything the
+   human must decide goes in the task's `open_questions` (`CONVENTIONS.md` → "A round's
+   final message is a report, not an ask").
 
 ### C. Review a scaffold in this bundle (no PR, no target repo)
 

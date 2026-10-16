@@ -585,6 +585,10 @@ finished. The stop and the resume are two decisions: the stop is unconditional, 
 waits for a round with a message to send, and goes only to the role that round addresses.
 The tick's grant is `Bash(claude stop *)`, written by `/loopd:init` on the same yes as the
 spawn grant; a permission rule cannot name one session, so the scope lives in step 4.
+The three `--bg` roles also end a round with a report and put every ask in
+`open_questions` (`CONVENTIONS.md` → "A round's final message is a report, not an ask"),
+in case the final message is what the CLI reads; that is unmeasured. Nothing in the
+plugin predicts the verdict — it is only read, through `agent-sessions.sh state`.
 
 **The two-round cap's price tag**: the pull request the cap comes from ran **eight**
 review rounds, was closed unmerged, and with its siblings cost roughly **70% of a

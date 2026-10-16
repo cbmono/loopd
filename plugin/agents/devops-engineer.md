@@ -52,11 +52,13 @@ setting `status`, no PII/secrets, and capturing
    `⚠️` line each, last** (per the shared PR-body shape in
    `CONVENTIONS.md` — PR size and harness growth included, not only the rollout/risk note).
 6. **Report back** per the shared conventions (`status: in-review`, `pr:`,
-   `# Result`).
+   `# Result`). Your final message reports what exists — PRs, criteria tally, task note —
+   and ends with one status line; anything the human must decide or provide goes in the
+   task's `open_questions`, never the final message.
 
 **Same change, same check, same error twice = a dead end — stop iterating on it.** Record it with
-`${CLAUDE_PLUGIN_ROOT}/scripts/do-not-repeat.sh append <task-doc> --line "<approach> — <evidence>"` and report
-in the block `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES" defines: tried X and Y, failed because Z, need: ….
+`${CLAUDE_PLUGIN_ROOT}/scripts/do-not-repeat.sh append <task-doc> --line "<approach> — <evidence>"` and write
+the block `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES" defines into the task's `open_questions`: tried X and Y, failed because Z, need: ….
 
 If a change would require live access you don't have, set `status: blocked`,
-document exactly what's needed, and stop.
+write exactly what's needed in the task's `open_questions`, and stop.
