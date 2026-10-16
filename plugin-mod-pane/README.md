@@ -69,7 +69,9 @@ test asserts their absence against task documents that carry all of them.
 `answer.sh` does the writing; this pane writes nothing. The run is a model turn queued until
 the session is idle, and it resolves when queued, before the document moves (measured on
 2.1.300), so while one is queued every answer control is hidden, and an answered question
-stays *Sending your answer…* until its document's mtime moves. A refused run is drawn.
+stays *Sending your answer…* until its document's mtime moves — or until the turn that ran
+it ends with the document unmoved (`answer.sh` refused), when its controls come back with a
+note. A refused run is drawn. A read that fails is retried on the next scan.
 
 ## What it reads
 
@@ -90,8 +92,8 @@ show this clone.
 
 The `.loopd/SNAPSHOT.json` spelling is `AB_SNAPSHOT` in `plugin/scripts/bundle-paths.sh`;
 `tests/mods.test.sh` asserts the module and that file agree, that every path the module
-names is listed in this section, and that a module which lists a directory spells its walk
-as a glob.
+names — every quoted literal an fs call is given included — is listed in this section, and
+that a module which lists a directory spells its walk as a glob.
 
 ## The two buttons — operator mode
 
@@ -119,7 +121,7 @@ source and on what `claude plugin validate` reads out of it:
 ## Tested with
 
 Claude Code **2.1.300** (`claude plugin validate . --strict` passes, `claude plugin test`
-15/15, 2026-10-15), written against the mods docs and the 2.1.289 `claude-code.d.ts`. Mods need
+17/17, 2026-10-16), written against the mods docs and the 2.1.289 `claude-code.d.ts`. Mods need
 v2.1.287 or later. After a CLI update run, from this directory:
 
 ```

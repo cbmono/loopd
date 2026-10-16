@@ -272,8 +272,9 @@ let sig = ''             // names and mtimes of every file the last scan saw; a 
 let sending = ''         // the question whose /loopd:answer run is queued; '' = none
 let sendNote = ''        // the line drawn after a run: a refusal, or where `more` printed
 // The run resolves once the command is queued, before answer.sh has written (measured on
-// 2.1.300), so an answered question stays held until its document's mtime moves.
-let held = new Map<string, number>()
+// 2.1.300), so an answered question is held until its document's mtime moves, or until a
+// turn that started after the press completes without moving it (answer.sh refused).
+let held = new Map<string, { mtimeMs: number; at: number; text: string }>()
 
 // The YAML subset fold-answers.sh's --list reads (a flow or block list of scalars, its
 // escapes only). Anything else is null, drawn as "could not read" — never a guess.
@@ -379,7 +380,8 @@ async function doc($: any, path: string, mtimeMs: number): Promise<Doc> {
   let text: unknown = null
   try { text = await $.fs.read(path) } catch { text = null }
   reads += 1
-  const d = typeof text === 'string' ? parse(text) : null
+  if (typeof text !== 'string') return null
+  const d = parse(text)
   docs.set(path, { mtimeMs, doc: d })
   return d
 }
@@ -401,15 +403,16 @@ async function refreshSimple($: any): Promise<boolean> {
     const files = await entries($, pdir)
     const pf = files.find(f => f.name === PROJECT_FILE && f.kind === 'file')
     const pd = pf ? await doc($, pdir + '/' + PROJECT_FILE, pf.mtimeMs) : null
-    if (pf) { seen.set(pdir + '/' + PROJECT_FILE, docs.get(pdir + '/' + PROJECT_FILE)!); s += pdir + ':' + pf.mtimeMs + ';' }
+    if (pf) { const c = docs.get(pdir + '/' + PROJECT_FILE); if (c) seen.set(pdir + '/' + PROJECT_FILE, c); s += pdir + ':' + pf.mtimeMs + (c ? ';' : '!;') }
     if (pd && (pd.status === 'done' || pd.status === 'cancelled')) continue
     const row: Simple = { slug: p.name, title: (pd && clean(pd.title)) || p.name, done: 0, total: 0, items: [] }
     for (const t of await entries($, pdir + '/' + TASKS_DIR)) {
       if (t.kind !== 'file' || !t.name.endsWith(TASK_SUFFIX) || !SAFE.test(t.name)) continue
       const path = pdir + '/' + TASKS_DIR + '/' + t.name
       const d = await doc($, path, t.mtimeMs)
-      seen.set(path, docs.get(path)!)
-      s += path + ':' + t.mtimeMs + ';'
+      const c = docs.get(path)
+      if (c) seen.set(path, c)
+      s += path + ':' + t.mtimeMs + (c ? ';' : '!;')
       const status = d ? d.status : ''
       if (status === 'cancelled') continue
       row.total += 1
@@ -419,10 +422,10 @@ async function refreshSimple($: any): Promise<boolean> {
     next.push(row)
   }
   docs = seen
-  const live = new Map<string, number>()
+  const live = new Map<string, { mtimeMs: number; at: number; text: string }>()
   for (const r of next) for (const it of r.items) for (const q of it.questions) {
-    const id = it.slug + '/' + it.file + '#' + q.label
-    if (held.get(id) === it.mtimeMs) live.set(id, it.mtimeMs)
+    const id = it.slug + '/' + it.file + '#' + q.label, h = held.get(id)
+    if (h && h.mtimeMs === it.mtimeMs) live.set(id, h)
   }
   held = live
   const was = kind
@@ -437,14 +440,16 @@ function bar(done: number, total: number): string {
   return '█'.repeat(f) + '░'.repeat(w - f) + ' ' + done + '/' + total + ' done'
 }
 
-function send($: any, it: Item, q: Question, reply: string): void {
+async function send($: any, it: Item, q: Question, reply: string): Promise<void> {
   if (sending || !reply) return
   sending = it.slug + '/' + it.file + '#' + q.label
   sendNote = ''
+  let at = 0
+  try { at = await $.clock.now() } catch { at = 0 }
   const args = PROJECTS_DIR + '/' + it.slug + '/' + TASKS_DIR + '/' + it.file + (q.label ? ' ' + q.label : '') + ' ' + reply
   const done = async (err?: unknown) => {
     sending = ''
-    if (err === undefined && reply !== 'more') held.set(it.slug + '/' + it.file + '#' + q.label, it.mtimeMs)
+    if (err === undefined && reply !== 'more') held.set(it.slug + '/' + it.file + '#' + q.label, { mtimeMs: it.mtimeMs, at, text: q.text })
     if (err !== undefined) sendNote = 'Could not send that answer: ' + (clean(err && (err as any).message ? (err as any).message : String(err)) || 'refused')
     else if (reply === 'more') sendNote = 'More detail on "' + q.text + '" is in the conversation.'
     try { await refreshSimple($) } catch { /* the next poll reads again */ }
@@ -478,7 +483,8 @@ function drawSimple($: any, e: any): any {
         rows.push(line(' '))
         rows.push(line('  ' + p.title + ' · ' + it.title, { dimColor: true }))
         rows.push(line('  ' + q.text, { bold: true }))
-        if (sending === id || held.get(id) === it.mtimeMs) { rows.push(line('  Sending your answer…', { dimColor: true })); continue }
+        const h = held.get(id)
+        if (sending === id || (h && h.mtimeMs === it.mtimeMs)) { rows.push(line('  Sending your answer…', { dimColor: true })); continue }
         if (sending) continue
         if (!q.label && !q.first) { rows.push(line('  Answer the question above first.', { dimColor: true })); continue }
         const k = 'q' + n
@@ -507,6 +513,18 @@ function drawSimple($: any, e: any): any {
   rows.push(line(' '))
   rows.push(Button({ key: 'refresh', label: 'Refresh', hotkey: 'r', onPress: async () => { await refreshSimple($); $.ui.invalidate('ui.render') } }))
   return Box({ flexDirection: 'column', children: rows })
+}
+
+// A main-loop turn that started after a held answer's press is that answer's turn (a plugin's
+// command runs once the session is idle); if it ends with the document unmoved, release it.
+async function settle($: any, e: any): Promise<void> {
+  if (MODE !== 'simple' || held.size === 0 || (e && e.agentId)) return
+  const started = (await $.clock.now()) - toint(e && e.durationMs)
+  await refreshSimple($)
+  let dropped = ''
+  for (const [id, h] of held) if (started >= h.at) { held.delete(id); dropped = h.text }
+  if (dropped) sendNote = 'Your answer to "' + dropped + '" did not change the task — see the conversation, then answer again.'
+  $.ui.invalidate('ui.render')
 }
 
 function summarySimple(): string {
@@ -549,6 +567,11 @@ export function register(on: any, options?: any) {
     if (!placed) $.ui.log(MODE === 'simple' ? summarySimple() : summary())
     return {}
   }).catch(async (_$: any, e: any, next: any) => next(e))   // fail OPEN: a broken pane never eats the command
+
+  on('turn.complete', async ($: any, e: any, next: any) => {
+    try { await settle($, e) } catch { /* the next poll reads again */ }
+    return next(e)
+  })
 
   on('ui.close', { id: PANE }, async (_$: any, e: any, next: any) => {
     if (timer) { try { timer.cancel() } catch { /* already gone */ } timer = null }

@@ -69,6 +69,7 @@ type World = {
   reads: number
   opened: number
   onRun?: (e: any) => void
+  failReads?: Set<string>
 }
 
 // Every stub the mod's hooks can reach, registered before the first call on `$`.
@@ -85,6 +86,7 @@ function stubs(on: any, w: World, placed = true, hold?: () => Promise<void>) {
   // begins with `/`); the stub records what reached it. The prompt.submit stub stays so a
   // regression back to a prompt is counted too (asserted zero).
   on('command.run', async (_$: any, e: any) => { w.submitted.push(e); if (hold) await hold(); if (w.onRun) w.onRun(e); return {} })
+  on('turn.complete', () => ({ text: '' }))
   on('prompt.submit', (_$: any, e: any) => { w.prompted.push(e); return { text: e.text } })
   on('fs.exists', (_$: any, e: any) => ({ value: w.files.has(e.path) }))
   on('fs.stat', (_$: any, e: any) => {
@@ -105,6 +107,7 @@ function stubs(on: any, w: World, placed = true, hold?: () => Promise<void>) {
   on('fs.read', (_$: any, e: any) => {
     const f = w.files.get(e.path)
     w.reads += 1
+    if (w.failReads && w.failReads.delete(e.path)) return { deny: 'EACCES' }
     return f ? { value: f.text } : { deny: 'ENOENT' }
   })
 }
@@ -459,5 +462,40 @@ test('the bar follows the task documents: the poll re-reads only a file whose mt
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await shown(ui)).toContain('████░░░░░░ 2/5 done · Alpha project')
   expect(w.submitted).toEqual([])
+  await ui.unmount()
+})
+
+test('a failed read is retried on the next scan, not cached under the unchanged mtime', SIMPLE, async ($, on) => {
+  const w = bundle()
+  w.failReads = new Set([P + '/alpha/tasks/task-002-colour.md'])
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await shown(ui)).toContain('Could not read the questions in "task-002-colour.md"')
+  await ui.press({ key: 'refresh' })
+  expect(await shown(ui)).toContain('Which colour, given the brand, ships first?')
+  await ui.unmount()
+})
+
+test('a held answer is released when its own turn ends without moving the document', SIMPLE, async ($, on) => {
+  const w = bundle()
+  stubs(on, w)
+  const clock = mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await clock.advance(10000)
+  await ui.press({ key: 'q1-opt2' })
+  expect(await ui.find({ key: 'q1-opt1' })).toBeUndefined()
+  // A turn that was already running before the press is not the answer's turn.
+  await clock.advance(1000)
+  await $.turn.complete({ turnId: 'before', answer: '', durationMs: 5000, isAborted: false, usage: null, reason: 'answer' })
+  expect(await shown(ui)).toContain('Sending your answer…')
+  // The answer's turn ends and answer.sh wrote nothing (it refused): the controls come back.
+  await clock.advance(1000)
+  await $.turn.complete({ turnId: 'answer', answer: '', durationMs: 500, isAborted: false, usage: null, reason: 'answer' })
+  expect(await shown(ui)).not.toContain('Sending your answer…')
+  expect(await shown(ui)).toContain('did not change the task')
+  expect(await ui.find({ key: 'q1-opt1' })).toBeDefined()
   await ui.unmount()
 })

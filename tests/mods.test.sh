@@ -62,8 +62,14 @@ reads_section() { awk '/^## What it reads/ { p = 1; next } /^## / { p = 0 } p' "
 # Every quoted path literal a module spells, either quote style — the paths a reader can
 # name: a `.json`/`.md` file, the three names of git's own worktree layout that the
 # plugin's deny hook walks too (`.git`, `commondir`, the `loopd-bundle` marker), and any
-# glob (a quoted string carrying `*`).
-path_literals() { grep -oE "['\"][^'\"]*(\.(json|md)|\.git|commondir|loopd-bundle|\*[^'\"]*)['\"]" "$1" 2>/dev/null | tr -d "'\"" | LC_ALL=C sort -u; }
+# glob (a quoted string carrying `*`) — plus every quoted literal inside an fs call's own
+# arguments, so `$.fs.list("secrets")` beside a declared glob still needs declaring. A
+# separator-only literal (`'/'`) names nothing. A path held in a variable is not seen here.
+path_literals() {
+  { grep -oE "['\"][^'\"]*(\.(json|md)|\.git|commondir|loopd-bundle|\*[^'\"]*)['\"]" "$1" 2>/dev/null
+    grep -oE '\$\.fs\.(read|stat|exists|list)\([^)]*\)' "$1" 2>/dev/null | grep -oE "['\"][^'\"]*['\"]"
+  } | tr -d "'\"" | grep -vE '^/*$' | LC_ALL=C sort -u
+}
 globs() { grep -oE "['\"][^'\"]*\*[^'\"]*['\"]" "$1" 2>/dev/null | grep -c . | tr -d ' '; }
 # yes when the README has the section AND every path literal the module names is in it.
 # Prints the missing ones on stderr so a FAIL names the path rather than a count.
@@ -220,6 +226,11 @@ while IFS='|' read -r RSRC RREADME; do
   # A walk the README does not name is refused the same way: the glob is the path.
   { cat "$RSRC"; printf '\nconst STRAY = %s\nasync function walk($: any) { return $.fs.list(STRAY.split("/")[0]) }\n' "'secrets/*/keys'"; } > "$TMP/strayglob.ts"
   ok "$rname: …a glob the README does not name is refused" "$(reads_declared "$TMP/strayglob.ts" "$RREADME" 2>/dev/null)" no
+  # Beside the declared globs, a listing of an undeclared directory is still refused, by name.
+  { cat "$RSRC"; printf '\nasync function peek($: any, root: string) { return $.fs.list(%s) }\n' "'secrets'"; } > "$TMP/mixedlist.ts"
+  named="$(reads_declared "$TMP/mixedlist.ts" "$RREADME" 2>&1 >/dev/null)"
+  ok "$rname: …a \$.fs.list of an undeclared directory beside a declared glob is refused" \
+     "$(reads_declared "$TMP/mixedlist.ts" "$RREADME" 2>/dev/null)/$(grep -c 'NOT DECLARED IN README: secrets$' <<<"$named")" no/1
   # The shipped README passes the same reader, so the refusals above are not a reader that
   # says no to everything.
   ok "$rname: …while the shipped module and README agree" "$(reads_declared "$RSRC" "$RREADME")" yes
