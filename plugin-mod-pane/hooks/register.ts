@@ -12,7 +12,7 @@
 // absence on this source, so none of those is spelled here even as a comment.
 
 const PANE = 'loopd-board'
-const COMMAND = 'board'
+const COMMAND = 'pane'
 const TITLE = 'loopd board'
 const CONFIG = 'instance.config.json'
 const SNAPSHOT = '.loopd/SNAPSHOT.json'
@@ -61,7 +61,7 @@ type Board = {
   rows: Project[]
 }
 
-// Module state. A reload starts it over, and the next poll or /board fills it again.
+// Module state. A reload starts it over, and the next poll or /pane fills it again.
 let kind: Kind = 'unread'
 let board: Board | null = null
 let detail = ''          // the one line a non-ok kind shows
@@ -544,7 +544,7 @@ async function reread($: any, force: boolean): Promise<boolean> {
 export function register(on: any, options?: any) {
   MODE = options && options.mode === 'simple' ? 'simple' : 'operator'
   on('session.start', async ($: any, e: any, next: any) => {
-    // `immediate` so /board opens while a turn is streaming. A taken name throws and
+    // `immediate` so /pane opens while a turn is streaming. A taken name throws and
     // would skip the rest of this hook, so it is caught and said once, where someone can see it.
     try {
       await $.command.register({ name: COMMAND, description: 'Draw this bundle\'s loopd board in a pane', immediate: true })
@@ -580,7 +580,7 @@ export function register(on: any, options?: any) {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($: any, e: any) => {
     if (kind === 'unread') {
-      // Drawn before /board ran (a reload while the pane stayed up): read, then redraw.
+      // Drawn before /pane ran (a reload while the pane stayed up): read, then redraw.
       reread($, true).then(() => $.ui.invalidate('ui.render'), () => $.ui.invalidate('ui.render'))
     }
     return MODE === 'simple' ? drawSimple($, e) : draw($, e)

@@ -2,7 +2,7 @@
   "name": "loopd-mod-pane",
   "displayName": "loopd — pane (a mod that draws the board inside the session)",
   "version": "3.0.0",
-  "description": "COMPANION, a mod. /board opens a pane beside the session. In operator mode (the default) it draws the board — in-flight tasks, the need-you rail, per-project counts — from .loopd/SNAPSHOT.json, with Tick (/loopd:dispatch) and Refresh. In simple mode it draws per project a done/total bar, each open question with its options, a text field and More, and each blocked task as one sentence, read from the task documents; every answer runs /loopd:answer. No model call, no permission decision, no process, no network, no write. Not installed = the three core renderers are all there is.",
+  "description": "COMPANION, a mod. /pane opens a pane beside the session. In operator mode (the default) it draws the board — in-flight tasks, the need-you rail, per-project counts — from .loopd/SNAPSHOT.json, with Tick (/loopd:dispatch) and Refresh. In simple mode it draws per project a done/total bar, each open question with its options, a text field and More, and each blocked task as one sentence, read from the task documents; every answer runs /loopd:answer. No model call, no permission decision, no process, no network, no write. Not installed = the three core renderers are all there is.",
   "userConfig": {
     "mode": {
       "type": "string",

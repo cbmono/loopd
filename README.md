@@ -86,7 +86,7 @@ loads it, each doing one thing and nothing else, each off by uninstalling it:
 | Mod | What it does |
 |---|---|
 | `loopd-mod-usage` | records what a session spent, so `session-usage.sh` can read it back [→](plugin-mod-usage/README.md) |
-| `loopd-mod-pane` | adds `/board`: opens the board in a pane beside the transcript, or a simple view of projects, questions and blocks [→](plugin-mod-pane/README.md) |
+| `loopd-mod-pane` | adds `/pane`: opens the board in a pane beside the transcript, or a simple view of projects, questions and blocks [→](plugin-mod-pane/README.md) |
 | `loopd-mod-signal` | lets a role agent's session tell the PM's session its turn is over, the moment it is [→](plugin-mod-signal/README.md) |
 
 ```text
