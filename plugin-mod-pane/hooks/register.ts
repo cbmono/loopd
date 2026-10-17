@@ -436,7 +436,7 @@ async function refreshSimple($: any): Promise<boolean> {
   }
   held = live
   if (creating) {
-    const made = next.find(r => r.autonomy && !creating!.slugs.has(r.slug))
+    const made = next.find(r => r.autonomy && r.title === creating!.title && !creating!.slugs.has(r.slug))
     if (made) {
       createNote = 'Created "' + made.title + '". ' + (made.autonomy === 'yolo' ? 'Its first questions will appear here.' : 'It moves only as far as the operator approves.')
       creating = null

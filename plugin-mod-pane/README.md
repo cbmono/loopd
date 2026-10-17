@@ -77,7 +77,7 @@ note. A refused run is drawn. A read that fails is retried on the next scan.
 **Create is one `/loopd:new-project` run**, only with all four fields filled:
 `"<what>" kind=build autonomy=yolo title="<title>" need="<for whom>" success_criteria="<done when>" --no-ask`.
 `--no-ask` makes the skill ask nothing and take its defaults; its step-8 scaffold review runs
-unchanged. Until a new project directory with a readable `project.md` appears the form shows
+unchanged. Until a new project directory appears whose `project.md` carries the title typed the form shows
 *Creating "…"…*; then *Created "…".*, plus *Its first questions will appear here* — they come
 from the loop's first read of the task, as any question does — or, when the project did not
 resolve to `yolo`, *It moves only as far as the operator approves.* A refused run, or a turn
@@ -133,7 +133,7 @@ source and on what `claude plugin validate` reads out of it:
 ## Tested with
 
 Claude Code **2.1.300** (`claude plugin validate . --strict` passes, `claude plugin test`
-22/22, 2026-10-16), written against the mods docs and the 2.1.289 `claude-code.d.ts`. Mods need
+23/23, 2026-10-18), written against the mods docs and the 2.1.289 `claude-code.d.ts`. Mods need
 v2.1.287 or later. After a CLI update run, from this directory:
 
 ```
