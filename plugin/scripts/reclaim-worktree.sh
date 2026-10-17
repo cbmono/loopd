@@ -6,7 +6,9 @@
 #
 # Exit: 0 removed (--dry-run: every guard passed, nothing touched) · 1 REFUSED, a guard
 # said no · 2 cannot answer (usage, not a bundle, unreadable frontmatter) · 3 nothing to
-# do (no `worktree:` recorded, or the path is already gone) — the idempotent re-run.
+# do (no `worktree:` recorded, or the path is already gone) — the idempotent re-run ·
+# 4 REFUSED, and every live process in the tree is the task's OWN `session:` (its daemon
+# roster worker or a descendant): a retry once that session is stopped, never a human item.
 #
 # It is record-driven: no scan, no candidate list, no "all finished worktrees" mode.
 # `prune-worktrees.sh` stays report-only and this never calls it. Guards G1-G13, why
@@ -127,6 +129,7 @@ STATUS="$(fm_scalar "$fm" status)"
 WT_REC="$(fm_scalar "$fm" worktree)"
 BR_REC="$(fm_scalar "$fm" branch)"
 REPO_REC="$(fm_scalar "$fm" target_repo)"
+SESSION_REC="$(fm_scalar "$fm" session)"
 
 # --- G2: the task must be done -----------------------------------------------
 
@@ -372,7 +375,34 @@ EOF
 ps -axo pid= >/dev/null 2>&1 || refuse "cannot enumerate processes, so whether something
         is still running inside $WT cannot be established."
 
+# Exit 0 when every live pid is the roster worker of the task's recorded session or a
+# descendant of it. Any doubt (no session, no roster entry, no ps) is a 1: today's refusal.
+own_session_only() { # <live> <worker-pid>
+  local tree pid p n
+  tree="$(ps -axo pid=,ppid= 2>/dev/null)" || return 1
+  while IFS=$'\t' read -r pid _; do
+    p=$pid; n=0
+    while [ "$p" != "$2" ]; do
+      p="$(printf '%s\n' "$tree" | awk -v p="$p" '$1 == p { print $2; exit }')"
+      n=$((n + 1))
+      case "$p" in ''|0|1) return 1 ;; esac
+      [ "$n" -lt 64 ] || return 1
+    done
+  done <<EOF
+$1
+EOF
+}
+
 live="$(live_processes_in "$WT")"
+if [ -n "$live" ] && [ -n "$SESSION_REC" ] \
+   && worker="$(bash "$(dirname "${BASH_SOURCE[0]:-$0}")/agent-sessions.sh" worker "$SESSION_REC" 2>/dev/null)" \
+   && own_session_only "$live" "${worker##* }"; then
+  short="$(printf '%s' "$worker" | cut -d' ' -f2)"
+  printf "refuse: own session %s (pid %s) is the only live process in %s — the task's
+        own finished round. claude stop %s, then ask again: a retry, not a human item.\n" \
+    "$short" "${worker##* }" "$WT" "$short" >&2
+  exit 4
+fi
 [ -z "$live" ] || refuse "$WT has a live process inside it. A process whose cwd is in a
         worktree does NOT stop 'git worktree remove' — it is left with a dangling cwd —
         so this is checked here. Stop it, then ask again:

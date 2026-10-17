@@ -115,6 +115,21 @@ task "$INST/projects/proj-a/tasks/t1.md" ready
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm undo
 WITH record; ok "…and clears when nothing is in flight"        "$(run check)" "rc:0 IDLE: finger"
 
+T3="$INST/projects/proj-a/tasks/t3.md"; WT3="$TMP/wt3"; mkdir -p "$WT3"
+printf -- '---\ntype: Task\nkind: build\nstatus: done\nworktree: %s\npr: []\n---\n' "$WT3" > "$T3"
+GIT -C "$INST" add -A && GIT -C "$INST" commit -qm done
+WITH record
+ok "a done task whose worktree is still on disk is a DELTA"   "$(run check)" "rc:1 DELTA: a don"
+ok "…and its digest names step 5"  "$(WITH digest | grep '^steps:' | grep -c 'step-5-reflect-merges.md')" 1
+printf '\n# Notes\n\n- worktree retained: dirty tree\n' >> "$T3"
+GIT -C "$INST" add -A && GIT -C "$INST" commit -qm retained
+WITH record; ok "…a 'worktree retained:' note ends the retry"  "$(run check)" "rc:0 IDLE: finger"
+GIT -C "$INST" checkout -q HEAD~1 -- "$T3"; GIT -C "$INST" commit -qm unretain
+rm -rf "$WT3"
+WITH record; ok "…and so does the worktree being gone"        "$(run check)" "rc:0 IDLE: finger"
+rm -f "$T3"; GIT -C "$INST" add -A && GIT -C "$INST" commit -qm rm-t3
+WITH record
+
 printf 'OPEN def5678 NONE\n' > "$GHDIR/7"
 ok "a moved PR head is a DELTA"                  "$(run check)" "rc:1 DELTA: the f"
 printf 'MERGED def5678 NONE\n' > "$GHDIR/7"

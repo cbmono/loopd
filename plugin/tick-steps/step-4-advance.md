@@ -114,7 +114,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    which is the resume step 3 allows. **The resume is two calls:
    `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh full <the recorded session>`, then
    `cd <worktree> && claude --bg --resume <the UUID full printed> '<the message>'`**,
-   with the same flags step 3 lists. `full` runs on every recorded value, so a task
+   and nothing else: the session keeps the agent, model, permission mode and add-dir it
+   was spawned with, and passing any of them starts a COPY under a new id (measured on
+   2.1.296). `full` runs on every recorded value, so a task
    dispatched before step 3 recorded the full id — its `session:` still the short
    one — is resolved before any resume. **`--resume` takes the FULL session id, never the
    short one**: a short id is a picker search term, the picker finds "No sessions match",
@@ -123,10 +125,15 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    (more than one session matches) and exit 2 (none, or unknown) leave the task as it is —
    name it in the tick report and surface it as a 🔴 item. Resume only a session
    `agent-sessions.sh state` calls `done`, or `stopped` after the tick's own stop of a
-   recorded round above — never one still `blocked` or `working`. Every resume prints a **new** id (measured on CLI 2.1.295, an exited session
-   included): before the tick moves on, write `agent-sessions.sh full <the new id>` —
-   the full UUID — as `session:` on the task, and one `# Notes` line `resumed <that
-   UUID>`. **If that second `full` exits 1 or 2, the resume has launched anyway**: set
+   recorded round above — never one still `blocked` or `working`. **Read the id off what
+   the resume printed, before the tick moves on:**
+   `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh resume-id <the UUID> '<everything the resume printed>'`.
+   A flag-free resume prints `note: woke session <short> with its saved options (…)` then
+   `backgrounded · <short> · <name>`, and the id is unchanged: **`same <uuid>`** — leave
+   `session:` alone and write one `# Notes` line `woke <that UUID>`. A resume that forked
+   prints `… started a copy as <new short>.` then `backgrounded · <new short>`:
+   **`copy <uuid>`** is that new id's full UUID — write it as `session:` and one `# Notes`
+   line `resumed <that UUID>`. **Exit 1 or 2, the resume has launched anyway**: set
    the task `blocked`, write `resume launched; session id unresolved: <the printed id>`
    under `# Notes`, report it as a 🔴 item, and never resume the old recorded session.
    **`claude stop` and `claude logs` refuse a full UUID** ("No job matching"),
@@ -135,7 +142,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
    **A STALLED RESUME falls back on the next tick — the one named exception to the
    `blocked` row above.** For each task whose `session:` is the UUID on its last
-   `resumed` note, run `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh stalled <the task's session UUID>`
+   `resumed` or `woke` note, run `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh stalled <the task's session UUID>`
    at this sweep. It reads `claude agents --json` and that session's transcript — never
    `session-usage.sh`, which prints `usage UNKNOWN` for a live session. **Exit 0**
    (`stalled <uuid>`: `blocked`, no turn since the resume, and no `waitingFor`):

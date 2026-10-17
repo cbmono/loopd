@@ -557,9 +557,16 @@ human.** `claude --bg` prints an 8-character short id, and `--resume` reads anyt
 is not a full session id as a picker search term: "No sessions match", and a `--bg`
 session cannot answer a picker, so it parks `blocked` with no transcript at all. That
 happened three times on 2026-10-08/09, each costing at least one tick cycle. Measured on
-CLI 2.1.295: `--resume <uuid>` continues the conversation under a new id (an exited
-session included), `--resume <short>` parks, and `claude stop`/`logs` take the short id
-and refuse the UUID. `agent-sessions.sh full` refuses on zero or two matches rather
+CLI 2.1.295: `--resume <short>` parks, and `claude stop`/`logs` take the short id and
+refuse the UUID. On 2.1.296 (2026-10-16) a resume **with** the spawn flags printed
+`note: background session 72916f90 keeps its own saved options, so the flags you passed
+started a copy as 277e00db` — every round after the first ran as a copy, and the
+original's process stayed behind in the worktree — while a **flag-free** resume printed
+`note: woke session <short> with its saved options (…)` and `backgrounded · <short>`,
+kept the id, and reset the row's `startedAt` to the resume time (1792089555834 →
+1792141798653). That reset is what keeps `stalled` right on a `woke` session, whose
+transcript still holds every earlier round. So the resume carries no flags, and
+`agent-sessions.sh resume-id` reads the `backgrounded` line to tell the two apart. `agent-sessions.sh full` refuses on zero or two matches rather
 than taking the first, which is what `state` does. **So step 3 records the full id in
 `session:` right after the spawn**: a recorded short id was resumed by its short form on
 2026-10-14 and 2026-10-15 and parked each time, and only an id that is already full can
@@ -656,6 +663,17 @@ dispatching PM wrote and removes exactly the one path in it.
 best-effort backstop: an agent that is thinking, waiting on review, or running a long
 command writes nothing for longer than the window and then looks idle. The tick's own
 in-flight count is the primary guard, which is why the prune waits for it to be zero.
+
+**A task's own finished session is stopped, and the tree retried, without the human.** On
+2026-10-15 reclaim refused two merged tasks' trees because each still held its last
+round's idle `claude bg-spare` process (the daemon retires one after ~60 min), and the tick
+turned that into a "remove these worktrees" item. A `done` task owns its session as much
+as its tree, so step 5 runs `claude stop <short>` on the one session the task records —
+`~/.claude/daemon/roster.json` is the readable pid↔session evidence, since `claude agents
+--json` rows carry no pid — and reclaim answers exit 4 when that session is all that is
+left. Measured 2026-10-16: `stop` on a session with no process prints `stopped <short>`,
+exit 0, so it is safe to run unconditionally; on a live one it kills the process and drops
+the roster entry.
 
 <a id="step-7"></a>
 ### Step 7 — why an idle tick sweeps the knowledge base

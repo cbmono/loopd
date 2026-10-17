@@ -23,6 +23,12 @@
 #                                             -> this bundle's background sessions, one
 #                                                row each: task, state, process, age, id;
 #                                                `--summary` prints `<running> <no-process>`
+#   agent-sessions.sh worker <session-id> [--roster <file>]
+#                                             -> `worker <short> <pid>`: the daemon's live
+#                                                process for it (roster.json); exit 1 none
+#   agent-sessions.sh resume-id <full-id> <resume stdout|->
+#                                             -> `same <uuid>` or `copy <new uuid>`; exit 1
+#                                                `unresolved <short>`, a copy `full` misses
 #
 # Exit 0 answered · 2 unknown (no `claude`, no `python3`, unreadable JSON) — and unknown is
 # never a zero, because "nothing is running" is what a broken read and an idle loop both
@@ -31,7 +37,7 @@
 # tests/resume-full-id.test.sh and tests/blocked-recorded.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,25p' "$0" >&2; exit 2; }
+usage() { sed -n '3,31p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 command -v python3 >/dev/null 2>&1 || {
@@ -358,6 +364,54 @@ PY
       echo "agent-sessions: could not read the session list" >&2; exit 2; }
     ;;
 
-  -h|--help) sed -n '3,25p' "$0"; exit 0 ;;
+  worker)
+    [ $# -eq 2 ] || [ $# -eq 4 ] || usage
+    roster="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/daemon/roster.json"
+    if [ $# -eq 4 ]; then [ "$3" = "--roster" ] || usage; roster="$4"; fi
+    [ -f "$roster" ] || exit 1
+    python3 - "$2" "$roster" <<'PY'
+import json, sys
+want = sys.argv[1]
+try:
+    workers = json.load(open(sys.argv[2])).get("workers")
+    assert isinstance(workers, dict)
+except Exception:
+    sys.exit(2)
+hits = []
+for w in workers.values():
+    sid = str(w.get("sessionId") or "") if isinstance(w, dict) else ""
+    if sid and want in (sid, sid.split("-")[0]):
+        hits.append(w)
+if not hits:
+    sys.exit(1)
+pid = hits[0].get("pid")
+if len(hits) > 1 or not isinstance(pid, int) or isinstance(pid, bool) or pid <= 1:
+    sys.exit(2)
+print("worker", str(hits[0]["sessionId"]).split("-")[0], pid)
+PY
+    ;;
+
+  resume-id)
+    [ $# -eq 3 ] || usage
+    out="$3"; [ "$out" = - ] && out="$(cat)"
+    new="$(python3 - "$2" "$out" <<'PY'
+import re, sys
+rec, out = sys.argv[1].split("-")[0], sys.argv[2]
+bg = set(re.findall(r"backgrounded\s*·\s*([0-9a-f]{8})\b", out))
+cp = set(re.findall(r"started a copy as ([0-9a-f]{8})\b", out))
+if len(bg) != 1 or len(cp) > 1 or (cp and cp != bg):
+    sys.exit(2)
+new = bg.pop()
+if new == rec and cp:
+    sys.exit(2)
+print("" if new == rec else new)
+PY
+)" || { echo "agent-sessions: no single \`backgrounded · <id>\` line in the resume's output" >&2; exit 2; }
+    [ -n "$new" ] || { echo "same $2"; exit 0; }
+    uuid="$(bash "$0" full "$new" 2>/dev/null)" || { echo "unresolved $new"; exit 1; }
+    echo "copy $uuid"
+    ;;
+
+  -h|--help) sed -n '3,31p' "$0"; exit 0 ;;
   *) usage ;;
 esac

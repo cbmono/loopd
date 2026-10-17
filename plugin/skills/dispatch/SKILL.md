@@ -380,7 +380,8 @@ ticks, regardless of how long a tick runs.
   — `--stage` stages exactly those paths first; never `--no-verify` in target repos.
 - **Worktree hygiene, two scripts.** `${CLAUDE_PLUGIN_ROOT}/scripts/reclaim-worktree.sh <task-path>`
   removes the ONE worktree a `done` task recorded, and only when every URL in its `pr:` has
-  MERGED — step 5 runs it per task; exit 1 is a refusal to record, never to retry around.
+  MERGED — step 5 runs it per task; exit 1 is a refusal to record, never to retry around,
+  and exit 4 (only the task's own stopped session still live in it) is a retry next tick.
   `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh` (≤ once per tick) **reports only —
   it never deletes anything**; surface its `REMOVABLE`/`RECLAIMABLE` sets as a human
   job. **Run it only when your in-flight count is zero** — the `PRUNE_ACTIVE_MINUTES`
