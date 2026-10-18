@@ -97,7 +97,9 @@ without your yes`, followed by the rules still missing. When you see that note:
   without a prompt?* — once, together with any `needs` keys.
 - On a yes, re-run the same command with `--spawn-grant`. The script writes the rules,
   verifies it, and removes any stale grant it named (a bare `Bash(claude --bg *)`, a
-  `bypassPermissions` spawn, a retired agent namespace), saying what it removed.
+  `bypassPermissions` spawn, a retired agent namespace, and exactly
+  `Bash(claude --bg * --agent loopd:* --permission-mode auto --add-dir *)`, whose `*` after
+  `--bg` approves any inserted flag), saying what it removed.
 - On a no, nothing: the rule stays printed for them. **Never write the rule yourself**, and
   never on a bundle whose stamp printed no such note.
 

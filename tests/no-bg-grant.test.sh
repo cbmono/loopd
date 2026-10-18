@@ -50,13 +50,22 @@ tty_stamp() { # <answer> <instance> — the answer piped, the TTY test forced op
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" BG_GRANT_STDIN=1 \
     bash "$MK/scripts/init-bundle.sh" "$2" <<<"$1" >"$TMP/out" 2>&1
 }
-RULE="Bash(claude --bg * --agent ${PN}:* --permission-mode auto --add-dir *)"
+ROLES="software-engineer devops-engineer qa-reviewer cataloguer"
+rules() { # <instance> -> the spawn rule for each role, one per line
+  for r in $ROLES; do printf 'Bash(claude --bg --agent %s:%s --permission-mode auto --add-dir %s --model *)\n' "$PN" "$r" "$1"; done
+}
+set_rules() { # <instance> -> RULES (array), RULE (the first) and PROMPT, for that bundle
+  RULES=(); while IFS= read -r l; do RULES+=("$l"); done < <(rules "$1"); RULE="${RULES[0]}"
+  PROMPT="Write $(printf '"%s" and ' "${RULES[@]}")\"$STOP\" to .claude/settings.local.json so the tick can start and stop role agents without a prompt? [Y/n]"
+}
+N=5   # four spawn rules and the stop rule
+AUTO_RULE="Bash(claude --bg * --agent ${PN}:* --permission-mode auto --add-dir *)"
+NEAR_RULE="Bash(claude --bg * --agent ${PN}:* --permission-mode auto --add-dir /*)"
 OLD_RULE="Bash(claude --bg * --agent ${PN}:* --permission-mode bypassPermissions --add-dir *)"
 BROAD="Bash(claude --bg *)"
 NS_RULE="Bash(claude --bg * --agent old-plugin:* --permission-mode auto --add-dir *)"
 INERT="Bash(claude --bg ' *)"
 STOP="Bash(claude stop *)"
-PROMPT="Write \"$RULE\" and \"$STOP\" to .claude/settings.local.json so the tick can start and stop role agents without a prompt? [Y/n]"
 STOP_PROMPT="Write \"$STOP\" to .claude/settings.local.json so the tick can start and stop role agents without a prompt? [Y/n]"
 grants() { # <instance> -> count of claude allow entries across every settings file it has
   cat "$1"/.claude/*.json 2>/dev/null | grep -cE '"Bash\(claude[ :]' | tr -d ' '
@@ -71,17 +80,17 @@ with_rules() { # <instance> <rule>… -> a settings.local.json holding exactly t
 trust_written() { grep -rl 'hasTrustDialogAccepted' "$TMP/home" "$1" 2>/dev/null | grep -c . | tr -d ' '; }
 
 echo "== 1. no terminal: a fresh stamp writes no grant, and says how to say yes =="
-I="$TMP/i1"; git init -q "$I"; stamp "$MK" "$I"; rc=$?
+I="$TMP/i1"; git init -q "$I"; set_rules "$I"; stamp "$MK" "$I"; rc=$?
 ok "stamp exits 0" "$rc" 0
 ok "no claude allow entry in any .claude/*.json" "$(grants "$I")" 0
-ok "the notice names the narrowest measured rule" "$(cnt -F "$RULE" "$TMP/out")" 1
+ok "the notice names one spawn rule per role" "$(rules "$I" | grep -cxF -f - <(sed 's/^ *//' "$TMP/out"))" 4
 ok "…and the stop rule" "$(cnt -F "          $STOP" "$TMP/out")" 1
 ok "the notice says init writes none without a yes" "$(cnt -F 'init writes no `claude --bg` grant without your yes' "$TMP/out")" 1
 ok "…and names both ways to give one" "$(cnt -F 'answer Y when a terminal stamp asks, or re-run with --spawn-grant' "$TMP/out")" 1
 ok "no question was printed" "$(cnt -F "$PROMPT" "$TMP/out")" 0
 ok "no trust key anywhere" "$(trust_written "$I")" 0
 # A piped `y` with the TTY test NOT forced is still "no terminal": nothing asked, nothing written.
-I="$TMP/i1b"; mkdir -p "$I"
+I="$TMP/i1b"; mkdir -p "$I"; set_rules "$I"
 PATH="$STUB:$PATH" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" \
   bash "$MK/scripts/init-bundle.sh" "$I" <<<"y" >"$TMP/out" 2>&1
 ok "a piped y with no terminal writes nothing" "$(grants "$I")" 0
@@ -95,9 +104,9 @@ ok "no other claude allow entry was added" "$(grants "$I")" 1
 ok "it is reported as matching no measured spawn form" "$(cnt -F 'matches no spawn form measured' "$TMP/out")" 1
 
 echo "== 3. an operator's own working rules are not second-guessed =="
-I="$TMP/i3"; with_rules "$I" "$RULE" "$STOP"; L="$I/.claude/settings.local.json"
+I="$TMP/i3"; set_rules "$I"; with_rules "$I" "${RULES[@]}" "$STOP"; L="$I/.claude/settings.local.json"
 stamp "$MK" "$I"
-ok "still exactly two claude allow entries" "$(grants "$I")" 2
+ok "still exactly the five claude allow entries" "$(grants "$I")" "$N"
 ok "no notice printed" "$(cnt -F 'claude --bg' "$TMP/out")" 0
 BEFORE="$(cat "$L")"   # after the first stamp: step 1e's script allowlist has landed by now
 tty_stamp "" "$I"
@@ -105,45 +114,46 @@ ok "…and a terminal stamp asks nothing either" "$(cnt -F "$PROMPT" "$TMP/out")
 ok "…leaving the file byte-identical" "$([ "$(cat "$L")" = "$BEFORE" ] && echo yes || echo no)" yes
 
 echo "== 3a. a bundle holding only the spawn rule is asked for the stop rule alone =="
-I="$TMP/i3a"; with_rules "$I" "$RULE"; L="$I/.claude/settings.local.json"
+I="$TMP/i3a"; set_rules "$I"; with_rules "$I" "${RULES[@]}"; L="$I/.claude/settings.local.json"
 tty_stamp "" "$I"
 ok "the question names only the stop rule" "$(cnt -F "$STOP_PROMPT" "$TMP/out")" 1
-ok "two claude allow entries after the yes" "$(grants "$I")" 2
+ok "five claude allow entries after the yes" "$(grants "$I")" "$N"
 ok "…the spawn rule still once" "$(cnt -F "\"$RULE\"" "$L")" 1
 ok "…and the stop rule once" "$(cnt -F "\"$STOP\"" "$L")" 1
 tty_stamp "" "$I"
 ok "a second stamp asks nothing" "$(cnt -F 'Write "' "$TMP/out")" 0
 
 echo "== 3d. a rule under permissions.deny is never read as a grant, and is reported =="
-I="$TMP/i3d"; mkdir -p "$I/.claude"; L="$I/.claude/settings.local.json"
-printf '{ "permissions": { "allow": [ "%s" ], "deny": [ "%s" ] } }\n' "$RULE" "$STOP" > "$L"
+I="$TMP/i3d"; set_rules "$I"; mkdir -p "$I/.claude"; L="$I/.claude/settings.local.json"
+printf '{ "permissions": { "allow": [ %s ], "deny": [ "%s" ] } }\n' "$(printf '"%s",' "${RULES[@]}" | sed 's/,$//')" "$STOP" > "$L"
 stamp "$MK" "$I"
 ok "the denied stop rule is still missing: the notice names it" "$(cnt -F "          $STOP" "$TMP/out")" 1
 ok "…and the conflicting deny is reported" "$(cnt -F "lists \`$STOP\` under permissions.deny" "$TMP/out")" 1
-ok "…without a yes, nothing is written" "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["permissions"]["allow"]))' "$L")" 1
+ok "…without a yes, nothing is written" "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["permissions"]["allow"]))' "$L")" 4
 tty_stamp "" "$I"
 ok "at a terminal it asks for the stop rule" "$(cnt -F "$STOP_PROMPT" "$TMP/out")" 1
 ok "…the yes lands it under allow, once" "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["permissions"]["allow"].count(sys.argv[2]))' "$L" "$STOP")" 1
 ok "…leaves the human's deny alone" "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["permissions"]["deny"].count(sys.argv[2]))' "$L" "$STOP")" 1
 ok "…and still reports it" "$(cnt -F "lists \`$STOP\` under permissions.deny" "$TMP/out")" 1
 ok "…no refusal" "$(cnt -F 'spawn grant not written' "$TMP/out")" 0
-I="$TMP/i3e"; mkdir -p "$I/.claude"
-printf '{ "permissions": { "deny": [ "%s", "%s" ] } }\n' "$RULE" "$STOP" > "$I/.claude/settings.local.json"
+I="$TMP/i3e"; set_rules "$I"; mkdir -p "$I/.claude"
+printf '{ "permissions": { "deny": [ %s, "%s" ] } }\n' "$(printf '"%s",' "${RULES[@]}" | sed 's/,$//')" "$STOP" > "$I/.claude/settings.local.json"
 stamp "$MK" "$I"
-ok "both denied: both still asked for" "$(cnt -E "^          Bash\(claude (--bg|stop) " "$TMP/out")" 2
+ok "all denied: all still asked for" "$(cnt -E "^          Bash\(claude (--bg|stop) " "$TMP/out")" "$N"
 
 echo "== 3b. the stale shapes are NAMED, each with why, and left alone without a yes =="
-I="$TMP/i3b"; with_rules "$I" "$OLD_RULE" "$BROAD" "$NS_RULE" "Bash(ls:*)"; L="$I/.claude/settings.local.json"
+I="$TMP/i3b"; set_rules "$I"; with_rules "$I" "$OLD_RULE" "$BROAD" "$NS_RULE" "$AUTO_RULE" "Bash(ls:*)"; L="$I/.claude/settings.local.json"
 stamp "$MK" "$I"
-ok "every rule is kept" "$(grants "$I")" 3
+ok "every rule is kept" "$(grants "$I")" 4
 ok "bypassPermissions: told the tick spawns in auto mode now" "$(cnt -F "has \`$OLD_RULE\` — stale: the tick spawns in auto mode now" "$TMP/out")" 1
 ok "the bare wildcard: told it is over-broad" "$(cnt -F "has \`$BROAD\` — over-broad" "$TMP/out")" 1
 ok "the old namespace: told it is retired" "$(cnt -F "has \`$NS_RULE\` — stale: names the retired old-plugin: namespace" "$TMP/out")" 1
-ok "each with the same remove instruction" "$(cnt -F 'Remove it: re-run with --spawn-grant, or edit the file.' "$TMP/out")" 3
+ok "the pre-reorder rule: told its mid-rule wildcard approves inserted flags" "$(cnt -F "has \`$AUTO_RULE\` — stale: its * after --bg also approves any flag inserted there" "$TMP/out")" 1
+ok "each with the same remove instruction" "$(cnt -F 'Remove it: re-run with --spawn-grant, or edit the file.' "$TMP/out")" 4
 ok "…and shown the rule that matches" "$(cnt -F "$RULE" "$TMP/out")" 1
 
 echo "== 4. a checkout stamp writes no grant either =="
-I="$TMP/i4"; mkdir -p "$I"; stamp "$TMP/checkout/plugin" "$I"
+I="$TMP/i4"; mkdir -p "$I"; set_rules "$I"; stamp "$TMP/checkout/plugin" "$I"
 ok "no claude allow entry" "$(grants "$I")" 0
 ok "the notice still prints" "$(cnt -F "$RULE" "$TMP/out")" 1
 
@@ -171,61 +181,67 @@ ok "no shipped JSON allows a claude command" "$json_hits" 0
 # Outside markdown, `Bash(claude` may only appear in a line that prints it or in one of the
 # named constants — the writer reaches the rule through $BG_RULE and nowhere else.
 code_hits="$(printf '%s\n' "$SURF" | grep -v '\.md$' | while IFS= read -r f; do
-  grep -nF 'Bash(claude' "$f" | grep -vE '^[0-9]+:[[:space:]]*(echo|printf|#|BG_RULE=|BG_INERT=|BG_BROAD=|STOP_RULE=)' | sed "s|^|$f:|"
+  grep -nF 'Bash(claude' "$f" | grep -vE '^[0-9]+:[[:space:]]*(echo|printf|#|BG_OLD=|BG_INERT=|BG_BROAD=|STOP_RULE=)' | sed "s|^|$f:|"
 done)"
 [ -z "$code_hits" ] || printf '%s\n' "$code_hits" | sed 's/^/        /'
 ok "no script line spells a claude rule outside the constants" "$(printf '%s' "$code_hits" | grep -c . | tr -d ' ')" 0
 
 echo "== 6. at a terminal, n writes nothing =="
-I="$TMP/i6"; mkdir -p "$I"; tty_stamp "n" "$I"; rc=$?
+I="$TMP/i6"; mkdir -p "$I"; set_rules "$I"; tty_stamp "n" "$I"; rc=$?
 ok "exits 0" "$rc" 0
 ok "the question is asked, verbatim" "$(cnt -F "$PROMPT" "$TMP/out")" 1
 ok "no claude allow entry" "$(grants "$I")" 0
 ok "…and the rule is printed for the human" "$(cnt -F "          $RULE" "$TMP/out")" 1
 ok "no trust key anywhere" "$(trust_written "$I")" 0
 
-echo "== 7. at a terminal, Enter is yes: exactly those two rules, and nothing else =="
-I="$TMP/i7"; mkdir -p "$I"; tty_stamp "" "$I"; rc=$?
+echo "== 7. at a terminal, Enter is yes: exactly those five rules, and nothing else =="
+I="$TMP/i7"; mkdir -p "$I"; set_rules "$I"; tty_stamp "" "$I"; rc=$?
 L="$I/.claude/settings.local.json"
 ok "exits 0" "$rc" 0
 ok "the question is asked, verbatim" "$(cnt -F "$PROMPT" "$TMP/out")" 1
 ok "it says what it wrote" "$(cnt -F 'wrote spawn grant into .claude/settings.local.json' "$TMP/out")" 1
-ok "exactly two claude allow entries" "$(grants "$I")" 2
-ok "…the measured rule" "$(cnt -F "\"$RULE\"" "$L")" 1
+ok "exactly five claude allow entries" "$(grants "$I")" "$N"
+ok "…one spawn rule per role" "$(rules "$I" | sed 's/.*/"&"/' | grep -cF -f - "$L")" 4
 ok "…and the stop rule" "$(cnt -F "\"$STOP\"" "$L")" 1
+ok "each claude rule has one *, at its end, and no quote" "$(python3 -c '
+import json,sys
+a=[r for r in json.load(open(sys.argv[1]))["permissions"]["allow"] if r.startswith("Bash(claude")]
+print(sum(r.count("*")==1 and r.endswith(" *)") and not set("\x27\"`") & set(r) for r in a))' "$L")" "$N"
 ok "the file parses as JSON" "$(yn python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$L")" yes
 ok "the script allowlist written beside it survives" "$(cnt -F '/scripts/*)"' "$L")" 2
 ok "no trust key anywhere" "$(trust_written "$I")" 0
 BEFORE="$(cat "$L")"
 tty_stamp "" "$I"
 ok "a second terminal stamp asks nothing" "$(cnt -F "$PROMPT" "$TMP/out")" 0
-ok "…and never duplicates a rule" "$(grants "$I")" 2
+ok "…and never duplicates a rule" "$(grants "$I")" "$N"
 ok "…byte-identical" "$([ "$(cat "$L")" = "$BEFORE" ] && echo yes || echo no)" yes
 I="$TMP/i7y"; mkdir -p "$I"; tty_stamp "y" "$I"
-ok "a typed y is the same yes" "$(grants "$I")" 2
-I="$TMP/i7e"; mkdir -p "$I"; tty_stamp "" "$I"
+ok "a typed y is the same yes" "$(grants "$I")" "$N"
+I="$TMP/i7e"; mkdir -p "$I"; set_rules "$I"; tty_stamp "" "$I"
 ok "…and the write lands as the ONLY claude entry on a bare dir" "$(cnt -F "\"$RULE\"" "$I/.claude/settings.local.json")" 1
 
 echo "== 8. the same yes replaces the stale shapes, and keeps everything else =="
-I="$TMP/i8"; with_rules "$I" "$OLD_RULE" "$BROAD" "$NS_RULE" "Bash(ls:*)"; L="$I/.claude/settings.local.json"
+I="$TMP/i8"; set_rules "$I"; with_rules "$I" "$OLD_RULE" "$BROAD" "$NS_RULE" "$AUTO_RULE" "$NEAR_RULE" "Bash(ls:*)"; L="$I/.claude/settings.local.json"
 tty_stamp "" "$I"
 ok "the question listed what would be removed" "$(cnt -F 'would be REMOVED' "$TMP/out")" 1
-ok "…naming all three" "$(cnt -E "^    - Bash\(claude --bg .*\((over-broad|stale)" "$TMP/out")" 3
-ok "exactly two claude allow entries remain" "$(grants "$I")" 2
+ok "…naming all four" "$(cnt -E "^    - Bash\(claude --bg .*\((over-broad|stale)" "$TMP/out")" 4
+ok "the five rules and the near-miss remain" "$(grants "$I")" $((N + 1))
 ok "…the measured rule" "$(cnt -F "\"$RULE\"" "$L")" 1
 ok "the bypass rule is gone" "$(cnt -F "\"$OLD_RULE\"" "$L")" 0
 ok "the bare wildcard is gone" "$(cnt -F "\"$BROAD\"" "$L")" 0
 ok "the old namespace is gone" "$(cnt -F "\"$NS_RULE\"" "$L")" 0
+ok "the pre-reorder auto rule is gone" "$(cnt -F "\"$AUTO_RULE\"" "$L")" 0
+ok "…a rule one character away from it is kept" "$(cnt -F "\"$NEAR_RULE\"" "$L")" 1
 ok "the unrelated rule is kept" "$(cnt -F '"Bash(ls:*)"' "$L")" 1
-ok "each removal is reported" "$(cnt -E '^  removed Bash\(claude --bg ' "$TMP/out")" 3
+ok "each removal is reported" "$(cnt -E '^  removed Bash\(claude --bg ' "$TMP/out")" 4
 ok "the file parses as JSON" "$(yn python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$L")" yes
 
 echo "== 9. --spawn-grant is the yes a session relays: no terminal, no question, one write =="
-I="$TMP/i9"; with_rules "$I" "$BROAD"; L="$I/.claude/settings.local.json"
+I="$TMP/i9"; set_rules "$I"; with_rules "$I" "$BROAD"; L="$I/.claude/settings.local.json"
 stamp "$MK" "$I" --spawn-grant; rc=$?
 ok "exits 0" "$rc" 0
 ok "no question was printed" "$(cnt -F "$PROMPT" "$TMP/out")" 0
-ok "exactly two claude allow entries" "$(grants "$I")" 2
+ok "exactly five claude allow entries" "$(grants "$I")" "$N"
 ok "…the measured rule" "$(cnt -F "\"$RULE\"" "$L")" 1
 ok "…and the over-broad one was removed" "$(cnt -F "\"$BROAD\"" "$L")" 0
 bash "$MK/scripts/init-bundle.sh" --help >"$TMP/help" 2>&1
@@ -233,13 +249,26 @@ ok "the flag is in --help" "$(yn grep -q -- '--spawn-grant' "$TMP/help")" yes
 ok "…which is still not truncated" "$(yn grep -q 'Backs up any conflicting real file' "$TMP/help")" yes
 
 echo "== 10. a file this cannot read safely is never rewritten =="
-I="$TMP/i10"; mkdir -p "$I/.claude"; L="$I/.claude/settings.local.json"
+I="$TMP/i10"; set_rules "$I"; mkdir -p "$I/.claude"; L="$I/.claude/settings.local.json"
 printf '{ "permissions": { "allow": [ "Bash(ls:*)", ] }\n' > "$L"   # a trailing comma: not JSON
 BEFORE="$(cat "$L")"
 tty_stamp "" "$I"
 ok "the broken file is byte-identical" "$([ "$(cat "$L")" = "$BEFORE" ] && echo yes || echo no)" yes
 ok "…and the refusal is named" "$(cnt -F 'spawn grant not written: no safe edit' "$TMP/out")" 1
 ok "…with the rule to add by hand" "$(cnt -F "Add to permissions.allow by hand: $RULE" "$TMP/out")" 1
+
+echo "== 11. a bundle path a rule cannot spell gets no spawn rule, and one note why =="
+for I in "$TMP/i 11" "$TMP/i'11"; do
+  mkdir -p "$I"; stamp "$MK" "$I" --spawn-grant
+  ok "[$(basename "$I")] the note says why, once" "$(cnt -F 'needs shell quoting, and a rule cannot carry a quote character' "$TMP/out")" 1
+  ok "[$(basename "$I")] only the stop rule is written" "$(grants "$I")" 1
+done
+
+echo "== 12. a stamp through a symlink names the physical bundle path =="
+I="$TMP/i12"; mkdir -p "$I"; ln -s "$I" "$TMP/link12"; set_rules "$I"
+stamp "$MK" "$TMP/link12" --spawn-grant
+ok "the rules name the physical path" "$(cnt -F "\"$RULE\"" "$I/.claude/settings.local.json")" 1
+ok "…and never the link" "$(cnt -F -- "--add-dir $TMP/link12 " "$I/.claude/settings.local.json")" 0
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
