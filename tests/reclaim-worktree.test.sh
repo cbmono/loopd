@@ -458,6 +458,14 @@ kill "$LIVE_PID" 2>/dev/null; wait "$LIVE_PID" 2>/dev/null
 run --dry-run "projects/demo/tasks/task-live.md"
 assert "G13 the process is what refused (the same fixture clears once it is gone)" \
   "$(eq "$RC" 0)"
+# The `; exit $?` keeps bash from exec-ing the script in its place, so the caller shell
+# whose command line names the worktree stays alive above it.
+OUT="$( cd "$INSTANCE" && PATH="$TMP/bin:$PATH" GH_FIXTURES="$FIXTURES" \
+  CLAUDE_CONFIG_DIR="$TMP/claude" \
+  bash -c 'bash "$1" --dry-run "$2"; exit $? # '"$WT_LIVE" _ "$RECLAIM" \
+    projects/demo/tasks/task-live.md 2>&1 )"; RC=$?
+assert "G13 a caller shell whose command names the worktree is not a live process" \
+  "$(eq "$RC" 0)"
 
 echo "== G13: the task's OWN session is a retry (exit 4), anything else stays exit 1 =="
 OWN_SID=aaaa1111-0000-4000-8000-000000000001
