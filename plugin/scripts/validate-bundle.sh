@@ -57,7 +57,8 @@
 # WHAT COUNTS AS A CONCEPT DOCUMENT. Only the schema-defined locations:
 # `objectives/*.md` (OPTIONAL — a bundle with none is valid), `projects/*/project.md`,
 # `projects/*/phases/*.md`, `projects/*/tasks/*.md`, `knowledge/<kind>/*.md`. Everything
-# else — `index.md`, `log.md`, `sources/`, `deliverables/`, a doc a human dropped into a
+# else — `index.md`, `log.md`, the `knowledge/{log,papercuts}/` month shards, `sources/`,
+# `deliverables/`, a doc a human dropped into a
 # project — is content or navigation. The first version of this script validated those
 # too and buried 6 real errors under 77 warnings, which is exactly how a validator
 # teaches people to ignore it.
@@ -137,7 +138,7 @@ FINDING_MAX_LINES=40
 # this reports a list already over it, which is the PM's cue to fold the oldest into `# Notes`.
 DO_NOT_REPEAT_MAX=10
 
-errors=0; warns=0; checked=0
+errors=0; warns=0; checked=0; skipped=0
 
 # Print the frontmatter block. Exit 3 when the file does not open with `---`, and
 # exit 4 when it opens but never closes — an unterminated block used to return the
@@ -343,7 +344,7 @@ collect_files() {
   find ./knowledge -mindepth 2 -maxdepth 2 -type f -name '*.md' 2>/dev/null || true
 }
 
-FILE_LIST="$(collect_files | grep -vE '/(index|log)\.md$' | sort -u || true)"
+FILE_LIST="$(collect_files | grep -vE '/(index|log)\.md$|^\./knowledge/(log|papercuts)/' | sort -u || true)"
 
 # A scope narrows the SAME list, so `collect_files` stays the one answer to "is this a
 # concept document" and the ignore rules hold on every run.
@@ -377,8 +378,10 @@ if [[ $CHANGED -eq 1 || ${#NAMED[@]} -gt 0 ]]; then
   for p in ${NAMED[@]+"${NAMED[@]}"}; do
     scope+=("$(canon "$p")")
     [[ "${scope[${#scope[@]}-1]}" != ./knowledge/index.md ]] || { NAMED_INDEX=1; continue; }
-    printf '%s\n' "$FILE_LIST" | grep -qFx "${scope[${#scope[@]}-1]}" \
-      || printf '  SKIP   %s\n         not a concept document — %s names the locations that are\n' "$p" "$AB_SCHEMA"
+    # A here-string, never `printf | grep -q`: under pipefail, grep's early exit SIGPIPEs printf.
+    grep -qFx -- "${scope[${#scope[@]}-1]}" <<<"$FILE_LIST" && continue
+    printf '  SKIP   %s\n         not a concept document — %s names the locations that are\n' "$p" "$AB_SCHEMA"
+    skipped=$((skipped+1))
   done
   FILE_LIST="$(printf '%s\n' ${scope[@]+"${scope[@]}"} | sort -u | grep -Fxf <(printf '%s\n' "$FILE_LIST") - || true)"
 fi
@@ -434,7 +437,7 @@ while IFS= read -r file; do
     fi
   fi
 
-  if ! printf '%s\n' "$fm" | grep -q '^timestamp:[[:space:]]*[^[:space:]]'; then
+  if ! grep -q '^timestamp:[[:space:]]*[^[:space:]]' <<<"$fm"; then
     fail "$rel" "missing required field: timestamp"
   fi
 
@@ -455,19 +458,19 @@ while IFS= read -r file; do
     if [[ -n "$lines" && "$lines" -gt $FINDING_MAX_LINES ]]; then
       warn "$rel" "Finding is $lines lines; $AB_CONVENTIONS 'Write less' caps it at $FINDING_MAX_LINES — the history behind it belongs in the task doc"
     fi
-    if ! printf '%s\n' "$fm" | grep -q '^lesson:[[:space:]]*[^[:space:]]'; then
+    if ! grep -q '^lesson:[[:space:]]*[^[:space:]]' <<<"$fm"; then
       warn "$rel" "Finding has no one-line 'lesson:' — the takeaway the next agent needs, required by $AB_CONVENTIONS 'Write less'"
     fi
     # `author:` is the GitHub login that filed it. Provenance has to survive a file move,
     # so it is frontmatter and never the path — there are no per-user folders in the KB.
     author="$(printf '%s\n' "$fm" | sed -n 's/^author:[[:space:]]*//p' | head -1 \
               | sed 's/[[:space:]]*$//; s/^"\(.*\)"$/\1/; s/^'"'"'\(.*\)'"'"'$/\1/')"
-    if [[ -n "$author" ]] && ! printf '%s' "$author" | grep -qE '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$'; then
+    if [[ -n "$author" ]] && ! grep -qE '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$' <<<"$author"; then
       warn "$rel" "author: '$author' is not a GitHub login ($AB_SCHEMA, 'author:')"
     fi
     # The index row, the tags and the supersession edges are build-kb-index.sh's half of
     # the contract; it reads knowledge/index.md, which is not a concept document.
-    if printf '%s\n' "$fm" | grep -q '^superseded_by:[[:space:]]*[^[:space:]]' \
+    if grep -q '^superseded_by:[[:space:]]*[^[:space:]]' <<<"$fm" \
        && [[ "$(printf '%s\n' "$fm" | sed -n 's/^status:[[:space:]]*//p' | head -1)" != superseded ]]; then
       fail "$rel" "carries superseded_by: but status is not 'superseded' — $AB_SCHEMA 'Superseding a Finding' sets both"
     fi
@@ -529,7 +532,7 @@ if [[ ( ${#NAMED[@]} -eq 0 || $NAMED_INDEX -eq 1 ) && -r knowledge/index.md && -
 fi
 
 echo "---"
-printf 'validate-bundle: %d documents checked, %d errors, %d warnings.\n' "$checked" "$errors" "$warns"
+printf 'validate-bundle: checked %d, skipped %d, %d errors, %d warnings.\n' "$checked" "$skipped" "$errors" "$warns"
 [[ $errors -eq 0 ]] || exit 1
 if [[ $STRICT -eq 1 && $warns -gt 0 ]]; then
   echo "(--strict: warnings are failures)"

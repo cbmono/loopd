@@ -153,6 +153,8 @@ doc projects/live/deliverables/written.md '# a deliverable, not a concept doc'
 doc projects/live/HANDOVER.md '# a doc a human dropped in'
 doc index.md '# bundle index'
 doc log.md '# activity log'
+doc knowledge/log/2026-10.md '# 2026-10 — knowledge log shard'
+doc knowledge/papercuts/2026-10.md '- a papercut line'
 
 set +e
 OUT="$(bash "$VALIDATOR" 2>&1)"; RC=$?
@@ -238,7 +240,8 @@ done
 
 echo "== non-concept files are never validated =="
 for f in 'projects/live/index.md' 'projects/live/log.md' 'projects/live/sources/README.md' \
-         'projects/live/deliverables/written.md' 'projects/live/HANDOVER.md' 'index.md' 'log.md'; do
+         'projects/live/deliverables/written.md' 'projects/live/HANDOVER.md' 'index.md' 'log.md' \
+         'knowledge/log/2026-10.md' 'knowledge/papercuts/2026-10.md'; do
   assert "ignored: $f" "$(grep -q . <<<"$(printf '%s\n' "$OUT" | grep -E "(ERROR|WARN) +$f\$")" && echo 1 || echo 0)"
 done
 
@@ -258,7 +261,7 @@ SKIP_ONE="$(bash "$VALIDATOR" projects/live/HANDOVER.md 2>&1)"; SKIP_RC=$?
 set -e
 one() { grep -q -- "$1" <<<"$ONE" && echo 0 || echo 1; }
 assert "a named Finding is checked on its own"    "$(one 'Finding is 48 lines')"
-assert "…and only it"                             "$(grep -q '1 documents checked' <<<"$ONE" && echo 0 || echo 1)"
+assert "…and only it"                             "$(grep -q 'checked 1, skipped 0,' <<<"$ONE" && echo 0 || echo 1)"
 assert "…so another document's error is not reported" "$(grep -q 'unknown type' <<<"$ONE" && echo 1 || echo 0)"
 assert "…and a warning alone still exits 0"       "$([[ $ONE_RC -eq 0 ]] && echo 0 || echo 1)"
 assert "--strict gates the single document"       "$([[ $ONE_STRICT_RC -eq 1 ]] && echo 0 || echo 1)"
@@ -266,6 +269,32 @@ assert "an absolute path names the same document" "$(grep -q 'Finding is 48 line
 assert "a clean named document is silent"         "$(grep -q '0 errors, 0 warnings' <<<"$GOOD_ONE" && echo 0 || echo 1)"
 assert "a named non-concept file is SKIPped"      "$(grep -q 'SKIP   projects/live/HANDOVER.md' <<<"$SKIP_ONE" && echo 0 || echo 1)"
 assert "…not turned into an error"                "$([[ $SKIP_RC -eq 0 ]] && echo 0 || echo 1)"
+
+echo "== a named path is found whatever its form or order, past a 64 KiB FILE_LIST =="
+# `printf | grep -q` under pipefail: grep exits on the first match, printf takes SIGPIPE once
+# the list outgrows the pipe buffer, and a checked document was also reported SKIP.
+BIG="$TMP/big"; mkdir -p "$BIG/knowledge/findings" "$BIG/knowledge/log" "$BIG/knowledge/papercuts"; cd "$BIG"
+echo '{ "org": "x", "reposRoot": "/tmp" }' > instance.config.json; echo '# Schema' > SCHEMA.md
+doc knowledge/findings/a.md '---' 'type: Finding' 'title: A' 'lesson: l' 'status: current' 'provenance: machine' "timestamp: $TS" '---' 'body'
+cp knowledge/findings/a.md knowledge/findings/b.md
+PAD="$(printf 'p%.0s' $(seq 1 200))"
+for i in $(seq 1 300); do cp knowledge/findings/a.md "knowledge/findings/z$i-$PAD.md"; done
+doc knowledge/log/2026-10.md '# 2026-10'
+doc knowledge/papercuts/2026-10.md '- a papercut line'
+set +e
+BIG_AB="$(bash "$VALIDATOR" knowledge/findings/a.md knowledge/findings/b.md 2>&1)"
+BIG_BA="$(bash "$VALIDATOR" knowledge/findings/b.md knowledge/findings/a.md 2>&1)"
+BIG_ABS_AB="$(bash "$VALIDATOR" "$BIG/knowledge/findings/a.md" "$BIG/knowledge/findings/b.md" 2>&1)"
+BIG_ABS_BA="$(bash "$VALIDATOR" "$BIG/knowledge/findings/b.md" "$BIG/knowledge/findings/a.md" 2>&1)"
+set -e
+assert "the fixture's FILE_LIST is over 64 KiB" \
+  "$([[ $(find ./knowledge -name '*.md' | wc -c) -gt 65536 ]] && echo 0 || echo 1)"
+assert "two named Findings: checked 2, skipped 0, 0 errors" \
+  "$(grep -q 'checked 2, skipped 0, 0 errors, 0 warnings' <<<"$BIG_AB" && echo 0 || echo 1)"
+assert "…with no SKIP line"                        "$(grep -q 'SKIP' <<<"$BIG_AB" && echo 1 || echo 0)"
+assert "…and the same output in either order, relative or absolute" \
+  "$([[ "$BIG_AB" == "$BIG_BA" && "$BIG_AB" == "$BIG_ABS_AB" && "$BIG_AB" == "$BIG_ABS_BA" ]] && echo 0 || echo 1)"
+cd "$B"
 
 echo "== the knowledge/index.md drift check is bundle-level, so a named scope leaves it out =="
 STALE='carries rows the generator would not produce'
@@ -297,7 +326,7 @@ git init -q . && git add -A \
   for i in $(seq 1 50); do echo "line $i"; done; } > knowledge/findings/just-written.md
 set +e; CH="$(bash "$VALIDATOR" --changed 2>&1)"; set -e
 assert "an untracked over-long Finding is caught" "$(grep -q 'just-written.md' <<<"$CH" && echo 0 || echo 1)"
-assert "…and the committed clean one is not rechecked" "$(grep -q '1 documents checked' <<<"$CH" && echo 0 || echo 1)"
+assert "…and the committed clean one is not rechecked" "$(grep -q 'checked 1, skipped 0,' <<<"$CH" && echo 0 || echo 1)"
 cd "$B"
 
 echo "== a clean bundle passes, and --strict still passes with no warnings =="
@@ -340,7 +369,7 @@ assert "…and --strict passes too"                "$([[ $NOOBJ_STRICT_RC -eq 0 
 assert "a project with success_criteria and no objective: is silent" \
   "$(grep -q 'projects/solo/project.md' <<<"$NOOBJ_OUT" && echo 1 || echo 0)"
 assert "…and its documents were actually checked, not skipped" \
-  "$(grep -q '2 documents checked' <<<"$NOOBJ_OUT" && echo 0 || echo 1)"
+  "$(grep -q 'checked 2, skipped 0,' <<<"$NOOBJ_OUT" && echo 0 || echo 1)"
 
 echo "== malformed frontmatter is an error, per measured fault class =="
 # Each of these four made a real document unreadable to every YAML consumer while
