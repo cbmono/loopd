@@ -2,7 +2,7 @@
 name: answer
 disable-model-invocation: true
 description: Answer the PM's pending open_questions interactively — gather the unanswered questions (all projects, one project, or one task), ask them in one batch, then fold the answers back into the tasks (clearing them). In-session convenience instead of editing each task file by hand.
-argument-hint: "[<project-slug> | projects/<slug> | <task path> [Q<n>] <n | more | text>]  omit for every project"
+argument-hint: "[<project-slug> | projects/<slug> | <task path> [Q<n>] <n | more | later | text>]  omit for every project"
 allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh:*), Read, Edit, Glob, Grep, AskUserQuestion
 ---
 
@@ -28,7 +28,7 @@ wins", row 1.)
   match, list the project slugs that exist, and stop — never fall back to all
   projects on a typo, silently widening what gets edited.
 
-## One answer from the arguments — `<task path> [Q<n>] <n | more | text>`
+## One answer from the arguments — `<task path> [Q<n>] <n | more | later | text>`
 When a task path is followed by more words, run exactly
 `bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path> [Q<n>] <the rest>` and relay its
 output; skip the steps below. It answers `Q<n>`, else the first open question: a bare
@@ -38,12 +38,14 @@ any other words are the answer. It moves the entry exactly as step 3 does, commi
 you through `commit-as.sh human`, then pushes it through `push-commit.sh` when the clone has
 an upstream. It bakes nothing into the body: the moved line and the `### Q<n>` block are
 the record. `more` prints the next stored depth (1, then 2, then 3) and changes no tracked file.
+`later` sends `Q<n>` to the end of the pane's inbox (one line in this clone's untracked
+`AB_ANSWER_LATER` file) and changes no tracked file either; only a numbered question can wait.
 - **Exit 5** — `more` is past the stored depths: answer the question yourself, here, from
   the task document and its sources, one level deeper than depth 3. Write nothing.
 - **Exit 1** — relay its one sentence and stop. **Exit 3** — the move was refused,
   nothing written. **Exit 4** — the answer is recorded but not pushed: relay the line
-  and stop; a rebase it did not start is left alone. **Exit 6** — `more` could not save
-  its depth: relay the line and stop. Never force-push, never resolve a rebase for the human.
+  and stop; a rebase it did not start is left alone. **Exit 6** — `more` or `later` could not save
+  its record: relay the line and stop. Never force-push, never resolve a rebase for the human.
 
 ## Steps
 1. **Gather.** Within the scope above, collect every task with a non-empty

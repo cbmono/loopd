@@ -4,9 +4,10 @@
 # stall_count (consecutive rounds on one blocker) and last_blocker. Progress resets it:
 # a changed blocker, a human edit (a capped task back in draft/ready), or --progress from
 # the tick (PR activity it observed). Usage: record <task> --blocker <text> [--progress] |
-# escalate <task> | status <task>. Exit: 0 under the cap (count on stdout), 1 at/over the
-# cap (do not dispatch; run escalate), 2 cannot answer, 3 write failed (temp-file writes,
-# nothing partial). Reasoning: ai-bridge-next/task-011 and its Finding.
+# escalate <task> | status <task> | reset <task> (stall_count 0, last_blocker kept). Exit: 0
+# under the cap (count on stdout), 1 at/over the cap (do not dispatch; run escalate), 2
+# cannot answer, 3 write failed (temp-file writes, nothing partial). Reasoning:
+# ai-bridge-next/task-011 and its Finding.
 set -uo pipefail
 
 # THE SELF PATH IS RESOLVED THROUGH THE SYMLINK, the same idiom and the same reason as
@@ -20,7 +21,7 @@ HERE="$(cd -- "$(dirname -- "$SELF")" 2>/dev/null && pwd -P)" || HERE=""
 DEFAULT_MAX=2
 
 usage() {
-  sed -n '6,8p' "$0" >&2
+  sed -n '6,9p' "$0" >&2
   exit 2
 }
 
@@ -177,7 +178,7 @@ append_note() { # <task-doc> <bullet> <dedupe-key>
 # commands
 
 CMD="${1:-}"; shift 2>/dev/null || true
-case "$CMD" in record|escalate|status) ;; -h|--help|'') usage ;; *) echo "stall-counter: unknown command '$CMD'" >&2; usage ;; esac
+case "$CMD" in record|escalate|status|reset) ;; -h|--help|'') usage ;; *) echo "stall-counter: unknown command '$CMD'" >&2; usage ;; esac
 
 TASK="${1:-}"; [ -n "$TASK" ] || usage; shift
 [ -f "$TASK" ] || { echo "stall-counter: no such task document: $TASK" >&2; exit 2; }
@@ -225,6 +226,12 @@ case "$CMD" in
     printf 'stall_count=%s max=%s last_blocker=%s\n' "$COUNT" "$MAX" "$LAST"
     [ "$COUNT" -lt "$MAX" ]
     exit $?
+    ;;
+
+  reset)
+    set_field "$TASK" stall_count 0 || { echo "stall-counter: could not write stall_count" >&2; exit 3; }
+    printf 'RESET  stall 0/%s\n' "$MAX"
+    exit 0
     ;;
 
   record)

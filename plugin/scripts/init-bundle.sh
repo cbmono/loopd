@@ -2029,6 +2029,16 @@ if ! grep -qE "^/?${AB_RECEIPTS//./\\.}/?$" "$gi"; then
 GI
 fi
 
+# The questions `answer.sh later` deferred — its OWN guard, for the same reason as the two above.
+if ! grep -qE "^/?${AB_ANSWER_LATER//./\\.}$" "$gi"; then
+  gi_add <<'GI'
+
+# The questions `/loopd:answer <task> Q<n> later` sent to the end of the pane's inbox
+# (answer.sh). Per clone and never committed; delete freely (absence = nothing deferred).
+/__AB_ANSWER_LATER__
+GI
+fi
+
 # The copies refresh-seeds.sh keeps — its own guard, the .tick-lock.claim lesson again:
 # every bundle in existence satisfies the guards above, so a line added to one of their
 # heredocs reaches nobody.
@@ -3307,7 +3317,7 @@ if [ "$FIRST_STAMP" = no ] && [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
   # ("newline in string") and the whole tidy then silently did nothing. Every path here is
   # a resolver constant, so none can contain a space.
   if [ -f "$gi" ]; then
-    gi_managed="/$AB_LOCK /$AB_LOCK_CLAIM /$AB_STATE_DIR /$AB_BOARD_OTHERS"
+    gi_managed="/$AB_LOCK /$AB_LOCK_CLAIM /$AB_STATE_DIR /$AB_ANSWER_LATER /$AB_BOARD_OTHERS"
     gi_managed="$gi_managed /$AB_BOARD_DIR/ /$AB_AWAITING /$AB_SNAPSHOT /$AB_DIR/kb.git/ /$AB_DIR/kb-src/"
     tmp="$gi.tmp.$$"
     if awk -v managed="$gi_managed" '

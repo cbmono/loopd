@@ -2,12 +2,13 @@
 #
 # answer.sh — answer one open question of one task: option n, free text, or `more`.
 #
-#   Usage: answer.sh [--instance DIR] <task-doc> [Q<n>] <n | more | --text <answer> | <answer>...>
+#   Usage: answer.sh [--instance DIR] <task-doc> [Q<n>] <n | more | later | --text <answer> | <answer>...>
 #
 # No Q<n> ⇒ the first unanswered entry. A bare integer is an option of its `### Q<n>` block.
+# `later` appends `<task path>#Q<n>` to AB_ANSWER_LATER; neither it nor `more` edits a tracked file.
 # Exit: 0 done · 1 refused, one sentence · 2 usage · 3 the move refused, nothing written
 #       4 committed, but the commit, rebase or push failed — nothing forced · 5 `more` is past the stored depths
-#       6 `more` could not save its depth, nothing printed
+#       6 `more` or `later` could not save its record, nothing printed
 # Reasoning: simple-board/task-002.
 set -uo pipefail
 
@@ -49,6 +50,16 @@ fi
 qlabel=""; [[ "$entry" =~ ^(Q[0-9]+): ]] && qlabel="${BASH_REMATCH[1]}"
 state="$inst/$AB_ANSWER_DEPTH"
 depth_file="$state/$(printf '%s\n%s' "$(cd "$(dirname "$doc")" && pwd -P)/$task" "$entry" | cksum | awk '{print $1}')"
+later="$inst/$AB_ANSWER_LATER"
+doc_abs="$(cd "$(dirname "$doc")" && pwd -P)/$(basename "$doc")"
+inst_abs="$(cd "$inst" 2>/dev/null && pwd -P)"
+key=""; [ -n "$qlabel" ] && [ -n "$inst_abs" ] && [ "${doc_abs#"$inst_abs"/}" != "$doc_abs" ] && key="${doc_abs#"$inst_abs"/}#$qlabel"
+# unlater [<line>] — drop this question's key from the later file, then append <line>.
+unlater() {
+  [ -n "$key" ] && { [ -f "$later" ] || [ -n "${1:-}" ]; } || return 0
+  mkdir -p "$(dirname "$later")" && { grep -vxF -- "$key" "$later" 2>/dev/null; [ -z "${1:-}" ] || printf '%s\n' "$1"; } > "$later.tmp" &&
+    mv -f "$later.tmp" "$later"
+}
 
 # block <option|depth> <k> — prints how many are stored, then item k when it exists.
 block() {
@@ -94,6 +105,14 @@ if 1 <= k <= n:
 PY
 }
 
+if [ "$forced" -eq 0 ] && [ "$reply" = "later" ]; then
+  [ -n "$qlabel" ] || refuse "Only a numbered question (Q<n>) can wait; answer this one now."
+  [ -n "$key" ] || refuse "$doc is not under the bundle at $inst, so later has nowhere to record it."
+  unlater "$key" 2>/dev/null || { echo "answer: could not save later under $later" >&2; exit 6; }
+  echo "$qlabel on $task moved to the end."
+  exit 0
+fi
+
 if [ "$forced" -eq 0 ] && [ "$reply" = "more" ]; then
   seen="$(cat "$depth_file" 2>/dev/null || echo 0)"
   out="$(block depth $((seen + 1)))"
@@ -122,6 +141,7 @@ fi
 
 bash "$HERE/fold-answers.sh" --instance "$inst" --answer "$entry" "$answer" "$doc" >/dev/null || exit 3
 rm -f "$depth_file"
+unlater 2>/dev/null
 echo "answered ${qlabel:-the question} on $task: $answer"
 
 dir="$(cd "$(dirname "$doc")" && pwd -P)"
