@@ -15,6 +15,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `## Question details` (`SCHEMA.md` → "Question details"): choose the recommendation,
    list it first under `Options:`, and write `Depth 1`, `Depth 2` and `Depth 3` once,
    now — nothing calls a model at answer time; otherwise leave it a clean `draft`.
+   **No login, no browser-reproduction criterion.** For an app with no known login, refine
+   does not draft one: it writes it as a `✗ — needs a login` row, or leaves it out.
+
    **Promotion follows the owning project's `autonomy`** (see Authority boundaries):
    leave it `draft` for the human unless that project delegates promotion and
    `AUTONOMY.md` defines the mode.

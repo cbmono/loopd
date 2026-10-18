@@ -964,8 +964,9 @@ above it so none may grow its share.
   each agent uses its own worktree under `worktreeRoot` (from `instance.config.json`
   — outside any synced folder; **never** inside `reposRoot`. Absent that key, fall
   back to `<reposRoot>/_wt`) and a **private package
-  store** (e.g. `pnpm install --store-dir <worktree>/.pnpm-store`), and pushes
-  early.
+  store** where the repo's own package manager has one (that manager, as the
+  target repo's `CLAUDE.md` states it — never assume one; e.g. a pnpm repo takes
+  `--store-dir <worktree>/.pnpm-store`), and pushes early.
   **THE HOOK CREATES IT — CHECK BEFORE YOU CREATE ONE.** A session started as
   `claude --worktree <task-id>` is placed by `plugin/hooks/worktree-create.sh` in
   `<worktreeRoot>/<task-id>` of your `target_repo`, on the task's `branch:`, and that is
