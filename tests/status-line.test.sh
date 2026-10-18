@@ -222,8 +222,8 @@ ok "a free lock is dim, not shouting"       "$(sgr_of "$C" 'lock free')" 2
 ok "…and a held one is the machine's blue"  "$(sgr_of "$(run --instance "$INST" --color always)" 'lock held')" 94
 rm -f "$INST/$AB_LOCK"
 ok "the last tick is a timestamp, so dim italic" "$(sgr_of "$C" 'last tick')" '3;2'
-ok "no third hue: every code emitted is blue, pink, bold, dim or dim italic" \
-   "$(printf '%s' "$C" | tr '\033' '\n' | grep -oE '^\[[0-9;]+m' | sort -u | grep -vcE '^\[(94|95|1|2|3;2|0)m$' | tr -d ' ')" 0
+ok "no other hue: every code emitted is blue, pink, bold, dim, dim italic or the green" \
+   "$(printf '%s' "$C" | tr '\033' '\n' | grep -oE '^\[[0-9;]+m' | sort -u | grep -vcE '^\[(94|95|1|2|3;2|0|38;2;118;214;164)m$' | tr -d ' ')" 0
 Z="$(run --instance "$TMP/d5" --color always)"
 ok "zero in flight goes dim, not blue"      "$(sgr_of "$Z" '0 in flight')" 2
 U="$(run --instance "$TMP/d4" --color always)"
@@ -238,9 +238,31 @@ chmod 644 "$TMP/d10/$AB_AWAITING"
 ok "an off queue paints nothing, because it is not a fault" \
    "$(printf '%s' "$(run --instance "$TMP/d1" --color always)" | grep -c 'need you\|unreadable' | tr -d ' ')" 0
 
+# RUNNING AGENTS ARE THE BRAND'S GREEN, 24-bit whatever tier (owner, 2026-10-18). The agents
+# cache is seeded directly: `<epoch> <running> <no process>`, keyed as status-line.sh keys it.
+GREEN='38;2;118;214;164'
+seed_agents() { # <bundle> <cache line after the epoch>
+  local f; f="$XDG_CACHE_HOME/loopd/agents-$(printf '%s' "$1" | cksum | cut -d' ' -f1)"
+  mkdir -p "${f%/*}"; printf '%s %s\n' "$(date +%s)" "$2" > "$f"
+}
+agents_sgr() { sgr_of "$(run --instance "$1" --color always)" 'agents '; }
+D="$TMP/g1"; mk "$D"
+seed_agents "$D" "2 0";       ok "running agents are the brand's green"       "$(agents_sgr "$D")" "$GREEN"
+ok "…and that is the only segment wearing it" \
+   "$(run --instance "$D" --color always | grep -oF "$GREEN" | wc -l | tr -d ' ')" 1
+seed_agents "$D" "0 0";       ok "zero running stays dim, not green"           "$(agents_sgr "$D")" 2
+seed_agents "$D" "2 3";       ok "a session with no process stays pink"        "$(agents_sgr "$D")" 95
+seed_agents "$D" "garbage";   ok "an unknown count stays pink"                 "$(agents_sgr "$D")" 95
+NG="$TMP/no-green"; cp -R "$REPO/plugin/scripts" "$NG"
+sed 's/"\$C_GREEN")" "agents/"$C_BLUE")" "agents/' "$SL" > "$NG/status-line.sh"
+seed_agents "$D" "2 0"
+ok "…mutant: painting it blue again is caught" \
+   "$(sgr_of "$(SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NG/status-line.sh" --instance "$D" --color always </dev/null 2>/dev/null)" 'agents ')" 94
+
 echo
-echo "== 8. 3/4-bit ONLY — no 256-colour, no truecolor, no terminfo probe =="
-# The codes live in cli-theme.sh; this file asks for its `basic` tier by name, never `auto`.
+echo "== 8. 3/4-bit but the green, all codes from cli-theme.sh, no terminfo probe =="
+# The codes live in cli-theme.sh; this file asks for its `basic` tier by name, never `auto`,
+# and the green alone from its `truecolor` tier.
 ok "the theme's basic tier is asked for by name" "$(grep -c 'ab_theme "\$use_color" basic' "$SL" | tr -d ' ')" 1
 ok "…and this file builds no escape of its own"  "$(grep -v '^[[:space:]]*#' "$SL" | grep -c '033' | tr -d ' ')" 0
 NT="$TMP/no-theme"; mkdir -p "$NT"

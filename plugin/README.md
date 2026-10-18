@@ -22,8 +22,8 @@ Joining somebody's bundle and running two commands, no more: [`docs/onboarding.m
 
 **It also ships a colour theme.** `themes/loopd.json`, declared by `experimental.themes`
 and listed in `/theme` as `custom:loopd:loopd` — select it there, because nothing
-here writes your `theme` setting. The palette is a duotone — blue is the machine's, pink is
-yours — and every colour in it comes from
+here writes your `theme` setting. Blue is the machine's and pink is yours; green #76d6a4
+marks done, and a dark tint of it sits behind your past prompts. Every colour comes from
 [`tests/fixtures/theme-palette.txt`](../tests/fixtures/theme-palette.txt); the token names a
 theme file may use are listed once, in
 [`tests/fixtures/theme-tokens.txt`](../tests/fixtures/theme-tokens.txt).

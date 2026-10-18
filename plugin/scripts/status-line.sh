@@ -57,8 +57,10 @@ done
 # `statusLine` command's stdout is ALWAYS a pipe into Claude Code, which renders the SGR
 # itself — so `[ -t 1 ]` would strip the colour off the one surface that must carry it.
 # `NO_COLOR` and `--color never` are the opt-outs, exactly as everywhere else here.
-# 3/4-bit only, so `cli-theme.sh`'s `basic` tier is ASKED FOR BY NAME and nothing is probed:
+# 3/4-bit, so `cli-theme.sh`'s `basic` tier is ASKED FOR BY NAME and nothing is probed:
 # `COLORTERM` and `tput colors` are not reliably inherited by a process Claude Code spawns.
+# One exception: running agents take the TRUECOLOR green, because basic 92 is whatever green
+# the terminal's palette holds and the owner chose the brand's (cli-theme.sh's header).
 use_color=0
 case "$COLOR" in
   always) use_color=1 ;;
@@ -68,6 +70,8 @@ esac
 # shellcheck source=cli-theme.sh
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/cli-theme.sh" 2>/dev/null
 command -v ab_theme >/dev/null 2>&1 || ab_theme() { :; }
+ab_theme "$use_color" truecolor
+C_GREEN="${T_GREEN:-}"
 ab_theme "$use_color" basic
 C_B="${T_BOLD:-}"; C_DIM="${T_DIM:-}"; C_DIMI="${T_DIMI:-}"
 C_BLUE="${T_BLUE:-}"; C_PINK="${T_PINK:-}"; C_OFF="${T_OFF:-}"
@@ -175,7 +179,7 @@ if [ "$agents" = "$UNKNOWN" ]; then
 elif [ "$a_none" -gt 0 ]; then
   printf '%s%s' "$SEP" "$(paint "$C_PINK" "agents $a_run running, $a_none no process")"
 else
-  printf '%s%s' "$SEP" "$(paint "$(n_colour "$a_run" "$C_BLUE")" "agents $a_run running")"
+  printf '%s%s' "$SEP" "$(paint "$(n_colour "$a_run" "$C_GREEN")" "agents $a_run running")"
 fi
 case "$queue" in
   on)         printf '%s%s' "$SEP" "$(paint "$(n_colour "$awaiting" "$C_PINK")" "$awaiting need you")" ;;

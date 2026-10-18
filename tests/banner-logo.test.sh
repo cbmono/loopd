@@ -158,12 +158,14 @@ for code in '[94m' '[95m' '[1;93m'; do
   assert "the 3/4-bit tier still carries $code" "$(eq "$(grep -cF -- "$code" "$THEME")" 1)"
 done
 # EVERY ESCAPE THE THEME HELPER SPELLS IS ONE cli-theme.json DEFINES — nothing composed.
+# The one addition is T_GREEN, the brand's #76d6a4 (theme-palette.txt) and its nearest 256
+# code, by the owner's decision of 2026-10-18 (interactive-board/task-007).
 assert "every truecolor escape in cli-theme.sh is a cli-theme.json value" \
   "$(eq "$(grep -oE '38;2;[0-9;]+' "$THEME" | sort -u \
-      | grep -vcE '^(38;2;94;162;255|38;2;255;122;194|38;2;233;237;244|38;2;154;164;181|38;2;108;116;136)$')" 0)"
+      | grep -vcE '^(38;2;94;162;255|38;2;255;122;194|38;2;233;237;244|38;2;154;164;181|38;2;108;116;136|38;2;118;214;164)$')" 0)"
 assert "every 256-colour escape in cli-theme.sh is a cli-theme.json value" \
   "$(eq "$(grep -oE '38;5;[0-9]+' "$THEME" | sort -u \
-      | grep -vcE '^38;5;(75|212|255|248|243)$')" 0)"
+      | grep -vcE '^38;5;(75|212|255|248|243|115)$')" 0)"
 
 # =======================================================================================
 echo "== 3. the opt-outs leave the three rows with NO SGR at all =="

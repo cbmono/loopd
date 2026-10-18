@@ -36,13 +36,13 @@
     "diffAddedDimmed": "#1c212b",
     "diffRemovedDimmed": "#1c212b",
 
-    "userMessageBackground": "#171b22",
-    "userMessageBackgroundHover": "#1c212b",
+    "userMessageBackground": "#223132",
+    "userMessageBackgroundHover": "#2a403c",
     "bashMessageBackgroundColor": "#14171c",
     "memoryBackgroundColor": "#616161",
     "selectionBg": "#33405a",
 
-    "briefLabelYou": "#e9edf4",
+    "briefLabelYou": "#76d6a4",
     "briefLabelClaude": "#5ea2ff",
     "rate_limit_fill": "#5ea2ff",
     "rate_limit_empty": "#262c37",
