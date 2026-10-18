@@ -58,8 +58,8 @@
 # `objectives/*.md` (OPTIONAL — a bundle with none is valid), `projects/*/project.md`,
 # `projects/*/phases/*.md`, `projects/*/tasks/*.md`, `knowledge/<kind>/*.md`. Everything
 # else — `index.md`, `log.md`, the `knowledge/{log,papercuts}/` month shards, `sources/`,
-# `deliverables/`, a doc a human dropped into a
-# project — is content or navigation. The first version of this script validated those
+# `deliverables/`, a doc a human dropped into a project — is content or navigation. The
+# first version of this script validated those
 # too and buried 6 real errors under 77 warnings, which is exactly how a validator
 # teaches people to ignore it.
 #
