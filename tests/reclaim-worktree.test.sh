@@ -463,12 +463,21 @@ run --dry-run "projects/demo/tasks/task-build.md"
 assert "G12 an ignored .env.local still refuses, config or not" "$(eq "$RC" 1)"
 CLEAN="$(tail -n1 <<<"$OUT")"
 assert "G12 …and ends with the exact clean command" \
-  "$(eq "$CLEAN" "git -C '$WT_BUILD' clean -fdX -- '.env.local'")"
+  "$(eq "$CLEAN" "git -C $WT_BUILD clean -fdX -- .env.local")"
 eval "$CLEAN" >/dev/null
 run --dry-run "projects/demo/tasks/task-build.md"
 assert "G12 …which, run as printed, clears it" "$(eq "$RC" 0)"
 assert "G12 …having taken only the .env.local" \
   "$(eq "$(no_if test -e "$WT_BUILD/.env.local") $(yes_if test -f "$WT_BUILD/target/app.bin")" "0 0")"
+
+HOSTILE="x';touch pwned;'"
+printf 'x\n' > "$WT_BUILD/.env.local"; printf 'x\n' > "$WT_BUILD/$HOSTILE"
+printf '%s\n' "$HOSTILE" >> "$REPO/.git/info/exclude"
+run --dry-run "projects/demo/tasks/task-build.md"
+CLEAN="$(tail -n1 <<<"$OUT")"
+( cd "$TMP" && eval "$CLEAN" >/dev/null 2>&1 )
+assert "G12 a quote in an ignored filename cannot break out of the printed command" \
+  "$(eq "$(no_if test -e "$TMP/pwned") $(no_if test -e "$WT_BUILD/$HOSTILE")" "0 0")"
 rm -f "$INSTANCE/instance.config.local.json"
 
 echo "== G13: nothing is running inside it =="

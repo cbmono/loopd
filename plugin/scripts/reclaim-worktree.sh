@@ -342,7 +342,7 @@ keepers="${keepers%$'\n'}"
         ignored file — so the last word on it stays the human's:
 $(printf '%s\n' "$keepers" | sed 's/^/          /' | head -20)
         If none of it is yours, delete it and ask again:
-git -C '$WT' clean -fdX --$(printf '%s\n' "$keepers" | while IFS= read -r k; do printf " '%s'" "$k"; done)"
+git -C $(printf '%q' "$WT") clean -fdX --$(printf '%s\n' "$keepers" | while IFS= read -r k; do printf ' %q' "$k"; done)"
 
 # --- G13: nothing is running in it -------------------------------------------
 # This replaces the pruner's PRUNE_ACTIVE_MINUTES veto rather than inheriting it: on this
