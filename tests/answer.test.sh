@@ -137,7 +137,7 @@ ok "…and nothing to the depth store but integers" \
 ok "no tracked file changes"                 "$(git -C "$B" status --porcelain --untracked-files=no | wc -l | tr -d ' ')" 0
 ok "…the task is byte-identical"             "$(cmp -s "$B/$TASK_REL" "$TMP/later.before" && echo yes || echo no)" yes
 ok "…and nothing was committed"              "$(git -C "$B" rev-list --count HEAD)" 1
-ok "more after later returns its next depth" "$(run "$B" Q1 more 2>&1 | head -n1)" "Depth 2 of 3 · Q1"
+ok "more after later returns its next depth" "$(OUT="$(run "$B" Q1 more 2>&1)"; head -n1 <<<"$OUT")" "Depth 2 of 3 · Q1"
 run "$B" Q2 later >/dev/null 2>&1; run "$B" Q1 later >/dev/null 2>&1
 ok "a second later moves it to the end, once" "$(tr '\n' '|' < "$LATER")" "$TASK_REL#Q2|$TASK_REL#Q1|"
 run "$B" Q1 1 >/dev/null 2>&1

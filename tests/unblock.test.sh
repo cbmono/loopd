@@ -49,7 +49,7 @@ MD
   echo "$b"
 }
 run() { local b="$1"; shift; (cd "$b" && bash "$SH" "$TASK_REL" "$@"); }
-field() { sed -n "s/^$2: *//p" "$1/$TASK_REL" | head -n1; }
+field() { sed -n "s/^$2: *//p" "$1/$TASK_REL" | sed -n 1p; }
 
 echo "== REFUSAL: a task that is not blocked is left exactly as it was =="
 B="$(fixture ready in-progress)"
