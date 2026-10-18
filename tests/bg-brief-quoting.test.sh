@@ -20,7 +20,7 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-62s (%s)\n' "$1" "$2"; pass=$(
 yn() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
 
 mkdir -p "$TMP/bin" "$TMP/wt"
-printf '#!/bin/sh\nprintf %%s "$2" > "$GOT"\necho "backgrounded · stub0000"\n' > "$TMP/bin/claude"
+printf '#!/bin/sh\nfor a; do :; done\nprintf %%s "$a" > "$GOT"\necho "backgrounded · stub0000"\n' > "$TMP/bin/claude"
 chmod +x "$TMP/bin/claude"
 
 MARK="<the whole brief>"
@@ -39,7 +39,7 @@ ESC="${ESC%x}"
 run() { # <block with the brief marker replaced by its quoted form>
   local cmd="$1"
   cmd="${cmd//<worktree>/$TMP/wt}"; cmd="${cmd//<assignee>/software-engineer}"
-  cmd="${cmd//<the alias you resolved>/haiku}"; cmd="${cmd//<bundle root>/$TMP}"
+  cmd="${cmd//<alias>/haiku}"; cmd="${cmd//<bundle root>/$TMP}"
   rm -f "$TMP/got" "$TMP/ran" "$TMP/ran2"
   printf '%s\n' "$cmd" > "$TMP/spawn.sh"
   PATH="$TMP/bin:$PATH" GOT="$TMP/got" bash "$TMP/spawn.sh" >/dev/null 2>&1

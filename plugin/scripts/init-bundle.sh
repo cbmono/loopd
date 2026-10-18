@@ -1699,7 +1699,20 @@ fi
 # it that nothing named. The owner's decision that day: ask at a terminal, Y by default;
 # write nothing on any other path. `--spawn-grant` is that yes relayed by a session that
 # has no terminal. docs/operations.md -> "The supported shape"; tests/no-bg-grant.test.sh.
-BG_RULE="Bash(claude --bg * --agent ${PLUGIN_NAME}:* --permission-mode auto --add-dir *)"
+# One rule per role, every fixed flag before one trailing `*` (Claude Code warns on a mid-rule
+# one), and the PHYSICAL bundle path: step 3 types that spelling, and a rule cannot quote.
+BG_ROLES="software-engineer devops-engineer qa-reviewer cataloguer"
+BG_ROOT="$(cd "$TARGET" && pwd -P)"
+bg_rule() { # <role> -> its spawn rule
+  printf 'Bash(claude --bg --agent %s:%s --permission-mode auto --add-dir %s --model *)\n' "$PLUGIN_NAME" "$1" "$BG_ROOT"
+}
+BG_RULES=""
+case "$BG_ROOT" in
+  *[[:space:]]*|*[]\'\"\`\$\\*?[\(\)\<\>\|\&\;\!\#{}]*)
+    echo "  note  no \`claude --bg\` spawn rule: the bundle path \`$BG_ROOT\` needs shell quoting, and a rule cannot carry a quote character." ;;
+  *) BG_RULES="$(for r in $BG_ROLES; do bg_rule "$r"; done)" ;;
+esac
+BG_OLD="Bash(claude --bg * --agent ${PLUGIN_NAME}:* --permission-mode auto --add-dir *)"
 BG_BROAD="Bash(claude --bg *)"
 BG_INERT="Bash(claude --bg ' *)"
 STOP_RULE="Bash(claude stop *)"
@@ -1720,15 +1733,18 @@ PY
   elif [ "$2" = allow ]; then grep -o "\"${BG_BROAD%% *}[^\"]*)\"" "$1" | sed 's/^"//; s/"$//'; fi
 }
 bg_has() { bg_list "$AL_FILE" allow | grep -qxF -- "$1"; }
-bg_missing="$(for r in "$BG_RULE" "$STOP_RULE"; do bg_has "$r" || printf '%s\n' "$r"; done)"
-bg_denied="$(bg_list "$AL_FILE" deny | grep -xF -e "$BG_RULE" -e "$STOP_RULE" || true)"
+BG_WANT="$(printf '%s\n' "$BG_RULES" "$STOP_RULE" | grep .)"
+bg_missing="$(printf '%s\n' "$BG_WANT" | while IFS= read -r r; do bg_has "$r" || printf '%s\n' "$r"; done)"
+bg_denied="$(bg_list "$AL_FILE" deny | grep -xF -- "$BG_WANT" || true)"
 # Every spawn rule in the file that matches far too much or nothing at all, as
-# "<rule>\t<why>": the bare wildcard, a bypassPermissions spawn, a retired agent namespace.
+# "<rule>\t<why>": the bare wildcard, the pre-reorder rule (string-equal only), a
+# bypassPermissions spawn, a retired agent namespace.
 bg_stale=""
 if [ -f "$AL_FILE" ]; then
   bg_stale="$( { bg_list "$AL_FILE" allow | grep -E '^Bash\(claude --bg ' || true; } \
-    | awk -v broad="$BG_BROAD" -v pn="$PLUGIN_NAME" '
+    | awk -v broad="$BG_BROAD" -v old="$BG_OLD" -v pn="$PLUGIN_NAME" '
         $0 == broad { print $0 "\tover-broad: it allows ANY claude --bg command"; next }
+        $0 == old { print $0 "\tstale: its * after --bg also approves any flag inserted there"; next }
         index($0, "--permission-mode bypassPermissions") { print $0 "\tstale: the tick spawns in auto mode now, so it matches nothing"; next }
         match($0, /--agent [^:* ]+:/) { ns = substr($0, RSTART + 8, RLENGTH - 9); if (ns != pn) print $0 "\tstale: names the retired " ns ": namespace" }')"
 fi
@@ -1759,7 +1775,9 @@ PY
 }
 bg_verify() { # <file> — parses, carries each rule once, and none of the stale ones
   team_json_ok "$1" || return 1
-  for bg_r in "$BG_RULE" "$STOP_RULE"; do [ "$(bg_list "$1" allow | grep -cxF -- "$bg_r")" = 1 ] || return 1; done
+  while IFS= read -r bg_r; do [ "$(bg_list "$1" allow | grep -cxF -- "$bg_r")" = 1 ] || return 1; done <<EOF
+$BG_WANT
+EOF
   while IFS= read -r bg_s; do
     [ -z "$bg_s" ] || ! bg_list "$1" allow | grep -qxF -- "$bg_s" || return 1
   done <<EOF
@@ -1814,7 +1832,7 @@ if [ "$bg_want" = yes ] || [ -n "$bg_stale" ]; then
     if [ "$bg_want" = yes ]; then
       echo "  note  init writes no \`claude --bg\` grant without your yes. The narrowest rules for the tick's spawn and its stop of a recorded round:"
       printf '%s\n' "$bg_missing" | sed 's/^/          /'
-      echo "        They let the tick spawn any ${PLUGIN_NAME} role in auto mode, and stop a session, unprompted. Adding them to"
+      echo "        They let the tick spawn its ${PLUGIN_NAME} roles in auto mode, and stop a session, unprompted. Adding them to"
       echo "        .claude/settings.local.json is yours: answer Y when a terminal stamp asks, or re-run with --spawn-grant."
     fi
     bg_note_stale
