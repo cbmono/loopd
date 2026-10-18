@@ -216,8 +216,12 @@ agents share one working tree here and a sibling mid-write is normal.
 
 Two things it deliberately does not do. **A conflict stops the tick** rather than being
 auto-resolved — conflicted task documents are contested state between two humans, and a
-guessed resolution writes a `status:` nobody chose. And **nothing force-pushes**. Work
-*you* commit by hand outside a tick is still yours to push. Ownership stops two loops
+guessed resolution writes a `status:` nobody chose. And **nothing force-pushes**.
+`/loopd:new-project` and `/loopd:answer` push their own commit the same way
+(`push-commit.sh`: fetch, rebase only when the remote moved, never force), so a project
+created on one clone reaches the other clone's loop; a push either could not make is one
+line in its reply, and the commit stays local. Work *you* commit by hand outside a tick or
+those two commands is still yours to push. Ownership stops two loops
 dispatching the same task; it was never a lock on pushing.
 
 ## Handing off a project with work in flight

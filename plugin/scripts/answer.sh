@@ -128,25 +128,9 @@ dir="$(cd "$(dirname "$doc")" && pwd -P)"
 root="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || { echo "not a git work tree: nothing committed"; exit 0; }
 ( cd "$root" && bash "$HERE/commit-as.sh" human "docs: answer ${qlabel:-a question} on $task" --stage -- "$dir/$(basename "$doc")" >/dev/null ) ||
   { echo "answer: recorded, but the commit failed — commit it by hand" >&2; exit 4; }
-git -C "$root" rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1 || { echo "committed; no upstream, so not pushed"; exit 0; }
-in_rebase() { [ -d "$(git -C "$root" rev-parse --git-path rebase-merge)" ] || [ -d "$(git -C "$root" rev-parse --git-path rebase-apply)" ]; }
-# Never abort a rebase this script did not start: a tick may own one in the same tree.
-in_rebase && { echo "answer: committed; a rebase is already in progress, so nothing pulled or pushed" >&2; exit 4; }
-# Ownership is the reflog's `<action> (start)` line of the running rebase, tagged with a nonce;
-# a pre-check alone cannot tell this pull's rebase from one a tick started a moment later.
-nonce="answer.sh $$.$RANDOM.$(date +%s)"
-if ! GIT_REFLOG_ACTION="$nonce" git -C "$root" pull --rebase --quiet >/dev/null 2>&1; then
-  if in_rebase; then
-    started="$(git -C "$root" log -g --format=%gs HEAD 2>/dev/null | grep -m1 ' (start): ')"
-    case "$started" in
-      "$nonce (start): "*) git -C "$root" rebase --abort >/dev/null 2>&1 ;;
-      *) echo "answer: committed locally; a rebase this command did not start is in progress — left alone, nothing pushed" >&2
-         exit 4 ;;
-    esac
-  fi
-  echo "answer: committed locally; pull --rebase failed, so nothing was pushed — rebase and push by hand, never force" >&2
-  exit 4
-fi
-git -C "$root" push --quiet >/dev/null 2>&1 ||
-  { echo "answer: committed locally; the push was rejected — pull and push by hand, never force" >&2; exit 4; }
-echo "committed and pushed"
+bash "$HERE/push-commit.sh" "$root"
+case $? in
+  0) echo "committed and pushed" ;;
+  3) echo "committed; no upstream, so not pushed" ;;
+  *) exit 4 ;;
+esac
