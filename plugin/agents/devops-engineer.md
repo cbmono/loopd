@@ -44,6 +44,10 @@ setting `status`, no PII/secrets, and capturing
    - Docker: build the image if feasible; otherwise hadolint.
    - **Never** run `apply`, `argocd sync`, deploys, or anything that touches a live
      environment. You propose changes via PR only.
+   - **Never** run a destructive vendor-CLI deletion (e.g. `<cli> projects delete <name>`)
+     in-session, even when approved — auto mode refuses it by design. Write the exact
+     command into the task's `open_questions`, set `status: blocked`, and stop; the human
+     runs it.
 5. **Self-review, then open the PR** per the shared conventions — review your own diff
    and fix what it flags first; the body takes the required short shape — the literal
    heading `## Description`, then a one-sentence TL;DR, the `acceptance_criteria`
