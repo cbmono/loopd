@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # subagent-merge-yolo.test.sh — the one merge `AUTONOMY.md` delegates, the ways it is
-# still refused, and when an external review stands in for the checker table: `plugin/hooks/deny-destructive.sh` rule `subagent_merge`, the policy
+# still refused, when an external review stands in for the checker table, and the opt-in merge at the review cap: `plugin/hooks/deny-destructive.sh` rule `subagent_merge`, the policy
 # it defers to in `plugin/scripts/merge-permit.sh`, and the clearance record
 # `plugin/scripts/clearance-receipt.sh` writes and reads.
 #
@@ -359,6 +359,73 @@ STUB
      "$(rc_exit README.md plugin/scripts/clearance-receipt.sh)" 4
   is "…and AUTONOMY.md too" "$(rc_exit plugin-yolo/companion/AUTONOMY.md)" 4
   is "…while an ordinary diff reaches the required-set question (exit 3)" "$(rc_exit README.md)" 3
+  is "a PR editing merge-permit.sh ⇒ required-checks.sh exit 4" \
+     "$(rc_exit plugin/scripts/merge-permit.sh)" 4
+
+  echo "== mergeAtReviewCap: exit 6 at the two-round cap, opt-in, yolo only =="
+  THIRD="fedcba9876543210fedcba9876543210fedcba98"
+  key() { printf '{"mergeAtReviewCap": %s}\n' "$1" > "$BUNDLE/instance.config.json"; }
+  caps() { cat "$RCPT" 2>/dev/null | awk '$1 == "cap" && $2 == "review-clearance.sh" { n++ } END { print n + 0 }'; }
+  reviewed_at() { # <sha>... — a vendor review at each, and one vendor thread still open
+    local c; setup "$H"
+    for c in "$@"; do add_review coderabbitai COMMENTED "$c" "$CLEAN"; done
+    add_thread false a.sh 3 coderabbitai https://example.invalid/t/1 'fix this'
+  }
+
+  forget; printf '{}\n' > "$BUNDLE/instance.config.json"
+  reviewed_at "$OTHER_SHA" "$H"
+  expect "key absent: two rounds, threads open at the head ⇒ exit 6" 6
+  is "…and no cap line is written" "$(caps)" 0
+  record_all 42 "$H" required-checks.sh pr-body-clearance.sh
+  is "key absent at the cap ⇒ refused" "$(permit)" 1
+
+  forget; key true; reviewed_at "$OTHER_SHA" "$H"
+  expect "key true: the same PR still answers exit 6" 6
+  is "…and records one external cap line" "$(grep -c '^cap review-clearance.sh .* external$' "$RCPT")" 1
+  is "…and no pass line" "$(grep -c '^pass review-clearance.sh ' "$RCPT")" 0
+  others
+  is "key true + yolo + cap + exit 6, external, no pr-verdict pass ⇒ permitted" "$(permit)" 0
+  key false
+  is "…key false ignores the recorded cap line" "$(permit)" 1
+  key null
+  is "…key null too" "$(permit)" 1
+  key '"true"'
+  is "…and the string \"true\" too" "$(permit)" 1
+  key true
+  sed -i.bak 's/^autonomy: yolo$/autonomy: gated/' "$BUNDLE/projects/ext-proj/project.md"
+  is "key true + gated + cap line ⇒ refused" "$(permit)" 1
+  sed -i.bak 's/^autonomy: gated$/autonomy: yolo/' "$BUNDLE/projects/ext-proj/project.md"
+  "$RECEIPT" record pr-verdict-clearance.sh --fail --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
+  is "an external cap line + a pr-verdict fail line ⇒ refused" "$(permit)" 1
+
+  forget; reviewed_at "$OTHER_SHA" "$THIRD"
+  expect "key true, two rounds on earlier heads, none at this one ⇒ exit 4" 4
+  is "…writes no cap line" "$(caps)" 0
+  others
+  is "key true + yolo + cap + exit 4 ⇒ refused" "$(permit)" 1
+
+  forget; reviewed_at "$OTHER_SHA" "$H"; MERGEABLE=CONFLICTING; MERGE_STATE=DIRTY
+  expect "key true, at the cap, the PR conflicts ⇒ exit 7" 7
+  is "…writes no cap line" "$(caps)" 0
+  others
+  is "key true + yolo + cap + exit 7 ⇒ refused" "$(permit)" 1
+
+  forget; reviewed_at "$H"
+  expect "key true, one round, threads open ⇒ exit 6" 6
+  is "…below the cap writes no cap line" "$(caps)" 0
+  others
+  is "key true + yolo below the cap ⇒ refused" "$(permit)" 1
+
+  forget
+  "$RECEIPT" record review-clearance.sh --cap --kind internal --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
+  others
+  is "an internal cap line, no pr-verdict pass ⇒ refused" "$(permit)" 1
+  record_all 42 "$H" pr-verdict-clearance.sh
+  is "…and its pr-verdict pass is what permits it" "$(permit)" 0
+  forget; key false
+  "$RECEIPT" record review-clearance.sh --cap --kind external --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
+  is "record --cap with the key off writes nothing" "$(caps)" 0
+  printf '{}\n' > "$BUNDLE/instance.config.json"
   printf '%s %s\n' "$pass" "$fail" > "$YTALLY"
 )
 read -r ypass yfail < "$YTALLY" 2>/dev/null || { ypass=0; yfail=1; }

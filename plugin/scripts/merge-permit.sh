@@ -89,9 +89,11 @@ fi
 [ -n "$defines_merge" ] || \
   refuse "project \`$owners\` is \`$mode\`, and $autonomy_file does not define that mode as delegating the merge — the human merges"
 
-# 4. The clearance record, read offline, at this exact head.
+# 4. The clearance record, read offline, at this exact head. A review-cap line counts only
+# for `yolo`, and only while `mergeAtReviewCap` is on (the receipt checks the key).
 [ -x "$RECEIPT" ] || refuse "clearance-receipt.sh is missing, so no clearance record can be read"
-receipt_err="$("$RECEIPT" verify --bundle "$bundle" --repo "$repo" --pr "$pr" --head "$head" 2>&1)" \
+cap=(); [ "$mode" = yolo ] && cap=(--cap)
+receipt_err="$("$RECEIPT" verify ${cap[@]+"${cap[@]}"} --bundle "$bundle" --repo "$repo" --pr "$pr" --head "$head" 2>&1)" \
   || refuse "${receipt_err:-no clearance record for $repo#$pr at $head}"
 
 exit 0

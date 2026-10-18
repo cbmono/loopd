@@ -404,11 +404,16 @@ ok "qa-reviewer.md names the script"  "$(has "$REPO/plugin/agents/qa-reviewer.md
 ok "the tick's step 4 names it"       "$(has "$REPO/plugin/tick-steps/step-4-advance.md")" "0"
 
 # The cap is a HARD number: CONVENTIONS.md says so, and a flag is how a hard cap becomes a
-# default. If someone adds one, this fails and they have to argue for it in review. Comment
+# default (mergeAtReviewCap is a bundle key that acts AT the cap, not a way to move it). If someone adds one, this fails and they have to argue for it in review. Comment
 # lines are excluded — the script's header discusses the flag it deliberately does not have,
 # and a scanner that could not tell prose from code would forbid saying so.
 ok "the cap is not configurable from the command line" \
    "$(grep -qE -- '--cap' <<<"$(grep -vE '^[[:space:]]*#' "$SCRIPT")" && echo 1 || echo 0)" "0"
+# The one opt-in exception (mergeAtReviewCap) changes what happens AT the cap, never the
+# number: the header names it, and the cap stays two.
+ok "the header names the one opt-in exception" \
+   "$(grep -c 'mergeAtReviewCap' "$SCRIPT")" "2"
+ok "…and the cap is still two" "$(grep -cx 'CAP=2' "$SCRIPT")" "1"
 
 
 # A ROUND COUNT IS A QUESTION ABOUT THE PAST, so the sibling's mergeability check is

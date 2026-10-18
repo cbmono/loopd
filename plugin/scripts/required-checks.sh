@@ -29,6 +29,10 @@
 #   4  this PR edits the declared list or a file of the merge gate itself (GATE_FILES) —
 #      changing the gate is a human call
 #
+# With `mergeAtReviewCap` on, a review-clearance exit 6 is accepted for the review half where
+# the receipt holds a `cap` line at this head. No project mode is resolved here; the hook's
+# merge-permit.sh is what limits a cap merge to `yolo`.
+#
 # TWO SOURCES, IN ORDER
 #
 #   1. PLATFORM — branch protection / rulesets, read via `gh pr checks --required`.
@@ -129,6 +133,7 @@ meta="$(gh pr view "$pr" ${R[@]+"${R[@]}"} \
 url="$(printf '%s' "$meta" | cut -f1)"
 base="$(printf '%s' "$meta" | cut -f2)"
 head_sha="$(printf '%s' "$meta" | cut -f3)"
+pr_num="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/[^/]+/[^/]+/pull/([0-9]+).*#\1#')"
 nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')"
 
 [ -n "$base" ] && [ -n "$head_sha" ] && [ "$nwo" != "$url" ] || {
@@ -368,6 +373,12 @@ clearance_for() { # [--for-check <name>] — 0, or the sibling's refusal code
   then return 0; else return $?; fi
 }
 
+RECEIPT="$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh"
+at_cap() { # <exit code of the sibling> — 0 where a recorded cap line stands in for it
+  [ "$1" -eq 6 ] && "$RECEIPT" armed --repo "$nwo" --pr "$pr_num" --head "$head_sha" >/dev/null 2>&1 || return 1
+  echo "note: review-clearance.sh exit 6 accepted at the two-round review cap (mergeAtReviewCap)" >&2
+}
+
 refuse_clearance() { # <the whole first clause> <exit code of the sibling>
   echo "refuse: $1 (review-clearance.sh exit $2). A green check" >&2
   echo "        means the integration ran, never that a review happened:" >&2
@@ -415,14 +426,14 @@ if [ -n "$reviewer_checks" ]; then
   while IFS= read -r name; do
     [ -n "$name" ] || continue
     if clearance_for --for-check "$name"; then crc=0; else crc=$?; fi
-    [ "$crc" -eq 0 ] || refuse_clearance \
+    [ "$crc" -eq 0 ] || at_cap "$crc" || refuse_clearance \
       "required check '$name' is a reviewer's own, and that reviewer did not clear PR $pr" "$crc"
   done <<EOF
 $reviewer_checks
 EOF
 else
   if clearance_for; then crc=0; else crc=$?; fi
-  [ "$crc" -eq 0 ] || refuse_clearance "no independent review clears PR $pr" "$crc"
+  [ "$crc" -eq 0 ] || at_cap "$crc" || refuse_clearance "no independent review clears PR $pr" "$crc"
 fi
 
 # --- and a body nobody can read is not a merge anybody can decide ------------
@@ -484,5 +495,5 @@ echo "ok: $count required check(s) pass, a review clears PR $pr, and its body ca
 
 # The clearance record the PreToolUse hook reads offline (ai-bridge-v3/task-044). Written
 # after the answer is decided, and silent on any failure: it cannot change that answer.
-"$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record required-checks.sh \
-  --repo "$nwo" --pr "$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/[^/]+/[^/]+/pull/([0-9]+).*#\1#')" --head "$head_sha" >/dev/null 2>&1 || true
+"$RECEIPT" record required-checks.sh \
+  --repo "$nwo" --pr "$pr_num" --head "$head_sha" >/dev/null 2>&1 || true
