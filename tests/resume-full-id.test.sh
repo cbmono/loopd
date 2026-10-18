@@ -38,6 +38,7 @@ offenders() { # <dir>
         f="${hit%%:*}"; rest="${hit#*:}"; n="${rest%%:*}"; line="${rest#*:}"
         case "$line" in
           *"$ARG"*) grep -qF -- "$RESOLVE" "$f" && continue ;;
+          *'Bash(claude --bg --resume *)'*) continue ;;  # init's allow rule names no id
         esac
         printf '%s:%s\n' "$f" "$n"
       done
