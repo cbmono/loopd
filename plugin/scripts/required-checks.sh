@@ -26,7 +26,8 @@
 #      missing/unrunnable, an unreadable reviewer state, or an unreadable PR body)
 #   3  no required set could be resolved — the merge authority is NOT exercisable
 #      here (this is the signal AUTONOMY.md's preflight surfaces to the human)
-#   4  this PR edits the declared list itself — changing the gate is a human call
+#   4  this PR edits the declared list or a file of the merge gate itself (GATE_FILES) —
+#      changing the gate is a human call
 #
 # TWO SOURCES, IN ORDER
 #
@@ -74,6 +75,21 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 DECLARED_PATH=".github/required-checks.txt"
+# The delegated merge's own machinery, as paths in the plugin's repository. A PR that edits
+# one would be cleared by the gate it rewrites (loopd-papercuts/task-010).
+GATE_FILES="
+plugin/scripts/merge-permit.sh
+plugin/scripts/clearance-receipt.sh
+plugin/scripts/review-clearance.sh
+plugin/scripts/required-checks.sh
+plugin/scripts/pr-body-clearance.sh
+plugin/scripts/pr-verdict-clearance.sh
+plugin/scripts/review-rounds.sh
+plugin/scripts/resolve-config.sh
+plugin/scripts/bundle-paths.sh
+plugin/hooks/deny-destructive.sh
+plugin-yolo/companion/AUTONOMY.md
+"
 
 usage() {
   echo "Usage: $(basename "$0") <pr> [--repo <owner>/<name>] [--head <sha>]" >&2
@@ -125,6 +141,17 @@ nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.
 if [ -n "$want_head" ] && [ "$want_head" != "$head_sha" ]; then
   echo "refuse: head moved — verified $want_head, PR is now at $head_sha" >&2
   exit 1
+fi
+
+changed="$(gh pr diff "$pr" ${R[@]+"${R[@]}"} --name-only 2>/dev/null)" || {
+  echo "error: could not list the files PR $pr changes — refusing (fail closed)" >&2
+  exit 2
+}
+gate_hit="$(printf '%s\n' "$changed" | grep -Fxf <(printf '%s\n' "$GATE_FILES" | grep -v '^$') || true)"
+if [ -n "$gate_hit" ]; then
+  echo "refuse: PR $pr edits the merge gate itself ($(printf '%s' "$gate_hit" | tr '\n' ' ' | sed 's/ $//'))" >&2
+  echo "        — a human decision. Surface it; do not auto-merge." >&2
+  exit 4
 fi
 
 # --- source 1: platform-required set ----------------------------------------
@@ -191,10 +218,6 @@ if [ -z "$required" ]; then
     # A PR that rewrites the gate must not be cleared by the gate it rewrites. The
     # list is read from BASE, so an open PR cannot weaken its own merge — but merging
     # it would weaken every later one, and that is the human's decision to take.
-    changed="$(gh pr diff "$pr" ${R[@]+"${R[@]}"} --name-only 2>/dev/null)" || {
-      echo "error: could not list the files PR $pr changes — refusing (fail closed)" >&2
-      exit 2
-    }
     if printf '%s\n' "$changed" | grep -Fxq "$DECLARED_PATH"; then
       echo "refuse: PR $pr edits $DECLARED_PATH — a change to the merge gate itself is" >&2
       echo "        a human decision. Surface it; do not auto-merge." >&2

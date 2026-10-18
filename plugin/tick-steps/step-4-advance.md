@@ -338,6 +338,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
      **Any exit code this table does not name HOLDS.** A disagreement is the human's: the whole
      point of a checker is that nobody reconciles the two tables downstream of it.
+     **Run it on EVERY in-review PR, external review or not**: exit 1 writes the fail line
+     the merge receipt refuses on, whatever cleared the review. Where an EXTERNAL reviewer
+     cleared the head (a `REVIEWERS` vendor, route A or C of `review-clearance.sh`), the
+     receipt needs no checker table, so exit 2 and 4 there do not hold the merge.
 
    **Pin verification to the head SHA.** Record which SHA passed (task `# Notes`). If
    a PR's head advances, its prior pass is stale — invalidate and re-verify. Surface
