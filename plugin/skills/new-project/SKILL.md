@@ -69,7 +69,8 @@ the pane passes it, so nothing in it reads as a token), plus optional tokens:
   before anything is written. The step-8 chain itself runs unchanged.
 - `--no-commit` — scaffold only; don't commit (default is to commit).
 
-If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing anything.
+If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing anything —
+under `--no-ask`, stop in one line instead (above), never ask.
 
 ## Steps
 
