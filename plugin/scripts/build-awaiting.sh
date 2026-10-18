@@ -29,6 +29,10 @@
 # to no live task drops only that edge. The sort reorders `row()`'s output and never
 # composes or drops a row: a failed sort renders glob order.
 #
+# A `close` row, like `continue`, renders only where `mine` clears the project.md, so it
+# FAILS CLOSED: an `owner:` on a clone with no ownerGithubUser (task-owner.sh 1), or a
+# malformed one (2), shows no close row.
+#
 # GENERIC PLUGIN FILE — no org, repo or path literals.
 set -uo pipefail
 
@@ -220,7 +224,7 @@ EOF
     esac
   done
 
-  if [ "$held" = 0 ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ]; then
+  if [ "$held" = 0 ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && mine "$pm"; then
     add_node "$pm" "${pm#"$inst"}" "$slug"
     pt="$(title_of "$pm")"; ptrail="$(lookup "$pm" trailer)"
     add "🏁" close "$pt" "${pm#"$inst"}" "${ptrail:-$DEF_CLOSE$slug\`}"

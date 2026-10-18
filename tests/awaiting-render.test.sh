@@ -124,6 +124,29 @@ bash "$SH" --instance "$F" >/dev/null 2>&1
 ok "the other human's task is not queued" "$(grep -c '✅ \*\*approve\*\*' "$F/$AB_AWAITING" | tr -d ' ')" 0
 
 echo
+echo "== a close row is narrowed by the project's owner, and fails closed =="
+proj() { # <dir> <slug> <title> <owner-line>
+  mkdir -p "$1/projects/$2/tasks"
+  printf -- '---\ntype: Project\ntitle: "%s"\nstatus: active\n%s---\n' "$3" "$4" > "$1/projects/$2/project.md"
+  printf -- '---\ntype: Task\ntitle: "t"\nstatus: done\n---\n' > "$1/projects/$2/tasks/task-001-a.md"
+}
+closes() { grep '🏁 \*\*close\*\*' "$1/$AB_AWAITING" | sed 's/.*— \[\([^]]*\)\].*/\1/' | sort | paste -sd, -; }
+O="$TMP/close-owner"; inst "$O"; : > "$O/$AB_AWAITING"; rm -rf "$O/projects/demo"
+proj "$O" mine-p "Mine" $'owner: me\n'
+proj "$O" theirs-p "Theirs" $'owner: someone-else\n'
+proj "$O" nobody-p "Nobody" ''
+printf '{ "ownerGithubUser": "me" }\n' > "$O/instance.config.local.json"
+bash "$SH" --instance "$O" >/dev/null 2>&1
+ok "only this clone's and the unowned close rows" "$(closes "$O")" "Mine,Nobody"
+rm "$O/instance.config.local.json"
+bash "$SH" --instance "$O" >/dev/null 2>&1
+ok "no ownerGithubUser ⇒ an owned project has none" "$(closes "$O")" "Nobody"
+proj "$O" mine-p "Mine" $'owner: not a login!\n'
+printf '{ "ownerGithubUser": "me" }\n' > "$O/instance.config.local.json"
+bash "$SH" --instance "$O" >/dev/null 2>&1
+ok "a malformed owner ⇒ no close row" "$(closes "$O")" "Nobody"
+
+echo
 echo "== the flow-list parser is NOT re-implemented here =="
 # One parser, one place it can cut an entry in half. A second regex over these lists is
 # the defect measured on 2026-09-12, so its absence is the assertion.
