@@ -254,7 +254,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
        conflict it could not classify, with the file named. **2, 4, 5 and 6 change
        nothing**: re-ask next tick, and never dispatch on them.
      * **On exit 3, dispatch a fresh round to the task's own agent** — rebase onto the
-       default branch, resolve, `--force-with-lease` with explicit arguments, re-run the
+       default branch, resolve, push with
+       `--force-with-lease="refs/heads/${BRANCH}:${SHA}"` — braced and quoted, because
+       zsh reads `$BRANCH:h…` as a modifier and drops the colon — re-run the
        body gate, and record the new verified SHA. Never re-request a review for a 7.
      * **Leave the task `in-progress`.** It is being worked, not waiting on you; that
        is also what keeps it off `AWAITING.md`, whose merge verb only ever fires for
