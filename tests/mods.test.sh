@@ -152,6 +152,17 @@ for d in "$REPO"/plugin-mod-*/; do
        "$(jq -c '.userConfig.mode | [.type, .default, .options]' "$d/.claude-plugin/plugin.json" 2>/dev/null)" '["string","operator",["operator","simple"]]'
     ok "$name: …and reads mode only off register's options" \
        "$(count '\.mode\b' "$mod")/$(count 'options\.mode' "$mod")/$(count 'export function register\(on: any, options' "$mod")" 1/1/1
+    # Create is one /loopd:new-project run: every token the pane passes is one the skill takes.
+    NP="$REPO/plugin/skills/new-project/SKILL.md"
+    hint="$(grep -m1 '^argument-hint:' "$NP")"
+    ok "$name: …runs /loopd:new-project, whose argument-hint the check reads" \
+       "$(count "'loopd:new-project'" "$mod")/$([ -n "$hint" ] && echo hint)" 1/hint
+    for tok in kind=build autonomy= title= need= success_criteria= --no-ask; do
+      ok "$name: …passes $tok, and new-project's argument-hint names it" \
+         "$(grep -cF -- "$tok" "$mod" | tr -d ' ' | sed 's/^[1-9][0-9]*$/yes/')/$(grep -cF -- "$tok" <<<"$hint")" yes/1
+    done
+    ok "$name: …asks for autonomy=yolo, a mode loopd-yolo's AUTONOMY.md defines" \
+       "$(grep -cF 'autonomy=yolo' "$mod")/$(grep -cE '^# Mode: `yolo`$' "$REPO/plugin-yolo/companion/AUTONOMY.md")" 1/1
   fi
   ok "$name: is a marketplace entry under its own name" \
      "$(jq -r --arg n "$pn" '[.plugins[] | select(.name == $n and .source == "./'"$name"'")] | length' "$MJ")" 1

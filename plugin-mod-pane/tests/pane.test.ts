@@ -501,3 +501,142 @@ test('a held answer is released when its own turn ends without moving the docume
   expect(await ui.find({ key: 'q1-opt1' })).toBeDefined()
   await ui.unmount()
 })
+
+// ---------------------------------------------------------------- a new project
+// The four fields, as a person types them: a quote in the title proves the escaping.
+const FORM = { title: 'Garden "log"', what: 'A log of what grows', whom: 'The allotment group', done: 'Every bed has an entry; a weekly summary' }
+const CREATE_ARGS = '"A log of what grows" kind=build autonomy=yolo title="Garden \\"log\\"" need="The allotment group" success_criteria="Every bed has an entry; a weekly summary" --no-ask'
+async function fill(ui: any, form: Record<string, string>) {
+  for (const [k, v] of Object.entries(form)) await ui.input({ key: 'new-' + k, text: v })
+}
+// What /loopd:new-project leaves on disk: a project and its one seed task, no questions yet.
+function scaffold(w: World, autonomy = 'yolo') {
+  w.files.set(P + '/garden-log/project.md', { text: '---\ntype: Project\ntitle: "Garden \\"log\\""\nstatus: active\nautonomy: ' + autonomy + '\n---\n', mtimeMs: 4000 })
+  w.files.set(P + '/garden-log/tasks/task-001-garden-log.md', { text: task('title: "Garden log"\nstatus: draft\nopen_questions: [ ]'), mtimeMs: 4000 })
+}
+
+test('FOUR FIELDS, ONE COMMAND: a filled form runs /loopd:new-project once with the four values', SIMPLE, async ($, on) => {
+  const w = bundle()
+  stubs(on, w)
+  const clock = mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await fill(ui, FORM)
+  expect(w.submitted).toEqual([])
+  await ui.press({ key: 'new-create' })
+  expect(w.submitted.length).toBe(1)
+  expect(w.submitted[0]).toMatchObject({ command: 'loopd:new-project', args: CREATE_ARGS })
+  // Queued: the button is gone, so a second press cannot create it twice; no timer re-runs it.
+  expect(await ui.find({ key: 'new-create' })).toBeUndefined()
+  expect(await shown(ui)).toContain('Creating "Garden "log""…')
+  await clock.advance(60000)
+  expect(w.submitted.length).toBe(1)
+  expect(w.prompted).toEqual([])
+  await ui.unmount()
+})
+
+test('KIT: an empty title runs nothing, and says why', SIMPLE, async ($, on) => {
+  const w = bundle()
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await fill(ui, { ...FORM, title: '   ' })
+  await ui.press({ key: 'new-create' })
+  expect(w.submitted).toEqual([])
+  expect(await shown(ui)).toContain('Fill in all four fields to create a project.')
+  expect(await ui.find({ key: 'new-create' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('THE PERSON SEES THE RESULT: the new project appears on the next read, then its first questions', SIMPLE, async ($, on) => {
+  const w = bundle()
+  w.onRun = () => scaffold(w)
+  stubs(on, w)
+  const clock = mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await fill(ui, FORM)
+  await ui.press({ key: 'new-create' })
+  // A directory with no project document yet is not the result.
+  const doc = w.files.get(P + '/garden-log/project.md')!
+  w.files.delete(P + '/garden-log/project.md')
+  await clock.advance(5000)
+  expect(await shown(ui)).toContain('Creating "Garden "log""…')
+  w.files.set(P + '/garden-log/project.md', doc)
+  await clock.advance(5000)
+  let text = await shown(ui)
+  expect(text).toContain('0/1 done · Garden "log"')
+  expect(text).toContain('Created "Garden "log"". Its first questions will appear here.')
+  expect(await ui.find({ key: 'new-create' })).toBeDefined()
+  // The form is empty again, ready for the next one.
+  expect((await ui.find({ key: 'new-title' })).props.value).toBe('')
+  const path = P + '/garden-log/tasks/task-001-garden-log.md'
+  w.files.set(path, { text: task('title: "Garden log"\nstatus: draft\nopen_questions: [ "Q1: Which beds come first?" ]'), mtimeMs: 5000 })
+  await clock.advance(5000)
+  text = await shown(ui)
+  expect(text).toContain('Garden "log" · Garden log')
+  expect(text).toContain('Which beds come first?')
+  await ui.unmount()
+})
+
+test('a project the operator must approve step by step says so in one sentence', SIMPLE, async ($, on) => {
+  const w = bundle()
+  w.onRun = () => scaffold(w, 'gated')
+  stubs(on, w)
+  const clock = mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await fill(ui, FORM)
+  await ui.press({ key: 'new-create' })
+  await clock.advance(5000)
+  expect(await shown(ui)).toContain('Created "Garden "log"". It moves only as far as the operator approves.')
+  await ui.unmount()
+})
+
+test('NOTHING IS WRITTEN BY THE MOD: a refused or failed create is one line, never retried', SIMPLE, async ($, on) => {
+  const w = bundle()
+  w.onRun = () => { throw new Error('the command is not available') }
+  stubs(on, w)
+  const clock = mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await fill(ui, FORM)
+  await ui.press({ key: 'new-create' })
+  expect((await shown(ui)).split('\n').filter(l => l.includes('Could not create the project: ')).length).toBe(1)
+  // Failed: the run went through, its turn ended, and no project appeared.
+  w.onRun = undefined
+  await clock.advance(10000)
+  await ui.press({ key: 'new-create' })
+  await clock.advance(1000)
+  await $.turn.complete({ turnId: 'create', answer: '', durationMs: 500, isAborted: false, usage: null, reason: 'answer' })
+  expect(await shown(ui)).toContain('The project was not created — the conversation says why.')
+  expect(await ui.find({ key: 'new-create' })).toBeDefined()
+  expect((await ui.find({ key: 'new-title' })).props.value).toBe(FORM.title)
+  await clock.advance(60000)
+  expect(w.submitted.length).toBe(2)
+  expect(w.prompted).toEqual([])
+  await ui.unmount()
+})
+
+test('a project someone else adds while a create is pending is not taken for it', SIMPLE, async ($, on) => {
+  const w = bundle()
+  w.onRun = () => w.files.set(P + '/other-thing/project.md', { text: '---\ntype: Project\ntitle: "Other thing"\nstatus: active\nautonomy: gated\n---\n', mtimeMs: 4000 })
+  stubs(on, w)
+  const clock = mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await fill(ui, FORM)
+  await ui.press({ key: 'new-create' })
+  await clock.advance(5000)
+  let text = await shown(ui)
+  expect(text).toContain('Other thing')
+  expect(text).not.toContain('Created "')
+  expect(text).toContain('Creating "Garden "log""…')
+  scaffold(w)
+  await clock.advance(5000)
+  text = await shown(ui)
+  expect(text).toContain('Created "Garden "log"". Its first questions will appear here.')
+  expect((await ui.find({ key: 'new-title' })).props.value).toBe('')
+  await ui.unmount()
+})

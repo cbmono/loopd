@@ -2,7 +2,7 @@
 name: new-project
 disable-model-invocation: true
 description: Scaffold a new project under projects/<slug>/ — schema-valid files, registered in the bundle index/log and linked to its objective, with seed draft tasks. Supports build (code/PRs) and research (in-bundle deliverables) projects.
-argument-hint: <one-line project description>  [kind=build|research] [objective=<slug>] [repo=<name|owner/name>] [deliverables="a; b"] [timebox=<N>d|<N>w] [--no-commit]
+argument-hint: <one-line project description>  [kind=build|research] [objective=<slug>] [repo=<name|owner/name>] [deliverables="a; b"] [autonomy=<mode>] [title="…"] [need="…"] [success_criteria="a; b"] [timebox=<N>d|<N>w] [--no-ask] [--no-commit]
 allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
 ---
 
@@ -24,7 +24,8 @@ build projects.
 > never hardcode org/repo/path literals here.
 
 ## Inputs
-`$ARGUMENTS` = a one-line description of the project, plus optional tokens:
+`$ARGUMENTS` = a one-line description of the project (in double quotes when a caller such as
+the pane passes it, so nothing in it reads as a token), plus optional tokens:
 - `kind=build|research` — project kind (default `build`).
 - `objective=<slug>` — link to `objectives/<slug>.md` instead of inferring one. Optional:
   `objectives/` is an opt-in layer, and a project's own `success_criteria` are the default anchor.
@@ -56,9 +57,20 @@ build projects.
   and never suggested: most projects have no time-box, and none should pay a question for
   it. Recorded verbatim from the flag. A value outside the grammar is refused in one line
   and left out. Omitted ⇒ the key is left out entirely, never written empty.
+- `title="…"`, `need="…"`, `success_criteria="a; b"` — the project's `title`, its value-gate
+  `need:` and its `success_criteria` (split on `;`), recorded **verbatim**: step 3 neither
+  proposes nor asks for a value given here. A `\"` inside the quotes is a literal quote.
+- `--no-ask` — **ask nothing**; the pane's Create runs this way, for a person who cannot answer
+  a prompt. Every question below takes its default instead: value-gate keys not given are
+  written empty, `objective` none, `clis:` an empty list, `browser` off, the `yolo` merge
+  preflight is reported and recorded and the run carries on, and step 8e's spend ask takes its
+  "not there to answer" branch. A value with **no** default — the description,
+  `success_criteria`, a `target_repo` with no `defaultRepo` — stops the run in one line,
+  before anything is written. The step-8 chain itself runs unchanged.
 - `--no-commit` — scaffold only; don't commit (default is to commit).
 
-If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing anything.
+If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing anything —
+under `--no-ask`, stop in one line instead (above), never ask.
 
 ## Steps
 
@@ -73,7 +85,8 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
 
 3. **Resolve the goal — the project's own `success_criteria` first.** Propose 2-4
    **measurable** lines for `success_criteria:` (name the command and today's number),
-   and get the user's OK. That is the project's anchor and `/audit` grounds against it.
+   and get the user's OK — unless `success_criteria=` was given, which is used as written.
+   That is the project's anchor and `/audit` grounds against it.
    **`objectives/` is an OPTIONAL layer** (`SCHEMA.md` → type: Objective): if the
    directory is absent, do not create it and do not ask — the criteria are enough. If
    `objective=` was given, use it. Otherwise, where `objectives/*.md` exists, offer the
