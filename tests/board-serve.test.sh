@@ -313,29 +313,81 @@ ok "board-serve.sh invokes no model"                   \
   "$(grep -cE '(^|[^a-z-])claude( |$)|anthropic|--model' "$SERVE")" 0
 ok "…and reads SNAPSHOT.json through build-board.sh only" \
   "$(yes_if grep -qF 'build-board.sh' "$SERVE")" yes
-# The one document the server opens is a task's, for its open_questions (section 7); a
-# project document or a second path into the bundle would be a new reader to justify.
-ok "…and builds one path into the bundle, a task's"   "$(grep -cE 'projects|tasks' "$SERVE")" 1
+# Rewritten on purpose (interactive-board task-001): a project's document is the second
+# path, read for need and success_criteria, which conventions 11b keeps out of the snapshot.
+ok "…and builds two paths into the bundle, a task's and a project's" "$(grep -cE 'projects|tasks' "$SERVE")" 2
 ok "…and only TESTS for the tracked config, never reads it" \
   "$(grep -n 'instance\.config\.json' "$SERVE" | grep -cv -- '-f instance\.config\.json')" 0
 
 echo
-echo "== 7. the served page shows the question; the published render cannot =="
+echo "== 7. the served page carries the filled fields; the published render cannot =="
 # BOTH SIDES FROM ONE FIXTURE IN ONE RUN. The local half alone passes on a build that
-# leaks; the published half alone passes on a build that renders nothing. The writer and
-# the publish render run with SNAPSHOT_QUESTION_TEXT=1 exported: the opt-in is deleted, so
-# setting it must change nothing.
+# leaks; the published half alone passes on a build that renders nothing. One canary
+# prefix rides in a question, an option, a depth, a project's need and success_criteria
+# and a blocker, so one grep covers every file. SNAPSHOT_QUESTION_TEXT=1 is exported: the
+# opt-in is deleted, so setting it must change nothing.
 SENT="SENTINEL-task012-7f3c9a"
+XSS='<script>alert(1)</script> \"dq\" &'   # inside a YAML double-quoted scalar
+XSS_MD='<script>alert(1)</script> "dq" &'      # the same bytes in a document body
 D="$TMP/group/_ai-bridge-delta"
 new_instance "$D"
+cat > "$D/projects/p/project.md" <<PRJ
+---
+type: Project
+title: Demo
+kind: build
+status: active
+need: "$SENT-NEED for $XSS co"
+success_criteria: [ "$SENT-SC one", "SC two" ]
+---
+PRJ
 cat > "$D/projects/p/tasks/task-002.md" <<TSK
 ---
 type: Task
 title: Needs an answer
 kind: build
 status: draft
-open_questions: [ "Q1: $SENT first, with <b>markup</b> & an ampersand?", "Q2: $SENT second?", "Q3: ANSWERED-task012 --- yes" ]
+timestamp: 2026-09-01T00:00:00Z
+open_questions: [ "Q1: $SENT-Q first, with <b>markup</b> & an ampersand, $XSS?", "Q2: $SENT-Q second?", "Q4: ANSWERED-task012 --- yes" ]
 ---
+
+## Question details
+
+### Q1
+Recommendation: $SENT-OPT beta
+Options:
+1. $SENT-OPT alpha $XSS_MD
+2. $SENT-OPT beta
+Context:
+- Depth 1: $SENT-DEPTH one
+- Depth 2: $SENT-DEPTH two
+- Depth 3: $SENT-DEPTH three
+  continues
+
+  second paragraph
+TSK
+cat > "$D/projects/p/tasks/task-003.md" <<TSK
+---
+type: Task
+title: Older, though its id is higher
+kind: build
+status: draft
+timestamp: 2026-08-01T00:00:00Z
+open_questions: [ "Q3: $SENT-Q later on the old task?", "$SENT-Q carries no number" ]
+---
+TSK
+cat > "$D/projects/p/tasks/task-004.md" <<TSK
+---
+type: Task
+title: Stuck on something
+kind: build
+status: blocked
+last_blocker: "$SENT-BLOCK the credential"
+---
+
+# Notes
+
+- blocked: $SENT-BLOCK the credential is missing
 TSK
 ( cd "$D" && SNAPSHOT_QUESTION_TEXT=1 SNAPSHOT_NOW=2026-09-06T00:00:00Z bash "$WRITER" --quiet )
 PUB="$TMP/publish/artifact-body.html"
@@ -344,22 +396,38 @@ mkdir -p "$TMP/publish"
 PD="$(cd "$D" && bash "$SERVE" --print-port)"
 SRV_D="$(start_server "$D" "$TMP/d.log")"
 SERVED="$(body_of "$PD" /board.html)"
+seam() { # <kind> <ref> — the inner HTML of that seam on the served page
+  python3 -c 'import re,sys; m=re.search(r"<(div|ol) data-fill=\"%s\" data-ref=\"%s\">(.*?)</\1>" % (re.escape(sys.argv[1]), re.escape(sys.argv[2])), sys.stdin.read()); print(m.group(2) if m else "<absent>")' "$1" "$2" <<<"$SERVED"
+}
+ranks() { python3 -c 'import re,sys; print(" ".join(r for _, r in sorted((int(n), r) for r, n in re.findall(r"data-fill=\"question\" data-ref=\"([^\"]*)\" data-rank=\"(\d+)\"", sys.stdin.read()))))'; }
 
 ok "CONTROL: the snapshot counts all three entries"   \
   "$(python3 -c "import json,sys; s=json.load(open(sys.argv[1])); print([t['open_questions'] for p in s['projects'] for t in p['tasks'] if t['id']=='task-002'])" "$D/$AB_SNAPSHOT")" "[3]"
-ok "the snapshot carries zero sentinel bytes"         "$(grep -c "$SENT" "$D/$AB_SNAPSHOT")" 0
+ok "the snapshot carries zero canary bytes"           "$(grep -c "$SENT" "$D/$AB_SNAPSHOT")" 0
 ok "the published render exists"                      "$(yes_if test -s "$PUB")" yes
-ok "…and carries zero sentinel bytes"                 "$(grep -c "$SENT" "$PUB")" 0
+ok "…carries the seams, empty"                        "$(grep -o 'data-fill="q-text" data-ref="p/task-002/Q1"></div>' "$PUB" | wc -l | tr -d ' ')" 1
+ok "…and zero canary bytes"                           "$(grep -c "$SENT" "$PUB")" 0
 ok "the served-dir file carries zero too"             "$(grep -c "$SENT" "$D/$AB_BOARD_DIR/board.html")" 0
-ok "the served page carries both questions"           "$(grep -o "$SENT" <<<"$SERVED" | wc -l | tr -d ' ')" 2
-ok "…escaped at the second escape point"              \
-  "$(yes_if grep -qF '&lt;b&gt;markup&lt;/b&gt; &amp; an ampersand' <<<"$SERVED")" yes
-ok "…and never as live markup"                        "$(grep -c '<b>markup</b>' <<<"$SERVED")" 0
+ok "the served page carries every open question"      "$(grep -o "$SENT-Q" <<<"$SERVED" | wc -l | tr -d ' ')" 4
+ok "…its text without the Q<n> prefix, code on the seam" "$(seam q-text p/task-003/Q3)" "<p>$SENT-Q later on the old task?</p>"
 ok "…and an answered entry awaiting the fold is not shown" "$(grep -c 'ANSWERED-task012' <<<"$SERVED")" 0
-ok "the placeholder is gone from the served item"     \
-  "$(grep -c 'Only the locally served board shows question text' <<<"$SERVED")" 0
-ok "…and still stands in the published one"           \
-  "$(grep -c 'Only the locally served board shows question text' "$PUB")" 1
+ok "options come recommendation first, numbered as written" \
+  "$(seam q-options p/task-002/Q1 | grep -o 'data-n="[0-9]"[^>]*' | tr '\n' ' ')" 'data-n="2" data-rec data-n="1" '
+ok "three depths, the third in two paragraphs"        \
+  "$(seam q-depths p/task-002/Q1 | python3 -c 'import sys; t=sys.stdin.read(); print(t.count("data-depth="), t.count("<p>"), "'"$SENT"'-DEPTH three continues" in t)')" "3 4 True"
+ok "a question with no block serves its text only"    "$(seam q-options p/task-003/Q3)" ""
+ok "an unnumbered question serves its text only"      \
+  "$(seam q-text p/task-003)|$(seam q-options p/task-003)" "<p>$SENT-Q carries no number</p>|"
+ok "the project's need is served"                     "$(yes_if grep -qF "$SENT-NEED" <<<"$(seam p-need p)")" yes
+ok "…and its success_criteria, one item each"         "$(seam p-success p)" "<li>$SENT-SC one</li><li>SC two</li>"
+ok "a blocked task's blocker text is never served"    "$(grep -c "$SENT-BLOCK" <<<"$SERVED")" 0
+ok "escaped: no filled <script>, \" or & reaches the page raw" \
+  "$(grep -cE '<script>alert|<b>markup|"dq"|& (an|co)' <<<"$SERVED")" 0
+ok "…question, option and need each arrive escaped"   \
+  "$(grep -o '&lt;script&gt;alert(1)&lt;/script&gt; &quot;dq&quot; &amp;' <<<"$SERVED" | wc -l | tr -d ' ')" 3
+ok "oldest task first, then Q number: Q3 on the old task beats Q1 on the new" \
+  "$(ranks <<<"$SERVED")" "p/task-003/Q3 p/task-003 p/task-002/Q1 p/task-002/Q2"
+ok "…and the order is the same on a refresh"          "$(body_of "$PD" /board.html | ranks)" "$(ranks <<<"$SERVED")"
 ok "the flag and the text field are gone from plugin/" \
   "$(grep -rlE 'SNAPSHOT_QUESTION_TEXT|open_question_text' "$REPO/plugin" | wc -l | tr -d ' ')" 0
 kill -TERM "$SRV_D" 2>/dev/null

@@ -5,6 +5,7 @@
 #
 #   Usage: fold-answers.sh [--instance DIR] [--answer <entry> <text>] <task-doc>
 #          fold-answers.sh --list <task-doc> <frontmatter-key>   # read-only
+#          fold-answers.sh --block Q<n> <task-doc>   # read-only: the ### Q<n> block as JSON, exit 1 if absent
 # `--answer` appends ` --- <text>` to that one open entry first (answer.sh's in-session answer).
 # Exit: 0 done (nothing to move is also 0) · 2 usage · 3 a list it could not round-trip,
 # nothing written · 4 the move would leave one entry in BOTH lists, nothing written.
@@ -14,15 +15,16 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-usage() { sed -n '6,8p' "$0" >&2; exit 2; }
+usage() { sed -n '6,9p' "$0" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "fold-answers: python3 is required" >&2; exit 2; }
 
-inst="."; doc=""; list_key=""; ans_entry=""; ans_text=""
+inst="."; doc=""; list_key=""; ans_entry=""; ans_text=""; block_label=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) [ $# -ge 2 ] || usage; inst="$2"; shift 2 ;;
     --list)     [ $# -ge 3 ] || usage; doc="$2"; list_key="$3"; shift 3 ;;
     --answer)   [ $# -ge 3 ] || usage; ans_entry="$2"; ans_text="$3"; shift 3 ;;
+    --block)    [ $# -ge 3 ] && [[ "$2" =~ ^Q[0-9]+$ ]] || usage; block_label="$2"; doc="$3"; shift 3 ;;
     -h|--help)  usage ;;
     -*)         usage ;;
     *)          [ -z "$doc" ] || usage; doc="$1"; shift ;;
@@ -45,7 +47,7 @@ done
 # unresolvable author stays `<unknown>` rather than being stamped with whoever's loop is
 # folding it.
 login_self="<unknown>"; login_author="<unknown>"; committed_state="absent"; committed_file=""
-if [ -z "$list_key" ] && [ -x "$HERE/decision-stamp.sh" ]; then
+if [ -z "$list_key$block_label" ] && [ -x "$HERE/decision-stamp.sh" ]; then
   committed_file="$(mktemp -t fold-answers.XXXXXX)"; head_doc="$(mktemp -t fold-answers-head.XXXXXX)"
   trap 'rm -f "$committed_file" "$head_doc"' EXIT
   login_self="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --self 2>/dev/null || true)"
@@ -64,13 +66,13 @@ if [ -z "$list_key" ] && [ -x "$HERE/decision-stamp.sh" ]; then
 fi
 
 python3 - "$doc" "$list_key" "$login_self" "$login_author" "$committed_state" \
-         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ans_entry" "$ans_text" <<'PY'
-import os, re, sys, tempfile
+         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ans_entry" "$ans_text" "$block_label" <<'PY'
+import json, os, re, sys, tempfile
 
 ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "/": "/"}
 
 path, list_key = sys.argv[1], sys.argv[2]
-login_self, login_author, committed_state, committed_file, stamp, ans_entry, ans_text = sys.argv[3:10]
+login_self, login_author, committed_state, committed_file, stamp, ans_entry, ans_text, block_label = sys.argv[3:11]
 src = open(path, encoding="utf-8").read()
 
 
@@ -253,6 +255,49 @@ def emit(entries, comment=""):
         lines.append('\n  - "%s"' % e.replace("\\", "\\\\").replace('"', '\\"'))
     return head + "".join(lines)
 
+
+if block_label:
+    # The same heading and field grammar as answer.sh's reader: the block runs to the
+    # next heading of level 1-3, `Options:`/`Context:` open a field on their own line.
+    lines = src[FM_END:].split("\n")
+    blk = None
+    for i, l in enumerate(lines):
+        if re.match(r"###\s+%s\s*$" % re.escape(block_label), l):
+            blk = []
+            for x in lines[i + 1:]:
+                if re.match(r"#{1,3}\s", x):
+                    break
+                blk.append(x)
+            break
+    if blk is None:
+        sys.exit(1)
+    rec, opts, deps, field = "", {}, {}, None
+    for l in blk:
+        m = re.match(r"Recommendation:\s*(.*\S)", l)
+        if m:
+            rec, field = m.group(1), None
+            continue
+        m = re.match(r"(\w+):\s*$", l)
+        if m:
+            field = m.group(1)
+            continue
+        if field == "Options":
+            m = re.match(r"\s*(\d+)\.\s+(.*\S)", l)
+            if m:
+                opts[int(m.group(1))] = m.group(2)
+        elif field == "Context":
+            m = re.match(r"\s*-\s*Depth\s+(\d+):\s*(.*)$", l)
+            if m:
+                cur = int(m.group(1))
+                deps[cur] = [m.group(2).strip()]
+            elif deps:
+                deps[max(deps)].append(l.strip())
+    print(json.dumps({
+        "recommendation": rec,
+        "options": [[n, opts[n]] for n in sorted(opts)],
+        "depths": ["\n".join(deps[n]).strip() for n in sorted(deps)],
+    }))
+    sys.exit(0)
 
 if list_key:
     entries, _, _, _ = read(list_key)

@@ -1399,20 +1399,36 @@ def q_title(t, ref):
     return (Q_NO_NUM if tolist(t.get("open_question_ids")) else Q_NO_TEXT) % ref
 
 
-def q_seam(p, t):
-    """` data-q="<slug>/<task id>"` on a question item's paragraph, else nothing.
+def q_seams(p, t):
+    """The serve-time seams of a question item, one set per open question, else "".
 
-    The ONLY seam for question text, and this file never fills it: board-serve.sh
-    replaces the paragraph in its HTTP response with the task document's own
-    `open_questions`. Both values are already on the page (the handle and the row's
-    id), so the attribute adds nothing a published copy did not carry.
+    This file never fills them: board-serve.sh does, in its HTTP response, from the task
+    document. Every attribute value is already on the page, so a published copy carries
+    nothing new. The names are a contract (docs/operations.md, "The serve-time fill").
     """
     slug, tid = str(p.get("slug") or ""), str(t.get("id") or "")
     if t.get("awaiting") not in ("answer", "question"):
         return ""
     if not (SLUG_SEG.fullmatch(slug) and SLUG_SEG.fullmatch(tid)):
         return ""
-    return ' data-q="%s"' % e(slug + "/" + tid)
+    out = []
+    for qn in dict.fromkeys(q_handles(t)):
+        code = "" if qn is None else "Q%d" % qn
+        ref = e("/".join(x for x in (slug, tid, code) if x))
+        out.append('<div class="qfill" data-fill="question" data-ref="%s" data-code="%s" '
+                   'data-project="%s"><div data-fill="q-text" data-ref="%s"></div>'
+                   '<ol data-fill="q-options" data-ref="%s"></ol>'
+                   '<ol data-fill="q-depths" data-ref="%s"></ol></div>'
+                   % (ref, code, e(slug), ref, ref, ref))
+    return "".join(out)
+
+
+def p_seams(slug):
+    """A project's need and success_criteria seams, filled the same way as q_seams()."""
+    if not SLUG_SEG.fullmatch(slug):
+        return ""
+    return ('<div data-fill="p-need" data-ref="%s"></div>'
+            '<ol data-fill="p-success" data-ref="%s"></ol>' % (e(slug), e(slug)))
 
 
 def explain(verb, p, t, hint):
@@ -1656,8 +1672,8 @@ def render_table():
             o.append('<span class="what">%s</span>' % e(t.get("title")))
             o.append('<span class="where">%s%s</span></summary>'
                      % (e(where), " · <code>%s</code>" % e(hint) if hint else ""))
-            o.append('<p%s>%s</p></details>'
-                     % (q_seam(p, t), e(explain(t.get("awaiting"), p, t, hint))))
+            o.append('<p>%s</p>%s</details>'
+                     % (e(explain(t.get("awaiting"), p, t, hint)), q_seams(p, t)))
             # ONE HANDLE, AND EVERY BUTTON IN THIS ROW OPENS WITH IT. `<handle>: ` is
             # the whole notation — the task's own for anything task-scoped, this
             # question's for a question, and the project's alone for a close proposal,
@@ -1831,6 +1847,7 @@ def render_table():
         o.append("</summary>")
 
         o.append('<div class="body">')
+        o.append(p_seams(slug))
         # THIS project's queue, above its task table and holding only its own items.
         rail(mine)
         # THERE IS NO ROLE COLUMN, AND IT IS NOT CONDITIONAL — IT IS GONE.

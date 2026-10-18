@@ -90,7 +90,7 @@ OUT_ABS="$(cd "$OUT_DIR" && pwd)"
 BOARD_ROOT="$ROOT" BOARD_OUT="$OUT_ABS" BOARD_PORT="$PORT" BOARD_INTERVAL="$INTERVAL" \
 BOARD_RENDER="$BOARD" BOARD_WRITER="$WRITER" \
 exec python3 - <<'PY'
-import errno, html, http.server, os, re, signal, socketserver, subprocess, sys, threading, time, urllib.parse, urllib.request
+import errno, html, http.server, json, os, re, signal, socketserver, subprocess, sys, threading, time, urllib.parse, urllib.request
 
 ROOT     = os.environ["BOARD_ROOT"]
 OUT      = os.path.realpath(os.environ["BOARD_OUT"])
@@ -137,14 +137,19 @@ def render():
         sys.stderr.write("board-serve: build-board could not be run — the page was not updated.\n")
 
 
-# THE QUESTION TEXT ENTERS HERE AND NOWHERE ELSE: in the HTTP response, never in a file.
-# build-board.sh marks a question item's paragraph with `data-q="<slug>/<task id>"`; this
-# swaps that paragraph for the task document's own `open_questions`, read fresh per
-# request. The snapshot and the rendered file stay text-free, so nothing that copies,
-# commits or publishes them can carry it. html.escape here is the page's SECOND escape
-# point (build-board.sh's e() is the first), pinned by tests/board-serve.test.sh.
-SEAM = re.compile(r'<p data-q="([^"<>]*)">[^<]*</p>')
+# THE FILLED TEXT ENTERS HERE AND NOWHERE ELSE: in the HTTP response, never in a file.
+# build-board.sh emits the named seams docs/operations.md lists ("The serve-time fill");
+# this fills them from the task and project documents, read fresh per request, so the
+# snapshot and the rendered file stay text-free. html.escape here is the page's SECOND
+# escape point (build-board.sh's e() is the first), pinned by tests/board-serve.test.sh.
+LEAF = re.compile(r'<(div|ol) data-fill="(q-text|q-options|q-depths|p-need|p-success)" '
+                  r'data-ref="([^"<>]*)"></\1>')
+QOPEN = re.compile(r'<div class="qfill" data-fill="question" data-ref="([^"<>]*)"')
 SEG = re.compile(r"\w[\w.+-]*")
+# The label rule of write-snapshot.sh's question_labels(), so a seam's code finds its entry.
+QCODE = re.compile(r"(?i)\s*(?:advisor:\s*)?(?:[^·]{0,40}·\s*)?(?:advisor:\s*)?"
+                   r"q0*(\d{1,3})(?![0-9a-z_])\s*[:.)]?\s*")
+ISO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?")
 INSTANCES = [ROOT]
 
 
@@ -160,32 +165,142 @@ def list_instances():
         pass
 
 
-# fold-answers.sh's --list is the one parser that round-trips these lists; a refusal
-# leaves the count paragraph, never a half-parsed question. An entry carrying ` --- ` is
-# answered and awaiting the fold, so it is skipped exactly as build-awaiting.sh skips it.
-def open_questions(path):
+def fold(*args):
     try:
-        r = subprocess.run(["bash", FOLD, "--list", path, "open_questions"],
+        r = subprocess.run(["bash", FOLD] + list(args),
                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30)
     except Exception:
-        return []
-    if r.returncode != 0:
-        return []
-    return [q for q in r.stdout.decode("utf-8", "replace").splitlines()
-            if q.strip() and " --- " not in q]
+        return None
+    return r.stdout.decode("utf-8", "replace") if r.returncode == 0 else None
 
 
-def fill(m):
-    ref = m.group(1).split("/")
-    if len(ref) != 2 or not all(SEG.fullmatch(x) for x in ref):
-        return m.group(0)
-    hits = [f for f in (os.path.join(d, "projects", ref[0], "tasks", ref[1] + ".md")
-                        for d in INSTANCES) if os.path.isfile(f)]
-    qs = open_questions(hits[0]) if len(hits) == 1 else []
-    if not qs:
-        return m.group(0)
-    return '<p data-q="%s">%s</p>' % (m.group(1), "<br>".join(html.escape(q, quote=True)
-                                                               for q in qs))
+# A task's document for its questions, a project's for need and success_criteria (which
+# conventions 11b keeps out of the snapshot) — the only two paths built into the bundle.
+def find_doc(slug, tid=None):
+    if not SEG.fullmatch(slug) or not (tid is None or SEG.fullmatch(tid)):
+        return None
+    if tid is None:
+        hits = [os.path.join(d, "projects", slug, "project.md") for d in INSTANCES]
+    else:
+        hits = [os.path.join(d, "projects", slug, "tasks", tid + ".md") for d in INSTANCES]
+    hits = [f for f in hits if os.path.isfile(f)]
+    return hits[0] if len(hits) == 1 else None
+
+
+def scalar(path, key):
+    try:
+        text = open(path, encoding="utf-8").read()
+    except (OSError, UnicodeDecodeError):
+        return ""
+    end = text.find("\n---", 3)
+    if not text.startswith("---\n") or end < 0:
+        return ""
+    m = re.search(r"(?m)^%s:[ \t]*(.*)$" % re.escape(key), text[4:end])
+    v = m.group(1).strip() if m else ""
+    if v.startswith('"'):
+        try:
+            v = json.JSONDecoder().raw_decode(v)[0]
+        except ValueError:
+            return ""
+        return v if isinstance(v, str) else ""
+    if v.startswith("'"):
+        return v[1:v.rfind("'")].replace("''", "'") if v.count("'") > 1 else ""
+    return re.split(r"[ \t]#", v, 1)[0].strip()
+
+
+def paras(text):
+    return "".join("<p>%s</p>" % html.escape(" ".join(x.split()), quote=True)
+                   for x in re.split(r"\n\s*\n", text) if x.strip())
+
+
+class Fill:
+    """One request's fill: every document is read at most once per page served."""
+
+    def __init__(self):
+        self.memo, self.open = {}, set()
+
+    def once(self, key, fn):
+        if key not in self.memo:
+            self.memo[key] = fn()
+        return self.memo[key]
+
+    # fold-answers.sh's --list is the one parser that round-trips these lists. An entry
+    # carrying ` --- ` is answered and awaiting the fold, so it is skipped exactly as
+    # build-awaiting.sh skips it.
+    def questions(self, doc):
+        def read():
+            out = fold("--list", doc, "open_questions") or ""
+            return [q for q in out.splitlines() if q.strip() and " --- " not in q]
+        return self.once(("q", doc), read)
+
+    def block(self, doc, code):
+        def read():
+            try:
+                return json.loads(fold("--block", code, doc) or "null")
+            except ValueError:
+                return None
+        return self.once(("b", doc, code), read)
+
+    def question(self, ref):
+        parts = ref.split("/")
+        if len(parts) not in (2, 3) or (len(parts) == 3 and not re.fullmatch(r"Q\d+", parts[2])):
+            return None, None, []
+        doc = find_doc(parts[0], parts[1])
+        if doc is None:
+            return None, None, []
+        code = parts[2] if len(parts) == 3 else ""
+        texts = []
+        for q in self.questions(doc):
+            m = QCODE.match(q)
+            if ("Q%d" % int(m.group(1)) if m else "") == code:
+                texts.append(q[m.end():] if m else q)
+        return doc, code, texts
+
+    def leaf(self, m):
+        tag, kind, ref = m.groups()
+        inner = ""
+        if kind.startswith("p-"):
+            doc = find_doc(ref)
+            if doc and kind == "p-need":
+                inner = paras(scalar(doc, "need"))
+            elif doc:
+                inner = "".join("<li>%s</li>" % html.escape(x, quote=True) for x in
+                                (fold("--list", doc, "success_criteria") or "").splitlines() if x)
+        else:
+            doc, code, texts = self.question(ref)
+            if texts and kind == "q-text":
+                self.open.add(ref)
+                inner = "".join("<p>%s</p>" % html.escape(x, quote=True) for x in texts)
+            elif texts and code:
+                b = self.block(doc, code) or {}
+                if kind == "q-options":
+                    opts = [o for o in b.get("options", []) if isinstance(o, list) and len(o) == 2]
+                    rec = [o for o in opts if o[1] == b.get("recommendation")][:1]
+                    inner = "".join('<li data-n="%d"%s>%s</li>' % (int(n), " data-rec" if [n, t] in rec
+                                                                   else "", html.escape(str(t), quote=True))
+                                    for n, t in rec + [o for o in opts if o not in rec])
+                else:
+                    inner = "".join('<li data-depth="%d">%s</li>' % (i + 1, paras(str(d)))
+                                    for i, d in enumerate(b.get("depths", [])[:3]))
+        if not inner:
+            return m.group(0)
+        return '<%s data-fill="%s" data-ref="%s">%s</%s>' % (tag, kind, ref, inner, tag)
+
+    # ONE ORDER RULE (docs/operations.md): oldest task first by its `timestamp:`, then Q
+    # number; no timestamp sorts last; slug and task id break ties so a refresh is stable.
+    def rank(self, page):
+        def key(ref):
+            parts = ref.split("/")
+            doc = find_doc(parts[0], parts[1])
+            ts = ISO.match(self.once(("t", doc), lambda: scalar(doc, "timestamp")) or "")
+            return (0 if ts else 1, ts.group(0) if ts else "", parts[0], parts[1],
+                    int(parts[2][1:]) if len(parts) == 3 else 1 << 30)
+        order = {r: i + 1 for i, r in enumerate(sorted(self.open, key=key))}
+        return QOPEN.sub(lambda m: m.group(0) + (' data-rank="%d"' % order[m.group(1)]
+                                                 if m.group(1) in order else ""), page)
+
+    def page(self, body):
+        return self.rank(LEAF.sub(self.leaf, body))
 
 
 def snap_mtime():
@@ -282,7 +397,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(404, b"not found\n")
         ctype = TYPES.get(os.path.splitext(full)[1], "application/octet-stream")
         if full == PAGE:
-            body = SEAM.sub(fill, body.decode("utf-8", "replace")).encode() + RELOAD.encode()
+            page = body.decode("utf-8", "replace")
+            try:
+                page = Fill().page(page)
+            except Exception:
+                sys.stderr.write("board-serve: the fill failed — served the page unfilled.\n")
+            body = page.encode() + RELOAD.encode()
         return self._send(200, body, ctype)
 
     do_HEAD = do_GET
