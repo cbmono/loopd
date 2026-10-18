@@ -1715,6 +1715,7 @@ esac
 BG_OLD="Bash(claude --bg * --agent ${PLUGIN_NAME}:* --permission-mode auto --add-dir *)"
 BG_BROAD="Bash(claude --bg *)"
 BG_INERT="Bash(claude --bg ' *)"
+RESUME_RULE="Bash(claude --bg --resume *)"
 STOP_RULE="Bash(claude stop *)"
 # A rule under permissions.deny is not a grant, so only the named list is read.
 bg_list() { # <file> <allow|deny> -> its string entries, one per line
@@ -1733,7 +1734,7 @@ PY
   elif [ "$2" = allow ]; then grep -o "\"${BG_BROAD%% *}[^\"]*)\"" "$1" | sed 's/^"//; s/"$//'; fi
 }
 bg_has() { bg_list "$AL_FILE" allow | grep -qxF -- "$1"; }
-BG_WANT="$(printf '%s\n' "$BG_RULES" "$STOP_RULE" | grep .)"
+BG_WANT="$(printf '%s\n' "$BG_RULES" "$RESUME_RULE" "$STOP_RULE" | grep .)"
 bg_missing="$(printf '%s\n' "$BG_WANT" | while IFS= read -r r; do bg_has "$r" || printf '%s\n' "$r"; done)"
 bg_denied="$(bg_list "$AL_FILE" deny | grep -xF -- "$BG_WANT" || true)"
 # Every spawn rule in the file that matches far too much or nothing at all, as
@@ -1830,9 +1831,9 @@ if [ "$bg_want" = yes ] || [ -n "$bg_stale" ]; then
     fi
   else
     if [ "$bg_want" = yes ]; then
-      echo "  note  init writes no \`claude --bg\` grant without your yes. The narrowest rules for the tick's spawn and its stop of a recorded round:"
+      echo "  note  init writes no \`claude --bg\` grant without your yes. The narrowest rules for the tick's spawn, its resume and its stop of a recorded round:"
       printf '%s\n' "$bg_missing" | sed 's/^/          /'
-      echo "        They let the tick spawn its ${PLUGIN_NAME} roles in auto mode, and stop a session, unprompted. Adding them to"
+      echo "        They let the tick spawn its ${PLUGIN_NAME} roles in auto mode, resume a session and stop one, unprompted. Adding them to"
       echo "        .claude/settings.local.json is yours: answer Y when a terminal stamp asks, or re-run with --spawn-grant."
     fi
     bg_note_stale

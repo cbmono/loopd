@@ -85,9 +85,9 @@ could not derive it prints as a `needs` line naming the key and its flag.
 
 ## The spawn grant: one yes/no question, asked here on the script's behalf
 
-Role agents are `claude --bg` sessions the tick starts — and stops, once a round is
-recorded — and without their rules in the bundle's `.claude/settings.local.json` each spawn
-or stop waits on a permission prompt. **At a
+Role agents are `claude --bg` sessions the tick starts, resumes and stops, once a round is
+recorded — and without their rules in the bundle's `.claude/settings.local.json` each spawn,
+resume or stop waits on a permission prompt. **At a
 terminal the script asks for it itself, Enter is yes.** Run from here there is no terminal,
 so it writes nothing and prints a `note` that begins `init writes no \`claude --bg\` grant
 without your yes`, followed by the rules still missing. When you see that note:

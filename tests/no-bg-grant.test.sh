@@ -56,17 +56,18 @@ rules() { # <instance> -> the spawn rule for each role, one per line
 }
 set_rules() { # <instance> -> RULES (array), RULE (the first) and PROMPT, for that bundle
   RULES=(); while IFS= read -r l; do RULES+=("$l"); done < <(rules "$1"); RULE="${RULES[0]}"
-  PROMPT="Write $(printf '"%s" and ' "${RULES[@]}")\"$STOP\" to .claude/settings.local.json so the tick can start and stop role agents without a prompt? [Y/n]"
+  PROMPT="Write $(printf '"%s" and ' "${RULES[@]}" "$RESUME")\"$STOP\" to .claude/settings.local.json so the tick can start and stop role agents without a prompt? [Y/n]"
 }
-N=5   # four spawn rules and the stop rule
+N=6   # four spawn rules, the resume rule and the stop rule
 AUTO_RULE="Bash(claude --bg * --agent ${PN}:* --permission-mode auto --add-dir *)"
 NEAR_RULE="Bash(claude --bg * --agent ${PN}:* --permission-mode auto --add-dir /*)"
 OLD_RULE="Bash(claude --bg * --agent ${PN}:* --permission-mode bypassPermissions --add-dir *)"
 BROAD="Bash(claude --bg *)"
 NS_RULE="Bash(claude --bg * --agent old-plugin:* --permission-mode auto --add-dir *)"
 INERT="Bash(claude --bg ' *)"
+RESUME="Bash(claude --bg --resume *)"
 STOP="Bash(claude stop *)"
-STOP_PROMPT="Write \"$STOP\" to .claude/settings.local.json so the tick can start and stop role agents without a prompt? [Y/n]"
+REST_PROMPT="Write \"$RESUME\" and \"$STOP\" to .claude/settings.local.json so the tick can start and stop role agents without a prompt? [Y/n]"
 grants() { # <instance> -> count of claude allow entries across every settings file it has
   cat "$1"/.claude/*.json 2>/dev/null | grep -cE '"Bash\(claude[ :]' | tr -d ' '
 }
@@ -104,9 +105,9 @@ ok "no other claude allow entry was added" "$(grants "$I")" 1
 ok "it is reported as matching no measured spawn form" "$(cnt -F 'matches no spawn form measured' "$TMP/out")" 1
 
 echo "== 3. an operator's own working rules are not second-guessed =="
-I="$TMP/i3"; set_rules "$I"; with_rules "$I" "${RULES[@]}" "$STOP"; L="$I/.claude/settings.local.json"
+I="$TMP/i3"; set_rules "$I"; with_rules "$I" "${RULES[@]}" "$RESUME" "$STOP"; L="$I/.claude/settings.local.json"
 stamp "$MK" "$I"
-ok "still exactly the five claude allow entries" "$(grants "$I")" "$N"
+ok "still exactly the six claude allow entries" "$(grants "$I")" "$N"
 ok "no notice printed" "$(cnt -F 'claude --bg' "$TMP/out")" 0
 BEFORE="$(cat "$L")"   # after the first stamp: step 1e's script allowlist has landed by now
 tty_stamp "" "$I"
@@ -116,8 +117,8 @@ ok "…leaving the file byte-identical" "$([ "$(cat "$L")" = "$BEFORE" ] && echo
 echo "== 3a. a bundle holding only the spawn rule is asked for the stop rule alone =="
 I="$TMP/i3a"; set_rules "$I"; with_rules "$I" "${RULES[@]}"; L="$I/.claude/settings.local.json"
 tty_stamp "" "$I"
-ok "the question names only the stop rule" "$(cnt -F "$STOP_PROMPT" "$TMP/out")" 1
-ok "five claude allow entries after the yes" "$(grants "$I")" "$N"
+ok "the question names only the resume and stop rules" "$(cnt -F "$REST_PROMPT" "$TMP/out")" 1
+ok "six claude allow entries after the yes" "$(grants "$I")" "$N"
 ok "…the spawn rule still once" "$(cnt -F "\"$RULE\"" "$L")" 1
 ok "…and the stop rule once" "$(cnt -F "\"$STOP\"" "$L")" 1
 tty_stamp "" "$I"
@@ -131,7 +132,7 @@ ok "the denied stop rule is still missing: the notice names it" "$(cnt -F "     
 ok "…and the conflicting deny is reported" "$(cnt -F "lists \`$STOP\` under permissions.deny" "$TMP/out")" 1
 ok "…without a yes, nothing is written" "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["permissions"]["allow"]))' "$L")" 4
 tty_stamp "" "$I"
-ok "at a terminal it asks for the stop rule" "$(cnt -F "$STOP_PROMPT" "$TMP/out")" 1
+ok "at a terminal it asks for the resume and stop rules" "$(cnt -F "$REST_PROMPT" "$TMP/out")" 1
 ok "…the yes lands it under allow, once" "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["permissions"]["allow"].count(sys.argv[2]))' "$L" "$STOP")" 1
 ok "…leaves the human's deny alone" "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["permissions"]["deny"].count(sys.argv[2]))' "$L" "$STOP")" 1
 ok "…and still reports it" "$(cnt -F "lists \`$STOP\` under permissions.deny" "$TMP/out")" 1
@@ -181,7 +182,7 @@ ok "no shipped JSON allows a claude command" "$json_hits" 0
 # Outside markdown, `Bash(claude` may only appear in a line that prints it or in one of the
 # named constants — the writer reaches the rule through $BG_RULE and nowhere else.
 code_hits="$(printf '%s\n' "$SURF" | grep -v '\.md$' | while IFS= read -r f; do
-  grep -nF 'Bash(claude' "$f" | grep -vE '^[0-9]+:[[:space:]]*(echo|printf|#|BG_OLD=|BG_INERT=|BG_BROAD=|STOP_RULE=)' | sed "s|^|$f:|"
+  grep -nF 'Bash(claude' "$f" | grep -vE '^[0-9]+:[[:space:]]*(echo|printf|#|BG_OLD=|BG_INERT=|BG_BROAD=|RESUME_RULE=|STOP_RULE=)' | sed "s|^|$f:|"
 done)"
 [ -z "$code_hits" ] || printf '%s\n' "$code_hits" | sed 's/^/        /'
 ok "no script line spells a claude rule outside the constants" "$(printf '%s' "$code_hits" | grep -c . | tr -d ' ')" 0
@@ -194,14 +195,15 @@ ok "no claude allow entry" "$(grants "$I")" 0
 ok "…and the rule is printed for the human" "$(cnt -F "          $RULE" "$TMP/out")" 1
 ok "no trust key anywhere" "$(trust_written "$I")" 0
 
-echo "== 7. at a terminal, Enter is yes: exactly those five rules, and nothing else =="
+echo "== 7. at a terminal, Enter is yes: exactly those six rules, and nothing else =="
 I="$TMP/i7"; mkdir -p "$I"; set_rules "$I"; tty_stamp "" "$I"; rc=$?
 L="$I/.claude/settings.local.json"
 ok "exits 0" "$rc" 0
 ok "the question is asked, verbatim" "$(cnt -F "$PROMPT" "$TMP/out")" 1
 ok "it says what it wrote" "$(cnt -F 'wrote spawn grant into .claude/settings.local.json' "$TMP/out")" 1
-ok "exactly five claude allow entries" "$(grants "$I")" "$N"
+ok "exactly six claude allow entries" "$(grants "$I")" "$N"
 ok "…one spawn rule per role" "$(rules "$I" | sed 's/.*/"&"/' | grep -cF -f - "$L")" 4
+ok "…the resume rule" "$(cnt -F "\"$RESUME\"" "$L")" 1
 ok "…and the stop rule" "$(cnt -F "\"$STOP\"" "$L")" 1
 ok "each claude rule has one *, at its end, and no quote" "$(python3 -c '
 import json,sys
@@ -225,7 +227,7 @@ I="$TMP/i8"; set_rules "$I"; with_rules "$I" "$OLD_RULE" "$BROAD" "$NS_RULE" "$A
 tty_stamp "" "$I"
 ok "the question listed what would be removed" "$(cnt -F 'would be REMOVED' "$TMP/out")" 1
 ok "…naming all four" "$(cnt -E "^    - Bash\(claude --bg .*\((over-broad|stale)" "$TMP/out")" 4
-ok "the five rules and the near-miss remain" "$(grants "$I")" $((N + 1))
+ok "the six rules and the near-miss remain" "$(grants "$I")" $((N + 1))
 ok "…the measured rule" "$(cnt -F "\"$RULE\"" "$L")" 1
 ok "the bypass rule is gone" "$(cnt -F "\"$OLD_RULE\"" "$L")" 0
 ok "the bare wildcard is gone" "$(cnt -F "\"$BROAD\"" "$L")" 0
@@ -241,7 +243,7 @@ I="$TMP/i9"; set_rules "$I"; with_rules "$I" "$BROAD"; L="$I/.claude/settings.lo
 stamp "$MK" "$I" --spawn-grant; rc=$?
 ok "exits 0" "$rc" 0
 ok "no question was printed" "$(cnt -F "$PROMPT" "$TMP/out")" 0
-ok "exactly five claude allow entries" "$(grants "$I")" "$N"
+ok "exactly six claude allow entries" "$(grants "$I")" "$N"
 ok "…the measured rule" "$(cnt -F "\"$RULE\"" "$L")" 1
 ok "…and the over-broad one was removed" "$(cnt -F "\"$BROAD\"" "$L")" 0
 bash "$MK/scripts/init-bundle.sh" --help >"$TMP/help" 2>&1
@@ -261,7 +263,7 @@ echo "== 11. a bundle path a rule cannot spell gets no spawn rule, and one note 
 for I in "$TMP/i 11" "$TMP/i'11"; do
   mkdir -p "$I"; stamp "$MK" "$I" --spawn-grant
   ok "[$(basename "$I")] the note says why, once" "$(cnt -F 'needs shell quoting, and a rule cannot carry a quote character' "$TMP/out")" 1
-  ok "[$(basename "$I")] only the stop rule is written" "$(grants "$I")" 1
+  ok "[$(basename "$I")] only the resume and stop rules are written" "$(grants "$I")" 2
 done
 
 echo "== 12. a stamp through a symlink names the physical bundle path =="

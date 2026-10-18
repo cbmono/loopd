@@ -1457,7 +1457,7 @@ fixes drifted into because this was never written down (task-019).
   terminal** asks, verbatim, `Write "Bash(claude --bg --agent loopd:software-engineer
   --permission-mode auto --add-dir <bundle path> --model *)" and …` — one such rule for each
   of `software-engineer`, `devops-engineer`, `qa-reviewer` and `cataloguer`, then `and
-  "Bash(claude stop *)" to .claude/settings.local.json so the tick can start and stop role
+  "Bash(claude --bg --resume *)" and "Bash(claude stop *)" to .claude/settings.local.json so the tick can start and stop role
   agents without a prompt? [Y/n]` — naming only the rules still missing — and Enter or `y` writes exactly those into
   `permissions.allow` (JSON-parsed, verified after it lands, never duplicated) and removes
   the stale shapes the question listed; `n` prints the rules as before. The stop rule is
@@ -1473,7 +1473,7 @@ fixes drifted into because this was never written down (task-019).
 | | Do this | Why it is yours |
 |---|---|---|
 | **Trust** (required) | run `claude` interactively **once in each product repo's main clone** and accept the prompt | trust is a `~/.claude.json` key; a plugin writing it grants itself trust |
-| **Grant** (optional) | answer **Y** when `/loopd:init` asks — or add `Bash(claude --bg --agent loopd:<role> --permission-mode auto --add-dir <bundle path> --model *)` for each of the four roles above, with the bundle's physical path (`pwd -P`; a path that needs shell quoting gets no rule), and `Bash(claude stop *)` to `permissions.allow` in the bundle's `.claude/settings.local.json` yourself (a copy under `permissions.deny` overrides them, and the stamp reports it) | it lets the tick spawn any role, in auto mode, and stop a session whose round is recorded, unprompted — it matters when the session running the tick is NOT in auto mode; in auto mode the classifier decides and accepts this spawn. The stamp asks and never assumes; a rule naming `bypassPermissions`, the bare `Bash(claude --bg *)`, the old `ai-bridge:` namespace and the exact pre-reorder rule `Bash(claude --bg * --agent loopd:* --permission-mode auto --add-dir *)` are named by it and replaced on the same yes |
+| **Grant** (optional) | answer **Y** when `/loopd:init` asks — or add `Bash(claude --bg --agent loopd:<role> --permission-mode auto --add-dir <bundle path> --model *)` for each of the four roles above, with the bundle's physical path (`pwd -P`; a path that needs shell quoting gets no rule), `Bash(claude --bg --resume *)` and `Bash(claude stop *)` to `permissions.allow` in the bundle's `.claude/settings.local.json` yourself (a copy under `permissions.deny` overrides them, and the stamp reports it) | it lets the tick spawn any role, in auto mode, resume one, and stop a session whose round is recorded, unprompted — it matters when the session running the tick is NOT in auto mode; in auto mode the classifier decides and accepts this spawn. The stamp asks and never assumes; a rule naming `bypassPermissions`, the bare `Bash(claude --bg *)`, the old `ai-bridge:` namespace and the exact pre-reorder rule `Bash(claude --bg * --agent loopd:* --permission-mode auto --add-dir *)` are named by it and replaced on the same yes |
 
 To run the role agents unattended inside a container or VM, with auto mode set in
 managed settings by the operator, see
@@ -1511,6 +1511,8 @@ same harness on `sonnet`, after step 3 moved the brief behind every fixed flag. 
 | the same | `--dangerously-skip-permissions` inserted after `--bg` | ✗ |
 | the same | the same flag inserted after `--agent loopd:<role>` | ✗ |
 | the same | the same flag **appended** after the brief — residual risk, any trailing `*` | ✓ |
+| `Bash(claude --bg --resume *)` — the resume grant | step 4's resume, a multi-line `'…'` message as above, alone and behind `cd <worktree> &&` | ✓, the message the stub's last argument |
+| the same | the same flag **appended** after the message — residual risk, any trailing `*` | ✓ |
 | `Bash(claude --bg * --agent loopd:* --permission-mode auto --add-dir *)` — the old grant | the old order, the flag inserted after `--agent` | ✓ (contrast) |
 | the old grant | the new order, the flag inserted after `--bg` | ✓ (contrast) |
 | the old grant | the new order, nothing inserted | ✗ — a bundle not re-stamped is prompted until its next yes |
