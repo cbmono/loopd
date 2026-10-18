@@ -33,8 +33,9 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/board-serve.sh
 That is the whole form. The script binds `127.0.0.1` on `boardPort`
 (`instance.config.local.json`; absent, a port derived from the bundle path in the 4xxxx
 band), renders `.loopd/.board-live/board.html` from `SNAPSHOT.json`, re-renders in two seconds
-of that file changing, and serves nothing outside `$AB_BOARD_DIR`. Each open question's text
-is filled in from its task document as the page is served — never into the file, so
+of that file changing, and serves nothing outside `$AB_BOARD_DIR`. Each open question (text,
+options, depths) and each project's need and success criteria are filled in from their
+documents as the page is served — never into the file, so
 `publish` below never carries it. **No model is in that
 path** — do not render, summarise or reformat the board yourself, and do not read the page
 back into the session. It runs until the human stops it; a second start on the same bundle

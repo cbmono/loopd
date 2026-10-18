@@ -296,6 +296,15 @@ ok "the body, block included, is byte-identical" \
 ok "…and it still carries the block" "$(sed '1,/^---$/d' "$QD" | grep -cE '^### Q1$|^- Depth 3: f\.$' | tr -d ' ')" 2
 
 echo
+echo "== --block Q<n>: the one ### Q<n> reader, READ-ONLY =="
+cp "$QD" "$TMP/qd.block"
+ok "the block comes back as JSON" "$(bash "$SH" --block Q1 "$QD")" \
+   '{"recommendation": "eu-central-1", "options": [[1, "eu-central-1"]], "depths": ["s.", "p.", "f."]}'
+ok "…and writes nothing" "$(cmp -s "$QD" "$TMP/qd.block" && echo yes || echo no)" yes
+ok "a missing block is exit 1, nothing printed" "$(bash "$SH" --block Q2 "$QD"; echo "rc=$?")" "rc=1"
+ok "a label that is not Q<n> is exit 2" "$(bash "$SH" --block 1 "$QD" >/dev/null 2>&1; echo $?)" 2
+
+echo
 echo "== usage =="
 ok "no argument is exit 2" "$(bash "$SH" >/dev/null 2>&1; echo $?)" 2
 ok "an unreadable path is exit 2" "$(bash "$SH" "$TMP/nope.md" >/dev/null 2>&1; echo $?)" 2

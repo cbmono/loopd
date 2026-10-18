@@ -445,8 +445,9 @@ scripts/watch-board.sh                                       # a local page, re-
 `/loopd:board` — bare, or `serve` — is the **local board server** (`board-serve.sh`). It
 binds `127.0.0.1` on `boardPort` from `instance.config.local.json` (absent, a port derived
 from the bundle path, 40000–49999), renders the page from `SNAPSHOT.json` into
-`.loopd/.board-live/`, re-renders when that file changes, and fills in each open question's
-text as the page is served, never into the file. No model is in that path and nothing is
+`.loopd/.board-live/`, re-renders when that file changes, and fills in each open question
+and each project's need and success criteria as the page is served, never into the file
+([the serve-time fill](#the-serve-time-fill-field-map-seams-and-order)). No model is in that path and nothing is
 published. `/loopd:board publish` is the only form that leaves the machine: it renders the
 same body and publishes it as a **private artifact** at a URL that does not change between
 runs ([below](#opening-the-board-laptop-phone-published-live)).
@@ -551,11 +552,11 @@ can contain, because the renderer reads the snapshot and nothing else.
 | PR links | — |
 
 **Question text is shown on exactly one surface: the response `board-serve.sh` sends on
-`127.0.0.1`.** The renderer marks each question item with its `<slug>/<task id>`, and the
-server fills it from that task document's `open_questions` as it answers the request. The
-snapshot and every rendered file stay text-free, and nothing switches that: the
-`SNAPSHOT_QUESTION_TEXT` opt-in that once put the text in the snapshot is deleted, so a
-copied or published page cannot carry it.
+`127.0.0.1`.** The renderer emits named, empty seams and the server fills them from the
+task and project documents as it answers the request
+([below](#the-serve-time-fill-field-map-seams-and-order)). The snapshot and every rendered
+file stay text-free, and nothing switches that: the `SNAPSHOT_QUESTION_TEXT` opt-in that
+once put the text in the snapshot is deleted, so a copied or published page cannot carry it.
 
 **One identity field is carried, and it was a decision.** `owner` used to be on the right
 of that table, for the obvious reason: on a shared bundle it names a person, and the page
@@ -593,6 +594,56 @@ sets a colour.
 
 Full reasoning, including why one drifted instance must not blank the board for the rest:
 [conventions.md invariant 11](conventions.md#11-the-cross-instance-board-is-a-writer-three-renderers-and-one-deletable-generated-file).
+
+### The serve-time fill: field map, seams and order
+
+The web board's inbox (`web-simple/HANDOFF.md` → "Data the snapshot must add") needs fields
+the snapshot must not carry, so **`SNAPSHOT.json` gains none**. Each field has one source:
+the **snapshot** (already in `write-snapshot.sh`'s allowlist, never filled), the **fill**
+(`board-serve.sh`, from a task or project document, per request), or **dropped**.
+
+| Field | Source |
+|---|---|
+| question `code` | snapshot: `open_question_ids` (seam attribute `data-code`) |
+| question `project` | snapshot: project `slug` (seam attribute `data-project`) |
+| question `text` | fill: the task's `open_questions` via `fold-answers.sh --list`, `Q<n>:` prefix removed |
+| question `options[]` | fill: `fold-answers.sh --block Q<n>`, the option equal to `Recommendation:` first |
+| question `context` (3 depths) | fill: the same block's `Depth 1`–`3` |
+| question `askedAt` | dropped: no file records a per-question ask time; the order rule below stands in |
+| stuck `id`, `project` | snapshot: task `id`, project `slug` |
+| stuck `sentence`, `action`, `buttonLabel` | snapshot: task `title` and `awaiting` verb, composed by the renderer — the blocker text is never served (`plugin-mod-pane/README.md`, Blocked row) |
+| stuck `state` | snapshot: task `status` and `in_flight` |
+| project `title`, `what` | snapshot: `title`, `description` |
+| project `who` | fill: `project.md` `need` |
+| project `doneWhen` | fill: `project.md` `success_criteria` via `fold-answers.sh --list` |
+| project `done`, `total`, `doneTitles[]`, `state` | snapshot: task `status` and `title`, project `status` |
+| project `finishedAt` | snapshot: `closed[]` close date, for a closed project only |
+| `updatedAt` | snapshot: `generated_at` |
+| `queue.consumed[]` | interactive-board task-006 (the answer queue) |
+| `boardEnabled` | interactive-board task-005 (the web board's simple mode) |
+| `connected` | dropped: the page's own transport state, not bundle data (task-006) |
+
+**The seams.** `build-board.sh` emits each one empty; `board-serve.sh` fills only these, and
+a seam it cannot resolve stays empty. Every filled string passes `html.escape`. A later
+renderer moves the seams; it does not rename them.
+
+| Seam | Emitted for | Filled with |
+|---|---|---|
+| `<div class="qfill" data-fill="question" data-ref="<slug>/<task id>[/Q<n>]" data-code data-project>` | each open question (`data-code=""` and no `/Q<n>` for an unnumbered one) | ` data-rank="<n>"`, the order below — only when its text was filled |
+| `<div data-fill="q-text" data-ref>` | inside each question | `<p>` per question text |
+| `<ol data-fill="q-options" data-ref>` | inside each question | `<li data-n="<option number>" [data-rec]>`, recommended first |
+| `<ol data-fill="q-depths" data-ref>` | inside each question | `<li data-depth="1..3">`, a `<p>` per paragraph |
+| `<div data-fill="p-need" data-ref="<slug>">` | each project | `<p>` of `need` |
+| `<ol data-fill="p-success" data-ref="<slug>">` | each project | `<li>` per `success_criteria` entry |
+
+An unnumbered question, or one with no `### Q<n>` block, gets its text and no options or
+depths. An entry carrying ` --- ` is answered and is not served.
+
+**The order rule — oldest task first.** Questions rank by their task's `timestamp:`, then by
+`Q<n>` within the task (an unnumbered one last), then by slug and task id, so a later Q3 on
+an old task ranks ahead of Q1 on a newer task and a refresh never reorders. A task with no
+`timestamp:` ranks after every dated one. The pane's inbox (task-003) and the web board
+(task-005) use this rule unchanged.
 
 ---
 
