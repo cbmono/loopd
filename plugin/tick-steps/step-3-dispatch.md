@@ -229,8 +229,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    other's worktrees. In every dispatch, instruct the agent to (a) work in its own
    worktree under the instance's `worktreeRoot` (from `instance.config.json` —
    **never** a path inside the synced `reposRoot`; absent, `<reposRoot>/_wt`),
-   (b) run installs against a **private store** (e.g. `pnpm install --store-dir
-   <worktree>/.pnpm-store`), and (c) **push early**. Two agents must never run a
+   (b) install with the target repo's **own package manager** (its `CLAUDE.md` says
+   which — never assume one) against a **private store** inside the worktree where that
+   manager has one, and (c) **push early**. Two agents must never run a
    package install against the shared store at once — if two `ready` tasks touch the
    same repo's deps, stagger them across ticks.
 

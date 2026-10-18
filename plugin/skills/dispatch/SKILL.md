@@ -365,8 +365,8 @@ ticks, regardless of how long a tick runs.
   with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-max-agents.sh` (local file first, tracked second; prints
   nothing and exits 1 when neither sets it — fall back to 4 then, the seeded, measured
   default per SCHEMA.md). Each agent uses its own worktree under `worktreeRoot`
-  (absent, `<reposRoot>/_wt`) + a **private package store** (e.g. `pnpm install
-  --store-dir <worktree>/.pnpm-store`) and **pushes early** — never two installs
+  (absent, `<reposRoot>/_wt`) + the target repo's **own package manager** (its `CLAUDE.md` says which)
+  with a **private store** inside the worktree where that manager has one, and **pushes early** — never two installs
   against the shared store at once.
 - A LIVE tick may also dispatch the **`cataloguer`** (`loopd:cataloguer`) after
   reflecting merges — read-only on product repos, writes only to `knowledge/`,
