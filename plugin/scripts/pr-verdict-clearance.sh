@@ -355,10 +355,13 @@ decide "$(scan "$TMPD/rbody" worker)" "$(scan "$TMPD/rchk" checker)" "$CLOGIN" "
 
 # The clearance record the PreToolUse hook reads offline (ai-bridge-v3/task-044). Host mode
 # only — a draft comparison says nothing about any pull request — and silent on any failure.
+# A disagreement (1) is recorded too, replacing an earlier pass: it refuses the merge even
+# where an external review means no pass from here is required.
 HEAD_SHA="$(printf '%s' "${META:-}" | jq -r '.headRefOid // ""' 2>/dev/null)" || HEAD_SHA=""
 URL="$(printf '%s' "${META:-}" | jq -r '.url // ""' 2>/dev/null)" || URL=""
-if [ "$DRC" -eq 0 ] && [ -n "$HEAD_SHA" ] && [ -n "$URL" ]; then
-  "$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record pr-verdict-clearance.sh \
+if { [ "$DRC" -eq 0 ] || [ "$DRC" -eq 1 ]; } && [ -n "$HEAD_SHA" ] && [ -n "$URL" ]; then
+  FAIL_FLAG=(); [ "$DRC" -eq 1 ] && FAIL_FLAG=(--fail)
+  "$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record pr-verdict-clearance.sh ${FAIL_FLAG[@]+"${FAIL_FLAG[@]}"} \
     --repo "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')" \
     --pr "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/[^/]+/[^/]+/pull/([0-9]+).*#\1#')" --head "$HEAD_SHA" >/dev/null 2>&1 || true
 fi

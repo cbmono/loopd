@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# subagent-merge-yolo.test.sh — the one merge `AUTONOMY.md` delegates, and the eight ways
-# it is still refused: `plugin/hooks/deny-destructive.sh` rule `subagent_merge`, the policy
+# subagent-merge-yolo.test.sh — the one merge `AUTONOMY.md` delegates, the ways it is
+# still refused, and when an external review stands in for the checker table: `plugin/hooks/deny-destructive.sh` rule `subagent_merge`, the policy
 # it defers to in `plugin/scripts/merge-permit.sh`, and the clearance record
 # `plugin/scripts/clearance-receipt.sh` writes and reads.
 #
@@ -265,6 +265,104 @@ ok "…and the probe carries the REAL merge command" \
    "$(grep -c 'gh pr merge --squash --match-head-commit' "$AUTON")" 2
 ok "…and the hook grows no --probe mode"           "$(grep -c -- '--probe' "$HOOK")" 0
 ok "docs/autonomy.md names trap three"             "$(grep -c 'trap three' "$DOCS")" 1
+
+echo
+echo "== an EXTERNAL review stands in for the checker table, and nothing else does =="
+# The writers run for real against review-clearance.lib.sh's gh stub, in a subshell because
+# the lib owns its own TMP, PATH and counters; the tally comes back through a file.
+YTALLY="$TMP/external.tally"
+(
+  # shellcheck source=review-clearance.lib.sh
+  . "$REPO/tests/review-clearance.lib.sh"
+  export CLAUDE_PROJECT_DIR="$BUNDLE"
+  NWO="acme/widgets"; H="$CLEAN_HEAD"
+  project ext-proj yolo 42
+  RCPT="$("$RECEIPT" path --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H")"
+  others() { record_all 42 "$H" required-checks.sh pr-body-clearance.sh; }
+  permit() { "$PERMIT" --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H" --role project-manager \
+               >/dev/null 2>&1; echo $?; }
+  is() { if [ "$2" = "$3" ]; then assert "$1" 0; else assert "$1 (got $2, want $3)" 1; fi; }
+  trailer_body() {
+    body_file '<!-- okf-verdict v1' 'verdict: pass' 'reviewer: qa-reviewer' "head_sha: $H" \
+      'lenses: correctness=done security=done repro=done' 'unverified_criteria: none' 'caveats: none' '-->'
+  }
+  checker() { # <PASS|FAIL> — post a checker table from a non-author login, then run the comparison
+    local w c; w="$(body_file '## Description' '' 'One sentence.' '' '| Criterion | ✓ | Verified by |' \
+      '|---|---|---|' '| the retry backs off | ✓ | `foo.test.sh` 40/0 |')"
+    c="$(body_file '| Criterion | Verdict | Evidence |' '|---|---|---|' \
+      "| the retry backs off | $1 | \`foo.test.sh\` 40/0 |")"
+    "$REAL_JQ" --rawfile b "$w" --rawfile c "$c" \
+      '. + {body:$b, comments:[{author:{login:"qa-bot"}, body:$c}]}' "$FIX/pr_json" > "$FIX/pr_json.v" \
+      && mv "$FIX/pr_json.v" "$FIX/pr_json"
+    "$SCRIPTS/pr-verdict-clearance.sh" 42 >/dev/null 2>&1; echo $?
+  }
+
+  forget; setup "$H"; add_review coderabbitai COMMENTED "$H" "$CLEAN"
+  expect "route A: a vendor review object at the head clears" 0
+  is "…and is recorded external" "$(grep -c '^pass review-clearance.sh .* external$' "$RCPT")" 1
+  others
+  is "route A external, no pr-verdict pass ⇒ permitted" "$(permit)" 0
+
+  is "…a checker FAIL exits 1" "$(checker FAIL)" 1
+  is "…and is recorded as a fail line" "$(grep -c '^fail pr-verdict-clearance.sh ' "$RCPT")" 1
+  is "external + a pr-verdict fail line ⇒ refused" "$(permit)" 1
+  is "…a later agreeing checker replaces the fail line" "$(checker PASS)" 0
+  is "…and the merge is permitted again" "$(permit)" 0
+  is "…one pr-verdict line per head" "$(grep -c ' pr-verdict-clearance.sh ' "$RCPT")" 1
+
+  setup "$H"; add_review qa-bot COMMENTED "$H" "$CLEAN"
+  expect "an internal mint at the same head clears too" 0 --reviewer qa-bot
+  is "…kept beside the external line, not over it" "$(grep -c '^pass review-clearance.sh ' "$RCPT")" 2
+  is "internal mint after an external one ⇒ still permitted" "$(permit)" 0
+
+  sed -i.bak 's/^autonomy: yolo$/autonomy: gated/' "$BUNDLE/projects/ext-proj/project.md"
+  is "a gated project with a complete external receipt ⇒ refused" "$(permit)" 1
+  sed -i.bak 's/^autonomy: gated$/autonomy: yolo/' "$BUNDLE/projects/ext-proj/project.md"
+
+  forget; setup "$H"; add_comment coderabbitai "$CLEAN"
+  expect "route C: the vendor's review marker naming the head clears" 0
+  is "…and is recorded external" "$(grep -c '^pass review-clearance.sh .* external$' "$RCPT")" 1
+  others
+  is "route C external, no pr-verdict pass ⇒ permitted" "$(permit)" 0
+
+  forget; setup "$H"; add_comment qa-bot "$(trailer_body)"
+  expect "route B: a qa-reviewer trailer clears" 0 --reviewer qa-bot
+  is "…and is recorded internal" "$(grep -c '^pass review-clearance.sh .* internal$' "$RCPT")" 1
+  others
+  is "trailer clearance, no pr-verdict pass ⇒ refused" "$(permit)" 1
+  record_all 42 "$H" pr-verdict-clearance.sh
+  is "…and its pr-verdict pass is what permits it" "$(permit)" 0
+
+  forget; setup "$H"; add_review qa-bot COMMENTED "$H" "$CLEAN"
+  expect "route A from a non-vendor --reviewer account clears" 0 --reviewer qa-bot
+  others
+  is "a non-vendor --reviewer account, no pr-verdict pass ⇒ refused" "$(permit)" 1
+
+  forget; record_all 42 "$H" review-clearance.sh; others
+  is "a kindless (legacy) review line, no pr-verdict pass ⇒ refused" "$(permit)" 1
+
+  # The gate-file refusal, before required-checks.sh asks anything else of the host.
+  RB="$TMP/rcbin"; mkdir -p "$RB"
+  cat > "$RB/gh" <<STUB
+#!/usr/bin/env bash
+case "\$1 \$2" in
+  "pr view") printf 'https://github.com/$NWO/pull/42\tmain\t$H\n' ;;
+  "pr diff") cat "$TMP/rc.diff" ;;
+  "pr checks") echo "no required checks reported on the 'topic' branch" >&2; exit 1 ;;
+  *) exit 1 ;;
+esac
+STUB
+  chmod +x "$RB/gh"
+  rc_exit() { printf '%s\n' "$@" > "$TMP/rc.diff"
+              PATH="$RB:$PATH" "$SCRIPTS/required-checks.sh" 42 >/dev/null 2>&1; echo $?; }
+  is "a PR editing clearance-receipt.sh ⇒ required-checks.sh exit 4" \
+     "$(rc_exit README.md plugin/scripts/clearance-receipt.sh)" 4
+  is "…and AUTONOMY.md too" "$(rc_exit plugin-yolo/companion/AUTONOMY.md)" 4
+  is "…while an ordinary diff reaches the required-set question (exit 3)" "$(rc_exit README.md)" 3
+  printf '%s %s\n' "$pass" "$fail" > "$YTALLY"
+)
+read -r ypass yfail < "$YTALLY" 2>/dev/null || { ypass=0; yfail=1; }
+pass=$((pass + ypass)); fail=$((fail + yfail))
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

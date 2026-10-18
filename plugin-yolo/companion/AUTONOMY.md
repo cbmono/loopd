@@ -103,6 +103,9 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    - **A PR that edits the list is never auto-merged** (exit 4). An open PR can't weaken
      its own gate — the list is read from the base branch — but merging it would weaken
      every later one. Surface it, exactly as no agent raises `autonomy` itself.
+   - **So is a PR that edits the merge gate's own files** (exit 4, `GATE_FILES` in
+     `required-checks.sh`: this file, the hook and the clearance scripts) — the gate
+     must not clear the PR that rewrites it.
 2. **The independent reviewer has cleared the current head** — *cleared* exactly as
    `SCHEMA.md` → "Independent verification gate" defines it (the `okf-verdict` trailer
    for the `qa-reviewer`; an identity-matched, non-dismissed, count-reconciled review for
@@ -163,12 +166,17 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    cannot see.
 
    **And a `✓` is the WORKER's claim, so it is not enough on its own.** Where no external
-   reviewer exists, the `qa-reviewer` posts its own `PASS`/`FAIL` table, re-derived from
-   the task and the diff. `scripts/pr-verdict-clearance.sh <pr> --repo <org>/<repo>`
+   reviewer cleared the head, the `qa-reviewer` posts its own `PASS`/`FAIL` table,
+   re-derived from the task and the diff. **External** means a `REVIEWERS` vendor login
+   clearing by route A (a review object at the head) or route C (its own review marker
+   naming the head) of `review-clearance.sh`; a trailer or a `--reviewer` account that is
+   no vendor is internal, and needs the table. `scripts/pr-verdict-clearance.sh <pr> --repo <org>/<repo>`
    compares the two and **exit 0 is the only clearance**: exit 1 is a row the worker
    passed and the checker failed, and that is the human's — a delegated merge never
-   adjudicates one. On a solo bundle the checker shares the author's `gh` login, so exit 4
-   is the standing answer there and the merge stays the human's (`SCHEMA.md` clause 8).
+   adjudicates one, and an exit 1 refuses the merge even where an external reviewer
+   cleared it. On a solo bundle the checker shares the author's `gh` login, so exit 4 is
+   the standing answer there and the merge stays the human's (`SCHEMA.md` clause 8) —
+   unless an external reviewer cleared the head, which needs no checker table.
 
    **And the table has to BE THERE for that to mean anything**, which is a separate
    question with a separate reader. Two halves, stated together because neither is worth
@@ -213,12 +221,14 @@ Then merge that exact commit:
 drift. Re-checking here matters: comments and checks can change after verification
 without the head moving.
 
-**That exact shape is also the only one the harness permits, and it reads the four
+**That exact shape is also the only one the harness permits, and it reads the
 preconditions off disk rather than trusting the caller.** Each of `required-checks.sh`,
 `review-clearance.sh`, `pr-body-clearance.sh` and `pr-verdict-clearance.sh` records its own
-exit 0 against the PR and the head it read, and the PreToolUse hook permits the merge only
-for the `project-manager`, only where this file defines the owning project's mode as
-delegating the merge, and only at the SHA all four name. A review receipt alone is
+exit 0 against the PR and the head it read — `review-clearance.sh` with whether the clearing
+reviewer was external, `pr-verdict-clearance.sh` its exit 1 too — and the PreToolUse hook
+permits the merge only for the `project-manager`, only where this file defines the owning
+project's mode as delegating the merge, and only at the SHA they name: all four, or the
+first three where an external reviewer cleared the head, and never over a checker `FAIL`. A review receipt alone is
 precondition 2's first half and never a merge permit. Anything missing — no companion, no
 owning project, two projects in different modes, a record at an earlier head — refuses, and
 the refusal names what is missing.

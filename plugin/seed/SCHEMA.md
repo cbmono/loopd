@@ -759,7 +759,7 @@ predicate is how a bad input gets accepted:
 6. **`caveats: none`** — a self-declared caveat is disqualifying, not context.
 7. **Every acceptance-criteria row in the PR body's table is `✓`.** One `✗` refuses — and
    so does one row the implementer marked `✓` that the checker's own re-derived table
-   marks `FAIL` (see below).
+   marks `FAIL` (see below), whoever cleared the review.
 8. **`reviewer` is the independent reviewer** — never the implementing agent's own report.
 9. **No reviewer-authored review thread is still unresolved.** A thread the PR
    author/executor resolved itself does not count unless the reviewer re-acknowledged it
@@ -797,8 +797,11 @@ lazily. **The value is re-read every tick and never cached** — it changes when
 branch moves with no commit on the PR, which is how three PRs were presented as merge rows
 on 2026-09-13 while GitHub reported all three DIRTY.
 
-**The checker's table is the review artifact when no external reviewer exists, and it is
-NOT the implementer's.** The PR body's `✓`/`✗` table is the *worker's* claim; the
+**The checker's table is required only where no external reviewer cleared the head, and it
+is NOT the implementer's.** External means a `REVIEWERS` vendor login in
+`review-clearance.sh` clearing by route A (a review object at the head) or route C (its
+own review marker naming the head); a trailer or a `--reviewer` account that is no vendor
+is internal. The PR body's `✓`/`✗` table is the *worker's* claim; the
 `qa-reviewer` posts a second table as a PR comment, re-derived from the task's
 `acceptance_criteria` and the diff, one `PASS`/`FAIL` per criterion with one command or
 artifact per row and no partial credit. `scripts/pr-verdict-clearance.sh` reads the two
@@ -810,7 +813,7 @@ the author's own login, **2** unknown. Only exit 0 is clearance.
 gate.** `pr-verdict-clearance.sh` compares the checker's `login` with the PR author's,
 exactly as `review-clearance.sh` does — and where every agent shares one `gh` login, those
 are equal by construction, so exit 4 is the standing answer and the routing to a human *is*
-the gate. It is stated rather than worked around: a second principal needs a second account
+the gate — unless an external reviewer cleared the head, where no checker table is needed. It is stated rather than worked around: a second principal needs a second account
 (`docs/sharing.md`), and nothing in a comment can evidence one that does not exist.
 
 **A verdict that reports a refusal must carry its trailer, or it classifies as one.** The

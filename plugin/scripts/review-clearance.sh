@@ -911,12 +911,15 @@ nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.
 }
 
 # The clearance record the PreToolUse hook reads offline (ai-bridge-v3/task-044) — exit 0
-# here is precondition 2's FIRST HALF, so this line is one of four and never a merge permit
-# on its own. Silent on any failure: it cannot change the answer this script gives.
-mint_receipt() {
-  "$RC_DIR/clearance-receipt.sh" record review-clearance.sh \
+# here is precondition 2's FIRST HALF, so this line is never a merge permit on its own.
+# Silent on any failure: it cannot change the answer this script gives. <kind> is
+# `external` only for a REVIEWERS vendor login clearing by route A or C — the one kind
+# that lets the merge go without a checker table (SCHEMA.md clause 7).
+mint_receipt() { # <internal|external>
+  "$RC_DIR/clearance-receipt.sh" record review-clearance.sh --kind "$1" \
     --repo "$nwo" --pr "$pr_number" --head "$head_sha" >/dev/null 2>&1 || true
 }
+vendor_kind() { if match_reviewer "$1"; then echo external; else echo internal; fi; }
 
 # AND THE AUTHOR LOGIN IS PART OF THAT GUARD, because a field that is missing here does
 # not fail — it silently switches off a rule. SCHEMA.md clause 8 (an author is never its
@@ -1591,7 +1594,7 @@ n=0; considered=0; refusal_body=""; refusal_from=""; refusal_kind=""
 terminal_body=""; terminal_from=""
 stale_from=""; stale_at=""; unproven_from=""
 refusal_at_head=""; empty_from=""; empty_state=""; held_from=""; held_state=""
-cleared_msg=""; ack_from=""; ack_at_head=""; incremental_from=""; marker_outranked=""
+cleared_msg=""; cleared_kind=internal; ack_from=""; ack_at_head=""; incremental_from=""; marker_outranked=""
 skip_from=""; other_refusal=""
 self_reviews=0; self_at_head=0
 # THE FIELDS ARE UNIT-SEPARATED, NOT TAB-SEPARATED, and that is not decoration: a tab is
@@ -1770,7 +1773,8 @@ while IFS=$'\037' read -r kind login state commit created; do
       # block — or nothing but an unbalanced fence — counts as contentless, which is the
       # safe direction. What counts as content is `renders_content` above.
       if renders_content "$TMPD/strict"; then
-        [ -n "$cleared_msg" ] || cleared_msg="ok: a submitted review ($state) from $login was made at head $head_sha on PR $pr"
+        [ -n "$cleared_msg" ] || { cleared_msg="ok: a submitted review ($state) from $login was made at head $head_sha on PR $pr"
+                                   cleared_kind="$(vendor_kind "$login")"; }
         continue
       fi
       if [ "$state" = "COMMENTED" ]; then
@@ -1803,7 +1807,8 @@ while IFS=$'\037' read -r kind login state commit created; do
       continue
     fi
     if names_head "$TMPD/strict"; then
-      [ -n "$cleared_msg" ] || cleared_msg="ok: $login's own review marker in a comment names head $head_sha on PR $pr"
+      [ -n "$cleared_msg" ] || { cleared_msg="ok: $login's own review marker in a comment names head $head_sha on PR $pr"
+                                 cleared_kind="$(vendor_kind "$login")"; }
       continue
     fi
     [ -n "$stale_from" ] || { stale_from="$login ($kind)"; stale_at="no commit it names"; }
@@ -1984,7 +1989,7 @@ if [ -z "$refusal_at_head" ] || [ -n "$cleared_msg" ]; then
       echo "      evidence at the same commit outranks it, so this cleared. Look if unsure." >&2
     }
     printf '%s\n' "$cleared_msg"
-    mint_receipt
+    mint_receipt "$cleared_kind"
     exit 0
   fi
   if [ -n "$held_from" ]; then
@@ -1992,7 +1997,7 @@ if [ -z "$refusal_at_head" ] || [ -n "$cleared_msg" ]; then
     [ -z "$clause9_threads" ] && [ "$clause9_state" = "ok" ] || \
       refuse_clause9 "a submitted review ($held_state) from $held_from"
     echo "ok: a submitted review ($held_state) from $held_from was made at head $head_sha on PR $pr"
-    mint_receipt
+    mint_receipt "$(vendor_kind "$held_from")"
     exit 0
   fi
 fi

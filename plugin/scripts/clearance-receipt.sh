@@ -3,19 +3,22 @@
 # clearance-receipt.sh — the merge gate's preconditions, recorded on disk at the head they
 # were checked against, so the PreToolUse hook can read them OFFLINE.
 #
-#   clearance-receipt.sh record <script> --repo O/R --pr N --head SHA [--bundle DIR]
+#   clearance-receipt.sh record <script> [--kind internal|external] [--fail] --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh verify --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh path   --repo O/R --pr N --head SHA [--bundle DIR]
 #
 # Exit: 0 recorded / complete / printed · 1 absent or incomplete · 2 usage, or no bundle.
 # `record` never fails a caller: outside a bundle it exits 0 having written nothing.
-# Reasoning: ai-bridge-v3/task-044.
+# Reasoning: ai-bridge-v3/task-044, loopd-papercuts/task-010.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
-# The four a delegated merge needs, all at the SAME head. A `review-clearance.sh` receipt
-# alone is precondition 2's first half and the qa-reviewer earns one on nearly every PR.
-REQUIRED="review-clearance.sh required-checks.sh pr-body-clearance.sh pr-verdict-clearance.sh"
+# What a delegated merge needs, all at the SAME head. A `review-clearance.sh` receipt alone
+# is precondition 2's first half and the qa-reviewer earns one on nearly every PR. The
+# checker table (CHECKER) is required only where no EXTERNAL reviewer cleared the head —
+# a REVIEWERS vendor by route A or C; a line with no kind predates the kinds and is internal.
+REQUIRED="review-clearance.sh required-checks.sh pr-body-clearance.sh"
+CHECKER="pr-verdict-clearance.sh"
 KEEP_DAYS=14
 
 usage() {
@@ -24,7 +27,7 @@ usage() {
 }
 
 mode="${1:-}"; [ $# -gt 0 ] && shift
-script=""
+script=""; kind=""; result=pass
 case "$mode" in
   record) script="${1:-}"; [ -n "$script" ] || usage; shift ;;
   verify|path) ;;
@@ -38,6 +41,9 @@ while [ $# -gt 0 ]; do
     --repo)   repo="${2:-}";   [ -n "$repo" ] || usage; shift 2 ;;
     --pr)     pr="${2:-}";     [ -n "$pr" ] || usage; shift 2 ;;
     --head)   head="${2:-}";   [ -n "$head" ] || usage; shift 2 ;;
+    --kind)   [ "$mode" = record ] || usage
+              case "${2:-}" in internal|external) kind="$2" ;; *) usage ;; esac; shift 2 ;;
+    --fail)   [ "$mode" = record ] || usage; result=fail; shift ;;
     -h|--help) usage ;;
     *) usage ;;
   esac
@@ -85,9 +91,17 @@ case "$mode" in
       echo "clearance-receipt: the receipt for $repo#$pr does not name head $head — refusing" >&2
       exit 1
     }
+    failed="$(awk '$1 == "fail" { print $2 }' "$file" 2>/dev/null | tr '\n' ' ')"
+    [ -z "$failed" ] || {
+      echo "clearance-receipt: $repo#$pr at $head failed: ${failed% } — refusing" >&2
+      exit 1
+    }
     got="$(awk '$1 == "pass" { print $2 }' "$file" 2>/dev/null)"
+    need="$REQUIRED"
+    awk '$1 == "pass" && $2 == "review-clearance.sh" && $4 == "external" { f = 1 } END { exit !f }' \
+      "$file" 2>/dev/null || need="$need $CHECKER"
     missing=""
-    for r in $REQUIRED; do
+    for r in $need; do
       printf '%s\n' "$got" | grep -qx "$r" || missing="${missing:+$missing }$r"
     done
     [ -z "$missing" ] || {
@@ -102,8 +116,11 @@ case "$mode" in
     tmp="$file.$$"
     {
       printf 'repo %s\npr %s\nhead %s\n' "$repo" "$pr" "$head"
-      [ -f "$file" ] && awk '$1 == "pass" && $2 != s' s="$script" "$file"
-      printf 'pass %s %s\n' "$script" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      # One line per script AND kind: an internal run at this head cannot erase an external one.
+      [ -f "$file" ] && awk '($1 == "pass" || $1 == "fail") &&
+        !($2 == s && ($4 == "external" ? "external" : "internal") == k)' \
+        s="$script" k="${kind:-internal}" "$file"
+      printf '%s %s %s%s\n' "$result" "$script" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${kind:+ $kind}"
     } > "$tmp" 2>/dev/null && mv -f "$tmp" "$file" 2>/dev/null
     rm -f "$tmp" 2>/dev/null
     find "$dir" -type f -mtime "+$KEEP_DAYS" -delete 2>/dev/null
