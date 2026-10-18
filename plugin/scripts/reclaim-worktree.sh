@@ -304,7 +304,21 @@ EOF
 # the check is explicit, and `--directory` collapses an ignored directory to one entry
 # so a node_modules does not print 40,000 lines.
 IGNORE_OK=" node_modules .pnpm-store .pnpm-store-task .bun-cache .venv venv __pycache__ \
-.pytest_cache .mypy_cache .next .nuxt .turbo .cache .gradle tmp temp .DS_Store "
+.pytest_cache .mypy_cache .next .nuxt .turbo .cache .gradle tmp temp .DS_Store \
+dist build out coverage "
+
+# No python3 or no key leaves the list as above: absence only ever refuses more.
+extra="$(bash "$(dirname "${BASH_SOURCE[0]:-$0}")/resolve-config.sh" --json reclaimIgnoreOk 2>/dev/null)" || extra=""
+while IFS= read -r name; do
+  [ -n "$name" ] || continue
+  case "$name" in
+    .env*) echo "warning: reclaimIgnoreOk '$name' not added — a .env file is never a cache." >&2 ;;
+    *[!A-Za-z0-9._+-]*) echo "warning: reclaimIgnoreOk '$name' not added — not a plain path component." >&2 ;;
+    *) IGNORE_OK="$IGNORE_OK$name " ;;
+  esac
+done <<EOF
+$(printf '%s' "$extra" | grep -oE '"[^"]*"' | tr -d '"')
+EOF
 
 ignored="" ; ignored_rc=0
 ignored="$(git -C "$WT" ls-files -o -i --exclude-standard --directory 2>/dev/null)" || ignored_rc=$?
@@ -326,7 +340,9 @@ keepers="${keepers%$'\n'}"
 [ -z "$keepers" ] || refuse "$WT holds IGNORED content that is not a known cache. git
         would delete it without complaint — 'git worktree remove' does not refuse an
         ignored file — so the last word on it stays the human's:
-$(printf '%s\n' "$keepers" | sed 's/^/          /' | head -20)"
+$(printf '%s\n' "$keepers" | sed 's/^/          /' | head -20)
+        If none of it is yours, delete it and ask again:
+git -C '$WT' clean -fdX --$(printf '%s\n' "$keepers" | while IFS= read -r k; do printf " '%s'" "$k"; done)"
 
 # --- G13: nothing is running in it -------------------------------------------
 # This replaces the pruner's PRUNE_ACTIVE_MINUTES veto rather than inheriting it: on this

@@ -384,6 +384,14 @@ task recorded. **Exit 0 is the only clearance** and it needs the task `done` **a
 URL in its `pr:` MERGED. 1 refused, 2 cannot answer, 3 nothing to do. The tick runs it in
 step 5 for each task it has just moved to `done`.
 
+Its G12 lets through ignored content only under a known cache or build-output directory,
+matched exactly on the first path component (`node_modules`, `.venv`, `tmp`, `dist`,
+`build`, `out`, `coverage`, …). **`reclaimIgnoreOk`** in `instance.config.json` — an array
+of first-path-component names, the local file first, the tracked one second — adds to that
+list; absent, the built-in list stands. A name starting with `.env` is never added, only
+warned about. `/loopd:prune-wt` does not read the key. When G12 still refuses, its message
+ends with the one line to run: `git -C '<worktree>' clean -fdX -- '<path>' …`.
+
 **`prune-worktrees.sh` never deletes.** It classifies and prints the `git worktree remove`
 commands for a human to run — it is what sees a worktree no task record names.
 

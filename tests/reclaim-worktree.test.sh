@@ -69,7 +69,7 @@ g config user.email fixture@example.com
 g config user.name  Fixture
 g config commit.gpgsign false
 printf 'one\n' > "$REPO/tracked.txt"
-printf '.env\nnode_modules/\ntmp/\n' > "$REPO/.gitignore"
+printf '.env\n.env.local\nnode_modules/\ntmp/\ndist/\ntarget/\n' > "$REPO/.gitignore"
 g add tracked.txt .gitignore; g commit -qm 'c1'
 git init -q --bare -b main "$ORIGIN"
 g remote add origin "$ORIGIN"
@@ -441,6 +441,35 @@ printf 'TOKEN=shape-only\n' > "$WT_CACHE/.env"
 run --dry-run "projects/demo/tasks/task-cache.md"
 assert "G12 …and one .env beside them refuses"               "$(eq "$RC" 1)"
 rm -f "$WT_CACHE/.env"
+
+WT_BUILD="$WTROOT/proj-demo-build"
+wt_pushed "$WT_BUILD" okf/demo-build
+mkdir -p "$WT_BUILD/dist/assets"; printf 'x\n' > "$WT_BUILD/dist/assets/app.js"
+write_task task-build done "$WT_BUILD" okf/demo-build fixture-org/proj "$PR1"
+run --dry-run "projects/demo/tasks/task-build.md"
+assert "G12 only dist/ ignored: build output is a known cache, clears" "$(eq "$RC" 0)"
+
+mkdir -p "$WT_BUILD/target"; printf 'x\n' > "$WT_BUILD/target/app.bin"
+run --dry-run "projects/demo/tasks/task-build.md"
+assert "G12 target/ is not a cache with no config: refuses" "$(eq "$RC" 1)"
+printf '{ "reclaimIgnoreOk": ["target", ".env.local"] }\n' > "$INSTANCE/instance.config.local.json"
+run --dry-run "projects/demo/tasks/task-build.md"
+assert "G12 a reclaimIgnoreOk name (target) clears" "$(eq "$RC" 0)"
+assert "G12 …and the .env.local entry is warned about, not added" \
+  "$(has "^warning: reclaimIgnoreOk '\.env\.local' not added")"
+
+printf 'TOKEN=shape-only\n' > "$WT_BUILD/.env.local"
+run --dry-run "projects/demo/tasks/task-build.md"
+assert "G12 an ignored .env.local still refuses, config or not" "$(eq "$RC" 1)"
+CLEAN="$(tail -n1 <<<"$OUT")"
+assert "G12 …and ends with the exact clean command" \
+  "$(eq "$CLEAN" "git -C '$WT_BUILD' clean -fdX -- '.env.local'")"
+eval "$CLEAN" >/dev/null
+run --dry-run "projects/demo/tasks/task-build.md"
+assert "G12 …which, run as printed, clears it" "$(eq "$RC" 0)"
+assert "G12 …having taken only the .env.local" \
+  "$(eq "$(no_if test -e "$WT_BUILD/.env.local") $(yes_if test -f "$WT_BUILD/target/app.bin")" "0 0")"
+rm -f "$INSTANCE/instance.config.local.json"
 
 echo "== G13: nothing is running inside it =="
 WT_LIVE="$WTROOT/proj-demo-live"
