@@ -29,7 +29,7 @@
 # the amendment above; each is carried by the override named after it.
 #57fffc  --loopd-accent-cyan      cyan_FOR_SUBAGENTS_ONLY
 #616161  --loopd-accent-grey      memoryBackgroundColor
-#76d6a4  --loopd-done             success (web-simple/HANDOFF.md: sent, saved, finished)
+#76d6a4  --loopd-done             success (web-simple/HANDOFF.md: sent, saved, finished), briefLabelYou (2026-10-18)
 #80e59e  --loopd-accent-green     green_FOR_SUBAGENTS_ONLY
 #cb77f9  --loopd-accent-purple    purple_FOR_SUBAGENTS_ONLY
 #f5f5f5  --loopd-accent-ink       text
@@ -37,3 +37,8 @@
 #ffbb9e  --loopd-accent-orange    orange_FOR_SUBAGENTS_ONLY
 #ffc7e5  --loopd-accent-pink-soft pink_FOR_SUBAGENTS_ONLY
 #fffdc2  --loopd-accent-yellow    yellow_FOR_SUBAGENTS_ONLY
+# Your past prompts, by the owner's decision of 2026-10-18 (interactive-board/task-007): tints
+# of #76d6a4 over the surface #171b22, picked from a preview of three. briefLabelYou takes
+# #76d6a4 itself.
+#223132  --loopd-you-tint         userMessageBackground (12%)
+#2a403c  --loopd-you-tint-hover   userMessageBackgroundHover (20%)
