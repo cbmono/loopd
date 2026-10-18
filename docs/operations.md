@@ -1474,6 +1474,11 @@ fixes drifted into because this was never written down (task-019).
   refusal `[Create Unsafe Agents]` is **intermittent**: one task, role, model and command
   shape was refused on 2026-09-30 and spawned on 2026-10-01. A refusal is rolled back and
   reported (`plugin/tick-steps/step-3-dispatch.md`), never retried in another shape.
+- **The same classifier once refused a close's folder step**, `close-project-folder.sh
+  <slug> --apply`, as local destruction (2026-10-09 papercuts pass). It did not
+  reproduce: two closes on 2026-10-18, under Claude Code 2.1.302, removed their
+  folders unprompted from the closeout subagent with init's script allowlist present. No
+  rule was added: the intermittent-refusal reading above applies.
 - **It writes a `claude --bg` grant on exactly one path — a human's yes — and never a
   trust key.** A plugin must not grant itself a bypass (owner, 2026-09-25 and
   2026-09-30), so until 3.5.0 `/loopd:init` only printed the rule and the operator added it.
