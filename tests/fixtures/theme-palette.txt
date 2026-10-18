@@ -29,7 +29,8 @@
 # the amendment above; each is carried by the override named after it.
 #57fffc  --loopd-accent-cyan      cyan_FOR_SUBAGENTS_ONLY
 #616161  --loopd-accent-grey      memoryBackgroundColor
-#80e59e  --loopd-accent-green     success, green_FOR_SUBAGENTS_ONLY
+#76d6a4  --loopd-done             success (web-simple/HANDOFF.md: sent, saved, finished)
+#80e59e  --loopd-accent-green     green_FOR_SUBAGENTS_ONLY
 #cb77f9  --loopd-accent-purple    purple_FOR_SUBAGENTS_ONLY
 #f5f5f5  --loopd-accent-ink       text
 #ff70bc  --loopd-accent-pink      warning

@@ -586,6 +586,34 @@ gets wrong on exactly this input. `print-board.sh` needs it for the same two rea
 a different sink: a terminal's metacharacters are ANSI escapes and newlines, and a title
 carrying one must not repaint the screen or forge a row.
 
+**The page follows the system's light or dark setting** (`prefers-color-scheme`); there is
+no toggle. Dark is `loopd-design/tokens.css`; green and the light theme are
+`web-simple/HANDOFF.md` → "Tokens used" (both in the brand brief). Each light value lands
+in exactly one CSS variable, and the variables not listed alias one that is:
+
+| HANDOFF (light) | hex | CSS variable |
+|---|---|---|
+| bg | `#f7f8fa` | `--ground` (`--sunk` aliases it) |
+| surface | `#fff` | `--surface` (`--accent-ink` aliases it) |
+| surface-2 | `#f1f3f7` | `--inner` (`--raise`, `--neutral-soft`) |
+| line | `#e2e6ed` | `--line` |
+| line-2 | `#c9d0db` | `--line-2` |
+| ink | `#14171c` | `--ink` (`--neutral-soft-text`) |
+| ink-2 | `#2c333f` | `--ink-2` |
+| muted | `#566072` | `--muted` |
+| dim | `#687184` | `--dim` |
+| blue | `#2f6fd6` | `--accent` (`--ok`) |
+| pink text | `#c2337f` | `--signal-soft-text` (`--stop`) |
+| pink fill | `#ff7ac2` | `--signal` |
+| pink fill text | `#14171c` | `--signal-ink` |
+| pink line | `#f4c6de` | `--pink-line` |
+| chip | `#fde6f1` | `--chip` (`--signal-soft`) |
+| green | `#18794c` | `--done` |
+| green line | `#bfe3cf` | `--done-line` |
+
+Pink is drawn only by the selectors the stylesheet's header lists — each one a thing only
+a person clears — and green only for finished; `board-renderers.test.sh` holds both.
+
 **Escaping is per-medium, and all three renderers do it.** A title is human prose, so the
 HTML board escapes for markup and the terminal board strips every code point in Unicode
 category C (ESC and the other controls, the bidi overrides). Nothing from a snapshot ever

@@ -17,9 +17,9 @@ This repo is the **template**. You stamp out one **instance** per group of repos
 side project, a client). Each instance is its own small git repo that sits beside those
 repos and holds only the state of the work — never application code.
 
-**Two colours, wherever loopd renders.** Blue `#5ea2ff` is the machine's — agents, code,
+**Two colours wherever loopd renders, and green for done.** Blue `#5ea2ff` is the machine's — agents, code,
 refs, running state. Pink `#ff7ac2` is yours — gates, decisions, anything waiting on a
-person. No third accent, no status rainbow.
+person. Green `#76d6a4` marks only what is sent, saved or finished; no status rainbow.
 
 | | |
 |---|---|

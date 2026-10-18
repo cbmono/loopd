@@ -404,6 +404,22 @@ test('SIMPLE SHOWS THREE THINGS: a bar per project, each open question, each blo
   await ui.unmount()
 })
 
+test('PINK MEANS YOU: a question and a blocked task are drawn #ff7ac2, every other line is not', SIMPLE, async ($, on) => {
+  const w = bundle()
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const pink = (await ui.findAll({ type: 'Text' })).filter((el: any) => el.props.color !== undefined)
+  expect(pink.map((el: any) => el.props.color)).toEqual(['#ff7ac2', '#ff7ac2', '#ff7ac2'])
+  expect(pink.map((el: any) => el.text.trim())).toEqual([
+    'Which colour, given the brand, ships first?',
+    'What should it be called?',
+    'Unblock "Import the archive" in Alpha project: it cannot move until you do.',
+  ])
+  await ui.unmount()
+})
+
 test('EVERY ACTION IS A COMMAND: option, text and more each run /loopd:answer, one at a time', SIMPLE, async ($, on) => {
   const w = bundle()
   const clock = mock.clock(on)

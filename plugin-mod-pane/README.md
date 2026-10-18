@@ -65,6 +65,9 @@ For someone who answers questions and does not run the loop. Three sections, in 
 No role, tick, pull request, session, usage, round, worktree or branch is drawn; the kit
 test asserts their absence against task documents that carry all of them.
 
+**Pink means you.** A question's text and a blocked task's sentence are drawn `#ff7ac2`
+(Text's `color` prop); every other line keeps the theme default or `dimColor`.
+
 **Every action is one `/loopd:answer` run** (`$.command.run`, as Tick is): an option runs
 `/loopd:answer <task> Q<n> <n>`, the text field `… Q<n> --text <words>`, More `… Q<n> more`.
 `answer.sh` does the writing; this pane writes nothing. The run is a model turn queued until
@@ -132,8 +135,8 @@ source and on what `claude plugin validate` reads out of it:
 
 ## Tested with
 
-Claude Code **2.1.300** (`claude plugin validate . --strict` passes, `claude plugin test`
-23/23, 2026-10-18), written against the mods docs and the 2.1.289 `claude-code.d.ts`. Mods need
+Claude Code **2.1.302** (`claude plugin validate . --strict` passes, `claude plugin test`
+24/24, 2026-10-18), written against the mods docs and the 2.1.289 `claude-code.d.ts`. Mods need
 v2.1.287 or later. After a CLI update run, from this directory:
 
 ```

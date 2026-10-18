@@ -342,7 +342,8 @@ m = re.search(r"\.toast\.fail\{([^}]*)\}", open(sys.argv[1], encoding="utf-8").r
 sys.stdout.write(m.group(1) if m else "")
 PYT
 }
-assert "the failure state is its own toast rule"     "$(toast_fail_rule "$BOUT" | fhas_in 'background:var(--stop)')"
+assert "the failure state is its own toast rule"     "$(toast_fail_rule "$BOUT" | fhas_in 'pointer-events:auto')"
+assert "…and not pink: a failed copy waits on nobody" "$(toast_fail_rule "$BOUT" | fhasnt_in 'var(--stop)')"
 assert "…that accepts the pointer"                   "$(toast_fail_rule "$BOUT" | fhas_in 'pointer-events:auto')"
 assert "…and whose text can be selected"             "$(toast_fail_rule "$BOUT" | fhas_in 'user-select:text')"
 assert "…carrying the exact text in a selectable <code>" \
