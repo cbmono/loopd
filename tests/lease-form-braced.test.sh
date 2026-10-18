@@ -3,6 +3,7 @@
 # lease-form-braced.test.sh — no file under plugin/ writes an expected-sha lease as
 # `lease=…$name:…`: zsh reads `$B:h1` as the :h modifier and the colon vanishes.
 # Why: plugin/tick-steps/step-4-advance.md, the exit-3 rebase round.
+# shellcheck disable=SC2016  # every $ below is a literal under test, never an expansion
 set -uo pipefail
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
