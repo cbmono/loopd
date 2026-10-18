@@ -63,9 +63,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    record. Then spawn the role in its own worktree:
 
    ```bash
-   cd <worktree> && claude --bg '<the whole brief>' \
-     --agent loopd:<assignee> --model <the alias you resolved> \
-     --permission-mode auto --add-dir <bundle root> < /dev/null
+   cd <worktree> && claude --bg --agent loopd:<assignee> --permission-mode auto --add-dir <bundle root> --model <alias> '<the whole brief>' < /dev/null
    ```
 
    It returns in about a second printing `backgrounded · <id>` — the 8-character short
@@ -85,7 +83,12 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    and you read its answer inside the tick, so it stays an `Agent`-tool dispatch. (The
    tick `advisor` was the other exception until it was retired on 2026-10-08.)
 
-   Seven things about that command line, each of which costs a wave if you get it wrong:
+   Eight things about that command line, each of which costs a wave if you get it wrong:
+   - **Keep the flags in exactly that order, the brief last.** `/loopd:init`'s grant is one
+     rule per role ending `--model *`, so a reordered spawn or one without `--model` matches
+     no rule and waits on a prompt; `--model` also stops `--add-dir` taking the brief as a
+     second directory. `<bundle root>` is the bundle's physical path (`pwd -P` there), typed
+     unquoted, the spelling the grant names.
    - **The brief is SINGLE-quoted**, and every `'` inside it is written `'\''`. Inside
      single quotes a backtick and a `$` are literal; inside double quotes bash runs a
      `` `span` `` or `$(...)` as a command and the agent gets the brief with that span
@@ -278,8 +281,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    the chosen tier with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh <agent>` and pass it as the model
    when you spawn — the same for **every** dispatch, including the `cataloguer` and
    the `plan-architect` critique. If `models`/`roleTiers` are absent the script prints
-   why on stderr — **report that line to the human**, then inherit the session model;
-   don't guess aliases.
+   why on stderr — **report that line to the human**, then inherit the session model:
+   a `claude --bg` spawn passes `--model` your own session's model, never no `--model`.
+   Don't guess aliases.
 
    **Name the Explore model in every role-agent brief.** Broad reads go to an Explore
    subagent (`CONVENTIONS.md`), which is dispatched with a model override like any other,

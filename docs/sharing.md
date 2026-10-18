@@ -109,7 +109,7 @@ this instance alone.
 |---|---|
 | **The knowledge base** | with `knowledge.repo` in the config and no mount, it seeds no `knowledge/` placeholders and runs `kb-sync.sh mount` itself. Real content in `knowledge/` is refused; a placeholder-only folder from an earlier stamp is named with the `rm` to run, never removed; an unreachable remote is a `warn` plus the `pull` to run later |
 | **`authorEmail`** | filled from `people[ownerGithubUser]` into an *existing* local file that lacks it — the one key that step writes there, verified after the write, never overwriting a value |
-| **The spawn grant** | at a terminal, when the exact auto-mode rule is absent, it asks `… [Y/n]` (Enter is yes) and writes it to `.claude/settings.local.json`, replacing the stale shapes on the same yes. With no terminal it writes nothing; `--spawn-grant` is the yes relayed from a session ([operations.md § The supported shape](operations.md#the-supported-shape-one-main-thread-auto-mode-always-on)) |
+| **The spawn grant** | at a terminal, when its per-role auto-mode spawn rules or its resume rule are absent, it asks `… [Y/n]` (Enter is yes) and writes it to `.claude/settings.local.json`, replacing the stale shapes on the same yes. With no terminal it writes nothing; `--spawn-grant` is the yes relayed from a session ([operations.md § The supported shape](operations.md#the-supported-shape-one-main-thread-auto-mode-always-on)) |
 
 **The shared, tracked half is done once, from either clone:**
 
