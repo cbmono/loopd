@@ -2,8 +2,8 @@
 //
 // TWO MODES, decided by the `mode` userConfig field alone (register's `options`):
 // operator — the fourth renderer over `.loopd/SNAPSHOT.json` (docs/conventions.md §11), with
-// Tick and Refresh; simple — projects, open questions and blocked tasks, read from the task
-// documents, every answer a `/loopd:answer` run. What each mode reads is README.md → "What it
+// Tick and Refresh; simple — an inbox of open questions, stuck tasks and progress, read from
+// the task documents, every button one slash command. What each mode reads is README.md → "What it
 // reads", asserted by tests/mods.test.sh. Untrusted text and types: every string through
 // clean(), every number through toint(), none truncated (conventions 11d, 11e).
 //
@@ -262,22 +262,37 @@ function draw($: any, e: any): any {
 }
 
 // ---------------------------------------------------------------- simple mode
+// An inbox, top to bottom: questions, stuck tasks a person can clear, stuck tasks we are
+// on, progress. One order rule (docs/operations.md → "The serve-time fill"): oldest task
+// `timestamp:` first, then Q<n> within the task, then slug and task id; undated last.
 type Question = { label: string; text: string; options: string[]; first: boolean }
-type Item = { slug: string; file: string; mtimeMs: number; title: string; status: string; questions: Question[]; unreadable: boolean }
-type Simple = { slug: string; title: string; autonomy: string; done: number; total: number; items: Item[] }
-type Doc = { title: string; status: string; autonomy: string; open: string[] | null; body: string } | null
+type Item = { slug: string; file: string; mtimeMs: number; title: string; status: string; ts: number; stall: number; questions: Question[]; unreadable: boolean }
+type Simple = { slug: string; title: string; autonomy: string; ts: number; finished: boolean; done: number; total: number; items: Item[] }
+type Doc = { title: string; status: string; autonomy: string; timestamp: string; stall: string; open: string[] | null; body: string } | null
+type Held = { kind: 'answer' | 'later'; mtimeMs: number; laterMtime: number; at: number; text: string }
+type Entry = { p: Simple; it: Item; q: Question; id: string; later: number }
 
+const UNBLOCK = 'loopd:unblock'
+// answer.sh's `later` record, AB_ANSWER_LATER in bundle-paths.sh: one `<task path>#Q<n>` a line.
+const LATER = '.loopd/.answer-later'
 let simple: Simple[] = []
 let docs = new Map<string, { mtimeMs: number; doc: Doc }>()
 let sig = ''             // names and mtimes of every file the last scan saw; a change redraws
-let sending = ''         // the question whose /loopd:answer run is queued; '' = none
-let sendNote = ''        // the line drawn after a run: a refusal, or where `more` printed
+let later: string[] = []
+let laterMtime = -1      // -1 = no file; -2 = a read failed, so the next scan reads again
+let sending = ''         // the run that is queued; '' = none, and only then does a key act
+let sendLine = ''        // what the open card shows while it is
+let sendNote = ''        // the line drawn after a run: a confirmation naming its code, or a refusal
 // The run resolves once the command is queued, before answer.sh has written (measured on
-// 2.1.300), so an answered question is held until its document's mtime moves, or until a
-// turn that started after the press completes without moving it (answer.sh refused).
-let held = new Map<string, { mtimeMs: number; at: number; text: string }>()
-// The one colour the pane sets: a row only a person can clear (loopd-design/cli-theme.json human_pink).
+// 2.1.300), so an answered question is held until its document's mtime moves (a deferred
+// one until the later file's does), or until a turn that started after the press completes
+// without moving it (answer.sh refused).
+let held = new Map<string, Held>()
+// The pane's colours: pink for a row only a person can clear, green for sent and finished
+// (loopd-design/cli-theme.json human_pink; plugin/themes/loopd.json success).
 const NEEDS_YOU = { color: '#ff7ac2' }
+const DONE = { color: '#76d6a4' }
+const STUCK_KEYS = ['c', 'd', 'e']
 
 const FIELDS = [['title', 'Title', 'a short name'], ['what', 'What', 'what it should do, in a line'],
   ['whom', 'For whom', 'who needs it'], ['done', 'Done when', 'how you will know; separate several with ;']] as const
@@ -340,6 +355,8 @@ function parse(text: string): Doc {
     title: scalar((fm.match(/^title:(.*)$/m) || [])[1]),
     status: scalar((fm.match(/^status:(.*)$/m) || [])[1]),
     autonomy: scalar((fm.match(/^autonomy:(.*)$/m) || [])[1]),
+    timestamp: scalar((fm.match(/^timestamp:(.*)$/m) || [])[1]),
+    stall: scalar((fm.match(/^stall_count:(.*)$/m) || [])[1]),
     open: oq ? list(fm, oq.index! + oq[0].length) : [],
     body: text.slice(end + 4),
   }
@@ -377,6 +394,7 @@ function questions(d: Doc): Question[] {
   }
   return out
 }
+function when(v: string): number { const t = Date.parse(v); return isFinite(t) ? t : NaN }
 
 // A name that goes into the command line the answer runs as: nothing a shell or the
 // skill's argument split could read as more than one word.
@@ -414,8 +432,11 @@ async function refreshSimple($: any): Promise<boolean> {
     const pf = files.find(f => f.name === PROJECT_FILE && f.kind === 'file')
     const pd = pf ? await doc($, pdir + '/' + PROJECT_FILE, pf.mtimeMs) : null
     if (pf) { const c = docs.get(pdir + '/' + PROJECT_FILE); if (c) seen.set(pdir + '/' + PROJECT_FILE, c); s += pdir + ':' + pf.mtimeMs + (c ? ';' : '!;') }
-    if (pd && (pd.status === 'done' || pd.status === 'cancelled')) continue
-    const row: Simple = { slug: p.name, title: (pd && clean(pd.title)) || p.name, autonomy: pd ? pd.autonomy : '', done: 0, total: 0, items: [] }
+    if (pd && pd.status === 'cancelled') continue
+    const row: Simple = { slug: p.name, title: (pd && clean(pd.title)) || p.name, autonomy: pd ? pd.autonomy : '', ts: when(pd ? pd.timestamp : ''),
+      finished: !!pd && pd.status === 'done', done: 0, total: 0, items: [] }
+    next.push(row)
+    if (row.finished) continue
     for (const t of await entries($, pdir + '/' + TASKS_DIR)) {
       if (t.kind !== 'file' || !t.name.endsWith(TASK_SUFFIX) || !SAFE.test(t.name)) continue
       const path = pdir + '/' + TASKS_DIR + '/' + t.name
@@ -427,15 +448,26 @@ async function refreshSimple($: any): Promise<boolean> {
       if (status === 'cancelled') continue
       row.total += 1
       if (status === 'done') row.done += 1
-      row.items.push({ slug: p.name, file: t.name, mtimeMs: t.mtimeMs, title: (d && clean(d.title)) || t.name, status, questions: questions(d), unreadable: !d || d.open === null })
+      row.items.push({ slug: p.name, file: t.name, mtimeMs: t.mtimeMs, title: (d && clean(d.title)) || t.name, status, ts: when(d ? d.timestamp : ''),
+        stall: toint(d ? d.stall : ''), questions: questions(d), unreadable: !d || d.open === null })
     }
-    next.push(row)
+    if (row.total > 0 && row.done === row.total) row.finished = true
   }
   docs = seen
-  const live = new Map<string, { mtimeMs: number; at: number; text: string }>()
+  let st: any = null
+  try { st = await $.fs.stat(root + '/' + LATER) } catch { st = null }
+  const lm = st && st.kind === 'file' && typeof st.mtimeMs === 'number' ? st.mtimeMs : -1
+  if (lm !== laterMtime) {
+    let text: unknown = ''
+    if (lm >= 0) { try { text = await $.fs.read(root + '/' + LATER) } catch { text = null } reads += 1 }
+    later = typeof text === 'string' ? text.split('\n').map(l => clean(l)).filter(Boolean) : []
+    laterMtime = typeof text === 'string' ? lm : -2
+  }
+  s += LATER + ':' + laterMtime + ';'
+  const live = new Map<string, Held>()
   for (const r of next) for (const it of r.items) for (const q of it.questions) {
     const id = it.slug + '/' + it.file + '#' + q.label, h = held.get(id)
-    if (h && h.mtimeMs === it.mtimeMs) live.set(id, h)
+    if (h && (h.kind === 'later' ? h.laterMtime === laterMtime : h.mtimeMs === it.mtimeMs)) live.set(id, h)
   }
   held = live
   if (creating) {
@@ -453,30 +485,87 @@ async function refreshSimple($: any): Promise<boolean> {
   return true
 }
 
+function taskPath(it: Item): string { return PROJECTS_DIR + '/' + it.slug + '/' + TASKS_DIR + '/' + it.file }
+// The one order rule. Never a subtraction on qn: Infinity - Infinity is NaN.
+function order(a: { ts: number; qn: number; slug: string; file: string }, b: typeof a): number {
+  const ad = isNaN(a.ts), bd = isNaN(b.ts)
+  if (ad !== bd) return ad ? 1 : -1
+  if (!ad && a.ts !== b.ts) return a.ts < b.ts ? -1 : 1
+  if (a.qn !== b.qn) return a.qn < b.qn ? -1 : 1
+  if (a.slug !== b.slug) return a.slug < b.slug ? -1 : 1
+  return a.file < b.file ? -1 : a.file > b.file ? 1 : 0
+}
+function qn(q: Question): number { return q.label ? parseInt(q.label.slice(1), 10) : Infinity }
+// Every open question, in the order the inbox draws them: the rule above, then whatever
+// `later` deferred, in the order it was deferred.
+function inbox(): Entry[] {
+  const out: Entry[] = []
+  for (const p of simple) for (const it of p.items) for (const q of it.questions) {
+    const id = it.slug + '/' + it.file + '#' + q.label, h = held.get(id)
+    const at = q.label ? later.indexOf(taskPath(it) + '#' + q.label) : -1
+    out.push({ p, it, q, id, later: h && h.kind === 'later' ? later.length : at })
+  }
+  const key = (e: Entry) => ({ ts: e.it.ts, qn: qn(e.q), slug: e.it.slug, file: e.it.file })
+  return out.sort((a, b) => (a.later < 0) !== (b.later < 0) ? (a.later < 0 ? -1 : 1)
+    : a.later >= 0 && a.later !== b.later ? a.later - b.later : order(key(a), key(b)))
+}
+function tasks(pick: (it: Item) => boolean): { p: Simple; it: Item }[] {
+  const out: { p: Simple; it: Item }[] = []
+  for (const p of simple) for (const it of p.items) if (pick(it)) out.push({ p, it })
+  return out.sort((a, b) => order({ ts: a.it.ts, qn: 0, slug: a.it.slug, file: a.it.file }, { ts: b.it.ts, qn: 0, slug: b.it.slug, file: b.it.file }))
+}
+const helps = (it: Item) => it.status === 'blocked'
+const onIt = (it: Item) => (it.status === 'in-progress' || it.status === 'in-review') && it.stall >= 1
+
 function bar(done: number, total: number): string {
   const w = 10, f = total > 0 ? Math.round((done / total) * w) : 0
   return '█'.repeat(f) + '░'.repeat(w - f) + ' ' + done + '/' + total + ' done'
 }
+function why(err: unknown): string { return clean(err && (err as any).message ? (err as any).message : String(err)) || 'refused' }
 
-async function send($: any, it: Item, q: Question, reply: string): Promise<void> {
-  if (sending || !reply) return
-  sending = it.slug + '/' + it.file + '#' + q.label
-  sendNote = ''
-  let at = 0
-  try { at = await $.clock.now() } catch { at = 0 }
-  const args = PROJECTS_DIR + '/' + it.slug + '/' + TASKS_DIR + '/' + it.file + (q.label ? ' ' + q.label : '') + ' ' + reply
-  const done = async (err?: unknown) => {
-    sending = ''
-    if (err === undefined && reply !== 'more') held.set(it.slug + '/' + it.file + '#' + q.label, { mtimeMs: it.mtimeMs, at, text: q.text })
-    if (err !== undefined) sendNote = 'Could not send that answer: ' + (clean(err && (err as any).message ? (err as any).message : String(err)) || 'refused')
-    else if (reply === 'more') sendNote = 'More detail on "' + q.text + '" is in the conversation.'
+// One slash command per press, and none while another is queued: `sending` is set before
+// the first await, so a second key pressed in that window runs nothing.
+function run($: any, command: string, args: string, after: (err?: unknown) => void): void {
+  const fin = async (err?: unknown) => {
+    sending = ''; sendLine = ''
+    after(err)
     try { await refreshSimple($) } catch { /* the next poll reads again */ }
     try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
   }
   let p: any = null
-  try { p = $.command.run({ command: ANSWER, args }) } catch (err) { void done(err); return }
-  if (p && typeof p.then === 'function') p.then(() => done(), (err: unknown) => done(err ?? 'refused')); else void done()
+  try { p = $.command.run({ command, args }) } catch (err) { void fin(err); return }
+  if (p && typeof p.then === 'function') p.then(() => fin(), (err: unknown) => fin(err ?? 'refused')); else void fin()
   try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
+}
+
+async function send($: any, e: Entry, reply: string): Promise<void> {
+  if (sending || !reply) return
+  const { p, it, q } = e
+  const code = q.label || 'the question'
+  sending = e.id
+  sendLine = reply === 'later' ? 'Moving ' + code + ' to the end…' : reply === 'more' ? 'Asking for more on ' + code + '…' : 'Sending your answer to ' + code + '…'
+  sendNote = ''
+  const lm = laterMtime
+  let at = 0
+  try { at = await $.clock.now() } catch { at = 0 }
+  run($, ANSWER, taskPath(it) + (q.label ? ' ' + q.label : '') + ' ' + reply, (err?: unknown) => {
+    if (err !== undefined) { sendNote = 'Could not send that answer: ' + why(err); return }
+    if (reply === 'more') { sendNote = 'More on ' + code + ' is in the conversation.'; return }
+    held.set(e.id, { kind: reply === 'later' ? 'later' : 'answer', mtimeMs: it.mtimeMs, laterMtime: lm, at, text: q.text })
+    sendNote = reply === 'later' ? '↷ ' + code + ' moved to the end. We\'ll bring it back after the others.'
+      : '✓ Sent your answer to ' + code + ' · ' + p.title + ' · ' + it.title
+  })
+}
+
+function unblock($: any, p: Simple, it: Item): void {
+  if (sending) return
+  sending = 'unblock:' + it.slug + '/' + it.file
+  sendLine = 'Opening "' + it.title + '" in the conversation…'
+  sendNote = ''
+  run($, UNBLOCK, taskPath(it), (err?: unknown) => {
+    sendNote = err !== undefined ? 'Could not start unblocking "' + it.title + '": ' + why(err)
+      : 'Unblocking "' + it.title + '" in ' + p.title + ' — answer in the conversation.'
+  })
 }
 
 function q(s: string): string { return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"' }
@@ -509,46 +598,57 @@ function drawSimple($: any, e: any): any {
   if (kind !== 'ok') {
     rows.push(line(kind === 'unread' ? 'loopd: reading…' : detail, { dimColor: kind === 'unread' }))
   } else {
-    rows.push(line('Projects', { bold: true }))
-    if (simple.length === 0) rows.push(line('No projects yet.', { dimColor: true }))
-    for (const p of simple) rows.push(line('  ' + bar(p.done, p.total) + ' · ' + p.title))
+    if (sendNote) rows.push(line(sendNote, sendNote.startsWith('✓') ? DONE : { dimColor: true }))
 
-    rows.push(line(' '))
     rows.push(line('Questions for you', { bold: true }))
-    let n = 0
-    for (const p of simple) for (const it of p.items) {
-      if (it.unreadable) { rows.push(line('  Could not read the questions in "' + it.title + '" (' + p.title + ').', { dimColor: true })); continue }
-      for (const q of it.questions) {
-        n += 1
-        const id = it.slug + '/' + it.file + '#' + q.label
-        rows.push(line(' '))
-        rows.push(line('  ' + p.title + ' · ' + it.title, { dimColor: true }))
-        rows.push(line('  ' + q.text, { bold: true, ...NEEDS_YOU }))
-        const h = held.get(id)
-        if (sending === id || (h && h.mtimeMs === it.mtimeMs)) { rows.push(line('  Sending your answer…', { dimColor: true })); continue }
-        if (sending) continue
-        if (!q.label && !q.first) { rows.push(line('  Answer the question above first.', { dimColor: true })); continue }
-        const k = 'q' + n
-        if (q.options.length) {
-          rows.push(Button({ key: k + '-opt1', label: 'Recommended: ' + q.options[0], onPress: () => send($, it, q, '1') }))
-          q.options.slice(1).forEach((o, i) => rows.push(Button({ key: k + '-opt' + (i + 2), label: o, onPress: () => send($, it, q, String(i + 2)) })))
-        }
-        if (Input) rows.push(Input({ key: k + '-text', placeholder: 'or type your own answer', submitLabel: 'send',
-          onSubmit: (v: string) => { const t = clean(v); if (t) send($, it, q, '--text ' + t) } }))
-        rows.push(Button({ key: k + '-more', label: 'More', onPress: () => send($, it, q, 'more') }))
-      }
+    const all = inbox()
+    const waiting = all.filter(x => !held.has(x.id) || held.get(x.id)!.kind === 'later')
+    const open = sending ? undefined : waiting.find(x => x.q.label || x.q.first)
+    if (sendLine) rows.push(line('  ' + sendLine, { dimColor: true }))
+    if (open) {
+      const { p, it, q } = open
+      rows.push(line(' '))
+      rows.push(line('  ' + (q.label ? q.label + ' · ' : '') + p.title + ' · ' + it.title, { dimColor: true }))
+      rows.push(line('  ' + q.text, { bold: true, ...NEEDS_YOU }))
+      q.options.forEach((o, i) => rows.push(Button({ key: 'open-opt' + (i + 1), label: i === 0 ? 'Recommended: ' + o : o,
+        ...(i < 9 ? { hotkey: String(i + 1) } : {}), onPress: () => send($, open, String(i + 1)) })))
+      if (Input) rows.push(Input({ key: 'open-text', placeholder: 'or type your own answer', submitLabel: 'send',
+        onSubmit: (v: string) => { const t = clean(v); if (t) send($, open, '--text ' + t) } }))
+      rows.push(Box({ flexDirection: 'row', columnGap: 2, children: [
+        Button({ key: 'open-more', label: 'More', hotkey: 'm', onPress: () => send($, open, 'more') }),
+        ...(q.label ? [Button({ key: 'open-later', label: 'Later', hotkey: 'l', onPress: () => send($, open, 'later') })] : []),
+      ] }))
     }
-    if (n === 0) rows.push(line('No open questions.', { dimColor: true }))
+    const rest = waiting.filter(x => x !== open)
+    if (open && rest.length) rows.push(line('  ' + rest.length + ' more ' + (rest.length === 1 ? 'question' : 'questions') + ' after this', { dimColor: true }))
+    if (rest.length) rows.push(line(' '))
+    for (const x of rest) rows.push(line('  ' + (x.q.label ? x.q.label + ' · ' : '') + x.p.title + ' · ' + x.q.text + (x.later >= 0 ? ' · later' : ''), { dimColor: true }))
+    for (const p of simple) for (const it of p.items) if (it.unreadable) rows.push(line('  Could not read the questions in "' + it.title + '" (' + p.title + ').', { dimColor: true }))
+    if (all.length === 0) rows.push(line('No open questions.', { dimColor: true }))
+
+    const help = tasks(helps)
+    if (help.length) {
+      rows.push(line(' '))
+      rows.push(line('Stuck — you can help', { bold: true }))
+      help.forEach(({ p, it }, i) => {
+        rows.push(line('  Unblock "' + it.title + '" in ' + p.title + ': it cannot move until you do.', NEEDS_YOU))
+        if (!sending) rows.push(Button({ key: 'unblock-' + (i + 1), label: 'Unblock it', ...(i < STUCK_KEYS.length ? { hotkey: STUCK_KEYS[i] } : {}), onPress: () => unblock($, p, it) }))
+      })
+    }
+    const quiet = tasks(it => !helps(it) && onIt(it))
+    if (quiet.length) {
+      rows.push(line(' '))
+      rows.push(line('Stuck — we\'re on it', { bold: true }))
+      for (const { p, it } of quiet) rows.push(line('  "' + it.title + '" in ' + p.title + ': nothing for you to do, we\'re on it.', { dimColor: true }))
+    }
 
     rows.push(line(' '))
-    rows.push(line('Blocked', { bold: true }))
-    let b = 0
-    for (const p of simple) for (const it of p.items) {
-      if (it.status !== 'blocked') continue
-      b += 1
-      rows.push(line('  Unblock "' + it.title + '" in ' + p.title + ': it cannot move until you do.', NEEDS_YOU))
-    }
-    if (b === 0) rows.push(line('Nothing is blocked.', { dimColor: true }))
+    rows.push(line('Progress', { bold: true }))
+    const made = [...simple].sort((a, b) => order({ ts: a.ts, qn: 0, slug: a.slug, file: '' }, { ts: b.ts, qn: 0, slug: b.slug, file: '' }))
+    if (made.length === 0) rows.push(line('No projects yet.', { dimColor: true }))
+    for (const p of made) if (!p.finished) rows.push(line('  ' + bar(p.done, p.total) + ' · ' + p.title))
+    const fin = made.filter(p => p.finished)
+    if (fin.length) rows.push(line('  ✓ Finished: ' + fin.map(p => p.title).join(', '), DONE))
 
     rows.push(line(' '))
     rows.push(line('New project', { bold: true }))
@@ -562,7 +662,6 @@ function drawSimple($: any, e: any): any {
     }
     if (createNote) rows.push(line('  ' + createNote, { dimColor: true }))
   }
-  if (sendNote) rows.push(line(sendNote, { dimColor: true }))
   rows.push(line(' '))
   rows.push(Button({ key: 'refresh', label: 'Refresh', hotkey: 'r', onPress: async () => { await refreshSimple($); $.ui.invalidate('ui.render') } }))
   return Box({ flexDirection: 'column', children: rows })
@@ -583,9 +682,7 @@ async function settle($: any, e: any): Promise<void> {
 
 function summarySimple(): string {
   if (kind !== 'ok') return detail
-  let q = 0, b = 0
-  for (const p of simple) for (const it of p.items) { q += it.questions.length; if (it.status === 'blocked') b += 1 }
-  return 'loopd: ' + simple.length + ' project(s) · ' + q + ' question(s) for you · ' + b + ' blocked'
+  return 'loopd: ' + simple.length + ' project(s) · ' + inbox().length + ' question(s) for you · ' + tasks(helps).length + ' blocked'
 }
 
 // ---------------------------------------------------------------- hooks

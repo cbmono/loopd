@@ -10,7 +10,7 @@ terminal), and nothing else.
 | `mode` | Draws | Reads |
 |---|---|---|
 | `operator` (default) | the board below, with Tick and Refresh | the snapshot |
-| `simple` | projects, questions for you, blocked tasks, and a form to start a project — nothing else | the task documents |
+| `simple` | an inbox — questions, stuck tasks, progress — and a form to start a project; nothing else | the task documents |
 
 ```
 /plugin marketplace add cbmono/loopd     # already added? skip
@@ -53,29 +53,45 @@ the mtime moved; the poll starts when the pane opens and stops when it closes.
 
 ## What it draws — simple mode
 
-For someone who answers questions and does not run the loop. Three sections, in plain words:
+For someone who answers questions and does not run the loop. One inbox, top to bottom:
 
 | Section | Shows |
 |---|---|
-| Projects | per open project, a done/total bar over its tasks (`cancelled` not counted) and its title; a `done` or `cancelled` project is left out |
-| Questions for you | each unanswered `open_questions` entry: its text, then **Recommended: …** (option 1 of its `### Q<n>` block), the other options, a text field and **More** |
-| Blocked | each `status: blocked` task as one sentence — *Unblock "…" in …: it cannot move until you do.* — never its blocker text |
+| Questions for you | every unanswered `open_questions` entry across the projects, oldest task first (`docs/operations.md` → "The serve-time fill", the order rule): its task's `timestamp:`, then `Q<n>`, then slug and task id; undated last, deferred ones after that. **Only the top one is open** — its code and project, its text, **Recommended: …** (option 1 of its `### Q<n>` block), the other options, a text field, **More** and **Later** — and *n more after this* counts the rest. Every other question is one line: code, project, text. |
+| Stuck — you can help | each `status: blocked` task, pink, in the same order (no field records when it became blocked), as one sentence — *Unblock "…" in …: it cannot move until you do.* — and one **Unblock it** button. Never its blocker text, and it opens no card: its open questions are in the section above. |
+| Stuck — we're on it | each `in-progress` or `in-review` task with `stall_count` ≥ 1, quiet, never pink: *"…" in …: nothing for you to do, we're on it.* (`last_blocker` is not the test — `stall-counter.sh` keeps it after a reset.) |
+| Progress | per project, in creation order (`project.md` `timestamp:`, undated last), a done/total bar over its tasks (`cancelled` not counted); every finished project — `status: done`, or all its tasks done — folds into one green *✓ Finished:* line |
 | New project | four fields — Title, What, For whom, Done when — and **Create** |
 
 No role, tick, pull request, session, usage, round, worktree or branch is drawn; the kit
 test asserts their absence against task documents that carry all of them.
 
-**Pink means you.** A question's text and a blocked task's sentence are drawn `#ff7ac2`
-(Text's `color` prop); every other line keeps the theme default or `dimColor`.
+**Pink means you, green means done.** The open question's text and a blocked task's sentence
+are drawn `#ff7ac2`; a sent answer and the finished line `#76d6a4` (Text's `color` prop);
+every other line keeps the theme default or `dimColor`.
 
-**Every action is one `/loopd:answer` run** (`$.command.run`, as Tick is): an option runs
-`/loopd:answer <task> Q<n> <n>`, the text field `… Q<n> --text <words>`, More `… Q<n> more`.
-`answer.sh` does the writing; this pane writes nothing. The run is a model turn queued until
-the session is idle, and it resolves when queued, before the document moves (measured on
-2.1.300), so while one is queued every answer control is hidden, and an answered question
-stays *Sending your answer…* until its document's mtime moves — or until the turn that ran
-it ends with the document unmoved (`answer.sh` refused), when its controls come back with a
-note. A refused run is drawn. A read that fails is retried on the next scan.
+**Every button is one slash command** (`$.command.run`, as Tick is), and every hotkey is
+unique on the screen:
+
+| Key | Button | Runs |
+|---|---|---|
+| `1`–`9` | an option of the open question | `/loopd:answer <task> Q<n> <n>` |
+| — | the text field | `/loopd:answer <task> Q<n> --text <words>` |
+| `m` | More | `/loopd:answer <task> Q<n> more` |
+| `l` | Later | `/loopd:answer <task> Q<n> later` — the question goes to the end; the next one opens |
+| `c` `d` `e` | Unblock it (the first three stuck tasks; the rest by click) | `/loopd:unblock <task>` — the blocker is shown in the session, never here |
+| `r` | Refresh | nothing — re-reads now |
+
+Keys act on the open card only. `answer.sh` and `unblock.sh` do the writing; this pane writes
+nothing. A run is a model turn queued until the session is idle, and it resolves when queued,
+before the document moves (measured on 2.1.300). While one is being queued the card shows
+*Sending your answer to Q<n>…* and has no buttons, so a second `1` runs nothing; once it is
+queued the line *✓ Sent your answer to Q<n> · project · task* names it, the answered question
+is held out of the inbox until its document's mtime moves, and the next question opens in
+the same place — `1` five times answers five questions. A deferred one is held at the end
+until the later file moves. If the turn that ran it ends with nothing moved (`answer.sh`
+refused), the question comes back with a note. A refused run is drawn. A read that fails is
+retried on the next scan.
 
 **Create is one `/loopd:new-project` run**, only with all four fields filled:
 `"<what>" kind=build autonomy=yolo title="<title>" need="<for whom>" success_criteria="<done when>" --no-ask`.
@@ -97,8 +113,9 @@ directory, never a path a config file names:
 |---|---|---|
 | `instance.config.json` | both | exists? — the cwd is a loopd bundle. Absent ⇒ *not a loopd bundle* and nothing else. |
 | `.loopd/SNAPSHOT.json` | operator | `stat` every poll, `read` when the mtime moved. Absent ⇒ *board OFF* with the `touch` that turns it on (absence is the off switch — conventions 3 and 11) and nothing else. Unparseable ⇒ one line, and the next `write-snapshot.sh` run overwrites it. |
-| `projects/*/project.md` | simple | `title`, `status` and `autonomy`. |
-| `projects/*/tasks/*.md` | simple | `title`, `status`, `open_questions` and the `### Q<n>` blocks. Listed every poll, read when an mtime moved. A list it cannot parse is drawn as *could not read*, never guessed. |
+| `projects/*/project.md` | simple | `title`, `status`, `autonomy` and `timestamp`. |
+| `projects/*/tasks/*.md` | simple | `title`, `status`, `timestamp`, `stall_count`, `open_questions` and the `### Q<n>` blocks. Listed every poll, read when an mtime moved. A list it cannot parse is drawn as *could not read*, never guessed. |
+| `.loopd/.answer-later` | simple | the questions `answer.sh later` deferred, one `<task path>#Q<n>` a line (`AB_ANSWER_LATER` in `plugin/scripts/bundle-paths.sh`). `stat` every poll, `read` when the mtime moved; absent ⇒ nothing deferred. Per clone and gitignored, so a deferral on one clone is not one on another. |
 
 Simple mode reads the task documents and not the snapshot because the snapshot carries no
 question text by design (conventions 11b) and is rewritten only by a clone that dispatches.
@@ -136,7 +153,7 @@ source and on what `claude plugin validate` reads out of it:
 ## Tested with
 
 Claude Code **2.1.302** (`claude plugin validate . --strict` passes, `claude plugin test`
-24/24, 2026-10-18), written against the mods docs and the 2.1.289 `claude-code.d.ts`. Mods need
+29/29, 2026-10-18), written against the mods docs and the 2.1.289 `claude-code.d.ts`. Mods need
 v2.1.287 or later. After a CLI update run, from this directory:
 
 ```

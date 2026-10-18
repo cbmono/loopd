@@ -368,7 +368,7 @@ test('ONE SWITCH: instance.config.json saying simple does not switch the mode �
   await ui.unmount()
 })
 
-test('SIMPLE SHOWS THREE THINGS: a bar per project, each open question, each blocked task — nothing else', SIMPLE, async ($, on) => {
+test('SIMPLE IS AN INBOX: the open question, the rest as lines, blocked tasks, progress — nothing else', SIMPLE, async ($, on) => {
   const w = bundle()
   stubs(on, w)
   mock.clock(on)
@@ -378,18 +378,19 @@ test('SIMPLE SHOWS THREE THINGS: a bar per project, each open question, each blo
   // Projects: done/total off the task statuses (cancelled is not counted), a closed project left out.
   expect(text).toContain('██░░░░░░░░ 1/5 done · Alpha project')
   expect(text).toContain('0/1 done · gamma')
-  expect(text).not.toContain('Beta closed')
+  expect(text).toContain('✓ Finished: Beta closed')
   expect(text).not.toContain('Never shown')
-  // A question: its text, the recommendation first, the other options, a text field, More.
+  // The open question: code and project, its text, the recommendation first, the other
+  // options, a text field, More and Later.
+  expect(text).toContain('Q1 · Alpha project · Decide the colour')
   expect(text).toContain('Which colour, given the brand, ships first?')
   const labels = (await ui.findAll({ type: 'Button' })).map((b: any) => b.props.label)
-  expect(labels.slice(0, 4)).toEqual(['Recommended: Blue, the brand colour', 'Green', 'Let the designer pick', 'More'])
-  expect(await ui.find({ key: 'q1-text' })).toBeDefined()
-  // A question with no details block: the text field and More, no options.
-  expect(text).toContain('What should it be called?')
-  expect(await ui.find({ key: 'q2-opt1' })).toBeUndefined()
-  expect(await ui.find({ key: 'q2-text' })).toBeDefined()
-  expect(await ui.find({ key: 'q2-more' })).toBeDefined()
+  expect(labels.slice(0, 5)).toEqual(['Recommended: Blue, the brand colour', 'Green', 'Let the designer pick', 'More', 'Later'])
+  expect(await ui.find({ key: 'open-text' })).toBeDefined()
+  // Every other question is one line with its code and project, and opens nothing.
+  expect(text).toContain('  Q1 · Alpha project · What should it be called?')
+  expect(text).toContain('1 more question after this')
+  expect((await ui.findAll({ type: 'Input' })).filter((i: any) => !String(i.key).startsWith('new-')).length).toBe(1)
   // An answered entry is not a question; an unparseable list is said, not guessed at.
   expect(text).not.toContain('Old one?')
   expect(text).toContain('Could not read the questions in "Broken list"')
@@ -404,18 +405,17 @@ test('SIMPLE SHOWS THREE THINGS: a bar per project, each open question, each blo
   await ui.unmount()
 })
 
-test('PINK MEANS YOU: a question and a blocked task are drawn #ff7ac2, every other line is not', SIMPLE, async ($, on) => {
+test('PINK MEANS YOU, GREEN MEANS DONE: the open question and a blocked task are pink, finished is green', SIMPLE, async ($, on) => {
   const w = bundle()
   stubs(on, w)
   mock.clock(on)
   await open($)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const pink = (await ui.findAll({ type: 'Text' })).filter((el: any) => el.props.color !== undefined)
-  expect(pink.map((el: any) => el.props.color)).toEqual(['#ff7ac2', '#ff7ac2', '#ff7ac2'])
-  expect(pink.map((el: any) => el.text.trim())).toEqual([
-    'Which colour, given the brand, ships first?',
-    'What should it be called?',
-    'Unblock "Import the archive" in Alpha project: it cannot move until you do.',
+  const coloured = (await ui.findAll({ type: 'Text' })).filter((el: any) => el.props.color !== undefined)
+  expect(coloured.map((el: any) => [el.props.color, el.text.trim()])).toEqual([
+    ['#ff7ac2', 'Which colour, given the brand, ships first?'],
+    ['#ff7ac2', 'Unblock "Import the archive" in Alpha project: it cannot move until you do.'],
+    ['#76d6a4', '✓ Finished: Beta closed'],
   ])
   await ui.unmount()
 })
@@ -426,21 +426,23 @@ test('EVERY ACTION IS A COMMAND: option, text and more each run /loopd:answer, o
   stubs(on, w, true, () => clock.sleep(1000))
   await open($)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'q1-more' })
+  await ui.press({ key: 'open-more' })
   expect(w.submitted[0]).toMatchObject({ command: 'loopd:answer', args: 'projects/alpha/tasks/task-002-colour.md Q1 more' })
   await clock.advance(1000)
-  expect(await shown(ui)).toContain('is in the conversation')
-  await ui.press({ key: 'q1-opt2' })
+  expect(await shown(ui)).toContain('More on Q1 is in the conversation.')
+  await ui.press({ key: 'open-opt2' })
   expect(w.submitted[1]).toMatchObject({ command: 'loopd:answer', args: 'projects/alpha/tasks/task-002-colour.md Q1 2' })
-  // While it is queued nothing else can be pressed, and the question says so.
-  expect(await shown(ui)).toContain('Sending your answer…')
-  expect(await ui.find({ key: 'q1-opt1' })).toBeUndefined()
-  expect(await ui.find({ key: 'q2-text' })).toBeUndefined()
+  // While it is queued nothing else can be pressed, and the card says so.
+  expect(await shown(ui)).toContain('Sending your answer to Q1…')
+  expect(await ui.find({ key: 'open-opt1' })).toBeUndefined()
+  expect(await ui.find({ key: 'open-text' })).toBeUndefined()
   await clock.advance(1000)
-  // The run is through but the document has not moved: still held, so it cannot be answered twice.
-  expect(await shown(ui)).toContain('Sending your answer…')
-  expect(await ui.find({ key: 'q1-opt1' })).toBeUndefined()
-  await ui.input({ key: 'q2-text', text: '  Widget\tPro  ' })
+  // The run is through but the document has not moved: still held, so it cannot be answered
+  // twice — the next question is the open one.
+  expect(await shown(ui)).toContain('✓ Sent your answer to Q1 · Alpha project · Decide the colour')
+  expect(await shown(ui)).not.toContain('Which colour')
+  expect(await shown(ui)).toContain('Q1 · Alpha project · Name it')
+  await ui.input({ key: 'open-text', text: '  Widget\tPro  ' })
   expect(w.submitted[2]).toMatchObject({ command: 'loopd:answer', args: 'projects/alpha/tasks/task-006-name.md Q1 --text Widget Pro' })
   await clock.advance(1000)
   expect(w.submitted.length).toBe(3)
@@ -456,10 +458,10 @@ test('an answered question leaves the pane on the next read; a refused run is sa
   mock.clock(on)
   await open($)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'q1-opt1' })
+  await ui.press({ key: 'open-opt1' })
   expect(await shown(ui)).not.toContain('Which colour')
   w.onRun = () => { throw new Error('the command is not available') }
-  await ui.press({ key: 'q1-more' })
+  await ui.press({ key: 'open-more' })
   expect(await shown(ui)).toContain('Could not send that answer: ')
   expect(await shown(ui)).toContain('What should it be called?')
   await ui.unmount()
@@ -503,18 +505,170 @@ test('a held answer is released when its own turn ends without moving the docume
   await open($)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await clock.advance(10000)
-  await ui.press({ key: 'q1-opt2' })
-  expect(await ui.find({ key: 'q1-opt1' })).toBeUndefined()
+  await ui.press({ key: 'open-opt2' })
+  expect(await shown(ui)).not.toContain('Which colour')
   // A turn that was already running before the press is not the answer's turn.
   await clock.advance(1000)
   await $.turn.complete({ turnId: 'before', answer: '', durationMs: 5000, isAborted: false, usage: null, reason: 'answer' })
-  expect(await shown(ui)).toContain('Sending your answer…')
+  expect(await shown(ui)).not.toContain('Which colour')
   // The answer's turn ends and answer.sh wrote nothing (it refused): the controls come back.
   await clock.advance(1000)
   await $.turn.complete({ turnId: 'answer', answer: '', durationMs: 500, isAborted: false, usage: null, reason: 'answer' })
-  expect(await shown(ui)).not.toContain('Sending your answer…')
+  expect(await shown(ui)).toContain('Which colour')
   expect(await shown(ui)).toContain('did not change the task')
-  expect(await ui.find({ key: 'q1-opt1' })).toBeDefined()
+  expect(await ui.find({ key: 'open-opt1' })).toBeDefined()
+  await ui.unmount()
+})
+
+// ---------------------------------------------------------------- the inbox
+// Three projects created out of order, questions on tasks dated out of order, a blocked task
+// with a question of its own, one stalled task, one recovered task, one finished project.
+function proj(title: string, ts: string, status = 'active'): string {
+  return '---\ntype: Project\ntitle: "' + title + '"\nstatus: ' + status + '\n' + (ts ? 'timestamp: ' + ts + '\n' : '') + '---\n'
+}
+const INBOX: Record<string, string> = {
+  [P + '/one/project.md']: proj('One', '2026-10-03T00:00:00Z'),
+  [P + '/two/project.md']: proj('Two', '2026-10-01T00:00:00Z'),
+  [P + '/three/project.md']: proj('Three', ''),
+  [P + '/four/project.md']: proj('Four', '2026-09-01T00:00:00Z', 'done'),
+  [P + '/five/project.md']: proj('Five', '2026-09-02T00:00:00Z'),
+  [P + '/five/tasks/task-001-a.md']: task('title: "All of it"\nstatus: done\ntimestamp: 2026-09-02T00:00:00Z\nopen_questions: [ ]'),
+  [P + '/one/tasks/task-001-old.md']: task('title: "Old task"\nstatus: draft\ntimestamp: 2026-10-01T09:00:00Z\nopen_questions: [ "Q3: Old Q3?" ]',
+    '\n## Question details\n\n### Q3\nOptions:\n1. Old yes\n2. Old no\n'),
+  [P + '/two/tasks/task-001-new.md']: task('title: "New task"\nstatus: draft\ntimestamp: 2026-10-05T00:00:00Z\nopen_questions: [ "Q2: New Q2?", "Q1: New Q1?" ]',
+    '\n## Question details\n\n### Q1\nOptions:\n1. Yes\n2. No\n'),
+  [P + '/three/tasks/task-001-undated.md']: task('title: "Undated"\nstatus: draft\nopen_questions: [ "Q1: Undated Q1?" ]'),
+  [P + '/one/tasks/task-002-blocked.md']: task('title: "Needs a key"\nstatus: blocked\ntimestamp: 2026-10-04T00:00:00Z\nstall_count: 2\nlast_blocker: "SECRET-BLOCKER-TEXT"\nopen_questions: [ "Q1: Which key?" ]',
+    '\n## Question details\n\n### Q1\nOptions:\n1. The staging key\n2. A new one\n'),
+  [P + '/three/tasks/task-002-blocked.md']: task('title: "Needs access"\nstatus: blocked\ntimestamp: 2026-10-02T00:00:00Z\nlast_blocker: "SECRET-BLOCKER-TEXT"\nopen_questions: [ ]'),
+  [P + '/two/tasks/task-002-stalled.md']: task('title: "Flaky check"\nstatus: in-progress\ntimestamp: 2026-10-02T00:00:00Z\nstall_count: 1\nlast_blocker: "SECRET-BLOCKER-TEXT"\nopen_questions: [ ]'),
+  [P + '/one/tasks/task-003-recovered.md']: task('title: "Recovered"\nstatus: in-review\ntimestamp: 2026-10-02T00:00:00Z\nstall_count: 0\nlast_blocker: "SECRET-BLOCKER-TEXT"\nopen_questions: [ ]'),
+}
+function inboxWorld(): World {
+  const w = world(SNAP)
+  for (const [path, text] of Object.entries(INBOX)) w.files.set(path, { text, mtimeMs: 1000 })
+  return w
+}
+const LATER_FILE = CWD + '/.loopd/.answer-later'
+// Every line under a heading, up to the next blank line.
+function under(text: string, heading: string): string[] {
+  const l = text.split('\n'), at = l.findIndex(x => x.trim() === heading)
+  const out: string[] = []
+  for (const x of l.slice(at + 1)) { if (!x.trim() && out.length) break; if (x.trim()) out.push(x.trim()) }
+  return out
+}
+// A key press: the Button whose hotkey it is, if one is drawn.
+async function hot(ui: any, k: string): Promise<boolean> {
+  const b = (await ui.findAll({ type: 'Button' })).find((el: any) => el.props.hotkey === k)
+  if (!b) return false
+  await ui.press({ key: b.key })
+  return true
+}
+
+test('INBOX ORDER: questions by the one order rule, then stuck you can help, stuck we are on it, progress', SIMPLE, async ($, on) => {
+  const w = inboxWorld()
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = await shown(ui)
+  const at = (h: string) => text.split('\n').indexOf(h)
+  expect([at('Questions for you'), at('Stuck — you can help'), at('Stuck — we\'re on it'), at('Progress')].every((v, i, a) => v >= 0 && (i === 0 || v > a[i - 1]))).toBe(true)
+  // Oldest task first (a later Q3 on an old task ahead of Q1 on a newer one), Q<n> within a
+  // task, undated last; a blocked task's own question stays here.
+  expect(text).toContain('Q3 · One · Old task')
+  expect(under(text, '4 more questions after this')).toEqual([
+    'Q1 · One · Which key?', 'Q1 · Two · New Q1?', 'Q2 · Two · New Q2?', 'Q1 · Three · Undated Q1?'])
+  // Blocked, by the same rule; each with one button; never its blocker text, and no card.
+  expect(under(text, 'Stuck — you can help')).toEqual([
+    'Unblock "Needs access" in Three: it cannot move until you do.',
+    'Unblock "Needs a key" in One: it cannot move until you do.'])
+  expect(under(text, 'Stuck — we\'re on it')).toEqual(['"Flaky check" in Two: nothing for you to do, we\'re on it.'])
+  expect(text).not.toContain('SECRET-BLOCKER-TEXT')
+  expect(text).not.toContain('Recovered')
+  expect((await ui.findAll({ type: 'Input' })).filter((i: any) => !String(i.key).startsWith('new-')).length).toBe(1)
+  // Progress in creation order, undated last; finished projects folded into one green line.
+  expect(under(text, 'Progress')).toEqual([
+    '░░░░░░░░░░ 0/2 done · Two', '░░░░░░░░░░ 0/3 done · One', '░░░░░░░░░░ 0/2 done · Three', '✓ Finished: Four, Five'])
+  await ui.unmount()
+})
+
+test('LATER: runs answer later, the next question opens, and a deferred question is drawn last', SIMPLE, async ($, on) => {
+  const w = inboxWorld()
+  w.onRun = (e: any) => { if (/ later$/.test(e.args)) w.files.set(LATER_FILE, { text: 'projects/one/tasks/task-001-old.md#Q3\n', mtimeMs: 7000 }) }
+  stubs(on, w)
+  const clock = mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await shown(ui)).toContain('4 more questions after this')
+  expect(await hot(ui, 'l')).toBe(true)
+  expect(w.submitted[0]).toMatchObject({ command: 'loopd:answer', args: 'projects/one/tasks/task-001-old.md Q3 later' })
+  await clock.advance(1000)
+  const text = await shown(ui)
+  expect(text).toContain('↷ Q3 moved to the end.')
+  expect(text).toContain('Q1 · One · Needs a key')
+  expect(text).toContain('4 more questions after this')
+  expect(under(text, '4 more questions after this').pop()).toBe('Q3 · One · Old Q3? · later')
+  await ui.unmount()
+})
+
+test('LATER: a question the later file names is drawn last on a fresh read, in the order deferred', SIMPLE, async ($, on) => {
+  const w = inboxWorld()
+  w.files.set(LATER_FILE, { text: 'projects/two/tasks/task-001-new.md#Q1\nprojects/one/tasks/task-001-old.md#Q3\nnot a key\n', mtimeMs: 7000 })
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = await shown(ui)
+  expect(text).toContain('Q1 · One · Needs a key')
+  expect(under(text, '4 more questions after this')).toEqual([
+    'Q2 · Two · New Q2?', 'Q1 · Three · Undated Q1?', 'Q1 · Two · New Q1? · later', 'Q3 · One · Old Q3? · later'])
+  expect(w.submitted).toEqual([])
+  await ui.unmount()
+})
+
+test('ONE COMMAND PER BUTTON: hotkeys are unique, a 1 while sending runs nothing, the next 1 answers the next question', SIMPLE, async ($, on) => {
+  const w = inboxWorld()
+  const clock = mock.clock(on)
+  stubs(on, w, true, () => clock.sleep(1000))
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const buttons = await ui.findAll({ type: 'Button' })
+  const keys = buttons.map((b: any) => b.props.hotkey).filter((k: unknown) => k !== undefined)
+  expect(keys).toEqual(['1', '2', 'm', 'l', 'c', 'd', 'r'])
+  expect(new Set(keys).size).toBe(keys.length)
+  // The question keys belong to the open card alone.
+  expect(buttons.filter((b: any) => /^[0-9ml]$/.test(String(b.props.hotkey))).every((b: any) => String(b.key).startsWith('open-'))).toBe(true)
+  const sent = ['projects/one/tasks/task-001-old.md Q3 1', 'projects/one/tasks/task-002-blocked.md Q1 1', 'projects/two/tasks/task-001-new.md Q1 1']
+  const said = ['Q3 · One · Old task', 'Q1 · One · Needs a key', 'Q1 · Two · New task']
+  for (let i = 0; i < 3; i++) {
+    expect(await hot(ui, '1')).toBe(true)
+    expect(w.submitted[i]).toMatchObject({ command: 'loopd:answer', args: sent[i] })
+    // Pressed again while that run is still being sent: nothing runs.
+    expect(await hot(ui, '1')).toBe(false)
+    expect(w.submitted.length).toBe(i + 1)
+    await clock.advance(1000)
+    expect(await shown(ui)).toContain('✓ Sent your answer to ' + said[i])
+  }
+  expect(await shown(ui)).toContain('Q2 · Two · New task')
+  expect(await shown(ui)).toContain('1 more question after this')
+  expect(w.prompted).toEqual([])
+  await ui.unmount()
+})
+
+test('UNBLOCK: each stuck-you-can-help row runs /loopd:unblock on its task, once', SIMPLE, async ($, on) => {
+  const w = inboxWorld()
+  const clock = mock.clock(on)
+  stubs(on, w, true, () => clock.sleep(1000))
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await hot(ui, 'd')).toBe(true)
+  expect(w.submitted[0]).toMatchObject({ command: 'loopd:unblock', args: 'projects/one/tasks/task-002-blocked.md' })
+  expect(await hot(ui, 'c')).toBe(false)
+  await clock.advance(1000)
+  expect(await shown(ui)).toContain('Unblocking "Needs a key" in One — answer in the conversation.')
+  expect(await shown(ui)).not.toContain('SECRET-BLOCKER-TEXT')
+  expect(w.submitted.length).toBe(1)
   await ui.unmount()
 })
 
@@ -591,8 +745,7 @@ test('THE PERSON SEES THE RESULT: the new project appears on the next read, then
   w.files.set(path, { text: task('title: "Garden log"\nstatus: draft\nopen_questions: [ "Q1: Which beds come first?" ]'), mtimeMs: 5000 })
   await clock.advance(5000)
   text = await shown(ui)
-  expect(text).toContain('Garden "log" · Garden log')
-  expect(text).toContain('Which beds come first?')
+  expect(text).toContain('Q1 · Garden "log" · Which beds come first?')
   await ui.unmount()
 })
 

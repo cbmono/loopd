@@ -648,7 +648,7 @@ the **snapshot** (already in `write-snapshot.sh`'s allowlist, never filled), the
 | question `context` (3 depths) | fill: the same block's `Depth 1`–`3` |
 | question `askedAt` | dropped: no file records a per-question ask time; the order rule below stands in |
 | stuck `id`, `project` | snapshot: task `id`, project `slug` |
-| stuck `sentence`, `action`, `buttonLabel` | snapshot: task `title` and `awaiting` verb, composed by the renderer — the blocker text is never served (`plugin-mod-pane/README.md`, Blocked row) |
+| stuck `sentence`, `action`, `buttonLabel` | snapshot: task `title` and `awaiting` verb, composed by the renderer — the blocker text is never served (`plugin-mod-pane/README.md`, Stuck — you can help row) |
 | stuck `state` | snapshot: task `status` and `in_flight` |
 | project `title`, `what` | snapshot: `title`, `description` |
 | project `who` | fill: `project.md` `need` |
@@ -711,7 +711,7 @@ Each README owns its detail.
 | Mod | One line | Detail |
 |---|---|---|
 | `loopd-mod-usage` | records a session's usage in the plugin store after every turn; `session-usage.sh` reads the store first and the transcript second | [`plugin-mod-usage/README.md`](../plugin-mod-usage/README.md) |
-| `loopd-mod-pane` | `/pane` opens a pane drawing `SNAPSHOT.json`, with **Tick** and **Refresh** buttons; `mode: simple` in `/config` shows only projects, questions, blocked tasks and a form to start a project | [`plugin-mod-pane/README.md`](../plugin-mod-pane/README.md) |
+| `loopd-mod-pane` | `/pane` opens a pane drawing `SNAPSHOT.json`, with **Tick** and **Refresh** buttons; `mode: simple` in `/config` shows an inbox — one open question, stuck tasks, progress — and a form to start a project | [`plugin-mod-pane/README.md`](../plugin-mod-pane/README.md) |
 | `loopd-mod-signal` | a role agent's session tells the PM's session its turn is over; step 4 settles that session first | [`plugin-mod-signal/README.md`](../plugin-mod-signal/README.md) |
 
 **What a mod may do here** is the same short list for all three — no model call, no
