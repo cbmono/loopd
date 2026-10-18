@@ -808,7 +808,7 @@ pink = r"var\(--(signal|stop|pink-line|chip)|#(ff7ac2|c2337f|f4c6de|fde6f1|3a273
 if sys.argv[2] == "pink":
     want, allow = pink, re.search(r"PINK IS FOR (.+?)\.\s*\n", head, re.S).group(1)
 else:
-    want, allow = r"var\(--done", ".proj.fin, .proj.fin .phead::before, .state.done"
+    want, allow = r"var\(--done", re.search(r"GREEN IS FOR (.+?)\.\s*\n", head, re.S).group(1)
 allow = {" ".join(a.split()) for a in allow.split(",")}
 bad = set()
 for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):

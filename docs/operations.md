@@ -682,6 +682,25 @@ an old task ranks ahead of Q1 on a newer task and a refresh never reorders. A ta
 `timestamp:` ranks after every dated one. The pane's inbox (task-003) and the web board
 (task-005) use this rule unchanged.
 
+### Simple mode: the web board's default view
+
+Every page `build-board.sh` renders — the served one, the tick's `file://` page and the
+published artifact — opens in **simple mode**: an inbox (questions oldest first with only
+the first open, then stuck items you can help with, then the ones we are handling) beside
+a 290px progress rail, which moves below the inbox under 820px. Today's board is behind
+**Show details**, filtered to one project when opened from that project's drawer, and with
+scripting off both views render, simple first. Questions and a project's need and done-when
+carry words only where `board-serve.sh` fills the seams above; elsewhere a card names its
+code and project. The page sends nothing: Send answer, Start the project and `N` show the
+`/loopd:answer` or `/loopd:new-project` command to type, until the answer queue
+(interactive-board task-006) exists. Keys: 1–9 pick an answer, Enter sends, `?` adds
+context, `L` is Later, `N` is New project, Esc closes.
+
+Simple mode never shows these words (`web-simple/COPY.md` → "Glossary");
+`tests/board-simple.test.sh` reads this line and greps the rendered simple-mode text for
+each: `scaffolded` `draft` `refining` `promoted` `dispatched` `PR` `review` `merged` `CI`
+`agent` `agents` `PM` `crew` `loop` `tick` `AWAITING.md` `branch` `status`.
+
 ---
 
 ## 6. Other operational knobs

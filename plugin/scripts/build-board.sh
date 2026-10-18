@@ -146,6 +146,10 @@
 #     that exposes neither its console nor its accessibility tree, so a blank page had no
 #     error to read. <details> needs no script, works with scripting off, is
 #     keyboard-accessible for free, and its open/closed state is per-viewer.
+#   · SIMPLE MODE IS THE DEFAULT VIEW and today's board is `.details`, behind Show details
+#     (docs/operations.md → "Simple mode"). Its inbox, drawers and keys live in the same
+#     one script; it sends nothing, never drives a <details>, and with scripting off both
+#     views render. It carries the serve-time seams now, once each.
 #   · It DOES carry one <script> and one external <link>: a clipboard helper (a browser
 #     cannot open a local file, so a task copies a SHORT REFERENCE — `<project>/tasks/<id>`
 #     — instead of a link, and every button says what it copied so a failed copy is
@@ -695,8 +699,14 @@ TABLE_HEAD = """<title>__TITLE__</title>
    PINK IS THE HUMAN'S: only a row or control a person's decision clears may draw it,
    and only these selectors do (board-renderers.test.sh reads this list):
    PINK IS FOR .sub .sig, .sig, .tally .live dd, .tally .live dt, .rail, .rail h2, .verb,
-   .why summary:hover .what, .acts .qbtn, .qbtn, .c.you, .c.you b, .state.stop.
+   .why summary:hover .what, .acts .qbtn, .qbtn, .c.you, .c.you b, .state.stop,
+   .s-chip.you, .s-pill, .s-btn.pink, .s-label.you, .s-q, .s-code, .s-q li.sel,
+   .s-q li.sel::before, .s-q li[data-rec]::after, .s-own label, .s-own textarea,
+   .s-stuck.you, .s-do, .s-dq, .s-dcode, .s-field.bad input, .s-field.bad textarea,
+   .s-field em, .s-err.
    GREEN (--done) is for sent, saved and finished only.
+   GREEN IS FOR .proj.fin, .proj.fin .phead::before, .state.done, .s-icon.ok, .s-ok,
+   .s-railfin.
    --signal is the pink FILL and --signal-soft-text the pink TEXT: one hex in dark, two
    in light, where #ff7ac2 text on white is unreadable.
    Four background layers do the separating: ground -> surface -> sunk -> inner. */
@@ -713,6 +723,7 @@ TABLE_HEAD = """<title>__TITLE__</title>
   --done:#76d6a4; --done-line:#23402f;
   --neutral-soft:#1c212b; --neutral-soft-text:#e9edf4;
   --shadow:0 24px 80px rgba(0,0,0,.5);
+  --pink-tint:rgba(255,122,194,.08); --scrim:rgba(5,7,10,.62);
 }
 @media (prefers-color-scheme:light){:root{
   --ground:#f7f8fa; --surface:#fff; --inner:#f1f3f7; --line:#e2e6ed; --line-2:#c9d0db;
@@ -723,6 +734,7 @@ TABLE_HEAD = """<title>__TITLE__</title>
   --sunk:var(--ground); --raise:var(--inner); --neutral-soft:var(--inner);
   --neutral-soft-text:var(--ink); --signal-soft:var(--chip); --stop:var(--signal-soft-text);
   --ok:var(--accent); --ok-soft:color-mix(in srgb,var(--accent) 12%,transparent);
+  --pink-tint:rgba(255,122,194,.10); --scrim:rgba(20,23,28,.32);
 }}
 *,*::before,*::after{box-sizing:border-box}
 /* The UA default selection is a dark blue on a dark ground -- invisible here.
@@ -1037,6 +1049,200 @@ code{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:.93em}
   .state{font-size:11px}
   td.prs,td.dim,td a,button.dep{font-size:11px}
 }
+/* ---- SIMPLE MODE: the default view (web-simple/HANDOFF.md). Today's board is .details,
+   behind Show details. html[data-js] is set by the script, so with scripting off both
+   views render, simple first, and nothing is unreachable. */
+[hidden]{display:none!important}
+html[data-js] .loopd:not([data-view="details"]) .details,
+html[data-js] .loopd[data-view="details"] .simple{display:none}
+.loopd{display:flex;flex-direction:column}
+.simple{order:-1;min-height:100vh;display:flex;flex-direction:column}
+.simple button{font-family:'Inter',system-ui,sans-serif}
+.s-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 22px;
+  border-bottom:1px solid var(--line)}
+.s-mark{font:700 16px/1 'JetBrains Mono',ui-monospace,Menlo,monospace;color:var(--ink)}
+.s-chips{display:flex;gap:6px;margin-left:16px;flex-wrap:wrap}
+.s-chip{font-size:12.5px;font-weight:500;color:var(--muted);background:transparent;
+  border:1px solid var(--line);padding:5px 11px;border-radius:999px}
+.s-chip.you{color:var(--signal-soft-text);border-color:var(--pink-line);font-weight:600}
+.simple[data-filter="all"] .s-chip[data-pickf="all"],
+.simple[data-filter="needs"] .s-chip[data-pickf="needs"],
+.simple[data-filter="active"] .s-chip[data-pickf="active"],
+.simple[data-filter="finished"] .s-chip[data-pickf="finished"]{background:var(--ink);
+  color:var(--ground);border-color:var(--ink);font-weight:600}
+.s-end{margin-left:auto;display:flex;align-items:center;gap:12px}
+.s-pill{display:none;font-size:12px;font-weight:600;color:var(--signal-ink);
+  background:var(--signal);padding:3px 10px;border-radius:999px}
+.s-fresh{font-size:12px;color:var(--muted)}
+.s-btn{font-size:13.5px;font-weight:500;line-height:1.2;color:var(--ink);
+  background:var(--inner);border:1px solid var(--line-2);border-radius:10px;padding:8px 15px}
+.s-btn.pink{background:var(--signal);color:var(--signal-ink);border-color:var(--signal);
+  font-weight:600}
+.s-btn.text{background:transparent;border-color:transparent;color:var(--muted)}
+.s-link{background:none;border:0;border-radius:10px;padding:0;color:var(--muted);
+  font-size:12.5px;text-align:left}
+.s-link:hover{color:var(--ink)}
+.s-grid{display:grid;grid-template-columns:minmax(0,1fr) 290px;flex:1}
+.s-inbox{padding:22px 24px 26px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.s-rail{padding:22px 20px;display:flex;flex-direction:column;gap:14px;
+  border-left:1px solid var(--line);min-width:0}
+.s-label{font:700 11px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace;
+  letter-spacing:.12em;color:var(--muted);margin:4px 0 0;text-transform:uppercase}
+.s-label.you{color:var(--signal-soft-text)}
+.s-sec,.s-qlist{display:flex;flex-direction:column;gap:12px}
+.simple[data-filter="all"] .s-sec[data-sec="active"],
+.simple[data-filter="all"] .s-sec[data-sec="finished"],
+.simple[data-filter="needs"] .s-sec:not([data-sec="questions"]):not([data-sec="stuck"]),
+.simple[data-filter="needs"] .s-stuck.quiet,
+.simple[data-filter="needs"] .s-sec[data-sec="stuck"]:not(:has(.s-stuck.you)),
+.simple[data-filter="active"] .s-sec:not([data-sec="active"]),
+.simple[data-filter="finished"] .s-sec:not([data-sec="finished"]),
+.simple:not([data-filter="all"]) .s-note{display:none}
+.s-q{background:var(--surface);border:1px solid var(--pink-line);
+  border-left:3px solid var(--signal-soft-text);border-radius:12px;padding:18px 20px;
+  display:flex;flex-direction:column;gap:12px}
+.s-q .qfill{display:flex;flex-direction:column;gap:12px;min-width:0}
+.s-qmeta{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);
+  flex-wrap:wrap}
+.s-code{font:700 12px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace;
+  color:var(--signal-soft-text)}
+.s-after{margin-left:auto}
+.s-q [data-fill="q-text"] p{margin:0;font-size:18px;font-weight:600;line-height:1.35;
+  text-wrap:pretty;color:var(--ink)}
+.s-q [data-fill="q-text"] p+p{margin-top:6px}
+.s-q ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.s-q [data-fill="q-options"]:empty{display:none}
+.s-q [data-fill="q-options"] li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:14px;
+  color:var(--ink-2);line-height:1.4;cursor:pointer}
+.s-q [data-fill="q-options"] li::before{content:"";width:16px;height:16px;flex:0 0 16px;
+  border-radius:999px;border:1.5px solid var(--dim);box-sizing:border-box}
+.s-q li.sel{border-color:var(--signal-soft-text);background:var(--pink-tint);color:var(--ink)}
+.s-q li.sel::before{border:5px solid var(--signal-soft-text)}
+.s-q li[data-rec]::after{content:"Recommended";margin-left:auto;font-size:11.5px;
+  font-weight:600;color:var(--signal-soft-text);background:var(--chip);padding:2px 8px;
+  border-radius:999px}
+.s-q li.s-ownopt{border-style:dashed;border-color:var(--line-2);color:var(--muted)}
+.s-q.own [data-fill="q-options"] li{color:var(--muted);border-color:var(--line);
+  background:transparent}
+.s-q.own [data-fill="q-options"] li::before{border:1.5px solid var(--dim)}
+.s-qnone{margin:0;font-size:14px;color:var(--muted)}
+.s-q:has([data-fill="q-text"] p) .s-qnone{display:none}
+.s-own{display:none;flex-direction:column;gap:6px}
+.s-q.own .s-own{display:flex}
+.s-own label{font-size:13px;font-weight:600;color:var(--signal-soft-text)}
+.s-own textarea{border:1.5px solid var(--signal-soft-text);border-radius:10px;
+  padding:11px 13px;min-height:68px;font:400 14px/1.5 'Inter',system-ui,sans-serif;
+  background:var(--ground);color:var(--ink);resize:vertical}
+.s-hint{font-size:12.5px;color:var(--muted)}
+.s-ctx{display:none;flex-direction:column;gap:9px;background:var(--inner);
+  border-radius:10px;padding:14px 16px}
+.s-q[data-lvl] .s-ctx{display:flex}
+.s-ctx li{display:none;font-size:13.5px;line-height:1.55;color:var(--ink-2)}
+.s-ctx p{margin:0 0 6px}
+.s-q[data-lvl] li[data-depth="1"],.s-q[data-lvl="2"] li[data-depth="2"],
+.s-q[data-lvl="3"] li[data-depth="2"],.s-q[data-lvl="3"] li[data-depth="3"]{display:block}
+.s-ctx li[data-depth="3"]::before{content:"Why it matters";display:block;font-weight:600;
+  color:var(--ink);margin:4px 0}
+.s-ctxend{display:none;margin:0;font-size:12.5px;color:var(--muted)}
+.s-q[data-end] .s-ctxend{display:block}
+.s-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.s-q[data-end] [data-act="more"],.s-q.nodepth [data-act="more"],.s-q.noopts [data-act="back"],
+.s-q.own .s-acts:not(.s-ownacts),.s-ownacts{display:none}
+.s-q.own .s-ownacts{display:flex}
+.s-qlist>.s-q:not(:first-child){display:grid;grid-template-columns:auto auto minmax(0,1fr);
+  align-items:baseline;gap:10px;padding:11px 14px;border:1px solid var(--line);border-radius:12px;
+  background:transparent;cursor:pointer}
+.s-qlist>.s-q:not(:first-child) :is(.s-after,[data-fill="q-options"],.s-ctx,.s-own,.s-acts,.s-qnone){display:none}
+.s-qlist>.s-q:not(:first-child) .s-qmeta{display:contents}
+.s-qlist>.s-q:not(:first-child) .s-code{color:var(--muted);font-weight:500}
+.s-qlist>.s-q:not(:first-child) [data-fill="q-text"] p{font-size:13.5px;font-weight:400}
+.s-qlist>.s-q:not(:first-child) [data-fill="q-text"] p+p{display:none}
+.s-stuck{background:var(--surface);border:1px solid var(--line);
+  border-left:3px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;
+  flex-direction:column;gap:6px}
+.s-stuck.you{border-left-color:var(--signal-soft-text)}
+.s-proj{font-size:12px;color:var(--muted)}
+.s-say{font-size:14px;line-height:1.45;color:var(--ink)}
+.s-do{font-size:13.5px;line-height:1.45;color:var(--signal-soft-text);font-weight:500}
+.s-calm,.s-quiet{font-size:13.5px;color:var(--muted);margin:0}
+.s-note{display:flex;flex-direction:column;gap:10px;padding:26px 4px 18px;max-width:560px}
+.s-icon{font-size:26px;line-height:1;color:var(--accent)}
+.s-icon.ok,.s-ok,.s-railfin{color:var(--done)}
+.s-note h2{margin:0;font-size:21px;font-weight:600;letter-spacing:-.01em}
+.s-note p{margin:0;font-size:14.5px;line-height:1.6;color:var(--muted)}
+.s-prow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%;
+  border:1px solid var(--line);border-radius:12px;padding:11px 14px;font-size:14px;
+  background:transparent;color:var(--ink);text-align:left}
+.s-ok{font-weight:700}
+.s-when,.s-more{font-size:12.5px;color:var(--muted)}
+.s-more{margin-left:auto}
+.s-rrow{display:flex;flex-direction:column;gap:6px;width:100%;background:none;border:0;
+  padding:0;text-align:left;color:var(--ink);font-size:13.5px;line-height:1.4}
+.s-rtop{display:flex;gap:8px;width:100%}
+.s-right{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}
+.s-bar{height:6px;background:var(--line);border-radius:6px;width:100%}
+.s-bar i{display:block;height:100%;background:var(--accent);border-radius:6px}
+.s-railfin{border-top:1px solid var(--line);padding-top:12px;font-size:13px}
+.s-railfoot{display:flex;gap:6px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.s-drawer,.s-modal{position:fixed;inset:0;z-index:8;display:flex;justify-content:flex-end}
+.s-modal{align-items:center;justify-content:center}
+.s-scrim{position:absolute;inset:0;background:var(--scrim)}
+.s-panel{position:relative;width:440px;max-width:100%;height:100%;overflow-y:auto;
+  background:var(--surface);border-left:1px solid var(--line);padding:22px 24px 24px;
+  display:flex;flex-direction:column;gap:14px}
+.s-modal .s-panel{width:580px;max-width:calc(100% - 2rem);height:auto;max-height:90vh;
+  border:1px solid var(--line-2);border-radius:12px}
+.s-dhead{display:flex;align-items:center;gap:8px}
+.s-dname{font-size:19px;font-weight:600}
+.s-x{margin-left:auto;background:none;border:0;color:var(--muted);font-size:18px;
+  padding:4px 8px}
+.s-dstat,.s-sub{font-size:13px;color:var(--muted);margin:0}
+.s-dq{border:1px solid var(--pink-line);border-left:3px solid var(--signal-soft-text);
+  border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;
+  align-items:flex-start}
+.s-dcode{font:700 12px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace;
+  color:var(--signal-soft-text)}
+.s-dtext{font-size:14px;font-weight:600}
+.s-dtext:empty{display:none}
+.s-fact{display:flex;flex-direction:column;gap:3px}
+.s-fact:has(> [data-fill]:empty){display:none}
+.s-fact p,.s-fact li{font-size:14px;line-height:1.5;color:var(--ink-2);margin:0}
+.s-fact ul,.s-fact ol{margin:0;padding-left:18px}
+.s-field{display:flex;flex-direction:column;gap:5px}
+.s-field span{font-size:13.5px;font-weight:600}
+.s-field small{font-size:12.5px;color:var(--muted);font-weight:400;margin-left:8px}
+.s-field input,.s-field textarea{border:1.5px solid var(--line);border-radius:10px;
+  padding:10px 12px;font:400 14px/1.45 'Inter',system-ui,sans-serif;background:var(--ground);
+  color:var(--ink)}
+.s-field.bad input,.s-field.bad textarea{border-color:var(--signal-soft-text)}
+.s-field em,.s-err{font-style:normal;font-size:13px;color:var(--signal-soft-text)}
+.s-field:not(.bad) em{display:none}
+.s-err{font-weight:600;background:var(--pink-tint);border:1px solid var(--pink-line);
+  border-radius:10px;padding:9px 12px}
+.s-cmd{display:block;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
+  background:var(--ground);font:500 13px/1.5 'JetBrains Mono',ui-monospace,Menlo,monospace;
+  word-break:break-all;user-select:all;-webkit-user-select:all}
+.s-back{margin:16px 0 0;align-self:flex-start}
+@media (max-width:820px){
+  .s-top{padding:16px 16px 10px;gap:10px}
+  .s-chips{margin-left:0;order:3;width:100%}
+  .s-pill{display:inline-flex}
+  .s-fresh{display:none}
+  .s-long{display:none}
+  .s-grid{grid-template-columns:minmax(0,1fr)}
+  .s-inbox{padding:6px 14px 18px}
+  .s-rail{border-left:0;border-top:1px solid var(--line);padding:18px 18px 22px}
+  .s-q{padding:14px 15px}
+  .s-q [data-fill="q-text"] p{font-size:16px}
+  .s-qlist>.s-q:not(:first-child){grid-template-columns:auto minmax(0,1fr);gap:4px 10px}
+  .s-qlist>.s-q:not(:first-child) .qfill{grid-column:1/-1}
+  .simple button,.s-q [data-fill="q-options"] li,.simple input,.simple textarea{min-height:44px}
+  .s-drawer{align-items:flex-end}
+  .s-drawer .s-panel{width:100%;height:auto;max-height:90vh;border-left:0;
+    border-top:1px solid var(--line-2);border-radius:12px;border-bottom-left-radius:0;
+    border-bottom-right-radius:0}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>"""
 
@@ -1119,6 +1325,156 @@ TABLE_SCRIPT = r"""<script>
       }catch(err){ bad(); }
     }
   });
+})();
+// SIMPLE MODE. It runs nothing and sends nothing: Send answer, Start the project and N
+// show the slash command to type. Every string it writes goes through textContent or
+// setAttribute. Today's board is reached by Show details, never by a <details> toggle.
+document.documentElement.setAttribute('data-js','');
+(function(){
+  var root;
+  function $(s,el){ return (el||document).querySelector(s); }
+  function $$(s,el){ return Array.prototype.slice.call((el||document).querySelectorAll(s)); }
+  function cards(){ return $$('.s-qlist>.s-q'); }
+  function top(){ return cards()[0]||null; }
+  function card(ref){ return cards().filter(function(q){ return q.getAttribute('data-ref')===ref; })[0]; }
+  function after(){
+    var c=cards();
+    c.forEach(function(q,i){ var a=$('.s-after',q); if(a) a.textContent=(i===0&&c.length>1)?(c.length-1)+' more after this':''; });
+  }
+  function rank(q){ var f=$('.qfill',q), r=f&&f.getAttribute('data-rank'); return r?+r:1e9; }
+  function select(q,li){
+    $$('[data-fill="q-options"] li',q).forEach(function(x){ x.classList.remove('sel'); });
+    if(li) li.classList.add('sel');
+  }
+  function prep(q){
+    var ol=$('[data-fill="q-options"]',q), lis=$$('li',ol);
+    if(lis.length){
+      var own=document.createElement('li'); own.className='s-ownopt'; own.textContent='Write my own answer…';
+      ol.appendChild(own); select(q,$('li[data-rec]',ol)||lis[0]);
+    } else if($('[data-fill="q-text"] p',q)){ q.classList.add('own','noopts'); }
+    if(!$('[data-fill="q-depths"] li',q)) q.classList.add('nodepth');
+  }
+  function modal(name){ return $('.s-modal[data-m="'+name+'"]'); }
+  function closeAll(){ $$('.s-drawer,.s-modal').forEach(function(m){ m.hidden=true; }); }
+  function openNow(){ return $('.s-drawer:not([hidden]),.s-modal:not([hidden])'); }
+  function show(text,title){
+    var m=modal('cmd'); if(!m) return;
+    closeAll();
+    $('.s-mtitle',m).textContent=title; $('.s-cmd',m).textContent=text;
+    var b=$('[data-copy]',m); b.setAttribute('data-copy',text); m.hidden=false; b.focus();
+  }
+  function command(q){
+    var r=q.getAttribute('data-ref').split('/'), c='/loopd:answer projects/'+r[0]+'/tasks/'+r[1]+'.md'+(r[2]?' '+r[2]:'');
+    if(!$('[data-fill="q-text"] p',q)) return c;
+    if(q.classList.contains('own')){
+      var t=($('textarea',q).value||'').replace(/[ \t\r\n]+/g,' ').trim();
+      return t?c+' --text '+t:'';
+    }
+    var s=$('[data-fill="q-options"] li.sel',q);
+    return s&&s.getAttribute('data-n')?c+' '+s.getAttribute('data-n'):c;
+  }
+  function act(q,a){
+    if(a==='send'){
+      var c=command(q);
+      if(c) show(c,'Type this in Claude Code to send your answer'); else $('textarea',q).focus();
+    } else if(a==='more'){
+      var n=$$('[data-fill="q-depths"] li',q).length; if(!n) return;
+      var l=Math.min(n,(+q.getAttribute('data-lvl')||0)+1);
+      q.setAttribute('data-lvl',l); if(l>=n) q.setAttribute('data-end','');
+    } else if(a==='later'){
+      if(cards().length>1){ q.parentNode.appendChild(q); after(); }
+    } else if(a==='back'){ q.classList.remove('own'); }
+  }
+  function lift(q){ var t=top(); if(q&&t&&q!==t){ t.parentNode.insertBefore(q,t); after(); } }
+  function filterDetails(slug){
+    $$('.details .pcard').forEach(function(c){
+      var x=$('.pclose',c); c.hidden=!!slug&&!(x&&x.getAttribute('data-copy')==='/close-project '+slug);
+    });
+    $$('.details .sep,.details .tabs').forEach(function(s){ s.hidden=!!slug; });
+  }
+  function details(slug){ closeAll(); root.setAttribute('data-view','details'); filterDetails(slug); window.scrollTo(0,0); }
+  function drawer(slug){
+    closeAll();
+    $$('.s-drawer').forEach(function(d){
+      if(d.getAttribute('data-slug')!==slug) return;
+      $$('[data-openq]',d).forEach(function(b){
+        var q=card(b.getAttribute('data-openq')), p=q&&$('[data-fill="q-text"] p',q), t=$('.s-dtext',b.parentNode);
+        if(t) t.textContent=p?p.textContent:'';
+      });
+      d.hidden=false; $('.s-x',d).focus();
+    });
+  }
+  function newProject(){
+    var m=modal('new'); if(!m) return;
+    closeAll(); $$('.s-field',m).forEach(function(f){ f.classList.remove('bad'); });
+    $('.s-err',m).hidden=true; m.hidden=false; $('input',m).focus();
+  }
+  function start(form){
+    var bad=0, v={};
+    $$('.s-field',form).forEach(function(f){
+      var i=$('input,textarea',f), s=(i.value||'').replace(/[ \t\r\n]+/g,' ').replace(/"/g,"'").trim();
+      v[i.name]=s; f.classList.toggle('bad',!s); if(!s) bad++;
+    });
+    var err=$('.s-err',form);
+    err.textContent=bad+' thing'+(bad===1?'':'s')+' to fix before we can start'; err.hidden=!bad;
+    if(bad) return;
+    show('/loopd:new-project "'+v.what+'" title="'+v.title+'" need="'+v.who+'" success_criteria="'+v.done+'"',
+         'Type this in Claude Code to start the project');
+  }
+  function fresh(){
+    var f=$('.s-fresh[data-at]'), t=f&&Date.parse(f.getAttribute('data-at'));
+    if(!f||isNaN(t)) return;
+    var m=Math.max(0,Math.round((Date.now()-t)/60000));
+    f.textContent='updated '+(m<1?'just now':m<60?m+' min ago':m<2880?Math.round(m/60)+' h ago':Math.round(m/1440)+' days ago');
+  }
+  function init(){
+    root=$('.loopd'); if(!root) return;
+    root.setAttribute('data-view','simple');
+    var list=$('.s-qlist');
+    if(list){
+      var cs=cards();
+      cs.forEach(function(q,i){ q.setAttribute('data-i',i); });
+      cs.sort(function(a,b){ return rank(a)-rank(b)||a.getAttribute('data-i')-b.getAttribute('data-i'); });
+      cs.forEach(function(q){ list.appendChild(q); prep(q); });
+      after();
+    }
+    fresh();
+    document.addEventListener('submit',function(e){ if(e.target.closest('.s-modal')){ e.preventDefault(); start(e.target); } });
+  }
+  document.addEventListener('click',function(e){
+    var t=e.target; if(!root||!t.closest||!t.closest('.simple')) { if(root&&t.closest&&t.closest('[data-simple]')){ root.setAttribute('data-view','simple'); filterDetails(''); } return; }
+    var b, q=t.closest('.s-q');
+    if(q&&q!==top()){ lift(q); return; }
+    if((b=t.closest('[data-act]'))&&q){ act(q,b.getAttribute('data-act')); return; }
+    if((b=t.closest('[data-fill="q-options"] li'))&&q){
+      if(b.classList.contains('s-ownopt')){ q.classList.add('own'); $('textarea',q).focus(); } else select(q,b);
+      return;
+    }
+    if((b=t.closest('[data-pickf]'))){ $('.simple').setAttribute('data-filter',b.getAttribute('data-pickf')); return; }
+    if((b=t.closest('[data-drawer]'))){ drawer(b.getAttribute('data-drawer')); return; }
+    if((b=t.closest('[data-details]'))){ details(b.getAttribute('data-details')); return; }
+    if((b=t.closest('[data-openq]'))){ closeAll(); $('.simple').setAttribute('data-filter','all'); q=card(b.getAttribute('data-openq')); lift(q); if(q){ q.scrollIntoView({block:'center'}); q.focus(); } return; }
+    if(t.closest('[data-new]')){ newProject(); return; }
+    if(t.closest('[data-close]')){ closeAll(); }
+  });
+  document.addEventListener('keydown',function(e){
+    if(!root||root.getAttribute('data-view')!=='simple'||e.metaKey||e.ctrlKey||e.altKey) return;
+    var k=e.key, q=top(), typing=/^(TEXTAREA|INPUT|SELECT)$/.test((e.target&&e.target.tagName)||'');
+    if(k==='Escape'){
+      if(openNow()){ closeAll(); e.preventDefault(); }
+      else if(q&&q.classList.contains('own')&&!q.classList.contains('noopts')){ q.classList.remove('own'); e.preventDefault(); }
+      return;
+    }
+    if(typing||openNow()) return;
+    if(k==='n'||k==='N'){ e.preventDefault(); newProject(); return; }
+    if(!q) return;
+    if(/^[1-9]$/.test(k)){ var li=$$('[data-fill="q-options"] li',q)[+k-1]; if(li){ e.preventDefault(); li.click(); } }
+    else if(k==='Enter'){ if(t_btn(e)) return; e.preventDefault(); act(q,'send'); }
+    else if(k==='?'){ e.preventDefault(); act(q,'more'); }
+    else if(k==='l'||k==='L'){ e.preventDefault(); act(q,'later'); }
+  });
+  function t_btn(e){ return e.target&&e.target.closest&&e.target.closest('button,a,li'); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 })();
 </script>"""
 
@@ -1399,38 +1755,6 @@ def q_title(t, ref):
     return (Q_NO_NUM if tolist(t.get("open_question_ids")) else Q_NO_TEXT) % ref
 
 
-def q_seams(p, t):
-    """The serve-time seams of a question item, one set per open question, else "".
-
-    This file never fills them: board-serve.sh does, in its HTTP response, from the task
-    document. Every attribute value is already on the page, so a published copy carries
-    nothing new. The names are a contract (docs/operations.md, "The serve-time fill").
-    """
-    slug, tid = str(p.get("slug") or ""), str(t.get("id") or "")
-    if t.get("awaiting") not in ("answer", "question"):
-        return ""
-    if not (SLUG_SEG.fullmatch(slug) and SLUG_SEG.fullmatch(tid)):
-        return ""
-    out = []
-    for qn in dict.fromkeys(q_handles(t)):
-        code = "" if qn is None else "Q%d" % qn
-        ref = e("/".join(x for x in (slug, tid, code) if x))
-        out.append('<div class="qfill" data-fill="question" data-ref="%s" data-code="%s" '
-                   'data-project="%s"><div data-fill="q-text" data-ref="%s"></div>'
-                   '<ol data-fill="q-options" data-ref="%s"></ol>'
-                   '<ol data-fill="q-depths" data-ref="%s"></ol></div>'
-                   % (ref, code, e(slug), ref, ref, ref))
-    return "".join(out)
-
-
-def p_seams(slug):
-    """A project's need and success_criteria seams, filled the same way as q_seams()."""
-    if not SLUG_SEG.fullmatch(slug):
-        return ""
-    return ('<div data-fill="p-need" data-ref="%s"></div>'
-            '<ol data-fill="p-success" data-ref="%s"></ol>' % (e(slug), e(slug)))
-
-
 def explain(verb, p, t, hint):
     """One short paragraph saying what this verb means and why THIS item is here.
 
@@ -1477,6 +1801,257 @@ def explain(verb, p, t, hint):
                 "task document records what. It will not retry until you clear it.")
     return ("This item is waiting on a human decision. The task document has the detail; "
             "the board deliberately does not carry it.")
+
+
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August",
+          "September", "October", "November", "December")
+
+
+def plain_day(v):
+    m = ISO_DAY.match(str(v or ""))
+    if not m:
+        return ""
+    y, mo, d = (int(x) for x in m.group(0).split("-"))
+    return "%d %s" % (d, MONTHS[mo - 1]) if 1 <= mo <= 12 else ""
+
+
+def q_cards(p, t):
+    """(qn, code, ref, seam) per open question — the inbox card's half of the contract."""
+    slug, tid = str(p.get("slug") or ""), str(t.get("id") or "")
+    if t.get("awaiting") not in ("answer", "question"):
+        return []
+    if not (SLUG_SEG.fullmatch(slug) and SLUG_SEG.fullmatch(tid)):
+        return []
+    out = []
+    for qn in dict.fromkeys(q_handles(t)):
+        code = "" if qn is None else "Q%d" % qn
+        ref = e("/".join(x for x in (slug, tid, code) if x))
+        seam = ('<div class="qfill" data-fill="question" data-ref="%s" data-code="%s" '
+                'data-project="%s"><div data-fill="q-text" data-ref="%s"></div>'
+                '<ol data-fill="q-options" data-ref="%s"></ol>'
+                '<div class="s-ctx"><div class="s-label">More context</div>'
+                '<ol data-fill="q-depths" data-ref="%s"></ol>'
+                '<p class="s-ctxend">That\'s everything we know about this question.</p>'
+                '</div></div>' % (ref, code, e(slug), ref, ref, ref))
+        out.append((qn, code, ref, seam))
+    return out
+
+
+def render_simple(rows, closed_all, stamp):
+    """Simple mode: inbox left, progress rail right. Copy is web-simple/COPY.md's, and
+    docs/operations.md → "Simple mode" lists the words it never shows."""
+    qs, you, quiet, live, fin = [], [], [], [], []
+    for g, p, done_proj, created, mine in rows:
+        slug = str(p.get("slug") or "")
+        ts = [todict(t) for t in tolist(p.get("tasks"))]
+        for t in ts:
+            st = str(t.get("status") or "")
+            if st in TERMINAL:
+                continue
+            for qn, code, ref, seam in q_cards(p, dict(t, awaiting=t.get("awaiting") or
+                                                             ("question" if t.get("open_questions") else ""))):
+                qs.append(((created or "9999", slug, task_number(str(t.get("id") or "")),
+                            qn if qn is not None else 1 << 30), p, code, ref, seam))
+            if st == "blocked":
+                you.append((p, t))
+            elif st in RUNNING and t.get("pr_mergeable") == "CONFLICTING":
+                quiet.append((p, t))
+        (fin if done_proj else live).append((p, created, ts))
+    qs.sort(key=lambda x: x[0])
+    live.sort(key=lambda x: (x[1] or "9999", str(x[0].get("slug") or "")))
+    for c in closed_all:
+        fin.append(({"title": c.get("slug"), "slug": "", "_closed": c.get("closed")}, "", []))
+
+    def counts(ts):
+        done = sum(1 for t in ts if t.get("status") == "done")
+        total = sum(1 for t in ts if t.get("status") != "cancelled")
+        ready = not ts or all(t.get("status") == "draft" for t in ts)
+        return done, total, ready
+
+    n_needs = len(qs) + len(you)
+    o = ['<section class="simple" data-filter="all" aria-label="loopd">']
+    o.append('<header class="s-top"><span class="s-mark">loopd</span>')
+    if rows or closed_all:
+        o.append('<nav class="s-chips">')
+        for key, label, n, cls in (("all", "Everything", None, ""),
+                                   ("needs", "Needs you", n_needs, " you" if n_needs else ""),
+                                   ("active", "Active", len(live), ""),
+                                   ("finished", "Finished", len(fin), "")):
+            o.append('<button class="s-chip%s" data-pickf="%s">%s</button>'
+                     % (cls, key, label if n is None else "%s · %d" % (label, n)))
+        o.append("</nav>")
+    o.append('<div class="s-end">')
+    if n_needs:
+        o.append('<span class="s-pill">%d need you</span>' % n_needs)
+    if stamp:
+        o.append('<span class="s-fresh" data-at="%s">updated %s UTC</span>'
+                 % (e(stamp), e(stamp.replace("T", " ").replace("Z", "")[:16])))
+    o.append('<button class="s-btn" data-new aria-label="New project">+<span class="s-long"> New project</span></button></div></header>')
+
+    o.append('<div class="s-grid"><div class="s-inbox"><div class="s-confirms"></div>')
+    if not rows and not closed_all:
+        o.append('<div class="s-note"><div class="s-icon">◌</div><h2>Welcome to loopd</h2>'
+                 '<p>Describe something you\'d like built. We\'ll plan it, ask what we need to '
+                 'know, and build it. Everything shows up here.</p><div class="s-acts">'
+                 '<button class="s-btn" data-new>+ Start your first project</button></div></div>')
+    elif not live and fin:
+        o.append('<div class="s-note"><div class="s-icon ok">✓</div><h2>Everything is done</h2>'
+                 '<p>All %d projects are finished. Nothing needs you.</p><div class="s-acts">'
+                 '<button class="s-btn" data-new>+ New project</button></div></div>' % len(fin))
+
+    o.append('<div class="s-sec" data-sec="questions">')
+    if qs:
+        o.append('<div class="s-label you">Questions · %d</div><div class="s-qlist">' % len(qs))
+        for i, (_k, p, code, ref, seam) in enumerate(qs):
+            o.append('<article class="s-q" data-ref="%s" data-code="%s" tabindex="-1">'
+                     % (ref, e(code)))
+            o.append('<div class="s-qmeta"><span class="s-code">%s</span><span>· %s</span>'
+                     '<span class="s-after">%s</span></div>'
+                     % (e(code or "?"), e(p.get("title")),
+                        "%d more after this" % (len(qs) - 1) if i == 0 and len(qs) > 1 else ""))
+            o.append(seam)
+            o.append('<p class="s-qnone">The question\'s words show on the board on your own '
+                     'computer. Send answer shows what to type in Claude Code.</p>')
+            o.append('<div class="s-own"><label>Your own answer</label><textarea rows="3">'
+                     '</textarea><div class="s-hint">Write it the way you\'d say it. We\'ll ask '
+                     'if anything is unclear.</div></div>')
+            o.append('<div class="s-acts"><button class="s-btn pink" data-act="send">Send answer'
+                     '</button><button class="s-btn" data-act="more">More context</button>'
+                     '<button class="s-btn text" data-act="later">Later</button></div>'
+                     '<div class="s-acts s-ownacts"><button class="s-btn pink" data-act="send">'
+                     'Send my answer</button><button class="s-btn" data-act="back">Back to '
+                     'options</button></div></article>')
+        o.append("</div>")
+    elif not you and (rows or closed_all) and live:
+        o.append('<p class="s-quiet">Nothing needs you right now.</p>')
+    o.append("</div>")
+
+    if you or quiet:
+        o.append('<div class="s-sec" data-sec="stuck"><div class="s-label%s">Stuck · %d</div>'
+                 % (" you" if you else "", len(you) + len(quiet)))
+        for p, t in you:
+            o.append('<div class="s-stuck you"><div class="s-proj">%s</div><div class="s-say">%s'
+                     '</div><div class="s-do">→ See what\'s in the way under Show details, then '
+                     'let us know once it\'s cleared.</div><div class="s-acts"><button class="s-btn" '
+                     'data-details="%s">Show details ›</button></div></div>'
+                     % (e(p.get("title")), e(t.get("title")), e(p.get("slug"))))
+        for p, t in quiet:
+            o.append('<div class="s-stuck quiet"><div class="s-proj">%s</div><div class="s-say">%s'
+                     '</div><p class="s-calm">Nothing for you to do, we\'re on it.</p></div>'
+                     % (e(p.get("title")), e(t.get("title"))))
+        o.append("</div>")
+
+    def prow(p, right, bar=None):
+        slug = str(p.get("slug") or "")
+        attr = 'data-drawer="%s"' % e(slug) if SLUG_SEG.fullmatch(slug) else 'data-details=""'
+        return ('<button class="s-prow" %s>%s<span>%s</span><span class="s-when">%s</span>'
+                '<span class="s-more">Show details ›</span></button>'
+                % (attr, '<span class="s-ok">✓</span>' if bar is None else "",
+                   e(p.get("title")), e(right)))
+
+    o.append('<div class="s-sec" data-sec="active"><div class="s-label">Active · %d</div>' % len(live))
+    for p, _c, ts in live:
+        done, total, ready = counts(ts)
+        o.append(prow(p, "getting ready…" if ready else "%d of %d done" % (done, total), True))
+    o.append('</div><div class="s-sec" data-sec="finished"><div class="s-label">Finished · %d</div>'
+             % len(fin))
+    for p, _c, _ts in fin:
+        day = plain_day(p.get("_closed"))
+        o.append(prow(p, "Finished %s" % day if day else "Finished"))
+    o.append("</div></div>")
+
+    if live or fin:
+        o.append('<aside class="s-rail"><div class="s-label">Progress</div>')
+        for p, _c, ts in live:
+            done, total, ready = counts(ts)
+            slug = str(p.get("slug") or "")
+            o.append('<button class="s-rrow" %s><span class="s-rtop"><span>%s</span>'
+                     '<span class="s-right">%s</span></span>%s</button>'
+                     % ('data-drawer="%s"' % e(slug) if SLUG_SEG.fullmatch(slug) else 'data-details=""',
+                        e(p.get("title")),
+                        "getting ready…" if ready else "%d of %d" % (done, total),
+                        "" if ready else '<span class="s-bar"><i style="width:%d%%"></i></span>'
+                        % (round(100 * done / total) if total else 0)))
+        if fin:
+            o.append('<div class="s-railfin">✓ %d finished · <button class="s-link" '
+                     'data-pickf="finished">show</button></div>' % len(fin))
+        o.append('<div class="s-railfoot"><span>Click a project to open it ·</span>'
+                 '<button class="s-link" data-details="">Show details ›</button></div></aside>')
+    o.append("</div>")
+
+    qby = {}
+    for _k, p, code, ref, _seam in qs:
+        qby.setdefault(str(p.get("slug") or ""), []).append((code, ref))
+    stuck_by = {}
+    for p, t in you + quiet:
+        stuck_by.setdefault(str(p.get("slug") or ""), []).append(t)
+    for p, _c, ts in live + fin:
+        slug = str(p.get("slug") or "")
+        if not SLUG_SEG.fullmatch(slug):
+            continue
+        done, total, ready = counts(ts)
+        o.append('<div class="s-drawer" data-slug="%s" hidden><div class="s-scrim" data-close>'
+                 '</div><div class="s-panel" role="dialog" aria-label="%s"><div class="s-dhead">'
+                 '<span class="s-dname">%s</span><button class="s-x" data-close '
+                 'aria-label="Close">×</button></div>' % (e(slug), e(p.get("title")), e(p.get("title"))))
+        o.append('<p class="s-dstat">%s</p>' % ("getting ready…" if ready else
+                                                "%d of %d done" % (done, total)))
+        if not ready:
+            o.append('<span class="s-bar"><i style="width:%d%%"></i></span>'
+                     % (round(100 * done / total) if total else 0))
+        for code, ref in qby.get(slug, []):
+            o.append('<div class="s-dq"><div class="s-dcode">%s · Needs you</div>'
+                     '<div class="s-dtext"></div><button class="s-btn pink" data-openq="%s">'
+                     'Answer %s</button></div>' % (e(code or "?"), ref, e(code or "it")))
+        for t in stuck_by.get(slug, []):
+            o.append('<p class="s-dstat">Stuck: %s</p>' % e(t.get("title")))
+        if p.get("description"):
+            o.append('<div class="s-fact"><div class="s-label">What it is</div><p>%s</p></div>'
+                     % e(p.get("description")))
+        o.append('<div class="s-fact"><div class="s-label">Who it\'s for</div>'
+                 '<div data-fill="p-need" data-ref="%s"></div></div>'
+                 '<div class="s-fact"><div class="s-label">Done when</div>'
+                 '<ol data-fill="p-success" data-ref="%s"></ol></div>' % (e(slug), e(slug)))
+        titles = [t.get("title") for t in ts if t.get("status") == "done"]
+        if titles:
+            o.append('<div class="s-fact"><div class="s-label">Done so far</div><ul>%s</ul></div>'
+                     % "".join("<li>%s</li>" % e(x) for x in titles))
+        o.append('<button class="s-link" data-details="%s">Show details for the technical team ›'
+                 '</button></div></div>' % e(slug))
+
+    o.append('<div class="s-modal" data-m="cmd" hidden><div class="s-scrim" data-close></div>'
+             '<div class="s-panel" role="dialog" aria-label="What to type"><div class="s-dhead">'
+             '<span class="s-dname s-mtitle"></span><button class="s-x" data-close '
+             'aria-label="Close">×</button></div><p class="s-sub">This page doesn\'t send '
+             'anything yet. Paste this into Claude Code in your loopd folder.</p>'
+             '<code class="s-cmd"></code><div class="s-acts"><button class="s-btn pink" '
+             'data-copy="" data-what="Command">Copy</button><button class="s-btn" data-close>'
+             'Close</button></div></div></div>')
+    o.append('<div class="s-modal" data-m="new" hidden><div class="s-scrim" data-close></div>'
+             '<form class="s-panel" role="dialog" aria-label="New project" novalidate>'
+             '<div class="s-dhead"><span class="s-dname">New project</span><button type="button" '
+             'class="s-x" data-close aria-label="Close">×</button></div><p class="s-sub">Four '
+             'short answers. Write them the way you\'d explain it to a colleague.</p>'
+             '<div class="s-err" hidden></div>')
+    for key, label, help_, ph, err in NEW_FIELDS:
+        tag = ('<textarea name="%s" rows="2" placeholder="%s"></textarea>' if key != "title"
+               else '<input name="%s" placeholder="%s">') % (key, e(ph))
+        o.append('<label class="s-field"><span>%s%s</span>%s<em>%s</em></label>'
+                 % (label, "<small>%s</small>" % help_ if help_ else "", tag, err))
+    o.append('<div class="s-acts"><button class="s-btn pink" type="submit">Start the project'
+             '</button><button class="s-btn" type="button" data-close>Cancel</button></div>'
+             '</form></div></section>')
+    return o
+
+
+NEW_FIELDS = (
+    ("title", "Title", "", "", "Give the project a short name."),
+    ("what", "What it is", "", "", "Tell us in a sentence what you\'d like built."),
+    ("who", "Who it\'s for", "", "", "Tell us who will use it."),
+    ("done", "Done when", "How you\'ll know it\'s finished.",
+     "e.g. Every new signup gets the next newsletter",
+     "Tell us how you\'ll know it\'s done. One sentence is enough."),
+)
 
 
 def render_table():
@@ -1589,10 +2164,12 @@ def render_table():
 
     head = [TABLE_HEAD.replace("__TITLE__", e(title)), TABLE_SCRIPT]
     # `all` is the rendered state, so a page with no scripting is the unfiltered board.
-    o = ['<div class="board" data-tab="all">']
+    stamps = sorted(str(s.get("generated_at") or "") for s in instances if s.get("generated_at"))
+    o = ['<div class="loopd">']
+    o.append('<div class="details"><div class="board" data-tab="all">'
+             '<button class="s-btn s-back" data-simple>‹ Back to simple mode</button>')
 
     o.append('<header class="mast"><div><h1>%s</h1>' % e(title))
-    stamps = sorted(str(s.get("generated_at") or "") for s in instances if s.get("generated_at"))
     # ONE SNAPSHOT LINE, carrying what is left of the pooled queue: how many items want
     # you and how many projects to look for. The list itself is inside those projects.
     n_wanting = sum(1 for r in rows if r[4])
@@ -1672,8 +2249,7 @@ def render_table():
             o.append('<span class="what">%s</span>' % e(t.get("title")))
             o.append('<span class="where">%s%s</span></summary>'
                      % (e(where), " · <code>%s</code>" % e(hint) if hint else ""))
-            o.append('<p>%s</p>%s</details>'
-                     % (e(explain(t.get("awaiting"), p, t, hint)), q_seams(p, t)))
+            o.append('<p>%s</p></details>' % e(explain(t.get("awaiting"), p, t, hint)))
             # ONE HANDLE, AND EVERY BUTTON IN THIS ROW OPENS WITH IT. `<handle>: ` is
             # the whole notation — the task's own for anything task-scoped, this
             # question's for a question, and the project's alone for a close proposal,
@@ -1847,7 +2423,6 @@ def render_table():
         o.append("</summary>")
 
         o.append('<div class="body">')
-        o.append(p_seams(slug))
         # THIS project's queue, above its task table and holding only its own items.
         rail(mine)
         # THERE IS NO ROLE COLUMN, AND IT IS NOT CONDITIONAL — IT IS GONE.
@@ -2075,7 +2650,9 @@ def render_table():
              "on your instance — the document is "
              "<code>projects/&lt;project&gt;/tasks/task-&lt;n&gt;*.md</code>. Decision "
              "buttons copy that same handle and then what the button means; the bundle, "
-             "not this page, is where a decision is recorded.</p></footer></div>")
+             "not this page, is where a decision is recorded.</p></footer></div></div>")
+    o += render_simple(rows, closed_all, stamps[-1] if stamps else "")
+    o.append("</div>")
     return head, o, len(asks)
 
 
