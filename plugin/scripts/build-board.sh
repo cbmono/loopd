@@ -412,7 +412,7 @@ def toint(v, default=0):
 
 # ---------------------------------------------------------------- the board
 TONE = {"blocked": "stop", "review": "accent", "in-review": "accent", "ready": "accent",
-        "done": "ok", "in-progress": "accent", "cancelled": "dim", "paused": "dim"}
+        "done": "done", "in-progress": "accent", "cancelled": "dim", "paused": "dim"}
 # THE GLYPH AND THE LABEL ARE MARKUP, NOT A PSEUDO-ELEMENT, and both fall back to the
 # raw status: a value the board has never seen still renders as its own text, so drift
 # stays visible instead of arriving as a blank cell.
@@ -688,26 +688,42 @@ TABLE_HEAD = """<title>__TITLE__</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <style>
-/* THE LOOPD DUOTONE, AND THERE IS ONLY ONE THEME. Every hex below is copied from the
-   brand's tokens.css; the board defines no colour that is not in it, which is what
-   keeps a third accent out. BLUE IS THE MACHINE'S and PINK IS THE HUMAN'S — --accent,
-   --ok and every running/merged/queued state are blue, and --signal/--stop are pink
-   because the only pink pixels on this page are things waiting on a person.
-   loopd is dark-only (tokens.css carries no light ground), so there is one palette
-   block, no toggle and no stored choice.
+/* THE LOOPD PALETTE HAS TWO SOURCES. Dark is loopd-design/tokens.css; green and the
+   light theme are web-simple/HANDOFF.md "Tokens used", which also gives the dark values
+   tokens.css lacks (ink-2, line-2, pink line/chip, green line). No colour comes from
+   anywhere else. BLUE IS THE MACHINE'S: --accent, --ok and every running/queued state.
+   PINK IS THE HUMAN'S: only a row or control a person's decision clears may draw it,
+   and only these selectors do (board-renderers.test.sh reads this list):
+   PINK IS FOR .sub .sig, .sig, .tally .live dd, .tally .live dt, .rail, .rail h2, .verb,
+   .why summary:hover .what, .acts .qbtn, .qbtn, .c.you, .c.you b, .state.stop.
+   GREEN (--done) is for sent, saved and finished only.
+   --signal is the pink FILL and --signal-soft-text the pink TEXT: one hex in dark, two
+   in light, where #ff7ac2 text on white is unreadable.
    Four background layers do the separating: ground -> surface -> sunk -> inner. */
 :root{
   --ground:#101318; --surface:#171b22; --sunk:#14171c; --inner:#1c212b; --raise:#1c212b;
-  --ink:#e9edf4; --muted:#9aa4b5; --dim:#6c7488; --line:#262c37;
+  --ink:#e9edf4; --ink-2:#c3cad6; --muted:#9aa4b5; --dim:#6c7488; --line:#262c37;
+  --line-2:#33405a;
   /* --dim is 3.45:1 to 3.98:1 on these grounds: UNDER AA for text. It is for
      NON-TEXT content only -- the caret glyphs, the dot separators, the close
      control. Any run of characters a reader reads takes --muted (6.4:1+). */
   --accent:#5ea2ff; --accent-ink:#14171c; --signal:#ff7ac2; --signal-ink:#14171c;
-  --signal-soft:#ff7ac21f; --signal-soft-text:#ff7ac2;
-  --ok:#5ea2ff; --ok-soft:#5ea2ff1f; --stop:#ff7ac2; --stop-soft:#ff7ac21f;
+  --signal-soft:#ff7ac21f; --signal-soft-text:#ff7ac2; --pink-line:#3a2737; --chip:#3a2737;
+  --ok:#5ea2ff; --ok-soft:#5ea2ff1f; --stop:#ff7ac2;
+  --done:#76d6a4; --done-line:#23402f;
   --neutral-soft:#1c212b; --neutral-soft-text:#e9edf4;
   --shadow:0 24px 80px rgba(0,0,0,.5);
 }
+@media (prefers-color-scheme:light){:root{
+  --ground:#f7f8fa; --surface:#fff; --inner:#f1f3f7; --line:#e2e6ed; --line-2:#c9d0db;
+  --ink:#14171c; --ink-2:#2c333f; --muted:#566072; --dim:#687184;
+  --accent:#2f6fd6; --accent-ink:var(--surface); --signal:#ff7ac2; --signal-ink:#14171c;
+  --signal-soft-text:#c2337f; --pink-line:#f4c6de; --chip:#fde6f1;
+  --done:#18794c; --done-line:#bfe3cf;
+  --sunk:var(--ground); --raise:var(--inner); --neutral-soft:var(--inner);
+  --neutral-soft-text:var(--ink); --signal-soft:var(--chip); --stop:var(--signal-soft-text);
+  --ok:var(--accent); --ok-soft:color-mix(in srgb,var(--accent) 12%,transparent);
+}}
 *,*::before,*::after{box-sizing:border-box}
 /* The UA default selection is a dark blue on a dark ground -- invisible here.
    accent/accent-ink is the palette's own high-contrast pair. */
@@ -769,7 +785,7 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balan
 /* THE DECISION RAIL. Sunk ground, a 4px pink left border and the label above it —
    the panel is set INTO the card rather than tinted on top of it, which is what the
    four background layers buy. */
-.rail{background:var(--sunk);border:1px solid var(--line);
+.rail{background:var(--sunk);border:1px solid var(--pink-line);
   border-left:4px solid var(--signal);border-radius:12px;padding:16px;
   display:flex;flex-direction:column;gap:12px}
 .rail h2{margin:0;font:700 11px/1.4 'Inter',system-ui,sans-serif;text-transform:uppercase;
@@ -780,7 +796,7 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balan
   background:var(--inner);border:1px solid var(--line);border-radius:10px}
 /* A snapshot that could not be parsed is a VISIBLE note here too, not just a line on
    stderr — one broken instance must not be able to disappear quietly. */
-.snapnote{border:1px solid var(--stop);border-left:4px solid var(--stop);
+.snapnote{border:1px solid var(--line-2);border-left:4px solid var(--line-2);
   border-radius:10px;padding:14px 16px;font-size:13px;color:var(--muted);
   background:var(--surface)}
 .line{display:flex;flex-wrap:wrap;gap:0 10px;align-items:baseline}
@@ -806,13 +822,12 @@ button{font:500 13px/1 'Inter',system-ui,sans-serif;cursor:pointer;border-radius
   padding:9px 16px;border:1px solid var(--line);background:var(--raise);
   color:var(--ink)}
 button:hover{border-color:var(--accent)}
-/* THE ACTION ROW, IN TWO COLOURS: pink for the question and for reject, blue for
-   approve, neutral for discuss and for the ref. All soft fills, so no button shouts
+/* THE ACTION ROW, IN TWO COLOURS: pink for the question, blue for approve, neutral
+   for discuss, reject and the ref. All soft fills, so no button shouts
    louder than the pink rail already does. */
 .acts button{border:0;background:var(--neutral-soft);color:var(--neutral-soft-text)}
 .acts button:hover{filter:brightness(1.12)}
 .acts button.go{background:var(--ok-soft);color:var(--ok);font-weight:600;padding:9px 18px}
-.acts button.no{background:var(--stop-soft);color:var(--stop)}
 .acts button.ghost{background:var(--neutral-soft);color:var(--muted);font-size:13px;
   padding:9px 16px}
 .acts .qbtn{background:var(--signal-soft);color:var(--signal-soft-text);font-weight:600;
@@ -854,9 +869,9 @@ button:hover{border-color:var(--accent)}
 .sep{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
   font-weight:600;margin:8px 0 0;display:flex;align-items:center;gap:12px}
 .sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--line)}
-.proj.fin{background:transparent;border-style:dashed}
+.proj.fin{background:transparent;border-style:dashed;border-color:var(--done-line)}
 .proj.fin .ptitle{color:var(--muted);font-weight:500;font-size:14px}
-.proj.fin .phead::before{content:"✓";color:var(--ok);font-size:14px}
+.proj.fin .phead::before{content:"✓";color:var(--done);font-size:14px}
 .proj.fin[open] .phead::before{content:"▾";color:var(--dim)}
 /* Another owner's work: the same card, dashed and set in mono, because it is context
    rather than your queue. Its own tab is where it lives now. */
@@ -872,7 +887,7 @@ button:hover{border-color:var(--accent)}
 /* The ✕. It COPIES `/close-project <slug>` and does nothing else — see the header. */
 button.pclose{font-size:14px;line-height:1;padding:4px 8px;color:var(--dim);
   background:none;border-color:transparent;flex-shrink:0}
-button.pclose:hover{color:var(--stop);border-color:var(--stop);background:var(--surface)}
+button.pclose:hover{color:var(--ink);border-color:var(--line-2);background:var(--surface)}
 
 /* THE TASK TABLE IS A GRID, and it is still a <table>. `display:contents` on the
    sections promotes each <tr> to a grid of its own, so the five tracks line up down
@@ -951,7 +966,7 @@ button.dlv:hover{color:var(--ink)}
 /* THE FIVE STATES AND THEIR GLYPHS. The glyph is markup, not a pseudo-element, so a
    status the board has never seen still renders as its own text with no glyph. */
 .state{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
-.state.ok{color:var(--ok)} .state.accent{color:var(--accent)}
+.state.ok{color:var(--ok)} .state.done{color:var(--done)} .state.accent{color:var(--accent)}
 .state.stop{color:var(--stop)} .state.dim{color:var(--muted)}
 .dim{color:var(--muted)} .sig{color:var(--signal-soft-text);font-weight:600}
 td.dim{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px}
@@ -969,7 +984,7 @@ td a:hover,td a:focus-visible{border-bottom-color:currentColor}
 /* THE FAILURE STATE, and why it is not just a red message. On a `file://` origin the
    clipboard can be refused outright, and a notice that fades after three seconds and
    cannot be selected leaves the reader with nothing. So it STAYS and is SELECTABLE. */
-.toast.fail{background:var(--stop);color:var(--ground);pointer-events:auto;
+.toast.fail{pointer-events:auto;
   user-select:text;-webkit-user-select:text}
 .toast.fail code{display:block;margin-top:.3rem;padding:.2rem .35rem;font-size:.86em;
   background:rgba(0,0,0,.28);border-radius:6px;word-break:break-all;

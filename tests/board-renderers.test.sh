@@ -695,10 +695,10 @@ sys.stdout.write(v.group(1) if v else "")
 PYT
 }
 
-echo "== the loopd palette: one dark theme, off the rendered page =="
+echo "== the loopd palette: dark from tokens.css, light and green from web-simple =="
 assert "the page renders at all"                     "$(yes_if test -s "$SLATE")"
-# Every value is copied from the brand's tokens.css. loopd is dark-only — the token set
-# carries no light ground — so there is ONE :root block and no [data-theme] override.
+# Dark is tokens.css plus the values only web-simple/HANDOFF.md "Tokens used" gives
+# (ink-2, line-2, pink line/chip, green, green line); light is that section's light row.
 DARK_TOKENS='ground #101318
 surface #171b22
 sunk #14171c
@@ -713,21 +713,49 @@ signal-ink #14171c
 ok #5ea2ff
 stop #ff7ac2
 accent #5ea2ff
-accent-ink #14171c'
+accent-ink #14171c
+ink-2 #c3cad6
+line-2 #33405a
+pink-line #3a2737
+chip #3a2737
+done #76d6a4
+done-line #23402f'
 while read -r name hex; do
   [ -n "$name" ] || continue
   assert "--$name is $hex"                           "$(eq "$(tokval "$SLATE" ':root' "$name")" "$hex")"
 done <<< "$DARK_TOKENS"
-# THE PALETTE CLOSES. Ten values, and the page may not contain an eleventh: this is the
-# assertion a third accent fails, whichever rule smuggles it in. The list IS tokens.css's
-# — a hex that is not in the brand's token file cannot appear here either.
-LOOPD_HEXES='#101318 #14171c #171b22 #1c212b #262c37 #5ea2ff #6c7488 #9aa4b5 #e9edf4 #ff7ac2'
-assert "…and the page holds those ten and no other" \
+LIGHT='@media (prefers-color-scheme:light){:root'
+LIGHT_TOKENS='ground #f7f8fa
+surface #fff
+inner #f1f3f7
+line #e2e6ed
+line-2 #c9d0db
+ink #14171c
+ink-2 #2c333f
+muted #566072
+dim #687184
+accent #2f6fd6
+signal-soft-text #c2337f
+signal #ff7ac2
+signal-ink #14171c
+pink-line #f4c6de
+chip #fde6f1
+done #18794c
+done-line #bfe3cf'
+while read -r name hex; do
+  [ -n "$name" ] || continue
+  assert "light --$name is $hex"                     "$(eq "$(tokval "$SLATE" "$LIGHT" "$name")" "$hex")"
+done <<< "$LIGHT_TOKENS"
+assert "…and the light block follows the system, with no toggle" "$(fhas "$LIGHT{" "$SLATE")"
+# THE PALETTE CLOSES over the two sources above and nothing else: the assertion a stray
+# accent fails, whichever rule smuggles it in.
+LOOPD_HEXES='#101318 #14171c #171b22 #18794c #1c212b #23402f #262c37 #2c333f #2f6fd6 #33405a #3a2737 #566072 #5ea2ff #687184 #6c7488 #76d6a4 #9aa4b5 #bfe3cf #c2337f #c3cad6 #c9d0db #e2e6ed #e9edf4 #f1f3f7 #f4c6de #f7f8fa #fde6f1 #ff7ac2'
+assert "…and the page holds those and no other" \
   "$(eq "$(grep -oE '#[0-9a-fA-F]{6}' "$SLATE" | tr 'A-F' 'a-f' | sort -u | tr '\n' ' ')" \
         "$LOOPD_HEXES ")"
 # The soft fills and the soft text: they are their own tokens, so an absent one reads as
 # "" and fails here rather than silently rendering unstyled. --ok-soft is BLUE because
-# approve is a machine-coloured affordance; --stop-soft is pink because reject is not.
+# approve is a machine-coloured affordance.
 softs() { # <selector> <expected, space separated name:hex>
   local sel="$1"; shift
   local ok=0 pair
@@ -738,7 +766,7 @@ softs() { # <selector> <expected, space separated name:hex>
 }
 assert "the soft fills and the soft text are carried" \
   "$(softs ':root' signal-soft:#ff7ac21f signal-soft-text:#ff7ac2 \
-           ok-soft:#5ea2ff1f stop-soft:#ff7ac21f neutral-soft:#1c212b neutral-soft-text:#e9edf4)"
+           ok-soft:#5ea2ff1f neutral-soft:#1c212b neutral-soft-text:#e9edf4)"
 # THE NEEDS-YOU PILL IS THE PINK ITSELF, not the soft fill — it is the one filled thing
 # on a collapsed row. Both halves: the fill is --signal, the text is --signal-ink.
 assert "the needs-you pill is filled with --signal"  "$(fhas '.c.you{background:var(--signal);color:var(--signal-ink);' "$SLATE")"
@@ -747,7 +775,7 @@ assert "the header's needs-you text is --signal-soft-text" "$(fhas '.sub .sig{co
 # TWO COLOURS, AND PINK MEANS A PERSON. Machine state is blue by construction: the four
 # status tones the renderer can emit resolve to --accent, --ok or --dim, and the only
 # one that resolves to pink is `blocked`, which is what a human has to unblock.
-assert "every machine state resolves to blue or dim" "$(fhas '.state.ok{color:var(--ok)} .state.accent{color:var(--accent)}' "$SLATE")"
+assert "every machine state resolves to blue or dim" "$(fhas '.state.ok{color:var(--ok)} .state.done{color:var(--done)} .state.accent{color:var(--accent)}' "$SLATE")"
 assert "…--ok is the same blue as --accent"          "$(eq "$(tokval "$SLATE" ':root' ok)" "$(tokval "$SLATE" ':root' accent)")"
 assert "…and only a blocked task takes --stop"       "$(yes_if python3 -c "
 import re, sys
@@ -760,7 +788,43 @@ import re, sys
 src = open('$BOARD', encoding='utf-8').read()
 m = re.search(r'^TONE = \{(.*?)\}', src, re.S | re.M)
 tone = dict(re.findall(r'\"([a-z-]+)\": \"([a-z]+)\"', m.group(1) if m else ''))
-sys.exit(0 if all(tone.get(k) in ('accent', 'ok') for k in ('ready', 'in-progress', 'in-review', 'done')) else 1)")"
+sys.exit(0 if all(tone.get(k) in ('accent', 'ok') for k in ('ready', 'in-progress', 'in-review')) else 1)")"
+assert "…and only a done task is green"              "$(yes_if python3 -c "
+import re, sys
+src = open('$BOARD', encoding='utf-8').read()
+m = re.search(r'^TONE = \{(.*?)\}', src, re.S | re.M)
+tone = dict(re.findall(r'\"([a-z-]+)\": \"([a-z]+)\"', m.group(1) if m else ''))
+sys.exit(0 if [k for k, v in tone.items() if v == 'done'] == ['done'] else 1)")"
+# PINK ONLY WHERE A PERSON IS NEEDED, GREEN ONLY FOR FINISHED. Every rule that draws pink
+# (a pink variable or hex) or green must have each selector in the list build-board.sh's
+# header names; the palette blocks themselves are definitions, not uses.
+uses() { # <page> <pink|green> -> the selectors drawing that colour outside the allowlist
+  python3 - "$1" "$2" <<'PYT'
+import re, sys
+page = open(sys.argv[1], encoding="utf-8").read()
+css = re.sub(r"/\*.*?\*/", "", page.split("<style>", 1)[1].split("</style>", 1)[0], flags=re.S)
+head = re.search(r"/\* THE LOOPD PALETTE.*?\*/", page, re.S).group(0)
+pink = r"var\(--(signal|stop|pink-line|chip)|#(ff7ac2|c2337f|f4c6de|fde6f1|3a2737)"
+if sys.argv[2] == "pink":
+    want, allow = pink, re.search(r"PINK IS FOR (.+?)\.\s*\n", head, re.S).group(1)
+else:
+    want, allow = r"var\(--done", ".proj.fin, .proj.fin .phead::before, .state.done"
+allow = {" ".join(a.split()) for a in allow.split(",")}
+bad = set()
+for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+    for one in (" ".join(x.split()) for x in sel.split(",")):
+        if one != ":root" and re.search(want, body, re.I) and one not in allow:
+            bad.add(one)
+print(" ".join(sorted(bad)))
+PYT
+}
+assert "every pink rule's selector is on the human-gated list" "$(eq "$(uses "$SLATE" pink)" "")"
+assert "every green rule is a finished project or a done task" "$(eq "$(uses "$SLATE" green)" "")"
+sed 's#^\.toast{#.toast.fail{background:var(--stop)} .toast{#; s#^\.c\.ok b{#.c.ok b{color:var(--done)} .c.ok b{#' "$SLATE" > "$TMP/offlist.html"
+assert "…and a pink rule off the list is named"      "$(eq "$(uses "$TMP/offlist.html" pink)" ".toast.fail")"
+assert "…and so is a green one"                      "$(eq "$(uses "$TMP/offlist.html" green)" ".c.ok b")"
+assert "a finished project's ✓ is green"            "$(fhas '.proj.fin .phead::before{content:"✓";color:var(--done);' "$SLATE")"
+assert "…and the done count stays machine blue"      "$(fhas '.c.ok b{color:var(--ok)}' "$SLATE")"
 # The active tab is BLUE: which tab you are reading is the machine's state, and a filled
 # pink pill there would be a pink pixel that is not a decision waiting.
 assert "the active tab pill is filled blue"          "$(fhas 'background:var(--accent);
@@ -815,14 +879,14 @@ assert "other owners are hidden under All"           "$(fhas '.board[data-tab="a
 assert "…and so is the heading that led that section" "$(fhas '.board[data-tab="all"] .sep.others,' "$SLATE")"
 assert "…the facet the tab selects on is on the card" "$(fhas '<div class="pcard" data-f="' "$SLATE")"
 
-echo "== dark-only, and the theme toggle is gone with the light palette =="
-# THERE IS NO THEME CONTROL. loopd is a dark-only brand, so there is nothing to toggle:
-# no stored choice, no [data-theme] attribute, no system preference consulted. Asserted
-# as absences, because a half-removed toggle is a control that renders and does nothing.
+echo "== light follows the system, and there is still no theme toggle =="
+# THERE IS NO THEME CONTROL. The light block is a prefers-color-scheme query and nothing
+# else: no stored choice, no [data-theme] attribute. Asserted as absences, because a
+# half-removed toggle is a control that renders and does nothing.
 assert "no segmented theme control is rendered"      "$(fhasnt '<div class="seg"' "$SLATE")"
 assert "…no segment writes a theme"                  "$(fhasnt 'data-set-theme' "$SLATE")"
 assert "…nothing renders a data-theme attribute"     "$(fhasnt 'data-theme' "$SLATE")"
-assert "…prefers-color-scheme is not consulted"      "$(fhasnt 'prefers-color-scheme' "$SLATE")"
+assert "…prefers-color-scheme is the only switch"    "$(eq "$(grep -oF 'prefers-color-scheme' "$SLATE" | wc -l | tr -d ' ')" 1)"
 assert "…and no theme choice is stored"              "$(fhasnt 'ai-bridge-board-theme' "$SLATE")"
 # STILL ONE SCRIPT. The clipboard helper and the tabs share the single inline <script>
 # this page has always had — a second one would be a second place for the page's only

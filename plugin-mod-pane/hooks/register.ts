@@ -276,6 +276,9 @@ let sendNote = ''        // the line drawn after a run: a refusal, or where `mor
 // 2.1.300), so an answered question is held until its document's mtime moves, or until a
 // turn that started after the press completes without moving it (answer.sh refused).
 let held = new Map<string, { mtimeMs: number; at: number; text: string }>()
+// The one colour the pane sets: a row only a person can clear (loopd-design/cli-theme.json human_pink).
+const NEEDS_YOU = { color: '#ff7ac2' }
+
 const FIELDS = [['title', 'Title', 'a short name'], ['what', 'What', 'what it should do, in a line'],
   ['whom', 'For whom', 'who needs it'], ['done', 'Done when', 'how you will know; separate several with ;']] as const
 let form: Record<string, string> = { title: '', what: '', whom: '', done: '' }
@@ -520,7 +523,7 @@ function drawSimple($: any, e: any): any {
         const id = it.slug + '/' + it.file + '#' + q.label
         rows.push(line(' '))
         rows.push(line('  ' + p.title + ' · ' + it.title, { dimColor: true }))
-        rows.push(line('  ' + q.text, { bold: true }))
+        rows.push(line('  ' + q.text, { bold: true, ...NEEDS_YOU }))
         const h = held.get(id)
         if (sending === id || (h && h.mtimeMs === it.mtimeMs)) { rows.push(line('  Sending your answer…', { dimColor: true })); continue }
         if (sending) continue
@@ -543,7 +546,7 @@ function drawSimple($: any, e: any): any {
     for (const p of simple) for (const it of p.items) {
       if (it.status !== 'blocked') continue
       b += 1
-      rows.push(line('  Unblock "' + it.title + '" in ' + p.title + ': it cannot move until you do.'))
+      rows.push(line('  Unblock "' + it.title + '" in ' + p.title + ': it cannot move until you do.', NEEDS_YOU))
     }
     if (b === 0) rows.push(line('Nothing is blocked.', { dimColor: true }))
 
