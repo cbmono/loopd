@@ -77,8 +77,27 @@ ok "…saying so"                               "$(printf '%s' "$OUT" | grep -c 
 ok "the script never forces"                  "$(grep -cE -- '--force|push -f|-f( |$)' "$SH" | tr -d ' ')" 0
 
 echo
+echo "== ONLY HEAD: push.default=matching and a forcing push refspec move nothing else =="
+B="$(fixture refspec)"
+git -C "$B" push -q origin main~1:refs/heads/side; git -C "$B" branch -q side main~1
+SIDE="$(git -C "$B.git" rev-parse side)"
+git -C "$B" checkout -q side; git -C "$B" commit -q --amend -m rewritten; git -C "$B" checkout -q main
+git -C "$B" config push.default matching; git -C "$B" config remote.origin.push '+refs/heads/side:refs/heads/side'
+ok "exit 0"                                   "$(bash "$SH" "$B" 2>/dev/null; echo $?)" 0
+ok "…main reached the remote"                 "$(remote "$B")" "feat: add p project"
+ok "…the diverged side branch was not forced" "$(git -C "$B.git" rev-parse side)" "$SIDE"
+sed 's/^git push --quiet .*/git push --quiet >\/dev\/null 2>\&1 ||/' "$SH" > "$TMP/bare.sh"
+B="$(fixture bare)"
+git -C "$B" push -q origin main~1:refs/heads/side; git -C "$B" branch -q side main~1
+SIDE="$(git -C "$B.git" rev-parse side)"
+git -C "$B" checkout -q side; git -C "$B" commit -q --amend -m rewritten; git -C "$B" checkout -q main
+git -C "$B" config push.default matching; git -C "$B" config remote.origin.push '+refs/heads/side:refs/heads/side'
+bash "$TMP/bare.sh" "$B" >/dev/null 2>&1
+ok "a bare git push here DOES force side"     "$([ "$(git -C "$B.git" rev-parse side)" = "$SIDE" ] && echo kept || echo forced)" forced
+
+echo
 echo "== THE PROBE BITES: a copy with the push removed fails the pushed case =="
-sed '/ push --quiet/d' "$SH" > "$TMP/nopush.sh"
+sed '/ push --quiet/{N;d;}' "$SH" > "$TMP/nopush.sh"
 B="$(fixture mutant)"; bash "$TMP/nopush.sh" "$B" >/dev/null 2>&1
 ok "the mutant leaves the remote at init"     "$(remote "$B")" "init"
 

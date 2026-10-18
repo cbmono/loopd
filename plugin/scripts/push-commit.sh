@@ -32,4 +32,7 @@ if ! git merge-base --is-ancestor '@{u}' HEAD 2>/dev/null; then
     local_only "pull --rebase failed, so nothing was pushed — rebase and push by hand, never force"
   fi
 fi
-git push --quiet >/dev/null 2>&1 || local_only "the push was rejected — pull and push by hand, never force"
+branch="$(git symbolic-ref --short HEAD)"
+# An explicit refspec bypasses push.default and any configured `+` push refspec.
+git push --quiet "$(git config "branch.$branch.remote")" "HEAD:$(git config "branch.$branch.merge")" >/dev/null 2>&1 ||
+  local_only "the push was rejected — pull and push by hand, never force"
