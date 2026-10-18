@@ -12,7 +12,7 @@ ok() { if [ "$2" = "$3" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "F
 UNBRACED='lease=["'"'"']?[^"'"'"' ]*\$[A-Za-z_][A-Za-z0-9_]*:'
 hits() { grep -rnE -- "$UNBRACED" "$@"; }
 
-FX="$(mktemp -d)"; trap 'rm -rf "$FX"' EXIT
+FX="$(mktemp -d)" || { echo "FAIL: mktemp"; exit 1; }; trap 'rm -rf "$FX"' EXIT
 printf '%s\n' 'git push "--force-with-lease=$B:h1"' >"$FX/bare"
 printf '%s\n' 'git push --force-with-lease="refs/heads/$head:$lease"' >"$FX/quoted"
 printf '%s\n' 'git push --force-with-lease="refs/heads/${BRANCH}:${SHA}"' >"$FX/braced"
