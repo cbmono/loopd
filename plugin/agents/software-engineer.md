@@ -30,7 +30,9 @@ setting `status`, no PII/secrets, and capturing
 A bare form has no refspec, so `deny-destructive.sh` falls back to inferring the
 destination from `$CWD`, which is wrong when you are not cd'ed into your own
 worktree and gets the push refused. Run `git push --force-with-lease origin
-<branch>`.
+<branch>`. An expected-sha lease is written braced, never `$branch:$sha`:
+`git push --force-with-lease="refs/heads/${BRANCH}:${SHA}" origin "HEAD:refs/heads/${BRANCH}"`
+— zsh reads `$BRANCH:h…` as a modifier and drops the colon.
 
 ## Procedure
 

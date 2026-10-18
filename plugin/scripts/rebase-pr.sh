@@ -310,7 +310,7 @@ if [ $DRY -eq 1 ]; then
   exit 0
 fi
 
-git -C "$WT" push --force-with-lease="refs/heads/$head:$lease" \
+git -C "$WT" push --force-with-lease="refs/heads/${head}:${lease}" \
   origin "HEAD:refs/heads/$head" >/dev/null 2>&1 || {
   echo "rebase-pr: push refused — the lease on $head no longer holds. Nothing changed" >&2
   echo "        on the remote; re-ask next tick." >&2; exit 6; }
