@@ -332,8 +332,23 @@ $(printf '%s\n' "$keepers" | sed 's/^/          /' | head -20)"
 # This replaces the pruner's PRUNE_ACTIVE_MINUTES veto rather than inheriting it: on this
 # path the mtime window is dead on arrival, because the tick that reflects the merge runs
 # inside it for every fast merge and no later tick revisits a `done` task.
+ancestors_of() { # <pid> — it and every ancestor below pid 1, one per line
+  local tree p=$1 n=0
+  tree="$(ps -axo pid=,ppid= 2>/dev/null)" || tree=""
+  while :; do
+    printf '%s\n' "$p"
+    p="$(printf '%s\n' "$tree" | awk -v p="$p" '$1 == p { print $2; exit }')"
+    n=$((n + 1))
+    case "$p" in ''|0|1) return 0 ;; esac
+    [ "$n" -lt 64 ] || return 0
+  done
+}
+
+# The caller chain is pre-seeded as seen: a `cd <wt> && …` or wrapper shell above this
+# script names the path too, and is the one asking for the removal.
 live_processes_in() { # <worktree> — PID<TAB>COMMAND per live process inside it
-  local wt=$1 pid cmd dir seen=$'\n' line lsof_cwd ps_all
+  local wt=$1 pid cmd dir seen line lsof_cwd ps_all
+  seen=$'\n'"$(ancestors_of "$$")"$'\n'
   lsof_cwd=""
   command -v lsof >/dev/null 2>&1 && lsof_cwd="$(lsof -a -d cwd -n -P -Fpcn 2>/dev/null)"
   if [ -n "$lsof_cwd" ]; then
@@ -346,7 +361,6 @@ live_processes_in() { # <worktree> — PID<TAB>COMMAND per live process inside i
           dir=${line#n}
           case "$dir" in
             "$wt"|"$wt"/*)
-              [ "$pid" != "$$" ] || continue
               case "$seen" in *$'\n'"$pid"$'\n'*) ;;
                 *) seen="$seen$pid"$'\n'; printf '%s\t%s\n' "$pid" "$cmd" ;;
               esac ;;
@@ -359,7 +373,7 @@ EOF
   ps_all="$(ps -axo pid=,command= 2>/dev/null)" || ps_all=""
   if [ -n "$ps_all" ]; then
     while read -r pid cmd; do
-      [ -n "$pid" ] && [ "$pid" != "$$" ] || continue
+      [ -n "$pid" ] || continue
       case "$cmd" in
         *"$wt"*)
           case "$seen" in *$'\n'"$pid"$'\n'*) ;;
