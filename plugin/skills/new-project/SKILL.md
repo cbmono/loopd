@@ -3,7 +3,7 @@ name: new-project
 disable-model-invocation: true
 description: Scaffold a new project under projects/<slug>/ — schema-valid files, registered in the bundle index/log and linked to its objective, with seed draft tasks. Supports build (code/PRs) and research (in-bundle deliverables) projects.
 argument-hint: <one-line project description>  [kind=build|research] [objective=<slug>] [repo=<name|owner/name>] [deliverables="a; b"] [autonomy=<mode>] [title="…"] [need="…"] [success_criteria="a; b"] [timebox=<N>d|<N>w] [--no-ask] [--no-commit]
-allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
+allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
 ---
 
 Scaffold a new **Project** in this bundle: the `projects/<slug>/` folder and its
@@ -233,8 +233,7 @@ under `--no-ask`, stop in one line instead (above), never ask.
      names that login when `no_owner:` is empty.
 
 7. **Show & commit.** Print the created tree, the `project.md` frontmatter, and the
-   seed task titles. On a **build** project, **record the current `HEAD` sha before
-   committing** — step 8 needs it as a review base. Then (unless `--no-commit`) stage and
+   seed task titles. Then (unless `--no-commit`) stage and
    commit to this repo via
    the per-agent helper, naming **every** path steps 5 and 6 touched — the scaffold
    and its registration belong in one commit, or the tree records a project that
@@ -245,6 +244,13 @@ under `--no-ask`, stop in one line instead (above), never ask.
    per-project `index.md` are **not** in that list — they are derived and gitignored,
    so `git add` skips them and naming them would only produce a confusing "nothing
    staged" refusal.
+   Then push that commit (never under `--no-commit`):
+   `bash ${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh .` — it fetches, rebases only when the
+   remote moved, and never forces. **Exit 0** ⇒ say "pushed". **Exit 3** (no upstream) ⇒ say
+   nothing. **Exit 4** ⇒ relay its one line, in your final reply too: the project is committed
+   on this clone only, and step 8 still runs. On a **build** project, now record
+   `git rev-parse HEAD^` — the step-7 commit's parent, read after any rebase — as step 8's
+   review base.
    Remind the user of the next step: the PM refines the drafts, then **you** promote
    `draft → ready`. For **build**, the PM then dispatches to a role agent → PR →
    you merge. For **research**, *you* work each task in-session (Claude + any
@@ -298,8 +304,9 @@ under `--no-ask`, stop in one line instead (above), never ask.
    — the FILES you just created, **never the whole bundle**. It takes file paths, not directories:
    a directory argument checks **0 documents and exits 0**, which would make this gate pass
    vacuously. Name the files. Zero errors is the gate for continuing.
-   Any error is a defect in the scaffold you just wrote: fix it, amend or add a commit, and
-   re-run until clean. Errors here are never "by design" — the validator only reports
+   Any error is a defect in the scaffold you just wrote: fix it in a new commit — never
+   amend, step 7's commit may already be pushed — push it as step 7 does, and re-run until
+   clean. Errors here are never "by design" — the validator only reports
    things the schema forbids.
 
    **Why scoped:** this gate asks one question — is the scaffold I just wrote well-formed? An
@@ -360,12 +367,12 @@ under `--no-ask`, stop in one line instead (above), never ask.
    the `<cli>` resolved in step a in place of `cr` below:
 
    ```bash
-   cr review --agent --committed --base-commit <sha-from-step-7> \
+   cr review --agent --committed --base-commit <review-base-from-step-7> \
              --dir <instance-root>/projects/<slug> -c CLAUDE.md SCHEMA.md
    ```
 
    `--dir` keeps it on the new project rather than the whole commit; `--base-commit` is the
-   pre-commit `HEAD`; `-c` hands it the bundle's own rules so it reviews against `SCHEMA.md`
+   step-7 commit's parent; `-c` hands it the bundle's own rules so it reviews against `SCHEMA.md`
    and the instance `CLAUDE.md` instead of generic style; `--agent` returns structured
    findings. Confirm the flags with `cr review --help` before running — don't assume this
    surface, the CLI moves.
@@ -438,8 +445,8 @@ under `--no-ask`, stop in one line instead (above), never ask.
    opinion, and why**, and say the same in your summary to the human. An unrun advisory
    review is an acceptable outcome; an unrun advisory review nobody knows about is not.
 
-   When it does run, brief it with the instance root, the project slug, and the pre-commit
-   SHA from step 7, and ask
+   When it does run, brief it with the instance root, the project slug, and the review base
+   from step 7, and ask
    for **mode C**. It reviews the committed bundle diff and writes its verdict into the
    project's `log.md` — there is no PR to comment on. Triage its findings exactly as in
    step c; its verdict is advisory, like the external one, and never gates creation.
@@ -450,9 +457,9 @@ under `--no-ask`, stop in one line instead (above), never ask.
    **f. Record the verdicts.** Add a dated bullet to the project's `log.md` naming what you
    applied **and what you rejected, with the reason** — and make sure that entry is committed,
    not just the accepted fixes. Stage `log.md` alongside the fixes so they land in one commit,
-   or record it in a follow-up commit if the fixes already landed; an uncommitted verdict
-   record doesn't survive. Without it, the next reviewer re-raises the same by-design findings
-   and someone eventually "fixes" them — deleting the PM's refine step or filling empty
+   or record it in a follow-up commit if the fixes already landed, and push it as step 7
+   does; an uncommitted verdict record doesn't survive. Without it, the next reviewer
+   re-raises the same by-design findings and someone eventually "fixes" them — deleting the PM's refine step or filling empty
    `acceptance_criteria` with invented content.
 
 ## Notes

@@ -151,7 +151,7 @@ mkdir -p "$TMP/shim"; REAL_GIT="$(command -v git)"
 cat > "$TMP/shim/git" <<SHIM
 #!/usr/bin/env bash
 case " \$* " in *" pull --rebase "*)
-  "$REAL_GIT" -C "\$2" fetch -q; GIT_REFLOG_ACTION=tick "$REAL_GIT" -C "\$2" rebase '@{u}' >/dev/null 2>&1; exit 1 ;; esac
+  "$REAL_GIT" fetch -q; GIT_REFLOG_ACTION=tick "$REAL_GIT" rebase '@{u}' >/dev/null 2>&1; exit 1 ;; esac
 exec "$REAL_GIT" "\$@"
 SHIM
 chmod +x "$TMP/shim/git"

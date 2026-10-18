@@ -35,7 +35,7 @@ output; skip the steps below. It answers `Q<n>`, else the first open question: a
 integer records that option's **text** from the `### Q<n>` block (`SCHEMA.md` → "Question
 details"), `--text <words>` records the words even when they are a number or `more`, and
 any other words are the answer. It moves the entry exactly as step 3 does, commits it as
-you through `commit-as.sh human`, then `git pull --rebase` and pushes when the clone has
+you through `commit-as.sh human`, then pushes it through `push-commit.sh` when the clone has
 an upstream. It bakes nothing into the body: the moved line and the `### Q<n>` block are
 the record. `more` prints the next stored depth (1, then 2, then 3) and changes no tracked file.
 - **Exit 5** — `more` is past the stored depths: answer the question yourself, here, from

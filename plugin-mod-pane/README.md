@@ -82,8 +82,8 @@ unchanged. Until a new project directory appears whose `project.md` carries the 
 from the loop's first read of the task, as any question does — or, when the project did not
 resolve to `yolo`, *It moves only as far as the operator approves.* A refused run, or a turn
 that ends with no new project, is one line and the form comes back filled; nothing retries it.
-The skill commits and does not push: on a bundle shared by two clones the project reaches the
-other clone when someone pushes.
+The skill commits and, when the bundle has an upstream, pushes. A push it could not make is one
+line in the session's reply, not in the form: *Created* then means created on this clone only.
 
 ## What it reads
 
