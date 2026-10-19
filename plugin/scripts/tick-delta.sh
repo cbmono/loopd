@@ -42,10 +42,12 @@
 #   task <path> <status>    every task's status — a move to/from any status is a delta,
 #                           and any `in-progress` task is an immediate DELTA whatever
 #                           the record says: a live dispatch is owed its monitoring.
-#   pr <url> <state> <head> <decision>
+#   pr <url> <state> <head> <decision> reviews=<n>:<id>:<state> status=<json>
 #                           every PR on an `in-review` task, from the host: a pushed
-#                           head, a merge, a close, or a review decision each require
-#                           tick work (re-verify, reflect, or send back).
+#                           head, a merge, a close, a review decision, a new review (a
+#                           COMMENTED one moves no decision) or a commit status's state or
+#                           description (a rate-limited reviewer still says SUCCESS) each
+#                           require tick work (re-verify, reflect, re-request, send back).
 #   queue/snapshot <present|absent>
 #                           the two opt-in artifacts' presence — `touch AWAITING.md`
 #                           re-enables the queue and needs one full tick to populate.
@@ -292,6 +294,22 @@ steps_line() {
   printf 'steps:%s\n' "$out"
 }
 
+PR_QUERY='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
+  state headRefOid reviewDecision reviews(last:1){totalCount nodes{id state}}
+  commits(last:1){nodes{commit{status{contexts{context state description}}}}}}}}'
+PR_JQ='.data.repository.pullRequest as $p
+| ($p.reviews.nodes // [] | last) as $r
+| ($p.commits.nodes // [] | last) as $c
+| ($c.commit.status.contexts // []) as $s
+| if ($p | type) != "object" or ($p.reviews.totalCount | type) != "number" or ($c.commit | type) != "object"
+     or ($p.reviews.totalCount > 0 and (($r.id // "") == "" or ($r.state // "") == ""))
+     or ($s | type) != "array" or any($s[]; (.state | type) != "string")
+  then "UNREADABLE"
+  else [$p.state, $p.headRefOid, ($p.reviewDecision // "NONE"),
+        "reviews=\($p.reviews.totalCount):\($r.id // "-"):\($r.state // "-")",
+        "status=\([$s[] | [.context, .state, .description]] | sort | tojson)"] | join(" ")
+  end'
+
 fingerprint() { # <probe|digest>
   local mode="$1"
   printf 'head %s\n' "$(git -C "$inst" rev-parse HEAD)"
@@ -370,15 +388,18 @@ $prs"
   # Every open-PR fact comes from the HOST, via gh's own --jq (no local jq needed). A
   # failure on any one PR poisons the whole fingerprint — better no answer than a match
   # built on a hole.
-  local u line
+  local u line host owner repo num
   for u in $(printf '%s\n' "$urls" | grep . | sort -u); do
     command -v gh >/dev/null 2>&1 || return 1
-    line="$(gh pr view "$u" --json state,headRefOid,reviewDecision \
-            --jq '[.state, .headRefOid, (.reviewDecision // "NONE")] | join(" ")' 2>/dev/null)" || return 1
-    case "$line" in
-      *" "*" "*) printf 'pr %s %s\n' "$u" "$line" ;;
-      *) return 1 ;;
-    esac
+    IFS=/ read -r host owner repo _ num <<<"${u#https://}"
+    case "$num" in ''|*[!0-9]*) return 1 ;; esac
+    # GraphQL, not `gh pr view`: its statusCheckRollup drops a commit status's description,
+    # the only field that tells a rate-limited reviewer's SUCCESS from a completed review.
+    line="$(gh api graphql --hostname "$host" -f o="$owner" -f r="$repo" -F n="$num" \
+            -f query="$PR_QUERY" --jq "$PR_JQ" 2>/dev/null)" || return 1
+    case "$line" in *$'\n'*) return 1 ;; esac
+    printf '%s\n' "$line" | grep -Eqx '[A-Z]+ [0-9a-f]+ [A-Z_]+ reviews=[0-9]+:[^ ]+:([A-Z_]+|-) status=\[.*\]' || return 1
+    printf 'pr %s %s\n' "$u" "$line"
   done
   # Emitted from INSIDE the walk: the caller reads this function through a command
   # substitution, so a flag set here never survives to the caller's scope.

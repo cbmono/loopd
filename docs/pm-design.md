@@ -334,7 +334,9 @@ The safety argument has one load-bearing direction: a false DELTA costs one full
 no record, no `gh`, a probe error, any `in-progress` task, any dirty tracked file, any
 untracked file under `projects/` — resolves to the full tick, and the fingerprint holds
 exactly the facts whose movement creates tick work: bundle HEAD, per-task status, each
-open PR's head SHA, state and review decision, and the presence of the two opt-in
+open PR's head SHA, state, review decision, review count with the latest review's id and
+state (a COMMENTED review moves no decision), and every commit status's state and
+description (a rate-limited reviewer still reports SUCCESS), and the presence of the two opt-in
 artifacts (a `touch AWAITING.md` re-enable needs one full tick to populate the queue).
 
 What the probe deliberately does not see, stated rather than discovered: a PR body edit

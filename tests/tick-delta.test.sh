@@ -63,20 +63,35 @@ printf '/%s\n' "$AB_STATE_DIR" > "$INST/.gitignore"
 GIT -C "$INST" init -q
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm init
 
-# The gh stub: `gh pr view <url> --json ... --jq ...` prints the canned line for the
-# URL's PR number from $GHDIR/<n>, or fails when $GHDIR/<n>.fail exists.
+# The gh stub: `gh api graphql ... -F n=<n> ... --jq <filter>` runs the script's OWN filter
+# over the canned GraphQL answer in $GHDIR/<n>, or fails when $GHDIR/<n>.fail exists. Each
+# call's leading arguments are logged to $GHDIR/calls.
+command -v jq >/dev/null 2>&1 || { echo "tick-delta.test: jq is required to run the stub's --jq" >&2; exit 2; }
 GHDIR="$TMP/gh"; mkdir -p "$GHDIR"
 BIN="$TMP/bin"; mkdir -p "$BIN"
 cat > "$BIN/gh" <<'EOS'
 #!/usr/bin/env bash
-url="$3"
-n="${url##*/}"
+printf '%s\n' "${*:1:10}" >> "$GHDIR/calls"
+n=""; filter="."
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -F) case "$2" in n=*) n="${2#n=}" ;; esac; shift 2 ;;
+    --jq) filter="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
 [ -e "$GHDIR/$n.fail" ] && exit 1
 [ -f "$GHDIR/$n" ] || exit 1
-cat "$GHDIR/$n"
+jq -r "$filter" "$GHDIR/$n"
 EOS
 chmod +x "$BIN/gh"
-printf 'OPEN abc1234 NONE\n' > "$GHDIR/7"
+NOREV='{"totalCount":0,"nodes":[]}'
+prj() { # <n> <state> <head> <decision|NONE> [reviews-json] [status-json]
+  local dec=null; [ "$4" = NONE ] || dec="\"$4\""
+  printf '{"data":{"repository":{"pullRequest":{"state":"%s","headRefOid":"%s","reviewDecision":%s,"reviews":%s,"commits":{"nodes":[{"commit":{"status":%s}}]}}}}}\n' \
+    "$2" "$3" "$dec" "${5:-$NOREV}" "${6:-null}" > "$GHDIR/$1"
+}
+prj 7 OPEN abc1234 NONE
 WITH() { PATH="$BIN:$PATH" GHDIR="$GHDIR" "$SH" "$@" --instance "$INST"; }
 
 run() { # <check|record> -> "rc:<n> first-line"
@@ -130,14 +145,49 @@ WITH record; ok "…and so does the worktree being gone"        "$(run check)" "
 rm -f "$T3"; GIT -C "$INST" add -A && GIT -C "$INST" commit -qm rm-t3
 WITH record
 
-printf 'OPEN def5678 NONE\n' > "$GHDIR/7"
+prj 7 OPEN def5678 NONE
 ok "a moved PR head is a DELTA"                  "$(run check)" "rc:1 DELTA: the f"
-printf 'MERGED def5678 NONE\n' > "$GHDIR/7"
+prj 7 MERGED def5678 NONE
 ok "…so is a state change"                      "$(run check)" "rc:1 DELTA: the f"
-printf 'OPEN abc1234 CHANGES_REQUESTED\n' > "$GHDIR/7"
+prj 7 OPEN abc1234 CHANGES_REQUESTED
 ok "…so is a review decision"                   "$(run check)" "rc:1 DELTA: the f"
-printf 'OPEN abc1234 NONE\n' > "$GHDIR/7"
+prj 7 OPEN abc1234 NONE
 ok "…and the original PR facts restore IDLE"    "$(run check)" "rc:0 IDLE: finger"
+
+echo "== review activity the decision never shows: a COMMENTED review, a reviewer's status =="
+REV1='{"totalCount":1,"nodes":[{"id":"PRR_one","state":"COMMENTED"}]}'
+REV2='{"totalCount":2,"nodes":[{"id":"PRR_two","state":"COMMENTED"}]}'
+st() { printf '{"contexts":[{"context":"CodeRabbit","state":"%s","description":"%s"}]}' "$1" "$2"; }
+DONE_ST="$(st SUCCESS 'Review completed')"
+prj 7 OPEN abc1234 NONE "$REV1" "$DONE_ST"; WITH record
+ok "a recorded review and status are IDLE"      "$(run check)" "rc:0 IDLE: finger"
+prj 7 OPEN abc1234 NONE "$REV2" "$DONE_ST"
+ok "a new COMMENTED review, decision unchanged, is a DELTA" "$(run check)" "rc:1 DELTA: the f"
+prj 7 OPEN abc1234 NONE "$REV1" "$(st SUCCESS 'Review rate limited')"
+ok "a SUCCESS status saying 'rate limited' is a DELTA" "$(run check)" "rc:1 DELTA: the f"
+prj 7 OPEN abc1234 NONE "$REV1" "$(st SUCCESS 'Review skipped')"
+ok "…and so is one saying 'skipped'"            "$(run check)" "rc:1 DELTA: the f"
+prj 7 OPEN abc1234 NONE "$REV1" "$DONE_ST"
+ok "…and the recorded facts restore IDLE"       "$(run check)" "rc:0 IDLE: finger"
+: > "$GHDIR/calls"; run check >/dev/null
+ok "the probe makes ONE gh call per open PR"    "$(wc -l < "$GHDIR/calls" | tr -d ' ')" 1
+ok "…to the host and repo the pr: URL names"    "$(grep -c '^api graphql --hostname github.com -f o=example-org -f r=example-repo -F n=7$' "$GHDIR/calls")" 1
+
+echo "== an unreadable new value is no answer: exit 2, and record refuses =="
+before="$(cat "$INST/$AB_STATE_DIR")"
+for bad in 'reviews missing|null|'"$DONE_ST" \
+           'a counted review with no node|{"totalCount":1,"nodes":[]}|'"$DONE_ST" \
+           'a review with no state|{"totalCount":1,"nodes":[{"id":"PRR_one"}]}|'"$DONE_ST" \
+           'a status context with no state|'"$REV1"'|{"contexts":[{"context":"CodeRabbit","description":"x"}]}' \
+           'a head with no commit object|'"$REV1"'|null'; do
+  IFS='|' read -r what revs stat <<<"$bad"
+  prj 7 OPEN abc1234 NONE "$revs" "$stat"
+  [ "$what" = 'a head with no commit object' ] && sed -i.bak 's/{"commit":{"status":null}}/{}/' "$GHDIR/7"
+  ok "$what makes check exit 2"                 "$(run check)" "rc:2 CANNOT ANSWE"
+  WITH record 2>/dev/null; ok "…and record refuses, record untouched" "$?:$([ "$(cat "$INST/$AB_STATE_DIR")" = "$before" ] && echo same)" "2:same"
+done
+prj 7 OPEN abc1234 NONE
+WITH record
 
 touch "$INST/$AB_AWAITING"
 ok "a touched AWAITING.md (queue re-enable) is a DELTA" "$(run check)" "rc:1 DELTA: the f"
@@ -196,7 +246,7 @@ printf 'type: Project\nstatus: paused\n' > "$INST/projects/held/project.md"
 printf -- '---\ntype: Task\nkind: build\nstatus: in-progress\nsession: s-1\npr: []\n---\n' \
   > "$INST/projects/held/tasks/run.md"
 task "$INST/projects/held/tasks/rev.md" in-review "https://github.com/example-org/example-repo/pull/8"
-printf 'OPEN fed4321 NONE\n' > "$GHDIR/8"
+prj 8 OPEN fed4321 NONE
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm held
 D="$(WITH digest)"
 ok "the paused project is enumerated"            "$(printf '%s\n' "$D" | grep -c '^project held status=paused')" 1
