@@ -44,7 +44,7 @@ elif what == "css": print(page.split("<style>", 1)[1].split("</style>", 1)[0])
 elif what == "script": print(re.search(r"<script>(.*?)</script>", page, re.S).group(1))
 elif what == "order":
     print(" ".join(m.group(2) or m.group(1) for m in re.finditer(
-        r'class="(s-confirms|s-stuck you|s-stuck quiet|s-q)"(?: data-ref="[^"]*" data-code="([^"]*)")?', simple)))
+        r'class="(s-confirms|s-stuck s-ask|s-stuck you|s-stuck quiet|s-q)"(?: data-ref="[^"]*" data-code="([^"]*)")?', simple)))
 elif what == "chips":
     print(" | ".join(re.findall(r'class="s-chip[^"]*" data-pickf="[a-z]+">([^<]*)</button>', simple)))
 elif what == "seams":
@@ -65,8 +65,8 @@ ok "a drawer's Show details names its project"    "$(has 'data-details="invoices
 ok "…and the details view filters on that project" "$(has "'/close-project '+slug" "$JS")" yes
 
 echo "== INBOX AND RAIL =="
-ok "inbox order: confirmations, questions oldest first, stuck you, stuck quiet" \
-  "$(part order)" "s-confirms Q12 Q13 Q14 s-stuck you s-stuck quiet"
+ok "inbox order: confirmations, questions oldest first, ready for you, stuck you, stuck quiet" \
+  "$(part order)" "s-confirms Q12 Q13 Q14 s-stuck s-ask s-stuck you s-stuck quiet"
 ok "only the first question is open"              "$(has '.s-qlist>.s-q:not(:first-child) :is(.s-after,[data-fill="q-options"],.s-ctx,.s-own,.s-acts,.s-qnone){display:none}' "$CSS")" yes
 ok "the rail is 290px on the right"               "$(has '.s-grid{display:grid;grid-template-columns:minmax(0,1fr) 290px;' "$CSS")" yes
 ok "under 820px the rail goes below"              "$(python3 -c 'import re,sys; c=open(sys.argv[1]).read(); m=re.search(r"@media \(max-width:820px\)\{(.*?)\n\}", c, re.S); print(bool(m and ".s-grid{grid-template-columns:minmax(0,1fr)}" in m.group(1)))' "$CSS")" True
@@ -75,7 +75,7 @@ ok "an all-draft project is getting ready"        "$(part simple | grep -c 'Supp
 ok "the seams moved into simple mode, once each"  "$(part seams)" "3 3 3 5 5 3"
 
 echo "== FILTERS =="
-ok "four filters, Everything first"               "$(part chips)" "Everything | Needs you · 4 | Active · 4 | Finished · 1"
+ok "four filters, Everything first"               "$(part chips)" "Everything | Needs you · 5 | Active · 4 | Finished · 1"
 ok "Everything is the default"                    "$(has '<section class="simple" data-filter="all"' "$PAGE")" yes
 for w in localStorage sessionStorage document.cookie pushState replaceState; do
   ok "the script writes nothing: no $w"           "$(has "$w" "$JS")" no
@@ -109,6 +109,36 @@ for c in "Your own answer" "Send answer" "More context" "Later" "Send my answer"
   ok "COPY.md: $c"                                "$(has "$c" "$TMP/text")" yes
 done
 ok "Recommended tags the recommended option"      "$(has 'li[data-rec]::after{content:"Recommended"' "$CSS")" yes
+
+echo "== NEEDS YOU IS COMPLETE =="
+# One bundle per decision the person owns, each the ONLY pending item: a go-ahead on a
+# planned part, an OK on a built one, a project close. None may read as an empty inbox.
+one() { # <name> <task status> <extra frontmatter> -> a rendered page for a one-task bundle
+  local b="$TMP/one-$1"; mkdir -p "$b/$AB_DIR" "$b/projects/solo/tasks"; : > "$b/$AB_SCHEMA"
+  printf '{ "org": "fixture-org" }\n' > "$b/instance.config.json"
+  printf -- '---\ntype: Project\ntitle: Solo project\nkind: build\nstatus: active\n---\n' > "$b/projects/solo/project.md"
+  printf -- '---\ntype: Task\ntitle: The only part\nkind: build\nstatus: %s\n%s---\n' "$2" "$3" > "$b/projects/solo/tasks/task-001.md"
+  : > "$b/$AB_SNAPSHOT"
+  ( cd "$b" && SNAPSHOT_NOW=2026-10-18T09:00:00Z bash "$WRITER" --quiet && bash "$GEN" --standalone --out "$b/board.html" . ) >/dev/null 2>&1
+  printf '%s' "$b/board.html"; }
+for k in approve merge close; do
+  case "$k" in
+    approve) P1="$(one "$k" draft $'acceptance_criteria: [ "the part works" ]\n')" ;;
+    merge)   P1="$(one "$k" in-review $'pr: [ https://github.com/example-user-007/x/pull/7 ]\npr_mergeable: MERGEABLE\n')" ;;
+    close)   P1="$(one "$k" done '')" ;;
+  esac
+  PAGE_K="$P1"
+  S1="$(PAGE="$PAGE_K" part simple)"; T1="$(PAGE="$PAGE_K" part text)"
+  ok "$k alone: Needs you counts it"              "$(PAGE="$PAGE_K" part chips | sed 's/.*Needs you · \([0-9]*\).*/\1/')" 1
+  ok "…the pill says so"                          "$(grep -c '<span class="s-pill">1 need you</span>' <<<"$S1")" 1
+  ok "…the item is shown, as $k"                  "$(grep -c "class=\"s-stuck s-ask\" data-ok=\"$k\"" <<<"$S1")" 1
+  ok "…and no empty state renders"                "$(grep -cE 'Nothing needs you|Everything is done' <<<"$T1")" 0
+  printf '%s' "$T1" > "$TMP/text-$k"
+  ok "…in glossary-safe words"                    "$(glossary_hits "$TMP/text-$k")" ""
+done
+P0="$(one none in-progress '')"
+ok "CONTROL: nothing pending reads as an empty inbox" "$(PAGE="$P0" part text | grep -c 'Nothing needs you right now.')" 1
+ok "…and counts 0"                               "$(PAGE="$P0" part chips | sed 's/.*Needs you · \([0-9]*\).*/\1/')" 0
 
 echo "== RUNS NOTHING =="
 for w in "fetch(" XMLHttpRequest sendBeacon WebSocket EventSource "window.open" "location=" ".submit("; do

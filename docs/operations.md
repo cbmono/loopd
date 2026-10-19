@@ -687,7 +687,8 @@ an old task ranks ahead of Q1 on a newer task and a refresh never reorders. A ta
 
 Every page `build-board.sh` renders — the served one, the tick's `file://` page and the
 published artifact — opens in **simple mode**: an inbox (questions oldest first with only
-the first open, then stuck items you can help with, then the ones we are handling) beside
+the first open, then what is ready for you — a go-ahead on a planned part, an OK on a built
+one, a project close — then stuck items you can help with, then the ones we are handling) beside
 a 290px progress rail, which moves below the inbox under 820px. Today's board is behind
 **Show details**, filtered to one project when opened from that project's drawer, and with
 scripting off both views render, simple first. Questions and a project's need and done-when

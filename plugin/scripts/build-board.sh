@@ -701,7 +701,7 @@ TABLE_HEAD = """<title>__TITLE__</title>
    .why summary:hover .what, .acts .qbtn, .qbtn, .c.you, .c.you b, .state.stop,
    .s-chip.you, .s-pill, .s-btn.pink, .s-label.you, .s-q, .s-code, .s-q li.sel,
    .s-q li.sel::before, .s-q li[data-rec]::after, .s-own label, .s-own textarea,
-   .s-stuck.you, .s-do, .s-dq, .s-dcode, .s-field.bad input, .s-field.bad textarea,
+   .s-stuck.you, .s-stuck.s-ask, .s-do, .s-dq, .s-dcode, .s-field.bad input, .s-field.bad textarea,
    .s-field em, .s-err.
    GREEN (--done) is for sent, saved and finished only.
    GREEN IS FOR .proj.fin, .proj.fin .phead::before, .state.done, .s-icon.ok, .s-ok,
@@ -1091,7 +1091,7 @@ html[data-js] .loopd[data-view="details"] .simple{display:none}
 .s-sec,.s-qlist{display:flex;flex-direction:column;gap:12px}
 .simple[data-filter="all"] .s-sec[data-sec="active"],
 .simple[data-filter="all"] .s-sec[data-sec="finished"],
-.simple[data-filter="needs"] .s-sec:not([data-sec="questions"]):not([data-sec="stuck"]),
+.simple[data-filter="needs"] .s-sec:not([data-sec="questions"]):not([data-sec="stuck"]):not([data-sec="ok"]),
 .simple[data-filter="needs"] .s-stuck.quiet,
 .simple[data-filter="needs"] .s-sec[data-sec="stuck"]:not(:has(.s-stuck.you)),
 .simple[data-filter="active"] .s-sec:not([data-sec="active"]),
@@ -1160,7 +1160,7 @@ html[data-js] .loopd[data-view="details"] .simple{display:none}
 .s-stuck{background:var(--surface);border:1px solid var(--line);
   border-left:3px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;
   flex-direction:column;gap:6px}
-.s-stuck.you{border-left-color:var(--signal-soft-text)}
+.s-stuck.you,.s-stuck.s-ask{border-left-color:var(--signal-soft-text)}
 .s-proj{font-size:12px;color:var(--muted)}
 .s-say{font-size:14px;line-height:1.45;color:var(--ink)}
 .s-do{font-size:13.5px;line-height:1.45;color:var(--signal-soft-text);font-weight:500}
@@ -1459,6 +1459,7 @@ document.documentElement.setAttribute('data-js','');
       return;
     }
     if((b=t.closest('[data-pickf]'))){ $('.simple').setAttribute('data-filter',b.getAttribute('data-pickf')); return; }
+    if((b=t.closest('[data-cmd]'))){ show(b.getAttribute('data-cmd'),'Type this in Claude Code to close the project'); return; }
     if((b=t.closest('[data-drawer]'))){ drawer(b.getAttribute('data-drawer')); return; }
     if((b=t.closest('[data-details]'))){ details(b.getAttribute('data-details')); return; }
     if((b=t.closest('[data-openq]'))){ closeAll(); $('.simple').setAttribute('data-filter','all'); q=card(b.getAttribute('data-openq')); lift(q); if(q){ q.scrollIntoView({block:'center'}); q.focus(); } return; }
@@ -1845,12 +1846,22 @@ def q_cards(p, t):
     return out
 
 
+# What the person decides, in COPY.md's words: the glossary hides draft, promoted, PR, review
+# and merged, so a go-ahead, a finished part and a project close are said plainly.
+OK_SAY = {
+    "approve": "We've planned this part. Give us the go-ahead under Show details and we'll start building it.",
+    "merge": "This part is built and checked. Give it your OK under Show details so it goes in.",
+    "close": "Close the project to wrap it up. Nothing is deleted.",
+}
+
+
 def render_simple(rows, closed_all, stamp):
     """Simple mode: inbox left, progress rail right. Copy is web-simple/COPY.md's, and
     docs/operations.md → "Simple mode" lists the words it never shows."""
-    qs, you, quiet, live, fin = [], [], [], [], []
+    qs, you, quiet, live, fin, ok_items = [], [], [], [], [], []
     for g, p, done_proj, created, mine in rows:
         slug = str(p.get("slug") or "")
+        ok_items += [(p, t) for _g, _p, t, _h in mine if t.get("awaiting") in OK_SAY]
         ts = [todict(t) for t in tolist(p.get("tasks"))]
         for t in ts:
             st = str(t.get("status") or "")
@@ -1876,7 +1887,7 @@ def render_simple(rows, closed_all, stamp):
         ready = not ts or all(t.get("status") == "draft" for t in ts)
         return done, total, ready
 
-    n_needs = len(qs) + len(you)
+    n_needs = len(qs) + len(you) + len(ok_items)
     o = ['<section class="simple" data-filter="all" aria-label="loopd">']
     o.append('<header class="s-top"><span class="s-mark">loopd</span>')
     if rows or closed_all:
@@ -1902,7 +1913,7 @@ def render_simple(rows, closed_all, stamp):
                  '<p>Describe something you\'d like built. We\'ll plan it, ask what we need to '
                  'know, and build it. Everything shows up here.</p><div class="s-acts">'
                  '<button class="s-btn" data-new>+ Start your first project</button></div></div>')
-    elif not live and fin:
+    elif not live and fin and not n_needs:
         o.append('<div class="s-note"><div class="s-icon ok">✓</div><h2>Everything is done</h2>'
                  '<p>All %d projects are finished. Nothing needs you.</p><div class="s-acts">'
                  '<button class="s-btn" data-new>+ New project</button></div></div>' % len(fin))
@@ -1932,9 +1943,24 @@ def render_simple(rows, closed_all, stamp):
                      'options</button><button class="s-btn text" data-act="later">Later</button>'
                      '</div></article>')
         o.append("</div>")
-    elif not you and (rows or closed_all) and live:
+    elif not n_needs and (rows or closed_all) and live:
         o.append('<p class="s-quiet">Nothing needs you right now.</p>')
     o.append("</div>")
+
+    if ok_items:
+        o.append('<div class="s-sec" data-sec="ok"><div class="s-label you">Ready for you · %d'
+                 '</div>' % len(ok_items))
+        for p, t in ok_items:
+            verb, slug = t.get("awaiting"), str(p.get("slug") or "")
+            slug = slug if SLUG_SEG.fullmatch(slug) else ""
+            say = "Every part is finished." if verb == "close" else e(t.get("title"))
+            btn = ('<button class="s-btn pink" data-cmd="/close-project %s">Close the project'
+                   '</button>' % slug if verb == "close" and slug else "")
+            o.append('<div class="s-stuck s-ask" data-ok="%s"><div class="s-proj">%s</div>'
+                     '<div class="s-say">%s</div><div class="s-do">→ %s</div><div class="s-acts">'
+                     '%s<button class="s-btn" data-details="%s">Show details ›</button></div></div>'
+                     % (e(verb), e(p.get("title")), say, OK_SAY[verb], btn, slug))
+        o.append("</div>")
 
     if you or quiet:
         o.append('<div class="s-sec" data-sec="stuck"><div class="s-label%s">Stuck · %d</div>'
@@ -1944,7 +1970,8 @@ def render_simple(rows, closed_all, stamp):
                      '</div><div class="s-do">→ See what\'s in the way under Show details, then '
                      'let us know once it\'s cleared.</div><div class="s-acts"><button class="s-btn" '
                      'data-details="%s">Show details ›</button></div></div>'
-                     % (e(p.get("title")), e(t.get("title")), e(p.get("slug"))))
+                     % (e(p.get("title")), e(t.get("title")),
+                        p.get("slug") if SLUG_SEG.fullmatch(str(p.get("slug") or "")) else ""))
         for p, t in quiet:
             o.append('<div class="s-stuck quiet"><div class="s-proj">%s</div><div class="s-say">%s'
                      '</div><p class="s-calm">Nothing for you to do, we\'re on it.</p></div>'
@@ -1995,6 +2022,9 @@ def render_simple(rows, closed_all, stamp):
     stuck_by = {}
     for p, t in you + quiet:
         stuck_by.setdefault(str(p.get("slug") or ""), []).append(t)
+    ok_by = {}
+    for p, t in ok_items:
+        ok_by.setdefault(str(p.get("slug") or ""), []).append(t)
     for p, _c, ts in live + fin:
         slug = str(p.get("slug") or "")
         if not SLUG_SEG.fullmatch(slug):
@@ -2015,6 +2045,9 @@ def render_simple(rows, closed_all, stamp):
                      'Answer %s</button></div>' % (e(code or "?"), ref, e(code or "it")))
         for t in stuck_by.get(slug, []):
             o.append('<p class="s-dstat">Stuck: %s</p>' % e(t.get("title")))
+        for t in ok_by.get(slug, []):
+            o.append('<p class="s-dstat s-do">Ready for you: %s</p>'
+                     % ("every part is finished" if t.get("awaiting") == "close" else e(t.get("title"))))
         if p.get("description"):
             o.append('<div class="s-fact"><div class="s-label">What it is</div><p>%s</p></div>'
                      % e(p.get("description")))
