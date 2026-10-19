@@ -583,10 +583,13 @@ JSON in its own `_sensitivity` key. **No customer PII belongs in a task title in
 place.** Read that header before adding a field: `tests/snapshot.test.sh` fails on any key
 outside the documented set.
 
-The page's only external request is **one declared webfont** (two `<link>`s to Google's
-font hosts, asserted verbatim in `tests/snapshot.test.sh`) — no CDN, no `src=`, no
-`url()` in the stylesheet. It carries **one `<script>`**, a clipboard helper, and nothing
-from a snapshot ever reaches it: collapsing is `<details>`, not JavaScript. (Until
+The page makes **no external request**: fonts are system stacks with Inter and JetBrains
+Mono named first (the Google Fonts `<link>`s went on 2026-10-19; `tests/snapshot.test.sh`
+asserts their hosts absent) — no CDN, no `src=`, no `url()` in the stylesheet. It carries
+**one `<script>`** — the clipboard helper and simple mode — with no snapshot text in its
+source: it reads snapshot-derived `data-*` attributes (a `data-copy` handle, a question's
+`data-ref` for the `/loopd:answer` route) as data, and writes them back only through
+`textContent` and `setAttribute`. Collapsing is `<details>`, not JavaScript. (Until
 2026-08-24 this paragraph said "zero external requests, no `<script>` at all". That was
 true of the kanban `columns` page and never of the one that got published; `columns` has
 since been deleted, so the promise is now stated against the page that ships.) The page
@@ -682,6 +685,27 @@ an old task ranks ahead of Q1 on a newer task, two tasks sharing a timestamp nev
 interleave, and a refresh never reorders. A task with no
 `timestamp:` ranks after every dated one. The pane's inbox (task-003) and the web board
 (task-005) use this rule unchanged.
+
+### Simple mode: the web board's default view
+
+Every page `build-board.sh` renders — the served one, the tick's `file://` page and the
+published artifact — opens in **simple mode**: an inbox (questions oldest first with only
+the first open, then what is ready for you — a go-ahead on a planned part, an OK on a built
+one, a project close — then stuck items you can help with, then the ones we are handling) beside
+a 290px progress rail, which moves below the inbox under 820px. Today's board is behind
+**Show details**, filtered to one project when opened from that project's drawer, and with
+scripting off both views render, simple first. Questions and a project's need and done-when
+carry words only where `board-serve.sh` fills the seams above; elsewhere a card names its
+code and project and takes your own words, so the command it shows is always one
+`answer.sh` accepts. The page sends nothing: Send answer, Start the project and `N` show the
+`/loopd:answer` or `/loopd:new-project` command to type, until the answer queue
+(interactive-board task-006) exists. Keys: 1–9 pick an answer, Enter sends, `?` adds
+context, `L` is Later, `N` is New project, Esc closes.
+
+Simple mode never shows these words (`web-simple/COPY.md` → "Glossary");
+`tests/board-simple.test.sh` reads this line and greps the rendered simple-mode text for
+each: `scaffolded` `draft` `refining` `promoted` `dispatched` `PR` `review` `merged` `CI`
+`agent` `agents` `PM` `crew` `loop` `tick` `AWAITING.md` `branch` `status`.
 
 ---
 
