@@ -1274,10 +1274,8 @@ owner asked three times in one session, for three different instances.
 ```text
 
    ▄▄▄▄
-◀━▐    ▌
-  ▝▄▄▄▄▘
-loopd v3.9.0 · _loopd-example · org: cbmono
-───────────────────────────────────────────
+◀━▐    ▌ loopd v3.9.0 · _loopd-example · org: cbmono
+  ▝▄▄▄▄▘ ───────────────────────────────────────────
 
 SETTING               VALUE                               FROM
 owner                 example-user-007 · you@example.com  local/tracked
@@ -1335,8 +1333,8 @@ blocked on a socket and most make no network call at all. A failed or timed-out 
 renders a `SessionStart` hook's `systemMessage` as `SessionStart:<source> says: <content>`,
 so without it the identity line arrives pushed right by a label — 26 characters on a
 resumed session — while the rule under it, sized from the header and printed at column 0,
-does not. One blank line ends the label's line and the header and its rule both start at
-column 0. It lives in the banner rather than in the `systemMessage` field so that all three
+does not. One blank line ends the label's line, so the mark starts at column 0 and the header
+and its rule start together beside it (`--no-logo`: at column 0). It lives in the banner rather than in the `systemMessage` field so that all three
 renderings carry the same bytes; the rule is never padded to match the label, whose width
 changes with the source (`startup` / `resume` / `clear` / `compact`).
 
@@ -1369,7 +1367,7 @@ markdown *literally*. `--format md` is what `scripts/welcome.sh` asks for when i
 is a pipe — the welcome-skill relay path (`/loopd:welcome`), where the output is relayed into an assistant message and
 the measurement is the exact opposite: markdown renders and 0 of 4 ANSI escape bytes survive.
 Plain text is the default and what a terminal gets. The md rendering differs from the plain
-one in **emphasis markers alone** — `**…**` on the identity line and the two table headers,
+one in **emphasis markers alone** — `**…**` on the identity line (with the mark on, its whole row) and the two table headers,
 the three lines a reader should land on first — because it is that same one buffer with a
 transform applied on the way out, never a second banner to keep in step. `NO_COLOR` and
 `--color never` reach it too: on a channel that draws `**bold**` as bold, emphasis *is* the

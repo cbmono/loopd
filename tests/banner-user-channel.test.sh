@@ -87,11 +87,12 @@ eq()    { [ "$1" = "$2" ] && echo 0 || echo 1; }
 # prints above the header. `0` when there is no non-empty line at all, never the empty
 # string, so a channel that carried nothing FAILS rather than matching an empty string.
 head_no() { awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$1"; }
-# THE LOGO SITS ABOVE THE HEADER (task-024), so "the identity line opens the banner" is now
-# "it is exactly three lines under the first non-empty one" — the same claim about section
-# ORDER, and §9's mutants prove it still goes red when anything else prints above it.
-hdr_no()  { awk '/^loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$1"; }
-LOGO_ABOVE=3
+# THE HEADER SITS BESIDE THE LOGO'S MIDDLE ROW (interactive-board/task-008), so "the identity
+# line opens the banner" is now "it is exactly one line under the first non-empty one" — the
+# same claim about section ORDER, and §9's mutants prove it still goes red when anything else
+# prints above it.
+hdr_no()  { awk '/(^|▌ )loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$1"; }
+LOGO_ABOVE=1
 nth()     { printf '%s\n' "$1" | sed -n "$2p"; }
 
 # Named once rather than typed inline: a literal tab, a bell and an ESC are invisible in a
@@ -439,7 +440,7 @@ assert "no arguments ⇒ the plain banner, exit 0"       "$(eq "$RC" 0)"
 # and not a weaker one: the banner opens with one blank line so the harness's label ends the
 # line it owns, and this still goes red the moment §0's machinery alarm or any future section
 # prints above the header. §9 drives both mutants that prove it.
-assert "…starting at the logo, with the identity line under it and not a brace" \
+assert "…starting at the logo, with the identity line beside its middle row and not a brace" \
   "$(eq "$(hdr_no "$OUT")" "$(( $(head_no "$OUT") + LOGO_ABOVE ))")"
 assert "…and it is not JSON"                           "$(eq "$(parses "$OUT")" 1)"
 assert "--format text says the same thing" \
@@ -953,7 +954,7 @@ if mutate "mutant: the leading blank line deleted" "$HOOK" '$0 ~ anchor { next }
   # is the one that would have caught the rejected fix.
   assert "…while strip_sgr(systemMessage) still equals the mutant's own text banner" \
     "$(eq "$(strip_sgr "$M1_SM")" "$M1_TXT")"
-  assert "…and the identity line still sits right under the logo, so the claims differ" \
+  assert "…and the identity line still sits beside the logo, so the claims differ" \
     "$(eq "$(hdr_no "$M1_TXT")" "$(( $(head_no "$M1_TXT") + LOGO_ABOVE ))")"
   use_hook "$HOOK"
 fi

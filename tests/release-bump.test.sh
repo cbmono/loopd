@@ -107,9 +107,11 @@ for e in mkt["plugins"]:
 io.open(p, "w", encoding="utf-8").write(json.dumps(mkt, indent=2, ensure_ascii=False) + "\n")
 p = root + "/docs/operations.md"; lines = io.open(p, encoding="utf-8").read().split("\n")
 for i, l in enumerate(lines):
-    if l.startswith("loopd v"):
-        lines[i] = re.sub(r"^loopd v[0-9.]+", "loopd v" + v, l)
-        if i + 1 < len(lines) and lines[i+1] and set(lines[i+1]) == {u"\u2500"}: lines[i+1] = u"\u2500" * len(lines[i])
+    c = l.find("loopd v")
+    if c >= 0:
+        lines[i] = l[:c] + re.sub(r"^loopd v[0-9.]+", "loopd v" + v, l[c:])
+        n = lines[i+1] if i + 1 < len(lines) else ""
+        if n[c:] and set(n[c:]) == {u"\u2500"}: lines[i+1] = n[:c] + u"\u2500" * (len(lines[i]) - c)
 io.open(p, "w", encoding="utf-8").write("\n".join(lines))
 ' "$1" "$2"
   GIT -C "$1" commit -q -am "plant five $2"
@@ -214,7 +216,7 @@ ok "…and the banner rule is re-cut to the new header's WIDTH" \
 import io, re, sys
 lines = io.open(sys.argv[1] + "/docs/operations.md", encoding="utf-8").read().splitlines()
 bad = [i for i, l in enumerate(lines[:-1])
-       if l.startswith("loopd ") and set(lines[i+1]) == {u"─"} and len(lines[i+1]) != len(l)]
+       if "loopd v" in l and set(lines[i+1][l.find("loopd v"):]) == {u"─"} and len(lines[i+1]) != len(l)]
 print(len(bad))' "$TMP/five")" 0
 ok "…on a header that really did get longer"  "$(five "$TMP/five" | cut -d' ' -f1)" 2.10.0
 
@@ -230,7 +232,7 @@ ok "…with the banner rule re-cut to the SHORTER header" \
 import io, sys
 lines = io.open(sys.argv[1] + "/docs/operations.md", encoding="utf-8").read().splitlines()
 bad = [i for i, l in enumerate(lines[:-1])
-       if l.startswith("loopd ") and set(lines[i+1]) == {u"\u2500"} and len(lines[i+1]) != len(l)]
+       if "loopd v" in l and set(lines[i+1][l.find("loopd v"):]) == {u"\u2500"} and len(lines[i+1]) != len(l)]
 print(len(bad))' "$TMP/major")" 0
 # A companion tracks core's MAJOR (plugin/README.md), so the five are not the whole set on
 # a major bump — and template-version.test.sh section 3b is what goes red if they are missed.

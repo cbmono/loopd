@@ -71,10 +71,13 @@ eq()     { [ "$1" = "$2" ] && echo 0 || echo 1; }
 # nothing must FAIL these assertions rather than satisfy them with an empty string on both
 # sides of an equality.
 head_no() { awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$1"; }
-# THE LOGO SITS ABOVE THE HEADER (task-024), so every claim anchored on the identity line
-# finds it with this rather than assuming it opens the banner. `0` when there is none at all.
-hdr_no()  { awk '/^loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$1"; }
-LOGO_ABOVE=3
+# THE HEADER SITS BESIDE THE LOGO'S MIDDLE ROW (interactive-board/task-008), so every claim
+# anchored on the identity line finds it with this rather than assuming it opens the banner.
+# `0` when there is none at all.
+hdr_no()  { awk '/(^|▌ )loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$1"; }
+LOGO_ABOVE=1
+# The mark's rows 2 and 3 as they lead the header row and the rule row, padded and spaced.
+LOGO2='◀━▐    ▌ '; LOGO3='  ▝▄▄▄▄▘ '
 nth()     { printf '%s\n' "$1" | sed -n "$2p"; }
 
 # =======================================================================================
@@ -464,10 +467,11 @@ assert "the banner opens with exactly ONE blank line" "$(eq "$(head_no "$OUT")" 
 CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" > "$TMP/banner.raw" 2>/dev/null
 assert "…and introduces no trailing blank line" \
   "$(eq "$(awk 'END { print ($0 == "" ? "blank" : "text") }' "$TMP/banner.raw")" text)"
-# WAS "on the first line", THEN "on the first NON-EMPTY line" — now "three lines under it",
-# because task-024 puts the logo there. Same claim about section order: still false the moment
-# §0's machinery alarm, or any future section, prints above it. Section 12 drives that mutant.
-assert "…exactly three lines under the first NON-EMPTY one, the logo and nothing else above it" \
+# WAS "on the first line", THEN "three lines under the first NON-EMPTY one" (task-024) — now
+# ONE line under it, beside the logo's middle row (task-008). Same claim about section order:
+# still false the moment §0's machinery alarm, or any future section, prints above it.
+# Section 12 drives that mutant.
+assert "…exactly ONE line under the first NON-EMPTY one, logo row 1 and nothing else above it" \
   "$(eq "$(hdr_no "$OUT")" "$(( $(head_no "$OUT") + LOGO_ABOVE ))")"
 # READS AS A HEADER WITH COLOUR OFF, which is the normal case: a SessionStart hook writes
 # to a pipe, never a terminal, so the bold is gone exactly where the banner is read. The
@@ -475,13 +479,20 @@ assert "…exactly three lines under the first NON-EMPTY one, the logo and nothi
 # the line it underlines rather than a fixed run of dashes.
 #
 # ANCHORED ON THE IDENTITY LINE, NOT ON LINES 1 AND 2, for the same reason as above. The
-# rule's DERIVATION is untouched by that: `^─+$` says it is box-drawing from column 0 with
-# nothing in front of it, so it is neither padded nor indented to line up under a label whose
-# width is not ours.
-h1="$(nth "$OUT" "$(hdr_no "$OUT")")"
-h2="$(nth "$OUT" "$(( $(hdr_no "$OUT") + 1 ))")"
-assert "the line under it is a rule"         "$(grep -qE '^─+$' <<<"$h2" && echo 0 || echo 1)"
+# rule's DERIVATION is untouched by that: once the mark's row is taken off, `^─+$` says it is
+# box-drawing with nothing else in front of it, so it is neither padded nor indented to line
+# up under a label whose width is not ours.
+h1row="$(nth "$OUT" "$(hdr_no "$OUT")")"; h1="${h1row#"$LOGO2"}"
+h2row="$(nth "$OUT" "$(( $(hdr_no "$OUT") + 1 ))")"; h2="${h2row#"$LOGO3"}"
+assert "the header sits beside the logo's middle row" "$([ "$h1" != "$h1row" ] && echo 0 || echo 1)"
+assert "the line under it is a rule, beside the bottom row, from the header's column" \
+  "$([ "$h2" != "$h2row" ] && grep -qE '^─+$' <<<"$h2" && echo 0 || echo 1)"
 assert "…exactly as wide as the header"      "$(eq "${#h2}" "${#h1}")"
+# `--no-logo` IS THE OLD TWO LINES: the header at column 0, the rule alone under it.
+NL_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --no-logo 2>/dev/null)"
+n1="$(nth "$NL_OUT" "$(head_no "$NL_OUT")")"; n2="$(nth "$NL_OUT" "$(( $(head_no "$NL_OUT") + 1 ))")"
+assert "--no-logo: the header IS the first non-empty line" "$(eq "$n1" "$h1")"
+assert "…and the rule alone under it, at column 0" "$(eq "$n2" "$h2")"
 # AND ITS WIDTH IS DERIVED FROM THE HEADER, which one run cannot show: a constant, or a width
 # measured against anything other than `head_line`, satisfies both assertions above on this
 # fixture alone. A second instance whose name is longer must move the header AND the rule
@@ -491,8 +502,8 @@ mkdir -p "$LONGNAME/.claude/agents"
 printf 'stub\n' > "$LONGNAME/$AB_SCHEMA"
 cp "$INST/instance.config.json" "$LONGNAME/instance.config.json"
 L_OUT="$(CLAUDE_PROJECT_DIR="$LONGNAME" bash "$HOOK" 2>/dev/null)"
-l1="$(nth "$L_OUT" "$(hdr_no "$L_OUT")")"
-l2="$(nth "$L_OUT" "$(( $(hdr_no "$L_OUT") + 1 ))")"
+l1="$(nth "$L_OUT" "$(hdr_no "$L_OUT")")"; l1="${l1#"$LOGO2"}"
+l2="$(nth "$L_OUT" "$(( $(hdr_no "$L_OUT") + 1 ))")"; l2="${l2#"$LOGO3"}"
 assert "a longer instance name widens the header…"       "$([ "${#l1}" -gt "${#h1}" ] && echo 0 || echo 1)"
 assert "…and the rule moves with it, still exactly as wide" "$(eq "${#l2}" "${#l1}")"
 rm -rf "$LONGNAME"
@@ -1260,7 +1271,7 @@ assert "…and the intact hook carries exactly ONE anchor" \
 CTL="$(mut_run control.sh)"
 assert "CONTROL: intact, the banner opens with exactly ONE blank line" \
   "$(eq "$(head_no "$CTL")" 2)"
-assert "CONTROL: intact, the identity line sits three lines under the first NON-EMPTY one" \
+assert "CONTROL: intact, the identity line sits one line under the first NON-EMPTY one" \
   "$(eq "$(hdr_no "$CTL")" "$(( $(head_no "$CTL") + LOGO_ABOVE ))")"
 
 # MUTANT 1 — the leading blank line deleted. Criterion 8: the assertion that says the banner
@@ -1289,13 +1300,13 @@ if mutate "mutant: a line printed above the identity line" "$HOOK" \
   assert "the mutant really printed a line above the header" \
     "$(has 'MUTANT: a section above the header' "$M2_OUT")"
   assert "…and still prints the banner under it" "$(has 'loopd' "$M2_OUT")"
-  assert "ABOVE THE HEADER: 'three lines under the first NON-EMPTY one' goes RED" \
+  assert "ABOVE THE HEADER: 'one line under the first NON-EMPTY one' goes RED" \
     "$([ "$(hdr_no "$M2_OUT")" != "$(( $(head_no "$M2_OUT") + LOGO_ABOVE ))" ] && echo 0 || echo 1)"
   # ANCHORED ON WHERE THE RULE BELONGS, NOT ON THE FIRST LINE: with the logo above the header
   # the line under the first non-empty one is a logo line in the intact banner too, so that
   # spelling would pass on both and prove nothing.
   assert "…and the rule assertions go with it — the rule is no longer where it belongs" \
-    "$(grep -qE '^─+$' <<<"$(printf '%s' "$(nth "$M2_OUT" "$(( $(head_no "$M2_OUT") + LOGO_ABOVE + 1 ))")")" && echo 1 || echo 0)"
+    "$(grep -qE '▘ ─+$' <<<"$(printf '%s' "$(nth "$M2_OUT" "$(( $(head_no "$M2_OUT") + LOGO_ABOVE + 1 ))")")" && echo 1 || echo 0)"
   assert "…while the blank-line assertion stays GREEN, so the two claims do not overlap" \
     "$(eq "$(head_no "$M2_OUT")" 2)"
 fi
@@ -1318,7 +1329,7 @@ printf '{ "org": "example-org" }\n' > "$DANGLING/instance.config.json"
 ln -s "$TMP/never-existed/index.md" "$DANGLING/agents/index.md"
 DANG="$(CLAUDE_PROJECT_DIR="$DANGLING" bash "$HOOK" 2>/dev/null)"
 assert "a dangling probe really fires §0's alarm" "$(has 'MACHINERY SYMLINKS' "$DANG")"
-assert "§0 ABOVE THE HEADER: the identity line stops sitting three lines under the first one" \
+assert "§0 ABOVE THE HEADER: the identity line stops sitting one line under the first one" \
   "$([ "$(hdr_no "$DANG")" != "$(( $(head_no "$DANG") + LOGO_ABOVE ))" ] && echo 0 || echo 1)"
 assert "…and the alarm, not the header, is what the label now prefixes — still one blank line" \
   "$(eq "$(head_no "$DANG")" 2)"

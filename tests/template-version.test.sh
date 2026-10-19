@@ -223,13 +223,15 @@ ok "…and that comparison catches a planted mismatch" "$planted" 1
 rule_drift() { # reads file names on stdin, prints how many headers are mis-underlined
   python3 -c '
 import io, re, sys
-hdr = re.compile(r"^loopd v?[0-9]+\.[0-9]+\.[0-9]+ ")
+hdr = re.compile(r"loopd v?[0-9]+\.[0-9]+\.[0-9]+ ")
 drifted = 0
 for name in sys.stdin.read().split():
     lines = io.open(name, encoding="utf-8").read().splitlines()
     for prev, cur in zip(lines, lines[1:]):
-        if hdr.match(prev) and cur and set(cur) == {u"\u2500"} and len(cur) != len(prev):
-            sys.stderr.write("        RULE %d vs HEADER %d in %s\n" % (len(cur), len(prev), name))
+        m = hdr.search(prev)
+        c = m.start() if m else 0
+        if m and cur[c:] and set(cur[c:]) == {u"\u2500"} and len(cur) != len(prev):
+            sys.stderr.write("        RULE %d vs HEADER %d in %s\n" % (len(cur) - c, len(prev) - c, name))
             drifted += 1
 print(drifted)
 '
@@ -240,6 +242,9 @@ mkdir -p "$TMP/planted"
 { printf 'loopd %s \xc2\xb7 x\n' "$ver"; printf '\xe2\x94\x80\xe2\x94\x80\n'; } > "$TMP/planted/sample.md"
 ok "…and that scan flags a rule that is too short" \
   "$(printf '%s\n' "$TMP/planted/sample.md" | rule_drift 2>/dev/null)" 1
+{ printf '\xe2\x97\x80 loopd %s \xc2\xb7 x\n' "$ver"; printf '  \xe2\x94\x80\xe2\x94\x80\n'; } > "$TMP/planted/beside.md"
+ok "…and so it does beside the logo, measured from the header's own column" \
+  "$(printf '%s\n' "$TMP/planted/beside.md" | rule_drift 2>/dev/null)" 1
 
 # =======================================================================================
 echo "== 3. \`core\` is a closed list, and it is the list the rule files govern =="
@@ -635,11 +640,11 @@ ok "…prints the drift line"                    "$(printf '%s\n' "$OUT" | grep 
 # the settings rows further down.
 # COUNTED FROM THE IDENTITY LINE, NOT FROM LINE 1. The banner opens with one blank line
 # (task-027) so the harness's `SessionStart:<source> says: ` label ends the line it owns, and
-# the logo's three lines sit above the header (task-024) — so "directly under the header
-# rule" is found from the IDENTITY line: it, its rule, §2b's own blank separator, then the
-# line. The claim is unchanged; only the anchor is.
+# the header sits beside the logo's middle row (interactive-board/task-008) — so "directly
+# under the header rule" is found from the IDENTITY line: it, its rule, §2b's own blank
+# separator, then the line. The claim is unchanged; only the anchor is.
 HEAD_NO="$(awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$OUT")"
-HDR_NO="$(awk '/^loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$OUT")"
+HDR_NO="$(awk '/(^|▌ )loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$OUT")"
 ok "…the banner opens with exactly ONE blank line"  "$HEAD_NO" 2
 ok "…and the drift line is directly under the header rule (line $((HDR_NO + 3)))" \
   "$(grep -qF 'UPDATE' <<<"$(printf '%s\n' "$OUT" | sed -n "$((HDR_NO + 3))p")" && echo yes || echo no)" yes
