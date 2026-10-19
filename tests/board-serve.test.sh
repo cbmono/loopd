@@ -433,5 +433,64 @@ ok "the flag and the text field are gone from plugin/" \
 kill -TERM "$SRV_D" 2>/dev/null
 
 echo
+echo "== 8. POST /__queue: one path, a per-launch token, Host, Origin and JSON, else refused =="
+# Raw sockets again: curl would fill in a Host and drop nothing, so each missing piece is
+# written (or left out) byte for byte. A 202 control keeps the 403s from being a dead server.
+raw_post() { # <port> <path> <host|-> <origin|-> <content-type|-> <token|-> <body>
+  python3 - "$@" <<'PY'
+import socket, sys
+port, path, host, origin, ctype, token, body = sys.argv[1:8]
+h = ["POST %s HTTP/1.0" % path]
+for k, v in (("Host", host), ("Origin", origin), ("Content-Type", ctype), ("X-Loopd-Token", token)):
+    if v != "-":
+        h.append("%s: %s" % (k, v))
+b = body.encode()
+h.append("Content-Length: %d" % len(b))
+try:
+    s = socket.create_connection(("127.0.0.1", int(port)), timeout=10)
+    s.sendall(("\r\n".join(h) + "\r\n\r\n").encode() + b)
+    data = b""
+    while True:
+        c = s.recv(4096)
+        if not c:
+            break
+        data += c
+    print(data.split(b" ", 2)[1].decode())
+except Exception:
+    print("000")
+PY
+}
+Q="$TMP/group/_ai-bridge-queue"
+new_instance "$Q"
+SRV_Q="$(start_server "$Q" "$TMP/q.log")"
+PQ="$(cd "$Q" && bash "$SERVE" --print-port)"
+TOK="$(body_of "$PQ" /board.html | sed -n 's/.*<meta name="loopd-queue" content="\([^"]*\)">.*/\1/p' | head -1)"
+H="127.0.0.1:$PQ"; O="http://$H"; J=application/json
+E='{"type":"answer","id":"e2e00001","task":"p/task-001","q":"Q1","option":1}'
+ok "the served page carries a token"                  "$(yes_if test "${#TOK}" -ge 32)" yes
+ok "every piece present: 202"                         "$(raw_post "$PQ" /__queue "$H" "$O" "$J" "$TOK" "$E")" 202
+ok "…and one JSON line lands in the gitignored queue" "$(wc -l < "$Q/$AB_QUEUE" | tr -d ' ')|$(cat "$Q/$(dirname "$AB_QUEUE")/.gitignore")" "1|*"
+ok "…its from is the server's, never the page's"     "$(python3 -c 'import json,sys;print(json.loads(open(sys.argv[1]).readline())["from"])' "$Q/$AB_QUEUE")" "<unknown>"
+ok "no token: 403"                                    "$(raw_post "$PQ" /__queue "$H" "$O" "$J" - "$E")" 403
+ok "a wrong token: 403"                               "$(raw_post "$PQ" /__queue "$H" "$O" "$J" "x$TOK" "$E")" 403
+ok "a foreign Host (DNS rebinding): 403"             "$(raw_post "$PQ" /__queue "rebound.example.com:$PQ" "http://rebound.example.com:$PQ" "$J" "$TOK" "$E")" 403
+ok "the board host on another port: 403"            "$(raw_post "$PQ" /__queue "127.0.0.1:1" "http://127.0.0.1:1" "$J" "$TOK" "$E")" 403
+ok "no Origin: 403"                                   "$(raw_post "$PQ" /__queue "$H" - "$J" "$TOK" "$E")" 403
+ok "a foreign Origin: 403"                            "$(raw_post "$PQ" /__queue "$H" "http://example.com" "$J" "$TOK" "$E")" 403
+ok "text/plain (a no-preflight form post): 415"       "$(raw_post "$PQ" /__queue "$H" "$O" text/plain "$TOK" "$E")" 415
+ok "localhost works as the Host too"                  "$(raw_post "$PQ" /__queue "localhost:$PQ" "http://localhost:$PQ" "$J" "$TOK" "${E/e2e00001/e2e00002}")" 202
+ok "an unknown key is refused at POST: 400"           "$(raw_post "$PQ" /__queue "$H" "$O" "$J" "$TOK" '{"type":"answer","id":"e2e00003","task":"p/task-001","q":"Q1","option":1,"from":"x"}')" 400
+ok "an unblock entry is refused in v1: 400"           "$(raw_post "$PQ" /__queue "$H" "$O" "$J" "$TOK" '{"type":"unblock","id":"e2e00004"}')" 400
+ok "POST anywhere else still answers 405"             "$(raw_post "$PQ" /board.html "$H" "$O" "$J" "$TOK" "$E")" 405
+ok "nothing refused reached the queue"                "$(wc -l < "$Q/$AB_QUEUE" | tr -d ' ')" 2
+ok "the token is in no file: not SNAPSHOT.json, not the rendered page" \
+  "$(grep -rlF -- "$TOK" "$Q" | wc -l | tr -d ' ')" 0
+SRV_Q2="$(kill -TERM "$SRV_Q" 2>/dev/null; sleep 1; start_server "$Q" "$TMP/q2.log")"
+TOK2="$(body_of "$PQ" /board.html | sed -n 's/.*<meta name="loopd-queue" content="\([^"]*\)">.*/\1/p' | head -1)"
+ok "a new launch has a new token, and the old one is refused" \
+  "$([ -n "$TOK2" ] && [ "$TOK2" != "$TOK" ] && echo yes)|$(raw_post "$PQ" /__queue "$H" "$O" "$J" "$TOK" "${E/e2e00001/e2e00005}")" "yes|403"
+kill -TERM "$SRV_Q2" 2>/dev/null
+
+echo
 echo "pass=$pass fail=$fail skip=$skip"
 [ "$fail" -eq 0 ]
