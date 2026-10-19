@@ -593,6 +593,22 @@ test('INBOX ORDER: questions by the one order rule, then stuck you can help, stu
   await ui.unmount()
 })
 
+test('INBOX ORDER: two tasks sharing a timestamp keep their questions together, task by task', SIMPLE, async ($, on) => {
+  const w = world(SNAP)
+  const at = 'timestamp: 2026-10-07T00:00:00Z\n'
+  w.files.set(P + '/same/project.md', { text: proj('Same', '2026-10-07T00:00:00Z'), mtimeMs: 1000 })
+  w.files.set(P + '/same/tasks/task-001-a.md', { text: task('title: "A"\nstatus: draft\n' + at + 'open_questions: [ "Q2: A Q2?", "Q1: A Q1?" ]'), mtimeMs: 1000 })
+  w.files.set(P + '/same/tasks/task-002-b.md', { text: task('title: "B"\nstatus: draft\n' + at + 'open_questions: [ "Q1: B Q1?" ]'), mtimeMs: 1000 })
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = await shown(ui)
+  expect(text).toContain('Q1 · Same · A')
+  expect(under(text, '2 more questions after this')).toEqual(['Q2 · Same · A Q2?', 'Q1 · Same · B Q1?'])
+  await ui.unmount()
+})
+
 test('LATER: runs answer later, the next question opens, and a deferred question is drawn last', SIMPLE, async ($, on) => {
   const w = inboxWorld()
   w.onRun = (e: any) => { if (/ later$/.test(e.args)) w.files.set(LATER_FILE, { text: 'projects/one/tasks/task-001-old.md#Q3\n', mtimeMs: 7000 }) }

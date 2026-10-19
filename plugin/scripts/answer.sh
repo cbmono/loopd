@@ -57,8 +57,8 @@ key=""; [ -n "$qlabel" ] && [ -n "$inst_abs" ] && [ "${doc_abs#"$inst_abs"/}" !=
 # unlater [<line>] — drop this question's key from the later file, then append <line>.
 unlater() {
   [ -n "$key" ] && { [ -f "$later" ] || [ -n "${1:-}" ]; } || return 0
-  mkdir -p "$(dirname "$later")" && { grep -vxF -- "$key" "$later" 2>/dev/null; [ -z "${1:-}" ] || printf '%s\n' "$1"; } > "$later.tmp" &&
-    mv -f "$later.tmp" "$later"
+  mkdir -p "$(dirname "$later")" && { grep -vxF -- "$key" "$later" 2>/dev/null; [ -z "${1:-}" ] || printf '%s\n' "$1"; } > "$later.tmp.$$" &&
+    mv -f "$later.tmp.$$" "$later"
 }
 
 # block <option|depth> <k> — prints how many are stored, then item k when it exists.

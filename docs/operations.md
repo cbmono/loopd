@@ -677,8 +677,9 @@ An unnumbered question, or one with no `### Q<n>` block, gets its text and no op
 depths. An entry carrying ` --- ` is answered and is not served.
 
 **The order rule — oldest task first.** Questions rank by their task's `timestamp:`, then by
-`Q<n>` within the task (an unnumbered one last), then by slug and task id, so a later Q3 on
-an old task ranks ahead of Q1 on a newer task and a refresh never reorders. A task with no
+slug and task id, then by `Q<n>` within the task (an unnumbered one last), so a later Q3 on
+an old task ranks ahead of Q1 on a newer task, two tasks sharing a timestamp never
+interleave, and a refresh never reorders. A task with no
 `timestamp:` ranks after every dated one. The pane's inbox (task-003) and the web board
 (task-005) use this rule unchanged.
 

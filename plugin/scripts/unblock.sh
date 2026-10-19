@@ -58,7 +58,7 @@ if [ "$decided" -eq 0 ]; then
   echo "Escalation: ${note:-none recorded}"
   exit 0
 fi
-decision="$(printf '%s ' "${words[@]}" | tr '\n\t\r' '   ' | sed 's/  */ /g; s/^ //; s/ $//')"
+decision="$(printf '%s ' ${words[@]+"${words[@]}"} | tr '\n\t\r' '   ' | sed 's/  */ /g; s/^ //; s/ $//')"
 [ -n "$decision" ] || usage
 
 login="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --self 2>/dev/null)"

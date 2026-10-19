@@ -263,8 +263,8 @@ function draw($: any, e: any): any {
 
 // ---------------------------------------------------------------- simple mode
 // An inbox, top to bottom: questions, stuck tasks a person can clear, stuck tasks we are
-// on, progress. One order rule (docs/operations.md → "The serve-time fill"): oldest task
-// `timestamp:` first, then Q<n> within the task, then slug and task id; undated last.
+// on, progress. One order rule, board-serve.sh's rank(): oldest task `timestamp:` first,
+// then slug, then task id, then Q<n> within the task; undated last.
 type Question = { label: string; text: string; options: string[]; first: boolean }
 type Item = { slug: string; file: string; mtimeMs: number; title: string; status: string; ts: number; stall: number; questions: Question[]; unreadable: boolean }
 type Simple = { slug: string; title: string; autonomy: string; ts: number; finished: boolean; done: number; total: number; items: Item[] }
@@ -486,14 +486,15 @@ async function refreshSimple($: any): Promise<boolean> {
 }
 
 function taskPath(it: Item): string { return PROJECTS_DIR + '/' + it.slug + '/' + TASKS_DIR + '/' + it.file }
-// The one order rule. Never a subtraction on qn: Infinity - Infinity is NaN.
+// The one order rule, key for key with board-serve.sh: tasks sharing a timestamp (every
+// task one scaffold writes) must not interleave. Never a subtraction on qn: Infinity - Infinity is NaN.
 function order(a: { ts: number; qn: number; slug: string; file: string }, b: typeof a): number {
   const ad = isNaN(a.ts), bd = isNaN(b.ts)
   if (ad !== bd) return ad ? 1 : -1
   if (!ad && a.ts !== b.ts) return a.ts < b.ts ? -1 : 1
-  if (a.qn !== b.qn) return a.qn < b.qn ? -1 : 1
   if (a.slug !== b.slug) return a.slug < b.slug ? -1 : 1
-  return a.file < b.file ? -1 : a.file > b.file ? 1 : 0
+  if (a.file !== b.file) return a.file < b.file ? -1 : 1
+  return a.qn === b.qn ? 0 : a.qn < b.qn ? -1 : 1
 }
 function qn(q: Question): number { return q.label ? parseInt(q.label.slice(1), 10) : Infinity }
 // Every open question, in the order the inbox draws them: the rule above, then whatever

@@ -86,7 +86,9 @@ ok "the commit is the human's, via people"   "$(git -C "$B" log -1 --format='%an
 ok "…and it reached the remote"              "$(git -C "$B.git" log -1 --format=%s main)" "docs: unblock task-001-x"
 ok "the work tree is clean"                  "$(git -C "$B" status --porcelain | wc -l | tr -d ' ')" 0
 ok "a second run refuses: it is not blocked any more" "$(run "$B" --decision again >/dev/null 2>&1; echo $?)" 1
-ok "an empty decision is a usage error"      "$(B2="$(fixture empty blocked)"; run "$B2" --decision >/dev/null 2>&1; echo $?)" 2
+B2="$(fixture empty blocked)"; OUT="$(run "$B2" --decision 2>&1)"; RC=$?
+ok "an empty decision is a usage error"      "$RC" 2
+ok "…named as usage, not an unbound variable" "$(printf '%s' "$OUT" | grep -c 'unbound' | tr -d ' ')" 0
 ok "the script never forces a push"          "$(grep -cE -- '--force|push -f' "$SH" | tr -d ' ')" 0
 
 echo
