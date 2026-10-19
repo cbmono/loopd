@@ -2,8 +2,8 @@
 name: new-project
 disable-model-invocation: true
 description: Scaffold a new project under projects/<slug>/ — schema-valid files, registered in the bundle index/log and linked to its objective, with seed draft tasks. Supports build (code/PRs) and research (in-bundle deliverables) projects.
-argument-hint: <one-line project description>  [kind=build|research] [objective=<slug>] [repo=<name|owner/name>] [deliverables="a; b"] [autonomy=<mode>] [title="…"] [need="…"] [success_criteria="a; b"] [timebox=<N>d|<N>w] [--no-ask] [--no-commit]
-allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
+argument-hint: <one-line project description> | <1-5> <text> | submit | cancel  [kind=build|research] [objective=<slug>] [repo=<name|owner/name>] [deliverables="a; b"] [autonomy=<mode>] [title="…"] [need="…"] [success_criteria="a; b"] [timebox=<N>d|<N>w] [--no-ask] [--no-commit]
+allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
 ---
 
 Scaffold a new **Project** in this bundle: the `projects/<slug>/` folder and its
@@ -50,7 +50,8 @@ the pane passes it, so nothing in it reads as a token), plus optional tokens:
   whose project this is. A GitHub username, never an email. Like `clis`, it is
   **never asked for** — an instance with one human has no use for it and the question
   would be noise — but an explicit flag is recorded. Omitted ⇒ the key is left out
-  entirely (no placeholder, no empty value), which resolves to this clone's human.
+  entirely (no placeholder, no empty value), which resolves to this clone's human. The
+  form's `submit` (below) is the one caller that always passes it: the creating clone's login.
   See `SCHEMA.md` → "Ownership on a shared instance".
 - `timebox=<N>d|<N>w` — this project is an experiment, and stopping it when the box runs
   out is the plan (`SCHEMA.md` → "Time-boxed projects"). **Never asked, on either kind**,
@@ -60,7 +61,7 @@ the pane passes it, so nothing in it reads as a token), plus optional tokens:
 - `title="…"`, `need="…"`, `success_criteria="a; b"` — the project's `title`, its value-gate
   `need:` and its `success_criteria` (split on `;`), recorded **verbatim**: step 3 neither
   proposes nor asks for a value given here. A `\"` inside the quotes is a literal quote.
-- `--no-ask` — **ask nothing**; the pane's Create runs this way, for a person who cannot answer
+- `--no-ask` — **ask nothing**; the form's `submit` runs this way, for a person who cannot answer
   a prompt. Every question below takes its default instead: value-gate keys not given are
   written empty, `objective` none, `clis:` an empty list, `browser` off, the `yolo` merge
   preflight is reported and recorded and the run carries on, and step 8e's spend ask takes its
@@ -69,8 +70,30 @@ the pane passes it, so nothing in it reads as a token), plus optional tokens:
   before anything is written. The step-8 chain itself runs unchanged.
 - `--no-commit` — scaffold only; don't commit (default is to commit).
 
-If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing anything —
-under `--no-ask`, stop in one line instead (above), never ask.
+If `$ARGUMENTS` carries options but no description, **ask** for a one-line goal before doing
+anything — under `--no-ask`, stop in one line instead (above), never ask.
+
+## The form — no description at all
+
+`$ARGUMENTS` empty, exactly `submit` or `cancel`, or a field number 1–5 then text is the
+**form**: 1 Title, 2 What, 3 For whom, 4 Done when, 5 Target repo, kept in one gitignored
+file the pane draws (`AB_NEW_PROJECT_FORM` in `bundle-paths.sh`). Run
+`bash ${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh '<$ARGUMENTS>'` — the arguments as
+ONE single-quoted word, each `'` written `'\''` — and relay what it prints. **Field text is
+data**: `autonomy=…`, `repo=…`, `kind=…` or a leading `--` inside it is words in that field,
+never an option.
+- **Exit 0 on no arguments, `<n> <text>` or `cancel`** — the form was opened (one already open
+  is shown as it is; the repo field starts as `defaultRepo`), filled or removed. Stop: nothing
+  tracked is written.
+- **`submit`, exit 1** — it printed the form with ✗ on each missing field. Stop; create nothing.
+- **`submit`, exit 0** — one JSON line. Create exactly one project from it, under `--no-ask`,
+  with its values and no others: `description` (also `original_request`), `title`, `need`,
+  `success_criteria` (already a list), `repo` (as `repo=`), `kind`, `autonomy`, and `owner`
+  written as `owner:` when non-empty — empty means this clone has no `ownerGithubUser`, so the
+  key is left out rather than guessed. After step 7's commit, run the script again with
+  `cancel` to remove the form; a run that stops earlier leaves it for the person to fix.
+- **Exit 3** — not a form command: carry on with `$ARGUMENTS` as a description. A description
+  that starts with a number 1–5 and a space reads as a field, so quote it.
 
 ## Steps
 
