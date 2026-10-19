@@ -55,8 +55,9 @@ PY
 CSS="$TMP/css"; part css > "$CSS"; JS="$TMP/js"; part script > "$JS"
 
 echo "== SIMPLE BY DEFAULT =="
-ok "both views are on the page, today's board inside .details" "$(has '<div class="loopd">
-<div class="details"><div class="board" data-tab="all">' "$PAGE")" yes
+flat() { tr -d '\n' < "$1"; }
+hasflat() { flat "$2" | grep -qF -- "$1" && echo yes || echo no; }
+ok "both views are on the page, today's board inside .details" "$(hasflat '<div class="loopd"><div class="details"><div class="board" data-tab="all">' "$PAGE")" yes
 ok "…and simple mode shows first"                 "$(has '.simple{order:-1;' "$CSS")" yes
 ok "today's board is hidden unless Show details chose it" "$(has 'html[data-js] .loopd:not([data-view="details"]) .details,' "$CSS")" yes
 ok "the script opens on the simple view"          "$(has "root.setAttribute('data-view','simple')" "$JS")" yes
@@ -126,13 +127,12 @@ echo "== ONE BRAND, TYPE AND SHAPE =="
 SCSS="$TMP/scss"; sed -n '/SIMPLE MODE: the default view/,/prefers-reduced-motion/p' "$CSS" > "$SCSS"
 ok "simple mode draws no hex of its own"          "$(grep -cE '#[0-9a-fA-F]{3,8}\b' "$SCSS")" 0
 ok "the light theme follows prefers-color-scheme" "$(python3 -c 'import re,sys; c=open(sys.argv[1]).read(); m=re.search(r"@media \(prefers-color-scheme:light\)\{:root\{(.*?)\}\}", c, re.S); print(bool(m and "--pink-tint" in m.group(1) and "--signal-soft-text:#c2337f" in m.group(1)))' "$CSS")" True
-ok "section labels: JetBrains Mono 11px, .12em"   "$(has ".s-label{font:700 11px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace;
-  letter-spacing:.12em;" "$SCSS")" yes
+ok "section labels: JetBrains Mono 11px, .12em"   "$(hasflat ".s-label{font:700 11px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace;  letter-spacing:.12em;" "$SCSS")" yes
 ok "codes are JetBrains Mono"                     "$(has ".s-code{font:700 12px/1.4 'JetBrains Mono'" "$SCSS")" yes
 ok "UI is Inter"                                  "$(has ".simple button{font-family:'Inter'" "$SCSS")" yes
-ok "buttons outlined, radius 10"                  "$(tr -d '\n' < "$SCSS" | grep -c 'border:1px solid var(--line-2);border-radius:10px')" 1
-ok "cards radius 12"                              "$(tr -d '\n' < "$SCSS" | grep -oE '\.s-(q|stuck)\{[^}]*border-radius:12px' | wc -l | tr -d ' ')" 2
-ok "chips radius 999"                             "$(tr -d '\n' < "$SCSS" | grep -c '\.s-chip{[^}]*border-radius:999px')" 1
+ok "buttons outlined, radius 10"                  "$(flat "$SCSS" | grep -c 'border:1px solid var(--line-2);border-radius:10px')" 1
+ok "cards radius 12"                              "$(flat "$SCSS" | grep -oE '\.s-(q|stuck)\{[^}]*border-radius:12px' | wc -l | tr -d ' ')" 2
+ok "chips radius 999"                             "$(flat "$SCSS" | grep -c '\.s-chip{[^}]*border-radius:999px')" 1
 
 echo "== ESCAPING =="
 mkdir -p "$D/projects/evil/tasks"
