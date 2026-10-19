@@ -31,24 +31,28 @@ A='{"type":"answer","id":"ID","task":"news/task-003","q":"Q12",'
 
 echo "== 1. strict schema, refused at append =="
 fresh
-for bad in \
-  '{"type":"answer","id":"short","task":"news/task-003","q":"Q12","option":1}' \
-  "${A/ID/aaaaaaaa}\"option\":1,\"text\":\"both\"}" \
-  "${A/ID/aaaaaaaa}\"option\":true}" \
-  "${A/ID/aaaaaaaa}\"option\":\"1\"}" \
-  "${A/ID/aaaaaaaa}\"option\":0}" \
-  "${A/ID/aaaaaaaa}\"text\":\"$(printf 'x%.0s' $(seq 1 2001))\"}" \
-  "${A/ID/aaaaaaaa}\"text\":\"bell\\u0007\"}" \
-  "${A/ID/aaaaaaaa}\"option\":1,\"ts\":\"2026-01-01T00:00:00Z\"}" \
-  "${A/ID/aaaaaaaa}\"option\":1,\"from\":\"example-user-008\"}" \
-  '{"type":"answer","id":"aaaaaaaa","task":"../etc/passwd","q":"Q12","option":1}' \
-  '{"type":"more","id":"aaaaaaaa","task":"news/task-003","q":"12"}' \
-  '{"type":"new-project","id":"aaaaaaaa","title":"t","what":"w","who":"p","doneWhen":"d","repo":"a b"}' \
-  '{"type":"new-project","id":"aaaaaaaa","title":"t","what":"w","who":"p","doneWhen":"d"}' \
-  '{"type":"unblock","id":"aaaaaaaa"}' '{"type":"board","id":"aaaaaaaa","on":true}' \
-  '{"type":"shell","id":"aaaaaaaa"}' '[1]' 'not json'; do
+while IFS= read -r bad; do
   ok "refused: $(printf '%s' "$bad" | cut -c1-60)" "$(rc add "$bad")" 1
-done
+done <<EOF
+{"type":"answer","id":"short","task":"news/task-003","q":"Q12","option":1}
+${A/ID/aaaaaaaa}\"option\":1,\"text\":\"both\"}
+${A/ID/aaaaaaaa}\"option\":true}
+${A/ID/aaaaaaaa}\"option\":\"1\"}
+${A/ID/aaaaaaaa}\"option\":0}
+${A/ID/aaaaaaaa}\"text\":\"$(printf 'x%.0s' $(seq 1 2001))\"}
+${A/ID/aaaaaaaa}\"text\":\"bell\\u0007\"}
+${A/ID/aaaaaaaa}\"option\":1,\"ts\":\"2026-01-01T00:00:00Z\"}
+${A/ID/aaaaaaaa}\"option\":1,\"from\":\"example-user-008\"}
+{"type":"answer","id":"aaaaaaaa","task":"../etc/passwd","q":"Q12","option":1}
+{"type":"more","id":"aaaaaaaa","task":"news/task-003","q":"12"}
+{"type":"new-project","id":"aaaaaaaa","title":"t","what":"w","who":"p","doneWhen":"d","repo":"a b"}
+{"type":"new-project","id":"aaaaaaaa","title":"t","what":"w","who":"p","doneWhen":"d"}
+{"type":"unblock","id":"aaaaaaaa"}
+{"type":"board","id":"aaaaaaaa","on":true}
+{"type":"shell","id":"aaaaaaaa"}
+[1]
+not json
+EOF
 ok "unblock says why it is not in v1" "$(add '{"type":"unblock","id":"aaaaaaaa"}' | grep -c 'not queued in v1')" 1
 ok "nothing refused reached the queue" "$(cat "$D/$AB_QUEUE" 2>/dev/null | wc -l | tr -d ' ')" 0
 ok "a duplicate id is refused" \

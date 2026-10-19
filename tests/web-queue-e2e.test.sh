@@ -46,8 +46,8 @@ PIDS="$PIDS $!"; ( sleep 240; kill -TERM $! 2>/dev/null ) >/dev/null 2>&1 &
   --user-data-dir="$TMP/profile" --remote-debugging-port="$DBG" about:blank >/dev/null 2>&1 &
 CPID=$!; PIDS="$PIDS $CPID"; ( sleep 240; kill -TERM $CPID 2>/dev/null ) >/dev/null 2>&1 &
 for _ in $(seq 1 100); do
-  curl -sf "http://127.0.0.1:$PORT/board.html" 2>/dev/null | grep -q 'loopd-queue" content=' &&
-    curl -sf "http://127.0.0.1:$DBG/json/version" >/dev/null 2>&1 && break
+  page="$(curl -sf "http://127.0.0.1:$PORT/board.html" 2>/dev/null)"
+  grep -q 'loopd-queue" content=' <<<"$page" && curl -sf "http://127.0.0.1:$DBG/json/version" >/dev/null 2>&1 && break
   sleep 0.3
 done
 

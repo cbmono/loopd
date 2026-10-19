@@ -460,11 +460,14 @@ except Exception:
     print("000")
 PY
 }
+token_of() { # <port> -> the token in the served page's queue <meta>
+  python3 -c 'import re,sys;m=re.search(r"<meta name=\"loopd-queue\" content=\"([^\"]*)\">",sys.stdin.read());print(m.group(1) if m else "")' <<<"$(body_of "$1" /board.html)"
+}
 Q="$TMP/group/_ai-bridge-queue"
 new_instance "$Q"
 SRV_Q="$(start_server "$Q" "$TMP/q.log")"
 PQ="$(cd "$Q" && bash "$SERVE" --print-port)"
-TOK="$(body_of "$PQ" /board.html | sed -n 's/.*<meta name="loopd-queue" content="\([^"]*\)">.*/\1/p' | head -1)"
+TOK="$(token_of "$PQ")"
 H="127.0.0.1:$PQ"; O="http://$H"; J=application/json
 E='{"type":"answer","id":"e2e00001","task":"p/task-001","q":"Q1","option":1}'
 ok "the served page carries a token"                  "$(yes_if test "${#TOK}" -ge 32)" yes
@@ -486,7 +489,7 @@ ok "nothing refused reached the queue"                "$(wc -l < "$Q/$AB_QUEUE" 
 ok "the token is in no file: not SNAPSHOT.json, not the rendered page" \
   "$(grep -rlF -- "$TOK" "$Q" | wc -l | tr -d ' ')" 0
 SRV_Q2="$(kill -TERM "$SRV_Q" 2>/dev/null; sleep 1; start_server "$Q" "$TMP/q2.log")"
-TOK2="$(body_of "$PQ" /board.html | sed -n 's/.*<meta name="loopd-queue" content="\([^"]*\)">.*/\1/p' | head -1)"
+TOK2="$(token_of "$PQ")"
 ok "a new launch has a new token, and the old one is refused" \
   "$([ -n "$TOK2" ] && [ "$TOK2" != "$TOK" ] && echo yes)|$(raw_post "$PQ" /__queue "$H" "$O" "$J" "$TOK" "${E/e2e00001/e2e00005}")" "yes|403"
 kill -TERM "$SRV_Q2" 2>/dev/null
