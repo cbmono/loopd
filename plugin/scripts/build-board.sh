@@ -150,11 +150,12 @@
 #     (docs/operations.md → "Simple mode"). Its inbox, drawers and keys live in the same
 #     one script; it sends nothing, never drives a <details>, and with scripting off both
 #     views render. It carries the serve-time seams now, once each.
-#   · It DOES carry one <script> and one external <link>: a clipboard helper (a browser
+#   · It DOES carry one <script>, and no <link>: a clipboard helper (a browser
 #     cannot open a local file, so a task copies a SHORT REFERENCE — `<project>/tasks/<id>`
 #     — instead of a link, and every button says what it copied so a failed copy is
-#     visible rather than silent) and a webfont stylesheet. Nothing from a snapshot ever
-#     reaches either of them; the escaping rules above are what hold, not "no script". A
+#     visible rather than silent). Fonts are system stacks with Inter and JetBrains Mono
+#     named first, so the page itself requests nothing (owner, 2026-10-19). Nothing from a
+#     snapshot reaches the script; the escaping rules above are what hold, not "no script". A
 #     retained project's deliverables panel copies with this SAME helper, and so does the
 #     ✕ close-command control — every `[data-copy]` button on the page shares it, and
 #     there is no second one.
@@ -689,8 +690,6 @@ WORDING = {
 
 TABLE_HEAD = """<title>__TITLE__</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <style>
 /* THE LOOPD PALETTE HAS TWO SOURCES. Dark is loopd-design/tokens.css; green and the
    light theme are web-simple/HANDOFF.md "Tokens used", which also gives the dark values

@@ -583,10 +583,11 @@ JSON in its own `_sensitivity` key. **No customer PII belongs in a task title in
 place.** Read that header before adding a field: `tests/snapshot.test.sh` fails on any key
 outside the documented set.
 
-The page's only external request is **one declared webfont** (two `<link>`s to Google's
-font hosts, asserted verbatim in `tests/snapshot.test.sh`) — no CDN, no `src=`, no
-`url()` in the stylesheet. It carries **one `<script>`**, a clipboard helper, and nothing
-from a snapshot ever reaches it: collapsing is `<details>`, not JavaScript. (Until
+The page makes **no external request**: fonts are system stacks with Inter and JetBrains
+Mono named first (the Google Fonts `<link>`s went on 2026-10-19; `tests/snapshot.test.sh`
+asserts their hosts absent) — no CDN, no `src=`, no `url()` in the stylesheet. It carries
+**one `<script>`** — the clipboard helper and simple mode — and nothing from a snapshot
+ever reaches it: collapsing is `<details>`, not JavaScript. (Until
 2026-08-24 this paragraph said "zero external requests, no `<script>` at all". That was
 true of the kanban `columns` page and never of the one that got published; `columns` has
 since been deleted, so the promise is now stated against the page that ships.) The page

@@ -1630,10 +1630,9 @@ for s in "$SECRET_DESC" "$SECRET_BODY" "$SECRET_QUESTION" "$SECRET_BLOCKER" "$SE
   assert "the page carries no '$s'" "$(fhasnt "$s" "$HTML")"
 done
 
-echo "== the only external request is the declared webfont =="
-# The two font hosts are spelled out here, verbatim, rather than described: a page that
-# started fetching from a third host would otherwise slip through a looser pattern, and
-# this list is the whole declaration of what the published board may reach.
+echo "== the page makes no external request =="
+# The webfont is gone (system stacks, owner 2026-10-19): a PR link is the only http(s)
+# href, and the two font hosts it used are asserted absent by name.
 FONT_HOSTS='https://fonts.gstatic.com https://fonts.googleapis.com/'
 BAD_HREF=""
 while IFS= read -r h; do
@@ -1641,14 +1640,13 @@ while IFS= read -r h; do
     http://*|https://*)
       case "$h" in
         *"/pull/"*) ;;
-        https://fonts.gstatic.com*|https://fonts.googleapis.com/*) ;;
         *) BAD_HREF="$BAD_HREF $h" ;;
       esac ;;
   esac
 done < <(grep -oE 'href="[^"]*"' "$HTML" | sed 's/^href="//; s/"$//')
-assert "every http(s) href is a PR link or the webfont${BAD_HREF:+ (saw:$BAD_HREF)}" "$(eq "$BAD_HREF" "")"
+assert "every http(s) href is a PR link${BAD_HREF:+ (saw:$BAD_HREF)}" "$(eq "$BAD_HREF" "")"
 for host in $FONT_HOSTS; do
-  assert "…and the webfont host $host is really there" "$(fhas "$host" "$HTML")"
+  assert "…and the old webfont host $host is not there" "$(fhasnt "${host#https://}" "$HTML")"
 done
 assert "no src= attribute at all"       "$(fhasnt 'src=' "$HTML")"
 assert "no @import in the stylesheet"   "$(fhasnt '@import' "$HTML")"
@@ -1672,7 +1670,7 @@ printf '%s\n' '<style>.a{color:red}</style><p>url(not-in-css)</p>' > "$TMP/txtur
 assert "…while url( outside a <style> block is not a false alarm" "$(yes_if no_css_url "$TMP/txturl.html")"
 # Exactly two: the preconnect and the stylesheet, both to the hosts asserted above. A
 # third <link> is a new external dependency and must be a deliberate edit here.
-assert "exactly two <link> elements"    "$(eq "$(grep -cF '<link' "$HTML")" 2)"
+assert "no <link> element at all"       "$(eq "$(grep -cF '<link' "$HTML")" 0)"
 assert "no <iframe>"                    "$(fhasnt '<iframe' "$HTML")"
 
 echo "== output shape =="

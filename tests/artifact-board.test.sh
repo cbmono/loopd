@@ -321,9 +321,9 @@ btns = re.findall(r'<button class=\"pclose\"[^>]*>', t)
 sys.exit(0 if btns and not any(a in b for b in btns
                                for a in ('href=', 'formaction=', 'target=')) else 1)")"
 
-echo "== …reusing the ONE clipboard helper: no second script, no second link =="
+echo "== …reusing the ONE clipboard helper: no second script, and no link =="
 assert "still exactly one <script>"                  "$(eq "$(grep -oF '<script' "$BOUT" | wc -l | tr -d ' ')" 1)"
-assert "…and still exactly two <link> elements"      "$(eq "$(grep -cF '<link' "$BOUT")" 2)"
+assert "…and no <link> element at all"               "$(eq "$(grep -cF '<link' "$BOUT")" 0)"
 assert "…the ✕ using the same [data-copy] convention" "$(fhas 'data-what="Close command"' "$BOUT")"
 # A FAILED COPY MUST DEGRADE VISIBLY. This page is opened over file://, where a
 # clipboard write can be refused, and a control that appears to copy and does not is

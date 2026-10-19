@@ -113,6 +113,11 @@ echo "== RUNS NOTHING =="
 for w in "fetch(" XMLHttpRequest sendBeacon WebSocket EventSource "window.open" "location=" ".submit("; do
   ok "the script makes no request: no $w"         "$(has "$w" "$JS")" no
 done
+for h in fonts.googleapis.com fonts.gstatic.com "<link"; do
+  ok "the page loads no webfont: no $h"           "$(has "$h" "$PAGE")" no
+done
+ok "…the stacks name Inter and JetBrains Mono first, then system fonts" \
+  "$(has "font:400 15px/1.55 'Inter',system-ui,sans-serif" "$PAGE")$(has "'JetBrains Mono',ui-monospace,Menlo,monospace" "$PAGE")" yesyes
 ok "the form has no action and no method"         "$(part simple | grep -cE '<form[^>]*(action|method)=')" 0
 ok "an answer shows the /loopd:answer command on the task's path" "$(has "c='/loopd:answer projects/'+r[0]+'/tasks/'+r[1]+'.md'" "$JS")" yes
 ok "…built from the card's own ref"               "$(has '<article class="s-q" data-ref="news/task-003/Q12" data-code="Q12"' "$PAGE")" yes
