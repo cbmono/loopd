@@ -7,7 +7,7 @@
 # retires. Still the bug: a machine-facing token recoloured to read as human-facing, or
 # the reverse — §6 of the suite asserts that, which is what replaced the line above.
 #101318  --loopd-bg
-#14171c  --loopd-terminal
+#14171c  --loopd-terminal         userMessageBackground, userMessageBackgroundHover (2026-10-19)
 #171b22  --loopd-surface
 #1c212b  --loopd-surface-2
 #262c37  --loopd-line
@@ -37,8 +37,8 @@
 #ffbb9e  --loopd-accent-orange    orange_FOR_SUBAGENTS_ONLY
 #ffc7e5  --loopd-accent-pink-soft pink_FOR_SUBAGENTS_ONLY
 #fffdc2  --loopd-accent-yellow    yellow_FOR_SUBAGENTS_ONLY
-# Your past prompts, by the owner's decision of 2026-10-18 (interactive-board/task-007): tints
-# of #76d6a4 over the surface #171b22, picked from a preview of three. briefLabelYou takes
-# #76d6a4 itself.
-#223132  --loopd-you-tint         userMessageBackground (12%)
-#2a403c  --loopd-you-tint-hover   userMessageBackgroundHover (20%)
+# Your past prompts: no tinted bar, by the owner's decision of 2026-10-19, replacing the
+# #76d6a4 tints of 2026-10-18 (interactive-board/task-007). userMessageBackground and its
+# hover take --loopd-terminal #14171c, so the prompt sits on the terminal itself; Claude Code
+# has no theme key for the prompt's TEXT colour, so it stays `text`. briefLabelYou keeps
+# #76d6a4.

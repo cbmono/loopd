@@ -21,6 +21,9 @@ promptBorder
 promptBorderShimmer
 planMode
 autoAccept
+# autoAcceptShimmer: not on the docs page (its shimmer list stops at fastMode); taken from
+# the six base presets in the Claude Code 2.1.303 binary, 2026-10-19.
+autoAcceptShimmer
 bashBorder
 ide
 fastMode
