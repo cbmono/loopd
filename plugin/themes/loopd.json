@@ -36,8 +36,8 @@
     "diffAddedDimmed": "#1c212b",
     "diffRemovedDimmed": "#1c212b",
 
-    "userMessageBackground": "#223132",
-    "userMessageBackgroundHover": "#2a403c",
+    "userMessageBackground": "#14171c",
+    "userMessageBackgroundHover": "#14171c",
     "bashMessageBackgroundColor": "#14171c",
     "memoryBackgroundColor": "#616161",
     "selectionBg": "#33405a",
