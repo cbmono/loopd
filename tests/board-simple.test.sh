@@ -123,6 +123,35 @@ ok "the form has no action and no method"         "$(part simple | grep -cE '<fo
 ok "an answer shows the /loopd:answer command on the task's path" "$(has "c='/loopd:answer projects/'+r[0]+'/tasks/'+r[1]+'.md'" "$JS")" yes
 ok "…built from the card's own ref"               "$(has '<article class="s-q" data-ref="news/task-003/Q12" data-code="Q12"' "$PAGE")" yes
 
+echo "== THE SHOWN COMMAND IS ONE answer.sh ACCEPTS =="
+# The page's own cmdFor(), lifted from the rendered script and run under node, then fed to
+# answer.sh in a copy of the fixture (no git: it records and says nothing was committed). A command answer.sh refuses is a dead control.
+if command -v node >/dev/null 2>&1; then
+  python3 -c 'import re,sys; m=re.search(r"function cmdFor\(.*?\n  \}", open(sys.argv[1]).read(), re.S); print(m.group(0) if m else "")' "$JS" > "$TMP/cmdfor.js"
+  cat >> "$TMP/cmdfor.js" <<'NODE'
+for (const [ref, n, text] of [["news/task-003/Q12", "2", ""], ["news/task-004/Q13", "", "A short thank-you,\n  nothing else"],
+                              ["invoices/task-003", "", "3 days after the due date"], ["news/task-003/Q12", "", "  "]])
+  console.log(cmdFor(ref, n, text));
+NODE
+  CMDS="$(node "$TMP/cmdfor.js")"
+  ok "an option, own words, no code: answer.sh shapes; nothing for an empty answer" "$CMDS" \
+"/loopd:answer projects/news/tasks/task-003.md Q12 2
+/loopd:answer projects/news/tasks/task-004.md Q13 --text A short thank-you, nothing else
+/loopd:answer projects/invoices/tasks/task-003.md --text 3 days after the due date"
+  A="$TMP/answers"; cp -R "$D" "$A"
+  while IFS= read -r c; do
+    [ -n "$c" ] || continue
+    read -ra args <<<"${c#/loopd:answer }"
+    rc=0; ( cd "$A" && bash "$TPL/plugin/scripts/answer.sh" "${args[@]}" ) >/dev/null 2>&1 || rc=$?
+    ok "answer.sh accepts: ${c#/loopd:answer }"   "$rc" 0
+  done <<<"$CMDS"
+  ok "…and moved all three answers"               "$(cat "$A"/projects/news/tasks/task-00[34].md "$A"/projects/invoices/tasks/task-003.md | grep -c '^open_questions: \[ \]')" 3
+  rc=0; ( cd "$A" && bash "$TPL/plugin/scripts/answer.sh" projects/news/tasks/task-003.md Q12 ) >/dev/null 2>&1 || rc=$?
+  ok "…while the old label-only shape is a usage error" "$rc" 2
+else
+  printf '  SKIP  node absent: the shown command was not run through answer.sh\n'
+fi
+
 echo "== ONE BRAND, TYPE AND SHAPE =="
 SCSS="$TMP/scss"; sed -n '/SIMPLE MODE: the default view/,/prefers-reduced-motion/p' "$CSS" > "$SCSS"
 ok "simple mode draws no hex of its own"          "$(grep -cE '#[0-9a-fA-F]{3,8}\b' "$SCSS")" 0

@@ -692,7 +692,8 @@ a 290px progress rail, which moves below the inbox under 820px. Today's board is
 **Show details**, filtered to one project when opened from that project's drawer, and with
 scripting off both views render, simple first. Questions and a project's need and done-when
 carry words only where `board-serve.sh` fills the seams above; elsewhere a card names its
-code and project. The page sends nothing: Send answer, Start the project and `N` show the
+code and project and takes your own words, so the command it shows is always one
+`answer.sh` accepts. The page sends nothing: Send answer, Start the project and `N` show the
 `/loopd:answer` or `/loopd:new-project` command to type, until the answer queue
 (interactive-board task-006) exists. Keys: 1–9 pick an answer, Enter sends, `?` adds
 context, `L` is Later, `N` is New project, Esc closes.

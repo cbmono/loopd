@@ -1350,7 +1350,7 @@ document.documentElement.setAttribute('data-js','');
     if(lis.length){
       var own=document.createElement('li'); own.className='s-ownopt'; own.textContent='Write my own answer…';
       ol.appendChild(own); select(q,$('li[data-rec]',ol)||lis[0]);
-    } else if($('[data-fill="q-text"] p',q)){ q.classList.add('own','noopts'); }
+    } else { q.classList.add('own','noopts'); }
     if(!$('[data-fill="q-depths"] li',q)) q.classList.add('nodepth');
   }
   function modal(name){ return $('.s-modal[data-m="'+name+'"]'); }
@@ -1362,15 +1362,19 @@ document.documentElement.setAttribute('data-js','');
     $('.s-mtitle',m).textContent=title; $('.s-cmd',m).textContent=text;
     var b=$('[data-copy]',m); b.setAttribute('data-copy',text); m.hidden=false; b.focus();
   }
+  // Always answer.sh's `<task-doc> [Q<n>] <n | --text <answer>>`, or '' — never a label
+  // with no answer. tests/board-simple.test.sh runs this function's output through answer.sh.
+  function cmdFor(ref,n,text){
+    var r=ref.split('/'), c='/loopd:answer projects/'+r[0]+'/tasks/'+r[1]+'.md'+(r[2]?' '+r[2]:'');
+    if(n) return c+' '+n;
+    text=(text||'').replace(/[ \t\r\n]+/g,' ').trim();
+    return text?c+' --text '+text:'';
+  }
   function command(q){
-    var r=q.getAttribute('data-ref').split('/'), c='/loopd:answer projects/'+r[0]+'/tasks/'+r[1]+'.md'+(r[2]?' '+r[2]:'');
-    if(!$('[data-fill="q-text"] p',q)) return c;
-    if(q.classList.contains('own')){
-      var t=($('textarea',q).value||'').replace(/[ \t\r\n]+/g,' ').trim();
-      return t?c+' --text '+t:'';
-    }
+    var ref=q.getAttribute('data-ref');
+    if(q.classList.contains('own')) return cmdFor(ref,'',$('textarea',q).value);
     var s=$('[data-fill="q-options"] li.sel',q);
-    return s&&s.getAttribute('data-n')?c+' '+s.getAttribute('data-n'):c;
+    return cmdFor(ref,s&&s.getAttribute('data-n'),'');
   }
   function act(q,a){
     if(a==='send'){
@@ -1391,7 +1395,11 @@ document.documentElement.setAttribute('data-js','');
     });
     $$('.details .sep,.details .tabs').forEach(function(s){ s.hidden=!!slug; });
   }
-  function details(slug){ closeAll(); root.setAttribute('data-view','details'); filterDetails(slug); window.scrollTo(0,0); }
+  function details(slug){
+    closeAll(); root.setAttribute('data-view','details');
+    var b=$('.details .board'); if(slug&&b) b.setAttribute('data-tab','all');
+    filterDetails(slug); window.scrollTo(0,0);
+  }
   function drawer(slug){
     closeAll();
     $$('.s-drawer').forEach(function(d){
@@ -1446,7 +1454,8 @@ document.documentElement.setAttribute('data-js','');
     if(q&&q!==top()){ lift(q); return; }
     if((b=t.closest('[data-act]'))&&q){ act(q,b.getAttribute('data-act')); return; }
     if((b=t.closest('[data-fill="q-options"] li'))&&q){
-      if(b.classList.contains('s-ownopt')){ q.classList.add('own'); $('textarea',q).focus(); } else select(q,b);
+      if(b.classList.contains('s-ownopt')){ q.classList.add('own'); $('textarea',q).focus(); }
+      else { q.classList.remove('own'); select(q,b); }
       return;
     }
     if((b=t.closest('[data-pickf]'))){ $('.simple').setAttribute('data-filter',b.getAttribute('data-pickf')); return; }
@@ -1461,12 +1470,12 @@ document.documentElement.setAttribute('data-js','');
     var k=e.key, q=top(), typing=/^(TEXTAREA|INPUT|SELECT)$/.test((e.target&&e.target.tagName)||'');
     if(k==='Escape'){
       if(openNow()){ closeAll(); e.preventDefault(); }
-      else if(q&&q.classList.contains('own')&&!q.classList.contains('noopts')){ q.classList.remove('own'); e.preventDefault(); }
+      else if(q&&q.classList.contains('own')&&!q.classList.contains('noopts')){ q.classList.remove('own'); if(typing) e.target.blur(); e.preventDefault(); }
       return;
     }
     if(typing||openNow()) return;
     if(k==='n'||k==='N'){ e.preventDefault(); newProject(); return; }
-    if(!q) return;
+    if(!q||!q.offsetParent) return;
     if(/^[1-9]$/.test(k)){ var li=$$('[data-fill="q-options"] li',q)[+k-1]; if(li){ e.preventDefault(); li.click(); } }
     else if(k==='Enter'){ if(t_btn(e)) return; e.preventDefault(); act(q,'send'); }
     else if(k==='?'){ e.preventDefault(); act(q,'more'); }
@@ -1910,7 +1919,8 @@ def render_simple(rows, closed_all, stamp):
                         "%d more after this" % (len(qs) - 1) if i == 0 and len(qs) > 1 else ""))
             o.append(seam)
             o.append('<p class="s-qnone">The question\'s words show on the board on your own '
-                     'computer. Send answer shows what to type in Claude Code.</p>')
+                     'computer. Write your answer here and Send shows what to type in Claude '
+                     'Code.</p>')
             o.append('<div class="s-own"><label>Your own answer</label><textarea rows="3">'
                      '</textarea><div class="s-hint">Write it the way you\'d say it. We\'ll ask '
                      'if anything is unclear.</div></div>')
@@ -1919,7 +1929,8 @@ def render_simple(rows, closed_all, stamp):
                      '<button class="s-btn text" data-act="later">Later</button></div>'
                      '<div class="s-acts s-ownacts"><button class="s-btn pink" data-act="send">'
                      'Send my answer</button><button class="s-btn" data-act="back">Back to '
-                     'options</button></div></article>')
+                     'options</button><button class="s-btn text" data-act="later">Later</button>'
+                     '</div></article>')
         o.append("</div>")
     elif not you and (rows or closed_all) and live:
         o.append('<p class="s-quiet">Nothing needs you right now.</p>')

@@ -1668,8 +1668,8 @@ printf '%s\n' '<style>.a{background:url(assets/icon.svg)}</style>' > "$TMP/relur
 assert "…and a relative url() is now rejected" "$(eq "$(yes_if no_css_url "$TMP/relurl.html")" 1)"
 printf '%s\n' '<style>.a{color:red}</style><p>url(not-in-css)</p>' > "$TMP/txturl.html"
 assert "…while url( outside a <style> block is not a false alarm" "$(yes_if no_css_url "$TMP/txturl.html")"
-# Exactly two: the preconnect and the stylesheet, both to the hosts asserted above. A
-# third <link> is a new external dependency and must be a deliberate edit here.
+# None: fonts are system stacks since 2026-10-19. Any <link> is a new external dependency
+# and must be a deliberate edit here.
 assert "no <link> element at all"       "$(eq "$(grep -cF '<link' "$HTML")" 0)"
 assert "no <iframe>"                    "$(fhasnt '<iframe' "$HTML")"
 

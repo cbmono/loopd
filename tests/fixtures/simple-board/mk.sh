@@ -17,16 +17,16 @@ proj news "Newsletter signup" "A signup box on our website that adds people to o
 task news task-001 done "Signup box on the home page"
 task news task-002 done "Store each new address"
 task news task-003 in-progress "Confirmation email" \
-  $'timestamp: 2026-09-01T00:00:00Z\nopen_questions: [ "Q12: Should new subscribers confirm their email before they join the list?" ]\n' \
+  $'timestamp: 2026-09-01T00:00:00Z\nopen_questions: [ "Q12: Should new subscribers confirm their email before they join the list?" ]\nanswered_questions: [ ]\n' \
   $'\n## Question details\n\n### Q12\nRecommendation: Yes, send a confirmation email first\nOptions:\n1. Yes, send a confirmation email first\n2. No, add them to the list straight away\nContext:\n- Depth 1: Confirming means your list only has real addresses that want your emails.\n- Depth 2: Without it, anyone can sign up someone else, and mistyped addresses stay on the list.\n- Depth 3: Email services watch how often your messages bounce. A list full of wrong addresses can push your newsletter into spam folders for everyone.\n'
 task news task-004 ready "Welcome email" \
-  $'timestamp: 2026-09-02T00:00:00Z\nopen_questions: [ "Q13: What should the welcome email say?" ]\n' \
+  $'timestamp: 2026-09-02T00:00:00Z\nopen_questions: [ "Q13: What should the welcome email say?" ]\nanswered_questions: [ ]\n' \
   $'\n## Question details\n\n### Q13\nRecommendation: A short thank-you with a link to the latest issue\nOptions:\n1. Just a short thank-you\n2. A short thank-you with a link to the latest issue\n3. A thank-you and a discount code\n'
 proj invoices "Invoice reminders" "Friendly reminders for unpaid invoices." "Our finance team." "Every late invoice gets one reminder"
 task invoices task-001 done "Find unpaid invoices"
 task invoices task-002 blocked "Reminders can't be sent until the company email account is connected"
 task invoices task-003 draft "First reminder" \
-  $'timestamp: 2026-09-03T00:00:00Z\nopen_questions: [ "Q14: When should the first reminder go out?" ]\n'
+  $'timestamp: 2026-09-03T00:00:00Z\nopen_questions: [ "Q14: When should the first reminder go out?" ]\nanswered_questions: [ ]\n'
 proj calendar "Team holiday calendar" "One calendar for everyone's time off." "The whole team." "Everyone books time off in one place"
 task calendar task-001 done "Calendar page"
 task calendar task-002 done "Time-off form"
