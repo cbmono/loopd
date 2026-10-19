@@ -4,7 +4,7 @@
 # classifier in plugin/scripts/review-clearance.sh: `--match-check`, `--self-test` and the
 # completeness sentinel, a table that does not compile, `--for-check`, a failing
 # environment, SCHEMA.md clause 9, mergeability and `--record`, acknowledgements and skip
-# notices, the two recorded PRs, and the no-widening sweep against a pinned base.
+# notices, the recorded PRs, and the no-widening sweeps against pinned bases.
 #
 # ONE OF THREE. tests/review-clearance.test.sh holds the recorded evidence and the header
 # that says what all three exist to pin; tests/review-clearance-bodies.test.sh holds the
@@ -781,6 +781,99 @@ if [ -n "$BASE" ]; then
     assert "#$rec did clear at ${BASE_SHA:0:7} (rc=0), so the refusal above is a change" \
       "$([ "$base_rc" -eq 0 ] && echo 0 || echo "1 — measured rc=$base_rc")"
   done
+fi
+
+echo
+echo "== loopd#399: a head marker past an older review object, edited after a request at this head =="
+# ONE deliberate widening (head-marker-after-request), measured 4 at W_SHA; no other row
+# clears. RATE_ACK is the vendor's verbatim refusal receipt; latest-request-refused and
+# rate-limit-prose-beside-marker both cleared (rc=0) at b2bfbe4.
+W_SHA="1f012cd"
+WBASE=""
+if git -C "$REPO" cat-file -e "$W_SHA:plugin/scripts/review-clearance.sh" 2>/dev/null; then
+  mkdir -p "$TMP/wbase"
+  git -C "$REPO" show "$W_SHA:plugin/scripts/review-clearance.sh" > "$TMP/wbase/review-clearance.sh"
+  git -C "$REPO" show "$W_SHA:plugin/scripts/bundle-paths.sh"     > "$TMP/wbase/bundle-paths.sh"
+  chmod +x "$TMP/wbase/review-clearance.sh"
+  WBASE="$TMP/wbase/review-clearance.sh"
+else
+  printf '  SKIP  %-58s\n' "the was column is measured — $W_SHA not in this clone"
+fi
+W_PUSH="2026-10-19T02:00:00Z"; W_ASK="2026-10-19T03:00:00Z"; W_DONE="2026-10-19T03:10:00Z"
+OLDER_SHA="fedcba9876543210fedcba9876543210fedcba98"
+ack_body() { body_file "$(sed -n 2p "$ACK")" "$@"; }
+build_399() { # <id>
+  case "$1" in
+    head-marker-after-request) setup "$CLEAN_HEAD" "$W_PUSH" ;;
+    marker-names-older-head)   setup "$OTHER_SHA" "$W_PUSH" ;;
+    request-before-push)       setup "$CLEAN_HEAD" "2026-10-19T03:05:00Z" ;;
+    marker-edited-before-request) setup "$CLEAN_HEAD" "$W_PUSH"
+      add_review coderabbitai COMMENTED "$OLDER_SHA" "$(body_file 'One nit.')"
+      add_comment_edited coderabbitai "2026-10-18T21:00:00Z" "2026-10-19T02:50:00Z" "$CLEAN"
+      add_comment_at coderabbitai "$W_ASK" "$(ack_body 'Full review finished.')"; return ;;
+    latest-request-refused)    setup "$CLEAN_HEAD" "$W_PUSH"
+      add_comment_at coderabbitai "2026-10-19T03:05:00Z" "$RATE_ACK" ;;
+    rate-limit-prose-beside-marker) setup "$CLEAN_HEAD" "$W_PUSH"
+      add_review coderabbitai COMMENTED "$OLDER_SHA" "$(body_file 'One nit.')"
+      add_comment_edited coderabbitai "2026-10-18T21:00:00Z" "$W_DONE" \
+        "$(body_file "$(cat "$CLEAN")" 'Review rate limited.')"
+      add_comment_at coderabbitai "$W_ASK" "$(ack_body 'Full review finished.')"; return ;;
+    request-names-older-commit) setup "$CLEAN_HEAD" "$W_PUSH"
+      add_review coderabbitai COMMENTED "$OLDER_SHA" "$(body_file 'One nit.')"
+      add_comment_edited coderabbitai "2026-10-18T21:00:00Z" "$W_DONE" "$CLEAN"
+      add_comment_at coderabbitai "$W_ASK" "$(ack_body "I will review at head \`${OLDER_SHA:0:7}\`.")"; return ;;
+    marker-has-no-edit-time)   setup "$CLEAN_HEAD" "$W_PUSH"
+      add_review coderabbitai COMMENTED "$OLDER_SHA" "$(body_file 'One nit.')"
+      add_comment_at coderabbitai "2026-10-18T21:00:00Z" "$CLEAN"
+      add_comment_at coderabbitai "$W_ASK" "$(ack_body 'Full review finished.')"; return ;;
+    no-request-at-all)         setup "$CLEAN_HEAD" "$W_PUSH"
+      add_review coderabbitai COMMENTED "$OLDER_SHA" "$(body_file 'One nit.')"
+      add_comment_edited coderabbitai "2026-10-18T21:00:00Z" "$W_DONE" "$CLEAN"; return ;;
+    skip-prose-beside-marker)  setup "$SKIP_REVIEWED_HEAD" "$W_PUSH"
+      add_review coderabbitai COMMENTED "$OLDER_SHA" "$(body_file 'One nit.')"
+      add_comment_edited coderabbitai "2026-10-18T21:00:00Z" "$W_DONE" "$SKIP_REVIEWED"
+      add_comment_at coderabbitai "$W_ASK" "$(ack_body 'Full review finished.')"; return ;;
+    *) echo "  FAIL  unknown shape $1"; fail=$((fail+1)); return 1 ;;
+  esac
+  add_review coderabbitai COMMENTED "$OLDER_SHA" "$(body_file 'One nit.')"
+  add_comment_edited coderabbitai "2026-10-18T21:00:00Z" "$W_DONE" "$CLEAN"
+  add_comment_at coderabbitai "$W_ASK" "$(ack_body 'Full review finished.')"
+}
+while read -r id was now; do
+  [ -n "$id" ] || continue
+  build_399 "$id" || continue
+  write_pr
+  if [ -n "$WBASE" ]; then
+    "$WBASE" 42 >/dev/null 2>&1; base_rc=$?
+    if [ "$base_rc" != "$was" ]; then
+      printf '  FAIL  %-58s was=%s claimed, %s measured %s\n' "$id" "$was" "$W_SHA" "$base_rc"
+      fail=$((fail+1)); continue
+    fi
+  fi
+  "$SCRIPT" 42 >/dev/null 2>&1; rc=$?
+  if [ "$rc" != "$now" ]; then
+    printf '  FAIL  %-58s expected rc=%s got rc=%s\n' "$id" "$now" "$rc"; fail=$((fail+1))
+  else printf '  PASS  %-58s (was=%s now=%s)\n' "$id" "$was" "$rc"; pass=$((pass+1)); fi
+done <<'SHAPES'
+head-marker-after-request    4 0
+marker-names-older-head      4 4
+request-before-push          4 4
+marker-edited-before-request 4 4
+latest-request-refused       4 4
+rate-limit-prose-beside-marker 4 4
+request-names-older-commit   4 4
+marker-has-no-edit-time      4 4
+no-request-at-all            4 4
+skip-prose-beside-marker     4 4
+SHAPES
+
+load_recorded "$FIXTURES/pr399.api.json"
+expect_recorded "#399 at its recorded head -> the head marker clears (route C)" 0 399
+says "  ...#399: on the marker edited after the request at this head" "edited after its latest review request"
+if [ -n "$WBASE" ]; then
+  "$WBASE" 399 >/dev/null 2>&1; base_rc=$?
+  assert "#399 refused at $W_SHA (rc=4), so the clearance above is the fix" \
+    "$([ "$base_rc" -eq 4 ] && echo 0 || echo "1 — measured rc=$base_rc")"
 fi
 echo
 echo "pass=$pass fail=$fail"

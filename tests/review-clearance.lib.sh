@@ -21,6 +21,7 @@ FIXTURES="$(cd "$(dirname "$0")" && pwd)/fixtures/reviewer"
 CLEAN="$FIXTURES/clean-review.pr29.md"
 REFUSAL="$FIXTURES/rate-limit-refusal.pr30.md"
 ACK="$FIXTURES/ack-invocation.pr227.md"
+RATE_ACK="$FIXTURES/ack-rate-limited.pr399.md"
 ACK_PROSE="$FIXTURES/ack-prose.quoted-in-a-review.md"
 SKIP="$FIXTURES/skip-notice.pr229.md"
 SKIP_REVIEWED="$FIXTURES/skip-beside-review.pr215.md"
@@ -132,6 +133,11 @@ add_comment() { # <login> <body-file>
 add_comment_at() { # <login> <created_at> <body-file>
   COMMENTS="$("$REAL_JQ" --arg l "$1" --arg t "$2" --rawfile b "$3" \
               '. + [{user:{login:$l}, body:$b, created_at:$t}]' <<<"$COMMENTS")"
+}
+
+add_comment_edited() { # <login> <created_at> <updated_at> <body-file>
+  COMMENTS="$("$REAL_JQ" --arg l "$1" --arg t "$2" --arg u "$3" --rawfile b "$4" \
+              '. + [{user:{login:$l}, body:$b, created_at:$t, updated_at:$u}]' <<<"$COMMENTS")"
 }
 
 # The host reports no author at all for an artifact from a deleted account, and `gh` passes

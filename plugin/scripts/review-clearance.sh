@@ -84,7 +84,9 @@
 #      vendor EDITS in place across rounds, so it names the current head whatever it last
 #      reviewed — on #227 it named the head while the reviewer's only review object sat two
 #      commits back, and that cleared. Where the structured channel has spoken for an
-#      account, the structured channel decides.
+#      account, the structured channel decides — UNLESS the comment, free of any refusal
+#      prose, was edited after that account's latest non-refused command receipt posted at
+#      this head (loopd#399; see the check after the classifier loop).
 #
 # THE TABLES CAN NO LONGER CAUSE A CLEARANCE. Every vendor string lives in REVIEWERS
 # (whose artifacts count, and what its check is called), REFUSALS_SENTINEL / NOT_YET /
@@ -503,6 +505,13 @@ INVOCATION_ACK='
 ^[[:space:]]*<!--[[:space:]]*coderabbit review command invocation:[^>]*-->[[:space:]]*$
 '
 
+# A receipt for a command the reviewer did NOT carry out (verbatim, loopd#399). Read only
+# to keep a held head marker from clearing; it decides no other exit code.
+ACK_REFUSED='
+action not completed
+review (was |is |has been )?rate[ -]?limited
+'
+
 # The reviewer explaining that a plain review request cannot produce a review at this head.
 # Surfaced in the exit-4 message, with the command that can — see `incremental_note`.
 INCREMENTAL_NOTE='
@@ -621,7 +630,7 @@ all_patterns() {
   rows "$REVIEWERS" | awk '{print $1; print $2}'
   rows "$REFUSALS_SENTINEL"; rows "$NOT_YET"
   rows "$REFUSALS";          rows "$REVIEW_SENTINEL"
-  rows "$REFUSALS_TERMINAL"; rows "$INVOCATION_ACK"
+  rows "$REFUSALS_TERMINAL"; rows "$INVOCATION_ACK"; rows "$ACK_REFUSED"
   rows "$INCREMENTAL_NOTE";  rows "$SKIP_NOTICE"
 }
 
@@ -774,6 +783,9 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "self-test: the acknowledgement table matches a review marker, which would" >&2
     echo "           refuse every review this reviewer publishes" >&2; exit 2
   fi
+  printf 'Review rate limited.\n' > "$TMPD/probe"
+  [ -n "$(hits "$ACK_REFUSED" "$TMPD/probe")" ] || {
+    echo "self-test: the refused-receipt table does not match a refused receipt" >&2; exit 2; }
   [ -s "$TMPD/grep-fatal" ] && exit 2
   printf '%s\n' "$SELFTEST_OK"
   exit 0
@@ -1033,7 +1045,7 @@ gh api "/repos/$nwo/pulls/$pr_number/reviews?per_page=100" --paginate \
 }
 gh api "/repos/$nwo/issues/$pr_number/comments?per_page=100" --paginate \
   --jq '.[] | {login: (.user.login // ""), body: (.body // ""),
-               created: (.created_at // "")}' \
+               created: (.created_at // ""), updated: (.updated_at // "")}' \
   > "$TMPD/comments.ndjson" 2>/dev/null || {
   echo "error: could not read the comments on PR $pr ($nwo) — refusing. A refusal this" >&2
   echo "       script cannot see is a refusal that did not happen, and that is a merge." >&2
@@ -1094,10 +1106,10 @@ SEP="okf-$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')"
 jq -rn --arg s "$SEP" --slurpfile rv "$TMPD/reviews.ndjson" \
                        --slurpfile cm "$TMPD/comments.ndjson" '
     ( ($rv[] | {kind:"review",  login:(.login // ""), state:(.state // ""),
-                commit:(.commit // ""), created:"",                body:(.body // "")}),
+                commit:(.commit // ""), created:"", updated:"",    body:(.body // "")}),
       ($cm[] | {kind:"comment", login:(.login // ""), state:"",
-                commit:"",              created:(.created // ""), body:(.body // "")}) )
-    | "\($s)\u001f\(.kind)\u001f\(.login)\u001f\(.state)\u001f\(.commit)\u001f\(.created)",
+                commit:"", created:(.created // ""), updated:(.updated // ""), body:(.body // "")}) )
+    | "\($s)\u001f\(.kind)\u001f\(.login)\u001f\(.state)\u001f\(.commit)\u001f\(.created)\u001f\(.updated)",
       .body
   ' 2>/dev/null > "$TMPD/stream" || {
   echo "error: could not parse the artifacts on PR $pr — refusing (fail closed)" >&2
@@ -1603,7 +1615,13 @@ self_reviews=0; self_at_head=0
 # field shifts the rest left. A comment's empty state and commit used to sit at the end of
 # the row where the loss was invisible; the moment a field followed them, it arrived in
 # `state`. \037 is not whitespace, so an empty field stays an empty field.
-while IFS=$'\037' read -r kind login state commit created; do
+note_ack() { # <login> <created_at> <refused 0|1> — an ack with no readable time counts as refused
+  local s; s="$(stamp "$2")" || s=""
+  [ -n "$s" ] || set -- "$1" "$2" 1
+  printf '%s\t%s\t%s\n' "$(norm "$1")" "${s:-99999999999999}" "$3" >> "$TMPD/acks"
+}
+: > "$TMPD/acks"; : > "$TMPD/head_markers"
+while IFS=$'\037' read -r kind login state commit created updated; do
   n=$((n + 1))
   body="$TMPD/body.$n"
   [ -f "$body" ] || : > "$body"
@@ -1661,6 +1679,8 @@ while IFS=$'\037' read -r kind login state commit created; do
   # filter below used to run before this, so a refusal published as a review object in any
   # other state — `PENDING`, `DISMISSED`, a casing variant — was dropped before it was ever
   # weighed. A state that cannot CLEAR is not a state that cannot REFUSE.
+  is_ack=""
+  [ "$kind" != "review" ] && [ -n "$(hits "$INVOCATION_ACK" "$TMPD/stripped")" ] && is_ack=yes
   verdict=""
   if [ -n "$trailer_armed" ] && verdict_trailer "$TMPD/strict"; then verdict=yes; fi
   refusal=""; kind_of_refusal=""
@@ -1711,6 +1731,7 @@ while IFS=$'\037' read -r kind login state commit created; do
       terminal_from="$login"; terminal_body="$TMPD/terminal"
       cp "$TMPD/stripped" "$TMPD/terminal"
     fi
+    [ -n "$is_ack" ] && note_ack "$login" "$created" 1
     fatal_grep
     continue
   fi
@@ -1719,8 +1740,13 @@ while IFS=$'\037' read -r kind login state commit created; do
   # An acknowledgement names the head it was invoked at and says nothing about whether a
   # review followed, so it is dropped here: it reaches neither the evidence tests below
   # nor the refusal tiers above, and clears nothing at any head (table 3b).
-  if [ "$kind" != "review" ] && [ -n "$(hits "$INVOCATION_ACK" "$TMPD/stripped")" ]; then
+  if [ -n "$is_ack" ]; then
     [ -n "$ack_from" ] || ack_from="$login"
+    # A receipt naming some other commit is a request at that commit, not this head.
+    if [ -z "$(hits "$ACK_REFUSED" "$TMPD/stripped")" ] \
+       && { names_head "$TMPD/stripped" || [ ! -s "$TMPD/toks" ]; }; then
+      note_ack "$login" "$created" 0
+    else note_ack "$login" "$created" 1; fi
     # An ack made AT this head is the record that the exit-8 ask has already been made,
     # and it is what bounds that ask to once per head (see the exit-8 block). Two ways to
     # be at the head, because the real acknowledgement carries no SHA to name: the body
@@ -1800,10 +1826,14 @@ while IFS=$'\037' read -r kind login state commit created; do
     # across rounds, so it names the current head whatever it last reviewed — on #227 it
     # named 711c755c while the only review object sat at 6d954b42, and that cleared.
     #
-    # THE COST, stated rather than hidden: a genuinely clean re-review at the new head
-    # leaves no review object of its own (see the KB finding on that), so where an OLDER
-    # object exists it now lands on exit 4 instead of clearing. That is a human glance.
+    # A clean re-review at the new head leaves no review object of its own (loopd#399), so
+    # a head marker with NO refusal prose at all is held for the after-loop check below.
     if has_review_object "$login"; then
+      if names_head "$TMPD/strict" && [ -z "$(hits "$REFUSALS" "$TMPD/stripped")" ] \
+         && [ -z "$(hits "$ACK_REFUSED" "$TMPD/stripped")" ]; then
+        printf '%s\t%s\n' "$login" "$(stamp "$updated")" >> "$TMPD/head_markers"
+      fi
+      fatal_grep
       [ -n "$marker_outranked" ] || marker_outranked="$login"
       continue
     fi
@@ -1818,6 +1848,23 @@ while IFS=$'\037' read -r kind login state commit created; do
   fatal_grep
   [ -n "$unproven_from" ] || unproven_from="$login ($kind)"
 done < "$TMPD/index"
+
+# A held head marker clears only when the account's LATEST command receipt was posted at
+# this head, is not a refusal, and the marker's comment was edited after it — the edit is
+# the review that request produced. Any unreadable time refuses.
+if [ -z "$cleared_msg" ] && [ -n "$head_stamp" ]; then
+  while IFS=$'\t' read -r mlogin mstamp; do
+    last="$(awk -F'\t' -v l="$(norm "$mlogin")" '$1 == l' "$TMPD/acks" \
+            | sort -t"$TAB" -k2,2n -k3,3n | tail -1)"
+    [ -n "$last" ] && [ -n "$mstamp" ] || continue
+    lstamp="$(printf '%s' "$last" | cut -f2)"; lref="$(printf '%s' "$last" | cut -f3)"
+    if [ "$lref" = 0 ] && [ "$lstamp" -ge "$head_stamp" ] && [ "$mstamp" -ge "$lstamp" ]; then
+      cleared_msg="ok: $mlogin's own review marker names head $head_sha on PR $pr, edited after its latest review request at this head"
+      cleared_kind="$(vendor_kind "$mlogin")"; marker_outranked=""
+      break
+    fi
+  done < "$TMPD/head_markers"
+fi
 
 # --- SCHEMA.md clause 9: no reviewer-authored thread is still unresolved ------
 #
