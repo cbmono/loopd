@@ -2,7 +2,7 @@
 # unblock.sh — `/loopd:unblock <task>` against a real bundle clone with a bare remote: it
 # refuses a task that is not `blocked`, shows the blocker in the session without writing,
 # and with a decision stamps one `# Notes` line, zeroes stall_count and returns the task to
-# `ready`, committed as the human and pushed.
+# `ready`, committed as the human and pushed — in one atomic write, so a retry never doubles it.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -88,6 +88,30 @@ ok "the work tree is clean"                  "$(git -C "$B" status --porcelain |
 ok "a second run refuses: it is not blocked any more" "$(run "$B" --decision again >/dev/null 2>&1; echo $?)" 1
 ok "an empty decision is a usage error"      "$(B2="$(fixture empty blocked)"; run "$B2" --decision >/dev/null 2>&1; echo $?)" 2
 ok "the script never forces a push"          "$(grep -cE -- '--force|push -f' "$SH" | tr -d ' ')" 0
+
+echo
+echo "== RETRY: a failed write leaves no note behind, so a retry records the decision once =="
+B="$(fixture retry blocked)"
+D="$B/$(dirname "$TASK_REL")"
+chmod a-w "$D"
+if [ -w "$D" ]; then
+  echo "  SKIP  a read-only directory is still writable here (root?) — the retry case is not measured"
+else
+  OUT="$(run "$B" --decision use the staging key 2>&1)"; RC=$?
+  chmod u+w "$D"
+  ok "a write that cannot land exits 3"      "$RC" 3
+  ok "…and the task is still blocked"        "$(field "$B" status)" blocked
+  ok "…with no decision note"                "$(grep -c 'unblocked —' "$B/$TASK_REL" | tr -d ' ')" 0
+  ok "…and no temp file left beside it"      "$(find "$D" -name '.unblock.*' | grep -c . | tr -d ' ')" 0
+  run "$B" --decision use the staging key >/dev/null 2>&1
+  ok "the retry records it once"             "$(grep -c 'unblocked — use the staging key$' "$B/$TASK_REL" | tr -d ' ')" 1
+  ok "…and moves it to ready"                "$(field "$B" status)" ready
+fi
+chmod u+w "$D" 2>/dev/null
+sed -i.bak 's/^status: ready$/status: blocked/' "$B/$TASK_REL" && rm -f "$B/$TASK_REL.bak"
+run "$B" --decision use the staging key >/dev/null 2>&1
+ok "a later blocking episode records the same decision again" \
+   "$(grep -c 'unblocked — use the staging key$' "$B/$TASK_REL" | tr -d ' ')" 2
 
 echo
 echo "== THE SKILL =="
