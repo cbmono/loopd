@@ -56,7 +56,7 @@ CSS="$TMP/css"; part css > "$CSS"; JS="$TMP/js"; part script > "$JS"
 
 echo "== SIMPLE BY DEFAULT =="
 flat() { tr -d '\n' < "$1"; }
-hasflat() { flat "$2" | grep -qF -- "$1" && echo yes || echo no; }
+hasflat() { local t; t="$(flat "$2")"; [[ "$t" == *"$1"* ]] && echo yes || echo no; }
 ok "both views are on the page, today's board inside .details" "$(hasflat '<div class="loopd"><div class="details"><div class="board" data-tab="all">' "$PAGE")" yes
 ok "…and simple mode shows first"                 "$(has '.simple{order:-1;' "$CSS")" yes
 ok "today's board is hidden unless Show details chose it" "$(has 'html[data-js] .loopd:not([data-view="details"]) .details,' "$CSS")" yes
