@@ -1386,7 +1386,11 @@ document.documentElement.setAttribute('data-js','');
   var KEY='loopd-queue', token='';
   var SAY={'saved':'Saved your answer to %s.','already-answered':'%s was already answered, so yours was not used.',
     'not-yours':'%s belongs to someone else, so yours was not saved.','no-more':'Nothing more is written down for %s.',
-    'expired':'Your answer to %s waited too long. Send it again.'};
+    'expired':'Your answer to %s waited too long. Send it again.',
+    'refused':'%s could not be saved as sent, and sending it again will not help.','invalid':'%s could not be read, so it was not saved.'};
+  // A refused project is a name already taken: sending it again is refused again.
+  var PSAY={'expired':'The project \u201c%s\u201d waited too long. Send it again.',
+    'refused':'The project \u201c%s\u201d was not started: one with that name already exists.'};
   function load(){ try{ var l=JSON.parse(localStorage.getItem(KEY)||'[]'); return Array.isArray(l)?l:[]; }catch(x){ return []; } }
   function store(l){ try{ localStorage.setItem(KEY,JSON.stringify(l)); }catch(x){} }
   function uid(){ var a=new Uint8Array(12); crypto.getRandomValues(a); return Array.prototype.map.call(a,function(b){ return ('0'+b.toString(16)).slice(-2); }).join(''); }
@@ -1394,7 +1398,7 @@ document.documentElement.setAttribute('data-js','');
     var d=document.createElement('p'), b=document.createElement('b'); d.className='s-sent';
     if(i.state==='sent'){ b.textContent='\u2713 '+i.code; d.appendChild(b); d.appendChild(document.createTextNode(' \u201c'+i.label+'\u201d sent \u00b7 we\u2019ll save it on the next update.')); }
     else if(i.state==='saved'&&i.kind==='project'){ d.textContent='Started the project \u201c'+i.label+'\u201d.'; }
-    else { d.textContent=(SAY[i.state]||'%s was not saved. Send it again.').replace('%s',i.code); }
+    else { d.textContent=((i.kind==='project'&&PSAY[i.state])||SAY[i.state]||'%s was not saved. Send it again.').replace('%s',i.code); }
     return d;
   }
   function paint(){

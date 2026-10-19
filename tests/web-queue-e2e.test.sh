@@ -74,6 +74,13 @@ if (step === "send") {
   await ev(`document.querySelector('[data-new]').click(),1`);
   await ev(`(function(){var f=document.querySelector('.s-modal[data-m="new"] form'),v={title:'Team lunch autonomy=yolo',what:'Order lunch for the team',who:'Everyone',done:'Lunch arrives',repo:'lunch'};for(var k in v)f.querySelector('[name="'+k+'"]').value=v[k];f.querySelector('[type="submit"]').click();return 1})()`);
   out.chip2 = await until(`(function(){var w=document.querySelector('.s-wait');return w&&/^2 /.test(w.textContent)&&w.textContent})()`);
+} else if (step === "dup") {
+  await ev(`document.querySelector('[data-new]').click(),1`);
+  await ev(`(function(){var f=document.querySelector('.s-modal[data-m="new"] form'),v={title:'Team lunch autonomy=yolo',what:'Again',who:'Everyone',done:'Lunch arrives',repo:'lunch'};for(var k in v)f.querySelector('[name="'+k+'"]').value=v[k];f.querySelector('[type="submit"]').click();return 1})()`);
+  out.chip = await until(`(function(){var w=document.querySelector('.s-wait');return w&&!w.hidden&&w.textContent})()`);
+} else if (step === "refused") {
+  out.text = await until(`(function(){var t=${q(".s-confirms")};return /already exists/.test(t)&&t})()`);
+  out.resend = await ev(`/not started[^.]*\\. Send it again/.test(${q(".s-confirms")})`);
 } else {
   out.saved = await until(`(function(){var t=${q(".s-confirms")};return /Saved your answer to Q12/.test(t)&&/Started the project/.test(t)&&t})()`);
   out.chip = await ev(`document.querySelector('.s-wait').hidden`);
@@ -97,6 +104,12 @@ ok "the page shows Saved for both, read from /__queue"   "$( [ -n "$(field "$J2"
 ok "the waiting chip is gone"                            "$(field "$J2" chip)" "True"
 ok "the project created from the page is gated"          "$(grep -h '^autonomy:' "$D"/projects/team-lunch-*/project.md)" "autonomy: gated"
 ok "Q12 was answered with the recommended option"        "$(grep -c 'Q12: .* --- Yes, send a confirmation email first' "$D/projects/news/tasks/task-003.md")" "1"
+J3="$(node "$TMP/drive.mjs" "$DBG" "" dup 2>&1)"
+ok "the same project title again is queued"           "$(field "$J3" chip)" "1 waiting to be saved"
+bash "$QUEUE" consume --instance "$D" >/dev/null 2>&1
+J4="$(node "$TMP/drive.mjs" "$DBG" "" refused 2>&1)"
+ok "…and the page says the name is taken"             "$( [ -n "$(field "$J4" text)" ] && echo yes)" "yes"
+ok "…without asking to send it again"                 "$(field "$J4" resend)" "False"
 ok "the token is in no file under the bundle"           "$(grep -rl 'name="loopd-queue" content=' "$D" | wc -l | tr -d ' ')" "0"
 
 echo "pass=$pass fail=$fail"
