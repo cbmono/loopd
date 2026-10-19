@@ -505,6 +505,13 @@ INVOCATION_ACK='
 ^[[:space:]]*<!--[[:space:]]*coderabbit review command invocation:[^>]*-->[[:space:]]*$
 '
 
+# A receipt for a command the reviewer did NOT carry out (verbatim, loopd#399). Read only
+# to keep a held head marker from clearing; it decides no other exit code.
+ACK_REFUSED='
+action not completed
+review (was |is |has been )?rate[ -]?limited
+'
+
 # The reviewer explaining that a plain review request cannot produce a review at this head.
 # Surfaced in the exit-4 message, with the command that can — see `incremental_note`.
 INCREMENTAL_NOTE='
@@ -623,7 +630,7 @@ all_patterns() {
   rows "$REVIEWERS" | awk '{print $1; print $2}'
   rows "$REFUSALS_SENTINEL"; rows "$NOT_YET"
   rows "$REFUSALS";          rows "$REVIEW_SENTINEL"
-  rows "$REFUSALS_TERMINAL"; rows "$INVOCATION_ACK"
+  rows "$REFUSALS_TERMINAL"; rows "$INVOCATION_ACK"; rows "$ACK_REFUSED"
   rows "$INCREMENTAL_NOTE";  rows "$SKIP_NOTICE"
 }
 
@@ -776,6 +783,9 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "self-test: the acknowledgement table matches a review marker, which would" >&2
     echo "           refuse every review this reviewer publishes" >&2; exit 2
   fi
+  printf 'Review rate limited.\n' > "$TMPD/probe"
+  [ -n "$(hits "$ACK_REFUSED" "$TMPD/probe")" ] || {
+    echo "self-test: the refused-receipt table does not match a refused receipt" >&2; exit 2; }
   [ -s "$TMPD/grep-fatal" ] && exit 2
   printf '%s\n' "$SELFTEST_OK"
   exit 0
@@ -1733,7 +1743,8 @@ while IFS=$'\037' read -r kind login state commit created updated; do
   if [ -n "$is_ack" ]; then
     [ -n "$ack_from" ] || ack_from="$login"
     # A receipt naming some other commit is a request at that commit, not this head.
-    if names_head "$TMPD/stripped" || [ ! -s "$TMPD/toks" ]; then
+    if [ -z "$(hits "$ACK_REFUSED" "$TMPD/stripped")" ] \
+       && { names_head "$TMPD/stripped" || [ ! -s "$TMPD/toks" ]; }; then
       note_ack "$login" "$created" 0
     else note_ack "$login" "$created" 1; fi
     # An ack made AT this head is the record that the exit-8 ask has already been made,
@@ -1818,7 +1829,8 @@ while IFS=$'\037' read -r kind login state commit created updated; do
     # A clean re-review at the new head leaves no review object of its own (loopd#399), so
     # a head marker with NO refusal prose at all is held for the after-loop check below.
     if has_review_object "$login"; then
-      if names_head "$TMPD/strict" && [ -z "$(hits "$REFUSALS" "$TMPD/stripped")" ]; then
+      if names_head "$TMPD/strict" && [ -z "$(hits "$REFUSALS" "$TMPD/stripped")" ] \
+         && [ -z "$(hits "$ACK_REFUSED" "$TMPD/stripped")" ]; then
         printf '%s\t%s\n' "$login" "$(stamp "$updated")" >> "$TMPD/head_markers"
       fi
       fatal_grep

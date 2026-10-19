@@ -785,8 +785,9 @@ fi
 
 echo
 echo "== loopd#399: a head marker past an older review object, edited after a request at this head =="
-# ONE deliberate widening (head-marker-after-request), measured 4 at W_SHA; every other row
-# must answer exactly what it did there.
+# ONE deliberate widening (head-marker-after-request), measured 4 at W_SHA; no other row
+# clears. RATE_ACK is the vendor's verbatim refusal receipt; latest-request-refused and
+# rate-limit-prose-beside-marker both cleared (rc=0) at b2bfbe4.
 W_SHA="1f012cd"
 WBASE=""
 if git -C "$REPO" cat-file -e "$W_SHA:plugin/scripts/review-clearance.sh" 2>/dev/null; then
@@ -811,7 +812,12 @@ build_399() { # <id>
       add_comment_edited coderabbitai "2026-10-18T21:00:00Z" "2026-10-19T02:50:00Z" "$CLEAN"
       add_comment_at coderabbitai "$W_ASK" "$(ack_body 'Full review finished.')"; return ;;
     latest-request-refused)    setup "$CLEAN_HEAD" "$W_PUSH"
-      add_comment_at coderabbitai "2026-10-19T03:05:00Z" "$(ack_body 'Review limit reached.')" ;;
+      add_comment_at coderabbitai "2026-10-19T03:05:00Z" "$RATE_ACK" ;;
+    rate-limit-prose-beside-marker) setup "$CLEAN_HEAD" "$W_PUSH"
+      add_review coderabbitai COMMENTED "$OLDER_SHA" "$(body_file 'One nit.')"
+      add_comment_edited coderabbitai "2026-10-18T21:00:00Z" "$W_DONE" \
+        "$(body_file "$(cat "$CLEAN")" 'Review rate limited.')"
+      add_comment_at coderabbitai "$W_ASK" "$(ack_body 'Full review finished.')"; return ;;
     request-names-older-commit) setup "$CLEAN_HEAD" "$W_PUSH"
       add_review coderabbitai COMMENTED "$OLDER_SHA" "$(body_file 'One nit.')"
       add_comment_edited coderabbitai "2026-10-18T21:00:00Z" "$W_DONE" "$CLEAN"
@@ -853,7 +859,8 @@ head-marker-after-request    4 0
 marker-names-older-head      4 4
 request-before-push          4 4
 marker-edited-before-request 4 4
-latest-request-refused       1 1
+latest-request-refused       4 4
+rate-limit-prose-beside-marker 4 4
 request-names-older-commit   4 4
 marker-has-no-edit-time      4 4
 no-request-at-all            4 4
