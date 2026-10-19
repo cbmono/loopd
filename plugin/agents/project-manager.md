@@ -274,8 +274,8 @@ state, and act only on deltas.
 
    - **0 (IDLE)** — the recorded fingerprint matches: bundle HEAD unchanged, tree
      clean, nothing untracked under `projects/`, no task `in-progress`, and every
-     open PR's head, state and review decision exactly as the last full tick recorded
-     them. **Skip steps 1–7.** Append ONE already-closed line to the root `log.md` —
+     open PR's head, state, review decision, latest review and commit statuses exactly
+     as the last full tick recorded them. **Skip steps 1–7.** Append ONE already-closed line to the root `log.md` —
      `* TICK <ISO-8601> by <login> idle — fingerprint unchanged (tick-delta)` — then go to step 8
      to commit and sync it as usual, reporting `noop: true`.
      **Then stop — your entire report is that one line, the probe's own, verbatim:**
