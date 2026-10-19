@@ -154,8 +154,9 @@
 #     cannot open a local file, so a task copies a SHORT REFERENCE — `<project>/tasks/<id>`
 #     — instead of a link, and every button says what it copied so a failed copy is
 #     visible rather than silent). Fonts are system stacks with Inter and JetBrains Mono
-#     named first, so the page itself requests nothing (owner, 2026-10-19). Nothing from a
-#     snapshot reaches the script; the escaping rules above are what hold, not "no script". A
+#     named first, so the page itself requests nothing (owner, 2026-10-19). No snapshot text
+#     is in the script's source; it reads escaped `data-*` attributes as data, so the
+#     escaping rules above are what hold, not "no script". A
 #     retained project's deliverables panel copies with this SAME helper, and so does the
 #     ✕ close-command control — every `[data-copy]` button on the page shares it, and
 #     there is no second one.

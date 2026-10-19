@@ -184,7 +184,9 @@ fi
 
 echo "== ONE BRAND, TYPE AND SHAPE =="
 SCSS="$TMP/scss"; sed -n '/SIMPLE MODE: the default view/,/prefers-reduced-motion/p' "$CSS" > "$SCSS"
-ok "simple mode draws no hex of its own"          "$(grep -cE '#[0-9a-fA-F]{3,8}\b' "$SCSS")" 0
+ok "simple mode draws no hex of its own"          "$(grep -cE '#[[:xdigit:]]{3,8}([^[:alnum:]_]|$)' "$SCSS")" 0
+printf '.x{color:#ff7ac2}\n.y{color:#abc}' > "$TMP/hex"
+ok "…while the same pattern finds a planted hex, mid-line and at line end" "$(grep -cE '#[[:xdigit:]]{3,8}([^[:alnum:]_]|$)' "$TMP/hex")" 2
 ok "the light theme follows prefers-color-scheme" "$(python3 -c 'import re,sys; c=open(sys.argv[1]).read(); m=re.search(r"@media \(prefers-color-scheme:light\)\{:root\{(.*?)\}\}", c, re.S); print(bool(m and "--pink-tint" in m.group(1) and "--signal-soft-text:#c2337f" in m.group(1)))' "$CSS")" True
 ok "section labels: JetBrains Mono 11px, .12em"   "$(hasflat ".s-label{font:700 11px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace;  letter-spacing:.12em;" "$SCSS")" yes
 ok "codes are JetBrains Mono"                     "$(has ".s-code{font:700 12px/1.4 'JetBrains Mono'" "$SCSS")" yes
@@ -201,6 +203,18 @@ printf -- '---\ntype: Task\ntitle: "<b>bold</b> blocker"\nkind: build\nstatus: b
 ok "a hostile project title is escaped"           "$(part simple | grep -c '<img src=x')" 0
 ok "…and still shown"                             "$(part simple | grep -c '&lt;img src=x onerror=alert(1)&gt; &amp; co' | awk '{print ($1>0)}')" 1
 ok "a hostile task title is escaped"              "$(part simple | grep -c '<b>bold</b>')" 0
+# A path-shaped slug in a hand-edited snapshot: the stuck card's Show details must open the
+# whole board (data-details=""), never filter on a slug no card's ✕ can match.
+python3 - "$D/$AB_SNAPSHOT" <<'PYS'
+import json, sys
+s = json.load(open(sys.argv[1]))
+for p in s["projects"]:
+    if p.get("slug") == "evil": p["slug"] = "../evil"
+json.dump(s, open(sys.argv[1], "w"))
+PYS
+( cd "$D" && bash "$GEN" --standalone --out "$PAGE" . ) >/dev/null 2>&1
+ok "a malformed slug never reaches a Show details filter" "$(part simple | grep -c 'data-details="[^"]*evil')" 0
+ok "…its stuck card opens the whole board instead" "$(part simple | python3 -c 'import re,sys; print(len(re.findall(r"<div class=\"s-stuck you\">(?:(?!</div></div>).)*?&lt;b&gt;bold&lt;/b&gt; blocker(?:(?!</div></div>).)*?data-details=\"\">Show details", sys.stdin.read(), re.S)))')" 1
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

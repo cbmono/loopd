@@ -586,8 +586,10 @@ outside the documented set.
 The page makes **no external request**: fonts are system stacks with Inter and JetBrains
 Mono named first (the Google Fonts `<link>`s went on 2026-10-19; `tests/snapshot.test.sh`
 asserts their hosts absent) — no CDN, no `src=`, no `url()` in the stylesheet. It carries
-**one `<script>`** — the clipboard helper and simple mode — and nothing from a snapshot
-ever reaches it: collapsing is `<details>`, not JavaScript. (Until
+**one `<script>`** — the clipboard helper and simple mode — with no snapshot text in its
+source: it reads snapshot-derived `data-*` attributes (a `data-copy` handle, a question's
+`data-ref` for the `/loopd:answer` route) as data, and writes them back only through
+`textContent` and `setAttribute`. Collapsing is `<details>`, not JavaScript. (Until
 2026-08-24 this paragraph said "zero external requests, no `<script>` at all". That was
 true of the kanban `columns` page and never of the one that got published; `columns` has
 since been deleted, so the promise is now stated against the page that ships.) The page
