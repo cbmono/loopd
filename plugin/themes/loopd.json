@@ -24,6 +24,7 @@
     "promptBorderShimmer": "#8dbdff",
     "planMode": "#5ea2ff",
     "autoAccept": "#5ea2ff",
+    "autoAcceptShimmer": "#8dbdff",
     "bashBorder": "#33405a",
     "ide": "#5ea2ff",
     "fastMode": "#5ea2ff",
