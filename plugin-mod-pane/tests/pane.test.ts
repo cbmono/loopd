@@ -544,9 +544,11 @@ const INBOX: Record<string, string> = {
   [P + '/two/tasks/task-002-stalled.md']: task('title: "Flaky check"\nstatus: in-progress\ntimestamp: 2026-10-02T00:00:00Z\nstall_count: 1\nlast_blocker: "SECRET-BLOCKER-TEXT"\nopen_questions: [ ]'),
   [P + '/one/tasks/task-003-recovered.md']: task('title: "Recovered"\nstatus: in-review\ntimestamp: 2026-10-02T00:00:00Z\nstall_count: 0\nlast_blocker: "SECRET-BLOCKER-TEXT"\nopen_questions: [ ]'),
 }
+// Inserted in REVERSE: fs.list answers in insertion order, so a fixture listed in the expected
+// order passes even with the cross-task sort deleted.
 function inboxWorld(): World {
   const w = world(SNAP)
-  for (const [path, text] of Object.entries(INBOX)) w.files.set(path, { text, mtimeMs: 1000 })
+  for (const [path, text] of Object.entries(INBOX).reverse()) w.files.set(path, { text, mtimeMs: 1000 })
   return w
 }
 const LATER_FILE = CWD + '/.loopd/.answer-later'
