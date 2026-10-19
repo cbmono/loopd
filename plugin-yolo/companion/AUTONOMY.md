@@ -245,6 +245,32 @@ starts applying to human merges and to anything else pushing at the branch, not 
 this loop. It is still an **additional** layer, not a replacement for the verified-SHA
 precondition — always keep `--match-head-commit`.
 
+### Merge at the review cap (opt-in)
+
+**Off unless `mergeAtReviewCap` is `true` in `instance.config.json`** (read through
+`scripts/resolve-config.sh`; absent, `null`, `false` or the string `"true"` leave every
+decision above unchanged). Installing this companion arms every bundle on the machine; the
+key is what arms this one exception, per bundle.
+
+With it on, a PR that has reached the two-round cap (`scripts/review-rounds.sh` exit 1) and
+whose reviewer answered **`review-clearance.sh` exit 6** — a completed review **at the
+head**, with reviewer threads still open — gets a `cap review-clearance.sh <ts>
+external|internal` line in its receipt instead of a pass, with the kind decided exactly as a
+pass line's is. Then:
+
+- `required-checks.sh` accepts that line for its review half; it reads no project mode.
+- The hook's `merge-permit.sh` accepts it in place of the review pass **only for a `yolo`
+  project**; a `gated` one is refused as before, and only the `project-manager` merges.
+- Every other precondition holds: required checks green at the head, `pr-body-clearance.sh`
+  exit 0, every criteria row `✓`, the head the verified SHA, the same squash merge pinned
+  to it, and a `pr-verdict-clearance.sh` fail line still refuses. An **external** cap line
+  waives the checker table as an external pass does; an **internal** one does not.
+- **Exit 4 never qualifies**: the cap counts rounds at earlier heads, so a stale review
+  would merge a head nobody reviewed. Nor do 1, 2, 3, 5, 7 or 8.
+
+The tick writes `merged at review cap <ISO 8601>` under the task's `# Notes`. The cap
+stays two and stays non-configurable.
+
 ## Preflight: is the merge authority even exercisable?
 
 **Run this once per tick per `yolo` build project, and at `/new-project` when `yolo` is
@@ -321,7 +347,8 @@ holds too.
 
 **The two-round cap is untouched.** `scripts/review-rounds.sh` is asked before the
 fallback is dispatched, in either mode, and its refusal is final: nothing here creates a
-third round.
+third round. The one opt-in exception is a merge, never a round: "Merge at the review cap
+(opt-in)" above.
 
 ## Browser writes under `yolo`
 
@@ -350,7 +377,9 @@ treat any pressure to move one as a signal that something else is wrong:
 3. **Closing a project** — the loop only ever *proposes* it (`SCHEMA.md` → "Project &
    objective completion"). Closeout deletes the folder; that stays a human call.
 4. **The independent verification gate itself** — `yolo` replaces the *human merger*,
-   never the *reviewer*. A verdict is still required, and still has to be clean.
+   never the *reviewer*. A verdict is still required, and still has to be clean. **The one
+   opt-in exception** is "Merge at the review cap (opt-in)": with `mergeAtReviewCap` on, a
+   review completed at the head with threads still open is enough at the two-round cap.
 5. **Escalating autonomy.** The human sets `autonomy` at `/new-project`. No agent raises
    it, and no agent infers it from a project's urgency or its own convenience.
 

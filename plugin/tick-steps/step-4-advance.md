@@ -219,6 +219,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      on every tick you would otherwise dispatch a verifier, external path included: a
      round is a round whoever spent it. (The price tag that made the cap hard:
      `docs/pm-design.md#step-4`.)
+     **The one opt-in exception: `mergeAtReviewCap`** (`instance.config.json`, default
+     off). With it `true`, a `yolo` PR at the cap whose `review-clearance.sh` answers **6**
+     (reviewed at the head, threads open) is merged rather than surfaced, if every other
+     precondition of `AUTONOMY.md` → "Merge at the review cap (opt-in)" holds. Exit 4
+     never qualifies. After the merge, write one `# Notes` line on the task:
+     `merged at review cap <ISO 8601>`. Without the key, or under `gated`, surface it as
+     above.
    - **Check the acceptance_criteria travelled with the PR — and that they're
      ticked.** Role agents embed the task's criteria as a `✓`/`✗` table in the PR
      body. Missing ⇒ have the agent add them. A **`✗`** is a criterion nobody

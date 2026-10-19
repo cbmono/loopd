@@ -392,6 +392,22 @@ setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
 reviewer_pr "$CR_CLEAN"; open_thread true
 expect "...and the same fixture with the thread RESOLVED -> clear" 0
 
+# mergeAtReviewCap: a `cap` line recorded at this head stands in for exit 6's review half,
+# and only while the key is true. No project mode is read here (merge-permit.sh does that).
+CAPB="$TMP/capbundle"; mkdir -p "$CAPB"
+cap_case() { # <key json> <name> <expected rc>
+  printf '{"mergeAtReviewCap": %s}\n' "$1" > "$CAPB/instance.config.json"
+  setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+  reviewer_pr "$CR_CLEAN"; open_thread false
+  CLAUDE_PROJECT_DIR="$CAPB" expect "$2" "$3"
+}
+printf '{"mergeAtReviewCap": true}\n' > "$CAPB/instance.config.json"
+"$(dirname "$SCRIPT")/clearance-receipt.sh" record review-clearance.sh --cap --kind external \
+  --bundle "$CAPB" --repo acme/widgets --pr 42 --head "$CR_HEAD"
+cap_case true  "exit 6 + a cap line at the head, key true -> clear" 0
+says "  ...naming the cap" "accepted at the two-round review cap"
+cap_case false "...the same cap line, key false -> refuse" 1
+
 setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
 reviewer_pr "$CR_REFUSAL"
 expect "required reviewer check GREEN but the reviewer refused -> refuse" 1

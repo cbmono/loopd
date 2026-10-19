@@ -121,10 +121,14 @@
 #   THIS SCRIPT CLEARS NOTHING AND MUST NEVER BE READ AS CLEARANCE. Exit 0 here means "the
 #   cap has room", never "this PR was reviewed". The merge gate is `required-checks.sh` +
 #   `review-clearance.sh`, unchanged and unaffected by anything in this file.
+#   THE ONE OPT-IN EXCEPTION is `mergeAtReviewCap` (default off): with it true,
+#   `review-clearance.sh` asks this script on its exit 6 and, at exit 1 here, records a `cap`
+#   line that only a `yolo` project's merge permit reads (AUTONOMY.md -> "Merge at the
+#   review cap (opt-in)"). Exit 4, a stale review, never qualifies.
 #
 # THE CAP IS NOT CONFIGURABLE, and that is the point of it being a hard number:
 # `CONVENTIONS.md` calls it "a hard cap", and a `--cap` flag is how a hard cap becomes a
-# default. Two.
+# default. Two. `mergeAtReviewCap` changes what happens AT the cap, never where it is.
 #
 # BROKEN OR ABSENT FAILS CLOSED BY CONSTRUCTION. Both callers (`project-manager.md`'s
 # verification step and `qa-reviewer.md` mode B) are told to refuse on ANY non-zero exit,
