@@ -689,18 +689,25 @@ say_strong() { local c="$1"; shift; printf '%s%s%s%s\n' "$EMPH_MARK" "$c" "$*" "
 # checked by eye in a real terminal.
 LOGO_ROWS=('   |▄|▄▄▄' '|◀━|▐    ▌' '  ||▝▄▄▄▄▘')
 
-# logo — the three rows. With colour off every name below is empty and this prints the
-# array's glyphs and nothing else; with colour on it is byte for byte what `cli-banner.sh`
-# emits, ONE reset per row rather than one per span.
+# logo [<row-2 span>] [<row-3 span>] — the three rows; each span given is appended after the
+# mark, padded to its widest row and one space. With colour off every name below is empty;
+# with colour on each row is `cli-banner.sh`'s bytes, ONE reset per span. The md marker goes
+# at the start of row 2 because `emit_md` only reads a prefix.
 logo() {
-  [ "$LOGO" -eq 1 ] || return 0
-  local row indent rest pink blue
+  local sfx=("" "$@") row indent rest pink blue i=0 w=0
+  for row in "${LOGO_ROWS[@]}"; do nchars "${row//|/}"; [ "$NCHARS" -gt "$w" ] && w="$NCHARS"; done
   for row in "${LOGO_ROWS[@]}"; do
     indent="${row%%|*}"; rest="${row#*|}"
     pink="${rest%%|*}"; blue="${rest#*|}"
+    [ "$i" -eq 1 ] && [ -n "${sfx[1]:-}" ] && printf '%s' "$EMPH_MARK"
     printf '%s' "$indent"
     [ -n "$pink" ] && printf '%s%s' "$C_PINK" "$pink"
-    printf '%s%s%s\n' "$C_BLUE" "$blue" "$C_OFF"
+    printf '%s%s%s' "$C_BLUE" "$blue" "$C_OFF"
+    if [ -n "${sfx[i]:-}" ]; then
+      nchars "${row//|/}"; printf '%*s %s' "$((w - NCHARS))" "" "${sfx[i]}"
+    fi
+    printf '\n'
+    i=$((i + 1))
   done
 }
 
@@ -990,10 +997,9 @@ org="$(cell "$(leaf_value "$(leaf org)")")"
 # THE SHAPE IS LITERAL — `loopd v<VERSION> · <bundle> · org: <org>`, the separators and the
 # `org: ` label included. The brand is always lowercase.
 head_line="loopd${ver:+ $ver} · $(basename "$root")${org:+ · org: $org}"
-# THE MARK GOES DIRECTLY ABOVE THE HEADER, not above §0: the machinery alarm keeps its place
-# as the banner's first line whenever it fires, because it is an alarm and the mark is not.
-logo
-say_strong "$C_INK" "$head_line"
+# THE HEADER AND ITS RULE SIT BESIDE THE MARK, on rows 2 and 3 (interactive-board/task-008),
+# not above §0: the machinery alarm keeps its place as the banner's first line whenever it
+# fires, because it is an alarm and the mark is not.
 # THE RULE UNDER IT IS WHAT MAKES THIS READ AS A HEADER WITH COLOUR OFF — which is the
 # normal case for this file, whose stdout is a pipe into Claude Code rather than a terminal.
 # Bold alone would be invisible in exactly the place the banner is actually read.
@@ -1006,7 +1012,12 @@ say_strong "$C_INK" "$head_line"
 # line always carries at least one `·`, so the rule came out two places too long there.
 nchars "$head_line"
 rule="$(printf "%*s" "$NCHARS" "" | sed "s/ /─/g")"
-say "$C_DIM" "$rule"
+if [ "$LOGO" -eq 1 ]; then
+  logo "$C_INK$head_line$C_OFF" "$C_DIM$rule$C_OFF"
+else
+  say_strong "$C_INK" "$head_line"
+  say "$C_DIM" "$rule"
+fi
 
 # ---------------------------------------------------------------------------------------
 # 2b. TEMPLATE DRIFT — is the version in that header the current one?

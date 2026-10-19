@@ -171,8 +171,10 @@ for rel in docs:
         header = HDR.sub(lambda m: m.group(1) + new, body)
         lines[k] = header + ("\n" if line.endswith("\n") else "")
         nxt = lines[k + 1].rstrip("\n") if k + 1 < len(lines) else ""
-        if header.startswith("loopd") and nxt and set(nxt) == set(RULE):
-            lines[k + 1] = RULE * len(header) + "\n"
+        # The header may sit beside the logo; its rule then starts in the same column below.
+        col = HDR.search(header).start()
+        if nxt[col:] and set(nxt[col:]) == set(RULE):
+            lines[k + 1] = nxt[:col] + RULE * len(header[col:]) + "\n"
     if hit:
         planned.append((rel, "".join(lines)))
 
@@ -203,8 +205,9 @@ if not dry:
             nxt = lines[k + 1] if k + 1 < len(lines) else ""
             if m.group(2) != new:
                 refuse("%s still displays %s" % (rel, m.group(2)))
-            if line.startswith("loopd") and nxt and set(nxt) == set(RULE) and len(nxt) != len(line):
-                refuse("%s: the rule under the banner is %d wide, the header is %d" % (rel, len(nxt), len(line)))
+            col = m.start()
+            if nxt[col:] and set(nxt[col:]) == set(RULE) and len(nxt) != len(line):
+                refuse("%s: the rule under the banner is %d wide, the header is %d" % (rel, len(nxt) - col, len(line) - col))
 
 print("\n".join(changed))
 PY

@@ -2,17 +2,16 @@
 # iced — the board is on hold (owner's decision, 2026-10-05). `run.sh --iced`, the nightly
 # workflow and any PR whose diff names this file's subject still run it. Thaw: delete these lines.
 #
-# banner-logo.test.sh — the loopd mark above the banner's header: three rows of DATA,
-# coloured POSITIONALLY, and adding nothing else to the banner.
+# banner-logo.test.sh — the loopd mark with the banner's header and rule BESIDE it
+# (interactive-board/task-008): three rows of DATA, coloured POSITIONALLY, rows 2 and 3
+# carrying the header and its rule from one shared column.
 #
-# The six claims, and each is here because a content grep passes without it: the three rows
-# are byte-exact; the gate and the `◀━` exit arrow are the ONLY pink in the mark, in all
-# three colour tiers; every escape the mark emits is one `cli-theme.json` defines; the
-# opt-outs leave the rows with no SGR at all; the header and its rule are the same bytes
-# they were before the logo existed — proved against a mutant of the hook with the `logo`
-# call removed, so "nothing else changed" is measured, not asserted; and (§5) the mark
-# renders on the SessionStart channel ALONE, never on the relayed `/welcome` path, where
-# markdown drops the leading space of row 1 and carries no colour.
+# The claims: the three rows are byte-exact, with the header and rule as row 2's and row 3's
+# suffixes; the gate and the `◀━` exit arrow are the ONLY pink in the mark, in all three
+# colour tiers; every escape the mark emits is one `cli-theme.json` defines; the opt-outs
+# leave the rows with no SGR at all; the header and rule spans are the `--no-logo` banner's
+# own bytes, colour included, so only their POSITION changed; and (§5) the mark renders on
+# the SessionStart channel ALONE, never on the relayed `/welcome` path.
 #
 # assert(): 0 is a PASS, matching the banner harnesses next door.
 set -uo pipefail
@@ -48,6 +47,8 @@ no_esc()    { LC_ALL=C grep -q "$ESC" <<<"$1" && echo 1 || echo 0; }
 strip_sgr() { printf '%s' "$1" | LC_ALL=C sed "s/$ESC\[[0-9;]*m//g"; }
 nth()       { printf '%s\n' "$1" | sed -n "$2p"; }
 head_no()   { awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }' <<<"$1"; }
+# CHARACTERS, not bytes and not the locale's opinion — the hook's `nchars`, restated.
+chars()     { printf '%s' "$1" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' '; }
 
 # THE THREE ROWS, TYPED HERE AND NOWHERE ELSE IN THIS FILE — copied from the design
 # source's `cli-banner.sh`. The hook keeps its own copy as `indent|pink|blue` data; that the
@@ -75,16 +76,24 @@ runenv() { # <env assignment…> -- <hook> [args…]
 }
 
 # =======================================================================================
-echo "== 1. the three rows, verbatim, above the version line =="
+echo "== 1. the three rows, verbatim, with the header and rule beside them =="
 # =======================================================================================
 OUT="$(run "$HOOK")"
 n="$(head_no "$OUT")"
-assert "row 1 is the top edge with its gate, byte for byte" "$(eq "$(nth "$OUT" "$n")" "$L1")"
-assert "row 2 is the exit arrow and the tube, byte for byte" "$(eq "$(nth "$OUT" "$((n+1))")" "$L2")"
-assert "row 3 is the bottom edge, byte for byte" "$(eq "$(nth "$OUT" "$((n+2))")" "$L3")"
+r2="$(nth "$OUT" "$((n+1))")"; r3="$(nth "$OUT" "$((n+2))")"
+HDR="${r2#"$L2 "}"; RULE="${r3#"$L3 "}"
+assert "row 1 is the top edge with its gate, alone, byte for byte" "$(eq "$(nth "$OUT" "$n")" "$L1")"
+assert "row 2 is the exit arrow and the tube, then one space" "$(eq "${r2:0:${#L2}+1}" "$L2 ")"
+assert "row 3 is the bottom edge, then one space" "$(eq "${r3:0:${#L3}+1}" "$L3 ")"
 # THE VERSION LINE'S SHAPE IS LITERAL — the `·` separators and the `org: ` label included.
-assert "…and the version line is directly under them, in its literal shape" \
-  "$(grep -qE '^loopd v[0-9][^ ]* · [^ ]+ · org: .+$' <<<"$(nth "$OUT" "$((n+3))")" && echo 0 || echo 1)"
+assert "row 2's suffix is the version line, in its literal shape" \
+  "$(grep -qE '^loopd v[0-9][^ ]* · [^ ]+ · org: .+$' <<<"$HDR" && echo 0 || echo 1)"
+assert "row 3's suffix is the rule" "$([ -n "$RULE" ] && [ -z "${RULE//─/}" ] && echo 0 || echo 1)"
+assert "…as wide as the header, in characters" "$(eq "$(chars "$RULE")" "$(chars "$HDR")")"
+assert "the header and the rule start in the same column" \
+  "$(eq "$(chars "${r2%"$HDR"}")" "$(chars "${r3%"$RULE"}")")"
+assert "…one past the mark's widest row" "$(eq "$(chars "${r2%"$HDR"}")" "$(( $(chars "$L2") + 1 ))")"
+assert "…and nothing follows the block but a blank line" "$(eq "$(nth "$OUT" "$((n+3))")" "")"
 # KEPT ONCE, AS DATA. Three inline printf fragments would satisfy every assertion above and
 # be three places to edit; the hook holds one array and this counts it.
 for l in "$D1" "$D2" "$D3"; do
@@ -97,8 +106,8 @@ SAMPLE="$(cat "$DOC")"
 for l in "$L1" "$L2" "$L3"; do
   assert "the operations.md banner sample shows it too" "$(has "$l" "$SAMPLE")"
 done
-assert "…and the sample's version line carries the brand, lowercase" \
-  "$(has 'loopd v' "$SAMPLE")"
+assert "…and the sample's version line carries the brand, lowercase, beside row 2" \
+  "$(grep -qE "^$L2 loopd v" <<<"$SAMPLE" && echo 0 || echo 1)"
 assert "no ASCII alien survives in the hook" \
   "$(eq "$(grep -ci 'AI-Bridge v' "$HOOK")" 0)"
 
@@ -111,19 +120,24 @@ echo "== 2. the gate and the exit arrow are the only pink, in all three tiers ==
 OFF="${ESC}[0m"   # the reset the rest of the banner already uses, not a second one
 tier() { # <tier name> <blue> <pink> <env…>
   local name="$1" b="$2" k="$3"; shift 3
-  local out l1 l2 l3 m
+  local out l1 l2 l3 m nl h
   out="$(runenv "$@" -- "$HOOK" --color always)"; m="$(head_no "$out")"
   l1="$(nth "$out" "$m")"; l2="$(nth "$out" "$((m+1))")"; l3="$(nth "$out" "$((m+2))")"
+  nl="$(runenv "$@" -- "$HOOK" --color always --no-logo)"; h="$(head_no "$nl")"
   assert "$name: row 1 is indent, pink gate, blue tube" \
     "$(eq "$l1" "   ${ESC}[${k}m▄${ESC}[${b}m▄▄▄${OFF}")"
-  assert "$name: row 2 is the pink exit arrow, then blue" \
-    "$(eq "$l2" "${ESC}[${k}m◀━${ESC}[${b}m▐    ▌${OFF}")"
-  assert "$name: row 3 is all blue — no third pink span anywhere in the mark" \
-    "$(eq "$l3" "  ${ESC}[${b}m▝▄▄▄▄▘${OFF}")"
+  # COLOURS UNCHANGED: the header and rule spans are the `--no-logo` lines' own bytes —
+  # bold ink, dim grey, one reset each — so the block moved them and recoloured nothing.
+  assert "$name: row 2 is the pink exit arrow, blue, then the header in its own colour" \
+    "$(eq "$l2" "${ESC}[${k}m◀━${ESC}[${b}m▐    ▌${OFF} $(nth "$nl" "$h")")"
+  assert "$name: row 3 is all blue, then the rule in its own colour — no third pink span" \
+    "$(eq "$l3" "  ${ESC}[${b}m▝▄▄▄▄▘${OFF} $(nth "$nl" "$((h+1))")")"
+  assert "$name: …and the header span is coloured at all (not vacuous)" \
+    "$(eq "$(no_esc "$(nth "$nl" "$h")")" 1)"
   assert "$name: …and exactly two pink spans in the whole mark" \
     "$(eq "$(printf '%s%s%s' "$l1" "$l2" "$l3" | grep -oF -- "${ESC}[${k}m" | grep -c .)" 2)"
-  assert "$name: …and stripping the SGR gives the three rows back" \
-    "$(eq "$(strip_sgr "$l1")$(strip_sgr "$l2")$(strip_sgr "$l3")" "$L1$L2$L3")"
+  assert "$name: …and stripping the SGR gives the three plain rows back" \
+    "$(eq "$(strip_sgr "$l1")$(strip_sgr "$l2")$(strip_sgr "$l3")" "$L1$L2 $HDR$L3 $RULE")"
 }
 # ONE RESET, AND SINCE loopd/task-004 IT IS THE THEME'S. A second escape spelling would
 # render the same and be a second thing to keep in step, so both files are asked how many
@@ -172,8 +186,8 @@ echo "== 3. the opt-outs leave the three rows with NO SGR at all =="
 # =======================================================================================
 plain_logo() { # <banner> -> 0 when the three lines are present and carry no escape
   local out="$1" m; m="$(head_no "$out")"
-  [ "$(nth "$out" "$m")" = "$L1" ] && [ "$(nth "$out" "$((m+1))")" = "$L2" ] \
-    && [ "$(nth "$out" "$((m+2))")" = "$L3" ] \
+  [ "$(nth "$out" "$m")" = "$L1" ] && [ "$(nth "$out" "$((m+1))")" = "$L2 $HDR" ] \
+    && [ "$(nth "$out" "$((m+2))")" = "$L3 $RULE" ] \
     && [ "$(no_esc "$(nth "$out" "$m")$(nth "$out" "$((m+1))")$(nth "$out" "$((m+2))")")" = 0 ] \
     && echo 0 || echo 1
 }
@@ -190,9 +204,15 @@ assert "a pipe with no flags prints them plain"  "$(plain_logo "$OUT")"
 assert "…while the same json run without it colours them" \
   "$(eq "$(plain_logo "$(sm "$(run "$HOOK" --format json)")")" 1)"
 # THE `/welcome` RELAY. Markdown renders there and SGR does not, so that rendering carries
-# the same three lines and no escape — colour is not promised on that channel.
+# the same three lines and no escape — colour is not promised on that channel. Its `**` is
+# emphasis, not content: it wraps the WHOLE header row, because `emit_md` reads only a
+# prefix, so row 2 still renders the header bold.
 MD="$(run "$HOOK" --format md)"
-assert "the hook's md rendering shows the same three lines" "$(plain_logo "$MD")"
+assert "the hook's md rendering shows the same three lines" "$(plain_logo "$(sed 's/\*\*//g' <<<"$MD")")"
+assert "…with the header row wrapped in emphasis, start to end" \
+  "$(eq "$(nth "$MD" "$(( $(head_no "$MD") + 1 ))")" "**$L2 $HDR**")"
+assert "…and rows 1 and 3 left alone" \
+  "$(eq "$(nth "$MD" "$(head_no "$MD")")$(nth "$MD" "$(( $(head_no "$MD") + 2 ))")" "$L1$L3 $RULE")"
 assert "…and the hook's own header says colour is not promised there" \
   "$(has 'colour is not promised' "$(sed -n '1,260p' "$HOOK")")"
 # AND THE EQUALITY THE TWO CHANNELS RUN ON: strip_sgr(systemMessage) is the text banner.
@@ -201,32 +221,21 @@ SM="$(printf '%s' "$JSON" | python3 -c 'import json,sys; sys.stdout.write(json.l
 assert "strip_sgr(systemMessage) still equals the text banner" "$(eq "$(strip_sgr "$SM")" "$OUT")"
 
 # =======================================================================================
-echo "== 4. the header and its rule are the bytes they were BEFORE the logo =="
+echo "== 4. the header and its rule are the --no-logo banner's, MOVED and nothing else =="
 # =======================================================================================
-# Against a mutant of the hook with the `logo` call removed — the banner as it shipped. The
-# intact banner minus its three logo lines must equal that mutant's banner byte for byte, so
-# "the banner gains the logo and nothing else" is measured rather than eyeballed.
-# IN A FAKE TEMPLATE BESIDE A CONTROL COPY, because the hook derives its VERSION and its
-# scripts/ dir from its own resolved path — a copy run from elsewhere differs in more than
-# the mutation, which is how the first draft of this section compared two unlike banners.
-MUTTPL="$TMP/muttpl"
-mkdir -p "$MUTTPL/plugin/hooks"
-ln -s "$TPL/plugin/scripts" "$MUTTPL/plugin/scripts"
-cp "$TPL/VERSION" "$MUTTPL/VERSION"
-cp "$HOOK" "$MUTTPL/plugin/hooks/control.sh"
-grep -v '^logo$' "$HOOK" > "$MUTTPL/plugin/hooks/no-logo.sh"
-MUT="$MUTTPL/plugin/hooks/no-logo.sh"
-assert "the mutant really lost the call"   "$(eq "$(grep -c '^logo$' "$MUT")" 0)"
-OUT="$(run "$MUTTPL/plugin/hooks/control.sh")"; n="$(head_no "$OUT")"
-NOLOGO="$(run "$MUT")"
-assert "…and still prints a banner"        "$(has 'loopd' "$NOLOGO")"
-assert "…which carries no logo line"       "$(eq "$(has "$L2" "$NOLOGO")" 1)"
-assert "the intact banner, minus the three logo lines, IS that banner" \
-  "$(eq "$(printf '%s\n' "$OUT" | sed "$n,$((n+2))d")" "$NOLOGO")"
-assert "…so the version line is unchanged" \
-  "$(eq "$(nth "$OUT" "$((n+3))")" "$(nth "$NOLOGO" "$(head_no "$NOLOGO")")")"
-assert "…and so is the rule under it"      \
-  "$(eq "$(nth "$OUT" "$((n+4))")" "$(nth "$NOLOGO" "$(( $(head_no "$NOLOGO") + 1 ))")")"
+# Drop row 1 and strip the mark from rows 2 and 3, and the intact banner must BE the
+# `--no-logo` one byte for byte — so "only the position changed" is measured, on the plain
+# rendering and on the coloured one alike.
+OUT="$(run "$HOOK")"; n="$(head_no "$OUT")"
+NL="$(run "$HOOK" --no-logo)"
+assert "the --no-logo banner prints the header, then the rule, alone" \
+  "$(eq "$(nth "$NL" "$(head_no "$NL")")|$(nth "$NL" "$(( $(head_no "$NL") + 1 ))")" "$HDR|$RULE")"
+assert "the intact banner, minus the mark, IS that banner" \
+  "$(eq "$(printf '%s\n' "$OUT" | sed -e "${n}d" -e "$((n+1))s/^$L2 //" -e "$((n+2))s/^$L3 //")" "$NL")"
+COL="$(run "$HOOK" --color always)"; n="$(head_no "$COL")"
+NLC="$(run "$HOOK" --color always --no-logo)"
+assert "…and so it is with colour on: the mark's two spans are all that is added" \
+  "$(eq "$(printf '%s\n' "$COL" | LC_ALL=C sed -e "${n}d" -e "$((n+1)),$((n+2))s/^.*${ESC}\[0m //")" "$NLC")"
 
 # =======================================================================================
 echo "== 5. the mark is the SessionStart channel's alone =="
@@ -260,14 +269,8 @@ assert "\`fix\` carries none"    "$(no_logo_at_all "$(welcome fix --instance "$I
 # A FLAG THE CALLER PASSED LEAVES THE DECISION ALONE — that contract is the reason this is
 # `--no-logo` on the wrapper's own branches and not a format the hook picks for itself.
 assert "a caller's own --format md still gets the mark" \
-  "$(plain_logo "$(welcome --format md)")"
-# AND THE SUPPRESSION SUBTRACTS THE THREE LINES AND NOTHING ELSE, measured the way §4
-# measures the mutant: the intact banner minus them IS the `--no-logo` one, byte for byte.
-FULL="$(run "$HOOK")"; f="$(head_no "$FULL")"
-NL="$(run "$HOOK" --no-logo)"
+  "$(plain_logo "$(welcome --format md | sed 's/\*\*//g')")"
 assert "--no-logo drops them from the hook too"   "$(no_logo_at_all "$NL")"
-assert "…and the banner minus the three lines IS that banner" \
-  "$(eq "$(printf '%s\n' "$FULL" | sed "$f,$((f+2))d")" "$NL")"
 # THE SUPERSESSION IS RECORDED WHERE THE LOGO LIVES, in one line, so the next reader of
 # task-024's criterion finds the reversal in the file it is a criterion about.
 assert "the hook's header records that this supersedes task-024" \
