@@ -128,6 +128,10 @@ d["defaultOwner"] = "example-user-008"
 d["org"] = "wrong-org"
 d["maxAgentMinutes"] = 120
 d["roleMinutes"] = {"project-manager": 200}
+d["reclaimIgnoreOk"] = ["target"]
+d["mergeAtReviewCap"] = True
+d["continueAfterTasks"] = 16
+d["continueAfterDays"] = 20
 PY
 RC="$(norm "$I")"
 ok "a dirty pair exits 1"                     "$RC" 1
@@ -138,6 +142,11 @@ ok "…and so is a shared fact like org"               "$(finding MISPLACED org)
 # SCHEMA marks both overridable, so the per-machine wall-clock budget stays where it is.
 ok "a local maxAgentMinutes is NOT misplaced"        "$(finding MISPLACED maxAgentMinutes)" no
 ok "…nor a local roleMinutes"                        "$(finding MISPLACED roleMinutes)" no
+ok "…nor a local reclaimIgnoreOk"                    "$(finding MISPLACED reclaimIgnoreOk)" no
+# SCHEMA marks these three shared facts, so a local copy is misplaced.
+ok "a local mergeAtReviewCap is MISPLACED"           "$(finding MISPLACED mergeAtReviewCap)" yes
+ok "…and so is continueAfterTasks"                   "$(finding MISPLACED continueAfterTasks)" yes
+ok "…and so is continueAfterDays"                    "$(finding MISPLACED continueAfterDays)" yes
 ok "report mode wrote nothing"                "$(jget "$I/$TCFG" reposRoot)" /abs/path/on/one/machine
 RC="$(norm "$I" --apply)"
 ok "--apply exits 0"                          "$RC" 0

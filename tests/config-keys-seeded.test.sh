@@ -24,15 +24,16 @@ GIT() { env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git \
   -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false "$@"; }
 
 # A call site is `resolve-config.sh"`, a variable holding it, or a `cfg` wrapper around it;
-# the key is the first lowerCamel word after `--instance "<dir>"` and `--json|--source`.
+# the key is the first lowerCamel word, quoted or not, after `--instance <dir>` and
+# `--json|--source`. `--dump` readers are not scanned.
 read_keys() {
   local f
   grep -rlE 'resolve-config\.sh' "$TPL/plugin" --include='*.sh' | while IFS= read -r f; do
     [ "${f##*/}" = resolve-config.sh ] && continue
     awk '/\\$/ { sub(/\\$/, ""); buf = buf $0; next } { print buf $0; buf = "" }' "$f" \
       | grep -vE '^[[:space:]]*#' \
-      | grep -oE '(resolve-config\.sh"|"\$(RC|RESOLVER|resolver)"|\$\(cfg|^[[:space:]]*cfg)( +--instance +"[^"]*")?( +--(json|source))? +[a-z][A-Za-z0-9]*\b' \
-      | awk '{print $NF}'
+      | grep -oE '(resolve-config\.sh"|"\$(RC|RESOLVER|resolver)"|\$\(cfg|^[[:space:]]*cfg)( +--instance +("[^"]*"|[^ "]+))?( +--(json|source))? +"?[a-z][A-Za-z0-9]*\b' \
+      | awk '{ k = $NF; gsub(/"/, "", k); print k }'
   done | sort -u
 }
 KEYS="$(read_keys)"
