@@ -28,6 +28,10 @@ AB_ANSWER_DEPTH="$AB_DIR/.answer-depth"
 AB_ANSWER_LATER="$AB_DIR/.answer-later"
 # Per clone: the /loopd:new-project form in progress. Its directory ignores itself (a `*` .gitignore).
 AB_NEW_PROJECT_FORM="$AB_DIR/.new-project/form.json"
+# Per clone: the web board's answer queue and its consumed-id ledger (web-queue.sh). Their
+# directory ignores itself (a `*` .gitignore), so no bundle needs re-stamping to keep them out.
+AB_QUEUE="$AB_DIR/.queue/queue.jsonl"
+AB_QUEUE_LEDGER="$AB_DIR/.queue/consumed.jsonl"
 AB_MODE_DIR="$AB_DIR/.permission-mode"
 AB_BOARD_DIR="$AB_DIR/.board-live"
 AB_BOARD_OTHERS="$AB_DIR/.board-others.json"
@@ -46,10 +50,10 @@ index.md:$AB_INDEX .tick-state:$AB_STATE_DIR .board-live:$AB_BOARD_DIR \
 AB_DIR_BEFORE=".ai-bridge"
 
 export AB_DIR AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER
-export AB_STATE_DIR AB_RECEIPTS AB_ANSWER_DEPTH AB_ANSWER_LATER AB_NEW_PROJECT_FORM AB_MODE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM AB_MOVES AB_DIR_BEFORE
+export AB_STATE_DIR AB_RECEIPTS AB_ANSWER_DEPTH AB_ANSWER_LATER AB_NEW_PROJECT_FORM AB_QUEUE AB_QUEUE_LEDGER AB_MODE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM AB_MOVES AB_DIR_BEFORE
 
 AB_KEYS="AB_DIR AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER \
-AB_STATE_DIR AB_RECEIPTS AB_ANSWER_DEPTH AB_ANSWER_LATER AB_NEW_PROJECT_FORM AB_MODE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM"
+AB_STATE_DIR AB_RECEIPTS AB_ANSWER_DEPTH AB_ANSWER_LATER AB_NEW_PROJECT_FORM AB_QUEUE AB_QUEUE_LEDGER AB_MODE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM"
 export AB_KEYS
 
 # Is <root> a bundle, and has it been migrated to the 3.0 layout?
