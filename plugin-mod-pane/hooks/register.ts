@@ -294,9 +294,7 @@ const NEEDS_YOU = { color: '#ff7ac2' }
 const DONE = { color: '#76d6a4' }
 const STUCK_KEYS = ['c', 'd', 'e']
 
-// The form new-project-form.sh keeps, AB_NEW_PROJECT_FORM in bundle-paths.sh. The pane only
-// draws it: every fill, submit and cancel is a /loopd:new-project run, and the ✗ marks are the
-// script's, read back from the file.
+// AB_NEW_PROJECT_FORM in bundle-paths.sh: new-project-form.sh writes it and its ✗ marks; the pane only draws it.
 const FORM_FILE = '.loopd/.new-project/form.json'
 const FIELDS = [['title', 'Title', 'a short name'], ['what', 'What', 'what it should do, in a line'],
   ['whom', 'For whom', 'who needs it'], ['done', 'Done when', 'how you will know; separate several with ;'],
