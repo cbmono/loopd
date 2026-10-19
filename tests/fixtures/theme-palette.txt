@@ -7,7 +7,7 @@
 # retires. Still the bug: a machine-facing token recoloured to read as human-facing, or
 # the reverse — §6 of the suite asserts that, which is what replaced the line above.
 #101318  --loopd-bg
-#14171c  --loopd-terminal         userMessageBackground, userMessageBackgroundHover (2026-10-19)
+#14171c  --loopd-terminal
 #171b22  --loopd-surface
 #1c212b  --loopd-surface-2
 #262c37  --loopd-line
@@ -37,8 +37,12 @@
 #ffbb9e  --loopd-accent-orange    orange_FOR_SUBAGENTS_ONLY
 #ffc7e5  --loopd-accent-pink-soft pink_FOR_SUBAGENTS_ONLY
 #fffdc2  --loopd-accent-yellow    yellow_FOR_SUBAGENTS_ONLY
-# Your past prompts: no tinted bar, by the owner's decision of 2026-10-19, replacing the
-# #76d6a4 tints of 2026-10-18 (interactive-board/task-007). userMessageBackground and its
-# hover take --loopd-terminal #14171c, so the prompt sits on the terminal itself; Claude Code
-# has no theme key for the prompt's TEXT colour, so it stays `text`. briefLabelYou keeps
-# #76d6a4.
+# Your past prompts, by the owner's decision of 2026-10-19 (picked in the real-render theme
+# preview), replacing the #76d6a4 tints of 2026-10-18 (interactive-board/task-007):
+# userMessageBackground takes the purple #5e2a89 and its hover the lighter #6f3a9c.
+# bashMessageBackgroundColor takes the owner's terminal background #1c1e26 (Orca, as the
+# preview detected it), provisionally; the owner may revisit it. Claude Code has no theme key for
+# the prompt's TEXT colour, so it stays `text`. briefLabelYou keeps #76d6a4.
+#5e2a89  --loopd-you-purple       userMessageBackground
+#6f3a9c  --loopd-you-purple-hover userMessageBackgroundHover
+#1c1e26  --loopd-owner-terminal   bashMessageBackgroundColor
