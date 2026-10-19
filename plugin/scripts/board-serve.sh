@@ -6,6 +6,7 @@
 #
 #   Usage: board-serve.sh [--port N] [--interval SECS] [--out DIR] [--print-port]
 #
+#   POST /__queue appends one web-board entry through web-queue.sh, behind a per-launch token.
 #   Exits 0 (served until Ctrl-C, or this bundle's port was already served),
 #   2 (bad flag), 3 (the port is held by something that is not this board).
 #   Why it is shaped this way: docs/operations.md § 5.
@@ -78,7 +79,7 @@ fi
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BOARD="$HERE/build-board.sh"
 WRITER="$HERE/write-snapshot.sh"
-for f in "$BOARD" "$WRITER" "$HERE/fold-answers.sh"; do
+for f in "$BOARD" "$WRITER" "$HERE/fold-answers.sh" "$HERE/web-queue.sh"; do
   [[ -f "$f" ]] || { echo "board-serve: missing $f" >&2; exit 2; }
 done
 command -v python3 >/dev/null 2>&1 || {
@@ -89,8 +90,9 @@ OUT_ABS="$(cd "$OUT_DIR" && pwd)"
 
 BOARD_ROOT="$ROOT" BOARD_OUT="$OUT_ABS" BOARD_PORT="$PORT" BOARD_INTERVAL="$INTERVAL" \
 BOARD_RENDER="$BOARD" BOARD_WRITER="$WRITER" \
+BOARD_FROM="$(bash "$HERE/decision-stamp.sh" --self 2>/dev/null)" \
 exec python3 - <<'PY'
-import errno, html, http.server, json, os, re, signal, socketserver, subprocess, sys, threading, time, urllib.parse, urllib.request
+import errno, hmac, html, http.server, json, os, re, secrets, signal, socketserver, subprocess, sys, threading, time, urllib.parse, urllib.request
 
 ROOT     = os.environ["BOARD_ROOT"]
 OUT      = os.path.realpath(os.environ["BOARD_OUT"])
@@ -103,6 +105,11 @@ PAGE     = os.path.join(OUT, "board.html")
 SNAP     = os.path.join(ROOT, os.environ["AB_SNAPSHOT"])
 STATE    = os.path.join(OUT, ".serve")
 URL      = "http://localhost:%d" % PORT
+QUEUE    = os.path.join(os.path.dirname(WRITER), "web-queue.sh")
+FROM     = os.environ.get("BOARD_FROM") or "<unknown>"
+# Per launch, in memory only: it reaches the page in the HTTP response and is in no file.
+TOKEN    = secrets.token_urlsafe(32)
+HOSTS    = ("127.0.0.1:%d" % PORT, "localhost:%d" % PORT)
 
 # The auto-reload: poll a revision endpoint, reload only when the page actually changed.
 # A `<meta refresh>` would reload on a timer and collapse every expanded project card
@@ -360,6 +367,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass
 
     def _send(self, code, body, ctype="text/plain; charset=utf-8"):
+        if code >= 400:
+            self.close_connection = True  # a refused request's body may be unread
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
@@ -380,6 +389,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except OSError:
                 rev = "0"
             return self._send(200, rev.encode())
+        if path == "/__queue":
+            if not self._allowed(False):
+                return self._send(403, b"forbidden\n")
+            out = self._queue(["status"])
+            return self._send(200 if out[0] == 0 else 500, out[1], "application/json")
         if path in ("/", "/index.html"):
             path = "/board.html"
         full = resolve(path)
@@ -402,15 +416,55 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 page = Fill().page(page)
             except Exception:
                 sys.stderr.write("board-serve: the fill failed — served the page unfilled.\n")
+            meta = '<meta name="loopd-queue" content="%s">' % TOKEN
+            page = page.replace("</head>", meta + "</head>", 1) if "</head>" in page else meta + page
             body = page.encode() + RELOAD.encode()
         return self._send(200, body, ctype)
 
     do_HEAD = do_GET
 
+    # A POST is the page asking the next tick to run one entry. The token keeps other web
+    # pages out, Host and Origin keep a rebound DNS name out; a process on this machine can
+    # read the token from GET /, and can equally edit the task document itself.
+    def _allowed(self, post):
+        host = self.headers.get("Host", "")
+        if host not in HOSTS:
+            return False
+        if post and self.headers.get("Origin") != "http://" + host:
+            return False
+        return hmac.compare_digest(self.headers.get("X-Loopd-Token", ""), TOKEN)
+
+    def _queue(self, args, body=b""):
+        try:
+            r = subprocess.run(["bash", QUEUE] + args + ["--instance", ROOT], input=body,
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30)
+            return r.returncode, r.stdout
+        except Exception:
+            return 2, b""
+
     def do_POST(self):
+        if urllib.parse.urlsplit(self.path).path != "/__queue":
+            return self._send(405, b"method not allowed\n")
+        if not self._allowed(True):
+            return self._send(403, b"forbidden\n")
+        if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
+            return self._send(415, b"application/json only\n")
+        try:
+            n = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            return self._send(411, b"length required\n")
+        if not 0 < n <= 16384:
+            return self._send(413, b"too large\n")
+        rc, out = self._queue(["append", "--from", FROM], self.rfile.read(n))
+        if rc == 1:
+            msg = out.decode("utf-8", "replace").strip()
+            return self._send(400, json.dumps({"error": msg}).encode(), "application/json")
+        return self._send(202 if rc == 0 else 500, out, "application/json")
+
+    def do_PUT(self):
         self._send(405, b"method not allowed\n")
 
-    do_PUT = do_DELETE = do_PATCH = do_POST
+    do_DELETE = do_PATCH = do_PUT
 
 
 def already_ours():

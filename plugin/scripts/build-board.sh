@@ -706,7 +706,7 @@ TABLE_HEAD = """<title>__TITLE__</title>
    .s-field em, .s-err.
    GREEN (--done) is for sent, saved and finished only.
    GREEN IS FOR .proj.fin, .proj.fin .phead::before, .state.done, .s-icon.ok, .s-ok,
-   .s-railfin.
+   .s-railfin, .s-wait, .s-sent b.
    --signal is the pink FILL and --signal-soft-text the pink TEXT: one hex in dark, two
    in light, where #ff7ac2 text on white is unreadable.
    Four background layers do the separating: ground -> surface -> sunk -> inner. */
@@ -1175,6 +1175,10 @@ html[data-js] .loopd[data-view="details"] .simple{display:none}
   border:1px solid var(--line);border-radius:12px;padding:11px 14px;font-size:14px;
   background:transparent;color:var(--ink);text-align:left}
 .s-ok{font-weight:700}
+.s-wait{font-size:12px;font-weight:600;color:var(--done)}
+.s-sent{font-size:13.5px;line-height:1.5;color:var(--muted);margin:0 0 8px}
+.s-sent b{color:var(--done);font-weight:600}
+.s-q.queued [data-fill="q-options"],.s-q.queued .s-own,.s-qlist>.s-q.queued .s-acts{display:none}
 .s-when,.s-more{font-size:12.5px;color:var(--muted)}
 .s-more{margin-left:auto}
 .s-rrow{display:flex;flex-direction:column;gap:6px;width:100%;background:none;border:0;
@@ -1326,8 +1330,10 @@ TABLE_SCRIPT = r"""<script>
     }
   });
 })();
-// SIMPLE MODE. It runs nothing and sends nothing: Send answer, Start the project and N
-// show the slash command to type. Every string it writes goes through textContent or
+// SIMPLE MODE. It runs nothing. Served by board-serve.sh (a `loopd-queue` <meta> carries
+// that launch's token) Send answer and Start the project POST one entry to the answer
+// queue the next tick consumes, shown Sent then Saved; anywhere else they show the slash
+// command to type. Every string it writes goes through textContent or
 // setAttribute. Today's board is reached by Show details, never by a <details> toggle.
 document.documentElement.setAttribute('data-js','');
 (function(){
@@ -1377,7 +1383,68 @@ document.documentElement.setAttribute('data-js','');
     var s=$('[data-fill="q-options"] li.sel',q);
     return cmdFor(ref,s&&s.getAttribute('data-n'),'');
   }
+  var KEY='loopd-queue', token='';
+  var SAY={'saved':'Saved your answer to %s.','already-answered':'%s was already answered, so yours was not used.',
+    'not-yours':'%s belongs to someone else, so yours was not saved.','no-more':'Nothing more is written down for %s.',
+    'expired':'Your answer to %s waited too long. Send it again.',
+    'refused':'%s could not be saved as sent, and sending it again will not help.','invalid':'%s could not be read, so it was not saved.'};
+  // A refused project is a name already taken: sending it again is refused again.
+  var PSAY={'expired':'The project \u201c%s\u201d waited too long. Send it again.',
+    'refused':'The project \u201c%s\u201d was not started: one with that name already exists.'};
+  function load(){ try{ var l=JSON.parse(localStorage.getItem(KEY)||'[]'); return Array.isArray(l)?l:[]; }catch(x){ return []; } }
+  function store(l){ try{ localStorage.setItem(KEY,JSON.stringify(l)); }catch(x){} }
+  function uid(){ var a=new Uint8Array(12); crypto.getRandomValues(a); return Array.prototype.map.call(a,function(b){ return ('0'+b.toString(16)).slice(-2); }).join(''); }
+  function line(i){
+    var d=document.createElement('p'), b=document.createElement('b'); d.className='s-sent';
+    if(i.state==='sent'){ b.textContent='\u2713 '+i.code; d.appendChild(b); d.appendChild(document.createTextNode(' \u201c'+i.label+'\u201d sent \u00b7 we\u2019ll save it on the next update.')); }
+    else if(i.state==='saved'&&i.kind==='project'){ d.textContent='Started the project \u201c'+i.label+'\u201d.'; }
+    else { d.textContent=((i.kind==='project'&&PSAY[i.state])||SAY[i.state]||'%s was not saved. Send it again.').replace('%s',i.code); }
+    return d;
+  }
+  function paint(){
+    var box=$('.s-confirms'), l=load(), n=l.filter(function(i){ return i.state==='sent'; }).length;
+    if(box){ box.textContent=''; l.forEach(function(i){ box.appendChild(line(i)); }); }
+    var w=$('.s-wait'); if(!w&&$('.s-end')){ w=document.createElement('span'); w.className='s-wait'; $('.s-end').insertBefore(w,$('.s-end').firstChild); }
+    if(w){ w.textContent=n+' waiting to be saved'; w.hidden=!n; }
+    cards().forEach(function(q){
+      var i=!q.hasAttribute('data-changing')&&l.filter(function(x){ return x.state==='sent'&&x.ref===q.getAttribute('data-ref'); })[0], s=$('.s-sent',q);
+      q.classList.toggle('queued',!!i); if(s) s.parentNode.removeChild(s);
+      if(i){ s=line(i); var c=document.createElement('button'); c.className='s-btn text'; c.setAttribute('data-act','change'); c.textContent='Change';
+        s.appendChild(c); q.appendChild(s); }
+    });
+  }
+  function post(entry,ref,code,label,kind,done){
+    fetch('/__queue',{method:'POST',headers:{'Content-Type':'application/json','X-Loopd-Token':token},body:JSON.stringify(entry)})
+      .then(function(r){ return r.json().then(function(j){ return [r.status,j]; },function(){ return [r.status,{}]; }); })
+      .then(function(x){
+        if(x[0]!==202){ notice('Not sent: '+(x[1].error||'the board could not take it')+'.'); return; }
+        var l=load().filter(function(i){ return !(ref&&i.ref===ref&&i.state==='sent'); });
+        l.push({id:entry.id,ref:ref,code:code,label:label,kind:kind,state:'sent'}); store(l);
+        var q=ref&&card(ref); if(q) q.removeAttribute('data-changing'); paint(); if(done) done();
+      },function(){ notice('Not sent: the board on this computer is not running.'); });
+  }
+  function notice(m){ var box=$('.s-confirms'); if(!box) return; var d=document.createElement('p'); d.className='s-sent'; d.textContent=m; box.insertBefore(d,box.firstChild); }
+  function poll(){
+    if(!load().some(function(i){ return i.state==='sent'; })) return;
+    fetch('/__queue',{headers:{'X-Loopd-Token':token}}).then(function(r){ return r.json(); }).then(function(j){
+      var c=(j&&j.consumed)||{}, l=load().filter(function(i){ return c[i.id]!=='replaced'; });
+      l.forEach(function(i){ if(i.state==='sent'&&c[i.id]) i.state=c[i.id]; });
+      store(l); paint();
+    },function(){});
+  }
+  function queue(q){
+    var ref=q.getAttribute('data-ref'), r=ref.split('/'), code=q.getAttribute('data-code')||r[2], e={type:'answer',id:uid(),task:r[0]+'/'+r[1],q:r[2]}, label;
+    if(q.classList.contains('own')){ label=($('textarea',q).value||'').replace(/[ \t\r\n]+/g,' ').trim(); if(!label) return false; e.text=label; }
+    else { var s=$('[data-fill="q-options"] li.sel',q); if(!s||!s.getAttribute('data-n')) return false; e.option=+s.getAttribute('data-n'); label=s.textContent; }
+    if(load().some(function(i){ return i.ref===ref&&i.state==='sent'; })) e.change=true;
+    post(e,ref,code,label,'answer'); return true;
+  }
   function act(q,a){
+    if(a==='change'){ q.setAttribute('data-changing',''); paint(); return; }
+    if(a==='send'&&token&&/^Q\d+$/.test(q.getAttribute('data-ref').split('/')[2]||'')){
+      if(!queue(q)&&q.classList.contains('own')) $('textarea',q).focus();
+      return;
+    }
     if(a==='send'){
       var c=command(q);
       if(c) show(c,'Type this in Claude Code to send your answer'); else $('textarea',q).focus();
@@ -1426,7 +1493,11 @@ document.documentElement.setAttribute('data-js','');
     var err=$('.s-err',form);
     err.textContent=bad+' thing'+(bad===1?'':'s')+' to fix before we can start'; err.hidden=!bad;
     if(bad) return;
-    show('/loopd:new-project "'+v.what+'" title="'+v.title+'" need="'+v.who+'" success_criteria="'+v.done+'"',
+    if(token){
+      post({type:'new-project',id:uid(),title:v.title,what:v.what,who:v.who,doneWhen:v.done,repo:v.repo},'',v.title,v.title,'project',closeAll);
+      return;
+    }
+    show('/loopd:new-project "'+v.what+'" title="'+v.title+'" need="'+v.who+'" success_criteria="'+v.done+'" repo="'+v.repo+'"',
          'Type this in Claude Code to start the project');
   }
   function fresh(){
@@ -1438,6 +1509,7 @@ document.documentElement.setAttribute('data-js','');
   function init(){
     root=$('.loopd'); if(!root) return;
     root.setAttribute('data-view','simple');
+    var m=$('meta[name="loopd-queue"]'); token=(m&&m.getAttribute('content'))||'';
     var list=$('.s-qlist');
     if(list){
       var cs=cards();
@@ -1447,6 +1519,11 @@ document.documentElement.setAttribute('data-js','');
       after();
     }
     fresh();
+    if(token){
+      store(load().filter(function(i){ return i.state==='sent'||!i.shown; }));
+      paint(); store(load().map(function(i){ if(i.state!=='sent') i.shown=1; return i; }));
+      poll(); setInterval(poll,5000);
+    }
     document.addEventListener('submit',function(e){ if(e.target.closest('.s-modal')){ e.preventDefault(); start(e.target); } });
   }
   document.addEventListener('click',function(e){
@@ -2074,11 +2151,11 @@ def render_simple(rows, closed_all, stamp):
     o.append('<div class="s-modal" data-m="new" hidden><div class="s-scrim" data-close></div>'
              '<form class="s-panel" role="dialog" aria-label="New project" novalidate>'
              '<div class="s-dhead"><span class="s-dname">New project</span><button type="button" '
-             'class="s-x" data-close aria-label="Close">×</button></div><p class="s-sub">Four '
+             'class="s-x" data-close aria-label="Close">×</button></div><p class="s-sub">Five '
              'short answers. Write them the way you\'d explain it to a colleague.</p>'
              '<div class="s-err" hidden></div>')
     for key, label, help_, ph, err in NEW_FIELDS:
-        tag = ('<textarea name="%s" rows="2" placeholder="%s"></textarea>' if key != "title"
+        tag = ('<textarea name="%s" rows="2" placeholder="%s"></textarea>' if key not in ("title", "repo")
                else '<input name="%s" placeholder="%s">') % (key, e(ph))
         o.append('<label class="s-field"><span>%s%s</span>%s<em>%s</em></label>'
                  % (label, "<small>%s</small>" % help_ if help_ else "", tag, err))
@@ -2095,6 +2172,8 @@ NEW_FIELDS = (
     ("done", "Done when", "How you\'ll know it\'s finished.",
      "e.g. Every new signup gets the next newsletter",
      "Tell us how you\'ll know it\'s done. One sentence is enough."),
+    ("repo", "Target repo", "The repository it changes.", "owner/name",
+     "Name the repository it changes, as owner/name."),
 )
 
 

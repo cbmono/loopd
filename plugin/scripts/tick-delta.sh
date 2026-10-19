@@ -48,6 +48,9 @@
 #                           COMMENTED one moves no decision) or a commit status's state or
 #                           description (a rate-limited reviewer still says SUCCESS) each
 #                           require tick work (re-verify, reflect, re-request, send back).
+#   web queue               not a line: an unconsumed web-board entry (web-queue.sh pending)
+#                           is an immediate DELTA, because the queue is gitignored and moves
+#                           nothing above — and the tick's step 0.95 is what consumes it.
 #   queue/snapshot <present|absent>
 #                           the two opt-in artifacts' presence — `touch AWAITING.md`
 #                           re-enables the queue and needs one full tick to populate.
@@ -434,6 +437,15 @@ case "$cmd" in
   check)
     if printf '%s\n' "$FP" | grep -qx 'inflight yes'; then
       echo "DELTA: task(s) in-progress — a live dispatch is owed its monitoring."
+      exit 1
+    fi
+    wq=0
+    if [ -s "$inst/$AB_QUEUE" ]; then
+      wq="$(bash "$(dirname "${BASH_SOURCE[0]}")/web-queue.sh" pending --instance "$inst" 2>/dev/null)" ||
+        fail2 "web-queue.sh pending could not read the queue"
+    fi
+    if [ "${wq:-0}" != 0 ]; then
+      echo "DELTA: $wq web board entr$([ "$wq" = 1 ] && echo y || echo ies) waiting in the queue — step 0.95 consumes them."
       exit 1
     fi
     if printf '%s\n' "$FP" | grep -q '^reclaim owed '; then

@@ -697,15 +697,45 @@ a 290px progress rail, which moves below the inbox under 820px. Today's board is
 scripting off both views render, simple first. Questions and a project's need and done-when
 carry words only where `board-serve.sh` fills the seams above; elsewhere a card names its
 code and project and takes your own words, so the command it shows is always one
-`answer.sh` accepts. The page sends nothing: Send answer, Start the project and `N` show the
-`/loopd:answer` or `/loopd:new-project` command to type, until the answer queue
-(interactive-board task-006) exists. Keys: 1–9 pick an answer, Enter sends, `?` adds
+`answer.sh` accepts. Only the page `board-serve.sh` serves sends anything (next section);
+everywhere else Send answer, Start the project and `N` show the `/loopd:answer` or
+`/loopd:new-project` command to type. Keys: 1–9 pick an answer, Enter sends, `?` adds
 context, `L` is Later, `N` is New project, Esc closes.
 
 Simple mode never shows these words (`web-simple/COPY.md` → "Glossary");
 `tests/board-simple.test.sh` reads this line and greps the rendered simple-mode text for
 each: `scaffolded` `draft` `refining` `promoted` `dispatched` `PR` `review` `merged` `CI`
 `agent` `agents` `PM` `crew` `loop` `tick` `AWAITING.md` `branch` `status`.
+
+### The answer queue: Sent, then Saved
+
+On the page `board-serve.sh` serves, Send answer and Start the project `POST /__queue`
+instead of showing a command; `plugin/scripts/web-queue.sh` appends one JSON line to
+`AB_QUEUE` (`.loopd/.queue/queue.jsonl`, a directory that ignores itself, so no bundle needs
+re-stamping). The next dispatch tick runs `web-queue.sh consume` under the tick
+lock: each entry runs `answer.sh` (free text through `--text-file`, never an argument) or
+`new-project-file.sh` (one `draft` task, `autonomy: gated` whatever the text says), and its
+id and verdict go to the ledger `AB_QUEUE_LEDGER`, which `SNAPSHOT.json` is not. The page
+keeps unconsumed entries in `localStorage` as **Sent**, counts them in the
+`{n} waiting to be saved` chip, and shows **Saved** — or Already answered, or why not —
+once `GET /__queue` returns the verdict.
+
+| Guard | What it is |
+|---|---|
+| who may write | a request carrying this launch's token (in the served `<meta name="loopd-queue">`, in no file), a `Host` of `127.0.0.1` or `localhost` on the board port, an `Origin` matching it, and `Content-Type: application/json`; anything else is 403 or 415, and every other method and path 405 |
+| `from` | set by the server to this clone's `ownerGithubUser`; a page that sends `from`, `ts` or any other unknown key is refused |
+| schema | `answer` (`task`, `q`, one of `option` 1–99 or `text` ≤2000, optional `change`), `more` (`task`, `q`), `new-project` (`title` ≤120, `what` ≤600, `who` ≤300, `doneWhen` ≤600, `repo` owner/name). `unblock` and `board` are refused: an unblock re-dispatches agent work on the page's words, and nothing turns the board on |
+| owner | an entry for a task `task-owner.sh` does not clear is `not-yours`, unrun |
+| window | `ts` is stamped by the server; an entry older than **24 hours** at consume (`--window` hours to change it) is `expired`, and the page says send it again |
+| no replay | an id in the ledger never runs again; a claim with no verdict (a killed consumer) is closed as `interrupted`, never re-run |
+| races | a later answer to the same question, still unconsumed, wins: the earlier one is `replaced`. An answer given elsewhere first makes this one `already-answered`, unrun |
+
+**The token keeps other web pages out; it does not keep this machine's processes out.**
+Any local process can `GET /` and read it — and could edit the task document directly
+anyway, so the queue grants nothing a local process lacks. The published page carries no
+queue controls: it has no token. `tests/web-queue.test.sh`, `tests/board-serve.test.sh` §8
+and `tests/web-queue-e2e.test.sh` (headless Chrome on a fixture bundle and a test port,
+SKIP without Chrome or node 22+) hold it.
 
 ---
 

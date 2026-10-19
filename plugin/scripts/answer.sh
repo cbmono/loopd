@@ -2,9 +2,10 @@
 #
 # answer.sh — answer one open question of one task: option n, free text, or `more`.
 #
-#   Usage: answer.sh [--instance DIR] <task-doc> [Q<n>] <n | more | later | --text <answer> | <answer>...>
+#   Usage: answer.sh [--instance DIR] <task-doc> [Q<n>] <n | more | later | --text <answer> | --text-file <path> | <answer>...>
 #
 # No Q<n> ⇒ the first unanswered entry. A bare integer is an option of its `### Q<n>` block.
+# `--text-file` reads the answer from a file, so no caller has to put free text in an argument.
 # `later` appends `<task path>#Q<n>` to AB_ANSWER_LATER; neither it nor `more` edits a tracked file.
 # Exit: 0 done · 1 refused, one sentence · 2 usage · 3 the move refused, nothing written
 #       4 committed, but the commit, rebase or push failed — nothing forced · 5 `more` is past the stored depths
@@ -18,11 +19,12 @@ usage() { sed -n '5p' "$0" >&2; exit 2; }
 refuse() { echo "$*"; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "answer: python3 is required" >&2; exit 2; }
 
-inst="."; doc=""; label=""; forced=0; words=()
+inst="."; doc=""; label=""; forced=0; words=(); text_file=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) [ $# -ge 2 ] || usage; inst="$2"; shift 2 ;;
     --text)     forced=1; shift; words+=("$@"); break ;;
+    --text-file) [ $# -eq 2 ] || usage; forced=1; text_file="$2"; words=(file); shift 2 ;;
     -h|--help)  usage ;;
     *) if [ -z "$doc" ]; then doc="$1"
        elif [ -z "$label" ] && [ ${#words[@]} -eq 0 ] && [[ "$1" =~ ^Q[0-9]+$ ]]; then label="$1"
@@ -33,6 +35,10 @@ done
 [ -n "$doc" ] && [ ${#words[@]} -gt 0 ] || usage
 [ -r "$doc" ] || refuse "No task document at $doc."
 reply="${words[*]}"
+if [ -n "$text_file" ]; then
+  [ -r "$text_file" ] || refuse "No answer file at $text_file."
+  reply="$(tr '\n\r\t' '   ' < "$text_file")"
+fi
 [ -n "${reply// /}" ] || usage
 task="$(basename "$doc" .md)"
 

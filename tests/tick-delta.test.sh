@@ -43,6 +43,7 @@ cp "$SRC" "$INST/scripts/tick-delta.sh"; chmod +x "$INST/scripts/tick-delta.sh"
 # around. A stage missing either is a stage that no longer resembles an install.
 cp "$(dirname "$SRC")/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"
 cp "$(dirname "$SRC")/fold-answers.sh" "$INST/scripts/fold-answers.sh"
+cp "$(dirname "$SRC")/web-queue.sh" "$INST/scripts/web-queue.sh"
 cp -R "$REPO/plugin/tick-steps" "$INST/tick-steps"
 SH="$INST/scripts/tick-delta.sh"
 
@@ -121,6 +122,14 @@ ok "…healed by a clean tree"                    "$(run check)" "rc:0 IDLE: fin
 printf 'draft\n' > "$INST/projects/proj-a/tasks/new-draft.md"
 ok "an untracked file under projects/ is a DELTA" "$(run check)" "rc:1 DELTA: untra"
 rm -f "$INST/projects/proj-a/tasks/new-draft.md"
+
+[ -f "$INST/instance.config.json" ] || printf '{}\n' > "$INST/instance.config.json"   # untracked, outside projects/
+mkdir -p "$INST/$(dirname "$AB_QUEUE")"; printf '*\n' > "$INST/$(dirname "$AB_QUEUE")/.gitignore"
+printf '{"type":"more","id":"webq0001","task":"proj-a/t1","q":"Q1","ts":"2026-01-01T00:00:00Z","from":"x"}\n' > "$INST/$AB_QUEUE"
+ok "an unconsumed web board entry is a DELTA"   "$(run check)" "rc:1 DELTA: 1 web"
+printf '{"id":"webq0001","verdict":"expired","at":"x"}\n' > "$INST/$AB_QUEUE_LEDGER"
+ok "…healed once the ledger holds its id"       "$(run check)" "rc:0 IDLE: finger"
+rm -rf "$INST/$(dirname "$AB_QUEUE")"
 
 task "$INST/projects/proj-a/tasks/t1.md" in-progress
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm dispatch
