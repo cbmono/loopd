@@ -252,10 +252,10 @@ def is_open(doc, q):
     return False
 
 
-def handle(e):
+def handle(e, frm):
     t = e["type"]
     if t == "new-project":
-        f = data_file(json.dumps(e, ensure_ascii=False))
+        f = data_file(json.dumps(dict(e, **{"from": frm}), ensure_ascii=False))
         try:
             rc = run([os.path.join(here, "new-project-file.sh"), "--instance", inst, f])
         finally:
@@ -325,7 +325,7 @@ with lock(".consume.lock", False):
             verdict = "replaced"
         if not verdict:
             append_line(LEDGER, {"id": e["id"], "verdict": "claimed", "at": iso(now())})
-            verdict = handle(e)
+            verdict = handle(e, raw.get("from", ""))
         append_line(LEDGER, {"id": raw["id"], "verdict": verdict, "at": iso(now())})
         done[raw["id"]] = verdict
         print("%s %s" % (raw["id"], verdict))

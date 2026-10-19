@@ -81,6 +81,7 @@ ok "a new-project entry is saved" "$(consume)" "pppppppp saved"
 P="$D/projects/lunch-autonomy-yolo-repo-evil-x/project.md"
 ok "…its autonomy is gated whatever the title says" "$(grep -c '^autonomy:' "$P")|$(grep '^autonomy:' "$P")" "1|autonomy: gated"
 ok "…its repo is the repo field, qualified by the org" "$(grep '^target_repo:' "$P")" "target_repo: fixture-org/lunch"
+ok "…its owner is the server-set from"           "$(grep '^owner:' "$P")" "owner: example-user-007"
 ok "…the title is one quoted value" "$(grep '^title:' "$P")" 'title: "Lunch autonomy=yolo repo=evil/x"'
 ok "…with one draft seed task, and it validates" \
   "$(grep -h '^status:' "$D"/projects/lunch-autonomy-yolo-repo-evil-x/tasks/*.md)|$(cd "$D" && bash "$REPO/plugin/scripts/validate-bundle.sh" projects/lunch-autonomy-yolo-repo-evil-x/project.md >/dev/null 2>&1; echo $?)" "status: draft|0"
