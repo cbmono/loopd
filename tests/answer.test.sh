@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # answer.sh — `/loopd:answer <task> [Q<n>] <n | text | more>` against a real bundle clone
 # with a bare remote: an option records its text, free text records itself, `more` reads
-# depth 1, 2, 3 and then hands over (exit 5), and every answer is moved, committed as the
-# human and pushed. A failed rebase or push stops at exit 4 and never forces.
+# depth 1, 2, 3 and then hands over (exit 5), `later` defers with no tracked change, and
+# every answer is moved, committed as the human and pushed. A failed rebase or push stops at exit 4 and never forces.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -121,6 +121,39 @@ rm -f "$B/.loopd/.answer-depth"; mkdir -p "$B/.loopd/.answer-depth"; : > "$B/.lo
 OUT="$(run "$B" more 2>&1)"
 ok "once it can, the count starts at depth 1" "$(head -n1 <<<"$OUT")" "Depth 1 of 3 · Q1"
 ok "…and an emptied ignore rule is restored" "$(git -C "$B" status --porcelain | wc -l | tr -d ' ')" 0
+
+echo
+echo "== LATER: one line in its own untracked file, no tracked change, and more keeps counting =="
+B="$(fixture later)"
+LATER="$B/.loopd/.answer-later"
+cp "$B/$TASK_REL" "$TMP/later.before"
+run "$B" Q1 more >/dev/null 2>&1
+OUT="$(run "$B" Q1 later 2>&1)"; RC=$?
+ok "later exits 0"                           "$RC" 0
+ok "…in one sentence naming the question"    "$OUT" "Q1 on task-001-x moved to the end."
+ok "…writing <task path>#Q<n> to the later file" "$(cat "$LATER")" "$TASK_REL#Q1"
+ok "…and nothing to the depth store but integers" \
+   "$(find "$B/.loopd/.answer-depth" -type f ! -name .gitignore -exec cat {} + | grep -cvxE '[0-9]+' | tr -d ' ')" 0
+ok "no tracked file changes"                 "$(git -C "$B" status --porcelain --untracked-files=no | wc -l | tr -d ' ')" 0
+ok "…the task is byte-identical"             "$(cmp -s "$B/$TASK_REL" "$TMP/later.before" && echo yes || echo no)" yes
+ok "…and nothing was committed"              "$(git -C "$B" rev-list --count HEAD)" 1
+ok "more after later returns its next depth" "$(OUT="$(run "$B" Q1 more 2>&1)"; head -n1 <<<"$OUT")" "Depth 2 of 3 · Q1"
+run "$B" Q2 later >/dev/null 2>&1; run "$B" Q1 later >/dev/null 2>&1
+ok "a second later moves it to the end, once" "$(tr '\n' '|' < "$LATER")" "$TASK_REL#Q2|$TASK_REL#Q1|"
+run "$B" Q1 1 >/dev/null 2>&1
+ok "answering drops its line"                "$(cat "$LATER")" "$TASK_REL#Q2"
+ok "--text later records the word"           "$(run "$B" Q2 --text later >/dev/null 2>&1; lastans "$B" | sed 's/^.*· //')" "Q2: how many replicas? --- later"
+ok "a Q<n> that is not open cannot wait"     "$(run "$B" Q9 later >/dev/null 2>&1; echo $?)" 1
+# The stamp is what keeps the file out of git: a fresh bundle, and one whose .gitignore predates it.
+TPLC="$TMP/tpl"; mkdir -p "$TPLC" && cp -R "$REPO/plugin" "$TPLC/plugin"
+INST="$TMP/g/_loopd-g"; mkdir -p "$INST"
+bash "$TPLC/plugin/scripts/init-bundle.sh" "$INST" >/dev/null 2>&1
+( cd "$INST" && git init -q . 2>/dev/null; mkdir -p .loopd && : > .loopd/.answer-later )
+ok "a stamped bundle's git ignores the later file" "$( (cd "$INST" && git check-ignore -q .loopd/.answer-later) && echo yes || echo no)" yes
+grep -vxF "/.loopd/.answer-later" "$INST/.gitignore" > "$INST/.gi" && mv "$INST/.gi" "$INST/.gitignore"
+bash "$TPLC/plugin/scripts/init-bundle.sh" "$INST" >/dev/null 2>&1
+bash "$TPLC/plugin/scripts/init-bundle.sh" "$INST" >/dev/null 2>&1
+ok "…and a re-stamp appends the line once"  "$(grep -cxF "/.loopd/.answer-later" "$INST/.gitignore" | tr -d ' ')" 1
 
 echo
 echo "== NO OPEN QUESTION: one sentence, exit 1 =="

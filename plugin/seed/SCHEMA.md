@@ -363,7 +363,8 @@ last_blocker: "<what the last round ended on>"   # PM-OWNED, NEVER HAND-EDITED. 
 # At `stall_count >= maxStallRounds` (`instance.config.json`, **absent ⇒ 2**) the PM stops
 # re-dispatching: `stall-counter.sh escalate` sets `status: blocked`, records the blocker under
 # `# Notes`, and emits the one `⛔ **unblock**` line for `AWAITING.md`. Same blocker twice ⇒ the
-# human decides, never a fresh agent at the same wall.
+# human decides, never a fresh agent at the same wall — with `/loopd:unblock <task>`, which
+# stamps the decision under `# Notes`, runs `stall-counter.sh reset` and sets `status: ready`.
 do_not_repeat: [ "<approach> — <evidence it failed on>", ... ]   # AGENT-OWNED, one line per approach an earlier round of THIS task already tried, at most 200 chars each and capped at 10. Written by the role agent with `scripts/do-not-repeat.sh append` whenever its round ends without a green PR (`CONVENTIONS.md`), and read at the NEXT dispatch: `do-not-repeat.sh brief` prints the block the PM pastes into the dispatch brief verbatim, under a fixed heading. Absent ⇒ nothing has failed yet, which is every first dispatch. The counterpart of `stall_count`: that says how MANY rounds, this says what not to try again. At the cap the script refuses and the PM folds the oldest entries into `# Notes`. It is read by a human here and pasted into a brief: **no customer PII, and never a secret or an environment value** — the failing check, not the output that failed.
 artifacts: [ /projects/<slug>/deliverables/<file>, ... ]   # RESEARCH only: the deliverable file(s) this task produces
 timestamp: <ISO 8601>
@@ -397,9 +398,10 @@ Context:
 The frontmatter line stays the flat `Q<n>: …` string and is still what the human answers
 (` --- <answer>`) and what `fold-answers.sh` moves. The block is never removed: once its
 question is answered it stays as the record. Readers find it by the `### Q<n>` heading
-alone. `/loopd:answer <task> [Q<n>] <n | more | text>` (`answer.sh`) records option `n`'s
-text from it, and `more` prints the next depth, counted per clone in the ignored
-`.loopd/.answer-depth/`. `validate-bundle.sh` **warns** — never errors — on a `Q<n>:`
+alone. `/loopd:answer <task> [Q<n>] <n | more | later | text>` (`answer.sh`) records option `n`'s
+text from it, `more` prints the next depth, counted per clone in the ignored
+`.loopd/.answer-depth/`, and `later` sends the question to the end of the pane's inbox,
+one line in the ignored `.loopd/.answer-later`. `validate-bundle.sh` **warns** — never errors — on a `Q<n>:`
 question with no block, a block with no options, or one with fewer than three depths; an unlabelled or
 `advisor:` question is exempt. The published snapshot never carries any of it.
 

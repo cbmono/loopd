@@ -648,7 +648,7 @@ the **snapshot** (already in `write-snapshot.sh`'s allowlist, never filled), the
 | question `context` (3 depths) | fill: the same block's `Depth 1`–`3` |
 | question `askedAt` | dropped: no file records a per-question ask time; the order rule below stands in |
 | stuck `id`, `project` | snapshot: task `id`, project `slug` |
-| stuck `sentence`, `action`, `buttonLabel` | snapshot: task `title` and `awaiting` verb, composed by the renderer — the blocker text is never served (`plugin-mod-pane/README.md`, Blocked row) |
+| stuck `sentence`, `action`, `buttonLabel` | snapshot: task `title` and `awaiting` verb, composed by the renderer — the blocker text is never served (`plugin-mod-pane/README.md`, Stuck — you can help row) |
 | stuck `state` | snapshot: task `status` and `in_flight` |
 | project `title`, `what` | snapshot: `title`, `description` |
 | project `who` | fill: `project.md` `need` |
@@ -677,8 +677,9 @@ An unnumbered question, or one with no `### Q<n>` block, gets its text and no op
 depths. An entry carrying ` --- ` is answered and is not served.
 
 **The order rule — oldest task first.** Questions rank by their task's `timestamp:`, then by
-`Q<n>` within the task (an unnumbered one last), then by slug and task id, so a later Q3 on
-an old task ranks ahead of Q1 on a newer task and a refresh never reorders. A task with no
+slug and task id, then by `Q<n>` within the task (an unnumbered one last), so a later Q3 on
+an old task ranks ahead of Q1 on a newer task, two tasks sharing a timestamp never
+interleave, and a refresh never reorders. A task with no
 `timestamp:` ranks after every dated one. The pane's inbox (task-003) and the web board
 (task-005) use this rule unchanged.
 
@@ -711,7 +712,7 @@ Each README owns its detail.
 | Mod | One line | Detail |
 |---|---|---|
 | `loopd-mod-usage` | records a session's usage in the plugin store after every turn; `session-usage.sh` reads the store first and the transcript second | [`plugin-mod-usage/README.md`](../plugin-mod-usage/README.md) |
-| `loopd-mod-pane` | `/pane` opens a pane drawing `SNAPSHOT.json`, with **Tick** and **Refresh** buttons; `mode: simple` in `/config` shows only projects, questions, blocked tasks and a form to start a project | [`plugin-mod-pane/README.md`](../plugin-mod-pane/README.md) |
+| `loopd-mod-pane` | `/pane` opens a pane drawing `SNAPSHOT.json`, with **Tick** and **Refresh** buttons; `mode: simple` in `/config` shows an inbox — one open question, stuck tasks, progress — and a form to start a project | [`plugin-mod-pane/README.md`](../plugin-mod-pane/README.md) |
 | `loopd-mod-signal` | a role agent's session tells the PM's session its turn is over; step 4 settles that session first | [`plugin-mod-signal/README.md`](../plugin-mod-signal/README.md) |
 
 **What a mod may do here** is the same short list for all three — no model call, no
