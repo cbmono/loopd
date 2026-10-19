@@ -25,7 +25,7 @@ build projects.
 
 ## Inputs
 `$ARGUMENTS` = a one-line description of the project (in double quotes when a caller such as
-the pane passes it, so nothing in it reads as a token), plus optional tokens:
+the web board shows it, so nothing in it reads as a token), plus optional tokens:
 - `kind=build|research` — project kind (default `build`).
 - `objective=<slug>` — link to `objectives/<slug>.md` instead of inferring one. Optional:
   `objectives/` is an opt-in layer, and a project's own `success_criteria` are the default anchor.

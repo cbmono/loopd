@@ -294,11 +294,34 @@ const NEEDS_YOU = { color: '#ff7ac2' }
 const DONE = { color: '#76d6a4' }
 const STUCK_KEYS = ['c', 'd', 'e']
 
+// The form new-project-form.sh keeps, AB_NEW_PROJECT_FORM in bundle-paths.sh. The pane only
+// draws it: every fill, submit and cancel is a /loopd:new-project run, and the ✗ marks are the
+// script's, read back from the file.
+const FORM_FILE = '.loopd/.new-project/form.json'
 const FIELDS = [['title', 'Title', 'a short name'], ['what', 'What', 'what it should do, in a line'],
-  ['whom', 'For whom', 'who needs it'], ['done', 'Done when', 'how you will know; separate several with ;']] as const
-let form: Record<string, string> = { title: '', what: '', whom: '', done: '' }
-let creating: { at: number; slugs: Set<string>; title: string } | null = null
+  ['whom', 'For whom', 'who needs it'], ['done', 'Done when', 'how you will know; separate several with ;'],
+  ['repo', 'Target repo', 'owner/name']] as const
+type Form = { fields: Record<string, string>; errors: Record<string, string> }
+let pform: Form | null = null
+let formBroken = false
+let formMtime = -1       // -1 = no form open; -2 = a read failed, so the next scan reads again
+let formSkip = -3        // the mtime of a form already turned into a project, drawn as the board
+// A form command is held, like an answer, until the form file moves or its turn ends unmoved.
+let formHeld: { kind: 'open' | 'fill' | 'cancel'; at: number; mtimeMs: number; n: number; text: string } | null = null
+let creating: { at: number; slugs: Set<string>; title: string; mtimeMs: number } | null = null
 let createNote = ''
+
+function readForm(text: unknown): Form | null {
+  if (typeof text !== 'string') return null
+  let j: unknown
+  try { j = JSON.parse(text) } catch { return null }
+  const o = obj(j), f = o && obj(o.fields)
+  if (!f) return null
+  const e = obj(o!.errors) || {}
+  const out: Form = { fields: {}, errors: {} }
+  for (const [k] of FIELDS) { out.fields[k] = str(f[k]); if (str(e[k])) out.errors[k] = str(e[k]) }
+  return out
+}
 
 // The YAML subset fold-answers.sh's --list reads (a flow or block list of scalars, its
 // escapes only). Anything else is null, drawn as "could not read" — never a guess.
@@ -464,6 +487,21 @@ async function refreshSimple($: any): Promise<boolean> {
     laterMtime = typeof text === 'string' ? lm : -2
   }
   s += LATER + ':' + laterMtime + ';'
+  let fst: any = null
+  try { fst = await $.fs.stat(root + '/' + FORM_FILE) } catch { fst = null }
+  const fm = fst && fst.kind === 'file' && typeof fst.mtimeMs === 'number' ? fst.mtimeMs : -1
+  if (fm !== formMtime) {
+    let text: unknown = null
+    if (fm >= 0) { try { text = await $.fs.read(root + '/' + FORM_FILE) } catch { text = null } reads += 1 }
+    pform = fm >= 0 ? readForm(text) : null
+    formBroken = fm >= 0 && !pform
+    formMtime = fm < 0 ? -1 : typeof text === 'string' ? fm : -2
+  }
+  s += FORM_FILE + ':' + formMtime + ';'
+  if (formHeld && formMtime !== formHeld.mtimeMs) {
+    if (formHeld.kind === 'cancel') createNote = 'Cancelled — nothing saved.'
+    formHeld = null
+  }
   const live = new Map<string, Held>()
   for (const r of next) for (const it of r.items) for (const q of it.questions) {
     const id = it.slug + '/' + it.file + '#' + q.label, h = held.get(id)
@@ -475,8 +513,8 @@ async function refreshSimple($: any): Promise<boolean> {
     if (made) {
       createNote = 'Created "' + made.title + '". ' + (made.autonomy === 'yolo' ? 'Its first questions will appear here.' : 'It moves only as far as the operator approves.')
       creating = null
-      for (const f of FIELDS) form[f[0]] = ''
-    }
+      formSkip = formMtime
+    } else if (formMtime !== creating.mtimeMs && pform && Object.keys(pform.errors).length) creating = null
   }
   const was = kind
   kind = 'ok'; detail = ''; simple = next
@@ -571,25 +609,50 @@ function unblock($: any, p: Simple, it: Item): void {
 
 function q(s: string): string { return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"' }
 
-async function create($: any): Promise<void> {
-  if (creating) return
-  const v: Record<string, string> = {}
-  for (const f of FIELDS) v[f[0]] = clean(form[f[0]])
-  if (FIELDS.some(f => !v[f[0]])) { createNote = 'Fill in all four fields to create a project.'; $.ui.invalidate('ui.render'); return }
+// One /loopd:new-project run for the form: `sending` covers the press until it is queued,
+// `formHeld` (or `creating`, for submit) until the form file or the bundle moves.
+async function formRun($: any, kind: 'open' | 'fill' | 'cancel' | 'submit', args: string, n = 0, text = ''): Promise<void> {
+  if (sending || formHeld || creating) return
+  sending = 'form'
+  sendNote = ''; createNote = ''
   let at = 0
   try { at = await $.clock.now() } catch { at = 0 }
-  creating = { at, slugs: new Set(simple.map(p => p.slug)), title: v.title }
-  createNote = ''
-  const args = q(v.what) + ' kind=build autonomy=yolo title=' + q(v.title) + ' need=' + q(v.whom) + ' success_criteria=' + q(v.done) + ' --no-ask'
-  const failed = (err: unknown) => {
-    creating = null
-    createNote = 'Could not create the project: ' + (clean(err && (err as any).message ? (err as any).message : String(err)) || 'refused')
-    try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
+  if (kind === 'submit') creating = { at, slugs: new Set(simple.map(p => p.slug)), title: pform ? pform.fields.title : '', mtimeMs: formMtime }
+  else formHeld = { kind, at, mtimeMs: formMtime, n, text }
+  run($, NEW_PROJECT, args, (err?: unknown) => {
+    if (err === undefined) return
+    formHeld = null; creating = null
+    createNote = (kind === 'submit' ? 'Could not create the project: ' : 'Could not reach the form: ') + why(err)
+  })
+}
+function fillFrom($: any, v: string): void {
+  const m = clean(v).match(/^([1-5])\s+(.*\S)$/)
+  if (!m) { createNote = 'Start with the field\'s number, 1 to 5, then the text.'; $.ui.invalidate('ui.render'); return }
+  void formRun($, 'fill', m[1] + ' ' + q(m[2]), parseInt(m[1], 10), m[2])
+}
+
+function drawForm($: any, e: any, rows: any[]): void {
+  const { Text, Button, Box, Input } = $.ui.resolve(e)
+  const line = (s: string, props: Record<string, unknown> = {}) => Text({ ...props, children: [s] })
+  if (!pform) {
+    rows.push(line('Could not read the new project form — Cancel removes it.', { dimColor: true }))
+  } else {
+    const filled = FIELDS.filter(([k]) => pform!.fields[k]).length, fix = Object.keys(pform.errors).length
+    rows.push(line('New project · ' + (fix ? fix + (fix === 1 ? ' thing' : ' things') + ' to fix' : filled + ' of ' + FIELDS.length + ' filled'), { bold: true, ...(fix ? NEEDS_YOU : {}) }))
+    rows.push(line('Type each answer in the box below, starting with its number, then press Enter.', { dimColor: true }))
+    FIELDS.forEach(([k, label, hint], i) => {
+      const saving = formHeld && formHeld.kind === 'fill' && formHeld.n === i + 1
+      const v = saving ? formHeld!.text + ' · saving…' : pform!.fields[k]
+      rows.push(line('  ' + (i + 1) + ' ' + label + ': ' + (v || 'e.g. ' + hint), v && !saving ? {} : { dimColor: true }))
+      if (pform!.errors[k] && !saving) rows.push(line('    ✗ ' + pform!.errors[k], NEEDS_YOU))
+    })
   }
-  let p: any = null
-  try { p = $.command.run({ command: NEW_PROJECT, args }) } catch (err) { failed(err); return }
-  if (p && typeof p.then === 'function') p.then(() => undefined, (err: unknown) => failed(err ?? 'refused'))
-  try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
+  if (sending || formHeld || creating) { rows.push(line('  Waiting for the form to update…', { dimColor: true })); return }
+  if (pform && Input) rows.push(Input({ key: 'form-text', placeholder: 'e.g. 1 Newsletter signup', submitLabel: 'fill', onSubmit: (v: string) => fillFrom($, v) }))
+  rows.push(Box({ flexDirection: 'row', columnGap: 2, children: [
+    ...(pform ? [Button({ key: 'form-submit', label: 'Start the project', hotkey: 'y', onPress: () => formRun($, 'submit', 'submit') })] : []),
+    Button({ key: 'form-cancel', label: 'Cancel', hotkey: 'x', onPress: () => formRun($, 'cancel', 'cancel') }),
+  ] }))
 }
 
 function drawSimple($: any, e: any): any {
@@ -600,6 +663,13 @@ function drawSimple($: any, e: any): any {
     rows.push(line(kind === 'unread' ? 'loopd: reading…' : detail, { dimColor: kind === 'unread' }))
   } else {
     if (sendNote) rows.push(line(sendNote, sendNote.startsWith('✓') ? DONE : { dimColor: true }))
+    if (createNote) rows.push(line(createNote, { dimColor: true }))
+    if ((pform || formBroken) && !creating && formMtime !== formSkip && !(formHeld && formHeld.kind === 'open')) {
+      drawForm($, e, rows)
+      rows.push(line(' '))
+      rows.push(Button({ key: 'refresh', label: 'Refresh', hotkey: 'r', onPress: async () => { await refreshSimple($); $.ui.invalidate('ui.render') } }))
+      return Box({ flexDirection: 'column', children: rows })
+    }
 
     rows.push(line('Questions for you', { bold: true }))
     const all = inbox()
@@ -652,16 +722,9 @@ function drawSimple($: any, e: any): any {
     if (fin.length) rows.push(line('  ✓ Finished: ' + fin.map(p => p.title).join(', '), DONE))
 
     rows.push(line(' '))
-    rows.push(line('New project', { bold: true }))
-    if (creating) rows.push(line('  Creating "' + creating.title + '"…', { dimColor: true }))
-    else {
-      for (const [k, label, hint] of FIELDS) {
-        if (Input) rows.push(Input({ key: 'new-' + k, label, placeholder: hint, value: form[k], submitLabel: 'keep',
-          onInput: (v: string) => { form[k] = v }, onSubmit: (v: string) => { form[k] = v; $.ui.invalidate('ui.render') } }))
-      }
-      rows.push(Button({ key: 'new-create', label: 'Create', onPress: () => create($) }))
-    }
-    if (createNote) rows.push(line('  ' + createNote, { dimColor: true }))
+    if (creating) rows.push(line('Creating "' + creating.title + '"…', { dimColor: true }))
+    else if (formHeld && formHeld.kind === 'open') rows.push(line('Opening the new project form…', { dimColor: true }))
+    else if (!sending) rows.push(Button({ key: 'new-project', label: simple.length ? 'New project' : 'Start your first project', hotkey: 'n', onPress: () => formRun($, 'open', '') }))
   }
   rows.push(line(' '))
   rows.push(Button({ key: 'refresh', label: 'Refresh', hotkey: 'r', onPress: async () => { await refreshSimple($); $.ui.invalidate('ui.render') } }))
@@ -671,10 +734,11 @@ function drawSimple($: any, e: any): any {
 // A main-loop turn that started after a held answer's press is that answer's turn (a plugin's
 // command runs once the session is idle); if it ends with the document unmoved, release it.
 async function settle($: any, e: any): Promise<void> {
-  if (MODE !== 'simple' || (held.size === 0 && !creating) || (e && e.agentId)) return
+  if (MODE !== 'simple' || (held.size === 0 && !creating && !formHeld) || (e && e.agentId)) return
   const started = (await $.clock.now()) - toint(e && e.durationMs)
   await refreshSimple($)
   if (creating && started >= creating.at) { creating = null; createNote = 'The project was not created — the conversation says why.' }
+  if (formHeld && started >= formHeld.at) { formHeld = null; createNote = 'The form did not change — see the conversation.' }
   let dropped = ''
   for (const [id, h] of held) if (started >= h.at) { held.delete(id); dropped = h.text }
   if (dropped) sendNote = 'Your answer to "' + dropped + '" did not change the task — see the conversation, then answer again.'
