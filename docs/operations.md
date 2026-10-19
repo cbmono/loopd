@@ -390,7 +390,8 @@ matched exactly on the first path component (`node_modules`, `.venv`, `tmp`, `di
 of first-path-component names, the local file first, the tracked one second — adds to that
 list; absent, the built-in list stands. A name starting with `.env` is never added, only
 warned about. `/loopd:prune-wt` does not read the key. When G12 still refuses, its message
-ends with the one line to run: `git -C '<worktree>' clean -fdX -- '<path>' …`.
+ends with the one line to run: `git -C <worktree> clean -fdX -- :(literal)<path> …`, shell-quoted,
+each path a literal pathspec so a `*` in a name matches only that name.
 
 **`prune-worktrees.sh` never deletes.** It classifies and prints the `git worktree remove`
 commands for a human to run — it is what sees a worktree no task record names.

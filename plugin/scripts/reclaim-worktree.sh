@@ -317,7 +317,13 @@ while IFS= read -r name; do
     *) IGNORE_OK="$IGNORE_OK$name " ;;
   esac
 done <<EOF
-$(printf '%s' "$extra" | grep -oE '"[^"]*"' | tr -d '"')
+$(printf '%s' "$extra" | python3 -c '
+import json, sys
+try: v = json.load(sys.stdin)
+except ValueError: v = None
+for x in (v if isinstance(v, list) else []):
+    if isinstance(x, str) and "\n" not in x: print(x)
+' 2>/dev/null)
 EOF
 
 ignored="" ; ignored_rc=0
@@ -342,7 +348,7 @@ keepers="${keepers%$'\n'}"
         ignored file — so the last word on it stays the human's:
 $(printf '%s\n' "$keepers" | sed 's/^/          /' | head -20)
         If none of it is yours, delete it and ask again:
-git -C $(printf '%q' "$WT") clean -fdX --$(printf '%s\n' "$keepers" | while IFS= read -r k; do printf ' %q' "$k"; done)"
+git -C $(printf '%q' "$WT") clean -fdX --$(printf '%s\n' "$keepers" | while IFS= read -r k; do printf ' %q' ":(literal)$k"; done)"
 
 # --- G13: nothing is running in it -------------------------------------------
 # This replaces the pruner's PRUNE_ACTIVE_MINUTES veto rather than inheriting it: on this

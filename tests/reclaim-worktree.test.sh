@@ -457,13 +457,19 @@ run --dry-run "projects/demo/tasks/task-build.md"
 assert "G12 a reclaimIgnoreOk name (target) clears" "$(eq "$RC" 0)"
 assert "G12 …and the .env.local entry is warned about, not added" \
   "$(has "^warning: reclaimIgnoreOk '\.env\.local' not added")"
+for bad in '{ "target": "dist" }' '["x\" \"target"]' '[["target"], 7]'; do
+  printf '{ "reclaimIgnoreOk": %s }\n' "$bad" > "$INSTANCE/instance.config.local.json"
+  run --dry-run "projects/demo/tasks/task-build.md"
+  assert "G12 reclaimIgnoreOk $bad adds no name: target/ still refuses" "$(eq "$RC" 1)"
+done
+printf '{ "reclaimIgnoreOk": ["target", ".env.local"] }\n' > "$INSTANCE/instance.config.local.json"
 
 printf 'TOKEN=shape-only\n' > "$WT_BUILD/.env.local"
 run --dry-run "projects/demo/tasks/task-build.md"
 assert "G12 an ignored .env.local still refuses, config or not" "$(eq "$RC" 1)"
 CLEAN="$(tail -n1 <<<"$OUT")"
 assert "G12 …and ends with the exact clean command" \
-  "$(eq "$CLEAN" "git -C $WT_BUILD clean -fdX -- .env.local")"
+  "$(eq "$CLEAN" "git -C $WT_BUILD clean -fdX -- :\\(literal\\).env.local")"
 eval "$CLEAN" >/dev/null
 run --dry-run "projects/demo/tasks/task-build.md"
 assert "G12 …which, run as printed, clears it" "$(eq "$RC" 0)"
@@ -472,12 +478,15 @@ assert "G12 …having taken only the .env.local" \
 
 HOSTILE="x';touch pwned;'"
 printf 'x\n' > "$WT_BUILD/.env.local"; printf 'x\n' > "$WT_BUILD/$HOSTILE"
-printf '%s\n' "$HOSTILE" >> "$REPO/.git/info/exclude"
+printf 'x\n' > "$WT_BUILD/*.bin"; printf 'x\n' > "$WT_BUILD/dist/keep.bin"
+printf '%s\n' "$HOSTILE" '*.bin' >> "$REPO/.git/info/exclude"
 run --dry-run "projects/demo/tasks/task-build.md"
 CLEAN="$(tail -n1 <<<"$OUT")"
 ( cd "$TMP" && eval "$CLEAN" >/dev/null 2>&1 )
 assert "G12 a quote in an ignored filename cannot break out of the printed command" \
   "$(eq "$(no_if test -e "$TMP/pwned") $(no_if test -e "$WT_BUILD/$HOSTILE")" "0 0")"
+assert "G12 a refused '*.bin' is cleaned as a literal path, sparing dist/keep.bin" \
+  "$(eq "$(no_if test -e "$WT_BUILD/*.bin") $(yes_if test -f "$WT_BUILD/dist/keep.bin")" "0 0")"
 rm -f "$INSTANCE/instance.config.local.json"
 
 echo "== G13: nothing is running inside it =="
