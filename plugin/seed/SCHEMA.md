@@ -1121,6 +1121,7 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `people` | **no** — a shared directory of who is who | no lookup; the `authorEmail` chain answers |
 | `commitAttribution` | **yes** — the tracked file is where an organisation states its policy; the local file is how one machine departs from it | `claude`: a target-repo commit keeps the `Co-Authored-By: Claude` trailer, because Claude co-authored it. `none` drops the trailer and the session URL |
 | `ticketPrefix` | **no** — it names the organisation's ticket system, a shared fact both clones' PR titles must agree on | **no tag**: a PR title is `<type>: <subject>` with nothing appended. Set (a Jira-shaped key, e.g. `ABC`), titles end `[ABC-<n>]`, or `[ABC-0]` when the task names no ticket. `dispatch-brief.sh` resolves it into the brief's `## PR title`; no agent reads it |
+| `reclaimIgnoreOk` | **yes** — which build output a machine's worktrees produce is a per-machine fact | `reclaim-worktree.sh`'s built-in G12 list alone. An array of first-path-component names added to it; a name starting with `.env` is warned about and never added |
 | `externalReviewer` | **no, by design** — it names **where this code may be sent**. That is policy, not preference: one clone silently routing diffs to a different reviewer is precisely the disagreement that breaks it, and it breaks in the direction nobody notices | the CodeRabbit CLI |
 | `mergeAtReviewCap` | **no** — a merge policy both clones must agree on | **off**: only a JSON `true` lets a `yolo` project merge a PR at the two-round review cap past open reviewer threads (`AUTONOMY.md` → "Merge at the review cap (opt-in)") |
 | everything else | no — shared facts (`org`, `group`, `maxPrLoc`, `maxPrFiles`, `continueAfterTasks`, `continueAfterDays`, `defaultRepo`, `codegraphSkip`, …) | as documented per key (`continueAfterTasks`/`continueAfterDays`: off) |
@@ -1441,8 +1442,8 @@ files inside a worktree mid-run.
 `scripts/reclaim-worktree.sh <task-path>` removes the single worktree that task recorded,
 and exits 0 only when the task is `done` and every URL in its `pr:` has MERGED — a PR
 CLOSED-UNMERGED, an empty `pr:`, a dirty or unpushed tree, a detached HEAD, an ignored
-file that is not a known cache, or a live process inside the tree are all refusals. The
-tick runs it in step 5. `scripts/prune-worktrees.sh` classifies and
+file that is not a known cache or build output (plus any `reclaimIgnoreOk` name), or a
+live process inside the tree are all refusals. The tick runs it in step 5. `scripts/prune-worktrees.sh` classifies and
 reports; it never removes. It scans `worktreeRoot` and the legacy `<reposRoot>/_wt`,
 labels each worktree `REMOVABLE` (real branch, merged/closed PR, fully clean tree),
 `RECLAIMABLE` (finished, but needs a human eye — either a detached HEAD, whose
