@@ -8,7 +8,7 @@
 #
 # consume prints `<id> <verdict>` per entry and never an entry's text. Exit: 0 ok · 1 refused,
 # one line · 2 usage or I/O · 3 another consumer holds the queue · 4 no tick lock held.
-# Reasoning: interactive-board/task-006 (docs/operations.md → "The answer queue").
+# Reasoning: interactive-board/task-006 (docs/operations.md → "The answer queue: Sent, then Saved").
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

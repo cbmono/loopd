@@ -1385,7 +1385,7 @@ document.documentElement.setAttribute('data-js','');
   }
   var KEY='loopd-queue', token='';
   var SAY={'saved':'Saved your answer to %s.','already-answered':'%s was already answered, so yours was not used.',
-    'not-yours':'%s belongs to someone else\u2019s loop, so it was not saved.','no-more':'Nothing more is written down for %s.',
+    'not-yours':'%s belongs to someone else, so yours was not saved.','no-more':'Nothing more is written down for %s.',
     'expired':'Your answer to %s waited too long. Send it again.'};
   function load(){ try{ var l=JSON.parse(localStorage.getItem(KEY)||'[]'); return Array.isArray(l)?l:[]; }catch(x){ return []; } }
   function store(l){ try{ localStorage.setItem(KEY,JSON.stringify(l)); }catch(x){} }

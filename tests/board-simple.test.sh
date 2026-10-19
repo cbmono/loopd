@@ -77,7 +77,11 @@ ok "the seams moved into simple mode, once each"  "$(part seams)" "3 3 3 5 5 3"
 echo "== FILTERS =="
 ok "four filters, Everything first"               "$(part chips)" "Everything | Needs you · 5 | Active · 4 | Finished · 1"
 ok "Everything is the default"                    "$(has '<section class="simple" data-filter="all"' "$PAGE")" yes
-for w in localStorage sessionStorage document.cookie pushState replaceState; do
+# The one store is the answer queue's own Sent list, under one key, and only once a served
+# page's token is read; the published render carries no token (tests/web-queue-e2e.test.sh).
+ok "localStorage holds one key, the queue's"     "$(grep -o "KEY='[^']*'" "$JS" | sort -u)" "KEY='loopd-queue'"
+ok "…and is read only on a page with the token"  "$(grep -c 'if(token){' "$JS")|$(has 'name="loopd-queue" content=' "$PAGE")" "2|no"
+for w in sessionStorage document.cookie pushState replaceState; do
   ok "the script writes nothing: no $w"           "$(has "$w" "$JS")" no
 done
 
@@ -141,7 +145,8 @@ ok "CONTROL: nothing pending reads as an empty inbox" "$(PAGE="$P0" part text | 
 ok "…and counts 0"                               "$(PAGE="$P0" part chips | sed 's/.*Needs you · \([0-9]*\).*/\1/')" 0
 
 echo "== RUNS NOTHING =="
-for w in "fetch(" XMLHttpRequest sendBeacon WebSocket EventSource "window.open" "location=" ".submit("; do
+ok "every request goes to the answer queue"       "$(grep -o "fetch('[^']*'" "$JS" | sort -u)" "fetch('/__queue'"
+for w in XMLHttpRequest sendBeacon WebSocket EventSource "window.open" "location=" ".submit("; do
   ok "the script makes no request: no $w"         "$(has "$w" "$JS")" no
 done
 for h in fonts.googleapis.com fonts.gstatic.com "<link"; do
