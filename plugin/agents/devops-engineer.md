@@ -25,6 +25,10 @@ push-early, conventional commits, **commit attribution** (your brief's
 setting `status`, no PII/secrets, and capturing
 `Finding`s. The steps below are the DevOps specifics layered on top.
 
+**Every file you write has a home in the project** — `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md`
+→ "Where files go": a sheet, export or report goes in `projects/<slug>/deliverables/`
+(PII-adjacent: `deliverables/local/`), never `~`, `/`, another repo or the bundle root.
+
 ## Procedure
 
 1. **Read the task** and set `status: in-progress`.

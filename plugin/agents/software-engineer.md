@@ -26,6 +26,10 @@ push-early, conventional commits, **commit attribution** (your brief's
 setting `status`, no PII/secrets, and capturing
 `Finding`s. The steps below are the software-engineering specifics layered on top.
 
+**Every file you write has a home in the project** — `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md`
+→ "Where files go": a sheet, export or report goes in `projects/<slug>/deliverables/`
+(PII-adjacent: `deliverables/local/`), never `~`, `/`, another repo or the bundle root.
+
 **`git push --force-with-lease` always names its remote and branch — never bare.**
 A bare form has no refspec, so `deny-destructive.sh` falls back to inferring the
 destination from `$CWD`, which is wrong when you are not cd'ed into your own

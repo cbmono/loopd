@@ -214,6 +214,13 @@ under `projects/<slug>/deliverables/` (one file per chunk — e.g. per domain/te
 Research tasks are **human-driven**: the PM refines and tracks them but never
 dispatches them to role agents (see the lifecycle note).
 
+**Where a project's files live.** `projects/<slug>/` holds `project.md`, `tasks/`,
+`phases/`, `log.md`, `index.md`, `sources/` (inputs gathered for the work) and
+`deliverables/` (what a human or a later task consumes, on **both** kinds — tracked and
+pushed). **`deliverables/local/` is ignored, never pushed** (`/projects/*/deliverables/local/`
+in the seed `.gitignore`): customer data, ticket exports, anything PII-adjacent that must
+not reach GitHub. `CONVENTIONS.md` → "Where files go" says which file goes where.
+
 **Retention (`retain: true`) is research-shaped, for a structural reason.** A build
 project's real output is merged PRs, which live in the *product repo's* history and
 are already linked from `log.md` — the folder is scaffolding around work that lives
@@ -366,7 +373,7 @@ last_blocker: "<what the last round ended on>"   # PM-OWNED, NEVER HAND-EDITED. 
 # human decides, never a fresh agent at the same wall — with `/loopd:unblock <task>`, which
 # stamps the decision under `# Notes`, runs `stall-counter.sh reset` and sets `status: ready`.
 do_not_repeat: [ "<approach> — <evidence it failed on>", ... ]   # AGENT-OWNED, one line per approach an earlier round of THIS task already tried, at most 200 chars each and capped at 10. Written by the role agent with `scripts/do-not-repeat.sh append` whenever its round ends without a green PR (`CONVENTIONS.md`), and read at the NEXT dispatch: `do-not-repeat.sh brief` prints the block the PM pastes into the dispatch brief verbatim, under a fixed heading. Absent ⇒ nothing has failed yet, which is every first dispatch. The counterpart of `stall_count`: that says how MANY rounds, this says what not to try again. At the cap the script refuses and the PM folds the oldest entries into `# Notes`. It is read by a human here and pasted into a brief: **no customer PII, and never a secret or an environment value** — the failing check, not the output that failed.
-artifacts: [ /projects/<slug>/deliverables/<file>, ... ]   # RESEARCH only: the deliverable file(s) this task produces
+artifacts: [ /projects/<slug>/deliverables/<file>, ... ]   # the non-code file(s) this task produces: a RESEARCH task's deliverable, or what a BUILD task hands a human or a later task (a sheet, instructions, an export, a report). Code goes in `pr:`, never here. `CONVENTIONS.md` → "Where files go"
 timestamp: <ISO 8601>
 ---
 ```

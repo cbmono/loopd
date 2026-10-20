@@ -101,6 +101,11 @@ instance.config.local.json
 # merge base this bundle was stamped from, and it is the same on every clone.)
 /.loopd/refresh/
 
+# A project's deliverables that must never reach GitHub — customer data, ticket exports,
+# anything PII-adjacent. `deliverables/` itself is tracked and pushed; this one subfolder
+# per project stays on this machine (CONVENTIONS.md → "Where files go").
+/projects/*/deliverables/local/
+
 # Instance additions (kept across seed refreshes)
 # Everything from the heading above to end of file is THIS bundle's own. refresh-seeds.sh
 # compares the seed against the file with this block removed and re-appends it unchanged,

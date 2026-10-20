@@ -26,6 +26,8 @@ data-handling, units, and where to route authoritative data questions.
   not a source of truth for customer data; route authoritative data questions to
   the owning team (see `knowledge/teams/`).
 - **Never echo secrets / environment variables** (e.g. registry tokens).
+- **A file outside `knowledge/` follows `CONVENTIONS.md` → "Where files go"** — never
+  `~`, `/`, another repo or the bundle root; ask the human instead.
 
 ## When knowledge/ is mounted from another repo
 

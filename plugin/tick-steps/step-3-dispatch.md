@@ -242,13 +242,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    reusable, write or update a `Finding` in `knowledge/findings/` per `SCHEMA.md` and
    link it from the task."*
 
-   **Grounding, Effort, Commit attribution, PR title and Scratch (where to start reading,
-   how big this is, how the commit is signed, what the title is tagged with, and where the
-   throwaway files go).** Before you
+   **Grounding, Effort, Commit attribution, PR title, Scratch and Deliverables (where to
+   start reading, how big this is, how the commit is signed, what the title is tagged with,
+   where the throwaway files go, and where the non-code output goes).** Before you
    spawn, run `${CLAUDE_PLUGIN_ROOT}/scripts/dispatch-brief.sh <task-path>` and paste its
-   output into the brief **unchanged, all five headings and all** — the fixed headings are
-   `## Grounding (<target_repo>)`, `## Effort`, `## Commit attribution`, `## PR title` and
-   `## Scratch`.
+   output into the brief **unchanged, all six headings and all** — the fixed headings are
+   `## Grounding (<target_repo>)`, `## Effort`, `## Commit attribution`, `## PR title`,
+   `## Scratch` and `## Deliverables`.
    Grounding is the
    target repo's
    `knowledge/services/<repo>.md` entry points, capped at 15 lines, or — when that Service
@@ -260,7 +260,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    same terms (**absent ⇒ no tag at all**). Scratch is one directory **this task alone
    owns** — keyed on the task's slug, and checked with `git check-ignore` against the target
    repo's own clone, because a per-session path is the SAME path for every agent one tick
-   spawns and the second writer silently wins. **Never re-derive any of the five
+   spawns and the second writer silently wins. Deliverables is the project's
+   `deliverables/`, `deliverables/local/` and `sources/` paths, absolute
+   (`CONVENTIONS.md` → "Where files go"). **Never re-derive any of the six
    yourself**: an agent that has to find its own entry points spends its first turns
    searching, which is the whole cost this block exists to remove.
 

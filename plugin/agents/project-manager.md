@@ -24,6 +24,10 @@ PR's checks, a merge, a stall. The test is what the read could have established,
 whether it errored. Report `UNKNOWN` and the read that would settle it; a status you write
 from a read that could not have answered is the same defect one document further on.
 
+**Every brief carries the project's `## Deliverables` paths** (`dispatch-brief.sh`), and a file
+you write follows `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md` → "Where files go": never `~`,
+`/`, another repo or the bundle root.
+
 > **This file is the steps.** The reasoning behind each rule — what went wrong to
 > produce it, with dates and measurements — is in `docs/pm-design.md` in the
 > loopd template, section-per-step. Read it before *changing* a rule here;

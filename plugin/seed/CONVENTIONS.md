@@ -1039,3 +1039,26 @@ above it so none may grow its share.
   — in the measurement above it placed last, it indexes no SQL, and its index is a stale
   snapshot that reports itself current. Skip silently if absent; it's an optional local
   index (see the loopd README).
+
+## Where files go
+
+**Every file you write has a home inside the project, and `~` is never one of them.** A build
+task once left a human-facing labelling sheet and its instructions in a folder under `~`,
+where no reviewer, no `AWAITING.md` row and no other clone could see them.
+
+| What the file is | Where it goes |
+|---|---|
+| Product code and config | your worktree of the target repo |
+| Anything a human or a later task consumes — sheets, instructions, exports, reports | `projects/<slug>/deliverables/`, listed in the task's `artifacts:` |
+| Inputs gathered for the work | `projects/<slug>/sources/` |
+| Scratch | your own temp dir (the brief's `## Scratch`), removed when you finish |
+| Anything else — `~`, `/`, another repo, the bundle root | **never** — ask the human in `open_questions` |
+
+- **`deliverables/` is tracked and pushed with the bundle.** Data that must not reach GitHub
+  — customer data, ticket exports, anything PII-adjacent — goes in
+  `projects/<slug>/deliverables/local/`, which the bundle's `.gitignore` ignores. Confirm
+  with `git check-ignore -q <path>` at the bundle root before you write; a "no" means ask.
+- **Hand a file over by its project path, never a home-directory one** — in `# Result`, in
+  `open_questions`, and in any `Needs you:` item.
+- **The paths are the bundle's, not your worktree's.** The brief's `## Deliverables` section
+  gives them absolute.
