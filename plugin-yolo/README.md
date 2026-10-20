@@ -1,6 +1,6 @@
 # loopd-yolo — the delegated-autonomy companion
 
-`ai-bridge` core is **gated-only**: the human promotes `draft → ready`, and the human
+`loopd` core is **gated-only**: the human promotes `draft → ready`, and the human
 merges. This companion is the *only* thing that makes any other mode exist.
 
 ```

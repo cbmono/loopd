@@ -1,6 +1,6 @@
 {
   // Multi-root editor view for this loopd instance:
-  //   • "AI Bridge"                    →  this instance's own files (.)
+  //   • "loopd"                        →  this instance's own files (.)
   //   • "repositories"                 →  the group folder (..) with the product
   //                                       repos, beside which this bridge lives
   //
@@ -26,7 +26,7 @@
   // does, which is the only way to use a wrapper launcher (a script that sets up
   // the environment and then execs `claude`). /loopd:init uncomments the line below
   // with this instance's absolute path; if you hand-copy this file, fill it in
-  // yourself. Absolute rather than ${workspaceFolder:AI Bridge} on purpose:
+  // yourself. Absolute rather than ${workspaceFolder:loopd} on purpose:
   // substitution in this setting isn't guaranteed across editors, and a silently
   // unresolved value reproduces the exact bug it exists to prevent. It ships
   // COMMENTED OUT so an unsubstituted copy — this seed opened in the template
@@ -37,7 +37,7 @@
   // working.
 
   "folders": [
-    { "name": "AI Bridge", "path": "." },
+    { "name": "loopd", "path": "." },
     { "name": "repositories", "path": ".." }
   ],
   // search.followSymlinks is off because the instance also carries `repos/`, a

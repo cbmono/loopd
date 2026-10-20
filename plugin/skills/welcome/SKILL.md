@@ -1,6 +1,6 @@
 ---
 name: welcome
-description: The AI Bridge welcome screen — banner, or `check` (state that could be wrong). Reports facts, never rules; it repairs nothing (`fix` moved into /loopd:init).
+description: The loopd welcome screen — banner, or `check` (state that could be wrong). Reports facts, never rules; it repairs nothing (`fix` moved into /loopd:init).
 argument-hint: "[check|fix]  omit for the banner"
 allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/welcome.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---

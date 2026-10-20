@@ -1563,7 +1563,7 @@ if [ "$BOARD_OPT" = false ]; then
 elif [ ! -e "$TARGET/$AB_SNAPSHOT" ]; then
   cat > "$TARGET/$AB_SNAPSHOT" <<'SNAPSHOT'
 {
-  "_schema": "ai-bridge board snapshot v1",
+  "_schema": "loopd board snapshot v1",
   "_sensitivity": "Derived and gitignored. Rewritten by write-snapshot.sh each dispatch tick. Delete this file to drop off the board until the next stamp; set \"board\": false in instance.config.json to stay off.",
   "group": "",
   "generated_at": "",
@@ -1622,7 +1622,7 @@ else
   ' "$SL_SETTINGS" > "$sl_tmp" 2>/dev/null
   if [ -s "$sl_tmp" ] && grep -q '"statusLine"' "$sl_tmp"; then
     mv "$sl_tmp" "$SL_SETTINGS"
-    echo "  wrote statusLine into .claude/settings.json (AI Bridge · in flight · agents · need you · lock · last tick)"
+    echo "  wrote statusLine into .claude/settings.json (loopd · in flight · agents · need you · lock · last tick)"
     sl_user="$CONFIG_DEST/settings.json"
     if [ -f "$sl_user" ] && grep -q '"statusLine"' "$sl_user"; then
       echo "  note  PROJECT settings win, so this shadows the statusLine in $sl_user"
@@ -2149,8 +2149,12 @@ fi
 # unconditionally replaced on every stamp. Git applies .gitignore patterns in file
 # order, so a line after the END marker is a line after the two blanket rules, which is
 # the only thing that makes the negation win.
-IDX_BEGIN_MARK="# >>> ai-bridge index ignore >>>"
-IDX_END_MARK="# <<< ai-bridge index ignore <<<"
+IDX_BEGIN_MARK="# >>> loopd index ignore >>>"
+IDX_END_MARK="# <<< loopd index ignore <<<"
+# THE PAIR CARRIED THE OLD BRAND NAME before the rename sweep, so every bundle stamped
+# earlier has it. Read ONLY to be renamed in place below — never written.
+IDX_OLD_BEGIN_MARK="# >>> ai-bridge index ignore >>>"
+IDX_OLD_END_MARK="# <<< ai-bridge index ignore <<<"
 idxbody="$(mktemp)"
 cat <<'GI' | ab_expand > "$idxbody"
 # Derived navigation indexes — the root one and each project's, rewritten by every
@@ -2179,6 +2183,39 @@ GI
 # ordinary "no such line" case aborts the whole install.sh run right here instead of
 # falling through to the next branch. See knowledge/findings/a-bare-pipeline-assignment-
 # aborts-under-set-e-even-when-a-sibling-guard-is-fine.md in the control-panel bundle.
+#
+# THE OLD-BRAND PAIR BECOMES THE loopd PAIR, IN PLACE AND ONCE. Every marker line in the
+# file is mapped line for line — nothing is added, dropped or moved — and only when the
+# markers that result are well formed (each BEGIN closed by an END before the next BEGIN),
+# because a BEGIN with no END is the case below that must be left byte for byte as found.
+# A second run finds no old-brand line and writes nothing here. A bundle that ALSO carries
+# a loopd pair (a hand-port, or migrate-bundle.sh's comment rewrite followed by a stamp)
+# ends up with two blocks; the rewrite below keeps the first and drops the second.
+idx_wellformed() { # <file> -> 0 when every BEGIN is closed before the next one opens
+  awk -v b="$IDX_BEGIN_MARK" -v e="$IDX_END_MARK" '
+    $0==b { if (open) bad=1; open=1 } $0==e { open=0 }
+    END { exit (bad || open) ? 1 : 0 }' "$1"
+}
+if grep -qxF -e "$IDX_OLD_BEGIN_MARK" -e "$IDX_OLD_END_MARK" "$gi"; then
+  tmp="$gi.tmp.$$"
+  awk -v ob="$IDX_OLD_BEGIN_MARK" -v oe="$IDX_OLD_END_MARK" \
+      -v b="$IDX_BEGIN_MARK" -v e="$IDX_END_MARK" '
+    $0==ob { print b; next } $0==oe { print e; next } { print }' "$gi" > "$tmp"
+  if idx_wellformed "$tmp"; then
+    mv "$tmp" "$gi"
+    echo "  renamed the index-ignore marker pair in .gitignore to '$IDX_BEGIN_MARK'"
+  else
+    rm -f "$tmp"
+  fi
+fi
+# AN ORPHAN END — one with no BEGIN anywhere in the file — is a line this script wrote and
+# nothing now closes; the 3.3 rename left one in a real bundle. It carries no rule, so it is
+# dropped, never kept as a marker a later BEGIN could pair with by accident.
+if ! grep -qxF "$IDX_BEGIN_MARK" "$gi" && grep -qxF "$IDX_END_MARK" "$gi"; then
+  tmp="$gi.tmp.$$"
+  awk -v e="$IDX_END_MARK" '$0!=e' "$gi" > "$tmp" && mv "$tmp" "$gi"
+fi
+
 idx_begin_line="$(grep -nxF "$IDX_BEGIN_MARK" "$gi" | head -1 | cut -d: -f1)" || true
 if [ -n "$idx_begin_line" ]; then
   # Already migrated to the marker pair by an earlier run of this (fixed) install.sh —
@@ -2193,8 +2230,10 @@ if [ -n "$idx_begin_line" ]; then
   # rewrite below — an interrupted stamp or a hand-edit that removed the END line reaches
   # exactly this state. Verify END exists AFTER BEGIN before touching the file at all;
   # if it does not, leave the file untouched and report the problem instead of writing.
-  idx_end_line="$(grep -nxF "$IDX_END_MARK" "$gi" | head -1 | cut -d: -f1)" || true
-  if [ -z "$idx_end_line" ] || [ "$idx_end_line" -lt "$idx_begin_line" ]; then
+  #
+  # The same check covers a SECOND BEGIN opened before the first one closed, which the
+  # rewrite below would otherwise read as a duplicate block running to end of file.
+  if ! idx_wellformed "$gi"; then
     echo "warn  $gi carries an index-ignore BEGIN marker ('$IDX_BEGIN_MARK') with no" >&2
     echo "      matching END marker after it. Left UNCHANGED rather than risk dropping" >&2
     echo "      everything after the BEGIN line. Fix by hand: add '$IDX_END_MARK' right" >&2
@@ -2202,10 +2241,15 @@ if [ -n "$idx_begin_line" ]; then
     echo "      remove the stray BEGIN line — then re-run." >&2
   else
     tmp="$gi.tmp.$$"
+    # One managed block: the FIRST pair takes the body; a later, complete pair is a
+    # duplicate and goes with everything inside it; an END outside any block is an orphan
+    # and goes alone. Everything else prints as found.
     awk -v b="$IDX_BEGIN_MARK" -v e="$IDX_END_MARK" -v body="$idxbody" '
-      $0==b { print; while ((getline line < body) > 0) print line; close(body); inblock=1; next }
-      $0==e { print; inblock=0; next }
-      !inblock { print }
+      $0==b && !done { print; while ((getline line < body) > 0) print line; close(body); inblock=1; next }
+      $0==b { dup=1; next }
+      $0==e { if (inblock) { print; inblock=0; done=1 } else dup=0; next }
+      inblock || dup { next }
+      { print }
     ' "$gi" > "$tmp" && mv "$tmp" "$gi"
   fi
 else
@@ -2502,7 +2546,7 @@ if [ "$team_ask" = yes ]; then
     return 0
   }
 
-  TEAM_ROSTER="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-roster.XXXXXX")"
+  TEAM_ROSTER="$(mktemp "${TMPDIR:-/tmp}/loopd-roster.XXXXXX")"
   team_state=ask   # ask → write, or one of: eof, interrupt, declined, unreadable
   team_tries=0
   while [ "$team_state" = ask ]; do
@@ -2615,7 +2659,7 @@ if [ "${team_state:-}" = write ]; then
   # makes it exit 3, and then nothing is written at all. That is guard 3 and a seed-drift
   # guard in one mechanism, and it degrades to "print the instruction", never to a
   # half-rewritten file.
-  team_lines="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-people.XXXXXX")"
+  team_lines="$(mktemp "${TMPDIR:-/tmp}/loopd-people.XXXXXX")"
   team_total="$(grep -c . "$TEAM_ROSTER" || true)"
   team_i=0
   while read -r team_l team_e; do
@@ -2910,7 +2954,7 @@ else
   fi
 
   if [ "$id_write" = yes ]; then
-    id_pairs="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-local.XXXXXX")"
+    id_pairs="$(mktemp "${TMPDIR:-/tmp}/loopd-local.XXXXXX")"
     [ -z "$id_owner" ] || printf '  "ownerGithubUser": "%s"\n' "$id_owner" >> "$id_pairs"
     [ -z "$id_email" ] || printf '  "authorEmail": "%s"\n' "$id_email" >> "$id_pairs"
     [ -z "$id_repos" ] || printf '  "reposRoot": "%s"\n' "$id_repos" >> "$id_pairs"
@@ -3294,15 +3338,16 @@ fi
 # same rows, the same tiers and the same refusals (config files and tick locks are
 # reported, never written).
 #
-# SKIPPED WHEN `AI_BRIDGE_INIT_PASS` IS ALREADY SET, which is what makes it terminate: the
+# SKIPPED WHEN `LOOPD_INIT_PASS` IS ALREADY SET, which is what makes it terminate: the
 # pass's own `bundle-unconverted` repair re-stamps this bundle, and that stamp inherits the
 # variable and runs no second pass. Without it, a symlink the sweep KEEPS (a human's own)
-# and that row still counts would loop forever.
+# and that row still counts would loop forever. `AI_BRIDGE_INIT_PASS`, its pre-rename name,
+# is still honoured as an alias, read here and in welcome.sh and never set.
 [ "$REFRESH_SEEDS" -eq 0 ] || REFRESH_SEEDS=0   # read and dropped — see the flag above
-if [ "$FIRST_STAMP" = no ] && [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
+if [ "$FIRST_STAMP" = no ] && [ -z "${LOOPD_INIT_PASS:-}${AI_BRIDGE_INIT_PASS:-}" ]; then
   if [ -f "$BIN_DIR/welcome.sh" ]; then
     echo
-    AI_BRIDGE_INIT_PASS=1 bash "$BIN_DIR/welcome.sh" fix --instance "$TARGET" || true
+    LOOPD_INIT_PASS=1 bash "$BIN_DIR/welcome.sh" fix --instance "$TARGET" || true
   elif [ -f "$BIN_DIR/refresh-seeds.sh" ]; then
     bash "$BIN_DIR/refresh-seeds.sh" "$TARGET" --apply || true
   fi
@@ -3395,7 +3440,7 @@ ORGNOTE
 fi
 if [ -n "$ORG_SLUG" ]; then
   echo "  note  everyone else on this bundle starts here:"
-  echo "        https://github.com/cbmono/ai-bridge/blob/main/docs/sharing.md"
+  echo "        https://github.com/cbmono/loopd/blob/main/docs/sharing.md"
 fi
 
 # 8. The knowledge mount, where a `knowledge` key names one, reported in this stamp's own
@@ -3405,7 +3450,7 @@ fi
 # mount whose fetch failed is named, with the command that completes it later (the
 # SessionStart hook runs that same `pull`, so a reconnected machine heals on its own).
 if [ -f "$BIN_DIR/kb-sync.sh" ] && [ "$KB_CONFIGURED" = yes ]; then
-  kb_out="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-kb.XXXXXX")"
+  kb_out="$(mktemp "${TMPDIR:-/tmp}/loopd-kb.XXXXXX")"
   mrc=0
   bash "$BIN_DIR/kb-sync.sh" --instance "$TARGET" mount >"$kb_out" 2>&1 || mrc=$?
   if [ "$mrc" -eq 0 ]; then

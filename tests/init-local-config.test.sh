@@ -196,17 +196,17 @@ one_person_cfg() { printf '{ "org": "acme", "group": "acme", "people": { "exampl
 I="$(newinst 8b)"; one_person_cfg "$I"
 printf '{\n  "ownerGithubUser": "example-user-008",\n  "models": { "deep": "opus" },\n  "roleTiers": { "software-engineer": "deep" }\n}\n' > "$I/$LOCAL"
 BEFORE="$(cat "$I/$LOCAL")"
-AI_BRIDGE_INIT_PASS=1 stamp "$I"
+LOOPD_INIT_PASS=1 stamp "$I"
 ok "a login absent from people: untouched" "$([ "$(cat "$I/$LOCAL")" = "$BEFORE" ] && echo yes || echo no)" yes
 ok "…and the needs line names the login"   "$(said "names ownerGithubUser 'example-user-008' and \`people\`")" yes
 ok "…and the flag that fills it"           "$(said 'needs  authorEmail — re-run with: --email <commit-address>')" yes
-AI_BRIDGE_INIT_PASS=1 stamp "$I" --email second@example.org
+LOOPD_INIT_PASS=1 stamp "$I" --email second@example.org
 ok "--email fills an existing file's missing authorEmail" "$(jget "$I/$LOCAL" authorEmail)" second@example.org
 ok "…saying where it came from"            "$(said 'set   authorEmail second@example.org (from --email)')" yes
 # No ownerGithubUser at all: the same one line, with the absence spelled out.
 I="$(newinst 8c)"; one_person_cfg "$I"
 printf '{\n  "reposRoot": "/x"\n}\n' > "$I/$LOCAL"
-AI_BRIDGE_INIT_PASS=1 stamp "$I"
+LOOPD_INIT_PASS=1 stamp "$I"
 ok "no login in the file: nothing is guessed" "$(jget "$I/$LOCAL" authorEmail)" -
 ok "…and the needs line says so"           "$(said "names ownerGithubUser '<unset>'")" yes
 

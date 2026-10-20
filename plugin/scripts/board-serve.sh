@@ -360,7 +360,7 @@ TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    server_version = "ai-bridge-board"
+    server_version = "loopd-board"
     protocol_version = "HTTP/1.1"
 
     def log_message(self, *_a):

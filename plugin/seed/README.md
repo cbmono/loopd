@@ -83,7 +83,7 @@ copied once from the plugin, so an edit there becomes a conflict the next time
 own `/loopd:dispatch` loop. The front door — creating or cloning it with
 `/loopd:init <dir> --org <org>`, the `people` map, `defaultOwner`, and what each
 person sets on their own machine — is
-[docs/sharing.md](https://github.com/cbmono/ai-bridge/blob/main/docs/sharing.md).
+[docs/sharing.md](https://github.com/cbmono/loopd/blob/main/docs/sharing.md).
 
 ## How it works
 ```

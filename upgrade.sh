@@ -9,7 +9,7 @@
 set -eu
 
 cat >&2 <<'EOF'
-upgrade.sh is retired. Its four stages are reachable from the ai-bridge PLUGIN.
+upgrade.sh is retired. Its four stages are reachable from the loopd PLUGIN.
 
   · machinery symlinks (stage 1)   gone — a bundle carries no machinery. `/loopd:init`
                                    converts a bundle stamped by the old install.sh.

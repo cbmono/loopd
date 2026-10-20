@@ -10,8 +10,8 @@
 # installs. Confirmed against real instances twice within an hour (this bundle and the
 # Alteos instance both stayed stale through a re-stamp). ai-bridge-v4/task-009.
 #
-# The fix mirrors the machinery block: a marker pair (`# >>> ai-bridge index ignore >>>`
-# / `# <<< ai-bridge index ignore <<<`), fully rewritten between the markers on every
+# The fix mirrors the machinery block: a marker pair (`# >>> loopd index ignore >>>`
+# / `# <<< loopd index ignore <<<`), fully rewritten between the markers on every
 # run. A SINGLE stamp cannot exercise this class of bug — the guard's failure mode only
 # shows up on the SECOND run — so every positive assertion here stamps a fixture twice
 # with genuinely different template content between the runs (the same shape task-008
@@ -69,8 +69,8 @@ git_check_ignore() { # $1 = instance dir, $2 = path relative to it -> 0 if ignor
 INST="$TMP/inst"; mkdir -p "$INST"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/out1" 2>&1
 assert "a fresh instance stamps"                    "$(yes_if test -f "$INST/instance.config.json")"
-assert "…and gets the index-ignore BEGIN marker"    "$(yes_if grep -qxF '# >>> ai-bridge index ignore >>>' "$INST/.gitignore")"
-assert "…and the END marker"                        "$(yes_if grep -qxF '# <<< ai-bridge index ignore <<<' "$INST/.gitignore")"
+assert "…and gets the index-ignore BEGIN marker"    "$(yes_if grep -qxF '# >>> loopd index ignore >>>' "$INST/.gitignore")"
+assert "…and the END marker"                        "$(yes_if grep -qxF '# <<< loopd index ignore <<<' "$INST/.gitignore")"
 assert "…and the derived index is actually ignored" "$(yes_if git_check_ignore "$INST" "$AB_INDEX")"
 assert "…and a project's index.md is ignored too"   "$(yes_if git_check_ignore "$INST" projects/demo/index.md)"
 assert "…and the KB mount's gitdir, from the seed"   "$(yes_if git_check_ignore "$INST" "$AB_DIR/kb.git/HEAD")"
@@ -107,7 +107,7 @@ cp "$LEGACY/.gitignore" "$TMP/legacy.before"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$LEGACY" >"$TMP/outL2" 2>&1
 RC=$?
 assert "install.sh exits 0 on a legacy (unmarked) instance"  "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
-assert "the legacy block gets migrated to the marker pair"   "$(yes_if grep -qxF '# >>> ai-bridge index ignore >>>' "$LEGACY/.gitignore")"
+assert "the legacy block gets migrated to the marker pair"   "$(yes_if grep -qxF '# >>> loopd index ignore >>>' "$LEGACY/.gitignore")"
 assert "…comment text is the CURRENT wording, not the old"   "$(yes_if grep -q 'shared by more than one human it would otherwise conflict' "$LEGACY/.gitignore")"
 assert "…the stale one-line-shorter old comment is gone"     "$(no_if grep -qxF '# /pm-loop tick from the documents they summarise. A view, not source.' "$LEGACY/.gitignore")"
 assert "a local edit BEFORE the block survives byte-for-byte" "$(yes_if grep -qxF '# LOCAL EDIT: restored 2026-08-23 after an install.sh run reversed it' "$LEGACY/.gitignore")"
@@ -120,7 +120,7 @@ assert "…and a bundle stamped before the KB mount ignores its gitdirs" \
 # Order is the mechanism: the negation line must still appear strictly AFTER the two
 # blanket rule lines (i.e. after the block's END marker), not before or inside it.
 neg_line="$(head -1 <<<"$(grep -nxF '!projects/retained-example/index.md' "$LEGACY/.gitignore")" | cut -d: -f1)"
-end_line="$(head -1 <<<"$(grep -nxF '# <<< ai-bridge index ignore <<<' "$LEGACY/.gitignore")" | cut -d: -f1)"
+end_line="$(head -1 <<<"$(grep -nxF '# <<< loopd index ignore <<<' "$LEGACY/.gitignore")" | cut -d: -f1)"
 assert "…and the negation line sits after the block's END marker" \
   "$([[ -n "$neg_line" && -n "$end_line" && "$neg_line" -gt "$end_line" ]] && echo 0 || echo 1)"
 
@@ -132,7 +132,7 @@ assert "…and the negation line sits after the block's END marker" \
 # ---------------------------------------------------------------------------------
 INST2="$TMP/inst2"; mkdir -p "$INST2"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$INST2" >"$TMP/out2a" 2>&1
-before="$(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST2/.gitignore")"
+before="$(sed -n '/# >>> loopd index ignore >>>/,/# <<< loopd index ignore <<</p' "$INST2/.gitignore")"
 
 # Mutate the TEMPLATE's install.sh between runs — a new comment sentence AND a new
 # rule line, the way a future loopd PR would extend this block.
@@ -140,7 +140,7 @@ perl -0pi -e "s/surface, changes only when the KB changes, and a fresh clone nee
 perl -0pi -e 's{^/projects/\*/index\.md\n(GI\n)}{/projects/*/index.md\n/.a-new-derived-index.json\n$1}m' "$TPL/plugin/scripts/init-bundle.sh"
 
 bash "$TPL/plugin/scripts/init-bundle.sh" "$INST2" >"$TMP/out2b" 2>&1
-after="$(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST2/.gitignore")"
+after="$(sed -n '/# >>> loopd index ignore >>>/,/# <<< loopd index ignore <<</p' "$INST2/.gitignore")"
 
 assert "a second stamp changes the block's content at all"   "$([[ "$before" != "$after" ]] && echo 0 || echo 1)"
 assert "…delivers the CHANGED comment text"                   "$(yes_if grep -qxF '# UPDATED WORDING for the second-stamp test.' "$INST2/.gitignore")"
@@ -148,7 +148,7 @@ assert "…delivers the NEW rule line"                           "$(yes_if grep 
 assert "…and the new line is actually ignored, not just present" \
   "$(yes_if git_check_ignore "$INST2" .a-new-derived-index.json)"
 assert "…a THIRD stamp with no template change is a no-op on this block" \
-  "$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST2" >"$TMP/out2c" 2>&1; cmp -s <(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST2/.gitignore") <(printf '%s\n' "$after") && echo 0 || echo 1)"
+  "$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST2" >"$TMP/out2c" 2>&1; cmp -s <(sed -n '/# >>> loopd index ignore >>>/,/# <<< loopd index ignore <<</p' "$INST2/.gitignore") <(printf '%s\n' "$after") && echo 0 || echo 1)"
 
 # ---------------------------------------------------------------------------------
 # 4. A line that merely RESEMBLES the marker must not be mistaken for it (would
@@ -159,17 +159,17 @@ assert "…a THIRD stamp with no template change is a no-op on this block" \
 INST3="$TMP/inst3"; mkdir -p "$INST3/projects/demo"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$INST3" >"$TMP/out3a" 2>&1
 # Strip the real block back out (so the file has NO real marker pair)…
-awk '/# >>> ai-bridge index ignore >>>/{skip=1} /# <<< ai-bridge index ignore <<</{skip=0; next} !skip' \
+awk '/# >>> loopd index ignore >>>/{skip=1} /# <<< loopd index ignore <<</{skip=0; next} !skip' \
   "$INST3/.gitignore" > "$INST3/.gitignore.tmp" && mv "$INST3/.gitignore.tmp" "$INST3/.gitignore"
 printf '\n/index.md\n/projects/*/index.md\n' >> "$INST3/.gitignore"
 # …and add a DECOY line that contains the exact marker text as a mere substring —
 # not a real marker, just prose about it.
-printf '# a note that mentions "# >>> ai-bridge index ignore >>>" for documentation, not a real marker\n' >> "$INST3/.gitignore"
+printf '# a note that mentions "# >>> loopd index ignore >>>" for documentation, not a real marker\n' >> "$INST3/.gitignore"
 cp "$INST3/.gitignore" "$TMP/inst3.before"
 
 bash "$TPL/plugin/scripts/init-bundle.sh" "$INST3" >"$TMP/out3b" 2>&1
 assert "a decoy resembling the marker does not block migration" \
-  "$(yes_if grep -qxF '# >>> ai-bridge index ignore >>>' "$INST3/.gitignore")"
+  "$(yes_if grep -qxF '# >>> loopd index ignore >>>' "$INST3/.gitignore")"
 assert "…the derived index is ignored after migrating past the decoy" \
   "$(yes_if git_check_ignore "$INST3" "$AB_INDEX")"
 assert "…the decoy line itself survives untouched"  \
@@ -184,18 +184,22 @@ INST4="$TMP/inst4"; mkdir -p "$INST4"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$INST4" >"$TMP/out4a" 2>&1
 {
   printf '\n# a later, unrelated section quoting the same text a second time:\n'
-  printf '# <<< ai-bridge index ignore <<<\n'
+  printf '# <<< loopd index ignore <<<\n'
   printf '# — should stay right here, untouched, and not re-open or re-close anything.\n'
 } >> "$INST4/.gitignore"
 cp "$INST4/.gitignore" "$TMP/inst4.before"
 
 bash "$TPL/plugin/scripts/init-bundle.sh" "$INST4" >"$TMP/out4b" 2>&1
-between_markers="$(head -1 <<<"$(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST4/.gitignore")")"
+between_markers="$(head -1 <<<"$(sed -n '/# >>> loopd index ignore >>>/,/# <<< loopd index ignore <<</p' "$INST4/.gitignore")")"
 assert "the block still closes at its OWN (first) END marker" \
   "$([[ -n "$between_markers" ]] && echo 0 || echo 1)"
 assert "…exactly ONE real block, not content swallowed to the stray END" \
-  "$([[ "$(grep -cxF '# >>> ai-bridge index ignore >>>' "$INST4/.gitignore")" -eq 1 ]] && echo 0 || echo 1)"
-assert "…the stray END further down the file survives untouched" \
+  "$([[ "$(grep -cxF '# >>> loopd index ignore >>>' "$INST4/.gitignore")" -eq 1 ]] && echo 0 || echo 1)"
+# An exact END line outside every block is an ORPHAN, and the rewrite drops it alone: it
+# carries no rule, and kept it is a marker a later BEGIN could pair with by accident.
+assert "…the orphan END further down is dropped, the block's own kept" \
+  "$([[ "$(grep -cxF '# <<< loopd index ignore <<<' "$INST4/.gitignore")" -eq 1 ]] && echo 0 || echo 1)"
+assert "…the line after the orphan END survives untouched" \
   "$(yes_if grep -qxF '# — should stay right here, untouched, and not re-open or re-close anything.' "$INST4/.gitignore")"
 assert "…and the unrelated comment line above it survives untouched" \
   "$(yes_if grep -qxF '# a later, unrelated section quoting the same text a second time:' "$INST4/.gitignore")"
@@ -219,14 +223,14 @@ bash "$TPL/plugin/scripts/init-bundle.sh" "$INST5" >"$TMP/out5a" 2>&1
 printf '\n# TRAILER: unrelated content that must survive a re-stamp untouched.\n/some/trailer/rule\n' >> "$INST5/.gitignore"
 # Drop the END marker line, leaving BEGIN, the trailer, and everything else intact but
 # unclosed.
-awk '$0 == "# <<< ai-bridge index ignore <<<" { next } { print }' "$INST5/.gitignore" \
+awk '$0 == "# <<< loopd index ignore <<<" { next } { print }' "$INST5/.gitignore" \
   > "$INST5/.gitignore.tmp" && mv "$INST5/.gitignore.tmp" "$INST5/.gitignore"
 cp "$INST5/.gitignore" "$TMP/inst5.before"
 assert "the fixture really has BEGIN with no END (sanity check on the fixture itself)" \
-  "$([[ "$(grep -cxF '# >>> ai-bridge index ignore >>>' "$INST5/.gitignore")" -eq 1 \
-     && "$(grep -cxF '# <<< ai-bridge index ignore <<<' "$INST5/.gitignore")" -eq 0 ]] && echo 0 || echo 1)"
+  "$([[ "$(grep -cxF '# >>> loopd index ignore >>>' "$INST5/.gitignore")" -eq 1 \
+     && "$(grep -cxF '# <<< loopd index ignore <<<' "$INST5/.gitignore")" -eq 0 ]] && echo 0 || echo 1)"
 assert "…and the trailer really does sit AFTER the dangling BEGIN (sanity check)" \
-  "$([[ "$(grep -nxF '# >>> ai-bridge index ignore >>>' "$INST5/.gitignore" | cut -d: -f1)" \
+  "$([[ "$(grep -nxF '# >>> loopd index ignore >>>' "$INST5/.gitignore" | cut -d: -f1)" \
         -lt "$(grep -nxF '/some/trailer/rule' "$INST5/.gitignore" | cut -d: -f1)" ]] && echo 0 || echo 1)"
 
 err5="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST5" 2>&1 1>/dev/null)"
@@ -276,13 +280,13 @@ bash "$TPL/plugin/scripts/init-bundle.sh" "$INST6" >"$TMP/out6b" 2>&1
 assert "install.sh exits 0 with an earlier unrelated /index.md line present" \
   "$([[ $? -eq 0 ]] && echo 0 || echo 1)"
 assert "the REAL index-ignore pair is migrated to the marker pair (not the decoy)" \
-  "$(yes_if grep -qxF '# >>> ai-bridge index ignore >>>' "$INST6/.gitignore")"
+  "$(yes_if grep -qxF '# >>> loopd index ignore >>>' "$INST6/.gitignore")"
 # ONE since the block's own rule line is `/.loopd/index.md`: the decoy is the only
 # `/index.md` left, which is exactly the line that had to survive.
 assert "the earlier unrelated /index.md rule is untouched" \
   "$([[ "$(grep -cxF '/index.md' "$INST6/.gitignore")" -eq 1 ]] && echo 0 || echo 1)"
 assert "…exactly ONE index-ignore block was created, not a duplicate at EOF" \
-  "$([[ "$(grep -cxF '# >>> ai-bridge index ignore >>>' "$INST6/.gitignore")" -eq 1 ]] && echo 0 || echo 1)"
+  "$([[ "$(grep -cxF '# >>> loopd index ignore >>>' "$INST6/.gitignore")" -eq 1 ]] && echo 0 || echo 1)"
 assert "a retained project's negation still wins (check-ignore) despite the decoy" \
   "$(no_if git_check_ignore "$INST6" projects/retained-example/index.md)"
 assert "…an ordinary project is still ignored" \
@@ -290,9 +294,87 @@ assert "…an ordinary project is still ignored" \
 assert "…root index.md is still ignored" \
   "$(yes_if git_check_ignore "$INST6" index.md)"
 neg_line6="$(head -1 <<<"$(grep -nxF '!projects/retained-example/index.md' "$INST6/.gitignore")" | cut -d: -f1)"
-end_line6="$(head -1 <<<"$(grep -nxF '# <<< ai-bridge index ignore <<<' "$INST6/.gitignore")" | cut -d: -f1)"
+end_line6="$(head -1 <<<"$(grep -nxF '# <<< loopd index ignore <<<' "$INST6/.gitignore")" | cut -d: -f1)"
 assert "…and the negation still sits after the block's END marker" \
   "$([[ -n "$neg_line6" && -n "$end_line6" && "$neg_line6" -gt "$end_line6" ]] && echo 0 || echo 1)"
+
+# ---------------------------------------------------------------------------------
+# 8. THE OLD-BRAND PAIR IS RENAMED IN PLACE, ONCE. Every bundle stamped before the rename
+#    sweep carries `# >>> ai-bridge index ignore >>>` / `# <<< ai-bridge index ignore <<<`.
+#    A re-stamp must leave exactly one `loopd` pair where the old one was — no second block
+#    appended, the negation after it still winning — and the run after that must not
+#    change a byte. Three shapes measured on real bundles: the plain old pair, the old
+#    pair followed by an orphan loopd END (migrate-bundle.sh's comment rewrite and a stamp
+#    between them left one), and an old block beside a loopd one.
+# ---------------------------------------------------------------------------------
+OLD_B='# >>> ai-bridge index ignore >>>'; OLD_E='# <<< ai-bridge index ignore <<<'
+NEW_B='# >>> loopd index ignore >>>';     NEW_E='# <<< loopd index ignore <<<'
+cnt() { grep -cxF -- "$1" "$2" | tr -d ' '; }
+pair_counts() { printf '%s/%s/%s/%s' "$(cnt "$OLD_B" "$1")" "$(cnt "$OLD_E" "$1")" "$(cnt "$NEW_B" "$1")" "$(cnt "$NEW_E" "$1")"; }
+to_old() { # <file> — the fixture: the stamped pair spelled the pre-rename way
+  awk -v nb="$NEW_B" -v ne="$NEW_E" -v ob="$OLD_B" -v oe="$OLD_E" \
+    '$0==nb {print ob; next} $0==ne {print oe; next} {print}' "$1" > "$1.tmp" && mv "$1.tmp" "$1"
+}
+
+INST8="$TMP/inst8"; mkdir -p "$INST8/projects/kept" "$INST8/projects/other"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST8" >"$TMP/out8a" 2>&1
+to_old "$INST8/.gitignore"
+awk -v e="$OLD_E" '{print} $0==e {print "!projects/kept/index.md"}' "$INST8/.gitignore" > "$INST8/.gitignore.tmp" \
+  && mv "$INST8/.gitignore.tmp" "$INST8/.gitignore"
+assert "8a fixture: one old pair, no loopd pair" "$([[ "$(pair_counts "$INST8/.gitignore")" == 1/1/0/0 ]] && echo 0 || echo 1)"
+old_at="$(grep -nxF "$OLD_B" "$INST8/.gitignore" | cut -d: -f1)"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST8" >"$TMP/out8b" 2>&1
+assert "8a the old pair becomes exactly one loopd pair" "$([[ "$(pair_counts "$INST8/.gitignore")" == 0/0/1/1 ]] && echo 0 || echo 1)"
+assert "…on the line the old BEGIN held — renamed in place, not appended" \
+  "$([[ "$(grep -nxF "$NEW_B" "$INST8/.gitignore" | cut -d: -f1)" == "$old_at" ]] && echo 0 || echo 1)"
+assert "…and the run says it renamed the pair"  "$(yes_if grep -q 'renamed the index-ignore marker pair' "$TMP/out8b")"
+assert "…a negation after the old END still wins" "$(no_if git_check_ignore "$INST8" projects/kept/index.md)"
+assert "…while an ordinary project is still ignored" "$(yes_if git_check_ignore "$INST8" projects/other/index.md)"
+cp "$INST8/.gitignore" "$TMP/inst8.after1"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST8" >"$TMP/out8c" 2>&1
+assert "…and a second stamp changes not a byte" "$(cmp -s "$TMP/inst8.after1" "$INST8/.gitignore" && echo 0 || echo 1)"
+assert "…nor claims to rename anything"         "$(no_if grep -q 'renamed the index-ignore marker pair' "$TMP/out8c")"
+
+INST9="$TMP/inst9"; mkdir -p "$INST9"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST9" >"$TMP/out9a" 2>&1
+to_old "$INST9/.gitignore"
+awk -v e="$OLD_E" -v ne="$NEW_E" '{print} $0==e {print ne}' "$INST9/.gitignore" > "$INST9/.gitignore.tmp" \
+  && mv "$INST9/.gitignore.tmp" "$INST9/.gitignore"
+assert "8b fixture: the old pair plus an orphan loopd END" "$([[ "$(pair_counts "$INST9/.gitignore")" == 1/1/0/1 ]] && echo 0 || echo 1)"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST9" >"$TMP/out9b" 2>&1
+assert "8b one loopd pair, the orphan gone"      "$([[ "$(pair_counts "$INST9/.gitignore")" == 0/0/1/1 ]] && echo 0 || echo 1)"
+assert "…and the derived index is still ignored" "$(yes_if git_check_ignore "$INST9" "$AB_INDEX")"
+cp "$INST9/.gitignore" "$TMP/inst9.after1"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST9" >"$TMP/out9c" 2>&1
+assert "…and a second stamp changes not a byte"  "$(cmp -s "$TMP/inst9.after1" "$INST9/.gitignore" && echo 0 || echo 1)"
+
+INST10="$TMP/inst10"; mkdir -p "$INST10"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST10" >"$TMP/out10a" 2>&1
+sed -n "/^$NEW_B\$/,/^$NEW_E\$/p" "$INST10/.gitignore" > "$TMP/block10"
+to_old "$INST10/.gitignore"
+{ printf '
+# a hand-ported copy, already spelled the new way
+'; cat "$TMP/block10"; printf '/after/the/copy
+'; } >> "$INST10/.gitignore"
+assert "8c fixture: an old block AND a loopd block" "$([[ "$(pair_counts "$INST10/.gitignore")" == 1/1/1/1 ]] && echo 0 || echo 1)"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST10" >"$TMP/out10b" 2>&1
+assert "8c the two collapse to one loopd block"  "$([[ "$(pair_counts "$INST10/.gitignore")" == 0/0/1/1 ]] && echo 0 || echo 1)"
+assert "…and only the duplicate went: the line after it stays" "$(yes_if grep -qxF '/after/the/copy' "$INST10/.gitignore")"
+cp "$INST10/.gitignore" "$TMP/inst10.after1"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST10" >"$TMP/out10c" 2>&1
+assert "…and a second stamp changes not a byte"  "$(cmp -s "$TMP/inst10.after1" "$INST10/.gitignore" && echo 0 || echo 1)"
+
+INST11="$TMP/inst11"; mkdir -p "$INST11"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST11" >"$TMP/out11a" 2>&1
+awk -v nb="$NEW_B" '$0!=nb' "$INST11/.gitignore" > "$INST11/.gitignore.tmp" && mv "$INST11/.gitignore.tmp" "$INST11/.gitignore"
+assert "8d fixture: a loopd END with no BEGIN anywhere" "$([[ "$(pair_counts "$INST11/.gitignore")" == 0/0/0/1 ]] && echo 0 || echo 1)"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST11" >"$TMP/out11b" 2>&1
+assert "8d the orphan END is not paired by accident: one well-formed block" \
+  "$([[ "$(pair_counts "$INST11/.gitignore")" == 0/0/1/1 \
+        && "$(grep -nxF "$NEW_B" "$INST11/.gitignore" | cut -d: -f1)" -lt "$(grep -nxF "$NEW_E" "$INST11/.gitignore" | cut -d: -f1)" ]] && echo 0 || echo 1)"
+cp "$INST11/.gitignore" "$TMP/inst11.after1"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST11" >"$TMP/out11c" 2>&1
+assert "…and a second stamp changes not a byte"  "$(cmp -s "$TMP/inst11.after1" "$INST11/.gitignore" && echo 0 || echo 1)"
 
 echo "index-ignore-restamp.test.sh: pass=$pass fail=$fail"
 [[ $fail -eq 0 ]]

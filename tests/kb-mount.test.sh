@@ -40,7 +40,7 @@ has() { grep -qF -- "$2" <<<"$1" && echo yes || echo no; }
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com
 export GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
-export AI_BRIDGE_KB_TIMEOUT=3
+export LOOPD_KB_TIMEOUT=3
 
 # --- fixtures ----------------------------------------------------------------
 finding() { # <file> <slug> <lesson>
@@ -599,7 +599,7 @@ INIT="$REPO/plugin/scripts/init-bundle.sh"
 STUBG="$TMP/stubbin"; mkdir -p "$STUBG" "$TMP/stamphome"; printf '#!/bin/sh\nexit 1\n' > "$STUBG/gh"; chmod +x "$STUBG/gh"
 stamp() { # <instance> -> combined output in $out, status in $rc
   out="$(cd "$TMP" && PATH="$STUBG:$PATH" HOME="$TMP/stamphome" XDG_CONFIG_HOME="$TMP/stamphome" \
-    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/stamphome/none" AI_BRIDGE_INIT_PASS=1 \
+    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/stamphome/none" LOOPD_INIT_PASS=1 \
     bash "$INIT" "$1" </dev/null 2>&1)"; rc=$?
 }
 kb_cfg() { # <dir> <repo> — a bundle whose tracked config names a KB and nothing else of note
@@ -651,7 +651,7 @@ rm -r "$SU/knowledge"; stamp "$SU"
 ok "…after which the same stamp mounts" "$([ -f "$SU/knowledge/findings/alpha.md" ] && echo yes || echo no)" yes
 
 SO="$TMP/stamp-offline"; kb_cfg "$SO" "https://10.255.255.1/x/kb.git"
-AI_BRIDGE_KB_TIMEOUT=2 stamp "$SO"
+LOOPD_KB_TIMEOUT=2 stamp "$SO"
 ok "an unreachable remote: the stamp exits 0" "$rc" 0
 ok "…names the empty mount" "$(has "$out" 'knowledge/ is mounted but EMPTY')" yes
 ok "…and the command that completes it later" "$(has "$out" 'kb-sync.sh pull')" yes

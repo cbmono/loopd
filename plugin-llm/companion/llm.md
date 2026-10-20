@@ -8,7 +8,7 @@ for.
 
 ## What a substitution is
 
-`bin/ai-bridge-deepseek` exports `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` and the
+`bin/loopd-deepseek` exports `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` and the
 four model-tier variables, then `exec`s `claude`. That is a **backend substitution**, not
 a delegation helper: the whole agent loop — prompts, file contents, tool results, diffs —
 is served by the third party. No proxy, no third-party code in the path that holds the key.

@@ -7,7 +7,7 @@ board. Procedures here; the reasoning behind each one is linked.
 
 ## 1. Installing and upgrading: two halves, and neither updates the other
 
-**AI Bridge is delivered in two pieces, on two different clocks.**
+**loopd is delivered in two pieces, on two different clocks.**
 
 | Half | What it carries | Scope | Installed / refreshed by |
 |---|---|---|---|
@@ -1103,7 +1103,7 @@ declared ids that **differ** are exit 1, `theirs`, and exit 2 stays reserved for
 plus stale, future-dated and unreadable.
 
 **The launcher mints the id, and that is what makes the last row rare — decided 2026-09-06.**
-`--claimant` shipped in [#71](https://github.com/cbmono/ai-bridge/pull/71) and neither
+`--claimant` shipped in [#71](https://github.com/cbmono/loopd/pull/71) and neither
 acquire site passed one, so both fell to the derived tier and a dispatched tick meeting its
 own claim reached exit 2 on the *ordinary* path. Now `/loopd:dispatch` step 1 mints one
 literal per tick (`tick-<UTC>-<4 chars>`), passes it to its **own** acquire — which records
@@ -1359,7 +1359,7 @@ no file, no key or no `python3` prints no row at all. Nothing else from that obj
 account and organisation UUIDs beside the address — ever reaches the banner.
 
 **The `Update` row is the third row of the board block, and it is one command.** It names
-what fetches a newer AI Bridge and installs it — `claude plugin update <plugin>` — plus the
+what fetches a newer loopd and installs it — `claude plugin update <plugin>` — plus the
 restart, which is the only step left with you. Four states, one row (the numbers above are
 illustrative):
 

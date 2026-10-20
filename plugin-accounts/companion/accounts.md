@@ -25,12 +25,13 @@ That is the cost of the mechanism — each account directory needs its own one-t
 | | |
 |---|---|
 | The label | `"account": "<label>"` in the bundle's `instance.config.json` — a label, never a secret |
-| The config dir | `${AI_BRIDGE_ACCOUNTS_HOME:-~/.claude-accounts}/<label>` — **always outside the bundle**; the launcher refuses a directory inside one |
+| The config dir | `${LOOPD_ACCOUNTS_HOME:-~/.claude-accounts}/<label>` — **always outside the bundle**; the launcher refuses a directory inside one. `AI_BRIDGE_ACCOUNTS_HOME`, the pre-rename name, is still read (with a note) while the new one is unset |
 | The credential | wherever Claude Code puts it for that directory. **Never in a bundle repo**, and nothing here ever reads or copies one |
-| The launcher | `bin/ai-bridge-claude`, run from a bundle root |
+| The launcher | `bin/loopd-claude`, run from a bundle root. `bin/ai-bridge-claude` is its deprecated pre-rename name: it notes the rename and runs `loopd-claude` |
 
 ## The seam for another backend
 
-The launcher `exec`s `claude` after exporting `CLAUDE_CONFIG_DIR` and `AI_BRIDGE_ACCOUNT`.
+The launcher `exec`s `claude` after exporting `CLAUDE_CONFIG_DIR` and `LOOPD_ACCOUNT`
+(`AI_BRIDGE_ACCOUNT` before the rename — core still reads it from a session started then).
 A companion that swaps the backend replaces the `exec` line and reuses everything above it
 — it is not built here.

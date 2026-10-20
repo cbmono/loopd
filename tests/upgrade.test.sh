@@ -485,8 +485,8 @@ mkdir -p "$GINST"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$GINST" > "$TMP/gi-stamp.out" 2>&1
 assert "the stamp gives a bundle without the slot one"  "$(yes_if grep -qxF "$GI_HEAD" "$GINST/.gitignore")"
 assert "…and writes its own patterns INTO that block"   "$(gi_where "$GINST/.gitignore" "/$AB_STATE_DIR" after)"
-assert "…with the managed index markers ahead of it"    "$(gi_where "$GINST/.gitignore" '# >>> ai-bridge index ignore >>>' before)"
-assert "…so the instance block is last"                 "$(gi_where "$GINST/.gitignore" '# <<< ai-bridge index ignore <<<' before)"
+assert "…with the managed index markers ahead of it"    "$(gi_where "$GINST/.gitignore" '# >>> loopd index ignore >>>' before)"
+assert "…so the instance block is last"                 "$(gi_where "$GINST/.gitignore" '# <<< loopd index ignore <<<' before)"
 
 # IN SYNC WITH ADDITIONS: a bundle pattern in the block, the seed unchanged.
 printf '/MY-OWN-PATTERN\n' >> "$GINST/.gitignore"

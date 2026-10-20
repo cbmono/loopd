@@ -27,7 +27,7 @@ const PANE = {
 
 // A snapshot of the shape write-snapshot.sh emits (its header is the field list).
 const SNAP = {
-  _schema: 'ai-bridge board snapshot v1',
+  _schema: 'loopd board snapshot v1',
   group: 'example',
   generated_at: '2026-10-08T01:02:03Z',
   counts: { projects: 2, tasks: 4, awaiting: 3 },

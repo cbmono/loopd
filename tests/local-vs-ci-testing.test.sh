@@ -174,7 +174,7 @@ ok "…and the condition to invert is stated" "$(saw "$CONV_FLAT" 'this rule inv
 echo
 echo "== 6. the authority is named: a required check under strict=true =="
 ok "harness suite is a required check"     "$(saw "$CONV_FLAT" "$REQUIRED")" yes
-ok "…cited to the PR that made it one"     "$(saw "$CONV_FLAT" 'https://github.com/cbmono/ai-bridge/pull/42')" yes
+ok "…cited to the PR that made it one"     "$(saw "$CONV_FLAT" 'https://github.com/cbmono/loopd/pull/42')" yes
 ok "branch protection sets strict=true"    "$(saw "$CONV_FLAT" "$STRICT")" yes
 ok "…forcing a run on the merged base"     "$(saw "$CONV_FLAT" "$MERGEDBASE")" yes
 ok "the local run never was the gate"      "$(saw "$CONV_FLAT" '**The local run never was the gate.**')" yes

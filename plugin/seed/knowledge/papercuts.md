@@ -23,7 +23,7 @@ Append with the tool, so the shape is checked before it lands rather than after:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh add \
-  --task ai-bridge-next/task-016 --surface script:validate-bundle.sh \
+  --task checkout-v2/task-016 --surface script:validate-bundle.sh \
   --note "exits 0 on an unreadable file, so a dangling ref reads as clean"
 ```
 

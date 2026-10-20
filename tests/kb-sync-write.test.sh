@@ -36,7 +36,7 @@ has() { grep -qF -- "$2" <<<"$1" && echo yes || echo no; }
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com
 export GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
-export AI_BRIDGE_KB_TIMEOUT=5
+export LOOPD_KB_TIMEOUT=5
 
 # `gh` is never called on this path; the stub is here so a regression that starts calling
 # it fails loudly instead of reaching a real host (tests/check-dispatch.test.sh:83).
@@ -106,7 +106,7 @@ ok "the KB commit's author is the human login" "${msg%%$'\t'*}" example-user-007
 rest="${msg#*$'\t'}"
 ok "…with the human's email from people[]" "${rest%%$'\t'*}" seven@example.com
 ok "…and the AI as Co-Authored-By, naming the role and the tool" \
-  "$(has "$msg" 'Co-Authored-By: ai-bridge cataloguer (Claude)')" yes
+  "$(has "$msg" 'Co-Authored-By: loopd cataloguer (Claude)')" yes
 ok "…never the reverse (the tool is not the author)" \
   "$(has "${msg%%$'\t'*}" 'Claude')" no
 

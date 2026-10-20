@@ -285,7 +285,7 @@ assert "no source was nested inside it"    "$([[ ! -e $AB_BOARD_DIR/.board-live 
 # to the old name, and read back through the plugin as it ships.
 # =========================================================================================
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
-export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null AI_BRIDGE_KB_TIMEOUT=3
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null LOOPD_KB_TIMEOUT=3
 SCRIPTS="$HERE/../plugin/scripts"
 OLD="$TMP/old-scripts"; cp -R "$SCRIPTS" "$OLD"
 sed -i.bak 's|^AB_DIR=".loopd"$|AB_DIR=".ai-bridge"|' "$OLD/bundle-paths.sh"

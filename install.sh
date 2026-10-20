@@ -11,7 +11,7 @@
 set -eu
 
 cat >&2 <<'EOF'
-install.sh is retired. The bundle installer ships in the ai-bridge PLUGIN now.
+install.sh is retired. The bundle installer ships in the loopd PLUGIN now.
 
   1. Install the plugin, once per machine:
        /plugin marketplace add cbmono/loopd
@@ -23,7 +23,7 @@ install.sh is retired. The bundle installer ships in the ai-bridge PLUGIN now.
 
 That command creates a bundle, refreshes an existing one, and CONVERTS a bundle
 stamped by this script: it removes the machinery symlinks into a template checkout
-and leaves your data untouched. You no longer need a clone of cbmono/ai-bridge on
+and leaves your data untouched. You no longer need a clone of cbmono/loopd on
 this machine at all.
 
   · the ~/.claude config layer (was `install.sh --config`):
