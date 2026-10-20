@@ -3,6 +3,16 @@
 # ai-bridge-claude — the PRE-RENAME NAME of loopd-claude, kept as a deprecated alias so a shell
 # alias written before the rename keeps working. It says so once on stderr and runs the
 # real launcher with the same arguments; nothing else. Re-point the alias at loopd-claude.
-here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-echo "ai-bridge-claude: note: renamed loopd-claude — re-point your alias at $here/loopd-claude" >&2
+#
+# Its own directory is found THROUGH SYMLINKS (a PATH link to this file must still reach
+# the sibling) and with CDPATH cleared, since an exported CDPATH makes `cd` print the
+# directory and the captured path would be two lines.
+src="${BASH_SOURCE[0]:-$0}"
+while [ -L "$src" ]; do
+  dir="$(CDPATH= cd -P -- "$(dirname -- "$src")" && pwd)" || exit 127
+  src="$(readlink -- "$src")"
+  case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+done
+here="$(CDPATH= cd -P -- "$(dirname -- "$src")" && pwd)" || exit 127
+echo "ai-bridge-claude: note: renamed loopd-claude — re-point your alias at ~/.claude/plugins/cache/*/loopd-accounts/*/bin/loopd-claude" >&2
 exec bash "$here/loopd-claude" "$@"

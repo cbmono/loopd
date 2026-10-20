@@ -18,7 +18,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
 # shellcheck source=bundle-paths.sh
 . "$HERE/bundle-paths.sh" || exit 2
-inst="."; cmd=""; message=""; role=""; paths=(); allow_empty=0; KB_EMPTY=0; TIMEOUT="${LOOPD_KB_TIMEOUT:-${AI_BRIDGE_KB_TIMEOUT:-20}}"
+inst="."; cmd=""; message=""; role=""; paths=(); allow_empty=0; KB_EMPTY=0; TIMEOUT_FLAG=0; TIMEOUT="${LOOPD_KB_TIMEOUT:-${AI_BRIDGE_KB_TIMEOUT:-20}}"
 need2() { [ "$1" -ge 2 ] || { echo "kb-sync: $2 needs a value" >&2; exit 2; }; }
 seen_dashdash=0
 while [ $# -gt 0 ]; do
@@ -27,7 +27,7 @@ while [ $# -gt 0 ]; do
     --instance) need2 $# "$1"; inst="$2"; shift 2 ;;
     --message)  need2 $# "$1"; message="$2"; shift 2 ;;
     --role)     need2 $# "$1"; role="$2"; shift 2 ;;
-    --timeout)  need2 $# "$1"; TIMEOUT="$2"; shift 2 ;;
+    --timeout)  need2 $# "$1"; TIMEOUT="$2"; TIMEOUT_FLAG=1; shift 2 ;;
     --)         seen_dashdash=1; shift ;;
     --allow-empty) allow_empty=1; shift ;;
     -h|--help)  sed -n '2,12p' "$0" >&2; exit 2 ;;
@@ -42,7 +42,9 @@ INST="$(cd "$inst" && pwd)"
 
 say()   { printf 'kb-sync: %s\n' "$1"; }
 warn()  { printf 'kb-sync: %s\n' "$1" >&2; }
-[ -n "${LOOPD_KB_TIMEOUT:-}" ] || [ -z "${AI_BRIDGE_KB_TIMEOUT:-}" ] \
+# Only when the old name is what DECIDED the bound: the SessionStart pull passes --timeout,
+# so a stale export never turns into a note at every session start.
+[ "$TIMEOUT_FLAG" -eq 1 ] || [ -n "${LOOPD_KB_TIMEOUT:-}" ] || [ -z "${AI_BRIDGE_KB_TIMEOUT:-}" ] \
   || warn "note: AI_BRIDGE_KB_TIMEOUT is deprecated — set LOOPD_KB_TIMEOUT instead."
 die()   { printf 'kb-sync: %s\n' "$1" >&2; exit "${2:-1}"; }
 

@@ -31,7 +31,7 @@ That is the cost of the mechanism — each account directory needs its own one-t
 
 ## The seam for another backend
 
-The launcher `exec`s `claude` after exporting `CLAUDE_CONFIG_DIR` and `LOOPD_ACCOUNT`
-(`AI_BRIDGE_ACCOUNT` before the rename — core still reads it from a session started then).
+The launcher `exec`s `claude` after exporting `CLAUDE_CONFIG_DIR` and `LOOPD_ACCOUNT`, plus
+`AI_BRIDGE_ACCOUNT` with the same value for one release — the name a pre-rename core reads.
 A companion that swaps the backend replaces the `exec` line and reuses everything above it
 — it is not built here.

@@ -7,7 +7,7 @@
 #   exit 2 usage · 3 no bundle / no `account:` declared · 4 that account is not logged in
 #        · 5 refused: the account's config dir is inside a repo
 #
-# It sets two env vars and execs. It never reads, writes, copies or prints a credential,
+# It sets three env vars (one the pre-rename alias of another) and execs. It never reads, writes, copies or prints a credential,
 # and nothing it does can write into the bundle. See companion/accounts.md.
 set -uo pipefail
 
@@ -75,7 +75,7 @@ mkdir -p "$dir" 2>/dev/null || { echo "loopd-claude: cannot create $dir" >&2; ex
 dir="$(cd "$dir" && pwd)"
 
 if [ "$print_env" -eq 1 ]; then
-  printf 'CLAUDE_CONFIG_DIR=%s\nLOOPD_ACCOUNT=%s\n' "$dir" "$label"
+  printf 'CLAUDE_CONFIG_DIR=%s\nLOOPD_ACCOUNT=%s\nAI_BRIDGE_ACCOUNT=%s\n' "$dir" "$label" "$label"
   exit 0
 fi
 
@@ -94,5 +94,8 @@ esac
 org="$(printf '%s' "$status" | sed -n 's/.*"orgName"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
 printf 'loopd: account %s%s\n' "$label" "${org:+ · $org}" >&2
 
-export CLAUDE_CONFIG_DIR="$dir" LOOPD_ACCOUNT="$label"
+# AI_BRIDGE_ACCOUNT TOO, same value, for one release: an account's config dir carries its
+# own core install, and a pre-rename core there reads only the old name — an inherited
+# value from the calling shell would otherwise name the wrong account.
+export CLAUDE_CONFIG_DIR="$dir" LOOPD_ACCOUNT="$label" AI_BRIDGE_ACCOUNT="$label"
 exec claude "$@"

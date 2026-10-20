@@ -384,5 +384,14 @@ ok "a tokened knowledge.repo is named without its token" \
   "$(has "$out" 'example.com/kb.git')$(has "$out" 's3cr3tt0ken')" yesno
 
 echo
+echo "== the pre-rename AI_BRIDGE_KB_TIMEOUT: read, noted only when it decides the bound =="
+NOKB="$TMP/nokb"; mkdir -p "$NOKB"; printf '{ "org": "x" }\n' > "$NOKB/instance.config.json"
+note() { env -u LOOPD_KB_TIMEOUT "$@" bash "$SYNC" --instance "$NOKB" status 2>&1 >/dev/null | grep -c 'AI_BRIDGE_KB_TIMEOUT is deprecated'; }
+ok "the old name alone deciding the bound -> one note"   "$(note AI_BRIDGE_KB_TIMEOUT=7)" 1
+ok "…none beside an explicit --timeout (the SessionStart pull)" \
+   "$(env -u LOOPD_KB_TIMEOUT AI_BRIDGE_KB_TIMEOUT=7 bash "$SYNC" --instance "$NOKB" --timeout 10 status 2>&1 >/dev/null | grep -c deprecated)" 0
+ok "…none when the new name is set too"                  "$(note AI_BRIDGE_KB_TIMEOUT=7 LOOPD_KB_TIMEOUT=5)" 0
+
+echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

@@ -77,10 +77,18 @@ ok "…still reports the opus-tier model"             "$(cnt "$OUT" '^ANTHROPIC_
 ok "…still reports the subagent model"              "$(cnt "$OUT" '^CLAUDE_CODE_SUBAGENT_MODEL=.')" 1
 ok "…and names the token as set, not its value"     "$(cnt "$OUT" '^ANTHROPIC_AUTH_TOKEN=(set')" 1
 # The pre-rename launcher name is a deprecated alias: same output, plus one note.
-OLDOUT="$( cd "$BUNDLE" && DEEPSEEK_API_KEY="$KEY" bash "$OLD_LAUNCH" --print-env 2>&1 )"; RC=$?
+# stdout and stderr captured APART: the note belongs on stderr, the env on stdout.
+OLDOUT="$( cd "$BUNDLE" && DEEPSEEK_API_KEY="$KEY" bash "$OLD_LAUNCH" --print-env 2>"$TMP/olderr" )"; RC=$?
+OLDERR="$(cat "$TMP/olderr")"
 ok "the old launcher name runs the new one"         "$RC/$(cnt "$OLDOUT" '^ANTHROPIC_BASE_URL=https://')" 0/1
-ok "…says it was renamed"                           "$(cnt "$OLDOUT" 'renamed loopd-deepseek')" 1
-ok "…and prints no key either"                      "$(cnt "$OLDOUT" "$KEY")" 0
+ok "…says it was renamed, on stderr only"           "$(cnt "$OLDERR" 'renamed loopd-deepseek')/$(cnt "$OLDOUT" 'renamed')" 1/0
+ok "…naming the stable glob, not a versioned path"  "$(cnt "$OLDERR" 'cache/\*/loopd-llm/\*/bin/loopd-deepseek')" 1
+ok "…and prints no key either"                      "$(cnt "$OLDOUT$OLDERR" "$KEY")" 0
+# Through a PATH symlink, with CDPATH exported: the shim resolves its real directory.
+mkdir -p "$TMP/linkbin"; ln -s "$OLD_LAUNCH" "$TMP/linkbin/ai-bridge-deepseek"
+LINKOUT="$( cd "$BUNDLE" && PATH="$TMP/linkbin:$PATH" CDPATH="$TMP" DEEPSEEK_API_KEY="$KEY" \
+            ai-bridge-deepseek --print-env 2>/dev/null )"; RC=$?
+ok "the shim reached through a PATH symlink -> 0"   "$RC/$(cnt "$LINKOUT" '^ANTHROPIC_BASE_URL=https://')" 0/1
 # A static guard: the slicing expression must not come back, in any of its three spellings.
 # `-E` because `\|` alternation is a GNU BRE extension and this harness ships to machines
 # we never see — a grep without it would match nothing and pass while the slicing was there.

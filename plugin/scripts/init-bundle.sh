@@ -2310,6 +2310,14 @@ EOF
     } | gi_add_before
   fi
 fi
+# AN OLD-SPELLING MARKER THAT SURVIVED ALL OF THE ABOVE is one the rename refused: a BEGIN
+# no END closes, or a stray beside a complete loopd pair. Said, never guessed at — the same
+# courtesy the loopd spelling gets when its BEGIN dangles.
+if grep -qxF -e "$IDX_OLD_BEGIN_MARK" -e "$IDX_OLD_END_MARK" "$gi"; then
+  echo "warn  $gi still carries an old-spelling index-ignore marker ('$IDX_OLD_BEGIN_MARK'" >&2
+  echo "      or its END) that does not form a pair with the rest. Left where it is: delete" >&2
+  echo "      that line by hand if the '$IDX_BEGIN_MARK' block is in place, then re-run." >&2
+fi
 rm -f "$idxbody"
 
 # A .gitignore line is INERT for a file git already tracks, so on an instance whose

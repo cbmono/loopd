@@ -97,3 +97,8 @@ A later sweep renamed what the plugin wrote or read under the old name. You run 
 | `AI_BRIDGE_ACCOUNTS_HOME`, `AI_BRIDGE_ACCOUNT` | `LOOPD_ACCOUNTS_HOME`, `LOOPD_ACCOUNT` | still read while the new one is unset; the launcher notes it |
 | `AI_BRIDGE_KB_TIMEOUT`, `AI_BRIDGE_INIT_PASS` | `LOOPD_KB_TIMEOUT`, `LOOPD_INIT_PASS` | still read while the new one is unset |
 | board snapshot `_schema` `ai-bridge board snapshot v1` | `loopd board snapshot v1` | nothing reads it; the other-owners cache under the old name is rebuilt once |
+
+**On a bundle shared by two clones, update the plugin on every clone before you commit
+the renamed `.gitignore`.** An older `/loopd:init` does not know the `loopd` pair, splices
+its own back in, and the two versions then flip the tracked file on every stamp. No rule is
+lost either way; the churn stops once every clone runs this version.

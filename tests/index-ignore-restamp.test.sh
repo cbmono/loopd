@@ -376,5 +376,26 @@ cp "$INST11/.gitignore" "$TMP/inst11.after1"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$INST11" >"$TMP/out11c" 2>&1
 assert "…and a second stamp changes not a byte"  "$(cmp -s "$TMP/inst11.after1" "$INST11/.gitignore" && echo 0 || echo 1)"
 
+# 8e. AN OLD BEGIN THE RENAME REFUSES is said out loud, like a dangling loopd BEGIN: a
+#     stray beside a complete loopd pair stays where it is, and every stamp warns.
+INST12="$TMP/inst12"; mkdir -p "$INST12"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST12" >"$TMP/out12a" 2>&1
+printf '\n%s\n' "$OLD_B" >> "$INST12/.gitignore"; cp "$INST12/.gitignore" "$TMP/inst12.before"
+err12="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST12" 2>&1 1>/dev/null)"
+assert "8e a stray old BEGIN beside a loopd pair is warned about" \
+  "$(grep -q 'old-spelling index-ignore marker' <<<"$err12" && echo 0 || echo 1)"
+assert "…and left exactly as found"            "$(cmp -s "$TMP/inst12.before" "$INST12/.gitignore" && echo 0 || echo 1)"
+
+# 8f. An old BEGIN with NO END above the two rule lines is absorbed by the legacy splice —
+#     one loopd pair, nothing left to warn about.
+INST13="$TMP/inst13"; mkdir -p "$INST13"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST13" >"$TMP/out13a" 2>&1
+to_old "$INST13/.gitignore"
+awk -v oe="$OLD_E" '$0!=oe' "$INST13/.gitignore" > "$INST13/.gitignore.tmp" && mv "$INST13/.gitignore.tmp" "$INST13/.gitignore"
+err13="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST13" 2>&1 1>/dev/null)"
+assert "8f a dangling old BEGIN becomes one loopd pair" "$([[ "$(pair_counts "$INST13/.gitignore")" == 0/0/1/1 ]] && echo 0 || echo 1)"
+assert "…with no warning, since nothing was left behind" \
+  "$(grep -q 'old-spelling index-ignore marker' <<<"$err13" && echo 1 || echo 0)"
+
 echo "index-ignore-restamp.test.sh: pass=$pass fail=$fail"
 [[ $fail -eq 0 ]]

@@ -79,6 +79,10 @@ ok "…and names the launcher core never runs"    "$(field 3)" "$COMPANION/bin/l
 out="$(CLAUDE_CONFIG_DIR="$CFG" AI_BRIDGE_ACCOUNT=proceso LOOPD_ACCOUNTS_HOME="$ACCT_HOME" \
        "$RESOLVE" --bundle "$BUNDLE" 2>/dev/null)"; rc=$?
 ok "the old AI_BRIDGE_ACCOUNT alone still resolves -> 0" "$rc" 0
+ok "…and it is the old name that named the account"  "$(field 2)" proceso
+out="$(CLAUDE_CONFIG_DIR="$CFG" LOOPD_ACCOUNT=proceso AI_BRIDGE_ACCOUNT=alteos \
+       LOOPD_ACCOUNTS_HOME="$ACCT_HOME" "$RESOLVE" --bundle "$BUNDLE" 2>/dev/null)"; rc=$?
+ok "both set: the NEW name wins -> 0"               "$rc/$(field 2)" 0/proceso
 OLDCOMP="$TMP/oldcomp"; mkdir -p "$OLDCOMP/companion" "$OLDCOMP/bin" "$TMP/oldcfg/plugins"
 cp "$COMPANION/companion/accounts.md" "$OLDCOMP/companion/"
 printf '#!/usr/bin/env bash\n' > "$OLDCOMP/bin/ai-bridge-claude"
@@ -137,20 +141,38 @@ ok "…CLAUDE_CONFIG_DIR is under the accounts home" \
    "$(printf '%s' "$out" | grep -c "^CLAUDE_CONFIG_DIR=$ACCT_HOME/proceso$")" 1
 ok "…and it labels the session for the banner"     \
    "$(printf '%s' "$out" | grep -c '^LOOPD_ACCOUNT=proceso$')" 1
-ok "…under the new name only"                      \
-   "$(printf '%s' "$out" | grep -c '^AI_BRIDGE_')" 0
+ok "…and under the pre-rename name, same value"     \
+   "$(printf '%s' "$out" | grep -c '^AI_BRIDGE_ACCOUNT=proceso$')" 1
 ok "…and the bundle tree is UNCHANGED"             \
    "$([ "$before" = "$(find "$BUNDLE" -type f | LC_ALL=C sort)" ] && echo yes || echo no)" yes
 
-# The pre-rename env var and launcher name still work — each says so once, on stderr.
-out="$(cd "$BUNDLE" && AI_BRIDGE_ACCOUNTS_HOME="$ACCT_HOME" HOME="$TMP/h" bash "$LAUNCH" --print-env 2>&1)"; rc=$?
+# The pre-rename env var and launcher name still work — each says so once, ON STDERR:
+# stdout is the env a caller may parse, so the two streams are captured apart.
+olde() { # <stdout-file> <stderr-file> <cmd...> — run in the bundle, rc into $rc
+  local o="$1" e="$2"; shift 2
+  rc=0; ( cd "$BUNDLE" && HOME="$TMP/h" "$@" ) >"$o" 2>"$e" || rc=$?
+}
+olde "$TMP/o1" "$TMP/e1" env -u LOOPD_ACCOUNTS_HOME AI_BRIDGE_ACCOUNTS_HOME="$ACCT_HOME" bash "$LAUNCH" --print-env
 ok "the old AI_BRIDGE_ACCOUNTS_HOME is still read" \
-   "$rc/$(printf '%s' "$out" | grep -c "^CLAUDE_CONFIG_DIR=$ACCT_HOME/proceso$")" 0/1
-ok "…with a one-line deprecation note"             "$(printf '%s' "$out" | grep -c 'AI_BRIDGE_ACCOUNTS_HOME is deprecated')" 1
-out="$(cd "$BUNDLE" && LOOPD_ACCOUNTS_HOME="$ACCT_HOME" HOME="$TMP/h" bash "$OLD_LAUNCH" --print-env 2>&1)"; rc=$?
-ok "the old launcher name runs the new one"        \
-   "$rc/$(printf '%s' "$out" | grep -c '^LOOPD_ACCOUNT=proceso$')" 0/1
-ok "…and says it was renamed"                      "$(printf '%s' "$out" | grep -c 'renamed loopd-claude')" 1
+   "$rc/$(grep -c "^CLAUDE_CONFIG_DIR=$ACCT_HOME/proceso$" "$TMP/o1")" 0/1
+ok "…with a one-line deprecation note, on stderr"  \
+   "$(grep -c 'AI_BRIDGE_ACCOUNTS_HOME is deprecated' "$TMP/e1")/$(grep -c deprecated "$TMP/o1")" 1/0
+olde "$TMP/o2" "$TMP/e2" env LOOPD_ACCOUNTS_HOME="$ACCT_HOME" AI_BRIDGE_ACCOUNTS_HOME="$TMP/elsewhere" bash "$LAUNCH" --print-env
+ok "both homes set: the NEW one wins, no note"     \
+   "$rc/$(grep -c "^CLAUDE_CONFIG_DIR=$ACCT_HOME/proceso$" "$TMP/o2")/$(grep -c deprecated "$TMP/e2")" 0/1/0
+olde "$TMP/o3" "$TMP/e3" env LOOPD_ACCOUNTS_HOME="$ACCT_HOME" bash "$OLD_LAUNCH" --print-env
+ok "the old launcher name runs the new one"        "$rc/$(grep -c '^LOOPD_ACCOUNT=proceso$' "$TMP/o3")" 0/1
+ok "…and says it was renamed, on stderr only"      \
+   "$(grep -c 'renamed loopd-claude' "$TMP/e3")/$(grep -c renamed "$TMP/o3")" 1/0
+ok "…naming the stable glob, not a versioned path" \
+   "$(grep -c 'cache/\*/loopd-accounts/\*/bin/loopd-claude' "$TMP/e3")" 1
+# THROUGH A SYMLINK ON PATH, with CDPATH exported: the shim must find its sibling from its
+# real location, and `cd` printing a directory must not corrupt the path it captures.
+LINKBIN="$TMP/linkbin"; mkdir -p "$LINKBIN"; ln -s "$OLD_LAUNCH" "$LINKBIN/ai-bridge-claude"
+olde "$TMP/o4" "$TMP/e4" env PATH="$LINKBIN:$PATH" CDPATH="$TMP" LOOPD_ACCOUNTS_HOME="$ACCT_HOME" ai-bridge-claude --print-env
+ok "the shim reached through a PATH symlink -> 0"  "$rc/$(grep -c '^LOOPD_ACCOUNT=proceso$' "$TMP/o4")" 0/1
+olde "$TMP/o5" "$TMP/e5" env CDPATH="$TMP" LOOPD_ACCOUNTS_HOME="$ACCT_HOME" bash "../linkbin/ai-bridge-claude" --print-env
+ok "…and by a relative path with CDPATH set -> 0"  "$rc/$(grep -c '^LOOPD_ACCOUNT=proceso$' "$TMP/o5")" 0/1
 
 # Refused BEFORE anything is created: the earlier version made the directory and then said
 # no, which is a directory in a git repo that nobody asked for.
