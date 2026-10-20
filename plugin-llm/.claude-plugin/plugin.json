@@ -1,7 +1,7 @@
 {
   "name": "loopd-llm",
   "displayName": "loopd — alternative LLM backend (DeepSeek)",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "COMPANION. Ships companion/llm.md, the capability file that makes an alternative LLM backend exist, and bin/loopd-deepseek, the launcher that runs one session against DeepSeek. Opt-in per machine; not installed = no launcher and nothing substitutes anything. Adds behaviour; removes no gate.",
   "author": {
     "name": "cbmono"

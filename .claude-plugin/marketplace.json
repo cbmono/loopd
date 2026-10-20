@@ -8,7 +8,7 @@
       "name": "loopd",
       "source": "./plugin",
       "description": "The OKF control panel as a Claude Code plugin — /brief-me, /capture, /work, /dispatch, /handoff, /welcome, /new-project, /close-project, /answer, /audit, /board, /fanout, /pr-review-request, plus the two PreToolUse enforcement hooks and the eight role agents.",
-      "version": "3.12.1",
+      "version": "3.12.2",
       "author": {
         "name": "cbmono"
       },
@@ -55,7 +55,7 @@
       "name": "loopd-accounts",
       "source": "./plugin-accounts",
       "description": "COMPANION to loopd. Ships companion/accounts.md and bin/loopd-claude — a bundle names its Claude account in instance.config.json, the launcher starts claude on it, and core's welcome banner says which account is active. Not installed = core prints no account line and switches nothing. A companion ADDS behaviour and never removes a core gate.",
-      "version": "3.0.0",
+      "version": "3.0.1",
       "author": {
         "name": "cbmono"
       },
@@ -71,7 +71,7 @@
       "name": "loopd-llm",
       "source": "./plugin-llm",
       "description": "COMPANION to loopd. Ships companion/llm.md and bin/loopd-deepseek — run one Claude Code session against DeepSeek instead of Anthropic. A BACKEND SUBSTITUTION: the whole session leaves for the third party, so it is opt-in per machine via allowSubstituteBackend in the gitignored instance.config.local.json and refuses without it. Not installed = no launcher. A companion ADDS behaviour and never removes a core gate.",
-      "version": "3.0.0",
+      "version": "3.0.1",
       "author": {
         "name": "cbmono"
       },
