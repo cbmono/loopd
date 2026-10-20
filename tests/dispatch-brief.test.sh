@@ -233,6 +233,21 @@ fi
 
 assert "the PM is told to paste the Scratch heading" "$(has '`## Scratch`' "$(cat "$PM_DOC")")"
 
+echo "== Deliverables names the project's paths, never a home directory =="
+
+dlv() { awk '/^## Deliverables$/{f=1;next} f' <<<"$1"; }
+D1="$(dlv "$(run "$TMP/projects/demo/tasks/task-101-alpha.md")")"
+assert "the Deliverables heading is emitted"         "$(has "/projects/demo/deliverables/ " "$D1")"
+assert "…with the gitignored local/ subfolder"       "$(has "/projects/demo/deliverables/local/ (gitignored" "$D1")"
+assert "…and the project's sources/"                 "$(has "/projects/demo/sources/" "$D1")"
+assert "…and it rules out ~ and the bundle root"     "$(has 'Never `~`, `/`, another repo or the bundle root' "$D1")"
+cp "$TMP/projects/demo/tasks/task-101-alpha.md" "$TMP/loose.md"
+D2="$(dlv "$(run "$TMP/loose.md")")"
+assert "a task outside projects/<slug>/tasks/ gets the placeholder" \
+  "$(has "<bundle>/projects/<slug>/deliverables/" "$D2")"
+assert "…never a guessed path"                       "$(hasnt "$TMP/deliverables" "$D2")"
+assert "the PM is told to paste the Deliverables heading" "$(has '`## Deliverables`' "$(cat "$PM_DOC")")"
+
 echo "== it refuses rather than guessing =="
 
 assert "a missing task document exits 2"  "$(eq "$(rc "$TMP/nope.md")" 2)"

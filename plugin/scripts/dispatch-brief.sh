@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# dispatch-brief.sh — the five fixed sections the PM pastes into a dispatch brief
+# dispatch-brief.sh — the six fixed sections the PM pastes into a dispatch brief
 # verbatim: `## Grounding (<repo>)`, the Service-doc entry points capped at 15 lines (or
 # one line telling the agent to draft the missing doc); `## Effort`, the files/LOC/turns
 # budget; `## Commit attribution` and `## PR title`, the resolved `commitAttribution` and
-# `ticketPrefix` — answered here so no agent reads either key itself; and `## Scratch`, a
-# directory this task alone owns.
+# `ticketPrefix` — answered here so no agent reads either key itself; `## Scratch`, a
+# directory this task alone owns; and `## Deliverables`, the project's non-code paths.
 # Usage: dispatch-brief.sh <task-doc> [--instance <bundle>]. Exit: 0 printed, 2 cannot
 # answer (no task doc, unreadable frontmatter). Never fails a dispatch — an absent config
 # key falls back to the documented default. Reasoning: ai-bridge-next/task-017 (bands),
@@ -21,6 +21,7 @@ EFFORT_HEADING='## Effort'
 ATTRIBUTION_HEADING='## Commit attribution'
 TITLE_HEADING='## PR title'
 SCRATCH_HEADING='## Scratch'
+DELIVERABLES_HEADING='## Deliverables'
 
 usage() { sed -n '2,12p' "$0" >&2; exit 2; }
 
@@ -198,3 +199,13 @@ printf '\n%s\n\n' "$SCRATCH_HEADING"
 printf 'Scratch directory — this task alone owns it. Create it, and keep every draft, probe and throwaway config inside it:\n%s\n' "$SCRATCH"
 printf 'Never the session scratchpad and never a path from another task: one tick spawns several agents into one session, and a shared `pr-body.md` is one a sibling overwrites.\n'
 printf '%s\n' "$NOTE"
+
+# A task outside `projects/<slug>/tasks/` gets the placeholder, never a guessed path.
+TASK_DIR="$(cd "$(dirname "$TASK")" && pwd)"; PROJ='<bundle>/projects/<slug>'
+[ "${TASK_DIR##*/}" = tasks ] && [ "$(basename "$(dirname "$(dirname "$TASK_DIR")")")" = projects ] &&
+  PROJ="$(dirname "$TASK_DIR")"
+
+printf '\n%s\n\n' "$DELIVERABLES_HEADING"
+printf 'A file a human or a later task consumes (sheet, instructions, export, report): %s/deliverables/ — and list it in this task'"'"'s `artifacts:`.\n' "$PROJ"
+printf 'Customer data, ticket exports, anything PII-adjacent: %s/deliverables/local/ (gitignored, never pushed). Inputs you gather: %s/sources/.\n' "$PROJ" "$PROJ"
+printf 'Never `~`, `/`, another repo or the bundle root — ask in `open_questions`. Hand a file over by this project path (CONVENTIONS.md → "Where files go").\n'

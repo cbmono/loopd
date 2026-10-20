@@ -21,6 +21,10 @@ follow it — the single source of truth for `reposRoot`, default-branch detecti
 branch/worktree isolation, commits/PRs, never merging, `# Result` + `status`, and
 no PII/secrets. The role-specific procedure is below.
 
+**Every file you write has a home in the project** — `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md`
+→ "Where files go": a sheet, export or report goes in `projects/<slug>/deliverables/`
+(PII-adjacent: `deliverables/local/`), never `~`, `/`, another repo or the bundle root.
+
 <!-- tool-mention: Skill(1) — B.4 names it to record that you do NOT hold it and must not be granted it; the route is to dispatch an agent that inherits it. -->
 
 ### A. QA / test task
