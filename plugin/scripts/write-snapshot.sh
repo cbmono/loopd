@@ -811,7 +811,7 @@ tmp="$OUT.tmp.$$"
 trap 'rm -f "$tmp"' EXIT
 cat > "$tmp" <<JSON
 {
-  "_schema": "ai-bridge board snapshot v1",
+  "_schema": "loopd board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
   "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/pr_mergeable (MERGEABLE|CONFLICTING|UNKNOWN, the tick's last host read)/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links. Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
   "group": $(jstr "$GROUP"),

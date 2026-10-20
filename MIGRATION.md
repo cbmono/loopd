@@ -70,8 +70,8 @@ marketplace:
 | Old | New |
 |---|---|
 | `ai-bridge-yolo@ai-bridge` | `loopd-yolo@loopd` |
-| `ai-bridge-accounts@ai-bridge` | `loopd-accounts@loopd` — its launcher keeps the name `bin/ai-bridge-claude`; re-point your alias at `cache/*/loopd-accounts/*/bin/ai-bridge-claude` |
-| `ai-bridge-llm@ai-bridge` | `loopd-llm@loopd` — likewise `bin/ai-bridge-deepseek` under `cache/*/loopd-llm/*` |
+| `ai-bridge-accounts@ai-bridge` | `loopd-accounts@loopd` — its launcher is now `bin/loopd-claude`; re-point your alias at `cache/*/loopd-accounts/*/bin/loopd-claude` (the old `bin/ai-bridge-claude` still runs it, with a deprecation note) |
+| `ai-bridge-llm@ai-bridge` | `loopd-llm@loopd` — likewise `bin/loopd-deepseek` under `cache/*/loopd-llm/*` (`bin/ai-bridge-deepseek` is the deprecated alias) |
 
 Uninstall each old one and install the new one. Until you do, `yolo` projects read as
 `gated` and no account line prints, which is the safe direction.
@@ -85,3 +85,20 @@ scripts-path line may keep resolving to stale `ai-bridge` scripts instead of fai
 
 **Done when** the grep above prints nothing in every bundle and `/loopd:welcome` shows the
 banner.
+
+## The names the plugin itself still carried
+
+A later sweep renamed what the plugin wrote or read under the old name. You run nothing:
+
+| Old | New | What happens to the old one |
+|---|---|---|
+| `# >>> ai-bridge index ignore >>>` / `# <<< ai-bridge index ignore <<<` in `.gitignore` | `# >>> loopd index ignore >>>` / `# <<< loopd index ignore <<<` | `/loopd:init` renames the pair in place, once; a duplicate block or an orphan END line goes with it. Commit the `.gitignore` change |
+| `bin/ai-bridge-claude`, `bin/ai-bridge-deepseek` | `bin/loopd-claude`, `bin/loopd-deepseek` | a deprecated alias: it prints a note and runs the new launcher |
+| `AI_BRIDGE_ACCOUNTS_HOME`, `AI_BRIDGE_ACCOUNT` | `LOOPD_ACCOUNTS_HOME`, `LOOPD_ACCOUNT` | still read while the new one is unset; the launcher notes it |
+| `AI_BRIDGE_KB_TIMEOUT`, `AI_BRIDGE_INIT_PASS` | `LOOPD_KB_TIMEOUT`, `LOOPD_INIT_PASS` | still read while the new one is unset |
+| board snapshot `_schema` `ai-bridge board snapshot v1` | `loopd board snapshot v1` | nothing reads it; the other-owners cache under the old name is rebuilt once |
+
+**On a bundle shared by two clones, update the plugin on every clone before you commit
+the renamed `.gitignore`.** An older `/loopd:init` does not know the `loopd` pair, splices
+its own back in, and the two versions then flip the tracked file on every stamp. No rule is
+lost either way; the churn stops once every clone runs this version.

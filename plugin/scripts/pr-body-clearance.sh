@@ -67,7 +67,7 @@
 #      `CONVENTIONS.md` has bounded that cell on both sides since 2026-08-29: a ceiling
 #      ("a row carries what a reviewer needs to CHECK THE CLAIM, and stops — narration is
 #      not wanted") and a floor ("short is the goal; cryptic is a failure"). NOTHING READ
-#      IT, and a day later ai-bridge#71 shipped criteria rows of 500-600 characters whose
+#      IT, and a day later loopd#71 shipped criteria rows of 500-600 characters whose
 #      evidence column carried shell one-liners and their own reasoning — inside the very
 #      machinery built to end unread rules. This element is that reader.
 #
@@ -1206,7 +1206,7 @@ if [ "${1:-}" = "--self-test" ]; then
     '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' \
     "| it works | ✓ | $(st_cell 377) |"
-  st_probe 3 "a row at ai-bridge#71's worst evidence cell (487)" \
+  st_probe 3 "a row at loopd#71's worst evidence cell (487)" \
     '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' \
     "| it works | ✓ | $(st_cell 487) |"

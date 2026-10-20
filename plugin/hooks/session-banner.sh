@@ -504,7 +504,7 @@ OUTBUF=""
 # has the same one reader, a human reading a relayed assistant message.
 MODEL_BLOCK=drop
 if [ "$FORMAT" = json ] || [ "$FORMAT" = md ]; then
-  OUTBUF="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-banner.XXXXXX" 2>/dev/null || true)"
+  OUTBUF="$(mktemp "${TMPDIR:-/tmp}/loopd-banner.XXXXXX" 2>/dev/null || true)"
   if [ -n "$OUTBUF" ] && [ -f "$OUTBUF" ]; then
     # `mark` ONLY WHERE THERE ARE TWO FIELDS TO ROUTE BETWEEN. md has one channel and its
     # reader is a human, so the model-only blocks stay dropped there, exactly as in text.
@@ -665,7 +665,7 @@ say() { local c="$1"; shift; printf '%s%s%s\n' "$c" "$*" "$C_OFF"; }
 # first: the identity line and the two table headers, which is the whole list. On the md path
 # it also carries EMPH_MARK, and `emit_md` turns that into `**…**`.
 #
-# THE CALL SITE DECIDES, NOT A PATTERN AT THE END OF THE PIPE. Matching `^AI-Bridge` or
+# THE CALL SITE DECIDES, NOT A PATTERN AT THE END OF THE PIPE. Matching `^loopd v` or
 # `^SETTING ` in the emitter would be a second reader of this file's own layout, and the two
 # would answer differently the day either changed — the divergence every other line here is
 # written to avoid. THE MARKER GOES BEFORE THE COLOUR because it must be at the start of the
@@ -990,7 +990,7 @@ fi
 
 # `org` IS A CONFIG VALUE AND IS FILTERED LIKE ONE. The instance's own directory name below
 # is NOT: it is the human's own path, it is in no fixed-width table, and printing
-# `?ai-bridge-group` for a folder they named would make the one line that answers "which
+# `?loopd-group` for a folder they named would make the one line that answers "which
 # instance is this" lie about the answer. A markdown-active byte there costs at worst two
 # characters of a decorative rule; in a table cell it costs a column.
 org="$(cell "$(leaf_value "$(leaf org)")")"
@@ -1460,7 +1460,7 @@ if [ "$board_on" -eq 1 ]; then
     echo "Board   enabled, but never rendered — no $AB_BOARD_DIR/board.html here yet"
     say "$C_DIM" "        run /${PLUGIN_NAME}:board serve; otherwise an /${PLUGIN_NAME}:dispatch tick renders it, or build-board.sh"
   fi
-  # THE UPDATE ROW — the one command that fetches a newer AI Bridge and installs it, and
+  # THE UPDATE ROW — the one command that fetches a newer loopd and installs it, and
   # the restart, which is the only part left with the human.
   #
   # THE VERDICT IS NOT COMPUTED HERE, exactly as §2b does not compute its own: the same

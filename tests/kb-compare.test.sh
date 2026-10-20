@@ -22,7 +22,7 @@ SEED="$REPO/plugin/seed"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/kbcompare.XXXXXX")" || exit 2
 trap 'rm -rf "$TMP"' EXIT
-export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null AI_BRIDGE_KB_TIMEOUT=3
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null LOOPD_KB_TIMEOUT=3
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 
 pass=0; fail=0

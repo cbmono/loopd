@@ -206,8 +206,8 @@ values: `worktreeRoot` must never sit inside the synced `reposRoot`, and `reposR
 not be the instance directory itself.
 
 **The tick syncs for you; ownership does not.** Since
-[#26](https://github.com/cbmono/ai-bridge/pull/26) and
-[#27](https://github.com/cbmono/ai-bridge/pull/27), a `/loopd:dispatch` tick pulls
+[#26](https://github.com/cbmono/loopd/pull/26) and
+[#27](https://github.com/cbmono/loopd/pull/27), a `/loopd:dispatch` tick pulls
 `--rebase`
 before it re-derives anything and pushes after it commits, whenever the bundle has a
 remote — so neither human runs git by hand for the loop's own work. A dirty tree

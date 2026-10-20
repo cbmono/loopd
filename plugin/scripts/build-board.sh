@@ -474,7 +474,8 @@ TERMINAL = ("done", "cancelled")
 # documents, arriving through git instead of through the writer. It goes through the same
 # e(), it renders only bundle-relative paths, and none of it reaches a <script>.
 OTHERS_CACHE = os.environ["AB_BOARD_OTHERS"]
-OTHERS_SCHEMA = "ai-bridge other-owners cache v1"
+# A cache written under the old brand's schema name is simply a miss: rebuilt once, then hit.
+OTHERS_SCHEMA = "loopd other-owners cache v1"
 OTHERS_TTL = 900          # seconds — the FALLBACK only; see others_for()
 
 

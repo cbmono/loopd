@@ -9,6 +9,8 @@
 #   instdir  an instance directory name, `_ai-bridge-<group>`
 #   fname    a file whose own name carries `ai-bridge`
 #   frozen   a pre-rename identifier, an on-disk marker or schema literal, a release note
+#   alias    a pre-rename name still READ and never written -- an old marker pair init
+#            renames in place, an env var or launcher kept as a deprecated alias
 #   harness  the check in section 5 below, which must name the string it sweeps for
 #   list     this file
 #
@@ -27,25 +29,21 @@ frozen	docs/releases/v3.0.0.md	2
 frozen	docs/releases/v3.1.0.md	3
 bundle,frozen	docs/releases/v3.3.0.md	6
 bundle,frozen	docs/releases/v3.3.1.md	2
-prov	docs/sharing.md
-prov,fname	plugin/README.md
+prov	plugin/README.md
 fname	plugin/RETIRED
 prov	plugin/evals/README.md
 prov	plugin/hooks/deny-destructive.sh
-prov,instdir,fname,frozen	plugin/hooks/session-banner.sh
+prov	plugin/hooks/session-banner.sh
 prov	plugin/scripts/agent-usage.sh
-frozen	plugin/scripts/board-serve.sh
-frozen	plugin/scripts/build-board.sh
 prov	plugin/scripts/build-kb-index.sh
 prov,instdir,bundle	plugin/scripts/bundle-paths.sh	1
-prov	plugin/scripts/check-dispatch.sh
 prov	plugin/scripts/cite-check.sh
 prov	plugin/scripts/clearance-receipt.sh
-prov,frozen	plugin/scripts/dispatch-brief.sh
+prov	plugin/scripts/dispatch-brief.sh
 prov	plugin/scripts/do-not-repeat.sh
-prov,instdir,fname,frozen	plugin/scripts/init-bundle.sh
+prov,instdir,alias	plugin/scripts/init-bundle.sh
 prov	plugin/scripts/kb-migrate.sh
-prov,frozen	plugin/scripts/kb-sync.sh
+prov	plugin/scripts/kb-sync.sh
 instdir	plugin/scripts/link-repos.sh
 prov	plugin/scripts/merge-permit.sh
 bundle	plugin/scripts/migrate-bundle.sh	3
@@ -53,22 +51,16 @@ prov	plugin/scripts/papercuts.sh
 prov	plugin/scripts/pr-body-clearance.sh
 prov	plugin/scripts/pr-verdict-clearance.sh
 prov	plugin/scripts/rebase-pr.sh
-instdir,frozen	plugin/scripts/refresh-seeds.sh
+instdir,alias	plugin/scripts/refresh-seeds.sh
 prov	plugin/scripts/release-bump.sh
 prov	plugin/scripts/required-checks.sh
-prov,fname	plugin/scripts/resolve-account.sh
+prov,alias	plugin/scripts/resolve-account.sh
 prov	plugin/scripts/resolve-autonomy.sh
 prov	plugin/scripts/review-clearance.sh
-prov	plugin/scripts/review-rounds.sh
 prov	plugin/scripts/stall-counter.sh
 prov	plugin/scripts/status-line.sh
-frozen	plugin/scripts/write-snapshot.sh
-prov	plugin/seed/CONVENTIONS.md
-prov	plugin/seed/README.md
 instdir	plugin/seed/bridge.code-workspace
-prov,instdir	plugin/seed/instance.config.json
-prov	plugin/seed/knowledge/papercuts.md
-prov	plugin/skills/answer/SKILL.md
+instdir	plugin/seed/instance.config.json
 prov	plugin/skills/close-project/SKILL.md
 prov	tests/agent-control.test.sh
 prov	tests/agent-tool-allowlist.test.sh
@@ -95,8 +87,8 @@ prov	tests/cite-check.test.sh
 prov	tests/close-project-launcher.test.sh
 prov,instdir	tests/commit-as-identity.test.sh
 prov	tests/commit-attribution.test.sh
-fname	tests/companion-account-switch.test.sh
-fname	tests/companion-alternative-llm.test.sh
+fname,alias	tests/companion-account-switch.test.sh
+fname,alias	tests/companion-alternative-llm.test.sh
 prov	tests/companion-plugins.test.sh
 prov,fname	tests/concision-contract.test.sh
 frozen	tests/config-layer.test.sh
@@ -117,7 +109,7 @@ prov	tests/fixtures/reviewer/rate-limit-refusal.pr30.md
 prov	tests/fixtures/reviewer/skip-beside-review.pr215.md
 prov	tests/fixtures/reviewer/skip-notice.pr229.md
 prov	tests/harness-read-paths.test.sh
-prov,frozen	tests/index-ignore-restamp.test.sh
+prov,alias	tests/index-ignore-restamp.test.sh
 prov	tests/init-local-config.test.sh
 prov,instdir	tests/init-org-bundle.test.sh
 prov,instdir	tests/install-era-wording.test.sh
@@ -127,7 +119,6 @@ prov	tests/kb-mount.test.sh
 prov,frozen	tests/kb-sync-write.test.sh
 prov,instdir	tests/link-repos.test.sh
 prov	tests/local-tier-seed.test.sh
-prov	tests/local-vs-ci-testing.test.sh
 frozen	tests/loop-cadence.test.sh
 bundle,fname	tests/migrate-bundle.test.sh	38
 prov,instdir,frozen	tests/moved-template.test.sh

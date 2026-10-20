@@ -162,7 +162,7 @@ So the suite has three gates, and `tests/plugin-eval.test.sh` prints which one s
 Any gate ⇒ `skipped: plugin eval unavailable — <why>`, never a silent pass.
 
 **Gate 3 exists because the alternative is a vacuous GREEN, not a fail.** Measured on
-[run 34787154536](https://github.com/cbmono/ai-bridge/actions/runs/34787154536), with the CLI
+[run 34787154536](https://github.com/cbmono/loopd/actions/runs/34787154536), with the CLI
 installed and no `ANTHROPIC_API_KEY`: `answer-is-human-gated` scored **1.00 / 100%** — a
 `tool_used` grader reads *"Skill called 0x (expected 0..0)"* as a pass on a run that never
 happened. Three of the eight cases are that shape, which is the same "nothing ran, so nothing

@@ -18,7 +18,7 @@ wins", row 1.)
 
 ## Scope — `$ARGUMENTS`
 - **Empty** ⇒ every project: glob `projects/*/tasks/*.md`.
-- **A project** — a slug (`ai-bridge-v2`), a `projects/<slug>` path, or a full path to
+- **A project** — a slug (`checkout-v2`), a `projects/<slug>` path, or a full path to
   a project directory ⇒ only that project's `tasks/*.md`.
 - **A task** — a path that resolves to a file under `projects/*/tasks/` ⇒ exactly
   that one file. A `.md` anywhere else is NOT a task and is rejected like a no-match:

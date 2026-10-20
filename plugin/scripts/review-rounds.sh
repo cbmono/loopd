@@ -82,7 +82,7 @@
 # costs the SAME one round — route C is worth at most one, ever — so the floor is unchanged.
 #
 # NEITHER IS FIXABLE FROM WHAT THE HOST PUBLISHES, and this was measured rather than
-# assumed, on ai-bridge#34 (29 commits, 2 recorded force-pushes): the REST timeline's
+# assumed, on loopd#34 (29 commits, 2 recorded force-pushes): the REST timeline's
 # `head_ref_force_pushed` events carry only the commit AFTER each push — both were still
 # in the commit list — and its `committed` events reproduce the current commit list exactly
 # (29 and 29, zero extra). There is no record of the orphaned commit to recover.

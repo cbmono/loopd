@@ -1,0 +1,244 @@
+#!/usr/bin/env bash
+#
+# loopd-deepseek — run one Claude Code session in this bundle against DeepSeek.
+#
+#   Usage: loopd-deepseek [--help] [--print-env] [--bundle DIR] [claude args...]
+#
+#   exit 1 bad endpoint / no key · 2 usage · 3 no bundle, or no per-machine opt-in
+#        · 5 refused: the .env holding the key is TRACKED by git
+#
+# A BACKEND SUBSTITUTION, not a delegation helper: the whole agent loop — prompts, file
+# contents, tool results, diffs — is served by DeepSeek. Ported from ai-setup v1's
+# deepseek-session.sh. Mechanism, governance and the subagent-tier call: companion/llm.md.
+set -euo pipefail
+
+# ---- Config (override via environment) ------------------------------------
+# Overridable because model IDs outlive scripts, and a stale one fails silently rather
+# than loudly: DeepSeek maps an unrecognised model name to a working model instead of
+# erroring. Verified 2026-08-04 — an unknown name resolved to deepseek-v4-pro, i.e. the
+# EXPENSIVE tier (their docs claim flash; it did not). Bump these deliberately.
+BASE_URL="${DEEPSEEK_BASE_URL:-https://api.deepseek.com/anthropic}"
+MODEL_PRO="${DEEPSEEK_MODEL_PRO:-deepseek-v4-pro}"
+MODEL_FLASH="${DEEPSEEK_MODEL_FLASH:-deepseek-v4-flash}"
+# NOT v1's flash default. A loopd instance dispatches its role agents as SUBAGENTS,
+# so flash here would quietly downgrade every PR-writing agent (companion/llm.md).
+SUBAGENT_MODEL="${DEEPSEEK_SUBAGENT_MODEL:-$MODEL_PRO}"
+# ---------------------------------------------------------------------------
+
+# The governance warning, in ONE place. The refusal below and the launch banner both print
+# these exact lines, so "verbatim" is structural rather than two copies kept in step.
+governance_warning() {
+  cat <<'WARN'
+NOT Anthropic. Every prompt, file read, and tool result in
+this session is sent to DeepSeek. Confirm this repo's code
+is cleared to go there.
+WARN
+}
+
+usage() {
+  cat <<'USAGE'
+loopd-deepseek — run one Claude Code session against DeepSeek.
+
+  loopd-deepseek                     start a session on DeepSeek
+  loopd-deepseek --print-env         show the env it would set, then exit
+                                     (the key is never printed, not even a fragment)
+  loopd-deepseek --bundle DIR        name the bundle instead of searching upwards
+  loopd-deepseek --help              show this help
+
+Any other arguments are passed through to `claude` verbatim.
+
+Opt-in, per machine: "allowSubstituteBackend": true in the bundle's gitignored
+instance.config.local.json. Not a tracked key — which backend an installation runs
+is a per-machine decision, and the tracked file is read by every clone.
+
+API key, first match wins:
+  1. $DEEPSEEK_API_KEY already exported
+  2. DEEPSEEK_API_KEY= in ./.env
+  3. DEEPSEEK_API_KEY= in <git repo root>/.env
+  4. DEEPSEEK_API_KEY= in <bundle root>/.env
+
+The .env file is PARSED, never sourced — nothing in it is executed as shell — and a
+.env that git already TRACKS is refused outright rather than read.
+
+Overrides: DEEPSEEK_BASE_URL (must be https://), DEEPSEEK_MODEL_PRO,
+           DEEPSEEK_MODEL_FLASH, DEEPSEEK_SUBAGENT_MODEL (defaults to the PRO tier
+           here, unlike v1: role agents are dispatched as subagents).
+
+Everything in the session goes to DeepSeek. Check what the code you are pointing
+it at is allowed to leave your infrastructure before you use it.
+USAGE
+}
+
+PRINT_ENV=0
+BUNDLE=""
+CLAUDE_ARGS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --print-env) PRINT_ENV=1; shift ;;
+    # `[ $# -ge 2 ]` first: a bare trailing `--bundle` leaves one argument and `shift 2`
+    # fails without shifting, which spins this loop forever.
+    --bundle)
+      [ $# -ge 2 ] || { echo "loopd-deepseek: --bundle needs a directory" >&2; exit 2; }
+      BUNDLE="$2"; shift 2 ;;
+    --) shift; CLAUDE_ARGS+=("$@"); break ;;
+    *) CLAUDE_ARGS+=("$1"); shift ;;
+  esac
+done
+
+# ---- The bundle, and its per-machine opt-in -------------------------------
+# The bundle root: this directory or the nearest ancestor carrying both markers.
+if [ -z "$BUNDLE" ]; then
+  d="$PWD"
+  while [ -n "$d" ]; do
+    if [ -f "$d/instance.config.json" ] && [ -f "$d/SCHEMA.md" ]; then BUNDLE="$d"; break; fi
+    [ "$d" = "/" ] && break
+    d="$(dirname "$d")"
+  done
+fi
+[ -n "$BUNDLE" ] && [ -f "$BUNDLE/instance.config.json" ] || {
+  echo "loopd-deepseek: not in a loopd bundle (no instance.config.json)" >&2; exit 3; }
+BUNDLE="$(cd "$BUNDLE" && pwd)"
+
+# THE OPT-IN IS READ FROM THE LOCAL LAYER AND FROM NOWHERE ELSE. `instance.config.json` is
+# tracked, so a value there is one clone's data-governance decision imposed on every other.
+# `[a-z][a-z]*`, not `\(true\|false\)`: `\|` is a GNU BRE extension that BSD sed reads
+# as a literal, so the alternation would match nothing and refuse every opted-in bundle.
+ALLOW="$(sed -n 's/.*"allowSubstituteBackend"[[:space:]]*:[[:space:]]*\([a-z][a-z]*\).*/\1/p' \
+         "$BUNDLE/instance.config.local.json" 2>/dev/null | head -n 1)" || ALLOW=""
+if [ "${ALLOW:-false}" != "true" ]; then
+  {
+    echo "loopd-deepseek: refusing — $BUNDLE has not opted in to a substituted backend."
+    echo "    Add \"allowSubstituteBackend\": true to instance.config.local.json"
+    echo "    (per machine, gitignored — never the tracked instance.config.json)."
+    echo
+    governance_warning
+  } >&2
+  exit 3
+fi
+
+# The endpoint is exported alongside the API key, so an http:// value (a typo, or a stale
+# DEEPSEEK_BASE_URL in a shell profile) would put that key on the wire in plaintext.
+# Require https and fail closed. Validated before any export so --print-env sees it.
+case "$BASE_URL" in
+  https://?*) : ;;
+  *)
+    echo "error: DEEPSEEK_BASE_URL must be an https:// URL (got: '$BASE_URL')." >&2
+    echo "       Anything else would send your API key unencrypted." >&2
+    exit 1
+    ;;
+esac
+
+# Extract one KEY=value from a .env file WITHOUT executing it. `set -a; . .env` would run
+# arbitrary shell from the one file in a repo that exists to hold secrets. Parse, don't source.
+read_key_from_file() {
+  local file="$1" line
+  [ -f "$file" ] || return 1
+  line="$(grep -E '^[[:space:]]*(export[[:space:]]+)?DEEPSEEK_API_KEY[[:space:]]*=' "$file" 2>/dev/null | tail -1)" || return 1
+  [ -n "$line" ] || return 1
+  line="${line#*=}"
+  line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  # A quoted value ends at its closing quote — a trailing comment is not part of the key.
+  # An unquoted value ends at the first '#'. Stripping quotes first leaves them embedded,
+  # which surfaces as a baffling 401 rather than an error.
+  case "$line" in
+    '"'*) line="${line#\"}"; line="${line%%\"*}" ;;
+    "'"*) line="${line#\'}"; line="${line%%\'*}" ;;
+    *)    line="${line%%#*}"
+          line="$(printf '%s' "$line" | sed -e 's/[[:space:]]*$//')" ;;
+  esac
+  [ -n "$line" ] || return 1
+  printf '%s' "$line"
+}
+
+KEY="${DEEPSEEK_API_KEY:-}"
+KEY_SOURCE="\$DEEPSEEK_API_KEY (exported)"
+KEY_FILE=""
+
+if [ -z "$KEY" ]; then
+  REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  for candidate in "$PWD/.env" ${REPO_ROOT:+"$REPO_ROOT/.env"} "$BUNDLE/.env"; do
+    if KEY="$(read_key_from_file "$candidate")"; then
+      KEY_SOURCE="$candidate"; KEY_FILE="$candidate"
+      break
+    fi
+    KEY=""
+  done
+fi
+
+# STRUCTURALLY, AND BEFORE THE KEY IS USED. A `.env` git already tracks is a key that is
+# in the repository — refused rather than documented against, the same shape as the
+# accounts launcher's config-dir guard.
+if [ -n "$KEY_FILE" ] && \
+   git -C "$(dirname "$KEY_FILE")" ls-files --error-unmatch -- "$(basename "$KEY_FILE")" >/dev/null 2>&1; then
+  echo "error: $KEY_FILE is TRACKED by git — a key in a tracked file is a published key." >&2
+  echo "       Add .env to .gitignore, run 'git rm --cached .env', and rotate that key." >&2
+  exit 5
+fi
+
+if [ -z "$KEY" ]; then
+  echo "error: no DeepSeek API key found." >&2
+  echo "       Export DEEPSEEK_API_KEY, or add 'DEEPSEEK_API_KEY=sk-...' to ./.env" >&2
+  echo "       (.env is gitignored in a stamped bundle — keep it that way)." >&2
+  exit 1
+fi
+
+# The key is NEVER printed, not even a fragment. A "redacted preview" of the first five and
+# last three characters is still key material: it survives into scrollback that routinely
+# ends up pasted into an issue, and a prefix identifies the credential well enough to
+# correlate it with a leak from somewhere else. The one thing the old preview was useful
+# for — spotting a truncated paste — needs no characters at all.
+if [ "${#KEY}" -le 8 ]; then
+  echo "warning: the DeepSeek key from $KEY_SOURCE is only ${#KEY} characters — check it." >&2
+fi
+
+export ANTHROPIC_BASE_URL="$BASE_URL"
+export ANTHROPIC_AUTH_TOKEN="$KEY"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="$MODEL_PRO"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="$MODEL_PRO"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="$MODEL_FLASH"
+# The installed CLI reads a FABLE tier too (present in 2.1.221), which DeepSeek's setup
+# docs omit. Left unset, a `fable` request falls through to their silent unknown-model
+# mapping — which resolves to the expensive tier anyway, so naming it removes the accident.
+export ANTHROPIC_DEFAULT_FABLE_MODEL="$MODEL_PRO"
+export CLAUDE_CODE_SUBAGENT_MODEL="$SUBAGENT_MODEL"
+
+# ANTHROPIC_API_KEY (x-api-key) and ANTHROPIC_AUTH_TOKEN (Authorization) are two different
+# auth headers. An inherited ANTHROPIC_API_KEY would travel to DeepSeek alongside our
+# token — leaking an Anthropic credential to a third party. Drop it.
+unset ANTHROPIC_API_KEY
+
+if [ "$PRINT_ENV" -eq 1 ]; then
+  cat <<ENVDUMP
+ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL
+ANTHROPIC_AUTH_TOKEN=(set — never printed; source: $KEY_SOURCE)
+ANTHROPIC_DEFAULT_OPUS_MODEL=$ANTHROPIC_DEFAULT_OPUS_MODEL
+ANTHROPIC_DEFAULT_SONNET_MODEL=$ANTHROPIC_DEFAULT_SONNET_MODEL
+ANTHROPIC_DEFAULT_HAIKU_MODEL=$ANTHROPIC_DEFAULT_HAIKU_MODEL
+ANTHROPIC_DEFAULT_FABLE_MODEL=$ANTHROPIC_DEFAULT_FABLE_MODEL
+CLAUDE_CODE_SUBAGENT_MODEL=$CLAUDE_CODE_SUBAGENT_MODEL
+ANTHROPIC_API_KEY=(unset)
+ENVDUMP
+  exit 0
+fi
+
+command -v claude >/dev/null 2>&1 || {
+  echo "error: 'claude' not found on PATH." >&2
+  exit 1
+}
+
+# Banner to stderr, every run, no way to suppress it. The failure this guards against is
+# forgetting which backend you are on and pasting in code that must not leave.
+{
+  echo "┌─ DeepSeek session ─────────────────────────────────────────"
+  echo "│ backend : $BASE_URL"
+  echo "│ models  : $MODEL_PRO (opus/sonnet/fable) · $MODEL_FLASH (haiku)"
+  echo "│ subagent: $SUBAGENT_MODEL"
+  echo "│ key     : (set — never printed) ← $KEY_SOURCE"
+  echo "│ bundle  : $BUNDLE"
+  echo "│"
+  governance_warning | while IFS= read -r l; do echo "│ $l"; done
+  echo "└────────────────────────────────────────────────────────────"
+} >&2
+
+exec claude "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"

@@ -190,5 +190,21 @@ awk -v d="$DOT" '!done && (i = index($0, d)) { $0 = substr($0, 1, i-1) substr($0
 ok "mutant I: a vanished pinned $DOT is named with its count" "$(dot_drift "$MUT5")" \
    "plugin/scripts/migrate-bundle.sh=2"
 
+echo
+echo "== 6. the title-case brand is gone from everything that ships =="
+# § 5 sweeps the lowercase spelling. The display name — `AI Bridge`, `AI-Bridge` — reached a
+# skill description a human reads in every command list, the status-line note init prints
+# and the plugin README's title, none of which § 5 could see. What ships is the core plugin,
+# its companions and the two stubs; `plugin-alias/` IS the old name, on purpose, and is not
+# swept. One survivor: plugin/RETIRED records the 2.0 migration under the name it shipped as.
+titlecase() { ( cd "$1" && grep -rIlE 'AI[ -]Bridge' plugin plugin-accounts plugin-llm plugin-yolo \
+                 plugin-all plugin-mod-usage plugin-mod-pane plugin-mod-signal install.sh upgrade.sh 2>/dev/null ) \
+                 | sort | tr '\n' ' ' | sed 's/ $//'; }
+ok "only plugin/RETIRED's history still says AI Bridge" "$(titlecase "$REPO")" plugin/RETIRED
+MUT6="$TMP/mut6"; mkdir -p "$MUT6/plugin/skills/welcome"
+sed 's/The loopd welcome screen/The AI Bridge welcome screen/' "$REPO/plugin/skills/welcome/SKILL.md" \
+  > "$MUT6/plugin/skills/welcome/SKILL.md"
+ok "mutant J: the old display name back in a skill is named" "$(titlecase "$MUT6")" plugin/skills/welcome/SKILL.md
+
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

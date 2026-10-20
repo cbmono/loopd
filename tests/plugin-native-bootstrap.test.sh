@@ -140,7 +140,7 @@ ok "…its own .claude/settings.json"      "$(yn test -f "$FRESH/.claude/setting
 ok "…the awaiting queue, on a FIRST stamp only" "$(yn test -f "$FRESH/$AB_AWAITING")" yes
 ok "…and a .gitignore with no machinery block" \
    "$(grep -c 'ai-bridge machinery' "$FRESH/.gitignore" | tr -d ' ')" 0
-ok "…and the derived-index ignore block"  "$(grep -c 'ai-bridge index ignore' "$FRESH/.gitignore" | tr -d ' ')" 2
+ok "…and the derived-index ignore block"  "$(grep -c 'loopd index ignore' "$FRESH/.gitignore" | tr -d ' ')" 2
 ok "validate-bundle.sh reports no error" \
    "$( ( cd "$FRESH" && bash "$REPO/plugin/scripts/validate-bundle.sh" >/dev/null 2>&1 ); echo $? )" 0
 BANNER="$(CLAUDE_PROJECT_DIR="$FRESH" bash "$REPO/plugin/hooks/session-banner.sh" 2>&1)"
@@ -227,7 +227,7 @@ ok "…which is theirs"                    "$(yn test -L "$LEG/mynotes")" yes
 # AT LEAST ONCE, not exactly once. The stamp runs the welcome check-and-fix pass after its
 # sweep, and `bundle-unconverted` counts every symlink outside the data dirs — including
 # one the sweep KEEPS — so its repair re-stamps once more and the line is printed again.
-# Bounded at one extra stamp: that stamp inherits AI_BRIDGE_INIT_PASS and runs no pass.
+# Bounded at one extra stamp: that stamp inherits LOOPD_INIT_PASS and runs no pass.
 ok "…reported as kept, not removed" \
    "$([ "$(grep -c 'keep  mynotes' "$TMP/convert.out" | tr -d ' ')" -ge 1 ] && echo yes || echo no)" yes
 ok "…and a dangling one was retired as such" \

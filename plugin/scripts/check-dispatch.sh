@@ -138,7 +138,7 @@ pr_region() {
 # prevent. A commented-out URL is the most natural way for that line to end up written.
 #
 # WHY IT LIVES AT THE CONSUMER AND NOT IN pr_region(). This is the third time this repo
-# has met this defect (ai-bridge#44 fixed it in write-snapshot.sh, where a trailing
+# has met this defect (loopd#44 fixed it in write-snapshot.sh, where a trailing
 # comment flipped an `awaiting:approve` verb and fabricated a `depends_on` edge), and the
 # lesson recorded there is that a BLANKET strip inside a shared region reader twice ate
 # real `open_questions` entries. `pr:` is a list of URLs, never free text, so the strip is

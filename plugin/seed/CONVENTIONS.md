@@ -28,8 +28,8 @@ in `cbmono/loopd` enforces this.
 
 **Owner's verdict, 2026-09-06: agents write far too much, everywhere.** Measured on this
 tree the same day — `init-bundle.sh` 1,115 comment lines of 2,400, `session-banner.sh`
-1,016 of 1,463, PR bodies [#122](https://github.com/cbmono/ai-bridge/pull/122) and
-[#135](https://github.com/cbmono/ai-bridge/pull/135) at 5,826 and 6,423 characters, 133
+1,016 of 1,463, PR bodies [#122](https://github.com/cbmono/loopd/pull/122) and
+[#135](https://github.com/cbmono/loopd/pull/135) at 5,826 and 6,423 characters, 133
 `Finding`s averaging 110 lines. **These are ceilings, not targets, and they bind every
 agent on every surface below.**
 
@@ -380,7 +380,7 @@ above it so none may grow its share.
   round-trip, and the day a repo's CI is slower than its local suite, this rule inverts.
   **The local run never was the gate.** In `cbmono/loopd`, the `harness suite` job is a
   **required check** on every PR
-  ([ai-bridge#42](https://github.com/cbmono/ai-bridge/pull/42)), and branch protection sets
+  ([loopd#42](https://github.com/cbmono/loopd/pull/42)), and branch protection sets
   **`strict=true`**, which forces that check to run **against the merged base** before the
   PR can land. Your machine cannot produce that verdict, so skipping the local full run
   asks nobody to trust **less** verification — it moves the verification to the only place
@@ -686,7 +686,7 @@ above it so none may grow its share.
     what the implementer says, and what the criterion actually asks for. The block goes in
     the task's `open_questions`, not the final message. The human decides; the agents do
     not converge on it.
-  **Why this is a hard number and not a guideline.** ai-bridge#34 ran **eight rounds**,
+  **Why this is a hard number and not a guideline.** loopd#34 ran **eight rounds**,
   and rounds 3-8 produced adversary-shaped findings against a change that already met its
   criteria — the reviewer kept finding new ground to contest because nothing told it to
   stop. That single PR, and others like it, consumed roughly **70% of a Max account's

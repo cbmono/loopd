@@ -36,7 +36,7 @@ has() { grep -qF -- "$2" <<<"$1" && echo yes || echo no; }
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com
 export GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
-export AI_BRIDGE_KB_TIMEOUT=5
+export LOOPD_KB_TIMEOUT=5
 
 # `gh` is never called on this path; the stub is here so a regression that starts calling
 # it fails loudly instead of reaching a real host (tests/check-dispatch.test.sh:83).
@@ -106,7 +106,7 @@ ok "the KB commit's author is the human login" "${msg%%$'\t'*}" example-user-007
 rest="${msg#*$'\t'}"
 ok "…with the human's email from people[]" "${rest%%$'\t'*}" seven@example.com
 ok "…and the AI as Co-Authored-By, naming the role and the tool" \
-  "$(has "$msg" 'Co-Authored-By: ai-bridge cataloguer (Claude)')" yes
+  "$(has "$msg" 'Co-Authored-By: loopd cataloguer (Claude)')" yes
 ok "…never the reverse (the tool is not the author)" \
   "$(has "${msg%%$'\t'*}" 'Claude')" no
 
@@ -382,6 +382,15 @@ printf '{ "knowledge": { "repo": "https://u:s3cr3tt0ken@example.com/kb.git", "pa
 out="$(bash "$MIGRATE" --instance "$TOK" --dry-run 2>&1)"
 ok "a tokened knowledge.repo is named without its token" \
   "$(has "$out" 'example.com/kb.git')$(has "$out" 's3cr3tt0ken')" yesno
+
+echo
+echo "== the pre-rename AI_BRIDGE_KB_TIMEOUT: read, noted only when it decides the bound =="
+NOKB="$TMP/nokb"; mkdir -p "$NOKB"; printf '{ "org": "x" }\n' > "$NOKB/instance.config.json"
+note() { env -u LOOPD_KB_TIMEOUT "$@" bash "$SYNC" --instance "$NOKB" status 2>&1 >/dev/null | grep -c 'AI_BRIDGE_KB_TIMEOUT is deprecated'; }
+ok "the old name alone deciding the bound -> one note"   "$(note AI_BRIDGE_KB_TIMEOUT=7)" 1
+ok "…none beside an explicit --timeout (the SessionStart pull)" \
+   "$(env -u LOOPD_KB_TIMEOUT AI_BRIDGE_KB_TIMEOUT=7 bash "$SYNC" --instance "$NOKB" --timeout 10 status 2>&1 >/dev/null | grep -c deprecated)" 0
+ok "…none when the new name is set too"                  "$(note AI_BRIDGE_KB_TIMEOUT=7 LOOPD_KB_TIMEOUT=5)" 0
 
 echo
 echo "pass=$pass fail=$fail"

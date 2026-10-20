@@ -7,6 +7,8 @@
 # `commit` is ONE bounded transaction and the only writer: rebase, regenerate the
 # index, commit, push, one retry, then stop and report. Every network call carries
 # the bound named by --timeout, so no command here can hang a tick or a session.
+# Its default is $LOOPD_KB_TIMEOUT, else 20 seconds; $AI_BRIDGE_KB_TIMEOUT, the pre-rename
+# name, is still read as a deprecated alias when the new one is unset, with a note.
 # A mount into a repo with no commits is refused, naming it; --allow-empty is kb-migrate.sh's,
 # which populates exactly that repo and whose first commit creates the branch.
 # Exit: 0 done · 1 refused or failed (reported) · 2 usage · 3 no `knowledge` key.
@@ -16,7 +18,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
 # shellcheck source=bundle-paths.sh
 . "$HERE/bundle-paths.sh" || exit 2
-inst="."; cmd=""; message=""; role=""; paths=(); allow_empty=0; KB_EMPTY=0; TIMEOUT="${AI_BRIDGE_KB_TIMEOUT:-20}"
+inst="."; cmd=""; message=""; role=""; paths=(); allow_empty=0; KB_EMPTY=0; TIMEOUT_FLAG=0; TIMEOUT="${LOOPD_KB_TIMEOUT:-${AI_BRIDGE_KB_TIMEOUT:-20}}"
 need2() { [ "$1" -ge 2 ] || { echo "kb-sync: $2 needs a value" >&2; exit 2; }; }
 seen_dashdash=0
 while [ $# -gt 0 ]; do
@@ -25,7 +27,7 @@ while [ $# -gt 0 ]; do
     --instance) need2 $# "$1"; inst="$2"; shift 2 ;;
     --message)  need2 $# "$1"; message="$2"; shift 2 ;;
     --role)     need2 $# "$1"; role="$2"; shift 2 ;;
-    --timeout)  need2 $# "$1"; TIMEOUT="$2"; shift 2 ;;
+    --timeout)  need2 $# "$1"; TIMEOUT="$2"; TIMEOUT_FLAG=1; shift 2 ;;
     --)         seen_dashdash=1; shift ;;
     --allow-empty) allow_empty=1; shift ;;
     -h|--help)  sed -n '2,12p' "$0" >&2; exit 2 ;;
@@ -40,6 +42,10 @@ INST="$(cd "$inst" && pwd)"
 
 say()   { printf 'kb-sync: %s\n' "$1"; }
 warn()  { printf 'kb-sync: %s\n' "$1" >&2; }
+# Only when the old name is what DECIDED the bound: the SessionStart pull passes --timeout,
+# so a stale export never turns into a note at every session start.
+[ "$TIMEOUT_FLAG" -eq 1 ] || [ -n "${LOOPD_KB_TIMEOUT:-}" ] || [ -z "${AI_BRIDGE_KB_TIMEOUT:-}" ] \
+  || warn "note: AI_BRIDGE_KB_TIMEOUT is deprecated — set LOOPD_KB_TIMEOUT instead."
 die()   { printf 'kb-sync: %s\n' "$1" >&2; exit "${2:-1}"; }
 
 cfg() { bash "$HERE/resolve-config.sh" --instance "$INST" "$@" 2>/dev/null; }
@@ -457,7 +463,7 @@ do_commit() {
   fi
 
   local trailer body
-  trailer="Co-Authored-By: ai-bridge ${role:-agent} (Claude) <noreply@anthropic.com>"
+  trailer="Co-Authored-By: loopd ${role:-agent} (Claude) <noreply@anthropic.com>"
   body="$message
 
 $trailer"

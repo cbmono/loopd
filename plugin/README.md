@@ -1,4 +1,4 @@
-# AI Bridge — the plugin
+# loopd — the plugin
 
 The OKF control panel, delivered as a Claude Code plugin instead of a symlink farm.
 Skills, agents, hooks **and the machinery itself** ship here, reading and writing bundles
@@ -151,8 +151,8 @@ halves for every companion entry in the marketplace, so a companion cannot drift
 | Companion | Ships | Read by |
 |---|---|---|
 | [`loopd-yolo`](../plugin-yolo/README.md) | `companion/AUTONOMY.md` — the delegated-autonomy capability and the `yolo` preflight | `scripts/resolve-autonomy.sh`, and through it `scripts/commit-as.sh`'s promotion guard |
-| [`loopd-accounts`](../plugin-accounts/README.md) | `companion/accounts.md` — the per-bundle account capability — and `bin/ai-bridge-claude`, the launcher the **human** runs | `scripts/resolve-account.sh`, and through it the SessionStart banner's account line |
-| [`loopd-llm`](../plugin-llm/README.md) | `companion/llm.md` — the alternative-LLM-backend capability — and `bin/ai-bridge-deepseek`, the launcher the **human** runs, opt-in per machine | nothing — core reads its presence nowhere. The banner's backend warning reads `ANTHROPIC_BASE_URL` from its own environment, so it fires with or without this companion |
+| [`loopd-accounts`](../plugin-accounts/README.md) | `companion/accounts.md` — the per-bundle account capability — and `bin/loopd-claude`, the launcher the **human** runs | `scripts/resolve-account.sh`, and through it the SessionStart banner's account line |
+| [`loopd-llm`](../plugin-llm/README.md) | `companion/llm.md` — the alternative-LLM-backend capability — and `bin/loopd-deepseek`, the launcher the **human** runs, opt-in per machine | nothing — core reads its presence nowhere. The banner's backend warning reads `ANTHROPIC_BASE_URL` from its own environment, so it fires with or without this companion |
 | [`loopd-mod-usage`](../plugin-mod-usage/README.md) | `hooks/register.ts` — a mod that records each session's tokens, requests, tool calls, tool errors, wall time and model in the plugin store under `loopd.usage.<session id>` | `scripts/session-usage.sh`, which reads that store record before the transcript and falls back to the transcript on any doubt |
 | [`loopd-mod-pane`](../plugin-mod-pane/README.md) | `hooks/register.ts` — a mod whose `/pane` opens a pane drawing this bundle's board from `.loopd/SNAPSHOT.json` in the session's cwd: a **fourth renderer** over `scripts/write-snapshot.sh`'s contract, with a Tick button that runs `/loopd:dispatch` in that session and a Refresh button; its `simple` mode (`/config`) draws projects, open questions and blocked tasks from the task documents, every answer a `/loopd:answer` run | nothing — core reads its presence nowhere. In `operator` mode it reads core's snapshot (never the bundle), and absent, the three core renderers are all there is |
 | [`loopd-mod-signal`](../plugin-mod-signal/README.md) | `hooks/register.ts` — a mod that records the PM session of a bundle under `loopd.pm.<bundle root>`, and from a role agent's marked worktree writes `loopd.signal.<session id>` on every `turn.complete` and sends that PM session **one** `loopd-signal:` line | nothing in code — `tick-steps/step-4-advance.md` tells the tick what the line is worth (the order of its sweep, never a verdict); absent, no line arrives and step 4 runs exactly as before |

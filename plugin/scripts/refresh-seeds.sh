@@ -160,10 +160,15 @@ additions_re() { printf '%s\n' "$ADDITIONS_HEADING" | awk -F'|' -v p="$1" '$1==p
 # Those two lines are written by this machinery and appear in no seed, so leaving them in
 # the body puts a bundle-side insertion exactly where a seed append lands — a CONFLICT on
 # the next seed edit, which is the bug this whole split exists to remove.
-GI_IDX_BEGIN='# >>> ai-bridge index ignore >>>'
-GI_IDX_END='# <<< ai-bridge index ignore <<<'
+# BOTH SPELLINGS: the pair carried the old brand name before the rename sweep, and init
+# renames it in place — but this split can run on a bundle the rename has not reached yet.
+GI_IDX_BEGIN='# >>> loopd index ignore >>>'
+GI_IDX_END='# <<< loopd index ignore <<<'
+GI_IDX_OLD_BEGIN='# >>> ai-bridge index ignore >>>'
+GI_IDX_OLD_END='# <<< ai-bridge index ignore <<<'
 split_additions() { # <file> <body-out> <block-out> <heading-ere>; no heading ⇒ all body
   awk -v re="$4" -v bm="$GI_IDX_BEGIN" -v em="$GI_IDX_END" \
+      -v obm="$GI_IDX_OLD_BEGIN" -v oem="$GI_IDX_OLD_END" \
       -v body="$2" -v block="$3" '
     function back(i) { while (i > 1 && l[i-1] ~ /^[[:space:]]*$/) i--; return i }
     { l[NR] = $0 } $0 ~ re && !h { h = NR }
@@ -171,8 +176,8 @@ split_additions() { # <file> <body-out> <block-out> <heading-ere>; no heading �
       printf "" > body; printf "" > block
       if (!h) { for (i = 1; i <= NR; i++) print l[i] > body; exit }
       s = back(h)
-      if (s > 1 && l[s-1] == em)
-        for (j = s - 1; j >= 1; j--) if (l[j] == bm) { s = back(j); break }
+      if (s > 1 && (l[s-1] == em || l[s-1] == oem))
+        for (j = s - 1; j >= 1; j--) if (l[j] == bm || l[j] == obm) { s = back(j); break }
       for (i = 1; i < s; i++)  print l[i] > body
       for (i = s; i <= NR; i++) print l[i] > block
     }' "$1"
@@ -216,7 +221,7 @@ EOF
   exit 2
 fi
 
-TMPD="$(mktemp -d "${TMPDIR:-/tmp}/ai-bridge-refresh-seeds.XXXXXX")"
+TMPD="$(mktemp -d "${TMPDIR:-/tmp}/loopd-refresh-seeds.XXXXXX")"
 trap 'rm -rf "$TMPD"' EXIT
 
 failed=0

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude Code when working in **this repo** — the ai-bridge template.
+Guidance for Claude Code when working in **this repo** — the loopd template.
 
 ## What this repo is
 

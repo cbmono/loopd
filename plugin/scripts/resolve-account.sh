@@ -19,7 +19,9 @@ set -uo pipefail
 _pn="$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh"; if [ -r "$_pn" ]; then . "$_pn"; fi
 
 COMPANION_REL="companion/accounts.md"
-LAUNCHER_REL="bin/ai-bridge-claude"
+LAUNCHER_REL="bin/loopd-claude"
+# A companion installed before the rename ships only its old name; name what is there.
+LAUNCHER_OLD_REL="bin/ai-bridge-claude"
 DEFAULT_MARKETPLACE="${PLUGIN_MARKETPLACE:-}"
 
 bundle="."
@@ -103,16 +105,20 @@ fi
 sane "$declared" || exit 1
 
 # --- what this session is actually on --------------------------------------------------
-# The launcher exports AI_BRIDGE_ACCOUNT beside CLAUDE_CONFIG_DIR; a session started any
+# The launcher exports LOOPD_ACCOUNT beside CLAUDE_CONFIG_DIR; a session started any
 # other way carries neither, which is the "or none" case and must be loud, not silent.
-active="${AI_BRIDGE_ACCOUNT:-}"
+# AI_BRIDGE_ACCOUNT and AI_BRIDGE_ACCOUNTS_HOME are the pre-rename names, still read when
+# the new ones are unset: a session a pre-rename launcher started is still running.
+active="${LOOPD_ACCOUNT:-${AI_BRIDGE_ACCOUNT:-}}"
 if [ -z "$active" ] && [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
-  home="${AI_BRIDGE_ACCOUNTS_HOME:-${HOME:-}/.claude-accounts}"
+  home="${LOOPD_ACCOUNTS_HOME:-${AI_BRIDGE_ACCOUNTS_HOME:-${HOME:-}/.claude-accounts}}"
   case "$CLAUDE_CONFIG_DIR" in "$home"/*) active="$(basename "$CLAUDE_CONFIG_DIR")" ;; esac
 fi
 sane "$active" || active=""
 
-printf '%s\t%s\t%s\n' "$declared" "$active" "$companion_root/$LAUNCHER_REL"
+launcher="$companion_root/$LAUNCHER_REL"
+[ -e "$launcher" ] || [ ! -e "$companion_root/$LAUNCHER_OLD_REL" ] || launcher="$companion_root/$LAUNCHER_OLD_REL"
+printf '%s\t%s\t%s\n' "$declared" "$active" "$launcher"
 [ -n "$active" ] || exit 4
 [ "$active" = "$declared" ] || exit 3
 exit 0

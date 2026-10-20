@@ -20,7 +20,8 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 . "$(dirname "$0")/tools/plugin-name.sh"
-LAUNCH="$REPO/plugin-llm/bin/ai-bridge-deepseek"
+LAUNCH="$REPO/plugin-llm/bin/loopd-deepseek"
+OLD_LAUNCH="$REPO/plugin-llm/bin/ai-bridge-deepseek"
 CAP="$REPO/plugin-llm/companion/llm.md"
 BANNER="$REPO/plugin/hooks/session-banner.sh"
 MJ="$REPO/.claude-plugin/marketplace.json"
@@ -75,6 +76,19 @@ ok "…still reports the endpoint"                    "$(cnt "$OUT" '^ANTHROPIC_
 ok "…still reports the opus-tier model"             "$(cnt "$OUT" '^ANTHROPIC_DEFAULT_OPUS_MODEL=.')" 1
 ok "…still reports the subagent model"              "$(cnt "$OUT" '^CLAUDE_CODE_SUBAGENT_MODEL=.')" 1
 ok "…and names the token as set, not its value"     "$(cnt "$OUT" '^ANTHROPIC_AUTH_TOKEN=(set')" 1
+# The pre-rename launcher name is a deprecated alias: same output, plus one note.
+# stdout and stderr captured APART: the note belongs on stderr, the env on stdout.
+OLDOUT="$( cd "$BUNDLE" && DEEPSEEK_API_KEY="$KEY" bash "$OLD_LAUNCH" --print-env 2>"$TMP/olderr" )"; RC=$?
+OLDERR="$(cat "$TMP/olderr")"
+ok "the old launcher name runs the new one"         "$RC/$(cnt "$OLDOUT" '^ANTHROPIC_BASE_URL=https://')" 0/1
+ok "…says it was renamed, on stderr only"           "$(cnt "$OLDERR" 'renamed loopd-deepseek')/$(cnt "$OLDOUT" 'renamed')" 1/0
+ok "…naming the stable glob, not a versioned path"  "$(cnt "$OLDERR" 'cache/\*/loopd-llm/\*/bin/loopd-deepseek')" 1
+ok "…and prints no key either"                      "$(cnt "$OLDOUT$OLDERR" "$KEY")" 0
+# Through a PATH symlink, with CDPATH exported: the shim resolves its real directory.
+mkdir -p "$TMP/linkbin"; ln -s "$OLD_LAUNCH" "$TMP/linkbin/ai-bridge-deepseek"
+LINKOUT="$( cd "$BUNDLE" && PATH="$TMP/linkbin:$PATH" CDPATH="$TMP" DEEPSEEK_API_KEY="$KEY" \
+            ai-bridge-deepseek --print-env 2>/dev/null )"; RC=$?
+ok "the shim reached through a PATH symlink -> 0"   "$RC/$(cnt "$LINKOUT" '^ANTHROPIC_BASE_URL=https://')" 0/1
 # A static guard: the slicing expression must not come back, in any of its three spellings.
 # `-E` because `\|` alternation is a GNU BRE extension and this harness ships to machines
 # we never see — a grep without it would match nothing and pass while the slicing was there.
@@ -262,7 +276,7 @@ ok "it ships no hook and no agent"                  \
    "$(find "$REPO/plugin-llm" -type d \( -name hooks -o -name agents \) | grep -c .)" 0
 # Core's own code, not its docs: plugin/README.md lists every companion by name.
 ok "no core script or hook runs the launcher"       \
-   "$(grep -rlE 'ai-bridge-deepseek|plugin-llm' "$REPO/plugin/scripts" "$REPO/plugin/hooks" | grep -c .)" 0
+   "$(grep -rlE '(ai-bridge|loopd)-deepseek|plugin-llm' "$REPO/plugin/scripts" "$REPO/plugin/hooks" | grep -c .)" 0
 ok "the capability file records the opt-in layer"   \
    "$(grep -c 'instance.config.local.json' "$CAP")" 1
 ok "…and states the subagent question as UNMEASURED" "$(grep -c 'UNMEASURED' "$CAP")" 1

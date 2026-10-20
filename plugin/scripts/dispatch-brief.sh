@@ -188,7 +188,7 @@ fi
 case "$IGNORED" in
   yes) SCRATCH="$WT/tmp/$SLUG"
        NOTE="$(printf '`%s` ignores `tmp/` (`git check-ignore` in %s), so nothing you write here can reach a commit.' "$TARGET_REPO" "$CLONE")" ;;
-  no)  SCRATCH="${TMPDIR:-/tmp}"; SCRATCH="${SCRATCH%/}/ai-bridge-scratch/$SLUG"
+  no)  SCRATCH="${TMPDIR:-/tmp}"; SCRATCH="${SCRATCH%/}/loopd-scratch/$SLUG"
        NOTE="$(printf '`%s` does NOT ignore `tmp/` (`git check-ignore` in %s), so this path is outside the repo instead.' "$TARGET_REPO" "$CLONE")" ;;
   *)   SCRATCH="$WT/tmp/$SLUG"
        NOTE="$(printf 'No clone to check, so whether the repo ignores `tmp/` is UNKNOWN — run `git check-ignore -q tmp/%s` in your worktree before you write, and use a path outside the repo if it says no.' "$SLUG")" ;;

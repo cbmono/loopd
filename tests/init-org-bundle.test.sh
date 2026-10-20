@@ -238,7 +238,7 @@ ok "…and the non-admin path as normal"        "$(saw "$SKILL" 'when creating i
 ok "…and carries no host literal (plugin rule)" "$(grep -c -E 'cbmono|/Users/|github\.com' "$SKILL" | tr -d ' ')" 0
 ok "sharing.md is the front door"             "$(saw "$SHARING" '# Sharing one bundle — the front door for multi-person use')" yes
 ok "…and carries the --org step"              "$(saw "$SHARING" '--org <org>')" yes
-ok "the seed README links it"                 "$(saw "$SEED_README" 'https://github.com/cbmono/ai-bridge/blob/main/docs/sharing.md')" yes
+ok "the seed README links it"                 "$(saw "$SEED_README" 'https://github.com/cbmono/loopd/blob/main/docs/sharing.md')" yes
 
 echo
 printf 'init-org-bundle.test: %d passed, %d failed\n' "$pass" "$fail"

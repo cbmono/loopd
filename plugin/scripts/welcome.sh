@@ -7,7 +7,7 @@
 #   welcome.sh fix    [flags]       RETIRED — points at /<plugin>:init and exits 0
 #
 # `fix` MOVED INTO `/<plugin>:init` — it stamps the bundle, then runs this file's pass
-# (`AI_BRIDGE_INIT_PASS=1`, same tiers, same refusals). This form is a pointer for one release.
+# (`LOOPD_INIT_PASS=1`, same tiers, same refusals). This form is a pointer for one release.
 #
 # WHAT THIS IS NOT, because the rejected shape is the one that keeps getting proposed. It
 # does NOT load rules into context. `CLAUDE.md` is injected into every turn and the banner
@@ -609,7 +609,7 @@ fix_bundle_unconverted() {
     note "NOT stamped: $BIN/init-bundle.sh is missing — re-install the plugin"
     return 0
   fi
-  # The stamp inherits AI_BRIDGE_INIT_PASS and runs no pass — one extra stamp, never a loop.
+  # The stamp inherits LOOPD_INIT_PASS and runs no pass — one extra stamp, never a loop.
   note "running: bash $BIN/init-bundle.sh $ROOT"
   bash "$BIN/init-bundle.sh" "$ROOT" 2>&1 | sed 's/^/      /'
   return 0
@@ -1274,7 +1274,7 @@ fi
 # `config-uncommitted` is; it reads the tier the row declares and dispatches on that alone.
 # The two ship-blockers therefore hold by construction rather than by care: there is no
 # branch here that could be pointed at a config file or a lock file.
-if [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
+if [ -z "${LOOPD_INIT_PASS:-}${AI_BRIDGE_INIT_PASS:-}" ]; then   # the old name is a read-only alias
   echo "${PLUGIN_NAME} fix has moved into /${PLUGIN_NAME}:init — run that instead; it stamps the bundle and then runs this same pass."
   exit 0
 fi

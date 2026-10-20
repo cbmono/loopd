@@ -1,6 +1,6 @@
 ---
 name: init
-description: Create a new AI Bridge bundle, refresh an existing one, or convert a symlink-era bundle in place. Data only — a bundle it stamps carries no machinery and no link into any checkout.
+description: Create a new loopd bundle, refresh an existing one, or convert a symlink-era bundle in place. Data only — a bundle it stamps carries no machinery and no link into any checkout.
 argument-hint: "<dir>  [--org O [--name R]] [--refresh-seeds] [--with-objectives] [--normalise-config] [--owner L] [--email A] [--repos-root D] [--spawn-grant]"
 disable-model-invocation: true
 allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
