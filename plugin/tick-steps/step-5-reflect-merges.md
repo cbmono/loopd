@@ -46,8 +46,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `claude stop <short>` on a `done` or `cancelled` task's recorded session unless it has
    already ended — `blocked` on a prompt or not, recorded or not — then reclaim. A done
    task's session left for the human to stop is the nag this removes (measured
-   2026-10-21). That one recorded session only: never a process the task does not record,
-   never `claude rm`. **Exit 4 is a RETRY**: every live process in the tree is that
+   2026-10-21). **A `needs` it still holds is filed first** — jobs meant for after the merge
+   ("merge #559, then run the backfill") — so its `👉 do` row outlives the `done` until the
+   human answers it; say so in the tick report. That one recorded session only: never a
+   process the task does not record, never `claude rm`. **Exit 4 is a RETRY**: every live process in the tree is that
    session's own, which can outlive the stop by a moment — no `# Notes` line, no
    `AWAITING.md` row, nothing for the human. **Exit 1 is a
    REFUSAL** — a PR CLOSED-UNMERGED, an empty `pr:`, a dirty tree, an unpushed commit, an

@@ -302,12 +302,13 @@ EOF
 # measured on git 2.50.1, a tree holding just a `.env` is removed with rc=0 and the file
 # goes with it. G9 cannot see it either — `status --porcelain` skips ignored paths. So
 # the check is explicit, and `--directory` collapses an ignored directory to one entry
-# so a node_modules does not print 40,000 lines. `.husky` is husky's generated, ignored
-# hook shim (`.husky/_/`): measured 2026-10-21 as the ONLY entry holding back a merged
-# task's worktree. The `.env` refusal is untouched — no `.env*` name is ever added.
+# so a node_modules does not print 40,000 lines. ONE PATH is allowed below the first
+# component: husky's generated, self-ignoring hook shim `.husky/_/` (measured 2026-10-21 as
+# the only entry holding a merged task's worktree back) — never the rest of `.husky/`, and
+# never a `.env*` file even inside the shim.
 IGNORE_OK=" node_modules .pnpm-store .pnpm-store-task .bun-cache .venv venv __pycache__ \
 .pytest_cache .mypy_cache .next .nuxt .turbo .cache .gradle tmp temp .DS_Store \
-dist build out coverage .husky "
+dist build out coverage "
 
 # No python3 or no key leaves the list as above: absence only ever refuses more.
 extra="$(bash "$(dirname "${BASH_SOURCE[0]:-$0}")/resolve-config.sh" --json reclaimIgnoreOk 2>/dev/null)" || extra=""
@@ -339,6 +340,7 @@ keepers=""
 while IFS= read -r entry; do
   [ -n "$entry" ] || continue
   case "$IGNORE_OK" in *" ${entry%%/*} "*) continue ;; esac
+  case "${entry##*/}" in .env*) ;; *) case "$entry" in .husky/_/*) continue ;; esac ;; esac
   keepers="$keepers$entry
 "
 done <<EOF

@@ -1,41 +1,46 @@
 #!/usr/bin/env bash
 #
 # session-handoff.sh — stop a task's role session that only the HUMAN can move on, after
-# writing down what it is waiting for. One task per call; run from the bundle root.
+# filing what it waits for; and say when the round after that is owed. Run from the bundle
+# root, one task per call.
 #
 #   session-handoff.sh <task-doc> [--jobs-dir <dir>]
+#     task `done`/`cancelled` -> `stopped <short> <status>` (a pending `needs` is filed
+#                                first), or `ended <short> <state>` when nothing was running
+#     any other task, its session `blocked` with a `needs` and no live prompt
+#                             -> `handed-off <short> <id> Q<n>`, then `claude stop <short>`
+#   session-handoff.sh --owed <task-doc>
+#                             -> `owed <uuid> <id>` then `answer: <text>`: the human answered
+#                                the latest hand-off of the task's current session, nothing
+#                                resumed it since, and the session has ended — resume it
 #
-#   task `done`/`cancelled`  -> `stopped <short> <status>` after `claude stop <short>`, or
-#                               `ended <short> <state>` when the session had already ended
-#   any other task whose session is `blocked` with a `needs` in its job record
-#                            -> `handed-off <short> do=<n> ask=<Q labels|->`: each job the
-#                               `needs` names is a `do: <job>` entry and each question a
-#                               numbered `Q<n>:` entry (with its `### Q<n>` block) in
-#                               `open_questions`, one `needs handed off <uuid>` `# Notes`
-#                               line, then `claude stop <short>`
+# A HAND-OFF writes the agent's `needs` VERBATIM (whitespace folded) to the per-clone,
+# ignored `$AB_HANDOFFS/<id>.txt`, which AWAITING.md renders — and the task gets only fixed
+# text the tick wrote: ONE `Q<n>: do: …hand-off <id>…` entry in `open_questions`, its
+# `### Q<n>` block, and a `needs handed off <uuid> · hand-off <id> · Q<n>` `# Notes` line, in
+# one atomic write. `<id>` is `<short>-<8 hex>` over the session, its `startedAt` and the
+# text, so a retry writes nothing twice and the next round's hand-off is a new entry.
 #
-# Exit 0 done · 1 not this script's case (`not-handed-off <why>`) — step 4's other rows
-# apply · 2 unknown (no `claude`, an unreadable record or task) · 3 the stop did not land
-# (the record is written; the next tick stops again, and writes nothing twice).
+# Exit 0 done · 1 not this script's case (`not-handed-off <why>`, `not-owed <why>`) · 2
+# unknown (no `claude`, an unreadable record or task) · 3 the stop did not land (the record
+# is written; the next tick stops again). Never `claude rm`.
 #
-# Why (measured 2026-10-21, CLI 2.1.303): a round that ends listing jobs for the human —
-# "review, apply and merge terraform#866; re-login SSO …" — sits `blocked` with that list
-# in `needs`, and attaching shows the human nothing the string does not. The list goes to
-# the task document, where AWAITING.md renders one `do` row per job, and the slot is freed.
-# The text is kept as written, minus anything shaped like a credential. `claude stop` takes
-# the SHORT id and is safe on a settled session; `claude rm` is never run here.
-# Reasoning: docs/pm-design.md#step-4. Verified by tests/session-handoff.test.sh.
+# Why (measured 2026-10-21, CLI 2.1.301-2.1.304): a round that ends listing jobs for the
+# human sits `blocked` with that list in `needs`, and `claude attach` showed nothing the
+# string did not. Reasoning: docs/pm-design.md#step-4. Verified by tests/session-handoff.test.sh.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-usage() { sed -n '6,7p' "$0" >&2; exit 2; }
+. "$HERE/bundle-paths.sh" || exit 2
+usage() { sed -n '7,15p' "$0" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "session-handoff: python3 is required" >&2; exit 2; }
 
-task=""; jobs="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/jobs"
+task=""; jobs="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/jobs"; owed=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --jobs-dir) [ $# -ge 2 ] || usage; jobs="$2"; shift 2 ;;
-    -h|--help)  sed -n '3,27p' "$0"; exit 0 ;;
+    --owed)     owed=1; shift ;;
+    -h|--help)  sed -n '3,30p' "$0"; exit 0 ;;
     -*) usage ;;
     *) [ -z "$task" ] || usage; task="$1"; shift ;;
   esac
@@ -48,10 +53,76 @@ fmval() { printf '%s\n' "$fm" | sed -n "s/^$1:[[:space:]]*//p" | head -1 | sed '
 status="$(fmval status)"; sid="$(fmval session)"
 [ -n "$sid" ] || { echo "not-handed-off no-session"; exit 1; }
 short="${sid%%-*}"
-
 TERMINAL=" done gone stopped completed cancelled failed error exited "
-state="$(bash "$HERE/agent-sessions.sh" state "$sid" 2>/dev/null)" || {
-  echo "session-handoff: cannot read the state of session $sid" >&2; exit 2; }
+
+# --- the owed round ---------------------------------------------------------------
+if [ "$owed" = 1 ]; then
+  case "$status" in done|cancelled) echo "not-owed task-$status"; exit 1 ;; esac
+  state="$(bash "$HERE/agent-sessions.sh" state "$sid" 2>/dev/null)" || exit 2
+  case "$state" in stopped|done) ;; *) echo "not-owed session-$state"; exit 1 ;; esac
+  open="$(bash "$HERE/fold-answers.sh" --list "$task" open_questions 2>/dev/null)" || exit 2
+  answered="$(bash "$HERE/fold-answers.sh" --list "$task" answered_questions 2>/dev/null)" || exit 2
+  python3 - "$task" "$sid" "$open" "$answered" <<'PY'
+import re, sys
+path, sid, open_q, answered = sys.argv[1:5]
+notes, last = open(path, encoding="utf-8").read().split("\n"), None
+for i, l in enumerate(notes):
+    m = re.search(r"needs handed off ([0-9a-f-]+) · hand-off ([0-9a-f]{8}-[0-9a-f]{8}) · (Q\d+)", l)
+    if m:
+        last = (i, m.group(1), m.group(2), m.group(3))
+if not last:
+    print("not-owed no-hand-off"); sys.exit(1)
+i, uuid, hid, q = last
+if not (uuid == sid or uuid.split("-")[0] == sid.split("-")[0]):
+    print("not-owed session-replaced"); sys.exit(1)
+if any(re.match(r"\* .*\b(woke|resumed) [0-9a-f]{8}", l) for l in notes[i + 1:]):
+    print("not-owed already-resumed"); sys.exit(1)
+for e in answered.splitlines() + open_q.splitlines():
+    body = re.sub(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z by [^\n]*? · ", "", e, count=1)
+    if body.startswith(q + ": do: ") and hid in body:
+        head, sep, ans = body.rpartition(" --- ")
+        if sep and ans.strip():
+            print("owed %s %s" % (uuid, hid)); print("answer: " + ans.strip()); sys.exit(0)
+print("not-owed unanswered"); sys.exit(1)
+PY
+  exit $?
+fi
+
+# --- the hand-off and the stop ------------------------------------------------------
+row="$(bash "$HERE/agent-sessions.sh" row "$sid" 2>/dev/null)"; rc=$?
+case $rc in 0) ;; 3) row='{"state":"gone"}' ;; *) echo "session-handoff: cannot read session $sid" >&2; exit 2 ;; esac
+rec="$jobs/$short/state.json"; [ -f "$rec" ] || rec="$jobs/$sid/state.json"
+# -> `<state> <id|-> <uuid>` then the folded needs text; exit 2 unreadable.
+read_needs() { # <row> <record> <session>
+  python3 - "$@" <<'PY'
+import hashlib, json, os, re, sys
+row, rec, sid = json.loads(sys.argv[1]), sys.argv[2], sys.argv[3]
+state = str(row.get("state") or row.get("status") or "working")
+d = {}
+if os.path.exists(rec):
+    try:
+        d = json.load(open(rec, encoding="utf-8"))
+        assert isinstance(d, dict)
+    except Exception:
+        sys.exit(2)
+uuid = row.get("sessionId") or d.get("sessionId") or sid
+needs = d.get("needs") if isinstance(d.get("needs"), str) else ""
+needs = re.sub(r"\s+", " ", "".join(c if c.isprintable() else " " for c in needs)).strip()
+# A live prompt is answered in the session, never filed: a fresh round would park on it.
+if not needs or row.get("waitingFor") or d.get("waitingFor"):
+    hid = "-"
+else:
+    h = hashlib.sha256("\n".join([uuid, str(row.get("startedAt")), needs]).encode()).hexdigest()[:8]
+    hid = "%s-%s" % (uuid.split("-")[0], h)
+print(state, hid, uuid, "waiting" if (row.get("waitingFor") or d.get("waitingFor")) else "-")
+print(needs)
+PY
+}
+info="$(read_needs "$row" "$rec" "$sid")" || { echo "session-handoff: unreadable job record $rec" >&2; exit 2; }
+read -r state hid uuid waiting <<EOF
+$info
+EOF
+needs="$(printf '%s\n' "$info" | sed -n '2,$p')"
 
 stop_it() { # -> 0 the stop landed, 3 it did not
   claude stop "$short" >/dev/null 2>&1 </dev/null
@@ -61,144 +132,77 @@ stop_it() { # -> 0 the stop landed, 3 it did not
   return 3
 }
 
-# A finished task's session is the tick's to stop, whatever it is still doing.
+# ONE atomic write: the entry, its block and the note land together or not at all, on a
+# copy beside the task that replaces it only after it reads back.
+file_it() { # -> prints Q<n>
+  mkdir -p "$AB_HANDOFFS" && { [ -f "$AB_HANDOFFS/.gitignore" ] || printf '*\n' > "$AB_HANDOFFS/.gitignore"; } \
+    && printf '%s\n' "$needs" > "$AB_HANDOFFS/$hid.txt" || return 2
+  local qn n entry tmp="$(dirname "$task")/.session-handoff.$$.md"
+  qn="$( { bash "$HERE/fold-answers.sh" --list "$task" open_questions; bash "$HERE/fold-answers.sh" --list "$task" answered_questions; } 2>/dev/null \
+        | grep -oE '(^|· )Q[0-9]+:' | grep -oE '[0-9]+' | sort -n | tail -1)"
+  n="Q$(( ${qn:-0} + 1 ))"
+  entry="$n: do: finish the agent's hand-off $hid — its jobs are in AWAITING.md; answer done, or with what its next round should know"
+  cp -p "$task" "$tmp" || return 2
+  bash "$HERE/fold-answers.sh" --add "$tmp" "$entry" >/dev/null || { rm -f "$tmp"; return 2; }
+  python3 - "$tmp" "$n" "$hid" "$uuid" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$AB_HANDOFFS" <<'PY' || { rm -f "$tmp"; return 2; }
+import re, sys
+path, q, hid, uuid, now, store = sys.argv[1:7]
+src = open(path, encoding="utf-8").read()
+end = src.find("\n---", 3) + 4
+head, lines = src[:end], src[end:].split("\n")
+def section_end(start):
+    for i in range(start + 1, len(lines)):
+        if re.match(r"#{1,2}\s", lines[i]):
+            return i
+    return len(lines)
+def append_to(heading, add):
+    global lines
+    at = next((i for i, l in enumerate(lines) if re.match(re.escape(heading) + r"\s*$", l)), None)
+    if at is None:
+        while lines and not lines[-1].strip():
+            lines.pop()
+        lines += ["", heading, ""] + add + [""]
+        return
+    e = section_end(at)
+    while e > at + 1 and not lines[e - 1].strip():
+        e -= 1
+    lines[e:e] = add
+append_to("## Question details", ["", "### " + q,
+    "Recommendation: done",
+    "Options:",
+    "1. done",
+    "Context:",
+    "- Depth 1: A role session ended its round (hand-off %s) with jobs only you can do, and the tick stopped it." % hid,
+    "- Depth 2: The jobs are in AWAITING.md; the full text is `%s/%s.txt` on the clone that filed it, and `claude logs %s` shows the session." % (store, hid, uuid.split("-")[0]),
+    "- Depth 3: Your answer is the resumed session's next message — `done`, or anything it should know first."])
+append_to("# Notes", ["* %s needs handed off %s · hand-off %s · %s · session stopped by the tick" % (now, uuid, hid, q)])
+out = head + "\n".join(lines)
+open(path, "w", encoding="utf-8").write(out if out.endswith("\n") else out + "\n")
+PY
+  # Read it back before it replaces the task: the entry once, the note once.
+  [ "$(bash "$HERE/fold-answers.sh" --list "$tmp" open_questions 2>/dev/null | grep -cF "hand-off $hid ")" = 1 ] \
+    && [ "$(grep -cF "· hand-off $hid ·" "$tmp")" = 1 ] && mv -f "$tmp" "$task" || { rm -f "$tmp"; return 2; }
+  printf '%s' "$n"
+}
+
+handoff() { # -> 0 filed (or already filed), 2 a write failed; sets q
+  q="$(grep -oE "· hand-off $hid · Q[0-9]+" "$task" | head -1 | grep -oE 'Q[0-9]+$')"
+  [ -n "$q" ] && return 0
+  q="$(file_it)" || { echo "session-handoff: could not file the hand-off in $task" >&2; return 2; }
+}
+
 case "$status" in
   done|cancelled)
+    # Jobs left for after the merge are filed first: the done path never discards them.
+    if [ "$state" = blocked ] && [ "$hid" != - ]; then handoff || exit 2; fi
     case "$TERMINAL" in *" $state "*) echo "ended $short $state"; exit 0 ;; esac
     stop_it || exit 3
     echo "stopped $short $status"; exit 0 ;;
 esac
 
 [ "$state" = blocked ] || { echo "not-handed-off not-blocked $state"; exit 1; }
-rec="$jobs/$short/state.json"; [ -f "$rec" ] || rec="$jobs/$sid/state.json"
-[ -f "$rec" ] || { echo "not-handed-off no-job-record"; exit 1; }
-
-open="$(bash "$HERE/fold-answers.sh" --list "$task" open_questions 2>/dev/null)" || {
-  echo "session-handoff: cannot read open_questions in $task" >&2; exit 2; }
-answered="$(bash "$HERE/fold-answers.sh" --list "$task" answered_questions 2>/dev/null)" || answered=""
-
-# -> JSON {uuid, entries, blocks, labels, jobs}; exit 1 no `needs`, 2 unreadable. A function,
-# not a heredoc inside `$(…)`: bash 3.2 mis-reads an apostrophe in one.
-plan_of() { # <record> <session> <open> <answered> <now>
-  python3 - "$@" <<'PY'
-import json, re, sys
-rec, sid, open_q, answered, now = sys.argv[1:6]
-try:
-    d = json.load(open(rec, encoding="utf-8"))
-    assert isinstance(d, dict)
-except Exception:
-    sys.exit(2)
-needs = d.get("needs")
-if not isinstance(needs, str) or not needs.strip():
-    sys.exit(1)
-uuid = d.get("sessionId") if re.fullmatch(r"[0-9a-f-]{36}", str(d.get("sessionId"))) else sid
-
-# Free text from an agent: anything shaped like a credential goes, the rest stays verbatim.
-SECRETS = [
-    (r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})", "[redacted]"),
-    (r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b", "[redacted]"),
-    (r"\bxox[abprs]-[A-Za-z0-9-]{10,}", "[redacted]"),
-    (r"\bsk-[A-Za-z0-9_-]{20,}", "[redacted]"),
-    (r"(?i)\b(password|passwd|secret|token|api[_-]?key)(\s*[=:]\s*)\S+", r"\1\2[redacted]"),
-    (r"-----BEGIN [A-Z ]+-----", "[redacted]"),
-]
-def clean(s):
-    s = "".join(c if c.isprintable() else " " for c in s)
-    for pat, rep in SECRETS:
-        s = re.sub(pat, rep, s)
-    s = re.sub(r"\s+", " ", s.replace(" --- ", " — ")).strip().rstrip(".").strip()
-    return s[:300]
-
-open_lines = [l for l in open_q.splitlines() if l.strip()]
-open_labels = {m.group(1) for l in open_lines for m in [re.match(r"(Q\d+):", l)] if m}
-used = {int(n) for l in open_lines + answered.splitlines() for n in re.findall(r"\bQ(\d+):", l)}
-nxt = max(used or {0}) + 1
-entries, blocks, labels = [], [], []
-for part in re.split(r"\n+|;\s*|(?<=[.!?])\s+(?=[A-Z])", needs):
-    part = clean(re.sub(r"^\s*(?:[-*•]|\(?\d+[.)])\s+", "", part))
-    if not part:
-        continue
-    refs = {"Q" + n for n in re.findall(r"\bQ(\d+)\b", part)}
-    if re.match(r"(?i)answer\b", part) and refs and refs <= open_labels:
-        continue  # those questions are already on the human's queue
-    if part.endswith("?") or re.match(r"(?i)(decide|choose|pick)\b", part):
-        q = "Q%d" % nxt
-        nxt += 1
-        labels.append(q)
-        entries.append("%s: %s" % (q, part))
-        blocks.append("\n".join([
-            "### " + q,
-            "Recommendation: answer in your own words — the agent asked this without options",
-            "Options:",
-            "1. answer in your own words — the agent asked this without options",
-            "Context:",
-            "- Depth 1: This task's role session ended its round asking this, and the tick stopped it.",
-            "- Depth 2: Copied from the session's job record on %s; your ` --- ` answer is carried to the next round, which resumes the same session." % now,
-            "- Depth 3: Session %s. Its transcript: `claude logs %s`." % (uuid, uuid.split("-")[0]),
-        ]))
-    else:
-        entries.append("do: " + part)
-print(json.dumps({"uuid": uuid, "entries": entries, "blocks": blocks, "labels": labels,
-                  "jobs": sum(e.startswith("do: ") for e in entries)}))
-PY
-}
-plan="$(plan_of "$rec" "$sid" "$open" "$answered" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"; rc=$?
-[ $rc -eq 1 ] && { echo "not-handed-off no-needs"; exit 1; }
-[ $rc -eq 0 ] || { echo "session-handoff: unreadable job record $rec" >&2; exit 2; }
-get() { python3 -c 'import json, sys; v = json.loads(sys.argv[1])[sys.argv[2]]; print("\n".join(v) if isinstance(v, list) else v)' "$plan" "$1"; }
-uuid="$(get uuid)"; njobs="$(get jobs)"; labels="$(get labels | paste -sd, -)"
-
-# ONCE per session: a re-run after a stop that did not land writes nothing twice.
-if ! grep -qF "needs handed off $uuid" "$task"; then
-  entries=(); while IFS= read -r e; do [ -n "$e" ] && entries+=("$e"); done <<EOF
-$(get entries)
-EOF
-  if [ ${#entries[@]} -gt 0 ]; then
-    bash "$HERE/fold-answers.sh" --add "$task" "${entries[@]}" >/dev/null || {
-      echo "session-handoff: could not add to open_questions in $task" >&2; exit 2; }
-  fi
-  python3 - "$task" "$plan" "* $(date -u +%Y-%m-%dT%H:%M:%SZ) needs handed off $uuid · do=$njobs · ask=${labels:--} · session stopped by the tick" <<'PY' || { echo "session-handoff: could not write $task" >&2; exit 2; }
-import json, os, re, sys, tempfile
-path, plan, note = sys.argv[1], json.loads(sys.argv[2]), sys.argv[3]
-src = open(path, encoding="utf-8").read()
-end = src.find("\n---", 3) + 4
-head, body = src[:end], src[end:]
-lines = body.split("\n")
-def section_end(start):  # the next column-0 heading of level 1-2 after `start`, or EOF
-    for i in range(start + 1, len(lines)):
-        if re.match(r"#{1,2}\s", lines[i]):
-            return i
-    return len(lines)
-if plan["blocks"]:
-    at = next((i for i, l in enumerate(lines) if re.match(r"## Question details\s*$", l)), None)
-    add = "\n\n".join(plan["blocks"]).split("\n")
-    if at is None:
-        while lines and not lines[-1].strip():
-            lines.pop()
-        lines = lines + ["", "## Question details", ""] + add + [""]
-    else:
-        e = section_end(at)
-        while e > at + 1 and not lines[e - 1].strip():
-            e -= 1
-        lines[e:e] = [""] + add
-at = next((i for i, l in enumerate(lines) if re.match(r"# Notes\s*$", l)), None)
-if at is None:
-    lines = lines + ["", "# Notes", "", note]
-else:
-    e = section_end(at)
-    while e > at + 1 and not lines[e - 1].strip():
-        e -= 1
-    lines[e:e] = [note]
-out = head + "\n".join(lines)
-if not out.endswith("\n"):
-    out += "\n"
-fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), prefix=".session-handoff.")
-with os.fdopen(fd, "w", encoding="utf-8") as fh:
-    fh.write(out)
-os.chmod(tmp, os.stat(path).st_mode & 0o7777)
-os.replace(tmp, path)
-PY
-fi
-
+[ "$waiting" = - ] || { echo "not-handed-off waiting-for"; exit 1; }
+[ "$hid" != - ] || { echo "not-handed-off no-needs"; exit 1; }
+handoff || exit 2
 stop_it || exit 3
-echo "handed-off $short do=$njobs ask=${labels:--}"
+echo "handed-off $short $hid $q"

@@ -81,8 +81,8 @@ this file so product-repo sessions aren't told they are a control panel. -->
 - **Two human authorities** (`SCHEMA.md`): only the human promotes `draft → ready`,
   and only the human merges. The PM never sets `ready` and never merges.
 - **Standing grant: the tick runs `claude stop`, never `rm`, on a role session whose
-  round is recorded** (`agent-sessions.sh recorded`), whose `needs` it filed as `do:`
-  rows, or whose task is done; any other stays yours.
+  round is recorded** (`agent-sessions.sh recorded`), whose `needs` it filed as a `👉 do`
+  hand-off, or whose task is done; any other stays yours.
 - **One active `/loopd:dispatch` loop per clone**, run from a session **in this
   repo**. The one-tick-at-a-time guarantee is backed by `.tick-lock` (per clone, gitignored) —
   the launcher takes it before dispatching and the tick checks it on entry — but the
@@ -119,7 +119,8 @@ failure-analyst, `ac`, `oq`, `fm` frontmatter, `bg`. Asks: `rec?`/`ur rec?`/`rec
 recommend with reasons and do NOT act; `?` explain; `st` status.
 - **Promote and merge are never inferred: act on either only when the reply types `prom`
   or `mrg`; a bare number whose glyph is promote or merge gets a one-line confirmation and
-  no action** — they are the two human authorities, and a typo must not fire one.
+  no action** — they are the two human authorities, and a typo must not fire one. A `👉 do`
+  row is your own job: a number on it runs none of its text.
 - **A list a tick, agent report or board refresh has replaced since you printed it is
   reprinted, numbered, before you act on a number.**
 

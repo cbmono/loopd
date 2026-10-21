@@ -60,7 +60,7 @@ REPORTED_LIVE="$(paths_of 'LIVE PROCESS')"
 # Must stay identical to reclaim-worktree.sh G12's list; tests/prune-wt.test.sh compares them.
 IGNORE_OK=" node_modules .pnpm-store .pnpm-store-task .bun-cache .venv venv __pycache__ \
 .pytest_cache .mypy_cache .next .nuxt .turbo .cache .gradle tmp temp .DS_Store \
-dist build out coverage .husky "
+dist build out coverage "
 
 live_processes_in() { # <worktree> — one line per live process whose cwd or argv is inside it; 1 if ps fails
   local wt=$1 pid cmd line ps_all
@@ -129,6 +129,7 @@ EOF
   while IFS= read -r entry; do
     [ -n "$entry" ] || continue
     case "$IGNORE_OK" in *" ${entry%%/*} "*) continue ;; esac
+    case "${entry##*/}" in .env*) ;; *) case "$entry" in .husky/_/*) continue ;; esac ;; esac
     keepers="$keepers $entry"
   done <<EOF
 $ignored

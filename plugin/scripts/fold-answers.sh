@@ -6,7 +6,7 @@
 #   Usage: fold-answers.sh [--instance DIR] [--answer <entry> <text>] <task-doc>
 #          fold-answers.sh --list <task-doc> <frontmatter-key>   # read-only
 #          fold-answers.sh --block Q<n> <task-doc>   # read-only: the ### Q<n> block as JSON, exit 1 if absent
-#          fold-answers.sh --add <task-doc> <entry>...  # append unanswered entries, skipping ones already open
+#          fold-answers.sh --add <task-doc> <entry>...  # append entries, skipping any already open or answered
 # `--answer` appends ` --- <text>` to that one open entry first (answer.sh's in-session answer).
 # Exit: 0 done (nothing to move is also 0) · 2 usage · 3 a list it could not round-trip,
 # nothing written · 4 the move would leave one entry in BOTH lists, nothing written.
@@ -292,7 +292,11 @@ if add_json:
             die(3, "an entry to add must be one non-empty line without ` --- `")
     open_q, o_at, o_end, o_cmt = read("open_questions")
     have = list(open_q or [])
-    new_q = have + [e for i, e in enumerate(adds) if e not in have and e not in adds[:i]]
+    ans_q = read("answered_questions")[0] or []
+    seen = {e.split(" --- ", 1)[0] for e in have} | {
+        re.sub(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z by [^\n]*? · ", "", a, count=1).split(" --- ", 1)[0]
+        for a in ans_q}
+    new_q = have + [e for i, e in enumerate(adds) if e not in seen and e not in adds[:i]]
     if len(new_q) == len(have):
         print("added: 0 entries")
         sys.exit(0)

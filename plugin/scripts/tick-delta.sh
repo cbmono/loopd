@@ -365,7 +365,11 @@ fingerprint() { # <probe|digest>
           in-review)   step4=1; step5=1 ;;
           done|cancelled) nterm=$((nterm + 1)) ;;
         esac
-        answered_open "$f"; case $? in 0) step2=1 ;; 2) return 1 ;; esac
+        # An answered hand-off owes its task a resume (step 4), whatever the status.
+        answered_open "$f"; case $? in
+          0) step2=1; grep -qF 'needs handed off' "$f" && step4=1 ;;
+          2) return 1 ;;
+        esac
       fi
       if [ "$st" = "in-review" ]; then
         prs="$(grep -m1 '^pr:' "$f" 2>/dev/null | grep -oE 'https://[^"[:space:]]+/pull/[0-9]+' || true)"

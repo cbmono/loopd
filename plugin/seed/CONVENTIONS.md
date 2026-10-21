@@ -906,9 +906,9 @@ above it so none may grow its share.
   correlation: every round whose final message addressed the human ended `blocked`, every
   one that reported an artifact ended `done`. Unconfirmed; the CLI's verdict is read
   through `agent-sessions.sh state`, never predicted. **A round that ends asking anyway is
-  not lost**: the CLI files the jobs it names as the session's `needs`, and the tick writes
-  them to `open_questions` as `do:` entries (a question as `Q<n>:`), stops the session, and
-  resumes it — same task, same PR — once the human has answered them (measured 2026-10-21).
+  not lost**: the CLI files the jobs it names as the session's `needs`, the tick shows them
+  in `AWAITING.md` as one hand-off (`Q<n>: do:` on the task), stops the session, and
+  resumes it — same task, same PR — with the human's answer (measured 2026-10-21).
 - **No customer PII** in code, commits, or PR text; **never echo, print, or log
   secrets or environment variables** (rely on existing env / `.npmrc` for auth).
 - **Capture knowledge:** if you discover something durable and reusable, write or
