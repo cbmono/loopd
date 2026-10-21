@@ -259,10 +259,8 @@ assert "…never names the written log"             "$(hasnt 'papercuts.md' "$LO
 assert "…leaves it byte-identical"                "$(yes_if cmp -s "$TMP/papercuts.pristine" "$INST3/knowledge/papercuts.md")"
 assert "…and ports the unwritten one"             "$(yes_if grep -qx '# Knowledge Base Log, v2' "$INST3/knowledge/log.md")"
 LOG_AGAIN="$(bash "$TPL3/plugin/scripts/refresh-seeds.sh" "$INST3" 2>&1)"
-assert "a second run is silent about both logs" \
-  "$(yes_if sh -c '! grep -qE "papercuts|knowledge/log" <<EOF
-$1
-EOF' _ "$LOG_AGAIN")"
+assert "a second run is silent about the written log" "$(hasnt 'papercuts.md' "$LOG_AGAIN")"
+assert "…and about the one it just ported"       "$(hasnt 'knowledge/log.md' "$LOG_AGAIN")"
 assert "…and the log is still untouched"          "$(yes_if cmp -s "$TMP/papercuts.pristine" "$INST3/knowledge/papercuts.md")"
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
