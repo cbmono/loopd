@@ -52,7 +52,7 @@ fm="$(awk 'NR==1 && $0!="---" {exit} /^---$/ {n++; if (n==2) exit; next} n==1' "
 fmval() { printf '%s\n' "$fm" | sed -n "s/^$1:[[:space:]]*//p" | head -1 | sed 's/[[:space:]]#.*$//' | tr -d '"'"'"' '; }
 status="$(fmval status)"; sid="$(fmval session)"
 # The store is the BUNDLE's (`<root>/projects/<slug>/tasks/<doc>`), wherever this runs from.
-root="$(cd "$(dirname "$task")/../../.." 2>/dev/null && pwd)"
+tdir="$(dirname "$task")"; root="$(cd "$tdir/../../.." 2>/dev/null && pwd)"
 [ -n "$root" ] && [ -f "$root/instance.config.json" ] || root="$PWD"
 store="$root/$AB_HANDOFFS"
 [ -n "$sid" ] || { echo "not-handed-off no-session"; exit 1; }
