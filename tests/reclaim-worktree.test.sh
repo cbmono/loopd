@@ -442,6 +442,35 @@ run --dry-run "projects/demo/tasks/task-cache.md"
 assert "G12 …and one .env beside them refuses"               "$(eq "$RC" 1)"
 rm -f "$WT_CACHE/.env"
 
+# husky's generated hook shim ignores itself (`.husky/_/.gitignore` is `*`): measured
+# 2026-10-21 as the one entry holding a merged task's worktree back.
+WT_HUSKY="$WTROOT/proj-demo-husky"
+wt_pushed "$WT_HUSKY" okf/demo-husky
+mkdir -p "$WT_HUSKY/.husky/_" "$WT_HUSKY/node_modules/pkg"
+printf 'npm test\n' > "$WT_HUSKY/.husky/pre-commit"   # the tracked hook beside the shim
+git -C "$WT_HUSKY" add .husky/pre-commit && git -C "$WT_HUSKY" commit -qm hooks && git -C "$WT_HUSKY" push -q
+printf '*\n' > "$WT_HUSKY/.husky/_/.gitignore"; printf '#!/bin/sh\n' > "$WT_HUSKY/.husky/_/pre-commit"
+printf 'x\n' > "$WT_HUSKY/node_modules/pkg/index.js"
+write_task task-husky done "$WT_HUSKY" okf/demo-husky fixture-org/proj "$PR1"
+printf 'TOKEN=shape-only\n' > "$WT_HUSKY/.env"
+run --dry-run "projects/demo/tasks/task-husky.md"
+assert "G12 .husky/_ beside a .env: the .env still refuses" "$(eq "$RC" 1)"
+rm -f "$WT_HUSKY/.env"
+# The allowance is the shim's PATH, never the `.husky` component: an ignored `.env` beside
+# the hooks, or one inside the shim itself, still refuses.
+printf 'TOKEN=shape-only\n' > "$WT_HUSKY/.husky/.env"
+run --dry-run "projects/demo/tasks/task-husky.md"
+assert "G12 an ignored .husky/.env refuses" "$(eq "$RC" 1)"
+assert "G12 …and is named" "$(has '\.husky/\.env')"
+rm -f "$WT_HUSKY/.husky/.env"
+printf 'TOKEN=shape-only\n' > "$WT_HUSKY/.husky/_/.env"
+run --dry-run "projects/demo/tasks/task-husky.md"
+assert "G12 a .env inside the shim refuses too" "$(eq "$RC" 1)"
+rm -f "$WT_HUSKY/.husky/_/.env"
+run "projects/demo/tasks/task-husky.md"
+assert "G12 .husky/_ and node_modules/ only: removed (exit 0)" "$(eq "$RC" 0)"
+assert "G12 …and the husky tree is gone" "$(no_if test -e "$WT_HUSKY")"
+
 WT_BUILD="$WTROOT/proj-demo-build"
 wt_pushed "$WT_BUILD" okf/demo-build
 mkdir -p "$WT_BUILD/dist/assets"; printf 'x\n' > "$WT_BUILD/dist/assets/app.js"

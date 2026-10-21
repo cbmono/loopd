@@ -432,12 +432,15 @@ state, and act only on deltas.
    driven by the task's own `worktree:`/`branch:`/`pr:` record, never by a scan.
    **Exit 0 only when that task is `done` AND every URL in its `pr:` has MERGED**; run it
    for each task you just moved to `done`, and report what it removed. **Stop the task's
-   own finished session first**: when
-   `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh worker <the task's session:>` prints
-   `worker <short> <pid>` (the daemon roster's live process for that session), run
-   `claude stop <short>` — `stop` refuses the full UUID — then
-   reclaim. That one recorded session only: never a process the task does not record,
-   never `claude rm`. **Exit 4 is a RETRY**: every live process in the tree is that
+   own session first, whatever state it is in**:
+   `${CLAUDE_PLUGIN_ROOT}/scripts/session-handoff.sh <task-path>` runs
+   `claude stop <short>` on a `done` or `cancelled` task's recorded session unless it has
+   already ended — `blocked` on a prompt or not, recorded or not — then reclaim. A done
+   task's session left for the human to stop is the nag this removes (measured
+   2026-10-21). **A `needs` it still holds is filed first** — jobs meant for after the merge
+   ("merge #559, then run the backfill") — so its `👉 do` row outlives the `done` until the
+   human answers it; say so in the tick report. That one recorded session only: never a
+   process the task does not record, never `claude rm`. **Exit 4 is a RETRY**: every live process in the tree is that
    session's own, which can outlive the stop by a moment — no `# Notes` line, no
    `AWAITING.md` row, nothing for the human. **Exit 1 is a
    REFUSAL** — a PR CLOSED-UNMERGED, an empty `pr:`, a dirty tree, an unpushed commit, an

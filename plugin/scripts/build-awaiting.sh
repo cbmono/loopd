@@ -24,10 +24,16 @@
 #
 # ROW ORDER IS AN EXECUTION ORDER, read top to bottom, so it is sorted after the walk rather
 # than left in glob order: (1) a task's blocker above it, via `depends_on`, transitively
-# through tasks that have no row; (2) then grant, unblock, answer, approve, merge, close, continue;
+# through tasks that have no row; (2) then grant, unblock, do, answer, approve, merge, close, continue;
 # (3) then glob order, so an unchanged bundle renders the same page. A cycle or a reference
 # to no live task drops only that edge. The sort reorders `row()`'s output and never
 # composes or drops a row: a failed sort renders glob order.
+#
+# A `Q<n>: do: …hand-off <id>…` entry is a stopped role session's HAND-OFF
+# (session-handoff.sh): ONE `👉 **do**` row, whose sentence is the agent's own `needs` read
+# from the per-clone `$AB_HANDOFFS/<id>.txt` — never from a tracked file — escaped, capped at
+# a word boundary, with the PR and run references it names linked. It renders on a done task
+# too until it is answered: jobs left for after the merge are the point of it.
 #
 # A `close` row, like `continue`, renders only where `mine` clears the project.md, so it
 # FAILS CLOSED: an `owner:` on a clone with no ownerGithubUser (task-owner.sh 1), or a
@@ -85,6 +91,73 @@ entries() { # <file> <key>
   bash "$HERE/fold-answers.sh" --list "$1" "$2" 2>/dev/null
 }
 
+# The hand-off row's sentence. Agent text is ESCAPED, so it cannot make a link or format
+# of its own; the links are ours: `owner/repo#N`, `<known repo>#N` (a `repos/` entry or the
+# task's `target_repo`), `PR #N` on the task's repo, and a run id on the repo its own `-R`
+# names, else the task's. Nothing inside a URL is linked. No text file ⇒ the entry's own.
+handoff_text() { # <entry> <task-file>
+  local id tr known
+  id="$(printf '%s' "$1" | grep -oE 'hand-off [0-9a-f]{8}-[0-9a-f]{8}' | head -1)"; id="${id#hand-off }"
+  tr="$(fmfirst "$2" target_repo)"
+  [ -n "$tr" ] || tr="$(fmfirst "$(dirname "$(dirname "$2")")/project.md" target_repo)"
+  known="$(ls "$inst/repos" 2>/dev/null | tr '\n' ' ')"
+  [ -n "${org+x}" ] || org="$(bash "$HERE/resolve-config.sh" --instance "$inst" org 2>/dev/null)" || org=""
+  python3 - "$1" "$tr" "$org" "$known" "$AB_HANDOFFS" "$inst/$AB_HANDOFFS/$id.txt" <<'PY' 2>/dev/null || printf '%s' "$1"
+import os, re, sys
+entry, tr, org, known, store, path = sys.argv[1:7]
+tr = re.sub(r"\s+#.*$", "", tr).strip().strip("\"'")
+tr = tr if re.fullmatch(r"[\w.-]+/[\w.-]+", tr) else ""
+owner = tr.split("/")[0] if tr else org
+known = set(known.split()) | ({tr.split("/")[1]} if tr else set())
+try:
+    text = open(path, encoding="utf-8").read().strip()
+except OSError:
+    text = ""
+if not text:
+    print(re.sub(r"([\\`*_\[\]()<>|~!#])", r"\\\1", entry), end=""); sys.exit(0)
+tail = ""
+if len(text) > 400:
+    cut = text.rfind(" ", 0, 400)
+    text = text[:cut if cut > 0 else 400]
+    tail = " … (truncated, full text: `%s/%s`)" % (store, os.path.basename(path))
+esc = lambda x: re.sub(r"([\\`*_\[\]()<>|~!#])", r"\\\1", x)
+TOK = re.compile(r"(?P<url>https?://[^\s<>]+)"
+                 r"|(?<![\w./#@-])(?:(?P<own>[A-Za-z0-9][\w.-]*)/)?(?P<repo>[A-Za-z][\w.-]*)#(?P<n>\d+)\b"
+                 r"|\bPR #?(?P<pr>\d+)\b"
+                 r"|\b(?P<verb>run(?: rerun| view| watch)?) (?P<run>\d{6,})\b")
+out, pos = [], 0
+for m in TOK.finditer(text):
+    out.append(esc(text[pos:m.start()])); pos = m.end(); g = m.group
+    if g("repo") and (g("own") or g("repo") in known) and (g("own") or owner):
+        o = g("own") or owner
+        out.append("[%s#%s](https://github.com/%s/%s/pull/%s)" % (g("repo"), g("n"), o, g("repo"), g("n")))
+    elif g("pr") and tr:
+        out.append("PR [%s#%s](https://github.com/%s/pull/%s)" % (tr.split("/")[1], g("pr"), tr, g("pr")))
+    elif g("run"):
+        # Its OWN command's `-R` only: the rest of this command, up to the next `gh `,
+        # `;` or `then` — never a later command's.
+        own = re.split(r"\bgh |;|\bthen\b", text[m.end():], maxsplit=1)[0]
+        r = re.search(r"(?:-R|--repo)[ =]([\w.-]+/[\w.-]+)", own)
+        rr = r.group(1) if r else tr
+        out.append(esc(g("verb")) + " " + ("[%s](https://github.com/%s/actions/runs/%s)" % (g("run"), rr, g("run")) if rr else g("run")))
+    else:
+        out.append(esc(m.group(0)))
+out.append(esc(text[pos:]))
+q = re.match(r"(Q\d+):", entry)
+print("".join(out) + tail + (" · then answer %s `done`" % q.group(1) if q else ""), end="")
+PY
+}
+
+handoffs_of() { # <file> <rel> <title> -> one 👉 row per unanswered hand-off entry
+  local e
+  while IFS= read -r e; do
+    case "$e" in *' --- '*) continue ;; Q[0-9]*': do: '*'hand-off '*) ;; *) continue ;; esac
+    add "👉" do "$3" "$2" "$(handoff_text "$e" "$1")"
+  done <<EOF
+$(entries "$1" open_questions || true)
+EOF
+}
+
 title_of() { # <file>
   local t; t="$(fmfirst "$1" title)"
   t="${t%\"}"; t="${t#\"}"
@@ -138,8 +211,8 @@ row() { printf '* %s **%s** — [%s](%s) · %s\n' "$1" "$2" "$3" "$4" "$5"; }
 
 row_txt=(); row_node=(); row_sev=()
 node_lines=""; node=0
-sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; answer) echo 2 ;;
-                        approve) echo 3 ;; merge) echo 4 ;; close) echo 5 ;; continue) echo 6 ;; *) echo 7 ;; esac; }
+sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; do) echo 2 ;; answer) echo 3 ;;
+                        approve) echo 4 ;; merge) echo 5 ;; close) echo 6 ;; continue) echo 7 ;; *) echo 8 ;; esac; }
 add() { row_txt+=("$(row "$@")"); row_node+=("$node"); row_sev+=("$(sev_of "$2")"); }
 # A live task becomes a sort node whether or not it renders a row, so an edge through an
 # in-progress or other-owner task still orders what it separates.
@@ -183,7 +256,14 @@ for pm in "$inst"/projects/*/project.md; do
     rel="${f#"$inst"}"
     st="$(fmfirst "$f" status)"; st="${st%% *}"
     ntask=$((ntask + 1))
-    case "$st" in done|cancelled) nterm=$((nterm + 1)); continue ;; esac
+    case "$st" in
+      done|cancelled)
+        nterm=$((nterm + 1))
+        if grep -qF 'hand-off ' "$f" && mine "$f"; then
+          add_node "$f" "$rel" "$slug"; handoffs_of "$f" "$rel" "$(title_of "$f")"
+        fi
+        continue ;;
+    esac
     add_node "$f" "$rel" "$slug"
     mine "$f" || continue
     t="$(title_of "$f")"
@@ -202,6 +282,7 @@ for pm in "$inst"/projects/*/project.md; do
       [ -n "$e" ] || continue
       case "$e" in *' --- '*) continue ;; esac
       qn=$((qn + 1))
+      case "$e" in Q[0-9]*': do: '*'hand-off '*) add "👉" do "$t" "$rel" "$(handoff_text "$e" "$f")"; continue ;; esac
       is_grant "$e" && { add "🧰" grant "$t" "$rel" "${trail:-$e}"; continue; }
       qs="${qs:+$qs; }$e"
     done <<EOF

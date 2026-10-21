@@ -20,7 +20,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    | `working` | absent | live. Leave it. Not a stall, not a re-dispatch. |
    | `done` | present | finished — advance the task as above. |
    | `done` | absent | it exited without the artifact: `check-dispatch.sh` exit 1. |
-   | `blocked` | either | holds a slot until `claude stop <id>`. **`agent-sessions.sh recorded` decides whose stop it is** (below): a recorded round is the tick's; anything else is surfaced, and stopped only on the human's say-so. **One named exception: a stalled resume** (below). |
+   | `blocked` | either | holds a slot until `claude stop <id>`. **`agent-sessions.sh recorded` decides whose stop it is** (below): a recorded round, or one whose `needs` lists the human's jobs, is the tick's; anything else is surfaced, and stopped only on the human's say-so. **One named exception: a stalled resume** (below). |
+   | `stopped` or `done` | either, after a hand-off | the human may have answered it: **`session-handoff.sh --owed` decides** (below, "A hand-off's round"). |
    | `gone` | absent | never started, or its record was removed. Same verdict as `done`+absent, and the same recovery. |
    | exit 2 | either | unknown, which is not "finished". Report it and change nothing. |
 
@@ -88,11 +89,38 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      count that round twice. Nothing owed ⇒ stop only; nothing reaches `AWAITING.md`.
    - **`unrecorded <uuid> check-dispatch=<n>`** — the human gate, as before: surface it,
      and this is the only `blocked` that puts a `claude stop` in `AWAITING.md`.
-   - **`prompt <uuid> <why>`** — the round is recorded but the session is on a live
-     prompt (`needs`, `waitingFor`), or nothing shows its turn ended. Never stopped by
-     the tick: surface it as `claude attach <the UUID's first field>` to answer it. A
-     stalled resume (below) is checked first.
+   - **`prompt <uuid> needs`** — the round ended listing what it needs from the human
+     (measured on 2.1.303: "review, apply and merge terraform#866; re-login SSO …").
+     **Hand it off, never attach:**
+     `${CLAUDE_PLUGIN_ROOT}/scripts/session-handoff.sh <task-path>`. The agent's text goes
+     only to the ignored `.loopd/.handoffs/<id>.txt`, which `AWAITING.md` renders as one
+     `👉 do` row with its PR and run links; the task gets fixed text — ONE
+     `Q<n>: do: …hand-off <id>…` entry, its block and a `needs handed off` note, in one
+     write — and the session is stopped. The task keeps its status. Exit 3 — the stop did
+     not land: report it; the next tick retries and writes nothing twice. Exit 1 (a live
+     `waitingFor` prompt, or no `needs`) or 2 — change nothing.
+   - **`prompt <uuid> <why>`, any other why** — a `waitingFor` prompt, or nothing shows
+     its turn ended. Never stopped by the tick: surface it as `claude attach <the UUID's
+     first field>` to answer it. A stalled resume (below) is checked first.
    - **`not-blocked <state>`** — the rows above apply. **Exit 2** — unknown: change nothing.
+
+   **A hand-off's round is RESUMED once the human has answered it** — same task, same PR
+   (`CONVENTIONS.md` → "A subagent works ONE task"). For EVERY task whose `# Notes` carry a
+   `needs handed off` line, whatever its status — `in-progress`, `in-review` or `blocked` —
+   run, after step 2's fold:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/session-handoff.sh --owed <task-path>
+   ```
+
+   **Exit 0** prints `owed <uuid> <id>` and `answer: <text>`: the latest hand-off names the
+   task's `session:`, its `Q<n>: do:` entry is answered, no `woke`/`resumed` note follows it,
+   and the session is `stopped` or `done`. Resume it by the two calls below with the message
+   `The human finished hand-off <id>: <text>. Carry on with this task.`, read the id back with
+   `resume-id`, and write the `woke`/`resumed` note — that note, or the `resume launched` one
+   below, is what makes the next tick answer `not-owed already-resumed`. **Exit 1** (`not-owed <why>`) — nothing to send. A
+   `done` task is never owed: its hand-off row stays in `AWAITING.md` until answered, and
+   the answer is the human's record, not a round.
 
    **Never `claude rm` a role agent's session** — it deletes the session **and its
    worktree**, which belongs to `reclaim-worktree.sh` once the task is `done` with every PR
@@ -125,7 +153,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    (more than one session matches) and exit 2 (none, or unknown) leave the task as it is —
    name it in the tick report and surface it as a 🔴 item. Resume only a session
    `agent-sessions.sh state` calls `done`, or `stopped` after the tick's own stop of a
-   recorded round above — never one still `blocked` or `working`. **Read the id off what
+   recorded round or a hand-off — never one still `blocked` or `working`. **Read the id off what
    the resume printed, before the tick moves on:**
    `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh resume-id <the UUID> '<everything the resume printed>'`.
    A flag-free resume prints `note: woke session <short> with its saved options (…)` then

@@ -592,6 +592,29 @@ in one read, and refuses on two cases the task document alone cannot see: a `nee
 `suggestedReply`, where a permission refusal mid-round would otherwise be stopped as
 finished. The stop and the resume are two decisions: the stop is unconditional, the resume
 waits for a round with a message to send, and goes only to the role that round addresses.
+
+**Why a `needs` is handed off, not attached.** Measured 2026-10-21 on 2.1.301–2.1.304: of
+five job records carrying `needs`, all five were `blocked` rounds whose `needs` was a list of
+jobs for the human — "review, apply and merge terraform#866; re-login SSO and run
+sim/simulate.sh, then gh run rerun …", "Merge PR #559 … Then run the backfill" — not a
+dialog, and none ended in `?`. Step 4 turned each into `claude attach <id>`, and attaching
+showed the human nothing the string did not. So `session-handoff.sh` files it and stops the
+session. **The agent's text never enters a tracked file**: a first cut split it into
+`do:`/`Q<n>:` entries and redacted credential shapes on the way into git, and review showed
+both lossy — no blocklist catches every token shape, and every split rule broke a real job
+(`e.g.`, a URL with `;`, "Answer Q1, then merge …"). So the text goes verbatim to the
+per-clone, self-ignoring `.loopd/.handoffs/<id>.txt` and renders only in `AWAITING.md`,
+escaped so it can draw no link of its own; the task gets ONE fixed-text `Q<n>: do:` entry
+with its block, and a note, in one atomic write. A `Q<n>` label because `/loopd:answer` and
+the board's queue address an entry only by one — an unlabelled entry fell back to "the
+first open question". The id hashes the session's `startedAt` with the text, so a retry
+writes nothing twice and the next round's hand-off — a flag-free resume keeps the uuid — is
+a new entry. **After the human answers, the round is a RESUME**: same task and same PR is
+`CONVENTIONS.md`'s resume case, and `session-handoff.sh --owed` is the one read that says so
+from a `stopped` session, which the `recorded` read never reaches. **A done task's
+hand-off outlives the `done`**: jobs meant for after the merge are the measured case, so
+`AWAITING.md` keeps the row until it is answered, and step 5 files a pending `needs` before
+it stops the session.
 The tick's grants are `Bash(claude stop *)` and `Bash(claude --bg --resume *)`, written by
 `/loopd:init` on the same yes as the spawn grant; a permission rule cannot name one
 session, so the scope lives in step 4.
@@ -676,7 +699,16 @@ as its tree, so step 5 runs `claude stop <short>` on the one session the task re
 --json` rows carry no pid — and reclaim answers exit 4 when that session is all that is
 left. Measured 2026-10-16: `stop` on a session with no process prints `stopped <short>`,
 exit 0, so it is safe to run unconditionally; on a live one it kills the process and drops
-the roster entry.
+the roster entry. **Since 2026-10-21 the stop does not wait for a roster process**: a done
+task's session that was `blocked` with no live worker (task-009 of one bundle, six PRs
+merged) stayed `blocked` and became a human `claude stop` item, so step 5 now stops any
+done or cancelled task's session that has not ended, through `session-handoff.sh`.
+Reclaim's allowlist gained ONE path the same day, `.husky/_/` — husky's generated,
+self-ignoring hook shim, the one entry holding that tree back (the other 27 ignored paths
+were `node_modules`). A path, not the `.husky` component: the rest of `.husky/` is the
+human's, and a `.env*` file is refused even inside the shim.
+Reclaim never runs `git clean`; the `clean -fdX` it prints for a human is limited to the
+named entries, so a `could not lstat` under `node_modules` cannot reach it.
 
 <a id="step-7"></a>
 ### Step 7 — why an idle tick sweeps the knowledge base

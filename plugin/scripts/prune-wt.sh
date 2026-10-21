@@ -129,6 +129,7 @@ EOF
   while IFS= read -r entry; do
     [ -n "$entry" ] || continue
     case "$IGNORE_OK" in *" ${entry%%/*} "*) continue ;; esac
+    case "${entry##*/}" in .env*) ;; *) case "$entry" in .husky/_/*) continue ;; esac ;; esac
     keepers="$keepers $entry"
   done <<EOF
 $ignored

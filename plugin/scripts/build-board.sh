@@ -1871,10 +1871,14 @@ def explain(verb, p, t, hint):
                 "immediately; the next loop tick does.")
     if verb in ("answer", "question"):
         n = toint(t.get("open_questions"))
-        return ("There %s %d open question%s on this task; an unanswered question blocks "
-                "promotion, so the loop will not dispatch it. Only the locally served "
+        # Only a DRAFT is held from promotion by a question; past it, an open entry is
+        # a stopped session's hand-off or an agent's ask, and holds that task's next round.
+        why = ("an unanswered question blocks promotion, so the loop will not dispatch it"
+               if t.get("status") == "draft" else
+               "the loop holds this task's next round until it is answered")
+        return ("There %s %d open question%s on this task; %s. Only the locally served "
                 "board shows question text." % ("is" if n == 1 else "are", n,
-                                                "" if n == 1 else "s"))
+                                                "" if n == 1 else "s", why))
     if verb == "merge":
         prs = [todict(x) for x in tolist(t.get("prs"))]
         nums = ", ".join("#%s" % x.get("number") for x in prs)

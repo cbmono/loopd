@@ -4,6 +4,8 @@
 #
 #   agent-sessions.sh state <session-id>      -> the raw state `claude agents` reports
 #                                                (working|blocked|done|gone, …) on stdout
+#   agent-sessions.sh row <session-id>        -> the one matching `claude agents` row as JSON;
+#                                                exit 1 several match, 3 none
 #   agent-sessions.sh full <session-id>       -> the full session UUID, for either spelling;
 #                                                exit 1 several match, 2 none (`resolve`
 #                                                is its older name)
@@ -37,7 +39,7 @@
 # tests/resume-full-id.test.sh and tests/blocked-recorded.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,31p' "$0" >&2; exit 2; }
+usage() { sed -n '3,33p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 command -v python3 >/dev/null 2>&1 || {
@@ -121,6 +123,12 @@ case "$1" in
     state_of "$2" "$json" || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
     ;;
 
+  row)
+    [ $# -eq 2 ] || usage
+    json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
+    match_of "$2" "$json"
+    ;;
+
   full|resolve)
     [ $# -eq 2 ] || usage
     json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
@@ -197,8 +205,10 @@ PY
     # Only a blocked session reaches the host read check-dispatch may make; it never calls back here.
     bash "$(dirname "${BASH_SOURCE[0]:-$0}")/check-dispatch.sh" "$task" >/dev/null 2>&1 </dev/null; cd_rc=$?
     [ $cd_rc -eq 0 ] || { echo "unrecorded $sid check-dispatch=$cd_rc"; exit 1; }
-    # A Claude Code internal (2.1.296-2.1.300): `needs` is a live prompt, `suggestedReply` a
-    # turn that ENDED addressing the human. Anything less stays the human's.
+    # A Claude Code internal (2.1.296-2.1.304): `needs` is what the session waits on — since
+    # 2.1.301 the jobs its round left the human, which step 4 hands to session-handoff.sh (it
+    # re-reads `waitingFor` itself) —
+    # and `suggestedReply` a turn that ENDED addressing the human. Anything less stays the human's.
     python3 - "$row" "$jobs" <<'PY'
 import json, os, sys
 r, jobs = json.loads(sys.argv[1]), sys.argv[2]
@@ -412,6 +422,6 @@ PY
     echo "copy $uuid"
     ;;
 
-  -h|--help) sed -n '3,31p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,33p' "$0"; exit 0 ;;
   *) usage ;;
 esac
