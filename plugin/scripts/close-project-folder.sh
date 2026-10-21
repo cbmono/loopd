@@ -36,7 +36,8 @@
 #   · `<project>/**/tmp/` and `<project>/**/temp/`  (directory name, case-insensitive)
 #   · `<project>/**/.DS_Store`
 #   · NON-MARKDOWN files under `<project>/sources/`  (`sources/**/*.md` are KEPT)
-#   · nothing else. Ever.
+#   · nothing else. Ever. (Outside the folder, in both outcomes: the per-clone, ignored
+#     hand-off texts `$AB_HANDOFFS/<id>.txt` that this project's task docs NAME — never others.)
 #
 # and what it must never touch:
 #
@@ -254,6 +255,21 @@ logbit() { LOG_BITS="$LOG_BITS${LOG_BITS:+, }$1"; }
 
 RETAIN="$(field "$PROJ/project.md" retain | tr '[:upper:]' '[:lower:]')"
 
+# A stopped role session's `needs` text (session-handoff.sh) is per clone and ignored, so
+# git takes none of it with the folder. ONLY the ids this project's task docs name are
+# removed — never the store as a class. Read before anything is deleted.
+HANDOFFS="$(grep -ohE 'hand-off [0-9a-f]{8}-[0-9a-f]{8}' "$PROJ"/tasks/*.md 2>/dev/null | cut -d' ' -f2 | sort -u || true)"
+prune_handoffs() {
+  local id f
+  for id in $HANDOFFS; do
+    f="$AB_HANDOFFS/$id.txt"
+    [[ -f "$f" && ! -L "$f" ]] || continue
+    note "PRUNE" "$f (hand-off text — per clone, ignored)"
+    if [[ $APPLY -eq 1 ]]; then rm -f -- "$f"; fi
+  done
+  return 0
+}
+
 # ---------------------------------------------------------------- removal (no retain)
 if [[ "$RETAIN" != "true" ]]; then
   echo "close-project-folder: $SLUG — not retained (no \`retain: true\` on project.md)."
@@ -301,6 +317,7 @@ if [[ "$RETAIN" != "true" ]]; then
     # files are a different matter: `git rm` leaves them, and this script does NOT
     # delete them behind a human's back — it reports that they are there.
     git rm -r -q -f -- "$PROJ"
+    prune_handoffs
     # The ONE exception, by name: the tick regenerates index.md and the bundle ignores
     # it. Never widen this to a class — "all ignored files" includes a closed project's .env.
     if [[ -f "$PROJ/index.md" && ! -L "$PROJ/index.md" ]]; then
@@ -329,6 +346,7 @@ EOF
       echo "Name $CLOSED_MD in the commit's paths — the entry must land in THIS commit."
     fi
   else
+    prune_handoffs
     if [[ -f "$PROJ/index.md" ]] && ! git ls-files --error-unmatch -- "$PROJ/index.md" >/dev/null 2>&1; then
       note "PRUNE" "would remove $PROJ/index.md (derived — the tick regenerates it)"
     fi
@@ -439,6 +457,7 @@ $(find "$PROJ" -path "$PROJ/deliverables" -prune -o -type f -name '.DS_Store' -p
 EOF
 if [[ $ds -gt 0 ]]; then note "PRUNE" "$ds .DS_Store file(s)"; logbit "$ds .DS_Store"; fi
 
+prune_handoffs
 note "KEEP" "tasks/  deliverables/  sources/**/*.md  index.md  log.md  project.md"
 
 echo "---"

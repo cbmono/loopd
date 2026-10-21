@@ -117,8 +117,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    task's `session:`, its `Q<n>: do:` entry is answered, no `woke`/`resumed` note follows it,
    and the session is `stopped` or `done`. Resume it by the two calls below with the message
    `The human finished hand-off <id>: <text>. Carry on with this task.`, read the id back with
-   `resume-id`, and write the `woke`/`resumed` note — that note is what makes the next tick
-   answer `not-owed already-resumed`. **Exit 1** (`not-owed <why>`) — nothing to send. A
+   `resume-id`, and write the `woke`/`resumed` note — that note, or the `resume launched` one
+   below, is what makes the next tick answer `not-owed already-resumed`. **Exit 1** (`not-owed <why>`) — nothing to send. A
    `done` task is never owed: its hand-off row stays in `AWAITING.md` until answered, and
    the answer is the human's record, not a round.
 

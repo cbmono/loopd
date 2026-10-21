@@ -51,6 +51,10 @@ done
 fm="$(awk 'NR==1 && $0!="---" {exit} /^---$/ {n++; if (n==2) exit; next} n==1' "$task")"
 fmval() { printf '%s\n' "$fm" | sed -n "s/^$1:[[:space:]]*//p" | head -1 | sed 's/[[:space:]]#.*$//' | tr -d '"'"'"' '; }
 status="$(fmval status)"; sid="$(fmval session)"
+# The store is the BUNDLE's (`<root>/projects/<slug>/tasks/<doc>`), wherever this runs from.
+root="$(cd "$(dirname "$task")/../../.." 2>/dev/null && pwd)"
+[ -n "$root" ] && [ -f "$root/instance.config.json" ] || root="$PWD"
+store="$root/$AB_HANDOFFS"
 [ -n "$sid" ] || { echo "not-handed-off no-session"; exit 1; }
 short="${sid%%-*}"
 TERMINAL=" done gone stopped completed cancelled failed error exited "
@@ -75,7 +79,9 @@ if not last:
 i, uuid, hid, q = last
 if not (uuid == sid or uuid.split("-")[0] == sid.split("-")[0]):
     print("not-owed session-replaced"); sys.exit(1)
-if any(re.match(r"\* .*\b(woke|resumed) [0-9a-f]{8}", l) for l in notes[i + 1:]):
+# Step 4 writes `woke`/`resumed <uuid>` after a resume, or `resume launched; …` when it
+# could not read the id back — every one of them means this hand-off was resumed.
+if any(re.search(r"\b(woke|resumed) [0-9a-f]{8}|\bresume launched\b", l) for l in notes[i + 1:]):
     print("not-owed already-resumed"); sys.exit(1)
 for e in answered.splitlines() + open_q.splitlines():
     body = re.sub(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z by [^\n]*? · ", "", e, count=1)
@@ -135,11 +141,14 @@ stop_it() { # -> 0 the stop landed, 3 it did not
 # ONE atomic write: the entry, its block and the note land together or not at all, on a
 # copy beside the task that replaces it only after it reads back.
 file_it() { # -> prints Q<n>
-  mkdir -p "$AB_HANDOFFS" && { [ -f "$AB_HANDOFFS/.gitignore" ] || printf '*\n' > "$AB_HANDOFFS/.gitignore"; } \
-    && printf '%s\n' "$needs" > "$AB_HANDOFFS/$hid.txt" || return 2
+  mkdir -p "$store" && { [ -f "$store/.gitignore" ] || printf '*\n' > "$store/.gitignore"; } \
+    && printf '%s\n' "$needs" > "$store/$hid.txt" || return 2
   local qn n entry tmp="$(dirname "$task")/.session-handoff.$$.md"
-  qn="$( { bash "$HERE/fold-answers.sh" --list "$task" open_questions; bash "$HERE/fold-answers.sh" --list "$task" answered_questions; } 2>/dev/null \
-        | grep -oE '(^|· )Q[0-9]+:' | grep -oE '[0-9]+' | sort -n | tail -1)"
+  # The highest number in use ANYWHERE: an `advisor: Q1:` entry and a `### Q1` heading
+  # both hold their number, and a second `### Q1` would answer the wrong block.
+  qn="$( { bash "$HERE/fold-answers.sh" --list "$task" open_questions; bash "$HERE/fold-answers.sh" --list "$task" answered_questions
+           sed -n 's/^### \(Q[0-9][0-9]*\)[[:space:]]*$/\1:/p' "$task"; } 2>/dev/null \
+        | grep -oE '(^|[^A-Za-z0-9])Q[0-9]+:' | grep -oE '[0-9]+' | sort -n | tail -1)"
   n="Q$(( ${qn:-0} + 1 ))"
   entry="$n: do: finish the agent's hand-off $hid — its jobs are in AWAITING.md; answer done, or with what its next round should know"
   cp -p "$task" "$tmp" || return 2

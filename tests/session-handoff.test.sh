@@ -198,6 +198,48 @@ ok "…the PR number is whole" "$(printf '%s' "$ROW" | grep -c 'terraform#8661\]
 ok "…and the cut is between words" "$(printf '%s' "$ROW" | grep -cE 'word … \(truncated')" 1
 STARTED=1791557649233; all_blocked
 
+echo "== B1: a launched resume counts as resumed, so a second tick never resumes again =="
+mk "$T/task-050-launched.md" in-progress "$U6"
+printf '\n* 2026-10-21T09:00:00Z needs handed off %s · hand-off f6f6f6f6-0000aaaa · Q1 · session stopped by the tick\n' "$U6" >> "$T/task-050-launched.md"
+bash "$FOLD" --add "$T/task-050-launched.md" "Q1: do: finish the agent's hand-off f6f6f6f6-0000aaaa — x" >/dev/null
+sed -i.bak 's/^  - "\(Q1: do: .*\)"$/  - "\1 --- done"/' "$T/task-050-launched.md"
+agents blocked blocked blocked blocked done stopped blocked blocked
+ok "answered and stopped: owed" "$(one --owed "$T/task-050-launched.md" | cut -d' ' -f1-2)" "owed $U6"
+printf 'resume launched; session id unresolved: 0badc0de\n' >> "$T/task-050-launched.md"
+ok "after 'resume launched': not owed" "$(one --owed "$T/task-050-launched.md")" "not-owed already-resumed rc=1"
+agents blocked blocked blocked blocked done done blocked blocked
+ok "…nor on the next tick, once the old session reads done" "$(one --owed "$T/task-050-launched.md")" "not-owed already-resumed rc=1"
+all_blocked
+
+echo "== W1: the next Q number counts advisor: entries and ### headings =="
+mk "$T/task-051-advisor.md" in-review "$U3" '[ "advisor: Q1: which db?" ]'
+printf -- '\n## Question details\n\n### Q1\nRecommendation: pg\nOptions:\n1. pg\nContext:\n- Depth 1: a\n- Depth 2: b\n- Depth 3: c\n' >> "$T/task-051-advisor.md"
+job "$U3" 'merge labs#9'
+OUT="$(one "$T/task-051-advisor.md")"
+ok "the hand-off becomes Q2" "$(printf '%s' "$OUT" | grep -oE 'Q[0-9]+ rc=0$')" "Q2 rc=0"
+ok "…the advisor's ### Q1 block is the only one" "$(grep -c '^### Q1$' "$T/task-051-advisor.md")" 1
+ok "…and --block Q2 is the hand-off's" "$(bash "$FOLD" --block Q2 "$T/task-051-advisor.md" | python3 -c 'import json, sys; print(json.load(sys.stdin)["options"][0][1])')" done
+mkdir -p "$J/${U3%%-*}"; printf '{"state":"blocked","suggestedReply":"x"}\n' > "$J/${U3%%-*}/state.json"; all_blocked
+
+echo "== W2: a run id takes the -R of its own command only =="
+mk "$T/task-052-runs.md" in-review "$U3"
+job "$U3" 'gh run rerun 39000001 then gh run rerun 39000002 -R acme/infra'
+one "$T/task-052-runs.md" >/dev/null; render
+ok "the first run links to the task's repo" "$(cnt "$AWF" '[39000001](https://github.com/example-user-007/labs/actions/runs/39000001)')" 1
+ok "…the second to its own -R" "$(cnt "$AWF" '[39000002](https://github.com/acme/infra/actions/runs/39000002)')" 1
+mkdir -p "$J/${U3%%-*}"; printf '{"state":"blocked","suggestedReply":"x"}\n' > "$J/${U3%%-*}/state.json"; all_blocked
+
+echo "== L2: the hand-off text lands in the bundle, wherever the tick runs from =="
+mk "$T/task-053-cwd.md" in-review "$U3"
+job "$U3" 'run the backfill'
+mkdir -p "$TMP/elsewhere"
+OUT="$( cd "$TMP/elsewhere" && bash "$SH" "$T/task-053-cwd.md" --jobs-dir "$J" 2>/dev/null )"
+ID5="$(id_of "$T/task-053-cwd.md")"
+ok "handed off from another cwd" "$(printf '%s' "$OUT" | cut -d' ' -f1)" handed-off
+ok "…its text is in the bundle's store" "$(cat "$HO/$ID5.txt" 2>/dev/null)" "run the backfill"
+ok "…and not under that cwd" "$([ -e "$TMP/elsewhere/.loopd" ] && echo yes || echo no)" no
+mkdir -p "$J/${U3%%-*}"; printf '{"state":"blocked","suggestedReply":"x"}\n' > "$J/${U3%%-*}/state.json"; all_blocked
+
 echo "== not its case, and unknown =="
 : > "$TMP/calls"
 ok "blocked with no needs" "$(one "$T/task-031-none.md")" "not-handed-off no-needs rc=1"

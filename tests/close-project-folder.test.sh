@@ -551,6 +551,24 @@ assert "…and that non-terminal tasks become cancelled"  "$(yes_if grep -q 'not
 assert "the Task status enum is unchanged (seven values)" \
   "$(yes_if grep -qF 'Task)      echo "draft ready in-progress in-review blocked cancelled done" ;;' "$TPL/plugin/scripts/validate-bundle.sh")"
 
+echo "== hand-off texts: the closed project's are removed, nobody else's =="
+for retain in "" "retain: true"$'\n'; do
+  ROOT="$TMP/handoffs"
+  new_instance "$ROOT" adoption "$retain"
+  printf -- '---\ntype: Task\nstatus: done\nopen_questions: [ "Q1: do: finish the agent'"'"'s hand-off a8b4344d-1f2e3d4c — x" ]\n---\n' > "$ROOT/projects/adoption/tasks/task-009.md"
+  ( cd "$ROOT" && git_c add -A . >/dev/null 2>&1 && git_c commit -qm t >/dev/null 2>&1 )
+  mkdir -p "$ROOT/.loopd/.handoffs"
+  printf '*\n' > "$ROOT/.loopd/.handoffs/.gitignore"
+  echo mine > "$ROOT/.loopd/.handoffs/a8b4344d-1f2e3d4c.txt"
+  echo theirs > "$ROOT/.loopd/.handoffs/b2b2b2b2-00000000.txt"
+  run "$ROOT" adoption
+  assert "${retain:+retained: }report-only names the hand-off text" "$(has '.handoffs/a8b4344d-1f2e3d4c.txt' "$OUT")"
+  assert "${retain:+retained: }…and keeps it" "$(exists "$ROOT/.loopd/.handoffs/a8b4344d-1f2e3d4c.txt")"
+  run "$ROOT" adoption --apply
+  assert "${retain:+retained: }--apply removes the project's hand-off text" "$(gone "$ROOT/.loopd/.handoffs/a8b4344d-1f2e3d4c.txt")"
+  assert "${retain:+retained: }…never another project's" "$(exists "$ROOT/.loopd/.handoffs/b2b2b2b2-00000000.txt")"
+done
+
 printf '\nclose-project-folder.test: pass=%d fail=%d\n' "$pass" "$fail"
 [[ $fail -eq 0 ]] || exit 1
 exit 0

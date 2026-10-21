@@ -134,7 +134,10 @@ for m in TOK.finditer(text):
     elif g("pr") and tr:
         out.append("PR [%s#%s](https://github.com/%s/pull/%s)" % (tr.split("/")[1], g("pr"), tr, g("pr")))
     elif g("run"):
-        r = re.match(r"[^;]*?(?:-R|--repo)[ =]([\w.-]+/[\w.-]+)", text[m.end():])
+        # Its OWN command's `-R` only: the rest of this command, up to the next `gh `,
+        # `;` or `then` — never a later command's.
+        own = re.split(r"\bgh |;|\bthen\b", text[m.end():], maxsplit=1)[0]
+        r = re.search(r"(?:-R|--repo)[ =]([\w.-]+/[\w.-]+)", own)
         rr = r.group(1) if r else tr
         out.append(esc(g("verb")) + " " + ("[%s](https://github.com/%s/actions/runs/%s)" % (g("run"), rr, g("run")) if rr else g("run")))
     else:
