@@ -1329,7 +1329,7 @@ owner asked three times in one session, for three different instances.
 ```text
 
    ▄▄▄▄
-◀━▐    ▌ loopd v3.12.2 · _loopd-example · org: cbmono
+◀━▐    ▌ loopd v3.12.3 · _loopd-example · org: cbmono
   ▝▄▄▄▄▘ ────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
