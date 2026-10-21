@@ -41,6 +41,8 @@
 #     Config is the one seed file whose purpose is to diverge, and a value in it is
 #     routinely a decision somebody made minutes ago. Same reason `/<plugin>:welcome` has
 #     no fixer for its `config-uncommitted` row.
+#   · A DATA LOG (`DATA_LOGS`) the bundle has written to ⇒ quiet, never merged: its header
+#     is the log's, not the seed's (`papercuts.sh` writes its own), so there is nothing to port.
 #   · No git history at all for the seed file (no repo, shallow clone, an uncommitted seed
 #     file) ⇒ no merge base, no evidence, no action. Reported for a human.
 #     A PATH MOVE IS NOT ONE OF THOSE CASES, AND KEEPING IT OUT IS WHAT `git log --follow`
@@ -182,6 +184,9 @@ split_additions() { # <file> <body-out> <block-out> <heading-ere>; no heading �
       for (i = s; i <= NR; i++) print l[i] > block
     }' "$1"
 }
+
+DATA_LOGS='knowledge/papercuts.md knowledge/log.md log.md'
+is_data_log() { case " $DATA_LOGS " in *" $1 "*) return 0 ;; esac; return 1; }
 
 rule_for() { printf '%s\n' "$DECIDABLE" | awk -F'|' -v p="$1" '$1==p {print $3; exit}'; }
 class_for() { printf '%s\n' "$DECIDABLE" | awk -F'|' -v p="$1" '$1==p {print $2; exit}'; }
@@ -613,6 +618,11 @@ while IFS= read -r rel; do
   done <<EOF
 $(hist_blobs "$rel")
 EOF
+
+  # A log still verbatim an old seed was never written to, so it ports like any seed file.
+  if is_data_log "$rel" && ! grep -qxF "$inst_hash" "$TMPD/prior"; then
+    insync=$((insync+1)); continue
+  fi
 
   if [ ! -s "$TMPD/prior" ]; then
     if [ "$any_history" -eq 1 ] && [ "$HIST_SHALLOW" -eq 0 ]; then
