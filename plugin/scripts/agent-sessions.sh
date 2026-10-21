@@ -197,8 +197,9 @@ PY
     # Only a blocked session reaches the host read check-dispatch may make; it never calls back here.
     bash "$(dirname "${BASH_SOURCE[0]:-$0}")/check-dispatch.sh" "$task" >/dev/null 2>&1 </dev/null; cd_rc=$?
     [ $cd_rc -eq 0 ] || { echo "unrecorded $sid check-dispatch=$cd_rc"; exit 1; }
-    # A Claude Code internal (2.1.296-2.1.300): `needs` is a live prompt, `suggestedReply` a
-    # turn that ENDED addressing the human. Anything less stays the human's.
+    # A Claude Code internal (2.1.296-2.1.304): `needs` is what the session waits on — since
+    # 2.1.301 the jobs its round left the human, which step 4 hands to session-handoff.sh —
+    # and `suggestedReply` a turn that ENDED addressing the human. Anything less stays the human's.
     python3 - "$row" "$jobs" <<'PY'
 import json, os, sys
 r, jobs = json.loads(sys.argv[1]), sys.argv[2]

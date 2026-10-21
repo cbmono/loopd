@@ -69,7 +69,11 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # 16102 -> 16264 (blocked-rounds-resume/task-001). +170 bytes, 2 lines: the standing grant
 # for the tick's `claude stop` on a recorded round, which the task's criterion 5 requires the
 # seed to state where the human reads it. Trimmed from 6 lines first. Measured, not rounded.
-CEILING=16264
+# 16264 -> 16319 (fix/blocked-needs-stop-and-husky). +55 bytes, 1 line: the standing grant
+# now names the two other sessions the tick stops — one whose `needs` it filed as `do:` rows,
+# and a done task's — because the human reads this line to know which stops are not theirs.
+# Trimmed from 3 added lines first. Measured, not rounded; flagged in the PR body.
+CEILING=16319
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

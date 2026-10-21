@@ -442,6 +442,22 @@ run --dry-run "projects/demo/tasks/task-cache.md"
 assert "G12 …and one .env beside them refuses"               "$(eq "$RC" 1)"
 rm -f "$WT_CACHE/.env"
 
+# husky's generated hook shim ignores itself (`.husky/_/.gitignore` is `*`): measured
+# 2026-10-21 as the one entry holding a merged task's worktree back.
+WT_HUSKY="$WTROOT/proj-demo-husky"
+wt_pushed "$WT_HUSKY" okf/demo-husky
+mkdir -p "$WT_HUSKY/.husky/_" "$WT_HUSKY/node_modules/pkg"
+printf '*\n' > "$WT_HUSKY/.husky/_/.gitignore"; printf '#!/bin/sh\n' > "$WT_HUSKY/.husky/_/pre-commit"
+printf 'x\n' > "$WT_HUSKY/node_modules/pkg/index.js"
+write_task task-husky done "$WT_HUSKY" okf/demo-husky fixture-org/proj "$PR1"
+printf 'TOKEN=shape-only\n' > "$WT_HUSKY/.env"
+run --dry-run "projects/demo/tasks/task-husky.md"
+assert "G12 .husky/_ beside a .env: the .env still refuses" "$(eq "$RC" 1)"
+rm -f "$WT_HUSKY/.env"
+run "projects/demo/tasks/task-husky.md"
+assert "G12 .husky/_ and node_modules/ only: removed (exit 0)" "$(eq "$RC" 0)"
+assert "G12 …and the husky tree is gone" "$(no_if test -e "$WT_HUSKY")"
+
 WT_BUILD="$WTROOT/proj-demo-build"
 wt_pushed "$WT_BUILD" okf/demo-build
 mkdir -p "$WT_BUILD/dist/assets"; printf 'x\n' > "$WT_BUILD/dist/assets/app.js"

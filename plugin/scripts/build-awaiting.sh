@@ -24,10 +24,14 @@
 #
 # ROW ORDER IS AN EXECUTION ORDER, read top to bottom, so it is sorted after the walk rather
 # than left in glob order: (1) a task's blocker above it, via `depends_on`, transitively
-# through tasks that have no row; (2) then grant, unblock, answer, approve, merge, close, continue;
+# through tasks that have no row; (2) then grant, unblock, do, answer, approve, merge, close, continue;
 # (3) then glob order, so an unchanged bundle renders the same page. A cycle or a reference
 # to no live task drops only that edge. The sort reorders `row()`'s output and never
 # composes or drops a row: a failed sort renders glob order.
+#
+# A `do: <job>` entry in `open_questions` is a JOB a stopped role session left for the human
+# (session-handoff.sh), not a question: ONE `👉 **do**` row per entry, its text with every
+# PR and run reference it names turned into a link. The human appends ` --- done` to it.
 #
 # A `close` row, like `continue`, renders only where `mine` clears the project.md, so it
 # FAILS CLOSED: an `owner:` on a clone with no ownerGithubUser (task-owner.sh 1), or a
@@ -85,6 +89,33 @@ entries() { # <file> <key>
   bash "$HERE/fold-answers.sh" --list "$1" "$2" 2>/dev/null
 }
 
+# `repo#N`, `owner/repo#N`, `PR #N` and a run id become links. The owner is the task's (or
+# its project's) `target_repo` owner, else the instance `org`; nothing known, text as is.
+linkify() { # <text> <task-file>
+  local tr; tr="$(fmfirst "$2" target_repo)"
+  [ -n "$tr" ] || tr="$(fmfirst "$(dirname "$(dirname "$2")")/project.md" target_repo)"
+  [ -n "${org+x}" ] || org="$(bash "$HERE/resolve-config.sh" --instance "$inst" org 2>/dev/null)" || org=""
+  python3 - "$1" "${tr//[\"\']/}" "$org" <<'PY' 2>/dev/null || printf '%s' "$1"
+import re, sys
+text, tr, org = sys.argv[1:4]
+tr = tr if re.fullmatch(r"[\w.-]+/[\w.-]+", tr) else ""
+owner = tr.split("/")[0] if tr else org
+def pr(m):
+    o = m.group(1) or owner
+    return "[%s#%s](https://github.com/%s/%s/pull/%s)" % (m.group(2), m.group(3), o, m.group(2), m.group(3)) if o else m.group(0)
+text = re.sub(r"(?<![\w/\[#])(?:([\w.-]+)/)?([A-Za-z][\w.-]*)#(\d+)\b", pr, text)
+if tr:
+    r = tr.split("/")[1]
+    text = re.sub(r"\bPR #?(\d+)\b", lambda m: "PR [%s#%s](https://github.com/%s/pull/%s)" % (r, m.group(1), tr, m.group(1)), text)
+m = re.search(r"(?:-R|--repo)[ =]([\w.-]+/[\w.-]+)", text)
+rr = m.group(1) if m else tr
+if rr:
+    text = re.sub(r"\b(run(?: rerun| view| watch)?) (\d{6,})\b",
+                  lambda m: "%s [%s](https://github.com/%s/actions/runs/%s)" % (m.group(1), m.group(2), rr, m.group(2)), text)
+print(text, end="")
+PY
+}
+
 title_of() { # <file>
   local t; t="$(fmfirst "$1" title)"
   t="${t%\"}"; t="${t#\"}"
@@ -138,8 +169,8 @@ row() { printf '* %s **%s** — [%s](%s) · %s\n' "$1" "$2" "$3" "$4" "$5"; }
 
 row_txt=(); row_node=(); row_sev=()
 node_lines=""; node=0
-sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; answer) echo 2 ;;
-                        approve) echo 3 ;; merge) echo 4 ;; close) echo 5 ;; continue) echo 6 ;; *) echo 7 ;; esac; }
+sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; do) echo 2 ;; answer) echo 3 ;;
+                        approve) echo 4 ;; merge) echo 5 ;; close) echo 6 ;; continue) echo 7 ;; *) echo 8 ;; esac; }
 add() { row_txt+=("$(row "$@")"); row_node+=("$node"); row_sev+=("$(sev_of "$2")"); }
 # A live task becomes a sort node whether or not it renders a row, so an edge through an
 # in-progress or other-owner task still orders what it separates.
@@ -202,6 +233,7 @@ for pm in "$inst"/projects/*/project.md; do
       [ -n "$e" ] || continue
       case "$e" in *' --- '*) continue ;; esac
       qn=$((qn + 1))
+      case "$e" in 'do: '*) add "👉" do "$t" "$rel" "$(linkify "${e#do: }" "$f")"; continue ;; esac
       is_grant "$e" && { add "🧰" grant "$t" "$rel" "${trail:-$e}"; continue; }
       qs="${qs:+$qs; }$e"
     done <<EOF

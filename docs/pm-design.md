@@ -592,6 +592,23 @@ in one read, and refuses on two cases the task document alone cannot see: a `nee
 `suggestedReply`, where a permission refusal mid-round would otherwise be stopped as
 finished. The stop and the resume are two decisions: the stop is unconditional, the resume
 waits for a round with a message to send, and goes only to the role that round addresses.
+
+**Why a `needs` is handed off, not attached.** Measured 2026-10-21 on 2.1.301–2.1.304: of
+five job records carrying `needs`, all five were `blocked` rounds whose `needs` was a list of
+jobs for the human — "review, apply and merge terraform#866; re-login SSO and run
+sim/simulate.sh, then gh run rerun …", "Merge PR #559 … Then run the backfill" — not a
+dialog, and none ended in `?`. Step 4 turned each into `claude attach <id>`, and attaching
+showed the human nothing the string did not. So `session-handoff.sh` splits the string on
+`;` and sentence ends, writes each job as a `do:` entry in `open_questions` (each question —
+ending `?`, or opening "Decide/Choose/Pick" — as a numbered `Q<n>:` with its block), and
+stops the session. `open_questions` rather than a new field because it already carries the
+reply (` --- done`), the fold, the `by <login>` stamp and the queue; the rejected `caveat:`
+prefix was rejected for blocking `draft → ready`, and a session only exists past `ready`.
+**After the human acts, the round is a RESUME, not a fresh dispatch**: it is the same task
+and the same PR, which is `CONVENTIONS.md`'s resume case, and the session holds the context
+the round was built on. The stop leaves it `stopped`, which the flag-free resume by the
+full id wakes. A text shaped like a credential is replaced with `[redacted]` before it is
+written; there was no existing scrub of agent text to reuse.
 The tick's grants are `Bash(claude stop *)` and `Bash(claude --bg --resume *)`, written by
 `/loopd:init` on the same yes as the spawn grant; a permission rule cannot name one
 session, so the scope lives in step 4.
@@ -676,7 +693,14 @@ as its tree, so step 5 runs `claude stop <short>` on the one session the task re
 --json` rows carry no pid — and reclaim answers exit 4 when that session is all that is
 left. Measured 2026-10-16: `stop` on a session with no process prints `stopped <short>`,
 exit 0, so it is safe to run unconditionally; on a live one it kills the process and drops
-the roster entry.
+the roster entry. **Since 2026-10-21 the stop does not wait for a roster process**: a done
+task's session that was `blocked` with no live worker (task-009 of one bundle, six PRs
+merged) stayed `blocked` and became a human `claude stop` item, so step 5 now stops any
+done or cancelled task's session that has not ended, through `session-handoff.sh`.
+Reclaim's allowlist gained `.husky` the same day: husky's generated, ignored `.husky/_/`
+was the one entry holding that tree back (the other 27 ignored paths were `node_modules`).
+Reclaim never runs `git clean`; the `clean -fdX` it prints for a human is limited to the
+named entries, so a `could not lstat` under `node_modules` cannot reach it.
 
 <a id="step-7"></a>
 ### Step 7 — why an idle tick sweeps the knowledge base

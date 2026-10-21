@@ -851,7 +851,7 @@ above it so none may grow its share.
 
   | What you would hand it | |
   |---|---|
-  | The **same task**, the **same PR**, the next round — review findings, a re-rebase, "open the PR on what you already have" | **RESUME.** It knows this repo squash-merges and which `--onto` base to use; a cold agent re-derives that at real cost. |
+  | The **same task**, the **same PR**, the next round — review findings, a re-rebase, "open the PR on what you already have", the round after the human did the jobs a stopped session left them | **RESUME.** It knows this repo squash-merges and which `--onto` base to use; a cold agent re-derives that at real cost. |
   | A **different task**, a **different PR**, or an unrelated ad-hoc job | **DISPATCH FRESH.** |
   | A `project-manager` **tick** | **NEVER RESUME — no exception, no "unless".** |
 
@@ -905,7 +905,10 @@ above it so none may grow its share.
   record. A final message nobody reads is an ask that is lost. Measured 2026-10-15, as a
   correlation: every round whose final message addressed the human ended `blocked`, every
   one that reported an artifact ended `done`. Unconfirmed; the CLI's verdict is read
-  through `agent-sessions.sh state`, never predicted.
+  through `agent-sessions.sh state`, never predicted. **A round that ends asking anyway is
+  not lost**: the CLI files the jobs it names as the session's `needs`, and the tick writes
+  them to `open_questions` as `do:` entries (a question as `Q<n>:`), stops the session, and
+  resumes it — same task, same PR — once the human has answered them (measured 2026-10-21).
 - **No customer PII** in code, commits, or PR text; **never echo, print, or log
   secrets or environment variables** (rely on existing env / `.npmrc` for auth).
 - **Capture knowledge:** if you discover something durable and reusable, write or

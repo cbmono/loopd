@@ -331,7 +331,10 @@ session: <id>                          # optional, BUILD only. MACHINE-READ by s
 # A `blocked` session is the TICK's to `claude stop` only when `agent-sessions.sh recorded`
 # says so: its turn ended addressing the human and this task already records the round
 # (`check-dispatch.sh` exit 0), so nothing is left to send it and the stop frees a slot.
-# With nothing recorded, or a live prompt, the stop stays the human's (step 4).
+# A session whose job record carries `needs` — the jobs its round left for the human — is
+# the tick's too, AFTER `session-handoff.sh` writes them to `open_questions`; so is any
+# session of a `done`/`cancelled` task. With nothing recorded, or a `waitingFor` prompt,
+# the stop stays the human's (step 4).
 #
 # NEVER run `claude rm` on one of these: it deletes a session AND its worktree, while a
 # role agent's worktree belongs to `prune-worktrees.sh` and the human who runs it.
@@ -343,7 +346,7 @@ interfaces:                           # optional, BUILD-shaped. NOT machine-read
 # spellings of the same function, route or column, and the mismatch surfaces at
 # review. Write exact identifiers, never prose. Omit the key entirely when a task
 # shares no surface with its siblings — an empty block is noise.
-open_questions:                       # PM-managed; ONLY still-unanswered questions. Number every entry (Q1, Q2, …), and give each its `### Q<n>` block under "Question details" below. The human answers an entry by appending ` --- <answer>` to it on the same line (e.g. "Q1: Which region should we default to? --- eu-central-1"); the PM treats any text after the ` --- ` delimiter as the answer, folds it into the task (Context / acceptance_criteria / Notes) and MOVES that entry to `answered_questions`, stamped `by <login>` with the human who answered ("Decisions name the human" below) — this list still EMPTIES, because that is the signal promotion keys on. (Answering in-session works too.)
+open_questions:                       # PM-managed; ONLY still-unanswered questions — and the `do: <job>` entries `session-handoff.sh` writes from a stopped role session's `needs`: a job, not a question, unnumbered, one `👉 do` row each in AWAITING.md, acknowledged with ` --- done` and folded like an answer. Number every entry (Q1, Q2, …), and give each its `### Q<n>` block under "Question details" below. The human answers an entry by appending ` --- <answer>` to it on the same line (e.g. "Q1: Which region should we default to? --- eu-central-1"); the PM treats any text after the ` --- ` delimiter as the answer, folds it into the task (Context / acceptance_criteria / Notes) and MOVES that entry to `answered_questions`, stamped `by <login>` with the human who answered ("Decisions name the human" below) — this list still EMPTIES, because that is the signal promotion keys on. (Answering in-session works too.)
   - "Q1: <blocking question for the human>"
   - "Q2: ..."
 advisor_notes:                        # optional, PM-managed. Concerns raised by an ADVISORY agent — the `plan-architect` approach critique the PM runs at refine time — that the PM has NOT yet triaged. (The per-tick `advisor` observer also wrote here until it was RETIRED on 2026-10-08 — enabled in no bundle, and a second opinion drawn from the PM's own inputs; its entries in existing documents stay valid and this field stays, unchanged, with no new check.) DELIBERATELY NOT A GATE: unlike `open_questions` this does NOT block promotion, does NOT put a row in AWAITING.md, and `validate-bundle.sh` adds no check for it — a concern is the loop's problem first, not the human's. On the next tick the PM triages each entry and it leaves this list one of two ways: RESOLVED, moving to `answered_questions` prefixed `advisor:` so the provenance survives; or ESCALATED, copied into `open_questions` prefixed `advisor:` because the PM genuinely cannot decide — and only then does it reach the human and the board. Absent means no concern is outstanding, which is the normal state. **No customer PII**, same rule as every other document field.

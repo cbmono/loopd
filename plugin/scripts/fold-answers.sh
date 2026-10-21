@@ -6,6 +6,7 @@
 #   Usage: fold-answers.sh [--instance DIR] [--answer <entry> <text>] <task-doc>
 #          fold-answers.sh --list <task-doc> <frontmatter-key>   # read-only
 #          fold-answers.sh --block Q<n> <task-doc>   # read-only: the ### Q<n> block as JSON, exit 1 if absent
+#          fold-answers.sh --add <task-doc> <entry>...  # append unanswered entries, skipping ones already open
 # `--answer` appends ` --- <text>` to that one open entry first (answer.sh's in-session answer).
 # Exit: 0 done (nothing to move is also 0) · 2 usage · 3 a list it could not round-trip,
 # nothing written · 4 the move would leave one entry in BOTH lists, nothing written.
@@ -15,16 +16,20 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-usage() { sed -n '6,9p' "$0" >&2; exit 2; }
+usage() { sed -n '6,10p' "$0" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "fold-answers: python3 is required" >&2; exit 2; }
 
-inst="."; doc=""; list_key=""; ans_entry=""; ans_text=""; block_label=""
+inst="."; doc=""; list_key=""; ans_entry=""; ans_text=""; block_label=""; add_json=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) [ $# -ge 2 ] || usage; inst="$2"; shift 2 ;;
     --list)     [ $# -ge 3 ] || usage; doc="$2"; list_key="$3"; shift 3 ;;
     --answer)   [ $# -ge 3 ] || usage; ans_entry="$2"; ans_text="$3"; shift 3 ;;
     --block)    [ $# -ge 3 ] && [[ "$2" =~ ^Q[0-9]+$ ]] || usage; block_label="$2"; doc="$3"; shift 3 ;;
+    # The ONE writer of a new entry, so it goes through the parser that round-trips.
+    --add)      [ $# -ge 3 ] || usage; doc="$2"; shift 2
+                add_json="$(python3 -c 'import json, sys; print(json.dumps(sys.argv[1:]))' "$@")" || usage
+                set -- ;;
     -h|--help)  usage ;;
     -*)         usage ;;
     *)          [ -z "$doc" ] || usage; doc="$1"; shift ;;
@@ -47,7 +52,7 @@ done
 # unresolvable author stays `<unknown>` rather than being stamped with whoever's loop is
 # folding it.
 login_self="<unknown>"; login_author="<unknown>"; committed_state="absent"; committed_file=""
-if [ -z "$list_key$block_label" ] && [ -x "$HERE/decision-stamp.sh" ]; then
+if [ -z "$list_key$block_label$add_json" ] && [ -x "$HERE/decision-stamp.sh" ]; then
   committed_file="$(mktemp -t fold-answers.XXXXXX)"; head_doc="$(mktemp -t fold-answers-head.XXXXXX)"
   trap 'rm -f "$committed_file" "$head_doc"' EXIT
   login_self="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --self 2>/dev/null || true)"
@@ -66,13 +71,13 @@ if [ -z "$list_key$block_label" ] && [ -x "$HERE/decision-stamp.sh" ]; then
 fi
 
 python3 - "$doc" "$list_key" "$login_self" "$login_author" "$committed_state" \
-         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ans_entry" "$ans_text" "$block_label" <<'PY'
+         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ans_entry" "$ans_text" "$block_label" "$add_json" <<'PY'
 import json, os, re, sys, tempfile
 
 ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "/": "/"}
 
 path, list_key = sys.argv[1], sys.argv[2]
-login_self, login_author, committed_state, committed_file, stamp, ans_entry, ans_text, block_label = sys.argv[3:11]
+login_self, login_author, committed_state, committed_file, stamp, ans_entry, ans_text, block_label, add_json = sys.argv[3:12]
 src = open(path, encoding="utf-8").read()
 
 
@@ -256,6 +261,58 @@ def emit(entries, comment=""):
     return head + "".join(lines)
 
 
+def write_out(out):
+    """Written beside the document and renamed over it: opening `path` for writing
+    truncates it first, so an interrupted write leaves a task document with half its
+    frontmatter."""
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), prefix=".fold-answers.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(out)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.chmod(tmp, os.stat(path).st_mode & 0o7777)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+if add_json:
+    # `--add`: append entries to `open_questions`, creating the key — and an empty
+    # `answered_questions`, which the later fold of an acknowledged entry refuses without.
+    # An entry already open is skipped, so a re-run adds nothing. ` --- ` would read as
+    # an answer, so it is refused rather than rewritten.
+    adds = json.loads(add_json)
+    for e in adds:
+        if not e.strip() or "\n" in e or " --- " in e:
+            die(3, "an entry to add must be one non-empty line without ` --- `")
+    open_q, o_at, o_end, o_cmt = read("open_questions")
+    have = list(open_q or [])
+    new_q = have + [e for i, e in enumerate(adds) if e not in have and e not in adds[:i]]
+    if len(new_q) == len(have):
+        print("added: 0 entries")
+        sys.exit(0)
+    if o_at is None:
+        out = src[:FM_END] + "open_questions:" + emit(new_q) + "\n" + src[FM_END:]
+    else:
+        out = src[:o_at] + emit(new_q, o_cmt) + src[o_end:]
+    src = out
+    FM_START, FM_END = frontmatter(out)
+    if find_key("answered_questions") is None:
+        out = out[:FM_END] + "answered_questions: [ ]\n" + out[FM_END:]
+        src = out
+        FM_START, FM_END = frontmatter(out)
+    back, _, _, _ = read("open_questions")
+    if back != new_q:
+        die(3, "the re-parse does not match; nothing written")
+    write_out(out)
+    print("added: %d entr%s -> open_questions" % (len(new_q) - len(have), "y" if len(new_q) - len(have) == 1 else "ies"))
+    sys.exit(0)
+
 if block_label:
     # The same heading and field grammar as answer.sh's reader: the block runs to the
     # next heading of level 1-3, `Options:`/`Context:` open a field on their own line.
@@ -402,21 +459,6 @@ back_a, _, _, _ = read("answered_questions")
 if back_o != keep or back_a != new_ans:
     die(3, "the re-parse does not match; nothing written")
 
-# Written beside the document and renamed over it: opening `path` for writing truncates it
-# first, so an interrupted write leaves a task document with half its frontmatter.
-fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), prefix=".fold-answers.")
-try:
-    with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        fh.write(out)
-        fh.flush()
-        os.fsync(fh.fileno())
-    os.chmod(tmp, os.stat(path).st_mode & 0o7777)
-    os.replace(tmp, path)
-except BaseException:
-    try:
-        os.unlink(tmp)
-    except OSError:
-        pass
-    raise
+write_out(out)
 print("folded: %d entr%s -> answered_questions" % (len(moved), "y" if len(moved) == 1 else "ies"))
 PY
