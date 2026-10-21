@@ -123,6 +123,10 @@ A conflict that recurs on every bundle with the same answer is a rule, not a que
 | `index.md` (`.loopd/index.md`) | derived and gitignored — the project-manager rewrites it at tick step 8 (Curate), so a conflicting hunk keeps the bundle's copy and writes nothing |
 | `.gitignore` | conflicting hunks that touch only seed-managed lines (`board.html`, `.board-live/`, `AWAITING.md`, `.tick-lock`, `.loopd/`) take the seed side; every bundle-added line is kept |
 
+**A data log is never a conflict.** `knowledge/papercuts.md`, `knowledge/log.md` and
+`log.md` are seeded when absent and, once the bundle has written to them, never merged —
+the refresh stays silent about them. One still byte-identical to an old seed ports as usual.
+
 ### The two config files, on the same stamp
 
 Config is the one seed file that is *meant* to diverge, so the seed pass never touches

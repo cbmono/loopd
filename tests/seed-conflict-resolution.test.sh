@@ -233,5 +233,37 @@ for p in $DG; do
     "$(yes_if cmp -s "$TMP/dg.$(printf '%s' "$p" | tr / _)" "$INST2/$(ab_seed_dest "$p")")"
 done
 
+# A data log is seeded when absent and never merged once written: its header is the
+# log's own (papercuts.sh writes one), so a seed example edit is nothing to port.
+echo "== a written data log is never a CONFLICT; an unwritten one still ports =="
+TPL3="$TMP/tpl3"; cp -R "$TPL" "$TPL3"
+INST3="$TMP/group3/_ai-bridge-logs"; mkdir -p "$INST3"
+bash "$TPL3/plugin/scripts/init-bundle.sh" "$INST3" > "$TMP/stamp3.out" 2>&1
+assert "an absent papercuts.md is stamped as the seed copy" \
+  "$(yes_if cmp -s "$TPL3/plugin/seed/knowledge/papercuts.md" "$INST3/knowledge/papercuts.md")"
+printf '# Papercuts\n\nOne line per papercut.\n\n## Entries\n\n2026-09-06 | p/task-001 | script:x.sh | a thing that hurt once\n<!-- pass 2026-09-07 — 1 entries, 1 surfaces -->\n' \
+  > "$INST3/knowledge/papercuts.md"
+cp "$INST3/knowledge/papercuts.md" "$TMP/papercuts.pristine"
+sed 's#checkout-v2/task-016#example/task-099#' "$TPL3/plugin/seed/knowledge/papercuts.md" > "$TMP/x" \
+  && mv "$TMP/x" "$TPL3/plugin/seed/knowledge/papercuts.md"
+sed '1s/.*/# Knowledge Base Log, v2/' "$TPL3/plugin/seed/knowledge/log.md" > "$TMP/x" \
+  && mv "$TMP/x" "$TPL3/plugin/seed/knowledge/log.md"
+( cd "$TPL3" && git add -A && gc "template, log seeds edited" )
+LOG_REPORT="$(bash "$TPL3/plugin/scripts/refresh-seeds.sh" "$INST3" 2>&1)"
+assert "the written log is not reported at all"   "$(hasnt 'papercuts.md' "$LOG_REPORT")"
+assert "an unwritten log is still PORTABLE"       "$(has 'PORTABLE  knowledge/log.md' "$LOG_REPORT")"
+LOG_RC=0
+LOG_APPLY="$(bash "$TPL3/plugin/scripts/refresh-seeds.sh" "$INST3" --apply 2>&1)" || LOG_RC=$?
+assert "--apply exits 0"                          "$([ "$LOG_RC" -eq 0 ] && echo 0 || echo 1)"
+assert "…never names the written log"             "$(hasnt 'papercuts.md' "$LOG_APPLY")"
+assert "…leaves it byte-identical"                "$(yes_if cmp -s "$TMP/papercuts.pristine" "$INST3/knowledge/papercuts.md")"
+assert "…and ports the unwritten one"             "$(yes_if grep -qx '# Knowledge Base Log, v2' "$INST3/knowledge/log.md")"
+LOG_AGAIN="$(bash "$TPL3/plugin/scripts/refresh-seeds.sh" "$INST3" 2>&1)"
+assert "a second run is silent about both logs" \
+  "$(yes_if sh -c '! grep -qE "papercuts|knowledge/log" <<EOF
+$1
+EOF' _ "$LOG_AGAIN")"
+assert "…and the log is still untouched"          "$(yes_if cmp -s "$TMP/papercuts.pristine" "$INST3/knowledge/papercuts.md")"
+
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
