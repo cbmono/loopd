@@ -36,13 +36,26 @@ for row in script:validate-bundle.sh=plugin script:package.json=instance agent:p
            script:../scripts/papercuts.sh=instance; do
   ok "${row%=*}" "$(bash "$PC" classify --surface "${row%=*}")" "${row#*=}"
 done
-mkdir -p "$TMP/bare/scripts"
+BARE="$TMP/bare"; mkdir -p "$BARE/scripts" && cp "$REPO/plugin/VERSION" "$BARE/"
+cp "$PC" "$REPO/plugin/scripts/bundle-paths.sh" "$BARE/scripts/"
 ok "a plugin without the file calls the same name instance" \
-  "$(CLAUDE_PLUGIN_ROOT="$TMP/bare" bash "$PC" classify --surface script:validate-bundle.sh)" instance
+  "$(CLAUDE_PLUGIN_ROOT="$BARE" bash "$BARE/scripts/papercuts.sh" classify --surface script:validate-bundle.sh)" instance
 
 mkdir -p "$TMP/link/loopd" && ln -s "$REPO/plugin/scripts" "$TMP/link/loopd/bin"
 ok "through a linked scripts dir, with no CLAUDE_PLUGIN_ROOT" \
   "$(env -u CLAUDE_PLUGIN_ROOT bash "$TMP/link/loopd/bin/papercuts.sh" classify --surface script:validate-bundle.sh)" plugin
+mkdir -p "$TMP/l2" && ln -s "$TMP/link/loopd/bin" "$TMP/l2/loopd"
+ok "through a two-hop link, with no CLAUDE_PLUGIN_ROOT" \
+  "$(env -u CLAUDE_PLUGIN_ROOT bash "$TMP/l2/loopd/papercuts.sh" classify --surface script:validate-bundle.sh)" plugin
+ok "…and with the matching CLAUDE_PLUGIN_ROOT" \
+  "$(bash "$TMP/l2/loopd/papercuts.sh" classify --surface script:validate-bundle.sh)" plugin
+ok "a foreign CLAUDE_PLUGIN_ROOT is refused, not read as instance" \
+  "$(CLAUDE_PLUGIN_ROOT="$REPO/plugin-yolo" rc bash "$PC" classify --surface script:validate-bundle.sh)" 2
+ok "a stale CLAUDE_PLUGIN_ROOT (another plugin copy) is refused" \
+  "$(CLAUDE_PLUGIN_ROOT="$BARE" rc bash "$PC" classify --surface script:validate-bundle.sh)" 2
+mkdir -p "$TMP/loose" && cp "$PC" "$REPO/plugin/scripts/bundle-paths.sh" "$TMP/loose/"
+ok "a copy outside any plugin root is refused" \
+  "$(rc env -u CLAUDE_PLUGIN_ROOT bash "$TMP/loose/papercuts.sh" classify --surface script:validate-bundle.sh)" 2
 
 echo
 echo "== 2. a fixture bundle whose proposals all target plugin surfaces =="
@@ -53,6 +66,9 @@ bash "$PC" add --task p/t-1 --surface script:validate-bundle.sh --note 'exits 0 
 bash "$PC" add --task p/t-2 --surface agent:project-manager --note 'drafts nothing for a plugin surface' --date 2026-09-02 >/dev/null
 printf '2026-09-02 | p/t-3 | rule:no-such-kind | a hand-written line the shape refuses\n' >> "$REC"
 
+ok "pass under a foreign root exits 2"  "$(CLAUDE_PLUGIN_ROOT="$REPO/plugin-yolo" rc up pass)" 2
+ok "pass under a stale root exits 2"    "$(CLAUDE_PLUGIN_ROOT="$BARE" rc up pass)" 2
+ok "…through a copy outside a plugin"   "$(rc env -u CLAUDE_PLUGIN_ROOT bash "$TMP/loose/papercuts.sh" pass --date 2026-09-05)" 2
 err="$(up pass 2>&1 >/dev/null)"; code=$?
 ok "pass is refused with two pending plugin surfaces"     "$code" 1
 ok "…writes no marker"                                    "$(grep -c '<!-- pass' "$REC")" 0
@@ -69,6 +85,13 @@ ok "dismiss with no --reason"               "$(rc up dismiss --surface agent:pro
 ok "dismiss with an empty --reason"         "$(rc up dismiss --surface agent:project-manager --reason '')" 1
 ok "propose for an instance-owned surface"  "$(rc up propose --surface script:package.json --edit 'add a lint script')" 1
 ok "dismiss for an instance-owned surface"  "$(rc up dismiss --surface script:package.json --reason 'not ours')" 1
+ok "propose with a \"|\" in --edit"          "$(rc up propose --surface script:validate-bundle.sh --edit 'a | b')" 1
+ok "propose with only a no-break space, C locale" \
+  "$(LC_ALL=C rc up propose --surface script:validate-bundle.sh --edit $' \xc2\xa0 ')" 1
+ok "dismiss with an impossible --date"      "$(rc bash "$PC" dismiss --surface agent:project-manager --reason x --date 2099-99-99)" 2
+ok "dismiss with a future --date"           "$(rc bash "$PC" dismiss --surface agent:project-manager --reason x --date 2099-01-01)" 1
+ok "propose with a future --date"           "$(rc bash "$PC" propose --surface agent:project-manager --edit x --date 2099-01-01)" 1
+ok "propose under a foreign root"           "$(CLAUDE_PLUGIN_ROOT="$REPO/plugin-yolo" rc up propose --surface script:validate-bundle.sh --edit x)" 2
 ok "…no refusal created the upstream file"  "$(yn test -e "$UP")" no
 ok "…and pass is still refused"             "$(rc up pass)" 1
 
@@ -81,6 +104,12 @@ ok "…naming only that one" \
   "$(grep -c 'agent:project-manager' <<<"$err")$(grep -c 'script:validate-bundle.sh' <<<"$err")" 10
 ok "a row dated BEFORE the entry does not count" \
   "$(bash "$PC" dismiss --surface agent:project-manager --reason 'an old dismissal' --date 2026-09-01 >/dev/null 2>&1; rc up pass)" 1
+printf '2099-01-01 | agent:project-manager | dismissed | a hand-written future row\n2026-09-05 | agent:project-manager | dismissed | a CRLF row above the heading\r\n' > "$TMP/up.head"
+cp "$UP" "$TMP/up.keep"; { cat "$TMP/up.head"; cat "$TMP/up.keep"; } > "$UP"
+ok "rows above ## Entries do not count"     "$(rc up pass)" 1
+printf '2099-01-01 | agent:project-manager | dismissed | a hand-written future row\n' >> "$UP"
+ok "a row dated after the pass does not count" "$(rc up pass)" 1
+cp "$TMP/up.keep" "$UP"
 ok "a dismissed row is written"             "$(rc up dismiss --surface agent:project-manager --reason 'no longer reproduces on 3.12')" 0
 ok "…and now pass marks the record"         "$(rc up pass)" 0
 ok "the marker carries the malformed figure" \

@@ -50,14 +50,21 @@ sources() {
   find "$DIR" -maxdepth 1 -type f -name '*.md' 2>/dev/null | LC_ALL=C sort
 }
 printf '%s' "$EVERY" | grep -qE '^[0-9]+$' || { echo "papercuts: --every wants days" >&2; exit 2; }
-printf '%s' "$DATE" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' \
-  || { echo "papercuts: --date wants YYYY-MM-DD" >&2; exit 2; }
+DATE_RE='^[0-9][0-9][0-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+printf '%s' "$DATE" | grep -qE "$DATE_RE" || { echo "papercuts: --date wants YYYY-MM-DD" >&2; exit 2; }
 
-# Follow links first: a wrong root calls every surface instance, which silently opens `pass`.
-_s="${BASH_SOURCE[0]:-$0}"; case "$_s" in /*) ;; *) _s="$PWD/$_s" ;; esac
-if [ -L "$_s" ]; then _t="$(readlink "$_s")"; case "$_t" in /*) _s="$_t" ;; *) _s="$(dirname "$_s")/$_t" ;; esac; fi
-_d="$(dirname "$_s")"; if [ -L "$_d" ] && [ ! -f "$(dirname "$_d")/VERSION" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$_d/.." && pwd)}"
+# A wrong root calls every surface instance, which silently opens `pass` — so the root is
+# where this file physically lives, CLAUDE_PLUGIN_ROOT must agree, and anything else is refused.
+_s="${BASH_SOURCE[0]:-$0}"
+while [ -L "$_s" ]; do _t="$(readlink "$_s")"; case "$_t" in /*) _s="$_t" ;; *) _s="$(dirname "$_s")/$_t" ;; esac; done
+PLUGIN_ROOT="$(cd -P "$(dirname "$_s")" 2>/dev/null && cd .. && pwd -P)"
+ROOT_ERR=""
+if [ ! -f "$PLUGIN_ROOT/VERSION" ] || [ ! "$PLUGIN_ROOT/scripts/papercuts.sh" -ef "$_s" ]; then
+  ROOT_ERR="'$PLUGIN_ROOT' is not a plugin root (no VERSION, or no scripts/papercuts.sh)"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ ! "$CLAUDE_PLUGIN_ROOT/scripts/papercuts.sh" -ef "$_s" ]; then
+  ROOT_ERR="CLAUDE_PLUGIN_ROOT '$CLAUDE_PLUGIN_ROOT' is not the plugin this script runs from ('$PLUGIN_ROOT')"
+fi
+need_root() { [ -z "$ROOT_ERR" ] || { echo "papercuts: cannot classify — $ROOT_ERR" >&2; exit 2; }; }
 UPSTREAM="$AB_UPSTREAM"
 SURFACE_RE='^(skill|agent|script):[A-Za-z0-9][A-Za-z0-9._/-]*$'
 
@@ -112,6 +119,7 @@ field3() { local r="${1#*|}"; r="${r#*|}"; trim "${r%%|*}"; }
 # The KIND prefix never decides: only a name that resolves in the installed plugin does.
 owner_of() {
   local k="${1%%:*}" n="${1#*:}" p=""
+  [ -z "$ROOT_ERR" ] || { echo unknown; return; }
   case "$n" in ''|*/*) echo instance; return ;; esac
   case "$k" in
     script) p="$PLUGIN_ROOT/scripts/$n" ;;
@@ -121,16 +129,17 @@ owner_of() {
   if [ -n "$p" ] && [ -f "$p" ]; then echo plugin; else echo instance; fi
 }
 
-# Plugin surfaces among the given entries with no upstream row dated on or after the entry.
+# Plugin surfaces among the given entries with no upstream row dated from the entry to the pass.
 held_upstream() {
   local l d s
   while IFS= read -r l; do
     [ -n "$l" ] || continue
     d="$(trim "${l%%|*}")"; s="$(field3 "$l")"
     [ "$(owner_of "$s")" = plugin ] || continue
-    awk -F'|' -v s="$s" -v d="$d" '
-      function t(x) { gsub(/^[ \t]+|[ \t]+$/, "", x); return x }
-      t($1) ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ && t($1) >= d && t($2) == s \
+    awk -F'|' -v s="$s" -v d="$d" -v now="$DATE" -v re="$DATE_RE" '
+      function t(x) { gsub(/^[ \t\r]+|[ \t\r]+$/, "", x); return x }
+      /^## Entries[ \t\r]*$/ { e = 1; next }
+      e && t($1) ~ re && t($1) >= d && t($1) <= now && t($2) == s \
         && (t($3) == "proposal" || t($3) == "dismissed") && t($4) != "" { f = 1 }
       END { exit !f }' "$UPSTREAM" 2>/dev/null || printf '%s\n' "$s"
   done <<<"$1" | sort -u
@@ -225,6 +234,7 @@ EOF
     fi
     ;;
   pass)
+    need_root
     target="$(newest)"; [ -n "$target" ] || target="$FILE"
     [ -w "$target" ] || { echo "papercuts: cannot write '$target'" >&2; exit 2; }
     src="$(since_pass)"; good="$(wellformed "$src")"
@@ -242,14 +252,19 @@ EOF
     ;;
   classify)
     [ -n "$SURFACE" ] || { echo "papercuts: classify wants --surface" >&2; usage; exit 2; }
+    need_root
     owner_of "$SURFACE"
     ;;
   propose|dismiss)
     [ -n "$SURFACE" ] || { echo "papercuts: $CMD wants --surface" >&2; usage; exit 2; }
     if [ "$CMD" = propose ]; then kind=proposal; flag=--edit; text="$EDIT"; else kind=dismissed; flag=--reason; text="$REASON"; fi
+    need_root
     text="$(trim "$text")"
-    [ -n "$text" ] || { echo "papercuts: refused — $CMD needs a non-empty $flag; nothing written" >&2; exit 1; }
+    [ -n "$(trim "${text//$'\xc2\xa0'/}")" ] || { echo "papercuts: refused — $CMD needs a non-empty $flag; nothing written" >&2; exit 1; }
     case "$SURFACE$text" in *$'\n'*|*$'\r'*) echo "papercuts: refused — a row is ONE line" >&2; exit 1 ;; esac
+    case "$text" in *'|'*) echo "papercuts: refused — a \"|\" in $flag breaks the row" >&2; exit 1 ;; esac
+    [ "$(days "$DATE")" -le "$(days "$(date -u +%Y-%m-%d)")" ] \
+      || { echo "papercuts: refused — --date $DATE is in the future; a row is dated when it is written" >&2; exit 1; }
     printf '%s' "$SURFACE" | grep -qE "$SURFACE_RE" \
       || { echo "papercuts: refused — '$SURFACE' is not skill|agent|script:<name>" >&2; exit 1; }
     [ "$(owner_of "$SURFACE")" = plugin ] \
