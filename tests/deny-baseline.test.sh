@@ -938,6 +938,36 @@ pushcase "$BUNDLE" "$BUNDLE" allow "plain git -C <feature wt> push origin HEAD" 
 pushcase "$BUNDLE" "$BUNDLE" allow "the bundle: git push origin main 2>&1" "git push origin main 2>&1"
 pushcase "$BUNDLE" "$BUNDLE" allow "the bundle: git push origin HEAD >/dev/null" "git push origin HEAD >/dev/null"
 
+# QA round 1 on loopd#425: a quoted or escaped `>` is no redirect, and a quote-only value
+# vanishes from the words — each shape below denied on origin/main and must still.
+echo "== …a quoted redirect character or an empty value never hides the destination"
+pushcase "$BUNDLE" "$GITREPO" "$D" "on main: X=\\> git push origin main" 'X=\> git push origin main'
+pushcase "$BUNDLE" "$FEATWT" "$D" "on feat/x: X=\\> git push origin main" 'X=\> git push origin main'
+pushcase "$BUNDLE" "$FEATWT" "$D" "…GIT_TRACE=\\> git push origin main" 'GIT_TRACE=\> git push origin main'
+pushcase "$BUNDLE" "$FEATWT" "$D" "…git -c core.pager=\\> push origin HEAD:main" 'git -c core.pager=\> push origin HEAD:main'
+pushcase "$BUNDLE" "$FEATWT" "$D" "…git push -o '>' origin main" "git push -o '>' origin main"
+pushcase "$BUNDLE" "$FEATWT" "$D" "…git push -o \\> origin main" 'git push -o \> origin main'
+pushcase "$BUNDLE" "$FEATWT" "$D" "…git push --push-option=\\> origin main" 'git push --push-option=\> origin main'
+pushcase "$BUNDLE" "$FEATWT" "$D" "…git push --repo=\\> origin main" 'git push --repo=\> origin main'
+pushcase "$BUNDLE" "$FEATWT" "$D" "…git push -o \"\" origin main" 'git push -o "" origin main'
+pushcase "$BUNDLE" "$FEATWT" "$D" "…git push --repo \"\" origin main" 'git push --repo "" origin main'
+pushcase "$BUNDLE" "$FEATWT" "$D" "…git push --exec \"\" origin main" 'git push --exec "" origin main'
+pushcase "$BUNDLE" "$FEATWT" "$D" "…git push -o \"<x\" origin main" 'git push -o "<x" origin main'
+pushcase "$BUNDLE" "$GITREPO" "$D" "on main: git push -o \"a b\" origin (one quoted value)" 'git push -o "a b" origin'
+pushcase "$BUNDLE" "$GITREPO" "$D" "…git -c \"user.name=A B\" push origin main" 'git -c "user.name=A B" push origin main'
+pushcase "$BUNDLE" "$GITREPO" "$D" "…git push origin >& /dev/null" 'git push origin >& /dev/null'
+pushcase "$BUNDLE" "$GITREPO" "$D" "…git push origin heads/main" 'git push origin heads/main'
+pushcase "$BUNDLE" "$GITREPO" "$D" "…git push origin head (a case-insensitive HEAD)" 'git push origin head'
+pushcase "$BUNDLE" "$FEATWT" allow "on feat/x: git push -o \"a b\" origin feat/x" 'git push -o "a b" origin feat/x'
+
+# Git takes any unambiguous prefix of a long option, so `--rep x` is `--repo x` and the
+# value is no remote. An ambiguous one (`--re`, `--p`) git refuses; it still denies on main.
+echo "== …an abbreviated value-taking option still eats its value"
+for o in --push-opt --pu --push --exe --e --receive --rece --rep --recu --re --p; do
+  pushcase "$BUNDLE" "$GITREPO" "$D" "on main: git push $o x origin" "git push $o x origin"
+  pushcase "$BUNDLE" "$FEATWT" allow "on feat/x: git push $o x origin" "git push $o x origin"
+done
+
 echo "== kb_apply_human_docs — an agent may not apply a report to human-written docs; the human may"
 KBA="bash /opt/loopd/plugin/scripts/kb-apply.sh --by example-user-007"
 KBR="projects/knowledge-reflection/tasks/task-001-knowledge-reflection.md"
