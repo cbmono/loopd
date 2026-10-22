@@ -1039,6 +1039,7 @@ _bundle_git_dir() {
 _push_stage_verdict() { # <stage>
   local c w seen=0 sub="" skip="" args="" cgd="" pgd="" base="$dir" g root="" remote r d dst p protected oldopts
   local -a loc
+  case "$1" in *push*) ;; *) return 1 ;; esac
   c="$(first_word "$1")" || return 1
   [ "$c" = git ] || return 1
   while IFS= read -r w; do
