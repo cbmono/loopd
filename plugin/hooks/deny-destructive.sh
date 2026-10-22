@@ -63,7 +63,9 @@
 # a language runtime. Paths and branches are judged against the payload's `cwd`, so a `cd`
 # earlier in the same command — or a `git -C <elsewhere>` — is not followed; the
 # force-push rule still covers the common branch names in that case, and the `rm` rule may
-# read a relative path against the wrong directory. It raises the floor.
+# read a relative path against the wrong directory. The one exception is
+# `subagent_push_default`, which resolves each push stage's own `cd`/`-C`/`GIT_DIR` and
+# fails closed where it cannot. It raises the floor.
 # THE REAL BOUNDARY IS CREDENTIALS — an agent
 # that cannot reach production cannot harm it whatever it decides. This is not a
 # substitute for that audit.
@@ -938,7 +940,7 @@ EOF
 # is the whole review gate — and a direct (non-force) push to a protected branch bypasses
 # it while `force_push_protected` stays silent, because a plain push to `main` is routine
 # FOR THE HUMAN and for the bundle. Agent-scoped like `subagent_merge`: fires only when
-# `agent_id` is present. NARROW ENOUGH TO KEEP, in three exemptions the tests pin:
+# `agent_id` is present. NARROW ENOUGH TO KEEP, in the exemptions the tests pin:
 #   · the BUNDLE — the repo whose root IS `$INSTANCE_ROOT` — is exempt: the
 #     project-manager tick commits and pushes the instance's own default branch by design
 #     (the loop's final step). `$INSTANCE_ROOT` is `$CLAUDE_PROJECT_DIR`, resolved once by
@@ -951,80 +953,209 @@ EOF
 # the top of this file has already exited on exactly that condition, so the branch is
 # unreachable and is deleted rather than left to read as live: reaching this line means an
 # instance root was found, so a comparison against it is meaningful.
-# The branch set is `force_push_protected`'s: the conventional names plus the repo's
-# resolved default. `git -C <elsewhere>` shares that rule's documented limitation.
+# PER STAGE, the one exception to the header's cd/-C limitation: each push stage's repo,
+# default branch and current branch come from THAT stage's directory — cumulative `-C`,
+# `--git-dir`/`GIT_DIR` (prefix or an earlier `export`), and a plain `cd <dir>` carried
+# along the chain — resolved by git, never by path prefix, so `<bundle>/repos/<x>` reads as
+# the product it links to. Only the git dir decides the repo; a work tree never does.
+# FAILS CLOSED: a directory change this cannot read statically — inside `( )`, `{ }`,
+# `$( )`, backticks, `-c`/`eval`; `pushd`/`popd`; a bare, `-`, `~` or `$` target; a `cd`
+# that may not have run — makes every later stage's root UNKNOWN, and an unknown or
+# unresolvable root is never the bundle. The branch set is `force_push_protected`'s.
+
+# One list element per line, after the operator that precedes it: S ; & && || |
+_push_elements() {
+  printf '%s' "$1" | awk 'BEGIN { RS = "\001"; op = "S" }
+    function emit(o) {
+      if (cur ~ /^[ \t]*$/) { if (o != ";") op = o }
+      else { print op "\t" cur; op = o }
+      cur = ""
+    }
+    { n = length($0)
+      for (i = 1; i <= n; i++) {
+        c = substr($0, i, 1); d = substr($0, i + 1, 1); b = substr($0, i - 1, 1)
+        if (c == "\\" && d == "\n") { cur = cur " "; i++ }
+        else if (c == "&" && d == "&") { emit("&&"); i++ }
+        else if (c == "|" && d == "|") { emit("||"); i++ }
+        else if (c == "|" && d == "&") { emit("|"); i++ }
+        else if (c == ";" || c == "\n") emit(";")
+        else if (c == "|" && b != ">") emit("|")
+        else if (c == "&" && b != ">" && b != "<" && d != ">") emit("&")
+        else cur = cur c
+      }
+      emit(";") }'
+}
+
+_push_touches_state() { # <element>
+  case "$1" in *cd*|*pushd*|*popd*|*GIT_DIR*|*GIT_WORK_TREE*) ;; *) return 1 ;; esac
+  local w git=0
+  [ "$(first_word "$1")" = git ] && git=1
+  while IFS= read -r w; do
+    case "$w" in
+      cd|pushd|popd) return 0 ;;
+      GIT_DIR|GIT_WORK_TREE|GIT_DIR=*|GIT_WORK_TREE=*) [ "$git" = 1 ] || return 0 ;;
+    esac
+  done <<EOF
+$(tokens_of "$1")
+EOF
+  return 1
+}
+
+# Applies a static `cd <dir>`, `export GIT_DIR=…`/`GIT_WORK_TREE=…` or `unset` of them to
+# the caller's `dir`/`gd` (bash locals are dynamically scoped); 1 = not statically known.
+_push_state() { # <element>
+  case "$1" in *[\(\)\{\}\`\$]*) return 1 ;; esac
+  local w t v; local -a tk; tk=()
+  while IFS= read -r w; do tk[${#tk[@]}]="$w"; done <<EOF
+$(tokens_of "$1")
+EOF
+  case "${tk[0]:-}" in
+    cd)
+      [ "${#tk[@]}" = 2 ] || return 1
+      t="${tk[1]}"
+      case "$t" in -*|\~*|*[\*\?\[]*) return 1 ;; /*) ;; *) t="$dir/$t" ;; esac
+      t="$(CDPATH='' cd -- "$t" 2>/dev/null && pwd -P)" || return 1
+      [ -n "$t" ] && dir="$t" ;;
+    export|unset)
+      for w in "${tk[@]:1}"; do
+        v="${w#*=}"; v="${v#[\"\']}"
+        case "${tk[0]}:$w" in
+          export:GIT_DIR=*) gd="$v" ;;
+          export:GIT_WORK_TREE=*|unset:GIT_WORK_TREE) ;;
+          unset:GIT_DIR) gd="" ;;
+          *:GIT_DIR*|*:GIT_WORK_TREE*|*:-*) return 1 ;;
+        esac
+      done ;;
+    *) return 1 ;;
+  esac
+}
+
+_bundle_git_dir() {
+  local d; d="$(git -C "$INSTANCE_ROOT" rev-parse --absolute-git-dir 2>/dev/null)" || return 0
+  (cd "$d" 2>/dev/null && pwd -P)
+}
+
+# Prints the reason and returns 0 to deny. Reads the caller's `dir`, `gd` and `amb`.
+_push_stage_verdict() { # <stage>
+  local c w seen=0 sub="" skip="" args="" cgd="" pgd="" base="$dir" g root="" remote r d dst p protected oldopts
+  local -a loc
+  c="$(first_word "$1")" || return 1
+  [ "$c" = git ] || return 1
+  while IFS= read -r w; do
+    if [ -n "$skip" ]; then
+      case "$skip" in
+        -C) case "$w" in /*) base="$w" ;; *) base="$base/$w" ;; esac ;;
+        --git-dir) cgd="$w" ;;
+      esac
+      skip=""; continue
+    fi
+    if [ "$seen" = 0 ]; then
+      case "$w" in
+        GIT_DIR=*) pgd="${w#*=}"; pgd="${pgd#[\"\']}" ;;
+        *=*) ;;
+        *) [ "${w##*/}" = git ] && seen=1 ;;
+      esac
+      continue
+    fi
+    if [ -z "$sub" ]; then
+      case "$w" in
+        -C|--git-dir) skip="$w" ;;
+        -c|--work-tree|--namespace|--exec-path) skip=x ;;
+        --git-dir=*) cgd="${w#*=}"; cgd="${cgd#[\"\']}" ;;
+        -*) ;;
+        *) sub="$w" ;;
+      esac
+      continue
+    fi
+    case "$w" in -*) ;; *) args="$args $w" ;; esac
+  done <<EOT
+$(tokens_of "$1")
+EOT
+  [ "$sub" = push ] || return 1
+
+  if [ "$amb" = 0 ] && base="$(cd "$base" 2>/dev/null && pwd -P)" && [ -n "$base" ]; then
+    g="${cgd:-${pgd:-$gd}}"
+    if [ -n "$g" ]; then
+      case "$g" in /*) ;; *) g="$base/$g" ;; esac
+      if g="$(cd "$g" 2>/dev/null && pwd -P)" && [ -n "$g" ]; then
+        [ "$g" = "$(_bundle_git_dir)" ] && return 1
+        root="$g"; loc=(--git-dir="$g")
+      fi
+    else
+      root="$(git -C "$base" rev-parse --show-toplevel 2>/dev/null || true)"
+      [ "$root" = "$INSTANCE_ROOT" ] && return 1   # the bundle: the tick pushes it by design
+      loc=(-C "$base")
+    fi
+  fi
+
+  oldopts="$(set +o | grep noglob)"; set -f
+  # shellcheck disable=SC2086  # deliberate split; globbing is off for the duration
+  set -- $args
+  eval "$oldopts"
+  remote="${1:-}"; [ "$#" -gt 0 ] && shift
+
+  dst=""; d=""
+  if [ "$#" -eq 0 ]; then
+    [ -n "$root" ] && d="$(git "${loc[@]}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    [ "$d" = "HEAD" ] || dst="$d"
+  else
+    for r in "$@"; do
+      case "$r" in +*) r="${r#+}" ;; esac
+      case "$r" in *:*) r="${r##*:}" ;; esac
+      dst="$dst ${r#refs/heads/}"
+    done
+  fi
+  [ -n "${dst// /}" ] || return 1
+
+  protected="main master develop trunk production"
+  if [ -n "$root" ]; then
+    d="$(git "${loc[@]}" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+    [ -n "$d" ] && protected="$protected ${d#*/}"
+  fi
+  for r in $dst; do
+    for p in $protected; do
+      if [ "$r" = "$p" ]; then
+        printf 'A dispatched agent may not push to the protected branch `%s` of a product repo (`%s`) — work lands there through a pull request, which is the review gate this would bypass. Pushing a FEATURE branch is normal and allowed, and the control-panel bundle itself is exempt (the tick pushes that by design).' "$p" "${root:-unresolved: no repo here, or a directory change this hook cannot follow}"
+        return 0
+      fi
+    done
+  done
+  return 1
+}
+
 rule_subagent_push_default() {
   [ -n "$AGENT_ID" ] || return 1          # the human's own session is never gated here
   case "$1" in *push*) ;; *) return 1 ;; esac
-  local root
-  root="$(repo_root)"
-  [ -n "$root" ] || return 1
-  [ "$root" = "$INSTANCE_ROOT" ] && return 1   # the bundle: the tick pushes it by design
-
-  local stage c w seen sub skipnext args remote r d dst p protected oldopts
-  while IFS= read -r stage; do
-    [ -n "$stage" ] || continue
-    c="$(first_word "$stage")" || continue
-    [ "$c" = "git" ] || continue
-
-    # The same walk force_push_protected uses, minus the force/delete tracking: ANY push
-    # shape reaching a protected branch of a product repo is refused for an agent.
-    seen=0; sub=""; skipnext=0; args=""
-    while IFS= read -r w; do
-      if [ "$skipnext" = 1 ]; then skipnext=0; continue; fi
-      if [ "$seen" = 0 ]; then [ "${w##*/}" = "git" ] && seen=1; continue; fi
-      if [ -z "$sub" ]; then
-        case "$w" in
-          -C|-c|--git-dir|--work-tree|--namespace|--exec-path) skipnext=1; continue ;;
-          -*) continue ;;
-          *) sub="$w"; continue ;;
-        esac
-      fi
-      case "$w" in
-        --*) ;;
-        -*) ;;
-        *) args="$args $w" ;;
-      esac
-    done <<EOT
-$(tokens_of "$stage")
-EOT
-    [ "$sub" = "push" ] || continue
-
-    oldopts="$(set +o | grep noglob)"; set -f
-    # shellcheck disable=SC2086  # deliberate split; globbing is off for the duration
-    set -- $args
-    eval "$oldopts"
-    remote="${1:-}"; [ "$#" -gt 0 ] && shift
-
-    dst=""
-    if [ "$#" -eq 0 ]; then
-      d="$(git -C "$CWD" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-      [ "$d" = "HEAD" ] && d=""
-      dst="$d"
-    else
-      for r in "$@"; do
-        case "$r" in +*) r="${r#+}" ;; esac
-        case "$r" in *:*) r="${r##*:}" ;; esac
-        r="${r#refs/heads/}"
-        dst="$dst $r"
-      done
-    fi
-    [ -n "${dst// /}" ] || continue
-
-    protected="main master develop trunk production"
-    d="$(default_branch)"
-    [ -n "$d" ] && protected="$protected $d"
-    for r in $dst; do
-      for p in $protected; do
-        if [ "$r" = "$p" ]; then
-          printf 'A dispatched agent may not push to the protected branch `%s` of a product repo (`%s`) — work lands there through a pull request, which is the review gate this would bypass. Pushing a FEATURE branch is normal and allowed, and the control-panel bundle itself is exempt (the tick pushes that by design).' "$p" "$root"
-          return 0
-        fi
-      done
-    done
+  local line k=0 i p n e dir="$CWD" gd="" amb=0 changed=0 cond=0 defer=0
+  local -a ops els; ops=(); els=()
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    ops[k]="${line%%	*}"; els[k]="${line#*	}"; k=$((k + 1))
   done <<EOF
-$(stages "$1")
+$(_push_elements "$1")
 EOF
+  # `changed`: this and-or list moved dir/gd. `cond`: something before it in the list may
+  # have failed, so the move is `defer`red — it holds inside the `&&` chain, not after it.
+  for ((i = 0; i < k; i++)); do
+    p="${ops[i]}"; n="${ops[i + 1]:-E}"; e="${els[i]}"
+    case "$p" in
+      S|";"|"&") changed=0; cond=0; defer=0 ;;
+      "||") [ "$defer" = 1 ] && amb=1 ;;
+    esac
+    if [ "$amb" = 0 ] && _push_touches_state "$e"; then
+      if [ "$p" != "|" ] && [ "$p" != "||" ] && [ "$n" != "|" ] && [ "$n" != "&" ] && _push_state "$e"; then
+        changed=1; [ "$cond" = 1 ] && defer=1
+      else
+        amb=1
+      fi
+    else
+      cond=1
+    fi
+    _push_stage_verdict "$e" && return 0
+    case "$n" in
+      E|";"|"&") { [ "$defer" = 1 ] || { [ "$n" = "&" ] && [ "$changed" = 1 ]; }; } && amb=1 ;;
+    esac
+  done
   return 1
 }
 

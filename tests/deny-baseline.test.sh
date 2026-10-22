@@ -792,6 +792,70 @@ ok "a .git file pointing nowhere is silent, never an error" \
    "$(verdict_from "$WORK/brokenwt" "$WORK/brokenwt" 'git push --force origin main')" "allow"
 rm -f "$MARKER"
 
+# --- subagent_push_default resolves PER STAGE: `cd`, `-C`, `--git-dir`, `GIT_DIR` --------
+# Each push stage is judged in the repo it actually pushes, so a bundle-cwd agent cannot
+# reach a product's default branch by `cd`/`-C`, and a worktree-cwd agent can push the
+# bundle it was told to. A directory change the hook cannot follow fails CLOSED. Every
+# command is also sent with no agent_id: the human's verdict must stay `allow`.
+echo "== subagent_push_default, per stage: the repo each push stage actually reaches"
+mkdir -p "$BUNDLE/repos" && ln -s "$GITREPO" "$BUNDLE/repos/prod"
+pushcase() { # <project-dir> <cwd> <want-for-agent> <label> <command>
+  ok "$4" "$(verdict_agent_in "$1" "$2" "$5")" "$3"
+  ok "…and the human's verdict is unchanged" "$(verdict_from "$1" "$2" "$5")" "allow"
+}
+D=deny:subagent_push_default
+pushcase "$BUNDLE" "$BUNDLE" "$D" "from the bundle: git -C <product> push origin main" "git -C $GITREPO push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…cd <product> && git push origin main" "cd $GITREPO && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…a chain: cd <bundle> && …; cd <product> && git push" "cd $BUNDLE && git status; cd $GITREPO && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…git -C <bundle>/repos/<name> (a symlink into the product)" "git -C $BUNDLE/repos/prod push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…--git-dir=<product>/.git" "git --git-dir=$GITREPO/.git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…--git-dir <product>/.git" "git --git-dir $GITREPO/.git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…GIT_DIR=<product>/.git git push" "GIT_DIR=$GITREPO/.git git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…GIT_WORK_TREE=<product> GIT_DIR=<product>/.git git push" "GIT_WORK_TREE=$GITREPO GIT_DIR=$GITREPO/.git git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…an earlier export GIT_DIR=<product>/.git" "export GIT_DIR=$GITREPO/.git; git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…cumulative relative -C: git -C <work> -C repo" "git -C $WORK -C repo push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…relative cd carried: cd <work> && cd repo && git push" "cd $WORK && cd repo && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…a bare push reads the PRODUCT's HEAD (main)" "cd $GITREPO && git push origin"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…the PRODUCT's own default: git -C <oddrepo> push origin release" "git -C $ODDREPO push origin release"
+pushcase "$BUNDLE" "$OUTSIDE" "$D" "from a non-repo cwd: --git-dir=<product>/.git" "git --git-dir=$GITREPO/.git push origin main"
+pushcase "$BUNDLE" "$OUTSIDE" "$D" "an unresolvable root is not the bundle (non-repo agent cwd)" "git push origin main"
+
+echo "== …a directory change it cannot follow makes every later push stage's root unknown"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "( cd <product> && git push )" "(cd $GITREPO && git push origin main)"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "{ cd <product>; git push; }" "{ cd $GITREPO; git push origin main; }"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "cd \"\$( cd <product> && pwd )\"" "cd \"\$(cd $GITREPO && pwd)\" && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "cd \`cd <product> && pwd\`" "cd \`cd $GITREPO && pwd\` && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "bash -c \"cd <product> && git push\"" "bash -c \"cd $GITREPO && git push origin main\""
+pushcase "$BUNDLE" "$BUNDLE" "$D" "sh -c \"cd <product> && git push\"" "sh -c \"cd $GITREPO && git push origin main\""
+pushcase "$BUNDLE" "$BUNDLE" "$D" "eval \"cd <product>\"; git push" "eval \"cd $GITREPO\"; git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "a bare cd" "cd && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "cd - (back into the product)" "cd $GITREPO; cd $BUNDLE; cd -; git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "cd ~… (resolves to the product)" "cd ~/../work/repo && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "cd \$VAR" "P=$GITREPO; cd \$P && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "pushd <product>" "pushd $GITREPO && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "popd (back into the product)" "pushd $GITREPO; pushd $BUNDLE; popd; git push origin main"
+pushcase "$BUNDLE" "$GITREPO" "$D" "a cd that may not have run: false && cd <bundle>; git push" "false && cd $BUNDLE; git push origin main"
+pushcase "$BUNDLE" "$GITREPO" "$D" "…or reached through ||: false && cd <bundle> || git push" "false && cd $BUNDLE || git push origin main"
+pushcase "$BUNDLE" "$GITREPO" "$D" "a backgrounded cd: cd <bundle> & git push" "cd $BUNDLE & git push origin main"
+pushcase "$BUNDLE" "$GITREPO" "$D" "a cd in a pipeline: cd <bundle> | true; git push" "cd $BUNDLE | true; git push origin main"
+
+echo "== …and the allow halves: the bundle, a feature branch, a static cd it CAN follow"
+pushcase "$BUNDLE" "$BUNDLE" allow "cd <product> && cd <bundle> && git push origin main" "cd $GITREPO && cd $BUNDLE && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" allow "git -C <work> -C bundle push origin main" "git -C $WORK -C bundle push origin main"
+pushcase "$BUNDLE" "$BUNDLE" allow "cd <product> && git push origin feat/x" "cd $GITREPO && git push origin feat/x"
+pushcase "$BUNDLE" "$GITREPO" allow "GIT_DIR=<bundle>/.git git push origin main" "GIT_DIR=$BUNDLE/.git git push origin main"
+pushcase "$BUNDLE" "$GITREPO" allow "cd <bundle> || exit 1; git push origin main" "cd $BUNDLE || exit 1; git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" allow "export GIT_DIR=<product>; unset GIT_DIR; git push" "export GIT_DIR=$GITREPO/.git; unset GIT_DIR; git push origin main"
+
+echo "== …from a WORKTREE cwd whose marker names a bundle that is a git repo"
+printf '%s\n' "$BUNDLE" > "$MARKER"
+pushcase "$WTREE" "$WTREE" allow "worktree agent: git -C <bundle> push origin main" "git -C $BUNDLE push origin main"
+pushcase "$WTREE" "$WTREE" allow "worktree agent: cd <bundle> && git push origin main" "cd $BUNDLE && git push origin main"
+pushcase "$WTREE" "$WTREE" allow "a feature push after an ambiguous cd still passes" "(cd /tmp && true); git push origin feat/x"
+pushcase "$WTREE" "$WTREE" "$D" "worktree agent: git push origin main (the product)" "git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "(cd <bundle> && true); git push origin main" "(cd $BUNDLE && true); git push origin main"
+rm -f "$MARKER"
+
 # EVERY RULE MUST BE EXERCISED HERE. Without this, a rule added to `RULES` and never tested
 # is exactly the false comfort this baseline exists to avoid — it ships, it is documented,
 # and nobody has ever seen it fire.
