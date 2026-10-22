@@ -440,7 +440,12 @@ while IFS= read -r file; do
   if [[ $type == Service || $type == Task ]] && grep -q '^deploy:' <<<"$fm"; then
     while IFS= read -r dv; do
       case "$dv" in manual|auto) ;; *) fail "$rel" "deploy '$dv' is not valid (one of: manual auto; absent ⇒ auto) — SCHEMA.md → type: $type" ;; esac
-    done <<<"$(sed -n 's/^deploy:[[:space:]]*//p' <<<"$fm" | sed "s/[[:space:]]#.*//; s/[[:space:]]*\$//; s/^[\"']//; s/[\"']\$//")"
+    # Unquote BEFORE dropping a comment: `"manual # note"` must be reported whole.
+    done <<<"$(sed -n 's/^deploy:[[:space:]]*//p' <<<"$fm" | awk -v q="'" '{ v = $0
+      if (v ~ /^"[^"]*"[[:space:]]*(#.*)?$/) { v = substr(v, 2); sub(/"[[:space:]]*(#.*)?$/, "", v) }
+      else if (v ~ ("^" q "[^" q "]*" q "[[:space:]]*(#.*)?$")) { v = substr(v, 2); sub(q "[[:space:]]*(#.*)?$", "", v) }
+      else { sub(/[[:space:]]#.*$/, "", v); sub(/[[:space:]]+$/, "", v) }
+      print v }')"
   fi
 
   if ! grep -q '^timestamp:[[:space:]]*[^[:space:]]' <<<"$fm"; then
