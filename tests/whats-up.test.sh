@@ -5,6 +5,7 @@
 # the tick line from tick-lock.sh status, and keeps the off switch off. ok() compares
 # actual to expected.
 set -uo pipefail
+unset TICK_LOCK_STALE_MINUTES TICK_CLAIMANT
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/tools/plugin-name.sh"
@@ -48,6 +49,24 @@ out="$(run)"
 ok "empty section: one line"                 "$(grep -c . <<<"$out")" 1
 ok "…says nothing needs you"                 "$(has "$out" 'Nothing needs you')" yes
 
+echo "== the seeded file reads as never refreshed =="
+printf '# Awaiting you\n\nDerived. Delete this file to turn the queue off for good;\nthe loop never recreates it. Last refreshed: never (no tick has run yet).\n\n## 🔴 Awaiting you (0)\n_None._\n' > "$B/.loopd/AWAITING.md"
+out="$(run)"
+ok "seeded: one line"                        "$(grep -c . <<<"$out")" 1
+ok "…says never refreshed"                   "$(has "$out" 'Never refreshed')" yes
+ok "…not an unknown time"                    "$(grep -cE 'unknown time|age unknown|changed something;' <<<"$out")" 0
+
+printf '# Awaiting you\n\nLast refreshed: %s.\n\n## 🔴 Awaiting you (0)\n_None._\n' "$(iso $((NOW + 7200)))" > "$B/.loopd/AWAITING.md"
+out="$(run)"
+ok "future stamp: no negative age"           "$(grep -cE '\(-[0-9]' <<<"$out")" 0
+ok "…says it is dated in the future"         "$(has "$out" 'dated in the future')" yes
+
+rm "$B/.loopd/AWAITING.md"; mkdir "$B/.loopd/AWAITING.md"
+out="$(run)"; rc=$?
+ok "a directory at AWAITING.md: exit 3"      "$rc" 3
+ok "…not read as on"                         "$(has "$out" 'queue is on')" no
+rmdir "$B/.loopd/AWAITING.md"
+
 echo "== numbered, same order, verbatim, one source =="
 cat > "$B/projects/p/tasks/task-001.md" <<'EOF'
 ---
@@ -69,7 +88,7 @@ ok "three numbered items"                    "$(grep -cE '^[0-9]+\. ' <<<"$out")
 ok "1 is the file's first row, verbatim"     "$(grep '^1\. ' <<<"$out")" "1. ${R1#\* }"
 ok "2 is the second, backticks and \$() literal" "$(grep '^2\. ' <<<"$out")" "2. ${R2#\* }"
 ok "3 is the third, link intact"             "$(grep '^3\. ' <<<"$out")" "3. ${R3#\* }"
-ok "nothing in an item ran"                  "$( (ls "$B/PWNED" "$TMP/PWNED" ) >/dev/null 2>&1 && echo yes || echo no)" no
+ok "nothing in an item ran"                  "$( { [ -e "$B/PWNED" ] || [ -e "$TMP/PWNED" ]; } && echo yes || echo no)" no
 ok "no fence markers"                        "$(grep -c 'BEGIN AWAITING\|END AWAITING' <<<"$out")" 0
 ok "no task-document text"                   "$(has "$out" 'TASKDOC-SENTINEL')" no
 ok "gh never called"                         "$([ -e "$TMP/gh.called" ] && echo yes || echo no)" no
@@ -90,6 +109,8 @@ out="$(run)"
 ok "stale lock: not read as in flight"       "$(has "$out" 'A tick is in flight')" no
 ok "…and named stale"                        "$(has "$out" 'STALE')" yes
 ok "…the lock is left in place"              "$([ -e "$B/.loopd/.tick-lock" ] && echo yes || echo no)" yes
+out="$(cd "$B" && TICK_LOCK_STALE_MINUTES=x PATH="$TMP/stub:$PATH" bash "$S" 2>&1)"
+ok "status cannot answer: unknown, not a lock problem" "$(has "$out" 'Whether a tick is in flight is unknown')" yes
 
 echo "== refuses outside an instance =="
 out="$(cd "$TMP" && bash "$S" 2>&1)"; rc=$?
