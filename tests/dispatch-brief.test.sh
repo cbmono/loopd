@@ -10,9 +10,9 @@
 # brief.md). Moving both sections into one script makes every criterion here a string
 # comparison on a fixture.
 #
-# BOTH HEADINGS ARE PINNED IN TWO PLACES ON PURPOSE — here as literals, and against
-# `project-manager.md`, which tells the PM to paste the block unchanged. A rename landing
-# in the script alone leaves the PM hunting a heading nothing emits.
+# ALL SEVEN HEADINGS ARE PINNED IN TWO PLACES ON PURPOSE — here as literals, `## Knowledge`
+# included, and against step-3-dispatch.md, which tells the PM to paste the block unchanged.
+# A rename landing in the script alone leaves the PM hunting a heading nothing emits.
 #
 # NON-VACUOUS BY CONSTRUCTION. The Service-doc branch and the no-Service-doc branch are
 # run over the SAME task document, with only the doc's existence differing, so a script
@@ -41,6 +41,7 @@ eq()   { [ "$1" = "$2" ] && echo 0 || echo 1; }
 
 GROUNDING='## Grounding'
 EFFORT='## Effort'
+KNOWLEDGE='## Knowledge'
 DOC="$TMP/projects/demo/tasks/task-001.md"
 SVC="$TMP/knowledge/services/widget.md"
 
@@ -247,6 +248,37 @@ assert "a task outside projects/<slug>/tasks/ gets the placeholder" \
   "$(has "<bundle>/projects/<slug>/deliverables/" "$D2")"
 assert "…never a guessed path"                       "$(hasnt "$TMP/deliverables" "$D2")"
 assert "the PM is told to paste the Deliverables heading" "$(has '`## Deliverables`' "$(cat "$PM_DOC")")"
+
+echo "== Knowledge is the seventh section, and the repo the matcher resolved =="
+
+PM="$(cat "$PM_DOC")"
+for h in "$GROUNDING (<target_repo>)" "$EFFORT" '## Commit attribution' '## PR title' '## Scratch' '## Deliverables' "$KNOWLEDGE"; do
+  assert "the PM is told to paste '$h'" "$(has "\`$h\`" "$PM")"
+done
+assert "…all seven of them"                   "$(has 'all seven headings and all' "$PM")"
+assert "…and to record what Knowledge carried" "$(has 'kb-select.sh --record <task-path>' "$PM")"
+
+reset 4
+mkdir -p "$TMP/knowledge/findings"
+printf -- '---\ntype: Finding\ntitle: "Widgets ship"\nlesson: Ship the widget behind criterion flags\nstatus: current\n---\n' \
+  > "$TMP/knowledge/findings/widget-ships.md"
+OUT="$(run "$DOC")"
+assert "the Knowledge heading is the last section"  "$(eq "$(grep '^## ' <<<"$OUT" | tail -n 1)" "$KNOWLEDGE")"
+assert "…carrying kb-select.sh's row"               "$(has '[[widget-ships]] — Ship the widget behind criterion flags' "$OUT")"
+rm "$TMP/knowledge/findings/widget-ships.md"
+assert "no Finding ⇒ one none matched line, never an empty heading" \
+  "$(eq "$(awk -v k="$KNOWLEDGE" '$0==k{f=1;next} f&&NF' <<<"$(run "$DOC")")" 'none matched — no current Finding shares enough content words with this task.')"
+
+service <<'MD'
+# Overview
+MD
+sed -i.bak '/^target_repo:/d' "$DOC"
+printf -- '---\ntype: Project\ntarget_repo: acme/widget\n---\n' > "$TMP/projects/demo/project.md"
+OUT="$(run "$DOC")"
+assert "no target_repo on the task ⇒ the project's"     "$(has "$GROUNDING (acme/widget)" "$OUT")"
+assert "…and its Service doc is the grounding"          "$(has "/knowledge/services/widget.md — read it before you read code." "$OUT")"
+rm "$TMP/projects/demo/project.md"
+assert "neither set ⇒ the existing no-target_repo line" "$(has "$GROUNDING ((no target_repo on the task))" "$(run "$DOC")")"
 
 echo "== it refuses rather than guessing =="
 

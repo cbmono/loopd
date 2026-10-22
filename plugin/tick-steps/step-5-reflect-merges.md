@@ -89,9 +89,12 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **Check the citations you are reflecting, and store them.** For each task you move to
    `done`, run
    `${CLAUDE_PLUGIN_ROOT}/scripts/kb-usage.sh record --source <id> --text-file <f> --brief <slugs>`
-   over its `# Result` section and over each merged PR body, with the slugs that task's brief
-   carried — `<id>` is `<task-slug>.result` or `<repo>-pr-<n>`, so a re-run rewrites the same
-   record instead of counting it twice. It runs
+   over its `# Result` section and over each merged PR body, with `<slugs>` the output of
+   `${CLAUDE_PLUGIN_ROOT}/scripts/kb-select.sh --recorded <task-path>` passed verbatim — the
+   set step 3 recorded at dispatch, never a re-run of the selector, which reads today's KB
+   (exit 1: dispatched before the record existed, so pass `none`) — `<id>` is
+   `<task-slug>.result` or `<repo>-pr-<n>`, so a re-run rewrites the same record instead
+   of counting it twice. It runs
    `${CLAUDE_PLUGIN_ROOT}/scripts/cite-check.sh --text-file` and passes its report and exit
    code through unchanged; that record is the only usage signal the archive sweep in
    step 7 has, so a skipped run is a citation the KB never sees. Anything dropped (exit 3, or exit 1 where a citing line lost every id) is
