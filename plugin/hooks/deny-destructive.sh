@@ -150,8 +150,8 @@ CMD="$(printf '%s' "$payload" | jq -r '.tool_input.command // ""' 2>/dev/null ||
 # `agent_id` and `agent_type` are present on a DISPATCHED subagent's PreToolUse event and
 # ABSENT on the parent session's own tool call (measured 2026-08-23; see agent-control.sh's
 # WHY agent_id). Most rules below are command-shape rules that apply to every session; the
-# session-scoped ones read these two and say so in their own header — `subagent_push_default`
-# and `subagent_merge`'s APPROVAL half fire only for a dispatched agent,
+# session-scoped ones read these two and say so in their own header — `subagent_push_default`,
+# `kb_apply_human_docs` and `subagent_merge`'s APPROVAL half fire only for a dispatched agent,
 # `launcher_diagnoses_nothing` only for the main thread, and `subagent_merge`'s MERGE half
 # for every caller in a bundle session, reading `agent_type` as the role rather than as a
 # presence test.
@@ -401,7 +401,7 @@ covers() { # <p> <x>
 # the tools falls through in microseconds. Narrowing one of these silently disables part of
 # a rule, so derive it from the rule body, and note that the deny half of that rule's tests
 # is what proves the filter still lets the real shapes through.
-RULES="terraform_destroy k8s_irreversible_delete k8s_production_target sql_destructive_remote rm_rf_repo_root force_push_protected secret_exfiltration subagent_merge subagent_push_default launcher_diagnoses_nothing"
+RULES="terraform_destroy k8s_irreversible_delete k8s_production_target sql_destructive_remote rm_rf_repo_root force_push_protected secret_exfiltration subagent_merge subagent_push_default kb_apply_human_docs launcher_diagnoses_nothing"
 
 # --- terraform_destroy --------------------------------------------------------------- #
 # JUSTIFIED BY: `destroy` deletes real infrastructure and there is no legitimate agent
@@ -1241,6 +1241,37 @@ EOF
       E|";"|"&") { [ "$defer" = 1 ] || { [ "$n" = "&" ] && [ "$changed" = 1 ]; }; } && amb=1 ;;
     esac
   done
+  return 1
+}
+
+# --- kb_apply_human_docs ------------------------------------------------------------- #
+# JUSTIFIED BY: `kb-apply.sh --human-docs` rewrites knowledge documents a person wrote, and
+# the slug list it demands is printed in the report, so from an agent it confirms nothing.
+# Agent-scoped like `subagent_push_default`. NARROW ENOUGH TO KEEP: the human's session, an
+# agent's `kb-apply.sh` without the flag, and reading or grepping the script all pass — except
+# inside `bash -c`, whose one string naming both script and flag is refused: it fails closed.
+rule_kb_apply_human_docs() {
+  [ -n "$AGENT_ID" ] || return 1
+  case "$1" in *human-docs*) ;; *) return 1 ;; esac
+  local stage c w run flag
+  while IFS= read -r stage; do
+    [ -n "$stage" ] || continue
+    c="$(first_word "$stage")" || continue
+    case "$c" in kb-apply.sh|bash|sh|zsh|dash|ksh|source|.|eval|claude) ;; *) continue ;; esac
+    run=0; flag=0
+    while IFS= read -r w; do
+      case "${w##*/}" in kb-apply.sh|*:kb-apply) run=1 ;; esac
+      case "$w" in --human-docs|--human-docs=*) flag=1 ;; esac
+    done <<EOT
+$(tokens_of "$stage")
+EOT
+    if [ "$run" = 1 ] && [ "$flag" = 1 ]; then
+      printf '`kb-apply.sh --human-docs` changes knowledge documents a person wrote or edited, and the slug list it asks for is printed in the report itself, so an agent passing it confirms nothing. Only a human applies it: point them at the report and let them run `/loopd:kb-apply <report> --human-docs <slugs>` in their own session. Without the flag, `kb-apply.sh` still applies a machine-only report.'
+      return 0
+    fi
+  done <<EOF
+$(stages "$1")
+EOF
   return 1
 }
 

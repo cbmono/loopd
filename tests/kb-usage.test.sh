@@ -121,18 +121,18 @@ out="$("$PROPOSE" 2>"$TMP/propose.err")"; rc=$?
 ok "with NO proposer configured, the sweep still proposes"   "$rc" 0
 REPORT="$(sed -n 's/.* in \(projects[^ ]*\.md\) .*/\1/p' <<<"$out")"
 ok "the report proposes archiving the stale learning"  "$(grep -c '^P[0-9]* · status · stale-learning · status=archived · - · ' "$REPORT")" 1
-ok "…and nothing else that a person wrote"             "$(grep -c 'stale-human' "$REPORT")" 0
-ok "…the human-written one is dropped by name"         "$(grep -c 'stale-human is not provenance: machine' "$TMP/propose.err")" 1
+ok "the human-written one is proposed too"             "$(grep -c '^P[0-9]* · status · stale-human · status=archived · ' "$REPORT")" 1
+ok "…and named under the human-written-docs section"   "$(sed -n '/^## Human-written docs this report changes/,$p' "$REPORT" | grep -c '^- `stale-human` (provenance: human)$')" 1
 ok "proposing changed no byte of knowledge/"           "$([ "$BEFORE" = "$(find knowledge -type f -exec cksum {} + | sort)" ] && echo yes || echo no)" yes
 
 echo
 echo "== criterion 5: archive is status: archived, nothing deleted, nothing moved =="
 cp knowledge/findings/stale-learning.md "$TMP/before.md"
 FILES_BEFORE="$(find knowledge -type f ! -name index.md ! -name .ledger-floor | sort)"
-"$APPLY" --by example-user-007 "$REPORT" >/dev/null 2>"$TMP/apply.err"; rc=$?
+"$APPLY" --by example-user-007 --human-docs stale-human "$REPORT" >/dev/null 2>"$TMP/apply.err"; rc=$?
 ok "the human applies it through kb-apply.sh"          "$rc" 0
 ok "status: archived"                                  "$(sed -n 's/^status: //p' knowledge/findings/stale-learning.md)" archived
-ok "…the reason is in its ledger entry"                "$(grep -c '^ledger: \[ "L1 · .* · status · by example-user-007 · items stale-learning · uncited in 10 text(s) over 640 days, category learning" \]' knowledge/findings/stale-learning.md)" 1
+ok "…the reason is in its ledger entry"                "$(grep -c '^ledger: \[ "L[0-9]* · .* · status · by example-user-007 · items stale-learning · uncited in 10 text(s) over 640 days, category learning" \]' knowledge/findings/stale-learning.md)" 1
 ok "every other line is byte-identical"                "$(diff <(grep -vE '^(status|ledger):' "$TMP/before.md") <(grep -vE '^(status|ledger):' knowledge/findings/stale-learning.md) >/dev/null && echo yes || echo no)" yes
 ok "no file under knowledge/ was removed or moved"     "$([ "$FILES_BEFORE" = "$(find knowledge -type f ! -name index.md ! -name .ledger-floor | sort)" ] && echo yes || echo no)" yes
 ok "build-kb-index --check accepts it"                 "$(bash "$BUILD" --check >/dev/null 2>&1; echo $?)" 0

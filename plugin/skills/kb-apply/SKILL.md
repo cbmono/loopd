@@ -2,7 +2,7 @@
 name: kb-apply
 disable-model-invocation: true
 description: Apply one knowledge/ reflection report after you have read it — the human half of the reflector. A scheduled run proposes into a draft report; this is the only path that writes the proposals to knowledge/. Applies exactly what the report names, in one commit.
-argument-hint: "<path to the report, e.g. projects/knowledge-reflection/tasks/task-001-knowledge-reflection.md>"
+argument-hint: "<path to the report, e.g. projects/knowledge-reflection/tasks/task-001-knowledge-reflection.md> [--human-docs <slug,...>]"
 allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/kb-apply.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Read, Glob, Grep
 ---
 
@@ -25,13 +25,20 @@ Run from a control-panel instance root — confirm `instance.config.json` in the
    across **all** of `projects/*/tasks/*.md` and ask which — the proposer's `--project` is
    a flag, so a report can live under any slug. No match ⇒ say so and stop.
 2. **Show the human the proposals first.** Print each `P<n> · …` line of the report with
-   the item it names. This is the gate the whole design exists for: do not run step 3
-   until they have said to.
+   the item it names. When the report has a `## Human-written docs this report changes`
+   section, show that list too, word for word — each slug with its `provenance:`, the
+   `status=archived` items apart from the `tags` edits — and say plainly that these are
+   documents a person wrote or edited. This is the gate the whole design exists for: do not
+   run step 3 until they have said to.
 3. **Apply.** One command, which does all of it:
 
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/kb-apply.sh --by <login> <report>
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/kb-apply.sh --by <login> [--human-docs <slug,...>] <report>
    ```
+
+   Pass `--human-docs` only when the human typed it in `$ARGUMENTS`; never add it yourself.
+   Without it a report that changes a human-written doc is refused — show them the apply
+   line the report prints and let them re-run the command with it.
 
    `<login>` is the human applying it, from
    `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self` — never a role name, which
@@ -40,7 +47,8 @@ Run from a control-panel instance root — confirm `instance.config.json` in the
    Never re-run a refused report with a different argument to get past the refusal.
 
 ## What it writes, and nothing else
-The frontmatter field each proposal names · one `ledger:` entry per item · the regenerated
+The frontmatter field each proposal names (on a `mixed`/`human` doc: `tags` or
+`status: archived`, nothing else) · one `ledger:` entry per item · the regenerated
 `knowledge/index.md` · the report's own `status: done` · one commit. A change the report
 does not name is not applied — that is the contract, and it is why the script refuses a
 whole report rather than applying the part of it that still checks out.
@@ -49,10 +57,14 @@ whole report rather than applying the part of it that still checks out.
 - **Declining is cancelling the report**, not editing it: set the task's
   `status: cancelled`. The row clears on the next tick and the proposal can be raised
   again by a later run.
-- **A refusal is information, not an obstacle.** `provenance: machine` is missing (a person
-  wrote that item), the item changed since the report was written, the report is already
-  `done`, or a tick holds the dispatch lock and may be writing `knowledge/`. Re-run
-  `kb-propose.sh` rather than editing the report by hand.
+- **A refusal is information, not an obstacle.** A human-written item that `--human-docs`
+  does not name, or a proposal on one other than `tags`/`status=archived`; the item changed
+  since the report was written; the report is already `done`; or a tick holds the dispatch
+  lock and may be writing `knowledge/`. Re-run `kb-propose.sh` rather than editing the
+  report by hand.
+- **`--human-docs` is derivable from the report, so it confirms nothing when an agent
+  passes it.** What keeps agents out is `deny-destructive.sh`'s `kb_apply_human_docs` rule,
+  which refuses the flag from any agent session — plus `disable-model-invocation` here.
 - **`ledger:` and `provenance:` are refused as proposal fields.** The first has one
   append-only writer; the second is the guard this path reads before it touches anything.
 - This command **never proposes, never promotes a task and never merges a PR**. The report

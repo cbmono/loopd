@@ -214,5 +214,121 @@ ok "the README's command table carries the row"     "$(grep -c '^| `/loopd:kb-ap
 ok "SCHEMA.md defines the report"                   "$(grep -c '^### The reflection report' "$SCHEMA")" 1
 ok "…and names both halves"                         "$(grep -c 'scripts/kb-propose.sh' "$SCHEMA")/$(grep -c 'scripts/kb-apply.sh' "$SCHEMA")" "1/1"
 
+echo "== human-written docs: tags and status=archived only, only with --human-docs naming them =="
+D2="$TMP/bundle-hd"
+mkdir -p "$D2/knowledge/findings" "$D2/.loopd"
+hitem() { # <slug> <provenance|-> [a block-form tags: item line…]
+  local slug="$1" prov="$2"; shift 2
+  { printf -- '---\ntype: Finding\ntitle: Title %s\ndescription: d\nlesson: l\ncategory: learning\n' "$slug"
+    if [ $# -gt 0 ]; then printf 'tags:\n'; printf '%s\n' "$@"; else printf 'tags: [ ]\n'; fi
+    printf 'status: current\n'
+    [ "$prov" = - ] || printf 'provenance: %s\n' "$prov"
+    printf 'timestamp: 2026-10-01T00:00:00Z\n---\n\n# Finding\n\nA claim.\n'
+  } >"$D2/knowledge/findings/$slug.md"
+}
+hitem m1 machine; hitem h1 human; hitem h2 human; hitem x1 mixed; hitem noprov -; hitem odd robot
+hitem blk human '  - a' '  - b'; hitem blkgap human '' '  - a'; hitem blkhash human '# a comment' '  - a'
+cp "$REPO/plugin/seed/knowledge/vocab.md" "$D2/knowledge/vocab.md"
+printf 'index, regenerated\n' >"$D2/knowledge/index.md"
+printf '{ "org": "example-org" }\n' >"$D2/instance.config.json"
+cp "$REPO/plugin/seed/SCHEMA.md" "$D2/.loopd/SCHEMA.md"
+cd "$D2" || exit 2
+git init -q . && git config user.name example-user-007 && git config user.email u@example.com
+git add -A && git commit -qm init
+fp() { cksum <"knowledge/findings/$1.md" | awk '{print $1 "-" $2}'; }
+rep() { # <name> <proposal lines> -> $R
+  R="projects/kb-hd/tasks/$1.md"; mkdir -p projects/kb-hd/tasks
+  printf -- '---\ntype: Task\ntitle: "r"\nkind: build\nstatus: draft\nassignee: human\nacceptance_criteria: [ ]\nopen_questions: [ ]\ntimestamp: 2026-10-22T00:00:00Z\n---\n\n# Proposals\n\n%s\n' "$2" >"$R"
+}
+# exit 1, knowledge/ byte-identical, and the refusal it was refused FOR — an exit 1 for an
+# earlier reason would prove nothing.
+refuse() { # <name> <reason pattern> <kb-apply args…>
+  local name="$1" pat="$2" before err rc; shift 2
+  before="$(kbsum)"
+  err="$("$APPLY" --by example-user-007 "$@" 2>&1 >/dev/null)"; rc=$?
+  ok "$name" "$rc/$([ "$before" = "$(kbsum)" ] && echo same || echo changed)/$(grep -c -- "$pat" <<<"$err")" "1/same/1"
+}
+rep only-human "P1 · edit · h1 · tags=[a] · - · $(fp h1) · tag it"
+refuse "a human doc without --human-docs is refused, knowledge/ identical" "only when --human-docs names it" "$R"
+rep mixed "P1 · edit · m1 · title=New · - · $(fp m1) · retitle
+P2 · edit · h1 · tags=[a] · - · $(fp h1) · tag it
+P3 · status · x1 · status=archived · - · $(fp x1) · stale"
+MIXED="$R"
+refuse "an EXTRA slug in --human-docs is refused"      "is not exactly" --human-docs h1,x1,m1 "$MIXED"
+refuse "a MISSING slug in --human-docs is refused"     "is not exactly" --human-docs h1 "$MIXED"
+refuse "a DUPLICATED slug in --human-docs is refused"  "names a slug twice" --human-docs h1,x1,h1 "$MIXED"
+rep machine-only "P1 · edit · m1 · title=New · - · $(fp m1) · retitle"
+refuse "--human-docs on a report with no human doc is refused" "changes no human-written doc" --human-docs m1 "$R"
+rep k-merge "P1 · merge · h1 · status=superseded · m1 · $(fp h1) · fold";       refuse "a merge of a human doc is refused"      "takes only" --human-docs h1 "$R"
+rep k-rename "P1 · rename · h1 · title=T · m1 · $(fp h1) · rename";             refuse "a rename of a human doc is refused"     "takes only" --human-docs h1 "$R"
+rep k-super "P1 · supersede · h1 · status=superseded · m1 · $(fp h1) · dup";     refuse "a supersede of a human doc is refused"  "takes only" --human-docs h1 "$R"
+rep k-field "P1 · edit · h1 · title=T · - · $(fp h1) · retitle";                refuse "any field but tags on a human doc is refused" "takes only" --human-docs h1 "$R"
+rep k-status "P1 · status · x1 · status=superseded · - · $(fp x1) · redirect";   refuse "status=superseded on a mixed doc is refused" "takes only" --human-docs x1 "$R"
+rep k-noprov "P1 · status · noprov · status=archived · - · $(fp noprov) · old"; refuse "an ABSENT provenance: is refused"       "provenance 'absent'" --human-docs noprov "$R"
+rep k-odd "P1 · status · odd · status=archived · - · $(fp odd) · old";          refuse "a provenance outside the enum is refused" "provenance 'robot'" --human-docs odd "$R"
+rep k-prov "P1 · edit · h1 · provenance=machine · - · $(fp h1) · relabel";      refuse "a provenance: write on a human doc stays refused" "not a proposal's to write" --human-docs h1 "$R"
+rep k-ledger "P1 · edit · h1 · ledger=[] · - · $(fp h1) · wipe";                refuse "a ledger: write on a human doc stays refused" "not a proposal's to write" --human-docs h1 "$R"
+rep k-block "P1 · edit · blk · tags=[c] · - · $(fp blk) · retag";               refuse "a block-form tags: is refused, the doc byte-identical" "block form" --human-docs blk "$R"
+rep k-gap "P1 · edit · blkgap · tags=[c] · - · $(fp blkgap) · retag";         refuse "…with a blank line before its items too" "block form" --human-docs blkgap "$R"
+rep k-hash "P1 · edit · blkhash · tags=[c] · - · $(fp blkhash) · retag";      refuse "…and with a # comment line before them" "block form" --human-docs blkhash "$R"
+rm -rf projects/kb-hd
+
+echo "== …kb-propose keeps the narrow shape and marks it; apply names it before writing =="
+PH="$TMP/proposer-hd.sh"
+cat >"$PH" <<'EOS'
+#!/usr/bin/env bash
+echo "edit · m1 · title=New · - · retitle"
+echo "edit · h1 · tags=[ops, kb] · - · tag it"
+echo "status · x1 · status=archived · - · stale"
+echo "edit · h2 · title=Nope · - · outside the shape"
+echo "edit · blk · tags=[c] · - · block form"
+echo "edit · blkgap · tags=[c] · - · block form"
+echo "edit · blkhash · tags=[c] · - · block form"
+EOS
+chmod +x "$PH"
+out="$("$PROPOSE" --proposer "$PH" --project kb-prop 2>"$TMP/hd.err")"
+RH="$(sed -n 's/.* in \(projects[^ ]*\.md\) .*/\1/p' <<<"$out")"
+sect() { sed -n '/^## Human-written docs this report changes$/,$p' "$RH"; }
+ok "the narrow-shape human proposals are kept as P<n> lines" "$(grep -cE '^P[0-9]+ · (edit · h1 · tags=|status · x1 · status=archived)' "$RH")" 2
+ok "…one outside the shape is still dropped"   "$(grep -c 'h2 is provenance: human' "$TMP/hd.err")/$(grep -c ' h2 ' "$RH")" "1/0"
+ok "…and so is every block-form target apply would refuse" \
+  "$(grep -cE '(blk|blkgap|blkhash) holds .tags:. in block form' "$TMP/hd.err")/$(grep -cE ' blk(gap|hash)? ' "$RH")" "3/0"
+ok "the report carries the human-written section" "$(grep -c '^## Human-written docs this report changes$' "$RH")" 1
+ok "…archived in their own sub-list, with provenance" \
+  "$(sect | sed -n '/^Archived/,/^$/p' | grep -c '^- `x1` (provenance: mixed)$')" 1
+ok "…tag edits in another, with provenance and value" \
+  "$(sect | sed -n '/^Tag edits/,$p' | grep -c '^- `h1` (provenance: human) · `tags=\[ops, kb\]`$')" 1
+ok "…and the exact apply line"  "$(sect | grep -cxF "\`/loopd:kb-apply $RH --human-docs h1,x1\`")" 1
+ok "a machine-only report carries no such section" "$(grep -c 'Human-written docs' "$D/$REPORT")" 0
+chmod u-w knowledge/findings
+out="$("$APPLY" --by example-user-007 --human-docs x1,h1 "$RH" 2>&1)"; rc=$?
+chmod u+w knowledge/findings
+ok "the notice is printed before the first write is attempted" \
+  "$rc/$(grep -c '^KB HUMAN-WRITTEN DOCS: 2' <<<"$out")/$(grep -c 'could not write' <<<"$out")" 1/1/1
+cp knowledge/findings/h1.md "$TMP/h1.before"
+out="$("$APPLY" --by example-user-007 --human-docs x1,h1 "$RH" 2>&1)"; rc=$?
+ok "the mixed report applies with the set in any order" "$rc" 0
+lno() { awk -v s="$1" '!n && index($0, s) { n = NR } END { print n }' <<<"$out"; }
+ok "the notice names archived, then tag edits, then KB APPLIED" \
+  "$(a=$(lno 'KB HUMAN-WRITTEN DOCS: 2'); b=$(lno '- x1 (provenance: mixed) status=archived'); c=$(lno 'tag edits'); d=$(lno '- h1 (provenance: human) tags=[ops, kb]'); e=$(lno 'KB APPLIED')
+     [ -n "$a" ] && [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ] && [ "$c" -lt "$d" ] && [ "$d" -lt "$e" ] && echo ordered || echo "$a/$b/$c/$d/$e")" ordered
+ok "a human doc gains only its field and one ledger: line" \
+  "$(diff "$TMP/h1.before" knowledge/findings/h1.md | grep '^[<>]' | cut -c1-9 | tr '\n' '|')" "< tags: [|> tags: [|> ledger:|"
+ok "…the ledger names the human" "$(grep -c '^ledger:.* · edit · by example-user-007 · items h1 · ' knowledge/findings/h1.md)" 1
+ok "…and provenance: is untouched" "$(sed -n 's/^provenance: //p' knowledge/findings/h1.md)/$(sed -n 's/^status: //p' knowledge/findings/x1.md)" human/archived
+cd "$D" || exit 2
+
+echo "== the guards that keep agents out =="
+ok "step 7 still never applies from the tick" \
+  "$(grep -cxF '   **Never apply a report from here, and never promote one.** `/loopd:kb-apply` is the' "$STEP7")" 1
+for f in "$SKILL" "$SCHEMA"; do
+  ok "$(basename "$f") says --human-docs is derivable, so the hook rule binds agents" \
+    "$(grep -c 'derivable from the report' "$f")/$(grep -c 'kb_apply_human_docs' "$f")" 1/1
+done
+ok "SCHEMA records the owner's reversal" "$(grep -c 'owner decision 2026-10-21' "$SCHEMA")" 1
+ok "…its provenance table names the narrow path" "$(grep -cE '^\| `(mixed|human)` .*`tags` and `status=archived` only, only through `/loopd:kb-apply --human-docs`' "$SCHEMA")" 2
+ok "no plugin line still says the machinery never rewrites a person's doc" \
+  "$(grep -rn 'never rewrites what a person wrote' "$REPO/plugin" | wc -l | tr -d ' ')" 0
+
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
