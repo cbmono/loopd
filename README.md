@@ -288,6 +288,7 @@ Run these inside an instance.
 | `/loopd:close-project [<slug>]` | (plugin) close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. No slug opens a picker of the projects, multi-select, and asks about `--force`. [→](docs/schema.md#closing-a-project) |
 | `/loopd:welcome [check\|fix]` | (plugin) reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-loopdwelcome-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
 | `/loopd:brief-me [project]` | (plugin) a since-you-last-looked digest, or a meeting-ready brief for one project. Read-only |
+| `/loopd:whats-up` | (plugin) "what do you need from me?" — reprints `AWAITING.md`'s Needs-you rows, numbered, with its last refresh and whether a tick is in flight. Read-only; nothing else is read |
 | `/loopd:capture <notes>` | (plugin) turn a decision or meeting notes into drafted projects and tasks, with provenance — never promoted |
 | `/loopd:work <task>` | (plugin) work one task in **this** session, ledger kept for you — the solo alternative to dispatching an agent |
 | `/loopd:handoff <path> <login>` | (plugin) transfer a task or project to another human, with the context that makes the transfer real |
@@ -605,6 +606,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `close-project-folder.sh` | closeout's folder step — `git rm -r` the project, or freeze and keep it on `retain: true` | only with `--apply` |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
 | `build-board.sh` | renders the HTML board (anywhere; needs `python3`) — pass `.` to render THIS instance only | yes, the output file |
+| `whats-up.sh` | backs `/loopd:whats-up` — `AWAITING.md`'s rows as a numbered `Needs you:` block, verbatim and in the file's order, plus its `Last refreshed:` age and the `tick-lock.sh status` verdict. Reads no task document, no `gh`, no `git`; no `AWAITING.md` ⇒ one off-switch line, and the file is never created | no |
 | `print-board.sh` | prints the board in the terminal | no |
 | `status-line.sh` | the bundle's Claude Code `statusLine`: one coloured line — `loopd · <n> in flight · agents <n> running[, <n> no process] · <n> need you · lock free\|held · last tick <hh:mm>` — from task frontmatter, `agent-sessions.sh view`, `AWAITING.md`, `.tick-lock` and `log.md`'s last `* TICK`. No `jq`, no `gh`, no model; a number it cannot establish renders `?`, and outside a bundle it prints nothing. The `need you` segment is three-state: a deleted `AWAITING.md` is the queue's off switch, so the segment goes; an unreadable one says so and names its own `chmod +r` repair. `/loopd:init` installs it into the BUNDLE's `.claude/settings.json` and never the user's | yes — the 10-second `agents` cache under `${XDG_CACHE_HOME:-~/.cache}/loopd/` |
 | `watch-board.sh` | renders the board into `.board-live/` and re-renders on every change | yes, the page (gitignored) |
