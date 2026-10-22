@@ -20,18 +20,6 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    Read-only on product repos, writes only to `knowledge/`; counts toward the
    concurrency cap.
 
-   **The stale list rides along with a cataloguer this tick already dispatches, and is
-   never a reason to dispatch one.** Only when one of this step's reasons (or step 6's) is
-   sending a cataloguer, run once and paste its output into that one brief:
-
-   ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/kb-stale.sh   # exit 0 = a list · 1 = nothing listed · 2 = could not run
-   ```
-
-   It names each Service and Runbook whose code has `kbStaleCommits` (absent ⇒ 20) commits
-   since its `timestamp:`, and UNKNOWN for one it cannot measure. Exit 1 or 2 adds nothing to
-   the brief. A non-empty list with no cataloguer going out dispatches nothing.
-
    **The papercuts pass is the other reason to dispatch one, and it runs on a cadence
    rather than on a merge.** Ask once per tick, and only act when it says DUE:
 
@@ -101,6 +89,18 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    only path that writes `knowledge/` from a report, a human types it, and a report is
    declined by cancelling it — not by promoting it to `ready`, which would dispatch an
    agent and make a second apply path.
+
+   **The stale list rides along with a cataloguer this tick already dispatches, and is
+   never a reason to dispatch one.** Only when one of this step's reasons (or step 6's) is
+   sending a cataloguer, run once and paste its output into that one brief:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/kb-stale.sh   # exit 0 = a list · 1 = nothing listed · 2 = could not run
+   ```
+
+   It names each Service and Runbook whose code has `kbStaleCommits` (absent ⇒ 20) commits
+   since its `timestamp:`, and UNKNOWN for one it cannot measure. Exit 1 or 2 adds nothing to
+   the brief. A non-empty list with no cataloguer going out dispatches nothing.
 
 
 <!-- end of step 7 -->
