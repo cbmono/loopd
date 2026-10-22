@@ -83,6 +83,7 @@ DECLARED_PATH=".github/required-checks.txt"
 # one would be cleared by the gate it rewrites (loopd-papercuts/task-010).
 GATE_FILES="
 plugin/scripts/merge-permit.sh
+plugin/scripts/plugin-name.sh
 plugin/scripts/clearance-receipt.sh
 plugin/scripts/review-clearance.sh
 plugin/scripts/required-checks.sh

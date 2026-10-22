@@ -42,6 +42,10 @@ res() { (cd "$1" 2>/dev/null && pwd -P); }
 SHA="a30826d9c0ffee1234567890abcdef0123456789"
 OTHER_SHA="cb20f95c11112222333344445555666677778888"
 NWO="cbmono/ai-bridge"   # paired with the receipt filename asserted below; a fixture value, not prose
+NWO2="example-user-007/widgets"   # a second repo the cwd's origin is NOT, so a URL case can be red
+# shellcheck source=tools/plugin-name.sh
+. "$REPO/tests/tools/plugin-name.sh"
+PM="$PN:project-manager"   # the tick's agent_type, namespaced exactly as Claude Code sends it
 
 # ------------------------------------------------------------------------------ fixtures
 # A bundle (the instance root the hook reads from CLAUDE_PROJECT_DIR) and a product-repo
@@ -124,15 +128,15 @@ echo "== (a) delegating mode + the four-precondition record at the SAME head ⇒
 autonomy_on
 project yolo-proj yolo 226
 forget; record_all 226 "$SHA"
-ok "the tick's own merge command is permitted" "$(verdict "$MERGE" project-manager)" "allow"
+ok "the tick's own merge command is permitted" "$(verdict "$MERGE" "$PM")" "allow"
 # Non-vacuity for the whole file: the permit is the NARROW shape and nothing near it.
 ok "…without --match-head-commit it is refused" \
-   "$(verdict 'gh pr merge --squash 226' project-manager)" "deny:subagent_merge"
+   "$(verdict 'gh pr merge --squash 226' "$PM")" "deny:subagent_merge"
 ok "…with --merge instead of --squash"          \
-   "$(verdict "gh pr merge --merge --match-head-commit $SHA 226" project-manager)" "deny:subagent_merge"
-ok "…a bare gh pr merge"                        "$(verdict 'gh pr merge 226' project-manager)" "deny:subagent_merge"
+   "$(verdict "gh pr merge --merge --match-head-commit $SHA 226" "$PM")" "deny:subagent_merge"
+ok "…a bare gh pr merge"                        "$(verdict 'gh pr merge 226' "$PM")" "deny:subagent_merge"
 ok "…and hidden behind an earlier stage it is still read" \
-   "$(verdict "gh pr view 226 && $MERGE" project-manager)" "allow"
+   "$(verdict "gh pr view 226 && $MERGE" "$PM")" "allow"
 # The review verbs an agent MUST keep, at the same fixture state.
 ok "gh pr create is untouched"        "$(verdict 'gh pr create --fill' software-engineer)" "allow"
 ok "gh pr review --request-changes is untouched" \
@@ -142,8 +146,8 @@ echo
 echo "== (b) a gated project is still refused, and the human is still named the merger =="
 project gated-proj gated 227
 forget; record_all 227 "$SHA"
-ok "gated ⇒ refused" "$(verdict "gh pr merge --squash --match-head-commit $SHA 227" project-manager)" "deny:subagent_merge"
-REASON="$(payload "$GITREPO" "gh pr merge --squash --match-head-commit $SHA 227" project-manager \
+ok "gated ⇒ refused" "$(verdict "gh pr merge --squash --match-head-commit $SHA 227" "$PM")" "deny:subagent_merge"
+REASON="$(payload "$GITREPO" "gh pr merge --squash --match-head-commit $SHA 227" "$PM" \
           | HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$BUNDLE" bash "$HOOK" 2>/dev/null \
           | jq -r '.hookSpecificOutput.permissionDecisionReason // ""')"
 ok "…and the refusal names the human as the merger" \
@@ -152,14 +156,14 @@ ok "…and the refusal names the human as the merger" \
 echo
 echo "== (c) delegating mode, NO receipt ⇒ refused =="
 forget
-ok "no clearance record ⇒ refused" "$(verdict "$MERGE" project-manager)" "deny:subagent_merge"
+ok "no clearance record ⇒ refused" "$(verdict "$MERGE" "$PM")" "deny:subagent_merge"
 echo "== …and a bare review receipt is not a merge permit (g) =="
 record_all 226 "$SHA" review-clearance.sh
-ok "review-clearance.sh alone ⇒ refused" "$(verdict "$MERGE" project-manager)" "deny:subagent_merge"
+ok "review-clearance.sh alone ⇒ refused" "$(verdict "$MERGE" "$PM")" "deny:subagent_merge"
 record_all 226 "$SHA" required-checks.sh pr-body-clearance.sh
-ok "…three of the four ⇒ still refused"  "$(verdict "$MERGE" project-manager)" "deny:subagent_merge"
+ok "…three of the four ⇒ still refused"  "$(verdict "$MERGE" "$PM")" "deny:subagent_merge"
 record_all 226 "$SHA" pr-verdict-clearance.sh
-ok "…and the fourth is what permits it"  "$(verdict "$MERGE" project-manager)" "allow"
+ok "…and the fourth is what permits it"  "$(verdict "$MERGE" "$PM")" "allow"
 echo "== …and the role is the tick's, never the worker's (g) =="
 ok "a software-engineer with the full record ⇒ refused" \
    "$(verdict "$MERGE" software-engineer)" "deny:subagent_merge"
@@ -169,44 +173,96 @@ ok "a qa-reviewer with the full record ⇒ refused" \
 echo
 echo "== (d) the receipt's head must equal --match-head-commit =="
 forget; record_all 226 "$OTHER_SHA"
-ok "a record at an earlier head ⇒ refused" "$(verdict "$MERGE" project-manager)" "deny:subagent_merge"
+ok "a record at an earlier head ⇒ refused" "$(verdict "$MERGE" "$PM")" "deny:subagent_merge"
 ok "…and the merge at THAT head is permitted" \
-   "$(verdict "gh pr merge --squash --match-head-commit $OTHER_SHA 226" project-manager)" "allow"
+   "$(verdict "gh pr merge --squash --match-head-commit $OTHER_SHA 226" "$PM")" "allow"
 # The file is keyed by head AND says so inside: a rename must not turn one into the other.
 mv "$BUNDLE/$AB_RECEIPTS/cbmono-ai-bridge__pr226__$OTHER_SHA" \
    "$BUNDLE/$AB_RECEIPTS/cbmono-ai-bridge__pr226__$SHA" 2>/dev/null
 ok "…and a renamed record still names the head it was earned at" \
-   "$(verdict "$MERGE" project-manager)" "deny:subagent_merge"
+   "$(verdict "$MERGE" "$PM")" "deny:subagent_merge"
 
 echo
 echo "== (e) no AUTONOMY.md ⇒ refused (the companion is not installed) =="
 forget; record_all 226 "$SHA"; autonomy_off
-ok "capability file absent ⇒ refused" "$(verdict "$MERGE" project-manager)" "deny:subagent_merge"
+ok "capability file absent ⇒ refused" "$(verdict "$MERGE" "$PM")" "deny:subagent_merge"
 autonomy_on
-ok "…and restoring it is the only thing that changed" "$(verdict "$MERGE" project-manager)" "allow"
+ok "…and restoring it is the only thing that changed" "$(verdict "$MERGE" "$PM")" "allow"
 
 echo
 echo "== (f) two tasks in differently-moded projects naming the same PR ⇒ refused =="
 project gated-twin gated 226
-ok "ambiguous PR → project mapping ⇒ refused" "$(verdict "$MERGE" project-manager)" "deny:subagent_merge"
+ok "ambiguous PR → project mapping ⇒ refused" "$(verdict "$MERGE" "$PM")" "deny:subagent_merge"
 rm -rf "$BUNDLE/projects/gated-twin"
-ok "…and it is the ambiguity, not the second project" "$(verdict "$MERGE" project-manager)" "allow"
+ok "…and it is the ambiguity, not the second project" "$(verdict "$MERGE" "$PM")" "allow"
 # A task that merely MENTIONS a PR in its prose owns nothing — only the `pr:` field counts.
 mkdir -p "$BUNDLE/projects/gated-twin/tasks"
 printf -- '---\ntype: Project\nautonomy: gated\n---\n' > "$BUNDLE/projects/gated-twin/project.md"
 printf -- '---\ntype: Task\npr: [ ]\n---\n\n# Context\n\nhttps://github.com/%s/pull/226 merged by hand.\n' \
   "$NWO" > "$BUNDLE/projects/gated-twin/tasks/task-001.md"
-ok "…a prose mention is not ownership" "$(verdict "$MERGE" project-manager)" "allow"
+ok "…a prose mention is not ownership" "$(verdict "$MERGE" "$PM")" "allow"
 rm -rf "$BUNDLE/projects/gated-twin"
 
 echo
 echo "== (h) the REST merge endpoint is refused under a delegating mode too =="
 ok "gh api PUT pulls/N/merge ⇒ refused" \
-   "$(verdict "gh api --method PUT /repos/$NWO/pulls/226/merge -f sha=$SHA" project-manager)" "deny:subagent_merge"
+   "$(verdict "gh api --method PUT /repos/$NWO/pulls/226/merge -f sha=$SHA" "$PM")" "deny:subagent_merge"
 ok "…and from a subagent"                \
    "$(verdict "gh api --method PUT /repos/$NWO/pulls/226/merge" software-engineer)" "deny:subagent_merge"
 ok "gh api reading the PR is untouched"  \
-   "$(verdict "gh api /repos/$NWO/pulls/226" project-manager)" "allow"
+   "$(verdict "gh api /repos/$NWO/pulls/226" "$PM")" "allow"
+
+echo
+echo "== (i) the role is the namespaced tick, matched exactly =="
+ok "the bare project-manager ⇒ refused (a user-level agent of that name is not the tick)" \
+   "$(verdict "$MERGE" project-manager)" "deny:subagent_merge"
+for r in "evil:project-manager" "$PN:$PN:project-manager" " $PM" "$PM " "$PN: project-manager" \
+         "$PN:software-engineer" "$PN:qa-reviewer" "$PN:project-manager-x" "$PN:Project-Manager"; do
+  ok "…'$r' ⇒ refused" "$(verdict "$MERGE" "$r")" "deny:subagent_merge"
+done
+ok "merge-permit.sh itself: --role $PM ⇒ 0" \
+   "$("$PERMIT" --bundle "$BUNDLE" --repo "$NWO" --pr 226 --head "$SHA" --role "$PM" >/dev/null 2>&1; echo $?)" 0
+ok "…--role project-manager ⇒ 1" \
+   "$("$PERMIT" --bundle "$BUNDLE" --repo "$NWO" --pr 226 --head "$SHA" --role project-manager >/dev/null 2>&1; echo $?)" 1
+
+echo
+echo "== (j) a PR URL names its own repo; a bare number still takes --repo or the cwd =="
+# The cwd's origin is $NWO; this PR lives in $NWO2, so the cwd fallback can never permit it.
+mkdir -p "$BUNDLE/projects/url-proj/tasks"
+printf -- '---\ntype: Project\ntitle: "url-proj"\nautonomy: yolo\n---\n' > "$BUNDLE/projects/url-proj/project.md"
+printf -- '---\ntype: Task\ntitle: "a task"\nstatus: in-review\npr: [ https://github.com/%s/pull/321 ]\n---\n' \
+  "$NWO2" > "$BUNDLE/projects/url-proj/tasks/task-001.md"
+record_nwo2() { # <sha>
+  local s
+  for s in review-clearance.sh required-checks.sh pr-body-clearance.sh pr-verdict-clearance.sh; do
+    "$RECEIPT" record "$s" --bundle "$BUNDLE" --repo "$NWO2" --pr 321 --head "$1" || return 1
+  done
+}
+URL="https://github.com/$NWO2/pull/321"
+UMERGE="gh pr merge --squash --match-head-commit $SHA"
+record_nwo2 "$SHA"
+ok "a URL operand resolves to the URL's repo, not the cwd's" "$(verdict "$UMERGE $URL" "$PM")" "allow"
+ok "…with --repo agreeing"                  "$(verdict "$UMERGE --repo $NWO2 $URL" "$PM")" "allow"
+ok "…with --repo disagreeing ⇒ refused"     "$(verdict "$UMERGE --repo $NWO $URL" "$PM")" "deny:subagent_merge"
+ok "…with -R disagreeing ⇒ refused"         "$(verdict "$UMERGE -R $NWO $URL" "$PM")" "deny:subagent_merge"
+ok "a bare number with --repo takes --repo" "$(verdict "$UMERGE --repo $NWO2 321" "$PM")" "allow"
+ok "…and without it, the cwd's origin"      "$(verdict "$UMERGE 321" "$PM")" "deny:subagent_merge"
+ok "…which is what clears #226 by number"   "$(verdict "$MERGE" "$PM")" "allow"
+# #226 is owned and cleared in $NWO; a URL naming #226 in ANOTHER repo merges that other PR.
+ok "a URL to an uncleared repo's #226 is not cleared by \$NWO's #226" \
+   "$(verdict "$UMERGE https://github.com/$NWO2/pull/226" "$PM")" "deny:subagent_merge"
+for u in "https://example.com/$NWO/pull/226" "http://github.com/$NWO/pull/226" \
+         "https://www.github.com/$NWO/pull/226" "github.com/$NWO/pull/226" "$NWO/226" "x/226" \
+         "https://github.com/$NWO/pull/226/files" "https://github.com/$NWO/pull/226/" \
+         "https://github.com/$NWO/issues/226" "https://github.com/../$NWO/pull/226"; do
+  ok "…operand '$u' ⇒ refused" "$(verdict "$UMERGE $u" "$PM")" "deny:subagent_merge"
+done
+ok "a URL, the wrong role ⇒ refused"        "$(verdict "$UMERGE $URL" "$PN:software-engineer")" "deny:subagent_merge"
+ok "a URL, a record at another head ⇒ refused" \
+   "$(verdict "gh pr merge --squash --match-head-commit $OTHER_SHA $URL" "$PM")" "deny:subagent_merge"
+forget; record_all 226 "$SHA"
+ok "a URL, no record ⇒ refused"             "$(verdict "$UMERGE $URL" "$PM")" "deny:subagent_merge"
+rm -rf "$BUNDLE/projects/url-proj"
 
 echo
 echo "== the check is not subagent-only: the MAIN thread carries no agent_id =="
@@ -215,7 +271,7 @@ echo "== the check is not subagent-only: the MAIN thread carries no agent_id =="
 ok "main thread, no record ⇒ refused" "$(forget; verdict "$MERGE" '')" "deny:subagent_merge"
 record_all 226 "$SHA"
 ok "main thread, full record, no role ⇒ still refused" "$(verdict "$MERGE" '')" "deny:subagent_merge"
-ok "…while the same command from the tick is permitted" "$(verdict "$MERGE" project-manager)" "allow"
+ok "…while the same command from the tick is permitted" "$(verdict "$MERGE" "$PM")" "allow"
 # The approval half stays agent-scoped: an approval is the human's to give in their session.
 ok "the human's own session may still approve" "$(verdict 'gh pr review --approve 226' '')" "allow"
 ok "…and a dispatched agent may not"           "$(verdict 'gh pr review --approve 226' software-engineer)" "deny:subagent_merge"
@@ -230,9 +286,9 @@ cp "$BUNDLE/AUTONOMY.md" "$GITREPO/AUTONOMY.md"
 printf '{}\n' > "$GITREPO/instance.config.json"
 sed -i.bak 's/^autonomy: yolo$/autonomy: gated/' "$BUNDLE/projects/yolo-proj/project.md"
 ok "a PR cannot raise its own project's autonomy from the target repo" \
-   "$(verdict "$MERGE" project-manager)" "deny:subagent_merge"
+   "$(verdict "$MERGE" "$PM")" "deny:subagent_merge"
 sed -i.bak 's/^autonomy: gated$/autonomy: yolo/' "$BUNDLE/projects/yolo-proj/project.md"
-ok "…and the bundle's own value is what decides" "$(verdict "$MERGE" project-manager)" "allow"
+ok "…and the bundle's own value is what decides" "$(verdict "$MERGE" "$PM")" "allow"
 rm -f "$GITREPO/instance.config.json" "$GITREPO/AUTONOMY.md"
 
 echo
@@ -279,7 +335,7 @@ YTALLY="$TMP/external.tally"
   project ext-proj yolo 42
   RCPT="$("$RECEIPT" path --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H")"
   others() { record_all 42 "$H" required-checks.sh pr-body-clearance.sh; }
-  permit() { "$PERMIT" --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H" --role project-manager \
+  permit() { "$PERMIT" --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H" --role "$PM" \
                >/dev/null 2>&1; echo $?; }
   is() { if [ "$2" = "$3" ]; then assert "$1" 0; else assert "$1 (got $2, want $3)" 1; fi; }
   trailer_body() {
@@ -361,6 +417,7 @@ STUB
   is "…while an ordinary diff reaches the required-set question (exit 3)" "$(rc_exit README.md)" 3
   is "a PR editing merge-permit.sh ⇒ required-checks.sh exit 4" \
      "$(rc_exit plugin/scripts/merge-permit.sh)" 4
+  is "…and plugin-name.sh, which names the merging role" "$(rc_exit plugin/scripts/plugin-name.sh)" 4
 
   echo "== mergeAtReviewCap: exit 6 at the two-round cap, opt-in, yolo only =="
   THIRD="fedcba9876543210fedcba9876543210fedcba98"

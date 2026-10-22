@@ -4,7 +4,7 @@
 # The policy half of `deny-destructive.sh`'s `subagent_merge` rule; the hook owns the
 # command SHAPE and this owns the mode, the owning project, the role and the receipt.
 #
-#   merge-permit.sh --bundle DIR --repo O/R --pr N --head SHA --role ROLE
+#   merge-permit.sh --bundle DIR --repo O/R --pr N --head SHA --role <plugin>:project-manager
 #
 # Exit: 0 permits, silently · 1 refuses, printing one line saying why · 2 usage, which
 # also refuses. Every unknown is a refusal — that is the whole design.
@@ -18,7 +18,12 @@ RECEIPT="$HERE/clearance-receipt.sh"
 # The tick, and nothing else. `review-clearance.sh` exit 0 is precondition 2's first half
 # and the qa-reviewer earns one on nearly every reviewed PR, so without this a
 # software-engineer in a delegated project could merge its own pull request.
+# EXACT `<this plugin>:project-manager`: never `${role##*:}`, which admits `evil:project-manager`,
+# and never the bare name, which any user-level agent file can claim (loopd/task-015).
 MERGER_ROLE="project-manager"
+# shellcheck source=plugin-name.sh
+. "$HERE/plugin-name.sh" 2>/dev/null
+MERGER_TYPE="${PLUGIN_NAME:+$PLUGIN_NAME:$MERGER_ROLE}"
 
 refuse() { printf '%s\n' "$1"; exit 1; }
 
@@ -41,8 +46,8 @@ done
 [ -f "$bundle/instance.config.json" ] || {
   echo "merge-permit: $bundle is not a bundle root" >&2; exit 2; }
 
-[ "$role" = "$MERGER_ROLE" ] || \
-  refuse "the merge is delegated to the \`$MERGER_ROLE\` tick, and this caller is \`${role:-the main thread}\`"
+[ -n "$MERGER_TYPE" ] && [ "$role" = "$MERGER_TYPE" ] || \
+  refuse "the merge is delegated to the \`${MERGER_TYPE:-<plugin>:$MERGER_ROLE}\` tick, and this caller is \`${role:-the main thread}\`"
 
 # 1. Is delegated autonomy installed at all, and where is the file that defines the modes?
 [ -x "$RESOLVE_AUTONOMY" ] || refuse "resolve-autonomy.sh is missing, so no mode can be resolved"

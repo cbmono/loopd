@@ -845,9 +845,11 @@ origin_nwo() {
   printf '%s' "$_origin_nwo"
 }
 
-# The PR a `gh pr merge` names, as a number — a URL counts, a flag's value never does.
+# The PR a `gh pr merge` names, as "<number> <owner/repo>": the repo only from a
+# https://github.com pull URL, which `gh` merges whatever --repo or the cwd say. Any other
+# operand with a slash or colon refuses; a flag's value never counts.
 merge_pr_operand() { # <stage>
-  local w f seen=0 skipv=0 op=""
+  local w f seen=0 skipv=0 op="" p o n nwo=""
   while IFS= read -r w; do
     if [ "$seen" = 0 ]; then [ "$w" = merge ] && seen=1; continue; fi
     if [ "$skipv" = 1 ]; then skipv=0; continue; fi
@@ -859,14 +861,24 @@ merge_pr_operand() { # <stage>
   done <<EOF
 $(tokens_of "$1")
 EOF
-  op="${op##*/}"
+  case "$op" in
+    https://github.com/*)
+      p="${op#https://github.com/}"
+      o="${p%%/*}"; p="${p#*/}"; n="${p%%/*}"; p="${p#*/}"
+      case "$o$n" in *[!A-Za-z0-9._-]*) return 1 ;; esac
+      case "$o" in ''|.*) return 1 ;; esac
+      case "$n" in ''|.|..) return 1 ;; esac
+      op="${p#pull/}"; [ "$op" != "$p" ] || return 1
+      nwo="$o/$n" ;;
+    */*|*:*) return 1 ;;
+  esac
   case "$op" in ''|*[!0-9]*) return 1 ;; esac
-  printf '%s' "$op"
+  printf '%s %s' "$op" "$nwo"
 }
 
 _merge_why=""
 merge_permitted() { # <stage> -> 0 when this exact merge is delegated in this bundle
-  local sha pr repo helper
+  local sha pr repo helper op urlrepo
   _merge_why="only \`gh pr merge --squash --match-head-commit <sha> <pr>\` is ever delegated"
   has_token "$1" --squash || return 1
   has_token "$1" --merge && return 1
@@ -874,8 +886,15 @@ merge_permitted() { # <stage> -> 0 when this exact merge is delegated in this bu
   sha="$(flag_value "$1" --match-head-commit || true)"
   case "$sha" in *[!0-9a-fA-F]*|"") return 1 ;; esac
   [ "${#sha}" -ge 7 ] || return 1
-  pr="$(merge_pr_operand "$1")" || return 1
+  op="$(merge_pr_operand "$1")" || {
+    _merge_why="the PR must be a number or https://github.com/<owner>/<repo>/pull/<number>"; return 1; }
+  pr="${op%% *}"; urlrepo="${op#* }"
   repo="$(flag_value "$1" --repo -R || true)"
+  if [ -n "$urlrepo" ]; then
+    [ -z "$repo" ] || [ "$repo" = "$urlrepo" ] || {
+      _merge_why="the PR URL names $urlrepo and --repo names $repo"; return 1; }
+    repo="$urlrepo"
+  fi
   [ -n "$repo" ] || repo="$(origin_nwo)"
   case "$repo" in */*) ;; *) _merge_why="the repository this merge names cannot be resolved"; return 1 ;; esac
   # Resolved HERE and not at the top of the file: that line would cost a subshell in
