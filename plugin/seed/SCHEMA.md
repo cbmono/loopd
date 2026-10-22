@@ -1093,6 +1093,28 @@ any of that and are untouched, so an HTTPS bundle that has one still authenticat
 unmounted bundle keeps `knowledge/papercuts.md`. The **bundle-root `log.md`** — the PM's
 tick ledger — is **not** a KB artifact and is never sharded.
 
+**`.loopd/upstream-proposals.md` holds the papercut proposals for loopd PLUGIN surfaces**,
+which no project in an instance owns. A surface is a plugin surface only when its name
+resolves in the installed plugin (`papercuts.sh classify --surface <s>`); every other
+surface is instance-owned and its proposal becomes a `draft` task in its owning project.
+`papercuts.sh propose` and `dismiss` are the only writers — one appended line each, never
+edited; an empty edit or reason, a `|` in it, or a future `--date` is refused. A plugin root
+the script cannot verify — `CLAUDE_PLUGIN_ROOT` naming another tree, or no `VERSION` beside
+`scripts/` — exits 2 rather than classify:
+
+```
+DATE | KIND:NAME | proposal | <concrete edit>
+DATE | KIND:NAME | dismissed | <reason>
+```
+
+The file is tracked and committed with `commit-as.sh` — by the PM at the tick, by
+`/loopd:close-project` at closeout — and it sits outside `knowledge/` on purpose: never
+KB-synced, never sharded, never read as a concept doc. `papercuts.sh pass` refuses while a
+well-formed entry since the last pass names a plugin surface with no row under `## Entries`
+dated from the entry to the pass; a malformed entry is counted on its own and never classified. A `👉 do` row may
+point at the file but is never the only record — hand-offs render from the ignored
+`.loopd/.handoffs/`.
+
 **`knowledgeSources[]`** mounts read-only corpora through the same script and the same
 scheme, at `knowledge-sources/<repo-name>/`; a `path` is checked out sparsely under that
 folder, and two entries whose repo names collide are reported rather than mounted over each

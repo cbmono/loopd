@@ -27,11 +27,17 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh due   # exit 0 = due (unprocessed entries, last pass >= 7 days)
    ```
 
-   Exit 0 ⇒ brief the cataloguer for the papercuts pass too (`cataloguer` step 5), inside
-   the same one-dispatch throttle. It returns one proposal per surface; **you** create each
-   as a `draft` task in the project that owns the surface — never `ready`, the human
-   promotes — and only then run `papercuts.sh pass` to mark the entries processed. Exit 1
-   is silence: no line in the report, no dispatch.
+   Exit 1 is silence: no line in the report, no dispatch. Exit 0 ⇒ brief the cataloguer
+   for the papercuts pass too (`cataloguer` step 5), inside the same one-dispatch throttle.
+   It returns one proposal per surface, each tagged `plugin` or `instance` by
+   `papercuts.sh report`, and **you** route each: an instance-owned surface becomes a
+   `draft` task in its owning project; a loopd plugin surface is written to
+   `.loopd/upstream-proposals.md` instead. A draft is never `ready`, the human promotes. A
+   plugin row is `papercuts.sh propose --surface <s> --edit "<the cataloguer's concrete
+   edit>"`, or `dismiss --surface <s> --reason "<why>"` for a surface that no longer
+   reproduces; commit the file with `commit-as.sh` like any other path. Only then run
+   `papercuts.sh pass`, which refuses and names the surfaces while a plugin surface still
+   has no row. `pass` checks only the plugin side; the drafts are your duty.
 
    **The KB sweep is the third reason, and the only one that fires when NOTHING merged.**
    A tick that dispatched no role agent is the cheapest session there is to spend on a

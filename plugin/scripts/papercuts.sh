@@ -2,12 +2,13 @@
 # papercuts.sh — the cheap end of the knowledge loop: one line per papercut, appended.
 #
 #   papercuts.sh add --task <ref> --surface <skill|agent|script>:<name> --note <text>
-#   papercuts.sh check | report [--all] | due [--every <days>] | pass
+#   papercuts.sh check | report [--all] | due [--every <days>] | pass | classify --surface <s>
+#   papercuts.sh propose --surface <s> --edit <text> | dismiss --surface <s> --reason <text>
 #
 # Entry shape, one line: `DATE | TASK | KIND:NAME | what hurt` (note 15-160 bytes).
 # Exit: 0 clean / a pass is due · 1 refused, named on stderr (or: not due) · 2 unknown
-# (usage, an unreadable record). Record: knowledge/papercuts.md, appended, never edited.
-# Why: CONVENTIONS.md → the papercut bullet. Reasoning: ai-bridge-next/task-016.
+# (usage, an unreadable record). Record: knowledge/papercuts.md, appended, never edited;
+# plugin rows: .loopd/upstream-proposals.md. Why: CONVENTIONS.md; ai-bridge-next/task-016.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
@@ -15,16 +16,18 @@ NOTE_MIN=15
 NOTE_MAX=160
 
 CMD="${1:-}"; [ $# -gt 0 ] && shift
-usage() { sed -n '2,9p' "$0" >&2; }
+usage() { sed -n '2,10p' "$0" >&2; }
 need2() { [ "$1" -ge 2 ] || { echo "papercuts: $2 needs a value" >&2; exit 2; }; }
 
-FILE=""; TASK=""; SURFACE=""; NOTE=""; DATE=""; EVERY=7; ALL=0
+FILE=""; TASK=""; SURFACE=""; NOTE=""; DATE=""; EVERY=7; ALL=0; EDIT=""; REASON=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --file)    need2 $# "$1"; FILE="$2";    shift 2 ;;
     --task)    need2 $# "$1"; TASK="$2";    shift 2 ;;
     --surface) need2 $# "$1"; SURFACE="$2"; shift 2 ;;
     --note)    need2 $# "$1"; NOTE="$2";    shift 2 ;;
+    --edit)    need2 $# "$1"; EDIT="$2";    shift 2 ;;
+    --reason)  need2 $# "$1"; REASON="$2";  shift 2 ;;
     --date)    need2 $# "$1"; DATE="$2";    shift 2 ;;
     --every)   need2 $# "$1"; EVERY="$2";   shift 2 ;;
     --all)     ALL=1; shift ;;
@@ -47,8 +50,23 @@ sources() {
   find "$DIR" -maxdepth 1 -type f -name '*.md' 2>/dev/null | LC_ALL=C sort
 }
 printf '%s' "$EVERY" | grep -qE '^[0-9]+$' || { echo "papercuts: --every wants days" >&2; exit 2; }
-printf '%s' "$DATE" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' \
-  || { echo "papercuts: --date wants YYYY-MM-DD" >&2; exit 2; }
+DATE_RE='^[0-9][0-9][0-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+printf '%s' "$DATE" | grep -qE "$DATE_RE" || { echo "papercuts: --date wants YYYY-MM-DD" >&2; exit 2; }
+
+# A wrong root calls every surface instance, which silently opens `pass` — so the root is
+# where this file physically lives, CLAUDE_PLUGIN_ROOT must agree, and anything else is refused.
+_s="${BASH_SOURCE[0]:-$0}"
+while [ -L "$_s" ]; do _t="$(readlink "$_s")"; case "$_t" in /*) _s="$_t" ;; *) _s="$(dirname "$_s")/$_t" ;; esac; done
+PLUGIN_ROOT="$(cd -P "$(dirname "$_s")" 2>/dev/null && cd .. && pwd -P)"
+ROOT_ERR=""
+if [ ! -f "$PLUGIN_ROOT/VERSION" ] || [ ! "$PLUGIN_ROOT/scripts/papercuts.sh" -ef "$_s" ]; then
+  ROOT_ERR="'$PLUGIN_ROOT' is not a plugin root (no VERSION, or no scripts/papercuts.sh)"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ ! "$CLAUDE_PLUGIN_ROOT/scripts/papercuts.sh" -ef "$_s" ]; then
+  ROOT_ERR="CLAUDE_PLUGIN_ROOT '$CLAUDE_PLUGIN_ROOT' is not the plugin this script runs from ('$PLUGIN_ROOT')"
+fi
+need_root() { [ -z "$ROOT_ERR" ] || { echo "papercuts: cannot classify — $ROOT_ERR" >&2; exit 2; }; }
+UPSTREAM="$AB_UPSTREAM"
+SURFACE_RE='^(skill|agent|script):[A-Za-z0-9][A-Za-z0-9._/-]*$'
 
 trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
 bytes() { printf '%s' "$1" | LC_ALL=C wc -c | tr -d ' '; }
@@ -63,7 +81,7 @@ bad_entry() {
   printf '%s' "$d" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' \
     || { printf 'field 1 is not an ISO date: "%s"' "$d"; return; }
   [ -n "$t" ] || { printf 'field 2 (task) is empty'; return; }
-  printf '%s' "$s" | grep -qE '^(skill|agent|script):[A-Za-z0-9][A-Za-z0-9._/-]*$' \
+  printf '%s' "$s" | grep -qE "$SURFACE_RE" \
     || { printf 'field 3 is not skill|agent|script:<name>: "%s"' "$s"; return; }
   b="$(bytes "$n")"
   [ "$b" -ge "$NOTE_MIN" ] || { printf 'field 4 is %s bytes, under the %s floor — say what hurt' "$b" "$NOTE_MIN"; return; }
@@ -87,6 +105,45 @@ since_pass() { region | awk '/^[[:space:]]*<!-- pass /{ n=0; next } { a[n++]=$0 
                | grep -vE '^[[:space:]]*$' || true; }
 last_pass() { region | grep -E '^[[:space:]]*<!-- pass ' | tail -1 \
               | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1 || true; }
+
+count() { printf '%s' "$1" | grep -c . || true; }
+wellformed() {
+  local l
+  while IFS= read -r l; do
+    [ -n "$l" ] && [ -z "$(bad_entry "$l")" ] && printf '%s\n' "$l"
+  done <<<"$1"
+  return 0
+}
+field3() { local r="${1#*|}"; r="${r#*|}"; trim "${r%%|*}"; }
+
+# The KIND prefix never decides: only a name that resolves in the installed plugin does.
+owner_of() {
+  local k="${1%%:*}" n="${1#*:}" p=""
+  [ -z "$ROOT_ERR" ] || { echo unknown; return; }
+  case "$n" in ''|*/*) echo instance; return ;; esac
+  case "$k" in
+    script) p="$PLUGIN_ROOT/scripts/$n" ;;
+    agent)  p="$PLUGIN_ROOT/agents/$n.md" ;;
+    skill)  p="$PLUGIN_ROOT/skills/$n/SKILL.md" ;;
+  esac
+  if [ -n "$p" ] && [ -f "$p" ]; then echo plugin; else echo instance; fi
+}
+
+# Plugin surfaces among the given entries with no upstream row dated from the entry to the pass.
+held_upstream() {
+  local l d s
+  while IFS= read -r l; do
+    [ -n "$l" ] || continue
+    d="$(trim "${l%%|*}")"; s="$(field3 "$l")"
+    [ "$(owner_of "$s")" = plugin ] || continue
+    awk -F'|' -v s="$s" -v d="$d" -v now="$DATE" -v re="$DATE_RE" '
+      function t(x) { gsub(/^[ \t\r]+|[ \t\r]+$/, "", x); return x }
+      /^## Entries[ \t\r]*$/ { e = 1; next }
+      e && t($1) ~ re && t($1) >= d && t($1) <= now && t($2) == s \
+        && (t($3) == "proposal" || t($3) == "dismissed") && t($4) != "" { f = 1 }
+      END { exit !f }' "$UPSTREAM" 2>/dev/null || printf '%s\n' "$s"
+  done <<<"$1" | sort -u
+}
 
 # Julian day number — `date -d` and `date -v` disagree across GNU and BSD; arithmetic does not.
 days() {
@@ -144,14 +201,16 @@ EOF
       src="$(since_pass)"; lp="$(last_pass)"
       scope="since the first entry"; [ -n "$lp" ] && scope="since the $lp pass"
     fi
-    if [ -z "$src" ]; then echo "papercuts: no entries $scope"; exit 0; fi
+    good="$(wellformed "$src")"; bad=$(( $(count "$src") - $(count "$good") )); src="$good"
+    if [ -z "$src" ]; then echo "papercuts: no entries $scope, $bad malformed"; exit 0; fi
     surfaces="$(printf '%s\n' "$src" | awk -F'|' '{ gsub(/[ \t]/, "", $3); print $3 }' | sort | uniq -c | sort -rn | awk '{ print $2 }')"
-    printf '== %s entries · %s surfaces · %s\n' \
-      "$(printf '%s\n' "$src" | wc -l | tr -d ' ')" "$(printf '%s\n' "$surfaces" | wc -l | tr -d ' ')" "$scope"
+    printf '== %s entries · %s surfaces · %s malformed · %s\n' \
+      "$(count "$src")" "$(count "$surfaces")" "$bad" "$scope"
     while IFS= read -r s; do
       [ -n "$s" ] || continue
-      printf '\n%s  (%s)\n' "$s" \
-        "$(printf '%s\n' "$src" | awk -F'|' -v s="$s" '{ k=$3; gsub(/[ \t]/, "", k); if (k == s) n++ } END { print n+0 }')"
+      printf '\n%s  (%s)  %s\n' "$s" \
+        "$(printf '%s\n' "$src" | awk -F'|' -v s="$s" '{ k=$3; gsub(/[ \t]/, "", k); if (k == s) n++ } END { print n+0 }')" \
+        "$(owner_of "$s")"
       printf '%s\n' "$src" | awk -F'|' -v s="$s" '
         function t(x) { gsub(/^[ \t]+|[ \t]+$/, "", x); return x }
         { k = $3; gsub(/[ \t]/, "", k); if (k == s) printf "  %s  %s  %s\n", t($1), t($2), t($4) }'
@@ -175,14 +234,49 @@ EOF
     fi
     ;;
   pass)
+    need_root
     target="$(newest)"; [ -n "$target" ] || target="$FILE"
     [ -w "$target" ] || { echo "papercuts: cannot write '$target'" >&2; exit 2; }
-    src="$(since_pass)"
-    n="$(printf '%s' "$src" | grep -c . || true)"
-    m="$(printf '%s\n' "$src" | grep . | awk -F'|' '{ gsub(/[ \t]/, "", $3); print $3 }' | sort -u | grep -c . || true)"
+    src="$(since_pass)"; good="$(wellformed "$src")"
+    n="$(count "$good")"; bad=$(( $(count "$src") - n ))
+    m="$(printf '%s\n' "$good" | grep . | awk -F'|' '{ gsub(/[ \t]/, "", $3); print $3 }' | sort -u | grep -c . || true)"
+    held="$(held_upstream "$good")"
+    if [ -n "$held" ]; then
+      echo "papercuts: pass refused — no upstream proposal or dismissal for: $(printf '%s' "$held" | tr '\n' ' ')" >&2
+      echo "papercuts: write each with 'papercuts.sh propose' or 'dismiss' (into $UPSTREAM), then pass again" >&2
+      exit 1
+    fi
     [ -z "$(tail -c 1 "$target")" ] || printf '\n' >> "$target"
-    printf '<!-- pass %s — %s entries, %s surfaces -->\n' "$DATE" "$n" "$m" >> "$target"
-    echo "papercuts: marked a pass at $DATE over $n entries, $m surfaces"
+    printf '<!-- pass %s — %s entries, %s surfaces, %s malformed -->\n' "$DATE" "$n" "$m" "$bad" >> "$target"
+    echo "papercuts: marked a pass at $DATE over $n entries, $m surfaces, $bad malformed"
+    ;;
+  classify)
+    [ -n "$SURFACE" ] || { echo "papercuts: classify wants --surface" >&2; usage; exit 2; }
+    need_root
+    owner_of "$SURFACE"
+    ;;
+  propose|dismiss)
+    [ -n "$SURFACE" ] || { echo "papercuts: $CMD wants --surface" >&2; usage; exit 2; }
+    if [ "$CMD" = propose ]; then kind=proposal; flag=--edit; text="$EDIT"; else kind=dismissed; flag=--reason; text="$REASON"; fi
+    need_root
+    text="$(trim "$text")"
+    [ -n "$(trim "${text//$'\xc2\xa0'/}")" ] || { echo "papercuts: refused — $CMD needs a non-empty $flag; nothing written" >&2; exit 1; }
+    case "$SURFACE$text" in *$'\n'*|*$'\r'*) echo "papercuts: refused — a row is ONE line" >&2; exit 1 ;; esac
+    case "$text" in *'|'*) echo "papercuts: refused — a \"|\" in $flag breaks the row" >&2; exit 1 ;; esac
+    [ "$(days "$DATE")" -le "$(days "$(date -u +%Y-%m-%d)")" ] \
+      || { echo "papercuts: refused — --date $DATE is in the future; a row is dated when it is written" >&2; exit 1; }
+    printf '%s' "$SURFACE" | grep -qE "$SURFACE_RE" \
+      || { echo "papercuts: refused — '$SURFACE' is not skill|agent|script:<name>" >&2; exit 1; }
+    [ "$(owner_of "$SURFACE")" = plugin ] \
+      || { echo "papercuts: refused — '$SURFACE' is instance-owned: draft it as a task in its owning project" >&2; exit 1; }
+    if [ ! -e "$UPSTREAM" ]; then
+      mkdir -p "$(dirname "$UPSTREAM")" || exit 2
+      printf '# Upstream proposals\n\nPapercut proposals for loopd plugin surfaces, for the plugin repo to act on.\nOne line: `DATE | KIND:NAME | proposal | <concrete edit>` or `DATE | KIND:NAME | dismissed | <reason>`.\nAppend with `papercuts.sh propose` / `dismiss`; never edit or delete a line.\n\n## Entries\n\n' > "$UPSTREAM" || exit 2
+    fi
+    [ -w "$UPSTREAM" ] || { echo "papercuts: cannot write '$UPSTREAM'" >&2; exit 2; }
+    [ -z "$(tail -c 1 "$UPSTREAM")" ] || printf '\n' >> "$UPSTREAM"
+    printf '%s | %s | %s | %s\n' "$DATE" "$SURFACE" "$kind" "$text" >> "$UPSTREAM" || exit 2
+    echo "papercuts: appended a $kind row to $UPSTREAM"
     ;;
   *) usage; exit 2 ;;
 esac

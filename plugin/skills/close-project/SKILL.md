@@ -256,12 +256,22 @@ is, while the log entry still names the human who decided.
    overtook.
 
    **And brief it to run the papercuts pass** (`cataloguer` step 5): closeout is when
-   the project's papercuts are still legible. It returns one proposal per surface —
-   create each as a `draft` task (never `ready`), then mark the entries processed:
+   the project's papercuts are still legible. It returns one proposal per surface, tagged
+   `plugin` or `instance`, and one rule routes them: an instance-owned surface becomes a
+   `draft` task in its owning project; a loopd plugin surface is written to
+   `.loopd/upstream-proposals.md` instead. Create each draft (never `ready`), write each
+   plugin row — its concrete edit, or why it no longer reproduces — then mark the pass:
 
    ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh propose --surface <s> --edit "<concrete edit>"
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh dismiss --surface <s> --reason "<why>"
    bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh pass
    ```
+
+   `pass` checks only the plugin side; the drafts are your duty. **If `pass` exits 1,
+   closeout continues without a marker**: step 3's `log.md` entry says `papercuts pass
+   refused: <the surfaces it named>`, and the entries stay pending for the tick's next DUE.
+   `.loopd/upstream-proposals.md`, when written, goes in step 7's commit by explicit path.
 
    Skip only if `bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh report` finds nothing; say so if you do.
 
@@ -280,7 +290,8 @@ is, while the log entry still names the human who decided.
    a dated **Project closed** entry to the root `log.md` (newest-first), stamped
    `by <login>`, naming the
    project, its merged PR(s) as `[<repo>#<n>](url)`, the `Finding`(s) it produced
-   (KB links), and a one-line outcome. **Closing is a human decision and the entry is the
+   (KB links), a one-line outcome, and `papercuts pass refused: <surfaces>` when step 2's
+   `pass` exited 1. **Closing is a human decision and the entry is the
    only place it is ever written down**, so it names the human the same way a promotion
    and a preview approval do (`SCHEMA.md` → "Decisions name the human"); `<unknown>` goes
    in as-is rather than being left out. The login is the human's, never yours — you are
@@ -385,7 +396,8 @@ is, while the log entry still names the human who decided.
      carry exists on exactly one machine.
 
    Commit via `bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "chore: close <slug> project" --stage -- <path>...`,
-   naming every path — including `projects/<slug>` and `projects/CLOSED.md`. **Author it
+   naming every path — including `projects/<slug>`, `projects/CLOSED.md` and, when step 2
+   wrote it, `.loopd/upstream-proposals.md`. **Author it
    as `project-manager`, never as `human`**: `human` is the one role every guard trusts
    (it skips the promotion-authority check and the explicit-path requirement), and an
    agent must not commit under it. Step 3's entry still names the human who decided.

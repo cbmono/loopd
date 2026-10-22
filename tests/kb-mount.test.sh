@@ -378,7 +378,7 @@ ok "…and every reader sees the flat file AND the shards" \
   "$( cd "$J" && bash "$PC" check 2>/dev/null | sed -n 's/papercuts: \([0-9]*\) entries.*/\1/p')" 3
 ok "…with report grouping the three across two surfaces" \
   "$( cd "$J" && bash "$PC" report --all 2>/dev/null | sed -n 's/^== \(.*\) · all time$/\1/p')" \
-  "3 entries · 2 surfaces"
+  "3 entries · 2 surfaces · 0 malformed"
 ok "the bundle-root log.md is NOT sharded by any of this" \
   "$(grep -c 'bundle-root `log.md`' "$SEED/SCHEMA.md" | tr -d ' ')" 1
 mkdir -p "$J/knowledge/log"; : > "$J/knowledge/log/2026-09.md"
