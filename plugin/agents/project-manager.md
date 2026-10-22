@@ -465,6 +465,18 @@ state, and act only on deltas.
    reflected inside the window and only the retry above revisits a `done` task — the
    live-process check replaces it there.
 
+   **A merge is not a deploy where the repo deploys by hand.** For each task you move to
+   `done`, run `${CLAUDE_PLUGIN_ROOT}/scripts/reflect-deploy.sh <task-path>`. On `manual`
+   (`deploy:` on the task, else its Service doc — `SCHEMA.md` → Service) it prints
+   `deploy-owed Q<n>` after writing one `merged, not deployed` `# Notes` line and one
+   `Q<n>: do: deploy …` entry with its block: report the task as merged, NOT shipped. Its
+   `👉 do` row stays in `AWAITING.md` until the human answers ` --- done`, and that answer is
+   the deploy's record — it is no hand-off, so nothing is ever resumed for it. Exit 1
+   (`auto`, `n/a`, `already Q<n>`) leaves the file alone. Exit 3 (`deploy-unknown Q<n>`) fails
+   toward manual: the same write, worded `deploy UNKNOWN`, so the row is never lost — report
+   it as `deploy UNKNOWN`, never "shipped". Exit 2 leaves the file untouched: report it, and
+   re-run the script by hand once fixed — it writes nothing twice.
+
    **Sum what that task cost, against the PR(s) that merged.** For each task you move to
    `done`, once:
 
@@ -495,7 +507,8 @@ state, and act only on deltas.
    knowledge as `[[finding-slug]]`.
 
 6. **Close completed projects (propose only — human-gated).** For each project whose
-   tasks are **all** terminal (`done`/`cancelled`), do **not** close it yourself —
+   tasks are **all** terminal (`done`/`cancelled`) and hold no unanswered `Q<n>: do:`
+   entry (a deploy or a hand-off — its row outlives `done`), do **not** close it yourself —
    surface it as a 🔴 *Awaiting you* item. Only on the human's OK (in-session or via
    `/close-project <slug>`) run closeout, in order (`SCHEMA.md` "Project & objective
    completion"): (a) dispatch the `loopd:cataloguer` for a final consolidation pass (counts

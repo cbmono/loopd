@@ -187,6 +187,12 @@ ok "…nothing filed" "$(grep -c 'hand-off' "$T/task-011-done.md")" 0
 ok "done + an ended session: nothing to stop" "$(one "$T/task-010-ended.md")" "ended e5e5e5e5 done rc=0"
 ok "…and no stop was issued" "$(cnt "$TMP/calls" "stop e5e5e5e5")" 0
 ok "a done task is never owed" "$(one --owed "$T/task-009-done.md")" "not-owed task-done rc=1"
+DQ='[ "Q1: do: deploy example-user-007/labs — https://github.com/example-user-007/labs/pull/5 merged, not deployed; answer done once it is live --- done" ]'
+mk "$T/task-012-deploy.md" done "$U5" "$DQ"
+ok "a done task whose only do: is a deploy: never owed" "$(one --owed "$T/task-012-deploy.md")" "not-owed task-done rc=1"
+mk "$T/task-012-deploy.md" in-review "$U5" "$DQ"
+ok "…nor on any status: a deploy is no hand-off" "$(one --owed "$T/task-012-deploy.md")" "not-owed no-hand-off rc=1"
+rm -f "$T/task-012-deploy.md"
 
 echo "== long text: capped at a word, never inside a token =="
 LONG="merge terraform#8661 first; $(printf 'word%.0s ' $(seq 1 90))then rerun"
