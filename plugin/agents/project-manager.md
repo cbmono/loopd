@@ -320,8 +320,8 @@ state, and act only on deltas.
    (`SCHEMA.md` → "Decisions name the human"). Resolve it once and reuse it for the idle
    line and for step 8's close.
 
-   What the probe deliberately does not see — a PR body edit at an unchanged head, comment
-   prose — defers to the next real delta (`docs/pm-design.md#step-0-9`).
+   What the probe deliberately does not see — a PR body edit at an unchanged head, an edit to a
+   comment already posted — defers to the next real delta (`docs/pm-design.md#step-0-9`).
 
 0.95. **Consume the web board's answer queue — blind.** Run
    `${CLAUDE_PLUGIN_ROOT}/scripts/web-queue.sh consume` once, under the lock step 0.5 took. It

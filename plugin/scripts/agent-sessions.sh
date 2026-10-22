@@ -4,6 +4,9 @@
 #
 #   agent-sessions.sh state <session-id>      -> the raw state `claude agents` reports
 #                                                (working|blocked|done|gone, …) on stdout
+#   agent-sessions.sh states [--timeout <s>] <session-id>...
+#                                             -> `<id> <state>` per id from ONE listing,
+#                                                bounded (20s); exit 2 on a timeout
 #   agent-sessions.sh row <session-id>        -> the one matching `claude agents` row as JSON;
 #                                                exit 1 several match, 3 none
 #   agent-sessions.sh full <session-id>       -> the full session UUID, for either spelling;
@@ -39,7 +42,7 @@
 # tests/resume-full-id.test.sh and tests/blocked-recorded.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,33p' "$0" >&2; exit 2; }
+usage() { sed -n '3,36p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 command -v python3 >/dev/null 2>&1 || {
@@ -121,6 +124,32 @@ case "$1" in
     [ $# -eq 2 ] || usage
     json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
     state_of "$2" "$json" || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
+    ;;
+
+  states)
+    shift; secs=20
+    if [ "${1:-}" = --timeout ]; then secs="${2:-}"; shift 2 || usage; fi
+    case "$secs" in ''|*[!0-9]*) usage ;; esac
+    [ $# -ge 1 ] || usage
+    command -v claude >/dev/null 2>&1 || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
+    python3 - "$secs" "$@" <<'PY' || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
+import json, re, subprocess, sys
+try:
+    rows = json.loads(subprocess.run(["claude", "agents", "--json", "--all"], check=True,
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        timeout=int(sys.argv[1])).stdout)
+    assert isinstance(rows, list)
+except Exception:
+    sys.exit(2)
+for want in sys.argv[2:]:
+    state = "gone"
+    for r in rows:
+        sid = (r.get("sessionId") or "") if isinstance(r, dict) else ""
+        if sid and (want == r.get("id") or want == sid or sid.split("-")[0] == want):
+            state = str(r.get("state") or r.get("status") or "working")
+            break
+    print(want, re.sub(r"[^A-Za-z0-9_-]", "", state) or "unknown")
+PY
     ;;
 
   row)

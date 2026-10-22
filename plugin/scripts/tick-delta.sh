@@ -42,12 +42,16 @@
 #   task <path> <status>    every task's status — a move to/from any status is a delta,
 #                           and any `in-progress` task is an immediate DELTA whatever
 #                           the record says: a live dispatch is owed its monitoring.
-#   pr <url> <state> <head> <decision> reviews=<n>:<id>:<state> status=<json>
+#   pr <url> <state> <head> <decision> reviews=<n>:<id>:<state> comments=<id>:<login> status=<json>
 #                           every PR on an `in-review` task, from the host: a pushed
 #                           head, a merge, a close, a review decision, a new review (a
-#                           COMMENTED one moves no decision) or a commit status's state or
+#                           COMMENTED one moves no decision), a new issue comment (a
+#                           reviewer's rate-limit reply is one) or a commit status's state or
 #                           description (a rate-limited reviewer still says SUCCESS) each
 #                           require tick work (re-verify, reflect, re-request, send back).
+#   session <id> <state>    each `session:` on an `in-review`/`blocked` task, from ONE
+#                           `claude agents` listing; `sessions unavailable` when `claude`
+#                           is not on PATH, so a clone without the CLI keeps its fast path.
 #   web queue               not a line: an unconsumed web-board entry (web-queue.sh pending)
 #                           is an immediate DELTA, because the queue is gitignored and moves
 #                           nothing above — and the tick's step 0.95 is what consumes it.
@@ -56,8 +60,8 @@
 #                           re-enables the queue and needs one full tick to populate.
 #
 # WHAT IT DELIBERATELY DOES NOT SEE, stated rather than discovered: a PR body edit at
-# an unchanged head (an unticked box, an edited description) and anything visible only
-# in comment prose. Those defer to the next real delta — the same trade the yolo merge
+# an unchanged head (an unticked box, an edited description) and an edit to a comment
+# already posted. Those defer to the next real delta — the same trade the yolo merge
 # gate refuses (it re-reads at the moment of merging) but a GATED surface-only tick can
 # afford, because nothing is merged on the strength of an idle verdict.
 #
@@ -276,6 +280,7 @@ step2=0 step3=0 step4=0 step5=0 step6=0
 # parser it could not run read as a task with nothing answered.
 FOLD="$(dirname "${BASH_SOURCE[0]}")/fold-answers.sh"
 CKPT="$(dirname "${BASH_SOURCE[0]}")/continue-checkpoint.sh"
+SESS="$(dirname "${BASH_SOURCE[0]}")/agent-sessions.sh"
 answered_open() { # <file>
   fmlist "$1" open_questions text 2>/dev/null | grep -qF -- ' --- ' && return 0
   local parsed
@@ -299,17 +304,21 @@ steps_line() {
 
 PR_QUERY='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
   state headRefOid reviewDecision reviews(last:1){totalCount nodes{id state}}
+  comments(last:1){nodes{id author{login}}}
   commits(last:1){nodes{commit{status{contexts{context state description}}}}}}}}'
 PR_JQ='.data.repository.pullRequest as $p
 | ($p.reviews.nodes // [] | last) as $r
 | ($p.commits.nodes // [] | last) as $c
+| ($p.comments.nodes // [] | last) as $k
 | ($c.commit.status.contexts // []) as $s
 | if ($p | type) != "object" or ($p.reviews.totalCount | type) != "number" or ($c.commit | type) != "object"
      or ($p.reviews.totalCount > 0 and (($r.id // "") == "" or ($r.state // "") == ""))
      or ($s | type) != "array" or any($s[]; (.state | type) != "string")
+     or ($p.comments.nodes | type) != "array" or ($k != null and ($k.id // "") == "")
   then "UNREADABLE"
   else [$p.state, $p.headRefOid, ($p.reviewDecision // "NONE"),
         "reviews=\($p.reviews.totalCount):\($r.id // "-"):\($r.state // "-")",
+        "comments=\($k.id // "-"):\($k.author.login // "-")",
         "status=\([$s[] | [.context, .state, .description]] | sort | tojson)"] | join(" ")
   end'
 
@@ -320,7 +329,7 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs inflight=0 urls="" ntask nterm wtp
+  local p d pst f st prs inflight=0 urls="" ntask nterm wtp sid sids=""
   for d in "$inst"/projects/*/; do
     [ -d "$d" ] || continue
     p="$d/project.md"
@@ -371,6 +380,10 @@ fingerprint() { # <probe|digest>
           2) return 1 ;;
         esac
       fi
+      case "$st" in in-review|blocked)
+        sid="$(fmfirst "$f" session | sed 's/#.*$//' | tr -d "\"' ")"
+        case "$sid" in '') ;; *[!A-Za-z0-9-]*) return 1 ;; *) sids="$sids $sid" ;; esac ;;
+      esac
       if [ "$st" = "in-review" ]; then
         prs="$(grep -m1 '^pr:' "$f" 2>/dev/null | grep -oE 'https://[^"[:space:]]+/pull/[0-9]+' || true)"
         [ -n "$prs" ] && urls="$urls
@@ -392,6 +405,16 @@ $prs"
     printf 'checkpoint %s\n' "$(printf '%s\n' "$due" | cut -f1 | grep . | tr '\n' ' ')"
   fi
 
+  if [ -n "$sids" ]; then
+    if command -v claude >/dev/null 2>&1; then
+      # shellcheck disable=SC2086
+      bash "$SESS" states $sids 2>/dev/null | sed 's/^/session /'
+      [ "${PIPESTATUS[0]}" = 0 ] || return 1
+    else
+      printf 'sessions unavailable\n'
+    fi
+  fi
+
   # Every open-PR fact comes from the HOST, via gh's own --jq (no local jq needed). A
   # failure on any one PR poisons the whole fingerprint — better no answer than a match
   # built on a hole.
@@ -405,7 +428,7 @@ $prs"
     line="$(gh api graphql --hostname "$host" -f o="$owner" -f r="$repo" -F n="$num" \
             -f query="$PR_QUERY" --jq "$PR_JQ" 2>/dev/null)" || return 1
     case "$line" in *$'\n'*) return 1 ;; esac
-    printf '%s\n' "$line" | grep -Eqx '[A-Z]+ [0-9a-f]+ [A-Z_]+ reviews=[0-9]+:[^ ]+:([A-Z_]+|-) status=\[.*\]' || return 1
+    printf '%s\n' "$line" | grep -Eqx '[A-Z]+ [0-9a-f]+ [A-Z_]+ reviews=[0-9]+:[^ ]+:([A-Z_]+|-) comments=[^ :]+:[^ :]+ status=\[.*\]' || return 1
     printf 'pr %s %s\n' "$u" "$line"
   done
   # Emitted from INSIDE the walk: the caller reads this function through a command
@@ -415,7 +438,7 @@ $prs"
 }
 
 mode=probe; [ "$cmd" = digest ] && mode=digest
-FP="$(fingerprint "$mode")" || fail2 "could not complete the fingerprint (an unreadable task file, gh missing or offline, or a bad PR URL)"
+FP="$(fingerprint "$mode")" || fail2 "could not complete the fingerprint (an unreadable task file, gh missing or offline, a bad PR URL, or \`claude agents\` failing)"
 
 case "$cmd" in
   digest)

@@ -44,6 +44,7 @@ cp "$SRC" "$INST/scripts/tick-delta.sh"; chmod +x "$INST/scripts/tick-delta.sh"
 cp "$(dirname "$SRC")/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"
 cp "$(dirname "$SRC")/fold-answers.sh" "$INST/scripts/fold-answers.sh"
 cp "$(dirname "$SRC")/web-queue.sh" "$INST/scripts/web-queue.sh"
+cp "$(dirname "$SRC")/agent-sessions.sh" "$INST/scripts/agent-sessions.sh"
 cp -R "$REPO/plugin/tick-steps" "$INST/tick-steps"
 SH="$INST/scripts/tick-delta.sh"
 
@@ -86,11 +87,11 @@ done
 jq -r "$filter" "$GHDIR/$n"
 EOS
 chmod +x "$BIN/gh"
-NOREV='{"totalCount":0,"nodes":[]}'
-prj() { # <n> <state> <head> <decision|NONE> [reviews-json] [status-json]
+NOREV='{"totalCount":0,"nodes":[]}'; NOCOM='{"nodes":[]}'
+prj() { # <n> <state> <head> <decision|NONE> [reviews-json] [status-json] [comments-json]
   local dec=null; [ "$4" = NONE ] || dec="\"$4\""
-  printf '{"data":{"repository":{"pullRequest":{"state":"%s","headRefOid":"%s","reviewDecision":%s,"reviews":%s,"commits":{"nodes":[{"commit":{"status":%s}}]}}}}}\n' \
-    "$2" "$3" "$dec" "${5:-$NOREV}" "${6:-null}" > "$GHDIR/$1"
+  printf '{"data":{"repository":{"pullRequest":{"state":"%s","headRefOid":"%s","reviewDecision":%s,"reviews":%s,"comments":%s,"commits":{"nodes":[{"commit":{"status":%s}}]}}}}}\n' \
+    "$2" "$3" "$dec" "${5:-$NOREV}" "${7:-$NOCOM}" "${6:-null}" > "$GHDIR/$1"
 }
 prj 7 OPEN abc1234 NONE
 WITH() { PATH="$BIN:$PATH" GHDIR="$GHDIR" "$SH" "$@" --instance "$INST"; }
@@ -181,6 +182,77 @@ ok "…and the recorded facts restore IDLE"       "$(run check)" "rc:0 IDLE: fin
 : > "$GHDIR/calls"; run check >/dev/null
 ok "the probe makes ONE gh call per open PR"    "$(wc -l < "$GHDIR/calls" | tr -d ' ')" 1
 ok "…to the host and repo the pr: URL names"    "$(grep -c '^api graphql --hostname github.com -f o=example-org -f r=example-repo -F n=7$' "$GHDIR/calls")" 1
+
+echo "== a reviewer's issue comment (the rate-limit reply's kind) is a DELTA =="
+com() { printf '{"nodes":[{"id":"%s","author":{"login":"%s"}}]}' "$1" "$2"; }
+prj 7 OPEN abc1234 NONE "" "" "$(com IC_one coderabbitai)"; WITH record
+ok "a recorded latest comment is IDLE"          "$(run check)" "rc:0 IDLE: finger"
+ok "…recorded as id and login, never its body"  "$(grep -c ' comments=IC_one:coderabbitai status=' "$INST/$AB_STATE_DIR")" 1
+prj 7 OPEN abc1234 NONE "" "" "$(com IC_two coderabbitai)"
+ok "a new issue comment, nothing else moved, is a DELTA" "$(run check)" "rc:1 DELTA: the f"
+prj 7 OPEN abc1234 NONE "" "" "$(com IC_one coderabbitai)"
+ok "…a placeholder created then deleted leaves it IDLE" "$(run check)" "rc:0 IDLE: finger"
+prj 7 OPEN abc1234 NONE "" "" "$(com IC_tick cbmono)"; WITH record
+ok "a comment posted BEFORE record is not a DELTA next check" "$(run check)" "rc:0 IDLE: finger"
+prj 7 OPEN abc1234 NONE "" "" '{"nodes":[{"author":{"login":"x"}}]}'
+ok "a comment with no id makes check exit 2"    "$(run check)" "rc:2 CANNOT ANSWE"
+prj 7 OPEN abc1234 NONE; WITH record
+
+echo "== a recorded role session's state, from ONE claude agents listing =="
+# The `claude` stub answers from $CLDIR/states (`<sessionId> <state>` lines); `fail` makes it
+# exit 1, `junk` print non-JSON, `hang` outlive the bound. Each call is logged to $CLDIR/calls.
+CLDIR="$TMP/claude"; mkdir -p "$CLDIR"
+cat > "$BIN/claude" <<'EOS'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$CLDIR/calls"
+[ -e "$CLDIR/fail" ] && exit 1
+[ -e "$CLDIR/junk" ] && { echo 'not json'; exit 0; }
+[ -e "$CLDIR/hang" ] && exec sleep 30
+awk 'BEGIN{printf "["} {printf "%s{\"id\":\"x%d\",\"sessionId\":\"%s\",\"state\":\"%s\"}", (NR>1?",":""), NR, $1, $2} END{print "]"}' "$CLDIR/states"
+EOS
+chmod +x "$BIN/claude"
+S1=11111111-aaaa-bbbb-cccc-000000000001; S2=22222222-aaaa-bbbb-cccc-000000000002; S0=00000000-aaaa-bbbb-cccc-000000000000
+printf '%s working\n%s working\n%s working\n' "$S1" "$S2" "$S0" > "$CLDIR/states"
+printf 'session: %s\n' "$S1" >> "$INST/projects/proj-a/tasks/t2.md"
+printf 'session: %s\n' "$S0" >> "$INST/projects/proj-a/tasks/t1.md"
+printf -- '---\ntype: Task\nkind: build\nstatus: blocked\nsession: "%s"\npr: []\n---\n' "$S2" > "$INST/projects/proj-a/tasks/t4.md"
+GIT -C "$INST" add -A && GIT -C "$INST" commit -qm sessions
+CLW() { PATH="$BIN:$PATH" GHDIR="$GHDIR" CLDIR="$CLDIR" "$SH" "$@" --instance "$INST"; }
+crun() { local out rc; out="$(CLW "$1" 2>&1)"; rc=$?; printf 'rc:%s %s' "$rc" "$(head -1 <<<"$out" | cut -c1-12)"; }
+CLW record
+ok "a working session on in-review and blocked tasks is recorded" "$(grep -cx "session $S1 working\|session $S2 working" "$INST/$AB_STATE_DIR")" 2
+ok "…a ready task's session is not"             "$(grep -c "$S0" "$INST/$AB_STATE_DIR")" 0
+: > "$CLDIR/calls"
+ok "…and check against it is IDLE"              "$(crun check)" "rc:0 IDLE: finger"
+ok "…from ONE claude agents call for two sessions" "$(grep -cx 'agents --json --all' "$CLDIR/calls")" 1
+printf '%s done\n%s working\n' "$S1" "$S2" > "$CLDIR/states"
+ok "a session going working -> done is a DELTA" "$(crun check)" "rc:1 DELTA: the f"
+printf '%s working\n' "$S1" > "$CLDIR/states"
+ok "…and one gone from the listing is a DELTA"  "$(crun check)" "rc:1 DELTA: the f"
+printf '%s working\n%s working\n' "$S1" "$S2" > "$CLDIR/states"
+ok "…the recorded states restore IDLE"          "$(crun check)" "rc:0 IDLE: finger"
+before3="$(cat "$INST/$AB_STATE_DIR")"
+for bad in fail junk; do
+  touch "$CLDIR/$bad"
+  ok "an unreadable claude agents ($bad) makes check exit 2" "$(crun check)" "rc:2 CANNOT ANSWE"
+  CLW record 2>/dev/null; ok "…and record refuses, record untouched" "$?:$([ "$(cat "$INST/$AB_STATE_DIR")" = "$before3" ] && echo same)" "2:same"
+  rm -f "$CLDIR/$bad"
+done
+touch "$CLDIR/hang"
+ok "a claude agents listing past its bound is exit 2" \
+   "$(PATH="$BIN:$PATH" CLDIR="$CLDIR" bash "$INST/scripts/agent-sessions.sh" states --timeout 1 "$S1" >/dev/null 2>&1; echo $?)" 2
+rm -f "$CLDIR/hang"
+NOCL="$TMP/nocl"; mkdir -p "$NOCL"
+for t in bash sh git sed grep sort date mv rm diff head cut env tr awk cat dirname basename jq wc gh; do
+  tp="$(PATH="$BIN:$PATH" command -v "$t" 2>/dev/null)" && ln -s "$tp" "$NOCL/$t"
+done
+PATH="$NOCL" GHDIR="$GHDIR" "$SH" record --instance "$INST"
+ok "no claude on PATH records one 'sessions unavailable' line" "$(grep -cx 'sessions unavailable' "$INST/$AB_STATE_DIR")" 1
+ok "…and keeps the fast path: check is IDLE" \
+   "$(PATH="$NOCL" GHDIR="$GHDIR" "$SH" check --instance "$INST" 2>&1 | cut -c1-5)" "IDLE:"
+GIT -C "$INST" checkout -q HEAD~1 -- projects; rm -f "$INST/projects/proj-a/tasks/t4.md"
+GIT -C "$INST" add -A && GIT -C "$INST" commit -qm unsessions
+WITH record
 
 echo "== an unreadable new value is no answer: exit 2, and record refuses =="
 before="$(cat "$INST/$AB_STATE_DIR")"
