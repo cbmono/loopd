@@ -18,7 +18,7 @@ RECEIPT="$HERE/clearance-receipt.sh"
 # The tick, and nothing else. `review-clearance.sh` exit 0 is precondition 2's first half
 # and the qa-reviewer earns one on nearly every reviewed PR, so without this a
 # software-engineer in a delegated project could merge its own pull request.
-# EXACT `<this plugin>:project-manager`: never `${role##*:}`, which admits `evil:project-manager`,
+# EXACT `<this plugin>:project-manager`: never `${role##*:}`, which admits any prefix,
 # and never the bare name, which any user-level agent file can claim (loopd/task-015).
 MERGER_ROLE="project-manager"
 # shellcheck source=plugin-name.sh
