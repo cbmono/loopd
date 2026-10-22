@@ -1081,6 +1081,14 @@ EOF
   esac
 }
 
+# Drops each redirect and its operand (`2>&1`, `> f`, `&>f`, `<f`), so neither reads as a
+# remote or refspec. An fd number counts only as a whole word, as in the shell: `x2>f` keeps `x2`.
+_push_unredirect() { # <stage>
+  printf '%s' "$1" | sed -E \
+    -e 's/(^|[[:space:]])[0-9]+(>>|>[|]|<>|>|<)[[:space:]]*[^[:space:]]+/\1 /g' \
+    -e 's/&?(>>|>[|]|<>|>|<)[[:space:]]*[^[:space:]]+/ /g'
+}
+
 _bundle_git_dir() {
   local d; d="$(git -C "$INSTANCE_ROOT" rev-parse --absolute-git-dir 2>/dev/null)" || return 0
   (cd -P "$d" 2>/dev/null && pwd)
@@ -1122,9 +1130,17 @@ _push_stage_verdict() { # <stage> <track|cwd>
       esac
       continue
     fi
-    case "$w" in -*) ;; *) args="$args $w" ;; esac
+    # `--repo X` names the remote only when no positional one follows, so after its value
+    # the first positional is still the remote — git's own precedence.
+    case "$w" in
+      --push-option|--receive-pack|--exec|--repo) skip=x ;;
+      --*) ;;
+      -*o) [ "${w%%o*}o" = "$w" ] && skip=x ;;
+      -*) ;;
+      *) args="$args $w" ;;
+    esac
   done <<EOT
-$(tokens_of "$1")
+$(tokens_of "$(_push_unredirect "$1")")
 EOT
   [ "$sub" = push ] || return 1
 
@@ -1162,20 +1178,25 @@ EOT
   fi
 
   dst=""; d=""
-  if [ "$#" -eq 0 ]; then
-    if [ "$known" = 0 ]; then
-      printf 'A dispatched agent may not run a bare `git push` whose repo this hook cannot resolve — the current branch may be a product repo'"'"'s protected one, and work lands there through a pull request. Name the branch: `git push origin <feature-branch>`.'
-      return 0
-    fi
+  if [ "$known" = 1 ]; then
     d="$(git "${loc[@]}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-    [ "$d" = "HEAD" ] || dst="$d"
-  else
-    for r in "$@"; do
-      case "$r" in +*) r="${r#+}" ;; esac
-      case "$r" in *:*) r="${r##*:}" ;; esac
-      dst="$dst ${r#refs/heads/}"
-    done
+    [ "$d" = "HEAD" ] && d=""
   fi
+  if [ "$#" -eq 0 ]; then
+    set -- HEAD
+  fi
+  for r in "$@"; do
+    r="${r#+}"; r="${r##*:}"
+    case "$r" in
+      HEAD|@)
+        if [ "$known" = 0 ]; then
+          printf 'A dispatched agent may not run a bare `git push`, or push `HEAD`/`@`, whose repo this hook cannot resolve — the current branch may be a product repo'"'"'s protected one, and work lands there through a pull request. Name the branch: `git push origin <feature-branch>`.'
+          return 0
+        fi
+        r="$d" ;;
+    esac
+    dst="$dst ${r#refs/heads/}"
+  done
   [ -n "${dst// /}" ] || return 1
 
   protected="main master develop trunk production"
