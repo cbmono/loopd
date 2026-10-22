@@ -809,11 +809,12 @@ above it so none may grow its share.
   teardown is yours, and your report still says what you stopped.
 - **A dispatch is not finished until its artifact exists — check, don't believe the
   report.** When an agent you dispatched reports back, run `scripts/check-dispatch.sh
-  <task-doc>` before you act on what it said. It reads three things and judges nothing
-  else: did `status:` advance, does `pr:` name a URL, and does that pull request exist.
+  <task-doc>` before you act on what it said. It reads four things and judges nothing
+  else: did `status:` advance, does `pr:` name a URL, does that pull request exist, and is
+  a PR opened from its `branch:` missing from `pr:`.
   Exit 0 is the only clearance — exit 1 is the parked signature (still `ready`/`in-progress`
-  with no PR), 3 a `pr:` the host does not resolve, 4 a record contradicting itself, 2 a
-  question it cannot answer. **Exit 0 does not mean "there is a PR":** a task the agent left
+  with no PR), 3 a `pr:` the host does not resolve, 4 a record contradicting itself, 5 a
+  PR opened from its `branch:` that `pr:` does not list, 2 a question it cannot answer. **Exit 0 does not mean "there is a PR":** a task the agent left
   `blocked` or `cancelled` with no PR also clears, because no artifact was due — read the
   stated reason rather than reading a stopped task as a verified artifact. Measured 2026-08-28: two agents finished their work, committed
   it — one had already pushed — then ended their turns waiting on a background job that

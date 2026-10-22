@@ -82,9 +82,9 @@ without merging anything.
 
 Everything below is about a pull request. This is the check that one exists.
 `scripts/check-dispatch.sh <task-doc>`, run whenever a dispatched agent reports — from a
-tick or from an ad-hoc dispatch — reads three things and judges nothing else: did
+tick or from an ad-hoc dispatch — reads four things and judges nothing else: did
 `status:` move off `ready`/`in-progress`, does `pr:` name a URL, does the host resolve
-that PR. It is **report-only** — it never re-dispatches, never edits the task, and asks
+that PR, and is a PR from its `branch:` missing from `pr:`. It is **report-only** — it never re-dispatches, never edits the task, and asks
 the host only to read.
 
 | Exit | Means |
@@ -94,6 +94,7 @@ the host only to read.
 | 2 | cannot answer — usage, unreadable frontmatter, a research task (no PR by design; read its `artifacts:`), `gh` missing. Unknown is never reported as fine |
 | 3 | `pr:` names a pull request the host does not resolve, or is not a URL at all |
 | 4 | the record contradicts itself — `in-review`/`done` with an empty `pr:`, or a PR that resolves while `status:` never moved |
+| 5 | **unrecorded** — everything else cleared, but an open or merged PR from the task's `branch:` is not in `pr:` (a closed-unmerged one is listed, never counted). A 1, 3 or 4 lists such PRs too and keeps its code; no `branch:` or a failing `gh` prints `UNRECORDED: UNKNOWN`, never "none" |
 
 Ask it about a task you **dispatched**: one nobody has dispatched reads as exit 1 too,
 correctly and uselessly. The measurement behind it is in

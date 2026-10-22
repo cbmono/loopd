@@ -33,7 +33,7 @@ BASELINE='577 plugin/hooks/agent-control.sh
 598 plugin/hooks/push-state.sh
 694 plugin/hooks/session-banner.sh
 463 plugin/scripts/welcome.sh
-423 plugin/scripts/check-dispatch.sh
+392 plugin/scripts/check-dispatch.sh
 576 plugin/scripts/check-template-version.sh
 376 plugin/scripts/close-project-folder.sh
 425 plugin/scripts/commit-as.sh
