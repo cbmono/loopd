@@ -45,6 +45,16 @@ split5() { # <line> -> F1..F4 and F5, which keeps any ` · ` the reason carries
 }
 fingerprint() { cksum <"$1" | awk '{print $1 "-" $2}'; }
 fmfield() { sed -n '2,/^---$/p' "$1" | sed -n "s/^$2:[[:space:]]*\([^[:space:]].*\)/\1/p" | head -n1; }
+# kb-apply.sh's block_form, kept in step: a proposal it would refuse is never queued.
+block_form() { # <file> <key>
+  sed -n '2,/^---$/p' "$1" | awk -v k="$2" '
+    d { next }
+    hit && ($0 ~ /^[ \t]*$/ || $0 ~ /^#/) { next }
+    hit { r = ($0 ~ /^[ \t]/ || $0 ~ /^-( |$)/); d = 1; next }
+    index($0, k ":")==1 { v = substr($0, length(k) + 2); sub(/^[ \t]+/, "", v)
+                          if (v ~ /^[|>]/) { r = 1; d = 1; next }; hit = 1 }
+    END { exit !r }'
+}
 
 for t in "projects/$PROJECT"/tasks/*.md; do
   [ -f "$t" ] && [ "$(fmfield "$t" status)" = draft ] || continue
@@ -82,6 +92,8 @@ while IFS= read -r line; do
   esac
   [[ "$F3" =~ ^[a-z][a-z0-9_]*=[^[:space:]] ]] || { drop "'$F3' is not field=value"; continue; }
   case " $PROTECTED " in *" ${F3%%=*} "*) drop "'${F3%%=*}' is not a proposal's to write"; continue ;; esac
+  ! block_form "${MATCH[0]}" "${F3%%=*}" \
+    || { drop "$F2 holds '${F3%%=*}:' in block form, which apply would refuse"; continue; }
   if [ "$F4" != - ]; then
     case "$F4" in ""|*[!A-Za-z0-9._,-]*) drop "'$F4' is not a slug list"; continue ;; esac
   fi

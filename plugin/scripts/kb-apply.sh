@@ -75,10 +75,13 @@ set_field() { # <file> <key> <value>
 # set_field rewrites only the key line, so the item lines of a block-form value would be
 # left orphaned — and its diff guard cannot see them, because they never start with `<key>:`.
 block_form() { # <file> <key>
+  # No early `exit`: under pipefail a SIGPIPE'd sed would turn a block-form answer into "no".
   fm "$1" | awk -v k="$2" '
-    hit { r = ($0 ~ /^[ \t]/ || $0 ~ /^-( |$)/); exit }
+    d { next }
+    hit && ($0 ~ /^[ \t]*$/ || $0 ~ /^#/) { next }
+    hit { r = ($0 ~ /^[ \t]/ || $0 ~ /^-( |$)/); d = 1; next }
     index($0, k ":")==1 { v = substr($0, length(k) + 2); sub(/^[ \t]+/, "", v)
-                          if (v ~ /^[|>]/) { r = 1; exit }; hit = 1 }
+                          if (v ~ /^[|>]/) { r = 1; d = 1; next }; hit = 1 }
     END { exit !r }'
 }
 

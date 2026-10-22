@@ -526,9 +526,9 @@ P1 · supersede · duplicate · status=superseded · keeper · 1234567890-412 ·
 - **Refusals cover the whole report, never part of it:** a `mixed`/`human` item outside the
   two proposals above or not named by `--human-docs`, a `--human-docs` set that differs from
   the report's, a `provenance:` absent or outside `machine | mixed | human`, a target field
-  held in YAML block form, an item whose fingerprint has
-  moved since the report was written, a report that is not `draft`, two proposals naming one
-  item, a `ledger:` or `provenance:` write, and a tick holding the dispatch lock — which
+  held in YAML block form (blank or `#` lines before its items included — `kb-propose.sh`
+  never queues one), an item whose fingerprint has moved since the report was written, a
+  report that is not `draft`, two proposals naming one item, a `ledger:` or `provenance:` write, and a tick holding the dispatch lock — which
   narrows the concurrent-writer window with the mechanism the bundle has, and does not close
   it (`skills/audit/SKILL.md` says the same of the same probe).
 

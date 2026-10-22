@@ -227,7 +227,7 @@ hitem() { # <slug> <provenance|-> [a block-form tags: item line…]
   } >"$D2/knowledge/findings/$slug.md"
 }
 hitem m1 machine; hitem h1 human; hitem h2 human; hitem x1 mixed; hitem noprov -; hitem odd robot
-hitem blk human '  - a' '  - b'
+hitem blk human '  - a' '  - b'; hitem blkgap human '' '  - a'; hitem blkhash human '# a comment' '  - a'
 cp "$REPO/plugin/seed/knowledge/vocab.md" "$D2/knowledge/vocab.md"
 printf 'index, regenerated\n' >"$D2/knowledge/index.md"
 printf '{ "org": "example-org" }\n' >"$D2/instance.config.json"
@@ -269,6 +269,8 @@ rep k-odd "P1 · status · odd · status=archived · - · $(fp odd) · old";    
 rep k-prov "P1 · edit · h1 · provenance=machine · - · $(fp h1) · relabel";      refuse "a provenance: write on a human doc stays refused" "not a proposal's to write" --human-docs h1 "$R"
 rep k-ledger "P1 · edit · h1 · ledger=[] · - · $(fp h1) · wipe";                refuse "a ledger: write on a human doc stays refused" "not a proposal's to write" --human-docs h1 "$R"
 rep k-block "P1 · edit · blk · tags=[c] · - · $(fp blk) · retag";               refuse "a block-form tags: is refused, the doc byte-identical" "block form" --human-docs blk "$R"
+rep k-gap "P1 · edit · blkgap · tags=[c] · - · $(fp blkgap) · retag";         refuse "…with a blank line before its items too" "block form" --human-docs blkgap "$R"
+rep k-hash "P1 · edit · blkhash · tags=[c] · - · $(fp blkhash) · retag";      refuse "…and with a # comment line before them" "block form" --human-docs blkhash "$R"
 rm -rf projects/kb-hd
 
 echo "== …kb-propose keeps the narrow shape and marks it; apply names it before writing =="
@@ -279,6 +281,9 @@ echo "edit · m1 · title=New · - · retitle"
 echo "edit · h1 · tags=[ops, kb] · - · tag it"
 echo "status · x1 · status=archived · - · stale"
 echo "edit · h2 · title=Nope · - · outside the shape"
+echo "edit · blk · tags=[c] · - · block form"
+echo "edit · blkgap · tags=[c] · - · block form"
+echo "edit · blkhash · tags=[c] · - · block form"
 EOS
 chmod +x "$PH"
 out="$("$PROPOSE" --proposer "$PH" --project kb-prop 2>"$TMP/hd.err")"
@@ -286,6 +291,8 @@ RH="$(sed -n 's/.* in \(projects[^ ]*\.md\) .*/\1/p' <<<"$out")"
 sect() { sed -n '/^## Human-written docs this report changes$/,$p' "$RH"; }
 ok "the narrow-shape human proposals are kept as P<n> lines" "$(grep -cE '^P[0-9]+ · (edit · h1 · tags=|status · x1 · status=archived)' "$RH")" 2
 ok "…one outside the shape is still dropped"   "$(grep -c 'h2 is provenance: human' "$TMP/hd.err")/$(grep -c ' h2 ' "$RH")" "1/0"
+ok "…and so is every block-form target apply would refuse" \
+  "$(grep -cE '(blk|blkgap|blkhash) holds .tags:. in block form' "$TMP/hd.err")/$(grep -cE ' blk(gap|hash)? ' "$RH")" "3/0"
 ok "the report carries the human-written section" "$(grep -c '^## Human-written docs this report changes$' "$RH")" 1
 ok "…archived in their own sub-list, with provenance" \
   "$(sect | sed -n '/^Archived/,/^$/p' | grep -c '^- `x1` (provenance: mixed)$')" 1
@@ -293,6 +300,11 @@ ok "…tag edits in another, with provenance and value" \
   "$(sect | sed -n '/^Tag edits/,$p' | grep -c '^- `h1` (provenance: human) · `tags=\[ops, kb\]`$')" 1
 ok "…and the exact apply line"  "$(sect | grep -cxF "\`/loopd:kb-apply $RH --human-docs h1,x1\`")" 1
 ok "a machine-only report carries no such section" "$(grep -c 'Human-written docs' "$D/$REPORT")" 0
+chmod u-w knowledge/findings
+out="$("$APPLY" --by example-user-007 --human-docs x1,h1 "$RH" 2>&1)"; rc=$?
+chmod u+w knowledge/findings
+ok "the notice is printed before the first write is attempted" \
+  "$rc/$(grep -c '^KB HUMAN-WRITTEN DOCS: 2' <<<"$out")/$(grep -c 'could not write' <<<"$out")" 1/1/1
 cp knowledge/findings/h1.md "$TMP/h1.before"
 out="$("$APPLY" --by example-user-007 --human-docs x1,h1 "$RH" 2>&1)"; rc=$?
 ok "the mixed report applies with the set in any order" "$rc" 0

@@ -1248,7 +1248,8 @@ EOF
 # JUSTIFIED BY: `kb-apply.sh --human-docs` rewrites knowledge documents a person wrote, and
 # the slug list it demands is printed in the report, so from an agent it confirms nothing.
 # Agent-scoped like `subagent_push_default`. NARROW ENOUGH TO KEEP: the human's session, an
-# agent's `kb-apply.sh` without the flag, and reading or grepping the script all pass.
+# agent's `kb-apply.sh` without the flag, and reading or grepping the script all pass — except
+# inside `bash -c`, whose one string naming both script and flag is refused: it fails closed.
 rule_kb_apply_human_docs() {
   [ -n "$AGENT_ID" ] || return 1
   case "$1" in *human-docs*) ;; *) return 1 ;; esac
