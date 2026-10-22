@@ -319,8 +319,8 @@ ok "…and provenance: is untouched" "$(sed -n 's/^provenance: //p' knowledge/fi
 cd "$D" || exit 2
 
 echo "== the guards that keep agents out =="
-ok "step 7 still never applies from the tick" "$(sed -n 82p "$STEP7")" \
-  '   **Never apply a report from here, and never promote one.** `/loopd:kb-apply` is the'
+ok "step 7 still never applies from the tick" \
+  "$(grep -cxF '   **Never apply a report from here, and never promote one.** `/loopd:kb-apply` is the' "$STEP7")" 1
 for f in "$SKILL" "$SCHEMA"; do
   ok "$(basename "$f") says --human-docs is derivable, so the hook rule binds agents" \
     "$(grep -c 'derivable from the report' "$f")/$(grep -c 'kb_apply_human_docs' "$f")" 1/1
