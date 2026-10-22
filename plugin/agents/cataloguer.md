@@ -78,6 +78,11 @@ knowledge base") means several people write this KB. Absent the key nothing belo
    ones, and `cite-check.sh` refuses to let anyone cite one.
 4. **Runbooks.** Write/refresh repeatable procedures as
    `knowledge/runbooks/<slug>.md`.
+   **A brief carrying `kb-stale.sh` output** lists Services and Runbooks whose code moved
+   on since their `timestamp:`. Check each against its code, and set `timestamp:` to the
+   review time **even when the body is unchanged** — that is the only thing that takes a
+   confirmed doc off the list. An UNKNOWN line names why it could not be measured; a prose
+   `path:` is fixed by writing a real path, or removing it to count the whole repo.
 5. **Papercuts → one proposal per surface.** `knowledge/papercuts.md` is the cheap end of
    this loop — one appended line per papercut (a tool that failed, a doc that misled, a
    step repeated), written by every agent because it costs nothing. Run this pass at
