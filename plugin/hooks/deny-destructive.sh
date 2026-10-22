@@ -1125,15 +1125,15 @@ _bundle_git_dir() {
 # origin/main's — `tokens_of` on the raw stage, no value consumed — so a word the first
 # misparses can never turn one of origin/main's denies into an allow.
 _push_stage_verdict() { # <stage> <track|cwd>
-  local c a ate=0
+  local c a b ate=0
   case "$1" in *push*) ;; *) return 1 ;; esac
   c="$(first_word "$1")" || return 1
   [ "$c" = git ] || return 1
   a="$(tokens_of "$(_push_unredirect "$(_push_unquote "$1")")")"
   _push_reading "$a" "$2" 1 && return 0
-  c="$(tokens_of "$1")"
-  [ "$ate" = 0 ] && [ "$a" = "$c" ] && return 1
-  _push_reading "$c" "$2" 0
+  b="$(tokens_of "$1")"
+  [ "$ate" = 0 ] && [ "$a" = "$b" ] && return 1
+  _push_reading "$b" "$2" 0
 }
 
 # Git takes any unambiguous prefix of a long option (`--rep x` is `--repo x`), so every
