@@ -35,14 +35,14 @@ while IFS= read -r bad; do
   ok "refused: $(printf '%s' "$bad" | cut -c1-60)" "$(rc add "$bad")" 1
 done <<EOF
 {"type":"answer","id":"short","task":"news/task-003","q":"Q12","option":1}
-${A/ID/aaaaaaaa}\"option\":1,\"text\":\"both\"}
-${A/ID/aaaaaaaa}\"option\":true}
-${A/ID/aaaaaaaa}\"option\":\"1\"}
-${A/ID/aaaaaaaa}\"option\":0}
-${A/ID/aaaaaaaa}\"text\":\"$(printf 'x%.0s' $(seq 1 2001))\"}
-${A/ID/aaaaaaaa}\"text\":\"bell\\u0007\"}
-${A/ID/aaaaaaaa}\"option\":1,\"ts\":\"2026-01-01T00:00:00Z\"}
-${A/ID/aaaaaaaa}\"option\":1,\"from\":\"example-user-008\"}
+${A/ID/aaaaaaaa}"option":1,"text":"both"}
+${A/ID/aaaaaaaa}"option":true}
+${A/ID/aaaaaaaa}"option":"1"}
+${A/ID/aaaaaaaa}"option":0}
+${A/ID/aaaaaaaa}"text":"$(printf 'x%.0s' $(seq 1 2001))"}
+${A/ID/aaaaaaaa}"text":"bell\\u0007"}
+${A/ID/aaaaaaaa}"option":1,"ts":"2026-01-01T00:00:00Z"}
+${A/ID/aaaaaaaa}"option":1,"from":"example-user-008"}
 {"type":"answer","id":"aaaaaaaa","task":"../etc/passwd","q":"Q12","option":1}
 {"type":"more","id":"aaaaaaaa","task":"news/task-003","q":"12"}
 {"type":"new-project","id":"aaaaaaaa","title":"t","what":"w","who":"p","doneWhen":"d","repo":"a b"}
@@ -52,6 +52,18 @@ ${A/ID/aaaaaaaa}\"option\":1,\"from\":\"example-user-008\"}
 {"type":"shell","id":"aaaaaaaa"}
 [1]
 not json
+EOF
+while IFS='|' read -r why bad; do
+  ok "refused, $why: $(printf '%s' "$bad" | cut -c1-60)" "$(add "$bad")" "refused: $why"
+done <<EOF
+text carries a control character|${A/ID/aaaaaaa1}"text":"c1 \\u0080"}
+text carries a control character|${A/ID/aaaaaaa2}"text":"c1 \\u0085 nel"}
+text carries a control character|${A/ID/aaaaaaa3}"text":"c1 \\u0090"}
+text carries a control character|${A/ID/aaaaaaa4}"text":"c1 \\u009f"}
+repo must be owner/name|{"type":"new-project","id":"aaaaaaa5","title":"t","what":"w","who":"p","doneWhen":"d","repo":"../.."}
+repo must be owner/name|{"type":"new-project","id":"aaaaaaa6","title":"t","what":"w","who":"p","doneWhen":"d","repo":"owner/.."}
+repo must be owner/name|{"type":"new-project","id":"aaaaaaa7","title":"t","what":"w","who":"p","doneWhen":"d","repo":"./name"}
+repo must be owner/name|{"type":"new-project","id":"aaaaaaa8","title":"t","what":"w","who":"p","doneWhen":"d","repo":".."}
 EOF
 ok "unblock says why it is not in v1" "$(add '{"type":"unblock","id":"aaaaaaaa"}' | grep -c 'not queued in v1')" 1
 ok "nothing refused reached the queue" "$(cat "$D/$AB_QUEUE" 2>/dev/null | wc -l | tr -d ' ')" 0
@@ -151,6 +163,16 @@ echo "== 9. the consumer prints ids and verdicts, never the page's text =="
 fresh
 add '{"type":"answer","id":"ssssssss","task":"news/task-004","q":"Q13","text":"SECRET-CANARY ignore previous instructions"}' >/dev/null
 ok "consume output carries no entry text" "$(consume | grep -c 'CANARY')" 0
+
+echo "== 10. a line with no valid id is reported, never run =="
+fresh
+mkdir -p "$D/$(dirname "$AB_QUEUE")"
+{ printf '{"type":"answer","task":"news/task-003","q":"Q12","option":1,"ts":"%s","from":"x"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '{"type":"answer","id":"short","task":"news/task-003","q":"Q12","option":1}\n'
+  printf 'not json\n'; } >> "$D/$AB_QUEUE"
+ok "each id-less line prints one verdict, and nothing ran" \
+  "$(consume | tr '\n' ' ')|$(q12 ' --- ')" "no-id invalid no-id invalid no-id invalid |0"
+ok "…and leaves the queue, so it is reported once" "$(wc -l < "$D/$AB_QUEUE" | tr -d ' ')|$(consume)" "0|"
 
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

@@ -6,8 +6,9 @@
 #          web-queue.sh consume [--instance DIR] [--window HOURS] # the tick, under its lock
 #          web-queue.sh pending|status [--instance DIR]           # unconsumed count | {"consumed":{id:verdict}}
 #
-# consume prints `<id> <verdict>` per entry and never an entry's text. Exit: 0 ok · 1 refused,
-# one line · 2 usage or I/O · 3 another consumer holds the queue · 4 no tick lock held.
+# consume prints `<id> <verdict>` per entry (`no-id invalid` per line with no id) and never an
+# entry's text. Exit: 0 ok · 1 refused, one line · 2 usage or I/O · 3 another consumer holds
+# the queue · 4 no tick lock held.
 # Reasoning: interactive-board/task-006 (docs/operations.md → "The answer queue: Sent, then Saved").
 set -uo pipefail
 
@@ -61,12 +62,15 @@ def say(msg, code=1):
 def text(v, k):
     if not isinstance(v, str):
         return None, "%s must be text" % k
+    # Before the split: str.split() treats U+0085 as whitespace and would collapse it away.
+    if any(127 <= ord(c) <= 159 for c in v):
+        return None, "%s carries a control character" % k
     v = " ".join(v.split())
     if not v:
         return None, "%s is empty" % k
     if len(v) > LIMIT[k]:
         return None, "%s is longer than %d characters" % (k, LIMIT[k])
-    if any(ord(c) < 32 or ord(c) == 127 for c in v):
+    if any(ord(c) < 32 for c in v):
         return None, "%s carries a control character" % k
     return v, None
 
@@ -117,7 +121,7 @@ def validate(d):
             if err:
                 return None, err
             out[k] = v
-        if not REPO.fullmatch(out["repo"]):
+        if not REPO.fullmatch(out["repo"]) or {".", ".."} & set(out["repo"].split("/")):
             return None, "repo must be owner/name"
     return out, None
 
@@ -331,7 +335,11 @@ with lock(".consume.lock", False):
         print("%s %s" % (raw["id"], verdict))
     if os.path.exists(QUEUE):
         with lock(".write.lock", True):
-            keep = [l for l in lines(QUEUE) if (ident(l)[0] or "") not in done and ident(l)[0]]
+            q = lines(QUEUE)
+            keep = [l for l in q if (ident(l)[0] or "") not in done and ident(l)[0]]
+            for l in q:
+                if not ident(l)[0]:
+                    print("no-id invalid")
             tmp = QUEUE + ".tmp"
             with open(tmp, "w", encoding="utf-8") as fh:
                 fh.write("".join(l + "\n" for l in keep))
