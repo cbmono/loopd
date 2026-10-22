@@ -484,7 +484,8 @@ state, and act only on deltas.
    `${CLAUDE_PLUGIN_ROOT}/scripts/kb-select.sh --recorded <task-path>` passed verbatim — the
    set step 3 recorded at dispatch, never a re-run of the selector, which reads today's KB
    (exit 1: dispatched before the record existed, so pass `none`) — `<id>` is
-   `<task-slug>.result` or `<repo>-pr-<n>`, so a re-run rewrites the same record instead of counting it twice. It runs
+   `<task-slug>.result` or `<repo>-pr-<n>`, so a re-run rewrites the same record instead
+   of counting it twice. It runs
    `${CLAUDE_PLUGIN_ROOT}/scripts/cite-check.sh --text-file` and passes its report and exit
    code through unchanged; that record is the only usage signal the archive sweep in
    step 7 has, so a skipped run is a citation the KB never sees. Anything dropped (exit 3, or exit 1 where a citing line lost every id) is
