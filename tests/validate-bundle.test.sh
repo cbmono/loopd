@@ -207,7 +207,7 @@ assert "unterminated frontmatter is an error"        "$(saw 'never closed by a s
 assert "an invalid Service status is an error"       "$(saw "status 'retired' is not valid for type Service")"
 assert "a valid Service status is silent"            "$(not_seen 'good-service.md')"
 assert "an invalid Service deploy: names the doc"    "$(saw "deploy 'sometimes' is not valid (one of: manual auto")"
-assert "…on the doc it names"                        "$(grep -B1 "deploy 'sometimes'" <<<"$OUT" | grep -q 'deploy-bad.md' && echo 0 || echo 1)"
+assert "…on the doc it names"                        "$(grep -q 'deploy-bad.md' <<<"$(grep -B1 "deploy 'sometimes'" <<<"$OUT")" && echo 0 || echo 1)"
 assert "an invalid Task deploy: is an error"         "$(saw "deploy 'yes' is not valid")"
 assert "a valid deploy: is silent, on either type"   "$(not_seen 'deploy-ok.md')"
 assert "files below knowledge/<kind>/ are ignored"   "$(not_seen 'raw-note.md')"
