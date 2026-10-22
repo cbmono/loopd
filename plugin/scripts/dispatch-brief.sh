@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# dispatch-brief.sh — the six fixed sections the PM pastes into a dispatch brief
-# verbatim: `## Grounding (<repo>)`, the Service-doc entry points capped at 15 lines (or
+# dispatch-brief.sh — the seven fixed sections the PM pastes into a dispatch brief
+# verbatim: `## Grounding (<repo>)`, service-doc.sh's entry points capped at 15 lines (or
 # one line telling the agent to draft the missing doc); `## Effort`, the files/LOC/turns
 # budget; `## Commit attribution` and `## PR title`, the resolved `commitAttribution` and
-# `ticketPrefix` — answered here so no agent reads either key itself; `## Scratch`, a
-# directory this task alone owns; and `## Deliverables`, the project's non-code paths.
+# `ticketPrefix`; `## Scratch`, a directory this task alone owns; `## Deliverables`, the
+# project's non-code paths; and `## Knowledge`, kb-select.sh's 1-5 Finding rows.
 # Usage: dispatch-brief.sh <task-doc> [--instance <bundle>]. Exit: 0 printed, 2 cannot
 # answer (no task doc, unreadable frontmatter). Never fails a dispatch — an absent config
 # key falls back to the documented default. Reasoning: ai-bridge-next/task-017 (bands),
@@ -22,6 +22,7 @@ ATTRIBUTION_HEADING='## Commit attribution'
 TITLE_HEADING='## PR title'
 SCRATCH_HEADING='## Scratch'
 DELIVERABLES_HEADING='## Deliverables'
+KNOWLEDGE_HEADING='## Knowledge'
 
 usage() { sed -n '2,12p' "$0" >&2; exit 2; }
 
@@ -106,10 +107,10 @@ FM="$(fm_block "$TASK")" || fm_rc=$?
   exit 2
 }
 
-REPO="$(field target_repo "$FM")"
+REPO="$(bash "$BIN/service-doc.sh" --repo "$TASK")" || REPO=""
 CRITERIA="$(count_entries "$(list_region acceptance_criteria "$FM")")"
 SERVICE=""
-[ -n "$REPO" ] && [ -n "$INSTANCE" ] && SERVICE="$INSTANCE/knowledge/services/${REPO##*/}.md"
+[ -n "$INSTANCE" ] && { SERVICE="$(bash "$BIN/service-doc.sh" "$TASK" --instance "$INSTANCE")" || SERVICE=""; }
 TARGET_REPO="$REPO"
 [ -n "$REPO" ] || REPO="(no target_repo on the task)"
 
@@ -209,3 +210,6 @@ printf '\n%s\n\n' "$DELIVERABLES_HEADING"
 printf 'A file a human or a later task consumes (sheet, instructions, export, report): %s/deliverables/ — and list it in this task'"'"'s `artifacts:`.\n' "$PROJ"
 printf 'Customer data, ticket exports, anything PII-adjacent: %s/deliverables/local/ (gitignored, never pushed). Inputs you gather: %s/sources/.\n' "$PROJ" "$PROJ"
 printf 'Never `~`, `/`, another repo or the bundle root — ask in `open_questions`. Hand a file over by this project path (CONVENTIONS.md → "Where files go").\n'
+
+printf '\n%s\n\n' "$KNOWLEDGE_HEADING"
+bash "$BIN/kb-select.sh" "$TASK" ${INSTANCE:+--instance "$INSTANCE"}

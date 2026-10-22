@@ -12,6 +12,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
+. "$HERE/kb-words.sh" || exit 2
 
 NEAR=0.50
 ORIGPWD="$PWD"; INST="$PWD"; CAND=""
@@ -50,28 +51,13 @@ EOF
 
 # Row per document: C|I, slug, type, provenance, superseded_by, tags, timestamp, lesson-ok,
 # score, equal, words only in the candidate, words only in the item. Tab-separated.
-FACTS="$(LC_ALL=C awk -v q="'" '
+FACTS="$(LC_ALL=C awk -v q="'" "$KB_WORDS_AWK"'
 function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
 function unq(s) { if (length(s) > 1 && (s ~ /^".*"$/ || (substr(s, 1, 1) == q && substr(s, length(s), 1) == q))) s = substr(s, 2, length(s) - 2); return s }
 # Read with a tab IFS, which collapses empty fields, so an empty one is `-`.
 function nz(s) { return (s == "") ? "-" : s }
 function flat(s) { gsub(/[\t\r]/, " ", s); return s }
-# Wording is normalised away (case, punctuation, order, articles, plurals); every other word is
-# content, so an interpreter, a harness or a calling context that differs is a different key.
-function words(s, set,   n, i, w, p, list) {
-  s = tolower(s); gsub(/[^a-z0-9._-]/, " ", s); n = split(s, p, " "); list = ""
-  for (i = 1; i <= n; i++) {
-    w = p[i]; sub(/^[._-]+/, "", w); sub(/[._-]+$/, "", w)
-    if (w == "" || (w in STOP)) continue
-    if (length(w) > 4 && w ~ /ies$/) w = substr(w, 1, length(w) - 3) "y"
-    else if (length(w) > 3 && w ~ /s$/ && w !~ /ss$/) w = substr(w, 1, length(w) - 1)
-    if (!(w in set)) { set[w] = 1; list = list " " w }
-  }
-  return substr(list, 2)
-}
 BEGIN {
-  split("a an the and of to is are was were be been being it its this that these those as", sw, " ")
-  for (i in sw) STOP[sw[i]] = 1
   n = 0
 }
 FNR == 1 { n++; F[n] = FILENAME; infm = ($0 == "---"); blk = ""; lst = ""; next }

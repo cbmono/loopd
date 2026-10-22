@@ -9,7 +9,11 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    reasoning in `# Notes`. For **`kind: build`** also resolve `target_repo` (confirm
    it exists under `<reposRoot>/`) and suggest an `assignee` (see `agents/index.md`).
    For **`kind: research`** instead turn the project's `deliverables` into concrete,
-   reviewable `acceptance_criteria` — no `target_repo`, no code `assignee`. If it has
+   reviewable `acceptance_criteria` — no `target_repo`, no code `assignee`. **Before you
+   write any `open_questions` entry**, run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/service-doc.sh <task-doc>` and
+   `${CLAUDE_PLUGIN_ROOT}/scripts/kb-select.sh <task-doc>` on the draft and read what they name: a
+   question the matched Service doc or a listed Finding already answers is folded into the task, never asked. If it still has
    blocking ambiguities, fill `open_questions`, **numbering every entry (`Q1:`,
    `Q2:`, …)**, and for each new `Q<n>` write its `### Q<n>` block under the body's
    `## Question details` (`SCHEMA.md` → "Question details"): choose the recommendation,

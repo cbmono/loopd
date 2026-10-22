@@ -236,23 +236,25 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    same repo's deps, stagger them across ticks.
 
    **Knowledge base (consult + capture).** Include both lines in every dispatch
-   brief: *"Before you start, scan `knowledge/index.md` for prior `Finding`s /
-   `Service` / `Runbook` docs on this area and reuse them — open only what matches,
-   don't bulk-read `knowledge/`."* and *"If you discover something durable and
+   brief: *"The `## Knowledge` rows below are the Findings this brief carried — open
+   those first. Then scan `knowledge/index.md` for prior `Finding`s / `Service` /
+   `Runbook` docs on this area and reuse them — open only what matches, don't bulk-read
+   `knowledge/`; a Finding you cite that you found only through the index is graded
+   `UNREAD` by `cite-check.sh`."* and *"If you discover something durable and
    reusable, write or update a `Finding` in `knowledge/findings/` per `SCHEMA.md` and
    link it from the task."*
 
-   **Grounding, Effort, Commit attribution, PR title, Scratch and Deliverables (where to
-   start reading, how big this is, how the commit is signed, what the title is tagged with,
-   where the throwaway files go, and where the non-code output goes).** Before you
+   **Grounding, Effort, Commit attribution, PR title, Scratch, Deliverables and Knowledge
+   (where to start reading, how big this is, how the commit is signed, what the title is
+   tagged with, where the throwaway files go, where the non-code output goes, and which
+   Findings apply).** Before you
    spawn, run `${CLAUDE_PLUGIN_ROOT}/scripts/dispatch-brief.sh <task-path>` and paste its
-   output into the brief **unchanged, all six headings and all** — the fixed headings are
+   output into the brief **unchanged, all seven headings and all** — the fixed headings are
    `## Grounding (<target_repo>)`, `## Effort`, `## Commit attribution`, `## PR title`,
-   `## Scratch` and `## Deliverables`.
-   Grounding is the
-   target repo's
-   `knowledge/services/<repo>.md` entry points, capped at 15 lines, or — when that Service
-   doc does not exist — one line telling the agent to draft it alongside the task for the
+   `## Scratch`, `## Deliverables` and `## Knowledge`.
+   Grounding is the entry points of the Service doc `service-doc.sh` matches to the task's
+   `target_repo` (the project's when the task sets none), capped at 15 lines, or — when no
+   Service doc matches — one line telling the agent to draft it alongside the task for the
    `cataloguer` to review. Effort is the files/LOC/turns budget derived from the task's
    criteria count and the instance's `maxPrLoc`/`maxPrFiles`. Commit attribution is the
    resolved `commitAttribution` (**absent ⇒ `claude`**), and it is in the brief precisely so
@@ -262,7 +264,11 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    repo's own clone, because a per-session path is the SAME path for every agent one tick
    spawns and the second writer silently wins. Deliverables is the project's
    `deliverables/`, `deliverables/local/` and `sources/` paths, absolute
-   (`CONVENTIONS.md` → "Where files go"). **Never re-derive any of the six
+   (`CONVENTIONS.md` → "Where files go"). Knowledge is `kb-select.sh`'s 1-5
+   `[[slug]] — lesson` rows, or one `none matched` line. Then, in the same wave, run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/kb-select.sh --record <task-path>` — it appends the
+   `* KNOWLEDGE <ISO 8601> · <slugs>` line step 5 hands to `kb-usage.sh` once the task merges.
+   **Never re-derive any of the seven
    yourself**: an agent that has to find its own entry points spends its first turns
    searching, which is the whole cost this block exists to remove.
 
