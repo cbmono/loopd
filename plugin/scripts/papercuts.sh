@@ -8,7 +8,7 @@
 # Entry shape, one line: `DATE | TASK | KIND:NAME | what hurt` (note 15-160 bytes).
 # Exit: 0 clean / a pass is due · 1 refused, named on stderr (or: not due) · 2 unknown
 # (usage, an unreadable record). Record: knowledge/papercuts.md, appended, never edited;
-# plugin-surface rows: .loopd/upstream-proposals.md (SCHEMA.md). Why: CONVENTIONS.md.
+# plugin rows: .loopd/upstream-proposals.md. Why: CONVENTIONS.md; ai-bridge-next/task-016.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
