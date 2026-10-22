@@ -296,7 +296,7 @@ ok "a machine-only report carries no such section" "$(grep -c 'Human-written doc
 cp knowledge/findings/h1.md "$TMP/h1.before"
 out="$("$APPLY" --by example-user-007 --human-docs x1,h1 "$RH" 2>&1)"; rc=$?
 ok "the mixed report applies with the set in any order" "$rc" 0
-lno() { grep -nF -- "$1" <<<"$out" | head -1 | cut -d: -f1; }
+lno() { awk -v s="$1" '!n && index($0, s) { n = NR } END { print n }' <<<"$out"; }
 ok "the notice names archived, then tag edits, then KB APPLIED" \
   "$(a=$(lno 'KB HUMAN-WRITTEN DOCS: 2'); b=$(lno '- x1 (provenance: mixed) status=archived'); c=$(lno 'tag edits'); d=$(lno '- h1 (provenance: human) tags=[ops, kb]'); e=$(lno 'KB APPLIED')
      [ -n "$a" ] && [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ] && [ "$c" -lt "$d" ] && [ "$d" -lt "$e" ] && echo ordered || echo "$a/$b/$c/$d/$e")" ordered
