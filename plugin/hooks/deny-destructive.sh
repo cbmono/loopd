@@ -1131,7 +1131,8 @@ _push_stage_verdict() { # <stage> <track|cwd>
       continue
     fi
     # `--repo X` names the remote only when no positional one follows, so after its value
-    # the first positional is still the remote — git's own precedence.
+    # the first positional is still the remote — git's own precedence. A short cluster takes
+    # the next word only when its FIRST `o` ends it: `-vo x`, but `-ozero` is inline.
     case "$w" in
       --push-option|--receive-pack|--exec|--repo) skip=x ;;
       --*) ;;
