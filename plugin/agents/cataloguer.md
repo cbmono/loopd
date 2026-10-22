@@ -88,13 +88,17 @@ knowledge base") means several people write this KB. Absent the key nothing belo
    ```
 
    **One proposal per surface the report names**, in your output, for whoever dispatched
-   you to draft: the surface, its entry count, and the **concrete edit** — the file, the
-   line as it reads, and what it should say instead — as the `acceptance_criteria` a
-   `draft` task would carry. A surface whose single entry no longer reproduces gets a line
-   saying so and no proposal; two entries naming one surface are already the evidence.
-   **You never write to `projects/` and never mark the pass** — the dispatcher creates the
-   drafts and runs `papercuts.sh pass`, so a lost proposal cannot be silently marked
-   processed. **Never edit or delete an entry**: ten lines naming one surface only read as
+   you: the surface, its `plugin`/`instance` tag from the report, its entry count, and the
+   **concrete edit** — the file, the line as it reads, and what it should say instead — as
+   the `acceptance_criteria` a `draft` task would carry. A surface whose single entry no
+   longer reproduces gets a line saying so and no proposal; two entries naming one surface
+   are already the evidence. The dispatcher routes them by one rule: an instance-owned
+   surface becomes a `draft` task in its owning project; a loopd plugin surface is written
+   to `.loopd/upstream-proposals.md` instead. `pass` checks only the plugin side; the drafts
+   are your dispatcher's duty.
+   **You never write to `projects/` or the upstream file, and never mark the pass** — the
+   dispatcher writes both and runs `papercuts.sh pass`, so a lost proposal cannot be
+   silently marked processed. **Never edit or delete an entry**: ten lines naming one surface only read as
    ten while nobody tidies them.
 6. **Rebuild `index.md` — never hand-edit it.** `knowledge/index.md` is **derived**:
 

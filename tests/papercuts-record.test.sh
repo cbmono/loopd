@@ -31,6 +31,8 @@ CLOSE="$REPO/plugin/skills/close-project/SKILL.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/papercuts.XXXXXX")" \
   || { echo "papercuts-record.test: could not create a temp dir" >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
+export CLAUDE_PLUGIN_ROOT="$REPO/plugin"
+cd "$TMP" || exit 2
 
 pass=0; fail=0
 ok() { # <name> <actual> <expected>
@@ -116,6 +118,9 @@ ok "the report counts both surfaces"        "$(printf '%s' "$R" | grep -c '3 ent
 ok "…the busiest surface leads"             "$(head -1 <<<"$(printf '%s\n' "$R" | grep -E '^(skill|agent|script):')" | awk '{print $1}')" "script:validate-bundle.sh"
 ok "…with its entry count"                  "$(printf '%s' "$R" | grep -c 'script:validate-bundle.sh  (2)')" 1
 ok "…and every entry appears under a surface" "$(printf '%s' "$R" | grep -c '^  2026-09-0')" 3
+for s in script:validate-bundle.sh agent:qa-reviewer; do
+  bash "$PC" propose --surface "$s" --edit 'the concrete edit for this surface' --date 2026-09-06 >/dev/null
+done
 bash "$PC" pass --file "$REC" --date 2026-09-06 >/dev/null
 ok "after a pass the record carries the marker" "$(grep -c '^<!-- pass 2026-09-06 ' "$REC")" 1
 ok "…the marker is not read back as an entry"   "$(yn bash "$PC" check --file "$REC")" yes
