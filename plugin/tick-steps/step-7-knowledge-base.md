@@ -90,5 +90,17 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    declined by cancelling it — not by promoting it to `ready`, which would dispatch an
    agent and make a second apply path.
 
+   **The stale list rides along with a cataloguer this tick already dispatches, and is
+   never a reason to dispatch one.** Only when one of this step's reasons (or step 6's) is
+   sending a cataloguer, run once and paste its output into that one brief:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/kb-stale.sh   # exit 0 = a list · 1 = nothing listed · 2 = could not run
+   ```
+
+   It names each Service and Runbook whose code has `kbStaleCommits` (absent ⇒ 20) commits
+   since its `timestamp:`, and UNKNOWN for one it cannot measure. Exit 1 or 2 adds nothing to
+   the brief. A non-empty list with no cataloguer going out dispatches nothing.
+
 
 <!-- end of step 7 -->

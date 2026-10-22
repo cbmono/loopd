@@ -550,6 +550,11 @@ timestamp: <ISO 8601>
 ```
 Body headings: `# Overview`, `# Stack & data`, `# Dependencies`, `# Notes`.
 
+**`timestamp:`** on a Service or Runbook is when it was last checked against its code:
+`kb-stale.sh` counts the commits since it (on `path:`, which must name a path in the repo,
+else the whole repo; `kbStaleCommits`, absent ⇒ 20), so a review that changes nothing
+still sets it.
+
 **`deploy:`** is resolved for a task by `deploy-mode.sh`: the task's own value wins, else the
 Service doc `service-doc.sh` matches for its `target_repo` (the task's, else its project's),
 else `auto`. A tie between matched docs that disagree is `manual`. Any value but
