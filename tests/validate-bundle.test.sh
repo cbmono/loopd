@@ -93,6 +93,7 @@ doc knowledge/services/deploy-ok.md '---' 'type: Service' 'title: S4' 'status: a
 doc projects/live/tasks/task-030-deploy-bad.md '---' 'type: Task' 'title: D' 'status: ready' 'deploy: "yes"' "timestamp: $TS" '---' 'body'
 doc projects/live/tasks/task-032-deploy-empty.md '---' 'type: Task' 'title: D3' 'status: ready' 'deploy:' "timestamp: $TS" '---' 'body'
 doc projects/live/tasks/task-033-deploy-quoted-comment.md '---' 'type: Task' 'title: D4' 'status: ready' 'deploy: "manual # note"' "timestamp: $TS" '---' 'body'
+doc projects/live/tasks/task-034-deploy-quoted-ok.md '---' 'type: Task' 'title: D5' 'status: ready' "deploy: 'manual'  # by hand" "timestamp: $TS" '---' 'body'
 doc projects/live/tasks/task-031-deploy-ok.md '---' 'type: Task' 'title: D2' 'status: ready' 'deploy: auto  # opt-out' "timestamp: $TS" '---' 'body'
 # CONVENTIONS.md -> "Write less" bounds a Finding at 40 lines and requires a one-line
 # `lesson:`. Both WARN rather than fail: every bundle alive has findings that predate the
@@ -212,7 +213,9 @@ assert "an invalid Service deploy: names the doc"    "$(saw "deploy 'sometimes' 
 assert "…on the doc it names"                        "$(grep -q 'deploy-bad.md' <<<"$(grep -B1 "deploy 'sometimes'" <<<"$OUT")" && echo 0 || echo 1)"
 assert "an invalid Task deploy: is an error"         "$(saw "deploy 'yes' is not valid")"
 assert "an empty deploy: is an error, not absent"   "$(saw "task-032-deploy-empty.md")"
-assert "a # inside the quotes is not a comment"     "$(saw "task-033-deploy-quoted-comment.md")"
+assert "a # inside the quotes is not a comment"     "$(saw "deploy 'manual # note' is not valid")"
+assert "…on the doc it names"                        "$(grep -q 'task-033-deploy-quoted-comment.md' <<<"$(grep -B1 "deploy 'manual # note'" <<<"$OUT")" && echo 0 || echo 1)"
+assert "…while a comment after the quotes is one"   "$(not_seen 'task-034-deploy-quoted-ok.md')"
 assert "a valid deploy: is silent, on either type"   "$(not_seen 'deploy-ok.md')"
 assert "files below knowledge/<kind>/ are ignored"   "$(not_seen 'raw-note.md')"
 
