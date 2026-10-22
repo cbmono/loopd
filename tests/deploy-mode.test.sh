@@ -121,5 +121,10 @@ task acme/web 'deploy: bogus';                                 check_same "UNKNO
 task acme/web 'deploy: manual' in-review;                      check_same "a task not yet done" 2
 task acme/web 'deploy: manual'; sed -i.bak '/^pr:/d' "$T";    check_same "no pr: to name" 2
 
+echo "== step 5 calls the writer =="
+S5="$REPO/plugin/tick-steps/step-5-reflect-merges.md"
+ok "step 5 runs reflect-deploy.sh per done task"  "$(grep -cF 'scripts/reflect-deploy.sh <task-path>' "$S5" | tr -d ' ')" 1
+ok "…and never reports a manual merge as shipped" "$(grep -cF 'report the task as merged, NOT shipped' "$S5" | tr -d ' ')" 1
+
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -367,6 +367,7 @@ open_caveats:                         # optional, TICK-WRITTEN. A caveat a tick 
 # on an in-progress task would block promotion as a side effect — conflating "a question
 # for the human" with "a warning that outranks you".
 pr: [ ]                               # BUILD only: PR URL(s) set by the role agent(s) — a task may fan out to several
+deploy: manual | auto                 # optional, BUILD only: overrides the Service doc's `deploy:` — see type: Service
 pr_mergeable: MERGEABLE               # PM-OWNED, NEVER HAND-EDITED. `MERGEABLE` | `CONFLICTING` | `UNKNOWN` — the tick's LAST `gh pr view --json mergeable,mergeStateStatus` read, written by `scripts/review-clearance.sh --record <task-doc>` in the same call that made it. Absent ⇒ `UNKNOWN`, which is NOT mergeable: `write-snapshot.sh` is offline by contract, so the board and `AWAITING.md` mint the 🔀 **merge** verb only for `MERGEABLE`, and a `CONFLICTING` in-review task renders as in flight (a rebase round) instead. Not a cache to consult INSTEAD of asking — mergeability changes when the default branch moves with no commit on the PR, so every tick overwrites it.
 stall_count: 0                        # PM-OWNED, NEVER HAND-EDITED. Consecutive rounds this task ended on the SAME blocker; absent ⇒ 0. The tick maintains it with `scripts/stall-counter.sh record` after every round, and it resets on progress: a changed blocker, a new commit or review thread on the PR (`--progress`), or a human edit — a task the human puts back in the queue (`draft`/`ready`) at or past the cap starts over.
 last_blocker: "<what the last round ended on>"   # PM-OWNED, NEVER HAND-EDITED. The blocker text or failing check the counter is counting, whitespace folded to one line. Absent ⇒ none. It is read by a human here and in `AWAITING.md` and persists for the life of the repo: **no customer PII, and never a secret or an environment value** — the failing check, not the output that failed.
@@ -542,11 +543,19 @@ owner:                            # team / person, optional. FREE TEXT and read 
 stack: [ <framework>, <orm>, ... ]
 runtime: node-<major>
 status: active | deprecated
+deploy: manual | auto             # optional; absent ⇒ auto. `manual`: a merge ships nothing until a human deploys
 provenance: machine | mixed | human  # who wrote it — required on every knowledge type (above)
 timestamp: <ISO 8601>
 ---
 ```
 Body headings: `# Overview`, `# Stack & data`, `# Dependencies`, `# Notes`.
+
+**`deploy:`** is resolved for a task by `deploy-mode.sh`: the task's own value wins, else the
+Service doc `service-doc.sh` matches for its `target_repo` (the task's, else its project's),
+else `auto`. A tie between matched docs that disagree is `manual`. Any value but
+`manual`/`auto` is a `validate-bundle.sh` error. On `manual`, step 5 records the merge as
+`merged, not deployed` with a `Q<n>: do: deploy …` entry, and the human's ` --- done` answer
+is the deploy's record.
 
 ### type: Finding  (`knowledge/findings/<slug>.md`)
 

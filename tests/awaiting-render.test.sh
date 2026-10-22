@@ -147,6 +147,22 @@ bash "$SH" --instance "$O" >/dev/null 2>&1
 ok "a malformed owner ⇒ no close row" "$(closes "$O")" "Nobody"
 
 echo
+echo "== a done task's do: deploy entry is one 👉 do row until it is answered =="
+D="$TMP/deploy"; inst "$D"; : > "$D/$AB_AWAITING"
+DQ='Q1: do: deploy demo/web — https://github.com/demo/web/pull/9 merged, not deployed; answer done once it is live'
+task "$D" task-001-a "Shipped by hand" done '"x"' "\"$DQ\""
+bash "$SH" --instance "$D" >/dev/null 2>&1
+ok "unanswered: one do row on the done task" "$(grep -c '^\* 👉 \*\*do\*\* — \[Shipped by hand\](/projects/demo/tasks/task-001-a.md) · Q1: do: deploy demo/web' "$D/$AB_AWAITING" | tr -d ' ')" 1
+ok "…and no second do row"                   "$(grep -c '^\* 👉' "$D/$AB_AWAITING" | tr -d ' ')" 1
+task "$D" task-001-a "Shipped by hand" done '"x"' "\"$DQ --- done\""
+bash "$SH" --instance "$D" >/dev/null 2>&1
+ok "answered: the row is gone"               "$(grep -c '^\* 👉' "$D/$AB_AWAITING" | tr -d ' ')" 0
+printf -- '---\ntype: Task\ntitle: "Shipped by hand"\nstatus: done\nopen_questions: [ ]\nanswered_questions: [ "%s --- done" ]\n---\n' "$DQ" \
+  > "$D/projects/demo/tasks/task-001-a.md"
+bash "$SH" --instance "$D" >/dev/null 2>&1
+ok "…and stays gone once folded"             "$(grep -c '^\* 👉' "$D/$AB_AWAITING" | tr -d ' ')" 0
+
+echo
 echo "== the flow-list parser is NOT re-implemented here =="
 # One parser, one place it can cut an entry in half. A second regex over these lists is
 # the defect measured on 2026-09-12, so its absence is the assertion.
