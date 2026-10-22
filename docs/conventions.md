@@ -760,7 +760,12 @@ the SHA-pinned squash `AUTONOMY.md` delegates, decided by `plugin/scripts/merge-
 from the bundle's own mode, the caller's role and a clearance record at that SHA — and
 **`rule_subagent_push_default`** refuses a dispatched agent's push to a product repo's
 default branch, exempting the bundle the tick pushes by design
-([#97](https://github.com/cbmono/loopd/pull/97)). The third strand of the same finding —
+([#97](https://github.com/cbmono/loopd/pull/97)). It is the one rule judged per push stage
+rather than from the payload `cwd`: a `cd`, `git -C`, `--git-dir` or `GIT_DIR` is followed
+to the repo it reaches, and a directory change the hook cannot follow fails closed. Because
+that walk does not know quotes, the bundle exemption goes only to a lexically plain command
+naming one of the bundle's own remotes; in any other command a `cd` the walk follows may
+never run, so it can only add a deny. The third strand of the same finding —
 a `project-manager` tick running with no dispatch lock — is refused by
 `plugin/scripts/tick-lock.sh` at **exit 4** (no lock, no launcher), not by a hook, because
 that fact is in the lock file and not in the tool payload. The audit report is a snapshot of

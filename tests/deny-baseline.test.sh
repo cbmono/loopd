@@ -499,6 +499,7 @@ git -C "$BUNDLE" init -q >/dev/null 2>&1
 git -C "$BUNDLE" symbolic-ref HEAD refs/heads/main
 git -C "$BUNDLE" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m init
 printf '{}\n' > "$BUNDLE/instance.config.json"
+git -C "$BUNDLE" remote add origin "https://example.com/bundle.git"   # the exemption needs a configured remote
 BUNDLE="$(res "$BUNDLE")"
 
 verdict_agent_in() { # <project-dir> <cwd> <command> -> "allow" | "deny:<rule>" | "bad:…"
@@ -791,6 +792,115 @@ printf 'gitdir: /nowhere/at/all\n' > "$WORK/broken.git"; mkdir -p "$WORK/brokenw
 ok "a .git file pointing nowhere is silent, never an error" \
    "$(verdict_from "$WORK/brokenwt" "$WORK/brokenwt" 'git push --force origin main')" "allow"
 rm -f "$MARKER"
+
+# --- subagent_push_default resolves PER STAGE: `cd`, `-C`, `--git-dir`, `GIT_DIR` --------
+# Each push stage is judged in the repo it actually pushes, so a bundle-cwd agent cannot
+# reach a product's default branch by `cd`/`-C`, and a worktree-cwd agent can push the
+# bundle it was told to. A directory change the hook cannot follow fails CLOSED. Every
+# command is also sent with no agent_id: the human's verdict must stay `allow`.
+echo "== subagent_push_default, per stage: the repo each push stage actually reaches"
+mkdir -p "$BUNDLE/repos" && ln -s "$GITREPO" "$BUNDLE/repos/prod"
+pushcase() { # <project-dir> <cwd> <want-for-agent> <label> <command>
+  ok "$4" "$(verdict_agent_in "$1" "$2" "$5")" "$3"
+  ok "…and the human's verdict is unchanged" "$(verdict_from "$1" "$2" "$5")" "allow"
+}
+D=deny:subagent_push_default
+pushcase "$BUNDLE" "$BUNDLE" "$D" "from the bundle: git -C <product> push origin main" "git -C $GITREPO push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…cd <product> && git push origin main" "cd $GITREPO && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…a chain: cd <bundle> && …; cd <product> && git push" "cd $BUNDLE && git status; cd $GITREPO && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…git -C <bundle>/repos/<name> (a symlink into the product)" "git -C $BUNDLE/repos/prod push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…--git-dir=<product>/.git" "git --git-dir=$GITREPO/.git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…--git-dir <product>/.git" "git --git-dir $GITREPO/.git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…GIT_DIR=<product>/.git git push" "GIT_DIR=$GITREPO/.git git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…GIT_WORK_TREE=<product> GIT_DIR=<product>/.git git push" "GIT_WORK_TREE=$GITREPO GIT_DIR=$GITREPO/.git git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…an earlier export GIT_DIR=<product>/.git" "export GIT_DIR=$GITREPO/.git; git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…cumulative relative -C: git -C <work> -C repo" "git -C $WORK -C repo push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…relative cd carried: cd <work> && cd repo && git push" "cd $WORK && cd repo && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…a bare push reads the PRODUCT's HEAD (main)" "cd $GITREPO && git push origin"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "…the PRODUCT's own default: git -C <oddrepo> push origin release" "git -C $ODDREPO push origin release"
+pushcase "$BUNDLE" "$OUTSIDE" "$D" "from a non-repo cwd: --git-dir=<product>/.git" "git --git-dir=$GITREPO/.git push origin main"
+pushcase "$BUNDLE" "$OUTSIDE" "$D" "an unresolvable root is not the bundle (non-repo agent cwd)" "git push origin main"
+
+echo "== …a directory change it cannot follow makes every later push stage's root unknown"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "( cd <product> && git push )" "(cd $GITREPO && git push origin main)"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "{ cd <product>; git push; }" "{ cd $GITREPO; git push origin main; }"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "cd \"\$( cd <product> && pwd )\"" "cd \"\$(cd $GITREPO && pwd)\" && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "cd \`cd <product> && pwd\`" "cd \`cd $GITREPO && pwd\` && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "bash -c \"cd <product> && git push\"" "bash -c \"cd $GITREPO && git push origin main\""
+pushcase "$BUNDLE" "$BUNDLE" "$D" "sh -c \"cd <product> && git push\"" "sh -c \"cd $GITREPO && git push origin main\""
+pushcase "$BUNDLE" "$BUNDLE" "$D" "eval \"cd <product>\"; git push" "eval \"cd $GITREPO\"; git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "a bare cd" "cd && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "cd - (back into the product)" "cd $GITREPO; cd $BUNDLE; cd -; git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "cd ~… (resolves to the product)" "cd ~/../work/repo && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "cd \$VAR" "P=$GITREPO; cd \$P && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "pushd <product>" "pushd $GITREPO && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" "$D" "popd (back into the product)" "pushd $GITREPO; pushd $BUNDLE; popd; git push origin main"
+pushcase "$BUNDLE" "$GITREPO" "$D" "a cd that may not have run: false && cd <bundle>; git push" "false && cd $BUNDLE; git push origin main"
+pushcase "$BUNDLE" "$GITREPO" "$D" "…or reached through ||: false && cd <bundle> || git push" "false && cd $BUNDLE || git push origin main"
+pushcase "$BUNDLE" "$GITREPO" "$D" "a backgrounded cd: cd <bundle> & git push" "cd $BUNDLE & git push origin main"
+pushcase "$BUNDLE" "$GITREPO" "$D" "a cd in a pipeline: cd <bundle> | true; git push" "cd $BUNDLE | true; git push origin main"
+
+echo "== …and the allow halves: the bundle, a feature branch, a static cd it CAN follow"
+pushcase "$BUNDLE" "$BUNDLE" allow "cd <product> && cd <bundle> && git push origin main" "cd $GITREPO && cd $BUNDLE && git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" allow "git -C <work> -C bundle push origin main" "git -C $WORK -C bundle push origin main"
+pushcase "$BUNDLE" "$BUNDLE" allow "cd <product> && git push origin feat/x" "cd $GITREPO && git push origin feat/x"
+pushcase "$BUNDLE" "$GITREPO" allow "GIT_DIR=<bundle>/.git git push origin main" "GIT_DIR=$BUNDLE/.git git push origin main"
+pushcase "$BUNDLE" "$GITREPO" allow "cd <bundle> || exit 1; git push origin main" "cd $BUNDLE || exit 1; git push origin main"
+pushcase "$BUNDLE" "$BUNDLE" allow "export GIT_DIR=<product>; unset GIT_DIR; git push" "export GIT_DIR=$GITREPO/.git; unset GIT_DIR; git push origin main"
+
+echo "== …from a WORKTREE cwd whose marker names a bundle that is a git repo"
+printf '%s\n' "$BUNDLE" > "$MARKER"
+pushcase "$WTREE" "$WTREE" allow "worktree agent: git -C <bundle> push origin main" "git -C $BUNDLE push origin main"
+pushcase "$WTREE" "$WTREE" allow "worktree agent: cd <bundle> && git push origin main" "cd $BUNDLE && git push origin main"
+pushcase "$WTREE" "$WTREE" allow "a feature push after an ambiguous cd still passes" "(cd /tmp && true); git push origin feat/x"
+pushcase "$WTREE" "$WTREE" "$D" "worktree agent: git push origin main (the product)" "git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "(cd <bundle> && true); git push origin main" "(cd $BUNDLE && true); git push origin main"
+
+echo "== …text that never runs is not a cd (review of #417, blocker 1): no exemption unless plain"
+NL=$'\n'
+pushcase "$WTREE" "$WTREE" "$D" "a cd inside a commit message" "git commit -m \"x; cd $BUNDLE\" && git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "a cd line inside a PR body" "gh pr create --body \"Repro:${NL}cd $BUNDLE${NL}then run\"; git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "a cd line inside a heredoc" "cat > notes.txt <<EOF${NL}cd $BUNDLE${NL}EOF${NL}git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "a cd inside a subshell group" "(:; cd $BUNDLE; :); git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "a cd inside an untaken if" "if false; then :; cd $BUNDLE; fi; git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "a cd inside a skipped { } group" "false && { :; cd $BUNDLE; }; git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "a cd inside an uncalled function" "f() { :; cd $BUNDLE; }; git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "a cd inside a multi-line ( )" "(${NL}cd $BUNDLE${NL})${NL}git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "a cd after a # comment" "git status #; cd $BUNDLE${NL}git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "a cd after a literal 0x01 byte" "echo x$(printf '\001')cd $BUNDLE${NL}git push origin main"
+
+echo "== …a real move it cannot read is unknown, not ignored (blocker 2)"
+pushcase "$WTREE" "$WTREE" "$D" "an escaped \\cd back into the product" "cd $BUNDLE; \\cd $WTREE && git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "a c\\d back into the product" "cd $BUNDLE; c\\d $WTREE && git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "a quote-split GIT_DI''R export" "export GIT_DIR=$BUNDLE/.git; export GIT_DI''R=$GITREPO/.git; git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "cd X || git push runs in the old directory" "cd $BUNDLE || git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "a relative cd CDPATH could redirect" "export CDPATH=$WORK; cd bundle && git push origin main"
+
+echo "== …a wrapper or override that changes what git reads (blocker 3 and the review's reasoning-only shapes)"
+pushcase "$WTREE" "$WTREE" "$D" "env -i drops a prefix GIT_DIR=<bundle>" "GIT_DIR=$BUNDLE/.git env -i PATH=/usr/bin:/bin git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "env -i drops GIT_DIR=<feature git dir>, so -C <product> on main is pushed" "GIT_DIR=$GITREPO/.git/worktrees/wt-task-001 env -i PATH=/usr/bin:/bin git -C $GITREPO push"
+pushcase "$WTREE" "$WTREE" "$D" "GIT_COMMON_DIR beside GIT_DIR=<bundle>" "GIT_COMMON_DIR=$GITREPO/.git GIT_DIR=$BUNDLE/.git git push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "git -c overriding the bundle's remote" "git -c remote.origin.url=$GITREPO -C $BUNDLE push origin main"
+pushcase "$WTREE" "$WTREE" "$D" "the bundle's remote re-pointed earlier in the command" "git -C $BUNDLE remote set-url origin $GITREPO; git -C $BUNDLE push origin main"
+ln -s "$BUNDLE" "$WORK/lnk"
+pushcase "$WTREE" "$WTREE" "$D" "a symlink re-pointed earlier in the command" "ln -sfn $GITREPO $WORK/lnk; git -C $WORK/lnk push origin main"
+
+echo "== …the destination: the exemption is for the bundle's own remotes"
+pushcase "$WTREE" "$WTREE" "$D" "git -C <bundle> push <product URL> HEAD:main" "git -C $BUNDLE push https://example.com/product.git HEAD:main"
+pushcase "$WTREE" "$WTREE" "$D" "git -C <bundle> push <product path> main" "git -C $BUNDLE push $GITREPO main"
+pushcase "$WTREE" "$WTREE" "$D" "git -C <bundle>/repos push prod main (a path, not a remote)" "git -C $BUNDLE/repos push prod main"
+pushcase "$WTREE" "$WTREE" "$D" "push --repo=<product>" "git -C $BUNDLE push --repo=$GITREPO main"
+
+echo "== …and the allow halves of the plain-command gate"
+pushcase "$WTREE" "$WTREE" allow "a plain bundle push through a pipeline" "cd $BUNDLE && git push origin main 2>&1 | tail -3"
+pushcase "$WTREE" "$WTREE" allow "a bare push after a quoted commit message, on a feature branch" "git commit -m \"fix: x\" && git push"
+rm -f "$MARKER"
+
+echo "== …a bare push whose repo is unknown names no branch, so it is refused (blocker 4)"
+pushcase "$BUNDLE" "$GITREPO" "$D" "product clone on main: a quoted 'cd' word, then a bare push" "git commit -m \"cd fix\" && git push"
+pushcase "$BUNDLE" "$GITREPO" "$D" "product clone on main: cd . >/dev/null && git push origin" "cd . >/dev/null && git push origin"
+pushcase "$BUNDLE" "$GITREPO" "$D" "product clone on main: a quoted message, then a bare push" "git commit -m \"fix: x\" && git push"
+pushcase "$BUNDLE" "$GITREPO" "$D" "product clone on main: a PR-body line cd <feature worktree>, then a bare push" "gh pr create --body \"notes${NL}cd $WTREE${NL}done\"; git push"
 
 # EVERY RULE MUST BE EXERCISED HERE. Without this, a rule added to `RULES` and never tested
 # is exactly the false comfort this baseline exists to avoid — it ships, it is documented,
