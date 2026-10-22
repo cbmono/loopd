@@ -416,19 +416,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 page = Fill().page(page)
             except Exception:
                 sys.stderr.write("board-serve: the fill failed — served the page unfilled.\n")
-            meta = '<meta name="loopd-queue" content="%s">' % TOKEN
-            page = page.replace("</head>", meta + "</head>", 1) if "</head>" in page else meta + page
+            if self._host_ok():
+                meta = '<meta name="loopd-queue" content="%s">' % TOKEN
+                page = page.replace("</head>", meta + "</head>", 1) if "</head>" in page else meta + page
             body = page.encode() + RELOAD.encode()
         return self._send(200, body, ctype)
 
     do_HEAD = do_GET
 
+    def _host_ok(self):
+        return self.headers.get("Host", "") in HOSTS
+
     # A POST is the page asking the next tick to run one entry. The token keeps other web
-    # pages out, Host and Origin keep a rebound DNS name out; a process on this machine can
-    # read the token from GET /, and can equally edit the task document itself.
+    # pages out, Host and Origin keep a rebound DNS name out — the page carries the token only
+    # for an allowed Host; a process on this machine can read it from GET /, and can equally
+    # edit the task document itself.
     def _allowed(self, post):
         host = self.headers.get("Host", "")
-        if host not in HOSTS:
+        if not self._host_ok():
             return False
         if post and self.headers.get("Origin") != "http://" + host:
             return False

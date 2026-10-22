@@ -100,13 +100,13 @@ except Exception:
 PY
 }
 
-body_of() { # <port> <request-target>
-  python3 - "$1" "$2" <<'PY'
+body_of() { # <port> <request-target> [host]
+  python3 - "$1" "$2" "${3:-localhost}" <<'PY'
 import socket, sys
-port, target = int(sys.argv[1]), sys.argv[2]
+port, target, host = int(sys.argv[1]), sys.argv[2], sys.argv[3]
 try:
     s = socket.create_connection(("127.0.0.1", port), timeout=5)
-    s.sendall(("GET %s HTTP/1.0\r\nHost: localhost\r\n\r\n" % target).encode())
+    s.sendall(("GET %s HTTP/1.0\r\nHost: %s\r\n\r\n" % (target, host)).encode())
     data = b""
     while True:
         chunk = s.recv(65536)
@@ -460,8 +460,8 @@ except Exception:
     print("000")
 PY
 }
-token_of() { # <port> -> the token in the served page's queue <meta>
-  python3 -c 'import re,sys;m=re.search(r"<meta name=\"loopd-queue\" content=\"([^\"]*)\">",sys.stdin.read());print(m.group(1) if m else "")' <<<"$(body_of "$1" /board.html)"
+token_of() { # <port> [host] -> the token in the served page's queue <meta>
+  python3 -c 'import re,sys;m=re.search(r"<meta name=\"loopd-queue\" content=\"([^\"]*)\">",sys.stdin.read());print(m.group(1) if m else "")' <<<"$(body_of "$1" /board.html "${2:-127.0.0.1:$1}")"
 }
 Q="$TMP/group/_ai-bridge-queue"
 new_instance "$Q"
@@ -471,6 +471,8 @@ TOK="$(token_of "$PQ")"
 H="127.0.0.1:$PQ"; O="http://$H"; J=application/json
 E='{"type":"answer","id":"e2e00001","task":"p/task-001","q":"Q1","option":1}'
 ok "the served page carries a token"                  "$(yes_if test "${#TOK}" -ge 32)" yes
+ok "a foreign Host gets the page with no token"      "$(token_of "$PQ" "rebound.example.com:$PQ")|$(body_of "$PQ" /board.html "rebound.example.com:$PQ" | grep -c '</html>')" "|1"
+ok "localhost with the port still gets the token"    "$(token_of "$PQ" "localhost:$PQ")" "$TOK"
 ok "every piece present: 202"                         "$(raw_post "$PQ" /__queue "$H" "$O" "$J" "$TOK" "$E")" 202
 ok "…and one JSON line lands in the gitignored queue" "$(wc -l < "$Q/$AB_QUEUE" | tr -d ' ')|$(cat "$Q/$(dirname "$AB_QUEUE")/.gitignore")" "1|*"
 ok "…its from is the server's, never the page's"     "$(python3 -c 'import json,sys;print(json.loads(open(sys.argv[1]).readline())["from"])' "$Q/$AB_QUEUE")" "<unknown>"
