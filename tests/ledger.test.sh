@@ -109,14 +109,14 @@ ok "the frontmatter carries it on one line" "$(grep -c '^ledger:' "$F")" 1
 "$BUILD" --print >"$TMP/index.out" 2>/dev/null
 ok "the index renders the item"            "$(grep -c 'retitled' "$TMP/index.out")" 1
 ok "the index carries no ledger text"      "$(grep -cE 'L[0-9]+ · ' "$TMP/index.out")" 0
-V() { "$VALIDATE" "$1" 2>&1 | grep -cE "ERROR|Finding is [0-9]+ lines"; }
+V() { "$VALIDATE" "$1" 2>&1 | grep -cE "ERROR|Finding body is [0-9]+ lines"; }
 ok "validate-bundle accepts a ledgered Finding" "$(V "$F")" 0
 finding cap "At the cap"
-for i in $(seq 26); do echo "line $i" >>knowledge/findings/cap.md; done
+for i in $(seq 36); do echo "line $i" >>knowledge/findings/cap.md; done
 "$LEDGER" append cap --kind edit --by example-user-007 --why w >/dev/null
-ok "fixture: 40 lines + provenance + ledger" "$(grep -c '' knowledge/findings/cap.md)" 42
+ok "fixture: 40 body lines + a 12-line frontmatter" "$(grep -c '' knowledge/findings/cap.md)" 52
 ok "the ledger line is not counted against the 40" "$(V knowledge/findings/cap.md)" 0
-echo "line 27" >>knowledge/findings/cap.md
+echo "line 37" >>knowledge/findings/cap.md
 ok "…while a 41st counted line still warns" "$(V knowledge/findings/cap.md)" 1
 
 echo "== criterion 6: one item's history opens one file =="

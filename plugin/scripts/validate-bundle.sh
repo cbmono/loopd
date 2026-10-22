@@ -451,12 +451,9 @@ while IFS= read -r file; do
   fi
 
   if [[ "$type" == Finding ]]; then
-    lines="$(grep -c '' "$file" || true)"
-    # `provenance:` and `ledger:` are not the author's to shorten, so neither is counted.
-    [[ -z "${prov:-}" ]] || lines=$((lines-1))
-    if grep -q '^ledger:' <<<"$fm"; then lines=$((lines-1)); fi
-    if [[ -n "$lines" && "$lines" -gt $FINDING_MAX_LINES ]]; then
-      warn "$rel" "Finding is $lines lines; $AB_CONVENTIONS 'Write less' caps it at $FINDING_MAX_LINES — the history behind it belongs in the task doc"
+    lines="$(awk 'NR==1 && $0=="---" { fm=1; next } fm && $0=="---" { fm=0; next } !fm { n++ } END { print n+0 }' "$file")"
+    if [[ "$lines" -gt $FINDING_MAX_LINES ]]; then
+      warn "$rel" "Finding body is $lines lines; $AB_CONVENTIONS 'Write less' caps it at $FINDING_MAX_LINES — the history behind it belongs in the task doc"
     fi
     if ! grep -q '^lesson:[[:space:]]*[^[:space:]]' <<<"$fm"; then
       warn "$rel" "Finding has no one-line 'lesson:' — the takeaway the next agent needs, required by $AB_CONVENTIONS 'Write less'"

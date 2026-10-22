@@ -2,22 +2,23 @@
 # build-kb-index.sh — regenerate knowledge/index.md from document frontmatter, or
 # `--check` that the file, the documents and their links agree. From a bundle root.
 #
-#   build-kb-index.sh [--check | --print] [--strict]
+#   build-kb-index.sh [--check [--list] | --print] [--strict]
 #
 # Exit: 0 clean · 1 a defect (with --strict, a warning too) · 2 usage/no KB here.
-# A row is derived, never hand-written: its summary is the doc's `lesson:` (else
-# `description:`), `|` is escaped, and superseded Findings render in their own
-# section. A broken link in knowledge/** WARNs, and so does a dangling `source:`.
-# Reasoning and the defect list: ai-bridge-next/task-007, task-019.
+# A row's summary is the doc's `lesson:` (else `description:`), `|` escaped. A broken
+# link or a dangling `source:` WARNs; untagged and off-enum-category Findings are one
+# count line each, never the exit, and --list names them.
+# Reasoning: ai-bridge-next/task-007, task-019; kb-retrieval-and-papercut-fixes/task-004.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
-MODE=build; STRICT=0
+MODE=build; STRICT=0; LIST=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --check)  MODE=check ;;
     --print)  MODE=print ;;
     --strict) STRICT=1 ;;
+    --list)   LIST=1 ;;
     -h|--help) sed -n '2,11p' "$0" >&2; exit 2 ;;
     *) echo "build-kb-index: unknown argument '$1'" >&2; exit 2 ;;
   esac
@@ -28,6 +29,7 @@ done
 INDEX=knowledge/index.md
 VOCAB=knowledge/vocab.md
 FINDING_STATUSES="current superseded corrected archived"
+FINDING_CATEGORIES="decision learning gotcha measurement"
 FINDING_MAX_LINES=40
 SUMMARY_MAX=240
 # The KB journal shards per month once it is shared; a single-writer bundle keeps the
@@ -57,6 +59,14 @@ listfield() { # <frontmatter> <key>
   ' | tr ' ' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"\(.*\)"$/\1/' | grep -v '^$' || true
 }
 esc() { printf '%s' "$1" | sed 's/|/\\|/g'; }
+body_lines() { awk 'NR==1 && $0=="---" { fm=1; next } fm && $0=="---" { fm=0; next } !fm { n++ } END { print n+0 }' "$1"; }
+count_line() { # <newline-list> <what>
+  local c; c=$(printf '%s' "$1" | grep -c .)
+  [ "$c" -gt 0 ] || return 0
+  printf '  WARN   %d Finding(s) %s%s\n' "$c" "$2" "$([ "$LIST" = 1 ] || echo ' — --list names them')" >&2
+  [ "$LIST" = 1 ] && printf '%s' "$1" | sed 's/^/         /' >&2
+  return 0
+}
 
 slug_of() { local b; b=$(basename "$1"); printf '%s' "${b%.md}"; }
 docs_in() { find "knowledge/$1" -maxdepth 1 -type f -name '*.md' 2>/dev/null | LC_ALL=C sort; }
@@ -235,7 +245,7 @@ check_index() {
 }
 
 check_docs() {
-  local kind f fmv slug st tag n edges=0
+  local kind f fmv slug st tag n catg edges=0 untagged="" offenum=""
   local indexed=""
   [ -r "$INDEX" ] && indexed=" $(grep -oE '[A-Za-z0-9._/-]+\.md' "$INDEX" | sed 's#.*/##; s#\.md$##' | LC_ALL=C sort -u | tr '\n' ' ')"
   for kind in services findings runbooks teams references; do
@@ -250,19 +260,23 @@ check_docs() {
         *" $st "*) : ;;
         *) err "$f" "status '$st' is outside {${FINDING_STATUSES// /, }}" ;;
       esac
-      n=$(grep -c '' "$f")
-      # validate-bundle.sh's rule: the mandatory `provenance:` line is not counted.
-      [ -z "$(field "$fmv" provenance)" ] || n=$((n-1))
+      n=$(body_lines "$f")
       au=$(field "$fmv" author)
       if [ -n "$au" ] && ! printf '%s' "$au" | grep -qE '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$'; then
         warn "$f" "author: '$au' is not a GitHub login — provenance has to survive a file move"
       fi
-      [ "$n" -le "$FINDING_MAX_LINES" ] || warn "$f" "Finding is $n lines; $AB_CONVENTIONS 'Write less' caps it at $FINDING_MAX_LINES"
+      [ "$n" -le "$FINDING_MAX_LINES" ] || warn "$f" "Finding body is $n lines; $AB_CONVENTIONS 'Write less' caps it at $FINDING_MAX_LINES"
       if [ -z "$(field "$fmv" lesson)" ]; then
         warn "$f" "no one-line 'lesson:' — the index row falls back to description:"
       elif [ "$(printf '%s' "$(summary_of "$fmv")" | wc -c | tr -d ' ')" -gt "$SUMMARY_MAX" ]; then
         warn "$f" "summary is over $SUMMARY_MAX characters — shorten the lesson:"
       fi
+      [ -n "$(listfield "$fmv" tags)" ] || untagged="$untagged$f"$'\n'
+      catg=$(field "$fmv" category)
+      case " $FINDING_CATEGORIES " in
+        *" $catg "*) : ;;
+        *) [ -z "$catg" ] || offenum="$offenum$f ($catg)"$'\n' ;;
+      esac
       for tag in $(listfield "$fmv" tags); do
         if [ "$HAVE_VOCAB" = 0 ]; then warn "$f" "tags: '$tag' cannot be checked — no $VOCAB in this bundle"
         elif ! in_vocab "$tag"; then err "$f" "tag '$tag' is not in $VOCAB — use a listed tag or an alias, never a new one"; fi
@@ -276,6 +290,10 @@ check_docs() {
       fi
     done <<< "$(docs_in "$kind")"
   done
+  # Counted, not warn()ed: hundreds of legacy Findings would bury every real line and
+  # turn --strict red forever (docs/conventions.md #8).
+  count_line "$untagged" "carry no tags: — pick from $VOCAB"
+  count_line "$offenum" "carry a category: outside {${FINDING_CATEGORIES// /, }}"
   printf 'build-kb-index: %d supersession edge(s).\n' "$edges"
 }
 

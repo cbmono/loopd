@@ -214,6 +214,35 @@ ok "an invented tag is refused"          "$(check_rc "$D")" 1
 ok "…and the message names the vocab"    "$(check_out | grep -c "tag 'banana' is not in knowledge/vocab.md")" 1
 
 echo
+echo "== untagged and off-enum Findings are COUNTED, never one line each, never the exit (task-004) =="
+D="$(plant tags-category)"
+for s in bogus-a bogus-b; do
+  printf -- '---\ntype: Finding\ntitle: %s\ndescription: d\nlesson: l %s\ncategory: bogus\nstatus: current\ntimestamp: 2026-09-06T00:00:00Z\n---\n' \
+    "$s" "$s" > "$D/knowledge/findings/$s.md"
+done
+printf -- '---\ntype: Finding\ntitle: M\ndescription: d\nlesson: l\ncategory: measurement\ntags: [ ci ]\nstatus: archived\ntimestamp: 2026-09-06T00:00:00Z\n---\n' \
+  > "$D/knowledge/findings/measured.md"
+( cd "$D" && bash "$BUILD" >/dev/null 2>&1 )
+ok "category: bogus and no tags: exit 0"   "$(check_rc "$D")" 0
+ok "…ONE count line for the untagged"      "$(check_out | grep -c '2 Finding(s) carry no tags:')" 1
+ok "…ONE for the off-enum category"        "$(check_out | grep -c '2 Finding(s) carry a category: outside {decision, learning, gotcha, measurement}')" 1
+ok "…and no per-Finding line without --list" "$(check_out | grep -c 'bogus-[ab]')" 0
+ok "--strict leaves the exit alone too"    "$(strict_rc "$D")" 0
+LIST_OUT="$( cd "$D" && bash "$BUILD" --check --list 2>&1 )"
+ok "--list names each, once per count"     "$(grep -cE '^ +knowledge/findings/bogus-[ab]\.md( \(bogus\))?$' <<<"$LIST_OUT")" 4
+ok "measurement + archived are not warned" "$(grep -c 'measured' <<<"$LIST_OUT")" 0
+ok "the clean fixture prints neither line" "$( (cd "$CLEAN" && bash "$BUILD" --check --list 2>&1) | grep -c 'Finding(s) carry')" 0
+D="$(plant body-cap)"
+{ printf -- '---\ntype: Finding\ntitle: Cap\ndescription: d\nlesson: l\ncategory: learning\ntags: [ ci ]\nstatus: current\n'
+  for i in $(seq 20); do echo "x$i: frontmatter line $i"; done
+  printf -- 'timestamp: 2026-09-06T00:00:00Z\n---\n'; seq 40; } > "$D/knowledge/findings/cap.md"
+( cd "$D" && bash "$BUILD" >/dev/null 2>&1 ); check_rc "$D" >/dev/null
+ok "40 body lines, long frontmatter: no cap warning" "$(check_out | grep -c 'Finding body is')" 0
+echo 41 >> "$D/knowledge/findings/cap.md"; check_rc "$D" >/dev/null
+ok "…41 body lines warn"                   "$(check_out | grep -c 'Finding body is 41 lines')" 1
+ok "SCHEMA.md's enums match the code"      "$(grep -cxF -e 'category: decision | learning | gotcha | measurement' -e 'status: current | superseded | corrected | archived' "$SCHEMA")" 2
+
+echo
 echo "== typed supersession edges must resolve, and both ends must agree =="
 D="$(plant dangling-edge)"
 sed 's#^superseded_by: new-rule#superseded_by: never-existed#' "$D/knowledge/findings/old-rule.md" > "$D/k" && mv "$D/k" "$D/knowledge/findings/old-rule.md"
