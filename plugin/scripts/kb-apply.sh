@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # kb-apply.sh — the human half of the reflector: it APPLIES one report. From a bundle root.
 #
-#   kb-apply.sh [--instance DIR] --by <login> <report>
+#   kb-apply.sh [--instance DIR] --by <login> [--human-docs <slug,...>] <report>
 #
 # Applies exactly the `P<n> · …` lines of <report> and nothing else: one frontmatter field
 # per proposal, one ledger entry per item, the derived knowledge/index.md, the report's own
 # `status: done`, and ONE commit. Every proposal is checked before any is written, so a
-# stale, hand-authored or missing item refuses the whole report.
+# stale or missing item, or a human-written one --human-docs does not name, refuses it all.
 # Exit: 0 applied · 1 refused (reported) · 2 usage. Grammar: SCHEMA.md "The reflection report".
 set -uo pipefail
 
@@ -18,19 +18,21 @@ KINDS="status edit merge rename supersede"
 # is the guard that decides whether this path may touch the item at all.
 PROTECTED="ledger provenance"
 ROLES="project-manager software-engineer devops-engineer qa-reviewer cataloguer human"
-ORIGPWD="$PWD"; INST="$PWD"; BY=""; REPORT=""
+ORIGPWD="$PWD"; INST="$PWD"; BY=""; REPORT=""; HD=""; HD_SET=0
 die() { echo "kb-apply: $2" >&2; exit "$1"; }
 need2() { [ "$1" -ge 2 ] || die 2 "$2 needs a value"; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) need2 $# "$1"; INST="$2"; shift 2 ;;
     --by)       need2 $# "$1"; BY="$2";   shift 2 ;;
+    --human-docs) need2 $# "$1"; HD="$2"; HD_SET=1; shift 2 ;;
     -h|--help) sed -n '2,9p' "$0" >&2; exit 2 ;;
     -*) die 2 "unknown argument '$1'" ;;
     *) [ -z "$REPORT" ] || die 2 "one report at a time"; REPORT="$1"; shift ;;
   esac
 done
-[ -n "$REPORT" ] || die 2 "usage: kb-apply.sh [--instance DIR] --by <login> <report>"
+[ -n "$REPORT" ] || die 2 "usage: kb-apply.sh [--instance DIR] --by <login> [--human-docs <slug,...>] <report>"
+[ "$HD_SET" = 0 ] || [ -n "$HD" ] || die 2 "--human-docs wants the report's human-written slugs, comma-separated"
 [[ "$BY" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$ ]] || die 2 "--by wants the GitHub login of the human applying it"
 # Checked here and not left to ledger.sh: there it fails after the first field is written.
 case " $ROLES " in *" $BY "*) die 2 "--by '$BY' is a role, not the human who applied it" ;; esac
@@ -70,12 +72,21 @@ set_field() { # <file> <key> <value>
   if ! diff <(grep -v "^$k:" "$f") <(grep -v "^$k:" "$t") >/dev/null; then rm -f "$t"; return 1; fi
   mv "$t" "$f"
 }
+# set_field rewrites only the key line, so the item lines of a block-form value would be
+# left orphaned — and its diff guard cannot see them, because they never start with `<key>:`.
+block_form() { # <file> <key>
+  fm "$1" | awk -v k="$2" '
+    hit { r = ($0 ~ /^[ \t]/ || $0 ~ /^-( |$)/); exit }
+    index($0, k ":")==1 { v = substr($0, length(k) + 2); sub(/^[ \t]+/, "", v)
+                          if (v ~ /^[|>]/) { r = 1; exit }; hit = 1 }
+    END { exit !r }'
+}
 
 [ "$(fmfield "$REPORT" type)" = Task ] || die 1 "$REPORT carries no 'type: Task'"
 st="$(fmfield "$REPORT" status)"
 [ "$st" = draft ] || die 1 "$REPORT is '$st', not 'draft' — a report is applied once"
 
-N=0; FILES=(); KINDS_OF=(); WITHS=(); WHYS=(); KEYS=(); VALS=()
+N=0; FILES=(); KINDS_OF=(); WITHS=(); WHYS=(); KEYS=(); VALS=(); NM=(); NM_LINES=()
 while IFS= read -r line; do
   [ -n "$line" ] || continue
   [ "$(grep -o ' · ' <<<"$line" | wc -l)" -ge 6 ] || die 1 "a proposal is not seven ' · ' fields: $line"
@@ -84,12 +95,24 @@ while IFS= read -r line; do
   case "$G3" in ""|*[!A-Za-z0-9._-]*) die 1 "$G1: '$G3' is not a slug" ;; esac
   MATCH=( knowledge/*/"$G3".md )
   { [ -f "${MATCH[0]}" ] && [ "${#MATCH[@]}" -eq 1 ]; } || die 1 "$G1: $G3 names no single item under knowledge/*/"
-  [ "$(fmfield "${MATCH[0]}" provenance)" = machine ] \
-    || die 1 "$G1: $G3 is not 'provenance: machine' — the machinery never rewrites what a person wrote"
   [ "$(fingerprint "${MATCH[0]}")" = "$G6" ] \
     || die 1 "$G1: $G3 has changed since the report was written — re-run kb-propose.sh"
   [[ "$G4" =~ ^[a-z][a-z0-9_]*=[^[:space:]] ]] || die 1 "$G1: '$G4' is not field=value"
   case " $PROTECTED " in *" ${G4%%=*} "*) die 1 "$G1: '${G4%%=*}' is not a proposal's to write" ;; esac
+  prov="$(fmfield "${MATCH[0]}" provenance)"
+  case "$prov" in
+    machine) ;;
+    mixed|human)
+      [ "$HD_SET" = 1 ] \
+        || die 1 "$G1: $G3 is 'provenance: $prov' — a person wrote or edited it, so it changes only when --human-docs names it"
+      case "$G2 $G4" in "edit tags="*|"status status=archived") ;;
+        *) die 1 "$G1: $G3 is 'provenance: $prov' — a human-written doc takes only 'edit · tags=' or 'status · status=archived', not '$G2 · $G4'" ;;
+      esac
+      NM+=("$G3"); NM_LINES+=("$G3 (provenance: $prov) $G4") ;;
+    *) die 1 "$G1: $G3 has provenance '${prov:-absent}', not one of machine|mixed|human" ;;
+  esac
+  ! block_form "${MATCH[0]}" "${G4%%=*}" \
+    || die 1 "$G1: $G3 holds '${G4%%=*}:' in block form, which a one-line write would leave half-rewritten"
   case "$G4$G5$G7" in *'"'*|*\\*) die 1 "$G1: a field carries a quote or a backslash" ;; esac
   case "$G2" in merge|rename|supersede)
     [ "$G5" != - ] || die 1 "$G1: a $G2 must name the other item(s), so this one leads to them" ;;
@@ -105,6 +128,22 @@ done <<EOF
 $(grep '^P[0-9][0-9]* · ' "$REPORT")
 EOF
 [ "$N" -gt 0 ] || die 1 "$REPORT names no proposals"
+
+if [ "$HD_SET" = 1 ]; then
+  [ "${#NM[@]}" -gt 0 ] || die 1 "--human-docs was given, but $REPORT changes no human-written doc"
+  given="$(tr ',' '\n' <<<"$HD" | sort)"
+  [ -z "$(uniq -d <<<"$given")" ] || die 1 "--human-docs names a slug twice: $HD"
+  [ "$given" = "$(printf '%s\n' "${NM[@]}" | sort)" ] \
+    || die 1 "--human-docs '$HD' is not exactly the report's human-written set: $(IFS=,; echo "${NM[*]}")"
+  printf 'KB HUMAN-WRITTEN DOCS: %s document(s) a person wrote or edited will change:\n' "${#NM[@]}"
+  for want in archived tags; do
+    [ "$want" = archived ] && printf '  archived (status=archived):\n' || printf '  tag edits (tags=):\n'
+    for l in "${NM_LINES[@]}"; do
+      case "$l" in *" status=archived") [ "$want" = archived ] ;; *) [ "$want" = tags ] ;; esac \
+        && printf '    - %s\n' "$l"
+    done
+  done
+fi
 
 PATHS=(); i=0
 while [ "$i" -lt "$N" ]; do

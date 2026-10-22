@@ -72,9 +72,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
    The shipped proposer is `scripts/kb-compare.sh <candidate.md>` (`SCHEMA.md` → "The
    reflection report").
-   It runs the archive sweep first, with or without a proposer: a current, machine-written
-   Finding past every qualifier `scripts/kb-usage.sh sweep` prints becomes a
-   `status=archived` proposal. Exit 0 ⇒ it has already written the report as a `draft`
+   It runs the archive sweep first, with or without a proposer: a current Finding past
+   every qualifier `scripts/kb-usage.sh sweep` prints becomes a `status=archived` proposal
+   (a human-written one is listed apart, for the human to name with `--human-docs`). Exit 0 ⇒ it has already written the report as a `draft`
    task; print its line and do **nothing else** — step 8 renders the row from that
    document like any other. Exit 1 is silence (nothing to archive and no proposer
    configured, nothing to propose, or a report still waiting on the human). Exit 2 could

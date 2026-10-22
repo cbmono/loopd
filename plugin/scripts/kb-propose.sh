@@ -60,7 +60,7 @@ $more"
 elif [ -z "$RAW" ]; then
   echo "kb-propose: not due — no proposer configured and nothing to archive" >&2; exit 1
 fi
-n=0; PROPOSALS=""; NAMED=""
+n=0; PROPOSALS=""; NAMED=""; HUMAN=""; ARCHIVED=""; TAGGED=""
 while IFS= read -r line; do
   [ -n "${line//[[:space:]]/}" ] || continue
   [ "$(grep -o ' · ' <<<"$line" | wc -l)" -ge 4 ] || { drop "not five ' · ' fields: $line"; continue; }
@@ -70,9 +70,16 @@ while IFS= read -r line; do
   MATCH=( knowledge/*/"$F2".md )
   [ -f "${MATCH[0]}" ] || { drop "no item named $F2 under knowledge/*/"; continue; }
   [ "${#MATCH[@]}" -eq 1 ] || { drop "$F2 names ${#MATCH[@]} items"; continue; }
-  # task-001's marker is the whole reason this may run unattended: cleanup never touches
-  # what a person wrote, so a proposal against one is dropped rather than queued.
-  [ "$(fmfield "${MATCH[0]}" provenance)" = machine ] || { drop "$F2 is not provenance: machine"; continue; }
+  # A doc a person wrote is queued only in the one shape kb-apply.sh --human-docs accepts.
+  prov="$(fmfield "${MATCH[0]}" provenance)"
+  case "$prov" in
+    machine) ;;
+    mixed|human)
+      case "$F1 $F3" in "edit tags="*|"status status=archived") ;;
+        *) drop "$F2 is provenance: $prov, which takes only 'edit · tags=' or 'status · status=archived'"; continue ;;
+      esac ;;
+    *) drop "$F2 has provenance '${prov:-absent}', not machine|mixed|human"; continue ;;
+  esac
   [[ "$F3" =~ ^[a-z][a-z0-9_]*=[^[:space:]] ]] || { drop "'$F3' is not field=value"; continue; }
   case " $PROTECTED " in *" ${F3%%=*} "*) drop "'${F3%%=*}' is not a proposal's to write"; continue ;; esac
   if [ "$F4" != - ]; then
@@ -86,6 +93,14 @@ while IFS= read -r line; do
   [[ "$F5" =~ [^[:space:]] ]] || { drop "$F2: an empty reason"; continue; }
   case "$F3$F4$F5" in *'"'*|*\\*|*\`*|*\$*) drop "$F2: a field carries a quote, a backslash or a shell metacharacter"; continue ;; esac
   n=$((n + 1)); NAMED="$NAMED $F2"
+  if [ "$prov" != machine ]; then
+    HUMAN="${HUMAN:+$HUMAN,}$F2"
+    case "$F3" in status=archived) ARCHIVED="$ARCHIVED
+- \`$F2\` (provenance: $prov)" ;;
+      *) TAGGED="$TAGGED
+- \`$F2\` (provenance: $prov) · \`$F3\`" ;;
+    esac
+  fi
   PROPOSALS="$PROPOSALS
 P$n · $F1 · $F2 · $F3 · $F4 · $(fingerprint "${MATCH[0]}") · $F5"
 done <<EOF
@@ -119,6 +134,7 @@ fi
 last="$(ls "projects/$PROJECT/tasks" 2>/dev/null | sed -n 's/^task-\([0-9][0-9]*\).*/\1/p' | sort -n | tail -1)"
 id="$(printf '%03d' $(( 10#${last:-0} + 1 )))"
 REPORT="projects/$PROJECT/tasks/task-$id-knowledge-reflection.md"
+APPLY="/loopd:kb-apply $REPORT${HUMAN:+ --human-docs $HUMAN}"
 
 cat >"$REPORT" <<EOR
 ---
@@ -129,7 +145,7 @@ status: draft
 assignee: human
 acceptance_criteria: [ ]
 open_questions:
-  - "Apply the $n proposal(s) in this report? Read them, then run \`/loopd:kb-apply $REPORT\`. Decline by cancelling this task."
+  - "Apply the $n proposal(s) in this report? Read them, then run \`$APPLY\`. Decline by cancelling this task."
 timestamp: $NOW
 ---
 
@@ -139,6 +155,21 @@ Nothing under \`knowledge/\` has changed. Each line below is one proposal, and
 \`/loopd:kb-apply\` applies exactly these and nothing else.
 EOR
 printf '%s\n' "$PROPOSALS" >>"$REPORT"
+[ -z "$HUMAN" ] || cat >>"$REPORT" <<EOR
+
+## Human-written docs this report changes
+
+A person wrote or edited these, so applying this report changes them only when you name
+every one of them:
+
+\`$APPLY\`
+
+Archived (\`status=archived\`):${ARCHIVED:-
+- none}
+
+Tag edits (\`tags=\`):${TAGGED:-
+- none}
+EOR
 cat >>"$REPORT" <<EOR
 
 # Notes

@@ -902,6 +902,26 @@ pushcase "$BUNDLE" "$GITREPO" "$D" "product clone on main: cd . >/dev/null && gi
 pushcase "$BUNDLE" "$GITREPO" "$D" "product clone on main: a quoted message, then a bare push" "git commit -m \"fix: x\" && git push"
 pushcase "$BUNDLE" "$GITREPO" "$D" "product clone on main: a PR-body line cd <feature worktree>, then a bare push" "gh pr create --body \"notes${NL}cd $WTREE${NL}done\"; git push"
 
+echo "== kb_apply_human_docs — an agent may not apply a report to human-written docs; the human may"
+KBA="bash /opt/loopd/plugin/scripts/kb-apply.sh --by example-user-007"
+KBR="projects/knowledge-reflection/tasks/task-001-knowledge-reflection.md"
+K=deny:kb_apply_human_docs
+ok "an agent's kb-apply.sh --human-docs is refused, the rule named" \
+   "$(verdict_agent "$INSTROOT" "$KBA --human-docs a,b $KBR")" "deny:kb_apply_human_docs"
+ok "…the =value spelling too"         "$(verdict_agent "$INSTROOT" "$KBA --human-docs=a $KBR")" "$K"
+ok "…the script run directly"         "$(verdict_agent "$INSTROOT" "kb-apply.sh --by u --human-docs a $KBR")" "$K"
+ok "…inside bash -c, after a cd"      "$(verdict_agent "$INSTROOT" "bash -c \"cd $INSTROOT && kb-apply.sh --by u --human-docs a $KBR\"")" "$K"
+ok "…and the slash command via claude -p" \
+   "$(verdict_agent "$INSTROOT" "claude -p \"/loopd:kb-apply $KBR --human-docs a\"")" "$K"
+ok "the HUMAN's session runs the identical command" \
+   "$(verdict "$INSTROOT" "$KBA --human-docs a,b $KBR")" "allow"
+ok "an agent's kb-apply.sh without the flag is untouched" \
+   "$(verdict_agent "$INSTROOT" "$KBA $KBR")" "allow"
+ok "…and so is grepping the script for the flag" \
+   "$(verdict_agent "$INSTROOT" "grep -n -- --human-docs plugin/scripts/kb-apply.sh")" "allow"
+ok "…nor a shell running something else that names the flag" \
+   "$(verdict_agent "$INSTROOT" "bash -c 'grep -rn -- --human-docs plugin/skills'")" "allow"
+
 # EVERY RULE MUST BE EXERCISED HERE. Without this, a rule added to `RULES` and never tested
 # is exactly the false comfort this baseline exists to avoid — it ships, it is documented,
 # and nobody has ever seen it fire.

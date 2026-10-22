@@ -450,8 +450,8 @@ all five types below, closed set, enforced by `validate-bundle.sh`:
 | Value | Meaning | May a cleanup pass rewrite it? |
 |---|---|---|
 | `machine` | a role agent wrote it and no person has edited it | yes |
-| `mixed` | a role agent wrote it and a person edited it since | no |
-| `human` | a person wrote it, **or who wrote it cannot be resolved** | no |
+| `mixed` | a role agent wrote it and a person edited it since | `tags` and `status=archived` only, only through `/loopd:kb-apply --human-docs` |
+| `human` | a person wrote it, **or who wrote it cannot be resolved** | `tags` and `status=archived` only, only through `/loopd:kb-apply --human-docs` |
 
 A role agent writes `machine`; the in-thread session and a person write `human`; a person
 editing a `machine` document sets it to `mixed`. **Ambiguity is `human`**: a wrong `human`
@@ -514,8 +514,19 @@ P1 · supersede · duplicate · status=superseded · keeper · 1234567890-412 ·
 - **The report's own project document is NOT in that set.** It is a bundle document like
   every other, so the tick commits it under the `project-manager` identity; putting it in
   apply's commit would widen a scope whose whole point is that it is closed.
-- **Refusals cover the whole report, never part of it:** an item that is not `provenance:
-  machine` (the machinery never rewrites what a person wrote), an item whose fingerprint has
+- **A `mixed` or `human` item takes two proposals and no others:** `edit · tags=<value>` and
+  `status · status=archived`. `kb-propose.sh` lists each under the report's `## Human-written
+  docs this report changes`, with its `provenance:`, and `kb-apply.sh` applies them only with
+  `--human-docs <slug,...>` naming exactly that set, printing the list before its first write.
+  This reverses "never a non-`machine` item" (owner decision 2026-10-21): one live instance's
+  reflector could reach 40 of 877 items, and a tag or an archive is one frontmatter line the
+  `ledger:` records. No `merge`, `rename`, `supersede` or other status, so nothing redirects a
+  reader away from what a person wrote. The flag is derivable from the report, so it binds no
+  agent: `deny-destructive.sh`'s `kb_apply_human_docs` rule refuses it from any agent session.
+- **Refusals cover the whole report, never part of it:** a `mixed`/`human` item outside the
+  two proposals above or not named by `--human-docs`, a `--human-docs` set that differs from
+  the report's, a `provenance:` absent or outside `machine | mixed | human`, a target field
+  held in YAML block form, an item whose fingerprint has
   moved since the report was written, a report that is not `draft`, two proposals naming one
   item, a `ledger:` or `provenance:` write, and a tick holding the dispatch lock — which
   narrows the concurrent-writer window with the mechanism the bundle has, and does not close
@@ -527,7 +538,7 @@ P1 · supersede · duplicate · status=superseded · keeper · 1234567890-412 ·
   dropped), and **only an equal key is proposed**: one differing word — an interpreter, a
   harness, a calling context — is `append as new`, because a false merge costs more than a
   missed one. A superseded match follows `superseded_by:`; a match not `provenance: machine`
-  is `human-authored, review only`; an empty `lesson:` is `no proposal: unreadable`.
+  is `human-authored, review only`, because a merge never applies to one; an empty `lesson:` is `no proposal: unreadable`.
 
 ### type: Service  (`knowledge/services/<name>.md`)
 
