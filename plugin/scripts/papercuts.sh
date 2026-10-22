@@ -53,7 +53,11 @@ printf '%s' "$EVERY" | grep -qE '^[0-9]+$' || { echo "papercuts: --every wants d
 printf '%s' "$DATE" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' \
   || { echo "papercuts: --date wants YYYY-MM-DD" >&2; exit 2; }
 
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)}"
+# Follow links first: a wrong root calls every surface instance, which silently opens `pass`.
+_s="${BASH_SOURCE[0]:-$0}"; case "$_s" in /*) ;; *) _s="$PWD/$_s" ;; esac
+if [ -L "$_s" ]; then _t="$(readlink "$_s")"; case "$_t" in /*) _s="$_t" ;; *) _s="$(dirname "$_s")/$_t" ;; esac; fi
+_d="$(dirname "$_s")"; if [ -L "$_d" ] && [ ! -f "$(dirname "$_d")/VERSION" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$_d/.." && pwd)}"
 UPSTREAM="$AB_UPSTREAM"
 SURFACE_RE='^(skill|agent|script):[A-Za-z0-9][A-Za-z0-9._/-]*$'
 

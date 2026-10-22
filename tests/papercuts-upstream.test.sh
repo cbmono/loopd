@@ -40,6 +40,10 @@ mkdir -p "$TMP/bare/scripts"
 ok "a plugin without the file calls the same name instance" \
   "$(CLAUDE_PLUGIN_ROOT="$TMP/bare" bash "$PC" classify --surface script:validate-bundle.sh)" instance
 
+mkdir -p "$TMP/link/loopd" && ln -s "$REPO/plugin/scripts" "$TMP/link/loopd/bin"
+ok "through a linked scripts dir, with no CLAUDE_PLUGIN_ROOT" \
+  "$(env -u CLAUDE_PLUGIN_ROOT bash "$TMP/link/loopd/bin/papercuts.sh" classify --surface script:validate-bundle.sh)" plugin
+
 echo
 echo "== 2. a fixture bundle whose proposals all target plugin surfaces =="
 B="$TMP/bundle"; mkdir -p "$B/knowledge" "$B/projects" && cd "$B" || exit 2
@@ -104,7 +108,7 @@ echo "== 6. one rule, four sites =="
 norm() { tr '\n' ' ' < "$1" | tr -s ' '; }
 RULE='an instance-owned surface becomes a `draft` task in its owning project; a loopd plugin surface is written to `.loopd/upstream-proposals.md` instead'
 SIDE='`pass` checks only the plugin side; the drafts are'
-states() { norm "$1" | grep -qF "$RULE" && norm "$1" | grep -qF "$SIDE"; }
+states() { local t; t="$(norm "$1")"; grep -qF "$RULE" <<<"$t" && grep -qF "$SIDE" <<<"$t"; }
 for f in $SITES; do ok "${f#"$REPO"/} states the rule" "$(yn states "$f")" yes; done
 sed 's/a loopd plugin surface is written/a plugin surface goes/' "$SKILL" > "$TMP/dropped.md"
 ok "…and a site that drops it fails the row"   "$(yn states "$TMP/dropped.md")" no
