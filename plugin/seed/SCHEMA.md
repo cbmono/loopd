@@ -485,7 +485,7 @@ ledger: [ "L12 · 2026-10-01T09:00:00Z · merge · by <login> · items <this-slu
   a separate file can disagree with the items. Writes are serialised by what already
   serialises `knowledge/` — the tick behind `.tick-lock`, then git sync — so there is no
   pull-before-write and no floor-conflict resolution.
-- **Not counted** against a Finding's 40 lines, like `provenance:`.
+- **Not counted** against a Finding's 40 lines — no frontmatter line is.
 
 ### The reflection report — a scheduled run proposes, a human-typed command applies
 
@@ -558,9 +558,9 @@ type: Finding
 title: <the statement / decision>
 description: <one line>
 lesson: <one line — the takeaway the next agent needs; required, and it becomes the index row's summary VERBATIM>
-category: decision | learning | gotcha
+category: decision | learning | gotcha | measurement
 tags: [ <tag>, ... ]              # from /knowledge/vocab.md ONLY — never a new word
-status: current | superseded | corrected
+status: current | superseded | corrected | archived
 provenance: machine | mixed | human  # who wrote it — required on every knowledge type (above)
 author: <github-login>            # who filed it — optional, and provenance that survives a file move
 supersedes: [ <slug>, ... ]       # Findings this one replaces
@@ -570,8 +570,10 @@ timestamp: <ISO 8601>
 ---
 ```
 Body headings: `# Context`, `# Finding` (or `# Decision`), `# Rationale`,
-`# Implications`. Link to the Services/tasks it concerns. **40 lines, whole file, less the `provenance:` line**
+`# Implications`. Link to the Services/tasks it concerns. **40 body lines — frontmatter is not counted**
 (`CONVENTIONS.md` → "Write less"); the history that produced it lives in the task doc.
+`build-kb-index.sh --check` prints one WARN count line for Findings with no `tags:` and one
+for a `category:` outside the enum above — never the exit status; `--list` names each Finding.
 
 **`lesson:` is the index row.** `build-kb-index.sh` copies it into `knowledge/index.md`
 verbatim, so a hand-written summary can no longer drift from the document. Without one the

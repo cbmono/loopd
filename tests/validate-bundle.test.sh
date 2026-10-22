@@ -94,8 +94,15 @@ doc knowledge/findings/no-lesson.md '---' 'type: Finding' 'title: NoLesson' \
   'category: learning' 'status: current' 'provenance: machine' "timestamp: $TS" '---' 'body'
 { printf '%s\n' '---' 'type: Finding' 'title: TooLong' 'category: learning' \
     'lesson: it is too long' 'status: current' 'provenance: machine' "timestamp: $TS" '---'
-  for i in $(seq 40); do echo "line $i"; done
+  for i in $(seq 41); do echo "line $i"; done
 } > knowledge/findings/too-long.md
+# The cap counts the BODY: a long frontmatter over 40 body lines is at the cap, not over it.
+{ printf '%s\n' '---' 'type: Finding' 'title: AtCap' 'category: learning' \
+    'lesson: at the cap' 'status: current' 'provenance: machine' "timestamp: $TS"
+  for i in $(seq 20); do echo "x$i: frontmatter line $i"; done
+  echo '---'
+  for i in $(seq 40); do echo "line $i"; done
+} > knowledge/findings/at-cap.md
 # Below knowledge/<kind>/ is not a schema location and must be ignored.
 doc knowledge/findings/sources/raw-note.md '# a raw note a human dropped in'
 # The FIFTH knowledge kind. `knowledge/<kind>/` is a shape, not a list of four names,
@@ -208,8 +215,9 @@ assert "…not even a malformed one"                   "$(not_seen 'task-015-own
 echo "== a Finding is bounded, and both bounds only WARN =="
 assert "a Finding with no lesson: warns"            "$(saw "no one-line 'lesson:'")"
 assert "…and it is a WARN, not an ERROR"            "$(grep -q "WARN.*no-lesson.md" <<<"$OUT" && echo 0 || echo 1)"
-assert "a 48-line Finding warns"                    "$(saw 'Finding is 48 lines')"
+assert "a 41-body-line Finding warns"                    "$(saw 'Finding body is 41 lines')"
 assert "…naming the cap"                            "$(saw "caps it at 40")"
+assert "40 body lines under a long frontmatter pass" "$(not_seen 'at-cap.md')"
 assert "--strict turns both into failures"          "$([[ $RC_STRICT -ne 0 ]] && echo 0 || echo 1)"
 
 echo "== open_caveats holds a TERMINAL write, and holds nothing else =="
@@ -260,12 +268,12 @@ ABS_ONE="$(bash "$VALIDATOR" "$B/knowledge/findings/too-long.md" 2>&1)"
 SKIP_ONE="$(bash "$VALIDATOR" projects/live/HANDOVER.md 2>&1)"; SKIP_RC=$?
 set -e
 one() { grep -q -- "$1" <<<"$ONE" && echo 0 || echo 1; }
-assert "a named Finding is checked on its own"    "$(one 'Finding is 48 lines')"
+assert "a named Finding is checked on its own"    "$(one 'Finding body is 41 lines')"
 assert "…and only it"                             "$(grep -q 'checked 1, skipped 0,' <<<"$ONE" && echo 0 || echo 1)"
 assert "…so another document's error is not reported" "$(grep -q 'unknown type' <<<"$ONE" && echo 1 || echo 0)"
 assert "…and a warning alone still exits 0"       "$([[ $ONE_RC -eq 0 ]] && echo 0 || echo 1)"
 assert "--strict gates the single document"       "$([[ $ONE_STRICT_RC -eq 1 ]] && echo 0 || echo 1)"
-assert "an absolute path names the same document" "$(grep -q 'Finding is 48 lines' <<<"$ABS_ONE" && echo 0 || echo 1)"
+assert "an absolute path names the same document" "$(grep -q 'Finding body is 41 lines' <<<"$ABS_ONE" && echo 0 || echo 1)"
 assert "a clean named document is silent"         "$(grep -q '0 errors, 0 warnings' <<<"$GOOD_ONE" && echo 0 || echo 1)"
 assert "a named non-concept file is SKIPped"      "$(grep -q 'SKIP   projects/live/HANDOVER.md' <<<"$SKIP_ONE" && echo 0 || echo 1)"
 assert "…not turned into an error"                "$([[ $SKIP_RC -eq 0 ]] && echo 0 || echo 1)"
