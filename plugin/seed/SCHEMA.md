@@ -553,7 +553,7 @@ Body headings: `# Overview`, `# Stack & data`, `# Dependencies`, `# Notes`.
 **`deploy:`** is resolved for a task by `deploy-mode.sh`: the task's own value wins, else the
 Service doc `service-doc.sh` matches for its `target_repo` (the task's, else its project's),
 else `auto`. A tie between matched docs that disagree is `manual`. Any value but
-`manual`/`auto` is a `validate-bundle.sh` error. On `manual`, step 5 records the merge as
+`manual`/`auto` — an empty one included — is a `validate-bundle.sh` error; omit the key instead. On `manual`, step 5 records the merge as
 `merged, not deployed` with a `Q<n>: do: deploy …` entry, and the human's ` --- done` answer
 is the deploy's record.
 

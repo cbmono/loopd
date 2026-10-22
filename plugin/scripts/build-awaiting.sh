@@ -38,7 +38,8 @@
 #
 # A `close` row, like `continue`, renders only where `mine` clears the project.md, so it
 # FAILS CLOSED: an `owner:` on a clone with no ownerGithubUser (task-owner.sh 1), or a
-# malformed one (2), shows no close row.
+# malformed one (2), shows no close row. Nor does a project whose terminal task still shows a
+# `👉 do` row: closing it would set `status: done` and drop that row from the page.
 #
 # GENERIC PLUGIN FILE — no org, repo or path literals.
 set -uo pipefail
@@ -251,7 +252,7 @@ for pm in "$inst"/projects/*/project.md; do
   [ -r "$pm" ] || fail3 "cannot read $pm"
   [ "$(fmfirst "$pm" status)" = done ] && continue
   slug="$(basename "$(dirname "$pm")")"
-  ntask=0; nterm=0
+  ntask=0; nterm=0; owed=0
   held=0; paused "$pm" && held=1
 
   for f in "$(dirname "$pm")"/tasks/*.md; do
@@ -264,7 +265,8 @@ for pm in "$inst"/projects/*/project.md; do
       done|cancelled)
         nterm=$((nterm + 1))
         if grep -qE 'hand-off |: do: deploy ' "$f" && mine "$f"; then
-          add_node "$f" "$rel" "$slug"; handoffs_of "$f" "$rel" "$(title_of "$f")"
+          n0=${#row_txt[@]}; add_node "$f" "$rel" "$slug"; handoffs_of "$f" "$rel" "$(title_of "$f")"
+          [ "${#row_txt[@]}" -gt "$n0" ] && owed=1
         fi
         continue ;;
     esac
@@ -312,7 +314,7 @@ EOF
     esac
   done
 
-  if [ "$held" = 0 ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && mine "$pm"; then
+  if [ "$held" = 0 ] && [ "$owed" = 0 ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && mine "$pm"; then
     add_node "$pm" "${pm#"$inst"}" "$slug"
     pt="$(title_of "$pm")"; ptrail="$(lookup "$pm" trailer)"
     add "🏁" close "$pt" "${pm#"$inst"}" "${ptrail:-$DEF_CLOSE$slug\`}"

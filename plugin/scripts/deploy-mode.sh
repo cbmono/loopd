@@ -30,11 +30,12 @@ val() { # <key> <frontmatter> -> every value of <key>, one per line, unquoted
   printf '%s\n' "$2" | sed -n "s/^$1:[[:space:]]*//p" |
     sed "s/[[:space:]]#.*//; s/[[:space:]]*\$//; s/^\"\\(.*\\)\"\$/\\1/; s/^'\\(.*\\)'\$/\\1/"
 }
-mode_of() { # <doc> -> manual | auto | nothing (absent); exit 1 unreadable or not one value
+mode_of() { # <doc> -> manual | auto | nothing (no key); exit 1 unreadable, empty or not one value
   local f v
   f="$(fm "$1")" || return 1
-  v="$(val deploy "$f" | grep . | sort -u)"
-  case "$v" in ""|manual|auto) printf '%s' "$v" ;; *) return 1 ;; esac
+  grep -q '^deploy:' <<<"$f" || return 0
+  v="$(val deploy "$f" | sort -u)"
+  case "$v" in manual|auto) printf '%s' "$v" ;; *) return 1 ;; esac
 }
 
 TFM="$(fm "$TASK")" || unknown "cannot read a task document at $TASK"

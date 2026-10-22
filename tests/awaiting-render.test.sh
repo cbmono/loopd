@@ -154,9 +154,11 @@ task "$D" task-001-a "Shipped by hand" done '"x"' "\"$DQ\""
 bash "$SH" --instance "$D" >/dev/null 2>&1
 ok "unanswered: one do row on the done task" "$(grep -c '^\* 👉 \*\*do\*\* — \[Shipped by hand\](/projects/demo/tasks/task-001-a.md) · Q1: do: deploy demo/web' "$D/$AB_AWAITING" | tr -d ' ')" 1
 ok "…and no second do row"                   "$(grep -c '^\* 👉' "$D/$AB_AWAITING" | tr -d ' ')" 1
+ok "…and no close row while it is open"     "$(grep -c '^\* 🏁' "$D/$AB_AWAITING" | tr -d ' ')" 0
 task "$D" task-001-a "Shipped by hand" done '"x"' "\"$DQ --- done\""
 bash "$SH" --instance "$D" >/dev/null 2>&1
 ok "answered: the row is gone"               "$(grep -c '^\* 👉' "$D/$AB_AWAITING" | tr -d ' ')" 0
+ok "…and the close row is back"              "$(grep -c '^\* 🏁' "$D/$AB_AWAITING" | tr -d ' ')" 1
 printf -- '---\ntype: Task\ntitle: "Shipped by hand"\nstatus: done\nopen_questions: [ ]\nanswered_questions: [ "%s --- done" ]\n---\n' "$DQ" \
   > "$D/projects/demo/tasks/task-001-a.md"
 bash "$SH" --instance "$D" >/dev/null 2>&1

@@ -66,6 +66,15 @@ task acme/web; svc web acme/web '(whole repo)' 'deploy: nightly'
 ok "an invalid Service deploy: is refused"      "$(mode "$T")" "UNKNOWN
 rc=3"
 svc web acme/web '(whole repo)' $'deploy: manual\ndeploy: auto'
+task acme/web 'deploy:'
+ok "an empty task deploy: is refused, not auto"  "$(mode "$T")" "UNKNOWN
+rc=3"
+task acme/web 'deploy: ""'
+ok "…nor a quoted empty one"                    "$(mode "$T")" "UNKNOWN
+rc=3"
+task acme/web; svc web acme/web '(whole repo)' 'deploy:'
+ok "an empty Service deploy: is refused"        "$(mode "$T")" "UNKNOWN
+rc=3"
 ok "two different deploy: lines are UNKNOWN"    "$(mode "$T")" "UNKNOWN
 rc=3"
 printf -- '---\ntype: Service\nrepo: acme/web\nstatus: active\ndeploy: auto\n' > "$S/web.md"
@@ -117,7 +126,6 @@ check_same() { # <label> <want-rc>
 }
 svc web acme/web '(whole repo)'; task acme/web;                check_same "auto" 1
 task acme/web 'kind: research'; sed -i.bak '/^kind: build$/d' "$T"; check_same "n/a" 1
-task acme/web 'deploy: bogus';                                 check_same "UNKNOWN" 3
 task acme/web 'deploy: manual' in-review;                      check_same "a task not yet done" 2
 task acme/web 'deploy: manual'; sed -i.bak '/^pr:/d' "$T";    check_same "no pr: to name" 2
 
@@ -125,6 +133,20 @@ echo "== step 5 calls the writer =="
 S5="$REPO/plugin/tick-steps/step-5-reflect-merges.md"
 ok "step 5 runs reflect-deploy.sh per done task"  "$(grep -cF 'scripts/reflect-deploy.sh <task-path>' "$S5" | tr -d ' ')" 1
 ok "…and never reports a manual merge as shipped" "$(grep -cF 'report the task as merged, NOT shipped' "$S5" | tr -d ' ')" 1
+
+echo "== the writer: UNKNOWN fails toward manual, durably =="
+svc web acme/web '(whole repo)'; task acme/web 'deploy: bogus'
+ok "UNKNOWN writes a deploy entry (exit 3)"     "$(bash "$WRITE" "$T" 2>/dev/null; echo "rc=$?")" "deploy-unknown Q1
+rc=3"
+ok "…one deploy UNKNOWN note"                   "$(grep -c '^\* .* · merged, deploy UNKNOWN · acme/web · https://github.com/acme/web/pull/42 · Q1$' "$T")" 1
+ok "…a do: deploy entry, so AWAITING.md shows it" "$(bash "$FOLD" --list "$T" open_questions | grep -c '^Q1: do: deploy acme/web — https://github.com/acme/web/pull/42 merged, deploy state UNKNOWN')" 1
+ok "…its ### Q1 block"                          "$(grep -c '^### Q1$' "$T")" 1
+before="$(sum "$T")"
+ok "…and a re-run writes nothing"               "$(bash "$WRITE" "$T" 2>/dev/null; echo "rc=$?")" "already Q1
+rc=1"
+ok "…byte-identical"                            "$(sum "$T")" "$before"
+task ""
+ok "no target_repo: still written, and says so" "$(bash "$WRITE" "$T" >/dev/null 2>&1; bash "$FOLD" --list "$T" open_questions | grep -c '^Q1: do: deploy (no target_repo) — ')" 1
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

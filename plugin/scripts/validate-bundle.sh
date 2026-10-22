@@ -437,9 +437,9 @@ while IFS= read -r file; do
     fi
   fi
 
-  if [[ $type == Service || $type == Task ]]; then
+  if [[ $type == Service || $type == Task ]] && grep -q '^deploy:' <<<"$fm"; then
     while IFS= read -r dv; do
-      case "$dv" in ""|manual|auto) ;; *) fail "$rel" "deploy '$dv' is not valid (one of: manual auto; absent ⇒ auto) — SCHEMA.md → type: $type" ;; esac
+      case "$dv" in manual|auto) ;; *) fail "$rel" "deploy '$dv' is not valid (one of: manual auto; absent ⇒ auto) — SCHEMA.md → type: $type" ;; esac
     done <<<"$(sed -n 's/^deploy:[[:space:]]*//p' <<<"$fm" | sed "s/[[:space:]]#.*//; s/[[:space:]]*\$//; s/^[\"']//; s/[\"']\$//")"
   fi
 

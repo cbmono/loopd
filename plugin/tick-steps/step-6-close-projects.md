@@ -5,7 +5,8 @@ it on its `steps:` line (`project-manager.md` → "Step files"). Every rule in t
 prompt still binds here — both authority gates, the ownership gate, the UNKNOWN rule.
 
 6. **Close completed projects (propose only — human-gated).** For each project whose
-   tasks are **all** terminal (`done`/`cancelled`), do **not** close it yourself —
+   tasks are **all** terminal (`done`/`cancelled`) and hold no unanswered `Q<n>: do:`
+   entry (a deploy or a hand-off — its row outlives `done`), do **not** close it yourself —
    surface it as a 🔴 *Awaiting you* item. Only on the human's OK (in-session or via
    `/close-project <slug>`) run closeout, in order (`SCHEMA.md` "Project & objective
    completion"): (a) dispatch the `loopd:cataloguer` for a final consolidation pass (counts
