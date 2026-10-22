@@ -21,6 +21,11 @@
 # also what the cap means operationally — the implementer pushes, a verifier reads that
 # push, and that is one round.
 #
+# AN UNREQUESTED INCREMENTAL REVIEW IS A ROUND TOO, and that is intended (owner decision
+# 2026-10-21): CodeRabbit's automatic review of the first fix push completes at a new
+# commit, so it counts as round 2. The relief valve is `mergeAtReviewCap`, not a change
+# to this count.
+#
 # WHAT IT ANCHORS ON, AND WHY A REVIEWER THAT DID NOT REVIEW CANNOT ADD TO IT. Two halves,
 # and neither is this file's own opinion:
 #

@@ -700,7 +700,12 @@ above it so none may grow its share.
   both-positions block above. It counts **completed verifications of distinct commits**,
   decided by `review-clearance.sh` — so a rate-limited reviewer's refusal, which publishes
   a green check and names the head in its own body, is **not** a round, and an absent
-  reviewer adds none. Exit 2 is *unknown*, which is not permission. A missing or broken
+  reviewer adds none. **An automatic incremental review counts, by design** (owner
+  decision 2026-10-21): where a repo leaves CodeRabbit's `auto_incremental_review` on,
+  its review of the first fix push is a completed verification of a new commit, so it
+  *is* round 2 even though nobody asked for it. The relief valve is `mergeAtReviewCap`
+  (`SCHEMA.md`, off by default), which changes what happens at the cap, never where it
+  is. Exit 2 is *unknown*, which is not permission. A missing or broken
   script exits non-zero too, so the failure direction is "ask the human", never "review
   again". This rule spent a week of budget while it was prose; it is not prose now.
   **Corollary — grade against the criteria, not against your own taste.** If you believe
