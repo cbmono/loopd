@@ -1790,6 +1790,11 @@ drift_case "a non-string group" \
 # awaiting item at all.
 assert "…and the coerced group is rendered in the rail" \
   "$(fhas 'class="where">5 › ' "$TMP/drift.html")"
+# A list or object is unhashable, so the simple view's OK_SAY lookup raised before a page.
+for aw in '["merge"]' '{"verb":"merge"}' '7'; do
+  drift_case "a non-string awaiting ($aw)" \
+    '{"group":"drift","counts":{"tasks":1},"projects":[{"slug":"p","title":"Drifted","status":"active","tasks":[{"id":"task-001","title":"T","status":"in-review","awaiting":'"$aw"',"open_questions":0,"prs":[]}]}]}'
+done
 rm -rf "$DRIFT"
 
 echo "== installer: on by first stamp, off by deletion, forever =="
