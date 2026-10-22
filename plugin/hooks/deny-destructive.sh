@@ -1019,7 +1019,7 @@ EOF
     for ((i = i + 1; i < n; i++)); do
       w="${tk[i]}"
       if [ -n "$sub" ]; then
-        case "$w" in --repo*) return 1 ;; esac
+        case "$w" in --rep*) return 1 ;; esac
         continue
       fi
       case "$w" in
@@ -1081,20 +1081,67 @@ EOF
   esac
 }
 
+# Drops each redirect and its operand (`2>&1`, `> f`, `&>f`, `<f`), so neither reads as a
+# remote or refspec. An fd number counts only as a whole word, as in the shell: `x2>f` keeps `x2`.
+_push_unredirect() { # <stage>
+  printf '%s' "$1" | sed -E \
+    -e 's/(^|[[:space:]])[0-9]+(>>|>[|]|>&|<&|<>|>|<)[[:space:]]*[^[:space:]]+/\1 /g' \
+    -e 's/&?(>>|>[|]|>&|<&|<>|>|<)[[:space:]]*[^[:space:]]+/ /g'
+}
+
+# Makes each shell word one plain token: quotes and escaping backslashes go, and a quoted or
+# escaped blank or `<>|&;()` becomes `_`, so `-o '>'` is no redirect and `-o "a b"` one
+# value. A word of quotes alone (`""`) is `_`, so an option still has its value.
+_push_unquote() { # <stage>
+  printf '%s' "$1" | awk 'BEGIN { RS = "\001" }
+    function m(c) { return c ~ /[ \t\n<>|&;()`]/ ? "_" : c }
+    function flush(  r) { r = (w == "" && had) ? "_" : w; w = ""; had = 0; return r }
+    { n = length($0); q = ""; w = ""; had = 0; out = ""
+      for (i = 1; i <= n; i++) {
+        c = substr($0, i, 1); d = substr($0, i + 1, 1)
+        if (q == "\047") { if (c == "\047") q = ""; else w = w m(c); continue }
+        if (q == "\"") {
+          if (c == "\"") q = ""
+          else if (c == "\\" && d ~ /[\\"$`]/) { w = w d; i++ }
+          else w = w m(c)
+          continue
+        }
+        if (c == "\\" && i < n) { w = w m(d); had = 1; i++; continue }
+        if (c == "\047" || c == "\"") { q = c; had = 1; continue }
+        if (c == " " || c == "\t") { out = out flush() c; continue }
+        w = w c
+      }
+      printf "%s", out flush() }'
+}
+
 _bundle_git_dir() {
   local d; d="$(git -C "$INSTANCE_ROOT" rev-parse --absolute-git-dir 2>/dev/null)" || return 0
   (cd -P "$d" 2>/dev/null && pwd)
 }
 
 # Prints the reason and returns 0 to deny. Mode `track` reads the caller's `dir`, `gd`,
-# `amb` and `plain`; mode `cwd` is origin/main's reading — the payload cwd, no `-C`/`GIT_DIR`
-# — and never exempts.
+# `amb` and `plain`; mode `cwd` is the payload cwd, no `-C`/`GIT_DIR`, and never exempts.
+# TWO READINGS, DENY IF EITHER DOES: the shell's words with option values consumed, and
+# origin/main's — `tokens_of` on the raw stage, no value consumed — so a word the first
+# misparses can never turn one of origin/main's denies into an allow.
 _push_stage_verdict() { # <stage> <track|cwd>
-  local mode="$2" c w seen=0 wrapped=0 sub="" skip="" args="" cgd="" pgd="" base g root="" known=0 bundle=0 remote r d dst p protected oldopts
-  local -a loc
+  local c a b ate=0
   case "$1" in *push*) ;; *) return 1 ;; esac
   c="$(first_word "$1")" || return 1
   [ "$c" = git ] || return 1
+  a="$(tokens_of "$(_push_unredirect "$(_push_unquote "$1")")")"
+  _push_reading "$a" "$2" 1 && return 0
+  b="$(tokens_of "$1")"
+  [ "$ate" = 0 ] && [ "$a" = "$b" ] && return 1
+  _push_reading "$b" "$2" 0
+}
+
+# Git takes any unambiguous prefix of a long option (`--rep x` is `--repo x`), so every
+# prefix of a value-taking one eats the next word; an ambiguous one (`--re`) git refuses,
+# and the no-eat reading still covers it.
+_push_reading() { # <tokens> <track|cwd> <eat 0|1>
+  local mode="$2" eat="$3" w seen=0 wrapped=0 sub="" skip="" args="" cgd="" pgd="" base g root="" known=0 bundle=0 remote r d dst p protected oldopts
+  local -a loc
   if [ "$mode" = cwd ]; then base="$CWD"; else base="$dir"; fi
   while IFS= read -r w; do
     if [ -n "$skip" ]; then
@@ -1122,9 +1169,18 @@ _push_stage_verdict() { # <stage> <track|cwd>
       esac
       continue
     fi
-    case "$w" in -*) ;; *) args="$args $w" ;; esac
+    # `--repo X` names the remote only when no positional one follows, so after its value
+    # the first positional is still the remote — git's own precedence. A short cluster takes
+    # the next word only when its FIRST `o` ends it: `-vo x`, but `-ozero` is inline.
+    case "$eat:$w" in
+      1:--|1:--*=*) ;;
+      1:--*) case " --push-option --receive-pack --exec --repo --recurse-submodules" in *" $w"*) skip=x; ate=1 ;; esac ;;
+      1:-*o) [ "${w%%o*}o" = "$w" ] && { skip=x; ate=1; } ;;
+      *:-*) ;;
+      *) args="$args $w" ;;
+    esac
   done <<EOT
-$(tokens_of "$1")
+$1
 EOT
   [ "$sub" = push ] || return 1
 
@@ -1162,20 +1218,25 @@ EOT
   fi
 
   dst=""; d=""
-  if [ "$#" -eq 0 ]; then
-    if [ "$known" = 0 ]; then
-      printf 'A dispatched agent may not run a bare `git push` whose repo this hook cannot resolve — the current branch may be a product repo'"'"'s protected one, and work lands there through a pull request. Name the branch: `git push origin <feature-branch>`.'
-      return 0
-    fi
+  if [ "$known" = 1 ]; then
     d="$(git "${loc[@]}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-    [ "$d" = "HEAD" ] || dst="$d"
-  else
-    for r in "$@"; do
-      case "$r" in +*) r="${r#+}" ;; esac
-      case "$r" in *:*) r="${r##*:}" ;; esac
-      dst="$dst ${r#refs/heads/}"
-    done
+    [ "$d" = "HEAD" ] && d=""
   fi
+  if [ "$#" -eq 0 ]; then
+    set -- HEAD
+  fi
+  for r in "$@"; do
+    r="${r#+}"; r="${r##*:}"
+    case "$r" in
+      @|[Hh][Ee][Aa][Dd])
+        if [ "$known" = 0 ]; then
+          printf 'A dispatched agent may not run a bare `git push`, or push `HEAD`/`@`, whose repo this hook cannot resolve — the current branch may be a product repo'"'"'s protected one, and work lands there through a pull request. Name the branch: `git push origin <feature-branch>`.'
+          return 0
+        fi
+        r="$d" ;;
+    esac
+    r="${r#refs/}"; dst="$dst ${r#heads/}"
+  done
   [ -n "${dst// /}" ] || return 1
 
   protected="main master develop trunk production"
