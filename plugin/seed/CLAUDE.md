@@ -28,7 +28,9 @@ never written). **`/loopd:welcome` is the banner and `check`** — facts, no rep
 
 **A bare `scripts/<x>.sh` in this bundle means the installed plugin's scripts directory —
 `<scripts>` below — never a folder here.** Agents reach it as
-`${CLAUDE_PLUGIN_ROOT}/scripts/<x>.sh`. **Call a script one command per call, by its
+`${CLAUDE_PLUGIN_ROOT}/scripts/<x>.sh`. **One exception: a file that exists at
+`<bundle>/scripts/<x>.sh` is bundle-local** — the plugin does not ship it, so reach it by
+its absolute bundle path, never through `<scripts>`. **Call a script one command per call, by its
 absolute path** — no `VAR=` path, `$(…)`, `~` or `; echo "EXIT=$?"`: a permission rule
 matches the command text, so those re-prompt every call and each approval covers nothing
 else; `/loopd:init` writes the rules that match. Find the path:

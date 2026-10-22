@@ -5,6 +5,7 @@
 #   Usage: tick-lock.sh acquire [--as launcher|loop|tick] [--agent <id>] [--claimant <id>]
 #                                       [--instance DIR]
 #          tick-lock.sh release [--instance DIR]   ·   status [--instance DIR]
+#          tick-lock.sh mint   — prints a fresh claimant id, tick-<UTC yyyymmddThhmmssZ>-<4 chars>
 #
 # WHY THIS EXISTS. `/<plugin>:dispatch` promises at most one PM tick at a time. Until this script,
 # that promise rested on TWO things, and neither is a mechanism:
@@ -465,13 +466,21 @@ usage() {
   echo "                            [--instance DIR]" >&2
   echo "       $(basename "$0") release [--instance DIR]" >&2
   echo "       $(basename "$0") status  [--instance DIR]" >&2
+  echo "       $(basename "$0") mint" >&2
   exit 3
 }
 
 cmd="${1:-}"; [ "$#" -gt 0 ] && shift
 case "$cmd" in
   acquire|release|status) ;;
-  -h|--help) sed -n '3,8p' "$0"; exit 0 ;;
+  mint)
+    [ "$#" -eq 0 ] || usage
+    # `tr` dies of SIGPIPE under pipefail, so the length is the check, not the status.
+    suffix="$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom 2>/dev/null | head -c 4)"
+    [ "${#suffix}" -eq 4 ] || { echo "tick-lock: cannot read /dev/urandom" >&2; exit 3; }
+    echo "tick-$(date -u +%Y%m%dT%H%M%SZ)-$suffix"
+    exit 0 ;;
+  -h|--help) sed -n '3,9p' "$0"; exit 0 ;;
   *) usage ;;
 esac
 
