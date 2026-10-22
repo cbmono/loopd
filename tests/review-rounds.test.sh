@@ -412,7 +412,7 @@ ok "the cap is not configurable from the command line" \
 # The one opt-in exception (mergeAtReviewCap) changes what happens AT the cap, never the
 # number: the header names it, and the cap stays two.
 ok "the header names the one opt-in exception" \
-   "$(grep -c 'mergeAtReviewCap' "$SCRIPT")" "2"
+   "$(grep -c 'mergeAtReviewCap' "$SCRIPT")" "3"
 ok "…and the cap is still two" "$(grep -cx 'CAP=2' "$SCRIPT")" "1"
 
 
