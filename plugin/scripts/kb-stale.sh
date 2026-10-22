@@ -26,7 +26,10 @@ self="${BASH_SOURCE[0]:-$0}"
 here="$(cd "$(dirname "$self")" && pwd)" || exit 2
 
 N="$(bash "$here/resolve-config.sh" --instance "$inst" kbStaleCommits 2>/dev/null)" || N=""
-case "$N" in ""|*[!0-9]*|0*) N=20 ;; esac
+case "$N" in
+  "") N=20 ;;
+  *[!0-9]*|0*) echo "kb-stale: kbStaleCommits '$N' is not a positive integer; using 20" >&2; N=20 ;;
+esac
 rr="$(bash "$here/resolve-config.sh" --instance "$inst" reposRoot 2>/dev/null)" || rr=""
 case "$rr" in "~"|"~/"*) rr="$HOME${rr#\~}" ;; esac
 
@@ -44,22 +47,38 @@ list_value() { # <key> <file> — flow `[ a, b ]` or block `- a` form, one entry
   awk -v key="$1" '
     NR == 1 { if ($0 != "---") exit; next }
     $0 == "---" { exit }
-    inb && /^[ \t]*-([ \t]|$)/ { v = $0; sub(/^[ \t]*-[ \t]*/, "", v); print v; next }
+    inb && /^[ \t]*-([ \t]|$)/ { v = $0; sub(/^[ \t]*-[ \t]*/, "", v); sub(/[ \t]+#.*/, "", v); print v; next }
     inb && /^[ \t]*$/ { next }
     inb { exit }
     index($0, key ":") == 1 {
-      v = $0; sub(/^[^:]*:[ \t]*/, "", v)
+      v = $0; sub(/^[^:]*:[ \t]*/, "", v); sub(/[ \t]+#.*/, "", v)
       if (v ~ /^\[/) { sub(/^\[/, "", v); sub(/\][ \t]*$/, "", v); n = split(v, a, ","); for (i = 1; i <= n; i++) print a[i]; exit }
       if (v != "") { print v; exit }
       inb = 1
     }' "$2" | sed "s/^[[:space:]]*//; s/[[:space:]]*\$//; s/^\"\(.*\)\"\$/\1/; s/^'\(.*\)'\$/\1/" | grep -v '^$'
 }
 
+# git silently remaps an impossible date (2026-02-30 counts from March), so check the calendar.
+TS_RE='^([0-9]{4})-([0-9]{2})-([0-9]{2})([T ]([0-9]{2}):([0-9]{2})(:([0-9]{2}))?)?'
+valid_ts() { # <timestamp>
+  local y m d dim
+  [[ "$1" =~ $TS_RE ]] || return 1
+  y=$((10#${BASH_REMATCH[1]})); m=$((10#${BASH_REMATCH[2]})); d=$((10#${BASH_REMATCH[3]}))
+  case "$m" in 1|3|5|7|8|10|12) dim=31 ;; 4|6|9|11) dim=30 ;;
+    2) if [ $((y % 4)) -eq 0 ] && { [ $((y % 100)) -ne 0 ] || [ $((y % 400)) -eq 0 ]; }; then dim=29; else dim=28; fi ;;
+    *) return 1 ;; esac
+  [ "$d" -ge 1 ] && [ "$d" -le "$dim" ] || return 1
+  [ -z "${BASH_REMATCH[4]}" ] && return 0
+  [ $((10#${BASH_REMATCH[5]})) -le 23 ] && [ $((10#${BASH_REMATCH[6]})) -le 59 ] &&
+    [ $((10#${BASH_REMATCH[8]:-0})) -le 59 ]
+}
+
 CNT=""; WHY=""; REF=""
 count() { # <repo> <path> <since> — sets CNT, or WHY when it cannot be measured
   local repo="$1" p="$2" since="$3" clone ref
   CNT=""; WHY=""; REF=""
-  case "$since" in [0-9][0-9][0-9][0-9]-[01][0-9]-[0-3][0-9]*) ;; *) WHY="no ISO 8601 timestamp:"; return ;; esac
+  [ -n "$since" ] || { WHY="no ISO 8601 timestamp:"; return; }
+  valid_ts "$since" || { WHY="timestamp: $since is not a valid date"; return; }
   [ -n "$repo" ] || { WHY="no repo:"; return; }
   [ -n "$rr" ] || { WHY="no reposRoot configured"; return; }
   clone="$rr/${repo##*/}"
@@ -69,12 +88,14 @@ count() { # <repo> <path> <since> — sets CNT, or WHY when it cannot be measure
     { WHY="no origin/HEAD in $clone"; return; }
   git -C "$clone" rev-parse -q --verify "$ref^{commit}" >/dev/null 2>&1 ||
     { WHY="origin/HEAD names $ref, which does not resolve"; return; }
+  [ "$(git -C "$clone" rev-parse --is-shallow-repository 2>/dev/null)" = false ] ||
+    { WHY="shallow clone at $clone would under-count"; return; }
   REF="${ref#refs/remotes/}"
   p="${p#./}"; p="${p%/}"
   if [ -z "$p" ]; then
     CNT="$(git -C "$clone" rev-list --count --since="$since" "$ref" 2>/dev/null)"
   elif git -C "$clone" cat-file -e "$ref:$p" 2>/dev/null; then
-    CNT="$(git -C "$clone" rev-list --count --since="$since" "$ref" -- "$p" 2>/dev/null)"
+    CNT="$(git -C "$clone" rev-list --count --since="$since" "$ref" -- ":(literal)$p" 2>/dev/null)"
   else
     WHY="path not in clone: $p"; return
   fi

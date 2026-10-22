@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # kb-stale.test.sh — plugin/scripts/kb-stale.sh against fixture clones: threshold, path vs
 # whole repo, prose path:, feature-branch checkout, dangling origin/HEAD, missing clone,
+# impossible timestamp:, shallow clone, trailing # comments in applies_to:,
 # Runbooks via one/two/no Services, deprecated; that it writes and fetches nothing; and the
 # step-7 / cataloguer / config wiring. Reasoning: kb-retrieval-and-papercut-fixes/task-006.
 set -uo pipefail
@@ -42,6 +43,7 @@ for i in 01 02 03 04 05 06 07 08 09 10; do commit "$RR/app" "2026-03-${i}T00:00:
 commit "$UP" 2026-02-20T00:00:00Z svc/a.txt
 GIT clone -q "$UP" "$RR/dangle"
 GIT -C "$RR/dangle" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/gone
+GIT clone -q --depth 1 "file://$UP" "$RR/shallow"
 
 B="$TMP/bundle"; mkdir -p "$B/knowledge/services" "$B/knowledge/runbooks"
 printf '{ "org": "x", "reposRoot": "%s", "kbStaleCommits": 3 }\n' "$RR" > "$B/instance.config.json"
@@ -63,11 +65,17 @@ svc fresh        "Fresh"        example-org/app svc/ active 2026-02-05T00:00:00Z
 svc old-gone     "Old Gone"     example-org/app svc deprecated "$T0"
 svc no-clone     "No Clone"     example-org/missing - active "$T0"
 svc dangling     "Dangling"     example-org/dangle - active "$T0"
+svc bad-date     "Bad Date"     example-org/app svc active 2026-02-30T00:00:00Z
+svc bad-time     "Bad Time"     example-org/app svc active 2026-01-15T25:00:00Z
+svc shallow      "Shallow"      example-org/shallow - active "$T0"
 rb rb-one        "$T0" 'applies_to: [ at-threshold ]'
 rb rb-two        "$T0" "$(printf 'applies_to:\n  - "Whole App"\n  - at-threshold\n  - whole')"
 rb rb-fresh      2026-02-05T00:00:00Z 'applies_to: [ at-threshold, Whole App ]'
 rb rb-none       "$T0" 'applies_to: [ example-org/app, deploy.sh, release area ]'
 rb rb-deprecated "$T0" 'applies_to: [ old-gone ]'
+rb rb-bad-date   2026-13-01T00:00:00Z 'applies_to: [ at-threshold ]'
+rb rb-comment    "$T0" "$(printf 'applies_to:\n  - at-threshold  # the main one')"
+rb rb-flow-cmt   "$T0" 'applies_to: [ at-threshold ]  # the main one'
 
 snap() { # everything kb-stale must not touch
   ( cd "$B" && find knowledge -type f -exec cksum {} + | sort )
@@ -92,6 +100,9 @@ ok "a timestamp after the commits is not listed" "$(has "$OUT" 'services/fresh.m
 ok "missing clone is UNKNOWN" "$(line services/no-clone.md | grep -c '^UNKNOWN .*no clone at' | tr -d ' ')" 1
 ok "dangling origin/HEAD is UNKNOWN" "$(line services/dangling.md | grep -c '^UNKNOWN .*does not resolve' | tr -d ' ')" 1
 ok "no UNKNOWN doc ever reads 0 commits" "$(has "$OUT" ' 0 commits')" 0
+ok "impossible date (02-30) is UNKNOWN, not 0" "$(line services/bad-date.md | grep -c '^UNKNOWN .*not a valid date' | tr -d ' ')" 1
+ok "impossible time (25:00) is UNKNOWN, not 0" "$(line services/bad-time.md | grep -c '^UNKNOWN .*not a valid date' | tr -d ' ')" 1
+ok "shallow clone is UNKNOWN, not an under-count" "$(line services/shallow.md | grep -c '^UNKNOWN .*shallow clone' | tr -d ' ')" 1
 ok "deprecated over threshold is not listed" "$(has "$OUT" 'old-gone.md')" 0
 ok "…and is tallied on one skipped line" "$(has "$OUT" 'skipped (deprecated): 1 Service(s)')" 1
 
@@ -100,6 +111,9 @@ ok "via one Service: listed" "$(has "$OUT" 'runbooks/rb-one.md — commits since
 ok "via two Services (title + slug, block list): listed once naming both" \
   "$(has "$OUT" 'runbooks/rb-two.md — commits since its 2026-01-15T00:00:00Z: whole 5, at-threshold 3')" 1
 ok "…exactly once" "$(has "$OUT" 'rb-two.md')" 1
+ok "impossible Runbook date (month 13) is UNKNOWN" "$(line runbooks/rb-bad-date.md | grep -c '^UNKNOWN .*not a valid date' | tr -d ' ')" 1
+ok "a trailing # comment on a block item still resolves" "$(has "$OUT" 'runbooks/rb-comment.md — commits since its 2026-01-15T00:00:00Z: at-threshold 3')" 1
+ok "a trailing # comment after a flow list still resolves" "$(has "$OUT" 'runbooks/rb-flow-cmt.md — commits since its 2026-01-15T00:00:00Z: at-threshold 3')" 1
 ok "counted from the Runbook's own timestamp" "$(has "$OUT" 'rb-fresh.md')" 0
 ok "unresolvable and deprecated-only on one unchecked line" \
   "$(has "$OUT" 'unchecked: 2 Runbook(s) resolve to no active Service — rb-deprecated rb-none')" 1
@@ -113,10 +127,13 @@ ok "build-kb-index.sh --check never calls it" "$(grep -c 'kb-stale' "$REPO/plugi
 
 echo "== default threshold, and nothing listed =="
 sed 's/, "kbStaleCommits": 3//' "$B/instance.config.json" > "$TMP/c" && mv "$TMP/c" "$B/instance.config.json"
-rm "$B"/knowledge/services/{prose,no-clone,dangling}.md
+rm "$B"/knowledge/services/{prose,no-clone,dangling,bad-date,bad-time,shallow}.md "$B"/knowledge/runbooks/rb-bad-date.md
 OUT="$(bash "$SH" --instance "$B" 2>&1)"; RC=$?
 ok "absent key ⇒ 20" "$(has "$OUT" 'at kbStaleCommits 20')" 1
 ok "below 20 nothing listed, exit 1" "$RC|$(has "$OUT" 'STALE')" "1|0"
+sed 's/^{ /{ "kbStaleCommits": 0, /' "$B/instance.config.json" > "$TMP/c" && mv "$TMP/c" "$B/instance.config.json"
+OUT="$(bash "$SH" --instance "$B" 2>&1)"
+ok "kbStaleCommits 0 ⇒ 20, and says so" "$(has "$OUT" "kbStaleCommits '0' is not a positive integer; using 20")" 1
 ok "no knowledge/ is a usage error" "$(bash "$SH" --instance "$TMP/none" >/dev/null 2>&1; echo $?)" 2
 
 echo "== wiring =="
