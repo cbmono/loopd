@@ -133,7 +133,11 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    stopped honestly at `blocked`/`cancelled` (no artifact was due). **1** — PARKED:
    still `ready`/`in-progress` and names no PR — what an agent that ended its turn
    waiting on a background job looks like. **3** — its `pr:` names a pull request the
-   host does not resolve. **4** — status and `pr:` contradict each other. **2** — it
+   host does not resolve. **4** — status and `pr:` contradict each other. **5** —
+   UNRECORDED: everything else cleared, but an open or merged PR from the task's
+   `branch:` is not in `pr:`; record it or close it before step 5 closes the task. A 1, 3
+   or 4 lists such PRs too and keeps its code; `UNRECORDED: UNKNOWN` never means "none".
+   **2** — it
    could not answer; treat as unknown, not as fine.
    **A non-zero verdict is never a re-dispatch.** On exit 1, read the agent's worktree
    and `claude logs <the session's first field>` first: the work is usually already

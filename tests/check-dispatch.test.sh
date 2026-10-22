@@ -94,6 +94,10 @@ case "${1:-} ${2:-}" in
     fi
     # Real `gh` reports an unresolvable PR on stderr and exits 1.
     echo "could not resolve to a PullRequest with the URL \"$url\"" >&2; exit 1 ;;
+  "pr list")
+    [ -f "$GHFIX/list-fails" ] && { echo "HTTP 502" >&2; exit 1; }
+    head=""; while [ $# -gt 0 ]; do [ "$1" = --head ] && head="${2:-}"; shift; done
+    cat "$GHFIX/head-${head//\//_}" 2>/dev/null; exit 0 ;;
 esac
 echo "check-dispatch.test stub: unhandled gh $*" >&2; exit 99
 STUB
@@ -301,6 +305,53 @@ mk_task "$TMP/pr-two.md" in-review "[ $SUCCESS_PR, https://github.com/acme/widge
 ok "one PR resolves, the second does not   -> exit 3" "$(rc_of "$TMP/pr-two.md")" 3
 
 echo
+echo "== a PR opened from branch: that pr: does not list is reported (exit 5 when nothing else fires) =="
+OTHER_PR="https://github.com/acme/widgets/pull/43"
+printf '%s\n' "$OTHER_PR" >> "$GHFIX/existing"
+with_branch() { sed 's|^target_repo: acme/widgets$|&\nbranch: feat/unrec|' "$1" > "$1.b" && mv "$1.b" "$1"; }
+mk_task "$TMP/rec-only.md" in-review "[ \"$SUCCESS_PR\" ]"; with_branch "$TMP/rec-only.md"
+ok "the branch: line landed (or every row below is a no-branch row)" \
+   "$(grep -c '^branch: feat/unrec$' "$TMP/rec-only.md")" 1
+printf '%s\n' "$SUCCESS_PR" > "$GHFIX/head-feat_unrec"
+ok "recorded only: the branch's one PR is in pr:   -> exit 0" "$(rc_of "$TMP/rec-only.md")" 0
+ok "…and it says it looked" "$(grep -qF 'no other pull requests from feat/unrec' <<<"$(out_of "$TMP/rec-only.md")" && echo yes || echo no)" yes
+printf '%s\n%s\n' "$SUCCESS_PR" "$OTHER_PR" > "$GHFIX/head-feat_unrec"
+REC_SUM="$(shasum "$TMP/rec-only.md")"
+UNREC_OUT="$(out_of "$TMP/rec-only.md")"
+ok "one unrecorded PR on the branch                -> exit 5" "$(rc_of "$TMP/rec-only.md")" 5
+ok "…naming the unlisted URL"           "$(grep -qF "$OTHER_PR" <<<"$UNREC_OUT" && echo yes || echo no)" yes
+ok "…naming it as a listed line"        "$(grep -cxF "            $OTHER_PR" <<<"$UNREC_OUT")" 1
+ok "…and not the recorded one"          "$(grep -cxF "            $SUCCESS_PR" <<<"$UNREC_OUT")" 0
+ok "…and the task document is unchanged" "$(shasum "$TMP/rec-only.md")" "$REC_SUM"
+mk_task "$TMP/rec-case.md" in-review "[ \"https://github.com/Acme/Widgets/pull/42\", \"$OTHER_PR\" ]"; with_branch "$TMP/rec-case.md"
+printf '%s\n' "https://github.com/Acme/Widgets/pull/42" >> "$GHFIX/existing"
+ok "a recorded URL differing only in case is recorded -> exit 0" "$(rc_of "$TMP/rec-case.md")" 0
+printf '%s CLOSED\n' "$OTHER_PR" > "$GHFIX/head-feat_unrec"
+CLOSED_OUT="$(out_of "$TMP/rec-only.md")"
+ok "an unrecorded CLOSED-unmerged PR moves no code -> exit 0" "$(rc_of "$TMP/rec-only.md")" 0
+ok "…but is still listed" "$(grep -qF "$OTHER_PR (closed, not merged" <<<"$CLOSED_OUT" && echo yes || echo no)" yes
+printf '%s OPEN\n%s MERGED\n' "$SUCCESS_PR" "$OTHER_PR" > "$GHFIX/head-feat_unrec"
+ok "an unrecorded MERGED PR                        -> exit 5" "$(rc_of "$TMP/rec-only.md")" 5
+mk_task "$TMP/unrec-empty.md" in-review "[ ]"; with_branch "$TMP/unrec-empty.md"
+ok "in-review, empty pr:, PR on the branch: keeps  -> exit 4" "$(rc_of "$TMP/unrec-empty.md")" 4
+ok "…and still lists it" "$(grep -qF "$OTHER_PR" <<<"$(out_of "$TMP/unrec-empty.md")" && echo yes || echo no)" yes
+mk_task "$TMP/unrec-parked.md" in-progress "[ ]"; with_branch "$TMP/unrec-parked.md"
+ok "parked with a PR on the branch: keeps          -> exit 1" "$(rc_of "$TMP/unrec-parked.md")" 1
+ok "…and lists it" "$(grep -qF "$OTHER_PR" <<<"$(out_of "$TMP/unrec-parked.md")" && echo yes || echo no)" yes
+NOBR_OUT="$(out_of "$TMP/pr-bare.md")"
+ok "no branch: is UNKNOWN for this check"       "$(grep -qF 'UNRECORDED: UNKNOWN' <<<"$NOBR_OUT" && echo yes || echo no)" yes
+ok "…never 'no other pull requests'"            "$(grep -qF 'no other pull requests' <<<"$NOBR_OUT" && echo yes || echo no)" no
+ok "…and moves no code                          -> exit 0" "$(rc_of "$TMP/pr-bare.md")" 0
+: > "$GHFIX/list-fails"
+FAIL_OUT="$(out_of "$TMP/rec-only.md")"
+ok "gh failing to list is UNKNOWN"              "$(grep -qF 'UNRECORDED: UNKNOWN' <<<"$FAIL_OUT" && echo yes || echo no)" yes
+ok "…never 'no other pull requests'"            "$(grep -qF 'no other pull requests' <<<"$FAIL_OUT" && echo yes || echo no)" no
+ok "…and moves no code                          -> exit 0" "$(rc_of "$TMP/rec-only.md")" 0
+ok "parked, gh failing: the verdict is unchanged -> exit 1" "$(rc_of "$TMP/unrec-parked.md")" 1
+ok "the parked fixture, gh failing              -> exit 1" "$(rc_of "$PARKED")" 1
+rm -f "$GHFIX/list-fails"
+
+echo
 echo "== it refuses rather than guesses: usage, missing file, unreadable frontmatter =="
 mk_task "$TMP/no-status.md" "" "[ ]"
 printf 'no frontmatter here at all\n' > "$TMP/bodyonly.md"
@@ -347,8 +398,8 @@ echo "== REPORT-ONLY: it never re-dispatches, never writes, and only ever asks =
 CALLS="$(cat "$GHFIX/calls" 2>/dev/null)"
 ok "the script actually called gh (or the next assertion is vacuous)" \
    "$([ -n "$CALLS" ] && echo yes || echo no)" yes
-NON_READ="$(grep -vE '^(pr view |auth status)' <<<"$CALLS" | grep -v '^$' | wc -l | tr -d ' ')"
-ok "every gh call it made was a read (pr view / auth status)" "$NON_READ" 0
+NON_READ="$(grep -vE '^(pr view |pr list |auth status)' <<<"$CALLS" | grep -v '^$' | wc -l | tr -d ' ')"
+ok "every gh call it made was a read (pr view / pr list / auth status)" "$NON_READ" 0
 ok "it never asked the host to create anything" \
    "$(grep -qE '(pr create|pr merge|pr edit|pr comment|pr close|pr ready|api .*-X)' <<<"$CALLS" && echo yes || echo no)" no
 
@@ -438,7 +489,7 @@ ok "…and step 4 says a non-zero verdict is not a re-dispatch" \
 # --- the assertion total ---------------------------------------------------------------
 # A block that is skipped rather than failed still turns this file red. Move this number
 # in the same commit that adds or removes an assertion.
-EXPECTED_ASSERTIONS=81
+EXPECTED_ASSERTIONS=105
 TOTAL=$((pass + fail))
 ok "exactly $EXPECTED_ASSERTIONS assertions ran (a silently skipped block shows up here)" \
    "$TOTAL" "$EXPECTED_ASSERTIONS"

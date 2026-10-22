@@ -5,11 +5,12 @@
 #   Usage: check-dispatch.sh <task-doc>
 #
 # Run it whenever a dispatched agent reports — from an `/<plugin>:dispatch` tick or from an ad-hoc
-# dispatch in a main session. It reads three things and judges nothing else:
+# dispatch in a main session. It reads four things and judges nothing else:
 #
 #   1. did the task's `status:` advance off `ready`/`in-progress`;
 #   2. does its `pr:` name a URL;
-#   3. does that pull request actually exist, per the host.
+#   3. does that pull request actually exist, per the host;
+#   4. is any PR opened from its `branch:` in its target repo missing from `pr:`.
 #
 # WHY IT EXISTS. On 2026-08-28 two role agents finished their work, committed it — one had
 # already pushed — then ended their turns waiting on a background job that nothing was left
@@ -46,6 +47,9 @@
 #      that resolves a `target_repo:` (bundle-only work is due no PR), a PR that
 #      resolves while `status:` never moved, or a `blocked` reason naming a tool the
 #      assignee's own `tools:` list already grants. Usually one edit away from correct.
+#   5  UNRECORDED — every other check cleared, but an open or merged PR opened from
+#      `branch:` is not in `pr:`. Listed after a 0, 1, 3 or 4 too, which keeps its code;
+#      no `branch:`, no repo or a failing `gh` prints UNKNOWN and moves no code.
 #
 # WHAT IT IS ASKED ABOUT MATTERS: run it on a task you DISPATCHED, when its agent reports.
 # A task nobody has dispatched yet reads as exit 1 too — correctly, in the sense that no PR
@@ -389,6 +393,42 @@ session_note() {
   esac
 }
 
+unrecorded() { # prints the report; 0 only when an unlisted open or merged PR was found
+  local branch listed u st hits="" found=1
+  branch="$(field branch)"
+  case "$repo" in ""|"?")
+    echo "UNRECORDED: UNKNOWN — no target_repo: resolves, so PRs from its branch were not listed." >&2
+    return 1 ;;
+  esac
+  [ -n "$branch" ] || {
+    echo "UNRECORDED: UNKNOWN — $TASK records no branch:, so PRs opened from it were not listed." >&2
+    return 1; }
+  listed="$(gh pr list --repo "$repo" --head "$branch" --state all --json url,state \
+            --jq '.[] | "\(.url) \(.state)"' 2>/dev/null </dev/null)" || {
+    echo "UNRECORDED: UNKNOWN — gh could not list pull requests from $branch in $repo." >&2
+    return 1; }
+  while read -r u st; do
+    [ -n "$u" ] || continue
+    grep -qixF -- "$u" <<<"$urls" && continue
+    [ -n "$hits" ] || echo "UNRECORDED: $TASK's branch $branch has pull request(s) pr: does not list:" >&2
+    hits=1
+    # reclaim-worktree.sh refuses a closed-unmerged URL in pr:, so recording one is wrong advice.
+    if [ "$st" = CLOSED ]; then echo "            $u (closed, not merged: listed only)" >&2
+    else echo "            $u" >&2; found=0; fi
+  done <<EOF
+$(printf '%s\n' "$listed" | grep -oE '^https?://[^ ]+/pull/[0-9]+( [A-Z]+)?$')
+EOF
+  [ -n "$hits" ] || echo "ok: no other pull requests from $branch in $repo."
+  [ "$found" -eq 0 ] || return 1
+  echo "            Record each open or merged one in pr: or close it. Nothing was changed." >&2
+}
+
+finish() { # <exit code>
+  local rc="$1"
+  if unrecorded && [ "$rc" -eq 0 ]; then rc=5; fi
+  exit "$rc"
+}
+
 # --- the parked signature, decided from the document alone --------------------------
 # Deliberately before the host is consulted: this verdict must survive an offline machine.
 if [ "$advanced" = "no" ] && [ -z "$claim" ]; then
@@ -399,7 +439,7 @@ if [ "$advanced" = "no" ] && [ -z "$claim" ]; then
   echo "        pushed, and one message asking it to open the PR recovers it." >&2
   echo "        This is a report, not an instruction — deciding what to do with it," >&2
   echo "        including whether anything is dispatched, stays with the human." >&2
-  exit 1
+  finish 1
 fi
 
 # --- resolve every URL the record claims --------------------------------------------
@@ -441,7 +481,7 @@ if [ -n "$missing" ]; then
   for u in $missing; do echo "           $u" >&2; done
   echo "           A deleted branch, a URL written from memory, or a PR opened" >&2
   echo "           against the wrong repository all land here." >&2
-  exit 3
+  finish 3
 fi
 
 # A `pr:` with content but no URL in it — `[ pending ]`, a branch name, a bare number — is
@@ -450,7 +490,7 @@ fi
 if [ -n "$claim" ] && [ -z "$urls" ]; then
   echo "NOT A URL: $TASK has pr:$(printf '%s' "$value" | tr '\n' ' ')" >&2
   echo "           which names no pull request URL, so nothing can be resolved." >&2
-  exit 3
+  finish 3
 fi
 
 if [ "$advanced" = "yes" ] && [ -z "$urls" ]; then
@@ -461,19 +501,19 @@ if [ "$advanced" = "yes" ] && [ -z "$urls" ]; then
     echo "ok: $TASK advanced to status: $status and names no pull request — correct:"
     echo "    it records no target_repo:, and neither does its project, so no pull"
     echo "    request was ever due. Skipped: the advanced-with-no-PR rule (exit 4)."
-    exit 0
+    finish 0
   fi
   echo "MISMATCH: $TASK reads status: $status but names no pull request." >&2
   echo "          One of the two is wrong: either the PR was never opened, or it was" >&2
   echo "          opened and never recorded. Read the agent's report before acting." >&2
-  exit 4
+  finish 4
 fi
 
 if [ "$advanced" = "no" ] && [ -n "$urls" ]; then
   echo "MISMATCH: $TASK names a pull request that exists, but status: is still" >&2
   echo "          $status. The work landed; the record did not move. That is a" >&2
   echo "          document edit, never a reason to dispatch the task again." >&2
-  exit 4
+  finish 4
 fi
 
 if [ "$advanced" = "stopped" ]; then
@@ -504,12 +544,12 @@ if [ "$advanced" = "stopped" ]; then
   # rather than inventing a verdict, which is also what keeps this off a task document
   # checked outside an instance.
   if [ "$status" = "blocked" ]; then
-    blocked_contradiction "$TASK" && exit 4
+    blocked_contradiction "$TASK" && finish 4
   fi
   echo "ok: $TASK reports status: $status — an honest stop, no PR expected."
   echo "    Read the stated reason; this check has nothing further to say about it."
-  exit 0
+  finish 0
 fi
 
 echo "ok: $TASK advanced to status: $status and every pull request it names exists."
-exit 0
+finish 0
