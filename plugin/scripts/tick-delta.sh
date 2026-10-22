@@ -381,7 +381,7 @@ fingerprint() { # <probe|digest>
         esac
       fi
       case "$st" in in-review|blocked)
-        sid="$(fmfirst "$f" session | sed 's/#.*$//' | tr -d "\"' ")"
+        sid="$(fmfirst "$f" session | sed 's/#.*$//' | tr -d "\"' \r")"
         case "$sid" in '') ;; *[!A-Za-z0-9-]*) return 1 ;; *) sids="$sids $sid" ;; esac ;;
       esac
       if [ "$st" = "in-review" ]; then

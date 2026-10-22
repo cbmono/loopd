@@ -200,13 +200,14 @@ prj 7 OPEN abc1234 NONE; WITH record
 
 echo "== a recorded role session's state, from ONE claude agents listing =="
 # The `claude` stub answers from $CLDIR/states (`<sessionId> <state>` lines); `fail` makes it
-# exit 1, `junk` print non-JSON, `hang` outlive the bound. Each call is logged to $CLDIR/calls.
+# exit 1, `junk` print non-JSON, `raw` print its own contents, `hang` outlive the bound. Each call is logged to $CLDIR/calls.
 CLDIR="$TMP/claude"; mkdir -p "$CLDIR"
 cat > "$BIN/claude" <<'EOS'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$CLDIR/calls"
 [ -e "$CLDIR/fail" ] && exit 1
 [ -e "$CLDIR/junk" ] && { echo 'not json'; exit 0; }
+[ -e "$CLDIR/raw" ] && { cat "$CLDIR/raw"; exit 0; }
 [ -e "$CLDIR/hang" ] && exec sleep 30
 awk 'BEGIN{printf "["} {printf "%s{\"id\":\"x%d\",\"sessionId\":\"%s\",\"state\":\"%s\"}", (NR>1?",":""), NR, $1, $2} END{print "]"}' "$CLDIR/states"
 EOS
@@ -215,7 +216,7 @@ S1=11111111-aaaa-bbbb-cccc-000000000001; S2=22222222-aaaa-bbbb-cccc-000000000002
 printf '%s working\n%s working\n%s working\n' "$S1" "$S2" "$S0" > "$CLDIR/states"
 printf 'session: %s\n' "$S1" >> "$INST/projects/proj-a/tasks/t2.md"
 printf 'session: %s\n' "$S0" >> "$INST/projects/proj-a/tasks/t1.md"
-printf -- '---\ntype: Task\nkind: build\nstatus: blocked\nsession: "%s"\npr: []\n---\n' "$S2" > "$INST/projects/proj-a/tasks/t4.md"
+printf -- '---\ntype: Task\nkind: build\nstatus: blocked\nsession: "%s"\r\npr: []\n---\n' "$S2" > "$INST/projects/proj-a/tasks/t4.md"
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm sessions
 CLW() { PATH="$BIN:$PATH" GHDIR="$GHDIR" CLDIR="$CLDIR" "$SH" "$@" --instance "$INST"; }
 crun() { local out rc; out="$(CLW "$1" 2>&1)"; rc=$?; printf 'rc:%s %s' "$rc" "$(head -1 <<<"$out" | cut -c1-12)"; }
@@ -238,6 +239,12 @@ for bad in fail junk; do
   CLW record 2>/dev/null; ok "…and record refuses, record untouched" "$?:$([ "$(cat "$INST/$AB_STATE_DIR")" = "$before3" ] && echo same)" "2:same"
   rm -f "$CLDIR/$bad"
 done
+for raw in '[1,2]' "[{\"session_id\":\"$S1\",\"state\":\"done\"}]" "[{\"sessionId\":\"$S1\",\"sessionState\":\"done\"}]"; do
+  printf '%s\n' "$raw" > "$CLDIR/raw"
+  ok "malformed listing rows ($raw) make check exit 2" "$(crun check)" "rc:2 CANNOT ANSWE"
+done
+rm -f "$CLDIR/raw"
+ok "…and a well-formed listing is IDLE again"   "$(crun check)" "rc:0 IDLE: finger"
 touch "$CLDIR/hang"
 ok "a claude agents listing past its bound is exit 2" \
    "$(PATH="$BIN:$PATH" CLDIR="$CLDIR" bash "$INST/scripts/agent-sessions.sh" states --timeout 1 "$S1" >/dev/null 2>&1; echo $?)" 2

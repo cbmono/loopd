@@ -6,7 +6,7 @@
 #                                                (working|blocked|done|gone, …) on stdout
 #   agent-sessions.sh states [--timeout <s>] <session-id>...
 #                                             -> `<id> <state>` per id from ONE listing,
-#                                                bounded (20s); exit 2 on a timeout
+#                                                bounded (20s); exit 2 on a timeout or unreadable rows
 #   agent-sessions.sh row <session-id>        -> the one matching `claude agents` row as JSON;
 #                                                exit 1 several match, 3 none
 #   agent-sessions.sh full <session-id>       -> the full session UUID, for either spelling;
@@ -139,12 +139,17 @@ try:
         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         timeout=int(sys.argv[1])).stdout)
     assert isinstance(rows, list)
+    # `[]` is a real answer under `--all`; a listing whose rows we cannot read is not.
+    if rows:
+        assert all(isinstance(r, dict) for r in rows)
+        assert any(isinstance(r.get("sessionId"), str) and r["sessionId"]
+                   and (r.get("state") or r.get("status")) for r in rows)
 except Exception:
     sys.exit(2)
 for want in sys.argv[2:]:
     state = "gone"
     for r in rows:
-        sid = (r.get("sessionId") or "") if isinstance(r, dict) else ""
+        sid = r.get("sessionId") or ""
         if sid and (want == r.get("id") or want == sid or sid.split("-")[0] == want):
             state = str(r.get("state") or r.get("status") or "working")
             break
