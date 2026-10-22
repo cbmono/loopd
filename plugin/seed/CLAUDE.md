@@ -26,12 +26,12 @@ None of them resolving means it is not installed here. Install once, then restar
 the check-and-fix pass (idempotent repairs only; config files and tick locks are reported,
 never written). **`/loopd:welcome` is the banner and `check`** — facts, no repairs.
 
-**A bare `scripts/<x>.sh` in this bundle means the installed plugin's scripts directory —
-`<scripts>` below — never a folder here.** Agents reach it as
-`${CLAUDE_PLUGIN_ROOT}/scripts/<x>.sh`. **Call a script one command per call, by its
-absolute path** — no `VAR=` path, `$(…)`, `~` or `; echo "EXIT=$?"`: a permission rule
-matches the command text, so those re-prompt every call and each approval covers nothing
-else; `/loopd:init` writes the rules that match. Find the path:
+**A bare `scripts/<x>.sh` means the plugin's scripts directory, `<scripts>` below
+(agents: `${CLAUDE_PLUGIN_ROOT}/scripts/<x>.sh`) — unless `<bundle>/scripts/<x>.sh`
+exists: that file is bundle-local, reached by its absolute bundle path.** **Call a script
+one command per call, by its absolute path** — no `VAR=` path, `$(…)`, `~` or
+`; echo "EXIT=$?"`: a permission rule matches the command text, so each re-prompts;
+`/loopd:init` writes the rules that match. Find the path:
 
 ```sh
 ls -d ~/.claude/plugins/cache/*/loopd/*/scripts | sort -V | tail -1

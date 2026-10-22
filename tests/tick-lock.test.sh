@@ -1188,6 +1188,24 @@ done
 # hands the same one to the tick — writing no file itself, because its allowed-tools cannot
 # and because `.tick-lock.claim` is the TICK's O_EXCL adopt record, not a launcher's to touch.
 ok "step 1 mints a per-tick id"          "$(grep -qF "mint this tick's id" <<<"$(step1)" && echo yes || echo no)" yes
+ok "…with the one command, not a recipe" "$(grep -qxF '       ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh mint' <<<"$(step1)" && echo yes || echo no)" yes
+ok "…and no hand-composed shape left"   "$(grep -qF 'tick-<UTC' <<<"$(step1)" && echo yes || echo no)" no
+
+echo
+echo "== mint: UTC whatever TZ says, plus the 4-character suffix =="
+# Kiritimati is UTC+14, so a local clock labelled Z cannot land on the UTC hour.
+h0="$(date -u +%Y%m%dT%H)"
+M1="$(TZ=Pacific/Kiritimati bash "$LOCKSH" mint)"; mrc=$?
+h1="$(date -u +%Y%m%dT%H)"
+M2="$(TZ=Pacific/Kiritimati bash "$LOCKSH" mint)"
+ok "mint exits 0"                        "$mrc" 0
+ok "…prints tick-YYYYMMDDTHHMMSSZ-xxxx"  "$(grep -qxE 'tick-[0-9]{8}T[0-9]{6}Z-[a-z0-9]{4}' <<<"$M1" && echo yes || echo no)" yes
+mh="${M1#tick-}"; mh="${mh:0:11}"
+ok "…in UTC under a non-UTC TZ"          "$([ "$mh" = "$h0" ] || [ "$mh" = "$h1" ] && echo yes || echo no)" yes
+ok "…and two mints differ"               "$([ "$M1" != "$M2" ] && echo yes || echo no)" yes
+ok "…which acquire accepts as a claimant" \
+  "$(mkdir -p "$TMP/mint" && bash "$LOCKSH" acquire --instance "$TMP/mint" --claimant "$M1" >/dev/null 2>&1; echo $?)" 0
+ok "mint takes no arguments"             "$(bash "$LOCKSH" mint --instance . >/dev/null 2>&1; echo $?)" 3
 ok "…passing it to its own acquire"      "$(has "$LAUNCHER" 'acquire --agent project-manager --claimant <id>')" yes
 ok "…handing the same literal to the tick" "$(has "$LAUNCHER" 'id you minted at step 1, verbatim')" yes
 ok "…recorded in the lock and nowhere else" "$(grep -qF 'the only place it lives' <<<"$(step1)" && echo yes || echo no)" yes

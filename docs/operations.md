@@ -1110,7 +1110,7 @@ plus stale, future-dated and unreadable.
 `--claimant` shipped in [#71](https://github.com/cbmono/loopd/pull/71) and neither
 acquire site passed one, so both fell to the derived tier and a dispatched tick meeting its
 own claim reached exit 2 on the *ordinary* path. Now `/loopd:dispatch` step 1 mints one
-literal per tick (`tick-<UTC>-<4 chars>`), passes it to its **own** acquire — which records
+literal per tick (`tick-<UTC>-<4 chars>`, from `tick-lock.sh mint`), passes it to its **own** acquire — which records
 it in `.tick-lock` as `claimant:`, the only place on disk it lives, and the launcher writes
 no claim — and hands the same literal to the tick, whose own acquire passes it too. Both sides
 are then **declared**, so a tick's second acquire is a proved re-entry.

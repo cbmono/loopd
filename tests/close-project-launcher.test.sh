@@ -28,7 +28,8 @@
 # WHAT IT DOES NOT ASSERT: the frontmatter. `allowed-tools` is documentation, not
 # enforcement (measured twice, 2026-08-23 and 2026-09-08), and the closeout's own grants
 # are unchanged by the split — so what is pinned is that the set grows only on purpose.
-# It has grown exactly once: `AskUserQuestion`, for the no-slug picker. The equality below
+# It has grown twice: `AskUserQuestion` for the no-slug picker, and `resolve-model.sh`, which
+# the launcher always ran ungranted. The equality below
 # is the whole mechanism — a grant nobody wrote into it is still a failure.
 #
 # ok() follows this directory's convention: it compares actual to expected.
@@ -155,6 +156,7 @@ Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*)
 Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*)
 Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*)
 Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*)
+Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*)
 Bash(grep:*)
 Bash(git rm:*)
 Bash(git add:*)
@@ -175,6 +177,25 @@ ok "…and AskUserQuestion is there, because the picker is a prompt" \
 printf -- '---\nallowed-tools: Bash(ls:*), Agent, Bash(curl:*)\n---\nbody\n' > "$TMP/wide.md"
 ok "…and a widened list is NOT equal to it" \
   "$([ "$(grants "$TMP/wide.md")" != "$EXPECTED_GRANTS" ] && echo yes || echo no)" yes
+
+# --- every script call is written in the form a grant names ------------------------
+# A grant matches the command TEXT, so `bash <path>` granted and `<path>` called re-prompts.
+calls() { # <file> -> each script call in the body, as written
+  awk 'NR==1 && $0=="---"{fm=1; next} fm && $0=="---"{fm=0; next} fm{next} {print}' "$1" \
+    | grep -oE '(bash )?[$][{]CLAUDE_PLUGIN_ROOT[}]/scripts/[A-Za-z0-9._-]+[.]sh'
+}
+ungranted() { # <file> -> the calls no grant covers
+  local g c; g="$(grants "$1")"
+  calls "$1" | while IFS= read -r c; do grep -qxF "Bash($c:*)" <<<"$g" || echo "$c"; done
+}
+for c in 'papercuts.sh pass' 'build-kb-index.sh' 'build-kb-index.sh --check' 'close-project-folder.sh <slug> --apply'; do
+  ok "the call to $c is in the granted form" \
+    "$(grep -qxF "   bash \${CLAUDE_PLUGIN_ROOT}/scripts/$c" "$SKILL" && echo yes || echo no)" yes
+done
+ok "every script call matches a grant"   "$(ungranted "$SKILL" | sort -u | tr '\n' ' ')" ""
+ok "…and there are calls to check"       "$([ "$(calls "$SKILL" | wc -l)" -ge 10 ] && echo yes || echo no)" yes
+printf -- '---\nallowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/x.sh:*)\n---\n    ${CLAUDE_PLUGIN_ROOT}/scripts/x.sh --apply\n' > "$TMP/bare.md"
+ok "…while a bare call under a bash grant fails it" "$(ungranted "$TMP/bare.md" | wc -l | tr -d ' ')" 1
 
 # --- the launcher says, in the file, that it reads nothing else -------------------
 ok "launcher carries the closed-list rule" "$(has "$SKILL" 'The launcher reads nothing else')" yes

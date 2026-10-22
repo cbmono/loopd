@@ -181,8 +181,12 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
 1. **Take the lock, then dispatch — in that order, with nothing in between.**
    Resolve the tick's model first (below), **mint this tick's id** — one fresh literal per
-   tick, shaped `tick-<UTC yyyymmddThhmmssZ>-<4 random chars>` (e.g.
-   `tick-20260906T152233Z-a7f3`), characters `[A-Za-z0-9._-]` only, never reused — then run
+   tick, never reused, printed by
+
+       ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh mint
+
+   (e.g. `tick-20260906T152233Z-a7f3`; never compose it yourself — a local clock labelled
+   `Z` is the bug this command exists for) — then run
 
        ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire --agent project-manager --claimant <id>
 
