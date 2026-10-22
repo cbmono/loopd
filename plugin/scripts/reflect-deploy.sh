@@ -39,8 +39,7 @@ q="$(grep -oE '· merged, (not deployed|deploy UNKNOWN) · .* · Q[0-9]+$' "$TAS
 prs="$(printf '%s\n' "$fm" | awk '/^pr:/ { on = 1 } on && /^[A-Za-z_]+:/ && !/^pr:/ { exit } on' |
        grep -oE 'https://[^]"[:space:],]+/pull/[0-9]+' | tr '\n' ' ' | sed 's/ $//')"
 [ -n "$prs" ] || { echo "reflect-deploy: no merged PR in pr: of $TASK" >&2; exit 2; }
-repo="$(bash "$HERE/service-doc.sh" --repo "$TASK" 2>/dev/null)" || {
-  [ "$mode" = UNKNOWN ] || exit 2; repo="(no target_repo)"; }
+repo="$(bash "$HERE/service-doc.sh" --repo "$TASK" 2>/dev/null)" || repo="(no target_repo)"
 
 # The highest Q number in use anywhere, as session-handoff.sh allocates it.
 qn="$( { bash "$HERE/fold-answers.sh" --list "$TASK" open_questions; bash "$HERE/fold-answers.sh" --list "$TASK" answered_questions

@@ -65,7 +65,6 @@ rc=3"
 task acme/web; svc web acme/web '(whole repo)' 'deploy: nightly'
 ok "an invalid Service deploy: is refused"      "$(mode "$T")" "UNKNOWN
 rc=3"
-svc web acme/web '(whole repo)' $'deploy: manual\ndeploy: auto'
 task acme/web 'deploy:'
 ok "an empty task deploy: is refused, not auto"  "$(mode "$T")" "UNKNOWN
 rc=3"
@@ -75,6 +74,7 @@ rc=3"
 task acme/web; svc web acme/web '(whole repo)' 'deploy:'
 ok "an empty Service deploy: is refused"        "$(mode "$T")" "UNKNOWN
 rc=3"
+svc web acme/web '(whole repo)' $'deploy: manual\ndeploy: auto'
 ok "two different deploy: lines are UNKNOWN"    "$(mode "$T")" "UNKNOWN
 rc=3"
 printf -- '---\ntype: Service\nrepo: acme/web\nstatus: active\ndeploy: auto\n' > "$S/web.md"
@@ -147,6 +147,11 @@ rc=1"
 ok "…byte-identical"                            "$(sum "$T")" "$before"
 task ""
 ok "no target_repo: still written, and says so" "$(bash "$WRITE" "$T" >/dev/null 2>&1; bash "$FOLD" --list "$T" open_questions | grep -c '^Q1: do: deploy (no target_repo) — ')" 1
+
+task "" 'deploy: manual'
+ok "a task-level manual with no target_repo writes (exit 0)" "$(bash "$WRITE" "$T" 2>/dev/null; echo "rc=$?")" "deploy-owed Q1
+rc=0"
+ok "…its merged, not deployed note"             "$(grep -c '^\* .* · merged, not deployed · (no target_repo) · https://github.com/acme/web/pull/42 · Q1$' "$T")" 1
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

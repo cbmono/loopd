@@ -440,7 +440,7 @@ while IFS= read -r file; do
   if [[ $type == Service || $type == Task ]] && grep -q '^deploy:' <<<"$fm"; then
     while IFS= read -r dv; do
       case "$dv" in manual|auto) ;; *) fail "$rel" "deploy '$dv' is not valid (one of: manual auto; absent ⇒ auto) — SCHEMA.md → type: $type" ;; esac
-    done <<<"$(sed -n 's/^deploy:[[:space:]]*//p' <<<"$fm" | sed "s/[[:space:]]#.*//; s/[[:space:]]*\$//; s/^[\"']//; s/[\"']\$//")"
+    done <<<"$(sed -n 's/^deploy:[[:space:]]*//p' <<<"$fm" | sed "s/[[:space:]]#.*//; s/[[:space:]]*\$//; s/^\"\\(.*\\)\"\$/\\1/; s/^'\\(.*\\)'\$/\\1/")"
   fi
 
   if ! grep -q '^timestamp:[[:space:]]*[^[:space:]]' <<<"$fm"; then
