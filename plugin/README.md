@@ -50,6 +50,7 @@ prints the clone command rather than reporting a missing directory.
 | Skill | What it does |
 |---|---|
 | `/brief-me [project]` | Read-only. No argument: the board brief — what needs you, what's in flight, what moved since the last full tick. With a project slug: a meeting-ready brief with questions quoted by number and a "decide today" list. |
+| `/whats-up` | Read-only. Reprints the Needs-you rows of `AWAITING.md`, numbered and verbatim, with when it was last refreshed — nothing else is read. |
 | `/capture <notes>` | Intake. Turns a decision or meeting notes into `draft` projects/tasks with provenance, fitted into existing projects where they belong. Never promotes; refinement stays the loop's job, promotion stays yours. |
 | `/work <task>` | Work one `ready` task in the current session — the solo alternative to a background dispatch, leaving the same record (worktree/branch on the task, PR in `pr:`, `in-review` at the end). The gates still hold: no merging, review still independent. |
 | `/dispatch [gap]` | The gated background loop. It carries the contract itself now — during the migration it delegated to the bundle's own copy verbatim, so there was never a second implementation to drift. |
