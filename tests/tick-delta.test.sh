@@ -239,7 +239,8 @@ for bad in fail junk; do
   CLW record 2>/dev/null; ok "…and record refuses, record untouched" "$?:$([ "$(cat "$INST/$AB_STATE_DIR")" = "$before3" ] && echo same)" "2:same"
   rm -f "$CLDIR/$bad"
 done
-for raw in '[1,2]' "[{\"session_id\":\"$S1\",\"state\":\"done\"}]" "[{\"sessionId\":\"$S1\",\"sessionState\":\"done\"}]"; do
+for raw in '[1,2]' "[{\"session_id\":\"$S1\",\"state\":\"done\"}]" "[{\"sessionId\":\"$S1\",\"sessionState\":\"done\"}]" \
+           "[{\"sessionId\":\"$S2\",\"state\":\"working\"},{\"sessionId\":\"$S1\",\"sessionState\":\"done\"}]"; do
   printf '%s\n' "$raw" > "$CLDIR/raw"
   ok "malformed listing rows ($raw) make check exit 2" "$(crun check)" "rc:2 CANNOT ANSWE"
 done

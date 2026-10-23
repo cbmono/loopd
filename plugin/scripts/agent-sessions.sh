@@ -139,19 +139,18 @@ try:
         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         timeout=int(sys.argv[1])).stdout)
     assert isinstance(rows, list)
-    # `[]` is a real answer under `--all`; a listing whose rows we cannot read is not.
-    if rows:
-        assert all(isinstance(r, dict) for r in rows)
-        assert any(isinstance(r.get("sessionId"), str) and r["sessionId"]
-                   and (r.get("state") or r.get("status")) for r in rows)
+    # `[]` is a real answer under `--all`; a row we cannot read is not — one bad row
+    # among good ones could be the tracked session, and would read `working`.
+    assert all(isinstance(r, dict) and isinstance(r.get("sessionId"), str) and r["sessionId"]
+               and (r.get("state") or r.get("status")) for r in rows)
 except Exception:
     sys.exit(2)
 for want in sys.argv[2:]:
     state = "gone"
     for r in rows:
-        sid = r.get("sessionId") or ""
-        if sid and (want == r.get("id") or want == sid or sid.split("-")[0] == want):
-            state = str(r.get("state") or r.get("status") or "working")
+        sid = r["sessionId"]
+        if want == r.get("id") or want == sid or sid.split("-")[0] == want:
+            state = str(r.get("state") or r.get("status"))
             break
     print(want, re.sub(r"[^A-Za-z0-9_-]", "", state) or "unknown")
 PY
