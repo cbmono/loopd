@@ -296,12 +296,15 @@ GIT -C "$TMP/comp" commit -q -am "feat: signal change and its bump in one squash
 sed -i.bak 's/"description": "/"description": "Edited. /' "$TMP/comp/plugin-all/.claude-plugin/plugin.json"
 rm -f "$TMP/comp/plugin-all/.claude-plugin/plugin.json.bak"
 GIT -C "$TMP/comp" commit -q -am "docs: plugin-all description only"
+mkdir -p "$TMP/comp/plugin-llm/tests"; GIT -C "$TMP/comp" mv plugin-llm/companion/llm.md plugin-llm/tests/llm.md
+GIT -C "$TMP/comp" commit -q -m "refactor: a shipped llm file moves into tests/"
 GIT -C "$TMP/comp" update-ref refs/remotes/origin/main "$(GIT -C "$TMP/comp" rev-parse HEAD)"
 ok "--dry-run names the moved companion" \
   "$("$BUMP" minor --dry-run --repo "$TMP/comp" | grep -c '^companion loopd-mod-pane 2.0.0 -> 2.1.0$')" 1
 ok "minor on a changed companion is accepted" "$(run minor --repo "$TMP/comp")" 0
 ok "…and moves it by the same field, in BOTH manifests" "$(comp "$TMP/comp" plugin-mod-pane)" 2.1.0/2.1.0
 ok "…and a description edit after the version commit is a change" "$(comp "$TMP/comp" plugin-all)" 2.1.0/2.1.0
+ok "…and so is a shipped file renamed INTO tests/" "$(comp "$TMP/comp" plugin-llm)" 2.1.0/2.1.0
 ok "…while a tests-only change moves nothing" "$(comp "$TMP/comp" plugin-mod-usage)" 2.0.0/2.0.0
 ok "…nor does a squash that changed content AND set the version" "$(comp "$TMP/comp" plugin-mod-signal)" 2.0.5/2.0.5
 ok "…nor an untouched companion (the alias included)" \

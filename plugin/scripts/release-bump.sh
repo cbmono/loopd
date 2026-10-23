@@ -176,7 +176,8 @@ for src in [s for s in sources if s != "./plugin"]:
         sha = git("log", "-1", "--format=%H", "-S", m.group(0), "--", man).strip() if m else ""
         if not sha or sha in shallow:
             refuse("no commit in this history sets the version %s of %s (shallow clone or rewritten history?) — fetch the full history and re-run" % (old, names.get(src) or src))
-        if not [f for f in git("diff", "--name-only", sha, "HEAD", "--", d).split("\n")
+        # A rename lists only its new path, so a shipped file moved into tests/ would vanish.
+        if not [f for f in git("diff", "--no-renames", "--name-only", sha, "HEAD", "--", d).split("\n")
                 if f and not SHIPS_NOTHING.search(f[len(d) + 1:])]:
             continue
         want = bumped(old)
