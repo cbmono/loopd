@@ -226,7 +226,8 @@ preconditions off disk rather than trusting the caller.** Each of `required-chec
 `review-clearance.sh`, `pr-body-clearance.sh` and `pr-verdict-clearance.sh` records its own
 exit 0 against the PR and the head it read — `review-clearance.sh` with whether the clearing
 reviewer was external, `pr-verdict-clearance.sh` its exit 1 too — and the PreToolUse hook
-permits the merge only for the `project-manager`, only where this file defines the owning
+permits the merge only for the `project-manager` (`agent_type` exactly `loopd:project-manager`;
+a PR URL operand names its own repo, and a `--repo` that disagrees refuses), only where this file defines the owning
 project's mode as delegating the merge, and only at the SHA they name: all four, or the
 first three where an external reviewer cleared the head, and never over a checker `FAIL`. A review receipt alone is
 precondition 2's first half and never a merge permit. Anything missing — no companion, no
@@ -298,7 +299,7 @@ configurations and the harness itself — and discovering that mid-run wastes a 
    ```sh
    jq -n --arg d "$PWD" --arg c "gh pr merge --squash --match-head-commit $SHA $PR" \
      '{cwd:$d, hook_event_name:"PreToolUse", tool_name:"Bash", agent_id:"probe",
-       agent_type:"project-manager", tool_input:{command:$c}}' \
+       agent_type:"loopd:project-manager", tool_input:{command:$c}}' \
      | CLAUDE_PROJECT_DIR="$PWD" bash "$AB/../hooks/deny-destructive.sh" \
      | jq -e '.hookSpecificOutput.permissionDecision != "deny"'   # 0 = the merge would run
    ```
