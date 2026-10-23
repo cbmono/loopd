@@ -48,6 +48,10 @@ rc=0"
 svc web acme/web '(whole repo)'; task acme/web 'deploy: "manual"'
 ok "a task-level manual"                        "$(mode "$T")" "manual
 rc=0"
+svc web Cbmono/loopd.git '(whole repo)' 'deploy: manual'; task cbmono/loopd
+ok "a manual doc spelling its repo differently stays manual" "$(mode "$T")" "manual
+rc=0"
+svc web acme/web '(whole repo)'
 task acme/other
 ok "no matching Service doc ⇒ auto"             "$(mode "$T")" "auto
 rc=0"
@@ -115,7 +119,7 @@ before="$(sum "$T")"
 ok "a re-run writes nothing"                    "$(bash "$WRITE" "$T" 2>&1; echo "rc=$?")" "already Q1
 rc=1"
 ok "…byte-identical"                            "$(sum "$T")" "$before"
-bash "$FOLD" --answer "Q1: do: deploy acme/web — https://github.com/acme/web/pull/42 merged, not deployed; answer done once it is live" done "$T" >/dev/null 2>&1
+bash "$FOLD" --answer "Q1: do: deploy acme/web — https://github.com/acme/web/pull/42 merged, not deployed; answer done once it is live" "done" "$T" >/dev/null 2>&1
 ok "answered and folded"                        "$(bash "$FOLD" --list "$T" answered_questions | grep -c 'Q1: do: deploy .* --- done$')" 1
 ok "…a run after the answer writes nothing"     "$(bash "$WRITE" "$T" >/dev/null 2>&1; echo $?)" 1
 

@@ -129,6 +129,14 @@ assert "…naming the doc to draft"                  "$(has 'knowledge/services/
 assert "…and the cataloguer as its reviewer"       "$(has 'cataloguer' "$BODY")"
 assert "…and it does NOT claim a doc exists"       "$(hasnt "read it before you read code" "$OUT")"
 assert "the Effort section still prints"           "$(has "$EFFORT" "$OUT")"
+service <<'MD'
+# Overview
+MD
+sed -i.bak 's#^repo: acme/widget$#repo: https://github.com/Acme/Widget.git#' "$SVC"
+OUT="$(run "$DOC")"
+assert "a differently-spelled repo: still grounds on the doc" "$(has "/knowledge/services/widget.md — read it before you read code." "$OUT")"
+assert "…not the draft-the-missing-doc line"       "$(hasnt 'cataloguer' "$(grounding_body "$OUT")")"
+rm -f "$SVC" "$SVC.bak"
 
 echo "== Effort carries files expected, the LOC ceiling and a turns hint =="
 

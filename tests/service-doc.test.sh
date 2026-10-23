@@ -2,7 +2,7 @@
 #
 # service-doc.test.sh — plugin/scripts/service-doc.sh picks ONE Service doc per task:
 # per-app path match in a monorepo, basename fallback, project-inherited target_repo, the
-# deprecated/prose-path tie, and its three exit codes. Reasoning:
+# deprecated/prose-path tie, repo-spelling normalisation, and its three exit codes. Reasoning:
 # kb-retrieval-and-papercut-fixes/task-003.
 set -uo pipefail
 
@@ -71,6 +71,23 @@ ok "…but never over the task's own"    "$(run --repo "$T")" acme/widget
 rm "$TMP/projects/p/project.md"; task "$T" "" "Neither"
 ok "neither set ⇒ exit 1"              "$(rc "$T")" 1
 ok "…and --repo exits 1 too"           "$(rc --repo "$T")" 1
+
+echo "== a repo: spelled differently still matches; a different repo never does =="
+rm -f "$TMP"/knowledge/services/*.md
+task "$T" cbmono/loopd "Ship it"
+for spelling in Cbmono/loopd cbmono/loopd.git https://github.com/cbmono/loopd git@github.com:cbmono/loopd.git/; do
+  svc spelled "$spelling" '(whole repo)'
+  ok "repo: $spelling matches cbmono/loopd" "$(run "$T")" knowledge/services/spelled.md
+done
+for spelling in other-org/loopd loopd; do
+  svc spelled "$spelling" '(whole repo)'
+  ok "repo: $spelling does not (exit 1)" "$(rc "$T")" 1
+done
+rm -f "$TMP"/knowledge/services/*.md
+svc loopd cbmono/loopd '(whole repo)'; svc aaa cbmono/loopd '(whole repo)'
+task "$T" cbmono/loopd.git "Ship it"
+ok "target_repo cbmono/loopd.git tiebreaks on loopd.md" "$(run "$T")" knowledge/services/loopd.md
+ok "…and --repo prints it normalised"                    "$(run --repo "$T")" cbmono/loopd
 
 echo "== it refuses rather than guessing =="
 ok "a missing task exits 2"            "$(rc "$TMP/nope.md")" 2

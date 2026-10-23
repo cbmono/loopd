@@ -44,7 +44,9 @@ split5() { # <line> -> F1..F4 and F5, which keeps any ` · ` the reason carries
   F5="$s"
 }
 fingerprint() { cksum <"$1" | awk '{print $1 "-" $2}'; }
-fmfield() { sed -n '2,/^---$/p' "$1" | sed -n "s/^$2:[[:space:]]*\([^[:space:]].*\)/\1/p" | head -n1; }
+# The trailing-comment rule is validate-bundle.sh's provenance reader's; keep them equal.
+fmfield() { sed -n '2,/^---$/p' "$1" | sed -n "s/^$2:[[:space:]]*\([^[:space:]].*\)/\1/p" | head -n1 |
+  sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'; }
 # kb-apply.sh's block_form, kept in step: a proposal it would refuse is never queued.
 block_form() { # <file> <key>
   sed -n '2,/^---$/p' "$1" | awk -v k="$2" '
