@@ -170,6 +170,21 @@ block_doc "'single ''quoted'''" 'bare entry  # a comment'
 assert "single-quoted and bare items read as YAML does" \
        "$(eq "$(run brief "$DOC" | grep '^- ')" "$(printf -- "- single 'quoted'\n- bare entry")")"
 
+# YAML allows a block sequence at its key's own indent.
+{ printf -- '---\ntype: Task\ndo_not_repeat:\n- "tried A"\n- "tried B"\ntimestamp: x\n---\nbody\n'; } > "$DOC"
+assert "an unindented block list is read"       "$(eq "$(run brief "$DOC" | grep -c '^- ')" 2)"
+assert "…and appended to without orphaning it"  "$(rc append "$DOC" --line 'tried C')"
+assert "…leaving exactly the three items"       "$(eq "$(grep -c -e '^- ' -e '^  - ' "$DOC")" 3)"
+if python3 -c 'import yaml' >/dev/null 2>&1; then
+  assert "…and PyYAML reads the three, in order" "$(eq "$(yaml_list)" "$(printf 'tried A\ntried B\ntried C')")"
+fi
+
+reset
+printf -- '---\ntype: Task\ndo_not_repeat: [ "tried A", bare B ]\n---\nbody\n' > "$DOC"
+cp "$DOC" "$TMP/mx.before"
+assert "a flow list mixing quoted and bare is refused: exit 2" "$(eq "$(rc append "$DOC" --line 'tried C')" 2)"
+assert "…and nothing was written"               "$(cmp -s "$DOC" "$TMP/mx.before" && echo 0 || echo 1)"
+
 # shellcheck disable=SC2046 # one word per entry, on purpose
 block_doc $(for i in $(seq 1 10); do printf '"approach-%s" ' "$i"; done)
 cp "$DOC" "$TMP/cap.before"

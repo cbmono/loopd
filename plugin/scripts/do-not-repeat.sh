@@ -57,10 +57,11 @@ read_entries() { # <frontmatter>
       for (i = 1; i <= n; i++) {
         c = substr(body, i, 1)
         if (c == "\"" || c == SQ) { print quoted(body, i); i = QEND - 1 }
+        else if (c != "," && c !~ /[[:space:]]/) bad = 1
       }
     }
     function item(t,   c) {
-      sub(/^[[:space:]]+-[[:space:]]*/, "", t)
+      sub(/^[[:space:]]*-[[:space:]]*/, "", t)
       c = substr(t, 1, 1); if (c == "\"" || c == SQ) { print quoted(t, 1); return }
       sub(/[[:space:]]+#.*$/, "", t); gsub(/^[[:space:]]+|[[:space:]]+$/, "", t)
       if (t != "") print t
@@ -73,7 +74,7 @@ read_entries() { # <frontmatter>
       if (rest !~ /\]/) bad = 1; else flow(rest)
       done = 1; next
     }
-    inblock && /^[[:space:]]+-([[:space:]]|$)/ { item($0); next }
+    inblock && /^[[:space:]]*-([[:space:]]|$)/ { item($0); next }
     inblock && /^[[:space:]]*$/ { next }
     inblock && /^[^[:space:]]/ { done = 1; next }
     inblock { bad = 1; done = 1 }
@@ -126,7 +127,7 @@ EOF
   DNR_KEY="$FIELD" DNR_VAL="$val" DNR_FORM="$2" awk '
     BEGIN { k = ENVIRON["DNR_KEY"]; v = ENVIRON["DNR_VAL"]; blk = ENVIRON["DNR_FORM"] == "block" }
     span && /^[[:space:]]*$/ { held = held $0 "\n"; next }
-    span && /^[[:space:]]/ { held = ""; next }
+    span && /^([[:space:]]|-([[:space:]]|$))/ { held = ""; next }
     span { span = 0; printf "%s", held }
     NR == 1 && $0 == "---" { n = 1; print; next }
     n == 1 && $0 == "---" { if (!done) { print k ":" v; done = 1 } n = 2; print; next }
