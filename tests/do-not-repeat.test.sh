@@ -135,6 +135,77 @@ assert "…and nothing was written"               "$(hasnt 'an eleventh approach
 assert "…while a line already there still no-ops" "$(rc append "$DOC" --line 'approach 4')"
 
 echo
+echo "== a BLOCK-form list is read, appended to and reread — never orphaned =="
+
+block_doc() { # <entry>... — each a quoted YAML scalar, written as a block item
+  rm -rf "$TMP/projects"; mkdir -p "$TMP/projects/demo/tasks"
+  { printf -- '---\ntype: Task\ntitle: "Ship the widget"\nstatus: in-progress\ndo_not_repeat:\n'
+    for e in "$@"; do printf '  - %s\n' "$e"; done
+    printf '\ntimestamp: 2026-01-01T00:00:00Z\n---\n\n# Context\n\nSomething.\n'
+  } > "$DOC"
+}
+yaml_list() { # the independent reader: PyYAML, one entry per line
+  python3 -c 'import sys, yaml
+t = open(sys.argv[1]).read().split("\n---\n")[0][4:]
+print("\n".join(yaml.safe_load(t)["do_not_repeat"]))' "$DOC" 2>&1
+}
+
+block_doc '"tried A"' '"tried \"B\""'
+BB="$(run brief "$DOC")"
+assert "brief reads both block entries"         "$(eq "$(printf '%s\n' "$BB" | grep -c '^- ')" 2)"
+assert "…under the fixed heading"               "$(eq "$(printf '%s\n' "$BB" | sed -n 1p)" "$HEADING")"
+assert "…unescaped, in order"                   "$(eq "$(printf '%s\n' "$BB" | sed -n '3,4p')" "$(printf -- '- tried A\n- tried "B"')")"
+assert "append to a block list exits 0"         "$(rc append "$DOC" --line 'tried C')"
+assert "…leaving three items"                   "$(eq "$(grep -c '^  - ' "$DOC")" 3)"
+assert "…still a block list"                    "$(eq "$(grep -c '^do_not_repeat:$' "$DOC")" 1)"
+assert "…keeping the blank line and the next key" "$(has "$(printf '  - "tried C"\n\ntimestamp:')" "$(cat "$DOC")")"
+assert "brief now carries all three, in order"  "$(eq "$(run brief "$DOC" | grep '^- ')" "$(printf -- '- tried A\n- tried "B"\n- tried C')")"
+if python3 -c 'import yaml' >/dev/null 2>&1; then
+  assert "PyYAML parses exactly the three, in order" "$(eq "$(yaml_list)" "$(printf 'tried A\ntried "B"\ntried C')")"
+else
+  echo "  SKIP  PyYAML not importable — the brief assertion above is the reader"
+fi
+
+block_doc "'single ''quoted'''" 'bare entry  # a comment'
+assert "single-quoted and bare items read as YAML does" \
+       "$(eq "$(run brief "$DOC" | grep '^- ')" "$(printf -- "- single 'quoted'\n- bare entry")")"
+
+# YAML allows a block sequence at its key's own indent.
+{ printf -- '---\ntype: Task\ndo_not_repeat:\n- "tried A"\n- "tried B"\ntimestamp: x\n---\nbody\n'; } > "$DOC"
+assert "an unindented block list is read"       "$(eq "$(run brief "$DOC" | grep -c '^- ')" 2)"
+assert "…and appended to without orphaning it"  "$(rc append "$DOC" --line 'tried C')"
+assert "…leaving exactly the three items"       "$(eq "$(grep -c -e '^- ' -e '^  - ' "$DOC")" 3)"
+if python3 -c 'import yaml' >/dev/null 2>&1; then
+  assert "…and PyYAML reads the three, in order" "$(eq "$(yaml_list)" "$(printf 'tried A\ntried B\ntried C')")"
+fi
+
+reset
+printf -- '---\ntype: Task\ndo_not_repeat: [ "tried A", bare B ]\n---\nbody\n' > "$DOC"
+cp "$DOC" "$TMP/mx.before"
+assert "a flow list mixing quoted and bare is refused: exit 2" "$(eq "$(rc append "$DOC" --line 'tried C')" 2)"
+assert "…and nothing was written"               "$(cmp -s "$DOC" "$TMP/mx.before" && echo 0 || echo 1)"
+
+# shellcheck disable=SC2046 # one word per entry, on purpose
+block_doc $(for i in $(seq 1 10); do printf '"approach-%s" ' "$i"; done)
+cp "$DOC" "$TMP/cap.before"
+assert "a block list of 10 is at the cap: exit 1" "$(eq "$(rc append "$DOC" --line 'an eleventh')" 1)"
+assert "…and nothing was written"               "$(cmp -s "$DOC" "$TMP/cap.before" && echo 0 || echo 1)"
+
+# A hand-typed entry the writer cannot reproduce (it folds and truncates) forces the reread
+# to disagree with the intended list.
+block_doc '"tried A"' "\"$(printf 'y%.0s' $(seq 1 250))\""
+cp "$DOC" "$TMP/mm.before"
+MM="$(run append "$DOC" --line 'tried C')"
+assert "a reread mismatch exits 3"              "$(eq "$(rc append "$DOC" --line 'tried C')" 3)"
+assert "…saying nothing was written"            "$(has 'nothing written' "$MM")"
+assert "…and the file is byte-identical"        "$(cmp -s "$DOC" "$TMP/mm.before" && echo 0 || echo 1)"
+
+block_doc '"tried A' '"tried B"'
+cp "$DOC" "$TMP/uq.before"
+assert "an unterminated quote is refused: exit 2" "$(eq "$(rc append "$DOC" --line 'tried C')" 2)"
+assert "…and nothing was written"               "$(cmp -s "$DOC" "$TMP/uq.before" && echo 0 || echo 1)"
+
+echo
 echo "== validate-bundle accepts the field, and reports a list over the cap =="
 
 VB="$REPO/plugin/scripts/validate-bundle.sh"
