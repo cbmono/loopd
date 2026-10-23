@@ -1944,7 +1944,8 @@ def render_simple(rows, closed_all, stamp):
     qs, you, quiet, live, fin, ok_items = [], [], [], [], [], []
     for g, p, done_proj, created, mine in rows:
         slug = str(p.get("slug") or "")
-        ok_items += [(p, t) for _g, _p, t, _h in mine if t.get("awaiting") in OK_SAY]
+        ok_items += [(p, t) for _g, _p, t, _h in mine
+                     if isinstance(t.get("awaiting"), str) and t["awaiting"] in OK_SAY]
         ts = [todict(t) for t in tolist(p.get("tasks"))]
         for t in ts:
             st = str(t.get("status") or "")
