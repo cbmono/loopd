@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # release-bump.sh <major|minor|patch> — move the version ON THE DEFAULT BRANCH, after a merge.
 # The ONLY writer of the five places that carry it: VERSION, plugin/VERSION, the two plugin
-# manifests, and every tracked doc that DISPLAYS the number (its `─` rule is resized with
-# the header) — never docs/releases/, where a shipped note records what shipped. The commit
-# also carries `docs/releases/v<new>.md`, the one path this script accepts dirty.
-# Refuses on a feature branch or any other dirty path, commits, prints the push.
-# `major` ALSO moves every companion plugin to <new major>.0.0: a companion tracks core's
-# MAJOR (plugin/README.md), so a v2 core beside a 1.x companion fails main's own suite.
-# Exit: 0 bumped · 1 refused (branch, dirty tree, missing file, unverifiable result) · 2 usage.
-# Reasoning: ai-bridge-next/task-026 and task-028, docs/conventions.md §20. Verified by tests/release-bump.test.sh.
+# manifests, and every tracked doc that DISPLAYS it (its `─` rule resized to the header) — never
+# docs/releases/. The commit also carries `docs/releases/v<new>.md`, the one path accepted dirty.
+# Refuses on a feature branch or any other dirty path, commits, prints the push. Companions
+# (every non-core marketplace source, the alias included): `major` moves each to <new major>.0.0;
+# `minor`/`patch` move by the same field each whose SHIPPED tree changed since the commit that
+# set its current version (pickaxe), where `tests/` and `*.test.*` ship nothing.
+# Exit: 0 bumped · 1 refused (branch, dirty tree, missing file, no version commit, unverifiable) · 2 usage.
+# Reasoning: ai-bridge-next/task-026, task-028; interactive-board/task-014; conventions §20. Tests: tests/release-bump.test.sh.
 set -uo pipefail
 
 usage() { sed -n '2,11p' "$0" >&2; exit 2; }
@@ -70,8 +70,7 @@ CHANGED="$(python3 - "$ROOT" "$NEW" "$DRY" "$FIELD" <<'PY'
 import io, json, os, re, subprocess, sys
 
 root, new, dry, field = sys.argv[1], sys.argv[2], sys.argv[3] == "1", sys.argv[4]
-# A companion tracks the core MAJOR, so only a major bump moves one, to <new major>.0.0.
-companion_new = new.split(".")[0] + ".0.0" if field == "major" else None
+SHIPS_NOTHING = re.compile(r'(^|/)tests/|\.test\.[^/]*$')
 HDR = re.compile(r'(loopd v?)(\d+\.\d+\.\d+)')
 RULE = u"─"
 changed = []
@@ -93,6 +92,15 @@ def write(path, text, rel):
 def refuse(msg):
     sys.stderr.write("release-bump: %s\n" % msg)
     sys.exit(1)
+
+def git(*args):
+    return subprocess.check_output(["git", "-C", root] + list(args)).decode("utf-8")
+
+def bumped(v):
+    if not re.match(r'^\d+\.\d+\.\d+$', v):
+        return None
+    ma, mi, pa = [int(x) for x in v.split(".")]
+    return "%d.%d.0" % (ma, mi + 1) if field == "minor" else "%d.%d.%d" % (ma, mi, pa + 1)
 
 def set_version(text, where, value=None):
     value = new if value is None else value
@@ -144,16 +152,49 @@ try:
     sources = [p.get("source", "") for p in json.loads(text).get("plugins", [])]
 except ValueError as e:
     refuse("%s is not JSON: %s" % (rel, e))
-for src in ["./plugin"] + ([s for s in sources if s != "./plugin"] if companion_new else []):
-    want = new if src == "./plugin" else companion_new
+
+# The boundary commit of a shallow clone LOOKS like the one that set every version: a miss.
+shallow = git("rev-parse", "--git-path", "shallow").strip()
+try:
+    shallow = set(io.open(os.path.join(root, shallow)).read().split())
+except IOError:
+    shallow = set()
+names = dict((p.get("source", ""), p.get("name", "")) for p in json.loads(text).get("plugins", []))
+companion_new, moved = {}, []
+for src in [s for s in sources if s != "./plugin"]:
+    d = os.path.normpath(src)
+    man = os.path.join(d, ".claude-plugin", "plugin.json")
+    mtext = read(os.path.join(root, man))
+    try:
+        old = str(json.loads(mtext).get("version", ""))
+    except ValueError as e:
+        refuse("%s is not JSON: %s" % (man, e))
+    if field == "major":
+        want = new.split(".")[0] + ".0.0"
+    else:
+        m = re.search(r'"version"\s*:\s*"%s"' % re.escape(old), mtext)
+        sha = git("log", "-1", "--format=%H", "-S", m.group(0), "--", man).strip() if m else ""
+        if not sha or sha in shallow:
+            refuse("no commit in this history sets the version %s of %s (shallow clone or rewritten history?) — fetch the full history and re-run" % (old, names.get(src) or src))
+        # A rename lists only its new path, so a shipped file moved into tests/ would vanish.
+        if not [f for f in git("diff", "--no-renames", "--name-only", sha, "HEAD", "--", d).split("\n")
+                if f and not SHIPS_NOTHING.search(f[len(d) + 1:])]:
+            continue
+        want = bumped(old)
+        if not want:
+            refuse("%s is not MAJOR.MINOR.PATCH: '%s'" % (man, old))
+    companion_new[src] = want
+    moved.append("companion %s %s -> %s" % (names.get(src) or src, old, want))
+
+for src in ["./plugin"] + list(companion_new):
+    want = new if src == "./plugin" else companion_new[src]
     i, j = entry_span(text, src)
     text = text[:i] + set_version(text[i:j], "the %s entry" % src, want) + text[j:]
 planned.append((rel, text))
 
-if companion_new:
-    for src in [s for s in sources if s != "./plugin"]:
-        rel = os.path.join(os.path.normpath(src), ".claude-plugin", "plugin.json")
-        planned.append((rel, set_version(read(os.path.join(root, rel)), rel, companion_new)))
+for src, want in companion_new.items():
+    rel = os.path.join(os.path.normpath(src), ".claude-plugin", "plugin.json")
+    planned.append((rel, set_version(read(os.path.join(root, rel)), rel, want)))
 
 # docs/releases/ is a RECORD, not a display: rewriting the header of a shipped note to the
 # new number makes v3.0.0.md claim it is 3.1.0. The note for the version being cut carries
@@ -189,13 +230,13 @@ if not dry:
     core = [p for p in mkt.get("plugins", []) if p.get("source") == "./plugin"]
     if own.get("version") != new or len(core) != 1 or core[0].get("version") != new:
         refuse("a manifest did not take the new number — `git checkout -- .` to undo")
-    for p in (mkt.get("plugins", []) if companion_new else []):
+    for p in mkt.get("plugins", []):
         src = p.get("source", "")
-        if src == "./plugin":
+        if src not in companion_new:
             continue
         man = os.path.join(root, os.path.normpath(src), ".claude-plugin", "plugin.json")
-        if p.get("version") != companion_new or json.loads(read(man)).get("version") != companion_new:
-            refuse("companion %s is not on %s — `git checkout -- .` to undo" % (p.get("name", src), companion_new))
+        if p.get("version") != companion_new[src] or json.loads(read(man)).get("version") != companion_new[src]:
+            refuse("companion %s is not on %s — `git checkout -- .` to undo" % (p.get("name", src), companion_new[src]))
     for rel in docs:
         lines = read(os.path.join(root, rel)).splitlines()
         for k, line in enumerate(lines):
@@ -209,21 +250,23 @@ if not dry:
             if nxt[col:] and set(nxt[col:]) == set(RULE) and len(nxt) != len(line):
                 refuse("%s: the rule under the banner is %d wide, the header is %d" % (rel, len(nxt) - col, len(line) - col))
 
-print("\n".join(changed))
+print("\n".join(changed + moved))
 PY
 )" || die "the bump did not complete — check 'git -C $ROOT status', then 'git -C $ROOT checkout -- .'"
 
+FILES="$(printf '%s\n' "$CHANGED" | grep -v '^companion ')"
+MOVED="$(printf '%s\n' "$CHANGED" | grep '^companion ')"
 if [ "$DRY" = 1 ]; then
-  printf 'release-bump: %s -> %s (dry run) would write:\n%s\n' "$OLD" "$NEW" "$CHANGED"
+  printf 'release-bump: %s -> %s (dry run) would write:\n%s\n%s\n' "$OLD" "$NEW" "$FILES" "$MOVED"
   exit 0
 fi
 if [ "$COMMIT" = 0 ]; then
-  printf 'release-bump: %s -> %s written, not committed:\n%s\n' "$OLD" "$NEW" "$CHANGED"
+  printf 'release-bump: %s -> %s written, not committed:\n%s\n%s\n' "$OLD" "$NEW" "$FILES" "$MOVED"
   exit 0
 fi
 
 git -C "$ROOT" add -A || die "git add failed"
-git -C "$ROOT" commit -q -m "chore: VERSION $OLD -> $NEW (bumped on $BRANCH after the merge)" \
+git -C "$ROOT" commit -q -m "chore: VERSION $OLD -> $NEW (bumped on $BRANCH after the merge)" ${MOVED:+-m "$MOVED"} \
   || die "git commit failed"
 printf 'release-bump: %s -> %s committed on %s. Now push it:\n  git -C %s push origin %s\n' \
   "$OLD" "$NEW" "$BRANCH" "$ROOT" "$BRANCH"

@@ -260,6 +260,87 @@ ok "…while naming the five places it would write" \
   "$("$BUMP" minor --dry-run --repo "$TMP/dry" | grep -cE '^(VERSION|plugin/VERSION|plugin/\.claude-plugin/plugin\.json|\.claude-plugin/marketplace\.json|docs/operations\.md)$')" 5
 
 echo
+echo "== 2b. on minor and patch, a companion moves only when its SHIPPED tree changed =="
+# Its version commit is the one that set the current version string (pickaxe), so a later
+# description edit is a change, a same-commit squash is not, and tests ship nothing.
+comp() { # <dir> <source dir> — "<marketplace version>/<plugin.json version>"
+  python3 -c '
+import json, sys
+root, src = sys.argv[1], sys.argv[2]
+mkt = json.load(open(root + "/.claude-plugin/marketplace.json", encoding="utf-8"))
+m = [p["version"] for p in mkt["plugins"] if p["source"] == "./" + src][0]
+print("%s/%s" % (m, json.load(open(root + "/" + src + "/.claude-plugin/plugin.json", encoding="utf-8"))["version"]))' "$1" "$2"
+}
+set_comp() { # <dir> <source dir> <version> — both manifests, uncommitted
+  python3 -c '
+import io, json, sys
+root, src, v = sys.argv[1], sys.argv[2], sys.argv[3]
+for rel in (".claude-plugin/marketplace.json", src + "/.claude-plugin/plugin.json"):
+    d = json.load(io.open(root + "/" + rel, encoding="utf-8"))
+    for e in d.get("plugins", [d]):
+        if e is d or e["source"] == "./" + src: e["version"] = v
+    io.open(root + "/" + rel, "w", encoding="utf-8").write(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
+' "$1" "$2" "$3"
+}
+fixture "$TMP/comp"
+plant_five "$TMP/comp" 2.4.7
+plant_companions "$TMP/comp" 2.0.0
+printf '\n// a shipped change\n' >> "$TMP/comp/plugin-mod-pane/hooks/register.ts"
+GIT -C "$TMP/comp" commit -q -am "feat: pane change after its bump"
+printf '\n// a test change\n' >> "$TMP/comp/plugin-mod-usage/tests/usage.test.ts"
+printf '// ships nothing\n' > "$TMP/comp/plugin-mod-usage/hooks/extra.test.ts"
+GIT -C "$TMP/comp" add -A >/dev/null; GIT -C "$TMP/comp" commit -q -m "test: usage tests only"
+printf '\n// squashed with its bump\n' >> "$TMP/comp/plugin-mod-signal/hooks/register.ts"
+set_comp "$TMP/comp" plugin-mod-signal 2.0.5
+GIT -C "$TMP/comp" commit -q -am "feat: signal change and its bump in one squash"
+sed -i.bak 's/"description": "/"description": "Edited. /' "$TMP/comp/plugin-all/.claude-plugin/plugin.json"
+rm -f "$TMP/comp/plugin-all/.claude-plugin/plugin.json.bak"
+GIT -C "$TMP/comp" commit -q -am "docs: plugin-all description only"
+mkdir -p "$TMP/comp/plugin-llm/tests"; GIT -C "$TMP/comp" mv plugin-llm/companion/llm.md plugin-llm/tests/llm.md
+GIT -C "$TMP/comp" commit -q -m "refactor: a shipped llm file moves into tests/"
+GIT -C "$TMP/comp" update-ref refs/remotes/origin/main "$(GIT -C "$TMP/comp" rev-parse HEAD)"
+ok "--dry-run names the moved companion" \
+  "$("$BUMP" minor --dry-run --repo "$TMP/comp" | grep -c '^companion loopd-mod-pane 2.0.0 -> 2.1.0$')" 1
+ok "minor on a changed companion is accepted" "$(run minor --repo "$TMP/comp")" 0
+ok "…and moves it by the same field, in BOTH manifests" "$(comp "$TMP/comp" plugin-mod-pane)" 2.1.0/2.1.0
+ok "…and a description edit after the version commit is a change" "$(comp "$TMP/comp" plugin-all)" 2.1.0/2.1.0
+ok "…and so is a shipped file renamed INTO tests/" "$(comp "$TMP/comp" plugin-llm)" 2.1.0/2.1.0
+ok "…while a tests-only change moves nothing" "$(comp "$TMP/comp" plugin-mod-usage)" 2.0.0/2.0.0
+ok "…nor does a squash that changed content AND set the version" "$(comp "$TMP/comp" plugin-mod-signal)" 2.0.5/2.0.5
+ok "…nor an untouched companion (the alias included)" \
+  "$(comp "$TMP/comp" plugin-yolo) $(comp "$TMP/comp" plugin-alias)" "2.0.0/2.0.0 2.0.0/2.0.0"
+ok "…and the commit message names each moved companion" \
+  "$(GIT -C "$TMP/comp" log -1 --format=%b | grep -cE '^companion (loopd-mod-pane|loopd-all) 2\.0\.0 -> 2\.1\.0$')" 2
+ok "…and template-version.test.sh passes on it" "$(harness "$TMP/comp" template-version.test.sh)" "fail=0 rc=0"
+ok "a patch right after moves nothing more" \
+  "$(run patch --repo "$TMP/comp" >/dev/null; comp "$TMP/comp" plugin-mod-pane)" 2.1.0/2.1.0
+printf '\n// another\n' >> "$TMP/comp/plugin-mod-pane/hooks/register.ts"
+GIT -C "$TMP/comp" commit -q -am "fix: pane again"
+ok "…until the companion changes again, then patch moves its PATCH" \
+  "$(run patch --repo "$TMP/comp" >/dev/null; comp "$TMP/comp" plugin-mod-pane)" 2.1.1/2.1.1
+
+# No version commit to compare against must refuse, never guess: a shallow clone's
+# boundary commit LOOKS like the one that set every version.
+GIT clone -q --depth 1 "file://$TMP/comp" "$TMP/shallow" 2>/dev/null
+ok "a shallow clone is refused on minor"  "$(run minor --repo "$TMP/shallow")" 1
+ok "…naming the companion" \
+  "$("$BUMP" minor --repo "$TMP/shallow" 2>&1 >/dev/null | grep -cE 'no commit in this history sets the version [0-9.]+ of (loopd|ai-bridge)')" 1
+ok "…having written nothing" "$(GIT -C "$TMP/shallow" status --porcelain | wc -l | tr -d ' ')" 0
+
+# The post-write check reads both manifests back: a nested "version" ahead of the entry's own
+# takes the edit, so the entry stays behind its plugin.json.
+for f in minor major; do
+  fixture "$TMP/verify-$f"
+  plant_companions "$TMP/verify-$f" 2.0.0
+  sed -i.bak 's|"source": "./plugin-mod-pane",|"source": "./plugin-mod-pane", "x": {"version": "0.0.0"},|' \
+    "$TMP/verify-$f/.claude-plugin/marketplace.json"
+  rm -f "$TMP/verify-$f/.claude-plugin/marketplace.json.bak"
+  printf '\n// a shipped change\n' >> "$TMP/verify-$f/plugin-mod-pane/hooks/register.ts"
+  GIT -C "$TMP/verify-$f" commit -q -am "plant a disagreement"
+  ok "$f: a moved companion whose manifests disagree is refused" "$(run "$f" --repo "$TMP/verify-$f")" 1
+done
+
+echo
 echo "== 3. a PR touching plugin/ WITHOUT a bump passes — the whole point of the change =="
 fixture "$TMP/pr"
 base="$(head -n 1 "$TMP/pr/VERSION")"

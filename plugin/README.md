@@ -138,14 +138,17 @@ held to it too, and a companion that could remove a core gate would not be a com
 
 **A companion tracks core's MAJOR and moves its own MINOR and PATCH independently.**
 `loopd-yolo 2.0.x` is the companion of `loopd 2.x`, and it releases a MINOR or a
-PATCH whenever its own contents change, without waiting for core to move. **The reason:**
+PATCH whenever its own shipped contents change — the field the core release carrying that
+change takes, and only for the companions that changed. **The reason:**
 MAJOR is the only field carrying a compatibility claim — the fixed `companion/<file>` path
 and the names core reads out of it — so a shared MAJOR says *this companion speaks the core
 contract you have installed*, while independent MINOR/PATCH keeps a companion's own fixes
 from forcing a core release nobody needed. `tests/template-version.test.sh` asserts both
 halves for every companion entry in the marketplace, so a companion cannot drift silently.
 `plugin/scripts/release-bump.sh major` moves every companion to the new major alongside core;
-`minor` and `patch` leave them alone.
+`minor` and `patch` move, by the same field, each companion whose shipped tree changed since the
+commit that set its current version — `tests/` and `*.test.*` ship nothing and do not count —
+and leave the rest alone. A history that cannot name that commit (a shallow clone) is refused.
 
 ### Today's companions
 
