@@ -38,6 +38,16 @@ worktree and gets the push refused. Run `git push --force-with-lease origin
 `git push --force-with-lease="refs/heads/${BRANCH}:${SHA}" origin "HEAD:refs/heads/${BRANCH}"`
 — zsh reads `$BRANCH:h…` as a modifier and drops the colon.
 
+**In a `claude --bg` session nobody can pick a browser, so never wait for one.** When
+claude-in-chrome needs a browser chosen (several connected) and no human is there to
+answer: a **read-only rendering check** — layout, a measurement, a screenshot — runs in a
+headless Chrome you launch yourself and drive over CDP (`--headless
+--remote-debugging-port=<port>`, or `--dump-dom` / `--screenshot`), against a test bundle
+in your scratch directory, never the live one. A check that needs the **owner's logged-in
+browser** becomes a `✗` row in the PR's criteria table naming what it would take — never a
+blocked session. This is for background sessions only: interactive ones keep the seeded
+`CLAUDE.md` rule — connect to every open browser and let the human pick.
+
 ## Procedure
 
 1. **Read the task** (frontmatter + `# Context` + `acceptance_criteria`). Set its
