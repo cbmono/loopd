@@ -335,13 +335,16 @@ no record, no `gh`, a probe error, any `in-progress` task, any dirty tracked fil
 untracked file under `projects/` — resolves to the full tick, and the fingerprint holds
 exactly the facts whose movement creates tick work: bundle HEAD, per-task status, each
 open PR's head SHA, state, review decision, review count with the latest review's id and
-state (a COMMENTED review moves no decision), and every commit status's state and
-description (a rate-limited reviewer still reports SUCCESS), and the presence of the two opt-in
-artifacts (a `touch AWAITING.md` re-enable needs one full tick to populate the queue).
+state (a COMMENTED review moves no decision), the latest issue comment's id and author
+(a reviewer's rate-limit reply is one; a review-thread reply already mints a review),
+every commit status's state and description (a rate-limited reviewer still reports
+SUCCESS), the state of each role session recorded on an `in-review` or `blocked` task
+(one `claude agents` listing; `sessions unavailable` where `claude` is not on PATH), and
+the presence of the two opt-in artifacts (a `touch AWAITING.md` re-enable needs one full tick to populate the queue).
 
 What the probe deliberately does not see, stated rather than discovered: a PR body edit
-at an unchanged head (an unticked criteria box, an edited description) and anything
-visible only in comment prose. Those defer to the next real delta. That is the same
+at an unchanged head (an unticked criteria box, an edited description) and an edit to a
+comment already posted. Those defer to the next real delta. That is the same
 trade the yolo merge gate refuses — it re-reads everything at the moment of merging —
 but a `gated` surface-only tick can afford it, because nothing is merged, promoted or
 dispatched on the strength of an idle verdict; the verdict only ends a tick that would
