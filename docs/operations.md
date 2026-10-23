@@ -728,10 +728,10 @@ once `GET /__queue` returns the verdict.
 |---|---|
 | who may write | a request carrying this launch's token (in the served `<meta name="loopd-queue">`, only for an allowed `Host`, in no file), a `Host` of `127.0.0.1` or `localhost` on the board port, an `Origin` matching it, and `Content-Type: application/json`; anything else is 403 or 415, and every other method and path 405 |
 | `from` | set by the server to this clone's `ownerGithubUser`; a page that sends `from`, `ts` or any other unknown key is refused |
-| schema | `answer` (`task`, `q`, one of `option` 1–99 or `text` ≤2000, optional `change`), `more` (`task`, `q`), `new-project` (`title` ≤120, `what` ≤600, `who` ≤300, `doneWhen` ≤600, `repo` owner/name). `unblock` and `board` are refused: an unblock re-dispatches agent work on the page's words, and nothing turns the board on |
+| schema | `answer` (`task`, `q`, one of `option` 1–99 or `text` ≤2000, optional `change`), `more` (`task`, `q`), `new-project` (`title` ≤120, `what` ≤600, `who` ≤300, `doneWhen` ≤600, `repo` owner/name, no `.` or `..` segment); text carrying a C0, DEL or C1 control character is refused. `unblock` and `board` are refused: an unblock re-dispatches agent work on the page's words, and nothing turns the board on |
 | owner | an entry for a task `task-owner.sh` does not clear is `not-yours`, unrun |
 | window | `ts` is stamped by the server; an entry older than **24 hours** at consume (`--window` hours to change it) is `expired`, and the page says send it again |
-| no replay | an id in the ledger never runs again; a claim with no verdict (a killed consumer) is closed as `interrupted`, never re-run |
+| no replay | an id in the ledger never runs again; a queue line with no valid id is never run, prints `no-id invalid` and leaves the queue; a claim with no verdict (a killed consumer) is closed as `interrupted`, never re-run |
 | races | a later answer to the same question, still unconsumed, wins: the earlier one is `replaced`. An answer given elsewhere first makes this one `already-answered`, unrun |
 
 **The token keeps other web pages out; it does not keep this machine's processes out.**
