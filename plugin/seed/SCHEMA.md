@@ -548,7 +548,7 @@ P1 · supersede · duplicate · status=superseded · keeper · 1234567890-412 ·
 type: Service
 title: <service name>
 description: <one line>
-repo: <org>/<repo>                # owning repo (or monorepo)
+repo: <org>/<repo>                # owning repo (or monorepo); lowercase, no .git, no URL — validate-bundle.sh warns otherwise
 path: services/<name>             # path within a monorepo, if applicable
 owner:                            # team / person, optional. FREE TEXT and read by nothing — unrelated to the `owner` that gates dispatch on a Project/Task (see "Ownership on a shared instance").
 stack: [ <framework>, <orm>, ... ]

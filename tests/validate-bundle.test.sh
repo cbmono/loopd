@@ -90,6 +90,9 @@ doc knowledge/services/good-service.md '---' 'type: Service' 'title: S2' 'status
 # `deploy:` is an enum on a Service and a Task (task-008): manual | auto, absent ⇒ auto.
 doc knowledge/services/deploy-bad.md '---' 'type: Service' 'title: S3' 'status: active' 'deploy: sometimes' 'provenance: machine' "timestamp: $TS" '---' 'body'
 doc knowledge/services/deploy-ok.md '---' 'type: Service' 'title: S4' 'status: active' 'deploy: manual' 'provenance: machine' "timestamp: $TS" '---' 'body'
+# `repo:` off the canonical <org>/<repo> form only WARNS: service-doc.sh normalises a spelling.
+doc knowledge/services/repo-bare.md '---' 'type: Service' 'title: S5' 'repo: loopd' 'status: active' 'provenance: machine' "timestamp: $TS" '---' 'body'
+doc knowledge/services/repo-ok.md '---' 'type: Service' 'title: S6' 'repo: cbmono/loopd' 'status: active' 'provenance: machine' "timestamp: $TS" '---' 'body'
 doc projects/live/tasks/task-030-deploy-bad.md '---' 'type: Task' 'title: D' 'status: ready' 'deploy: "yes"' "timestamp: $TS" '---' 'body'
 doc projects/live/tasks/task-032-deploy-empty.md '---' 'type: Task' 'title: D3' 'status: ready' 'deploy:' "timestamp: $TS" '---' 'body'
 doc projects/live/tasks/task-033-deploy-quoted-comment.md '---' 'type: Task' 'title: D4' 'status: ready' 'deploy: "manual # note"' "timestamp: $TS" '---' 'body'
@@ -173,7 +176,7 @@ doc knowledge/papercuts/2026-10.md '- a papercut line'
 
 set +e
 OUT="$(bash "$VALIDATOR" 2>&1)"; RC=$?
-OUT_STRICT="$(bash "$VALIDATOR" --strict 2>&1)"; RC_STRICT=$?
+bash "$VALIDATOR" --strict >/dev/null 2>&1; RC_STRICT=$?
 set -e
 
 pass=0; fail=0
@@ -217,6 +220,10 @@ assert "a # inside the quotes is not a comment"     "$(saw "deploy 'manual # not
 assert "…on the doc it names"                        "$(grep -q 'task-033-deploy-quoted-comment.md' <<<"$(grep -B1 "deploy 'manual # note'" <<<"$OUT")" && echo 0 || echo 1)"
 assert "…while a comment after the quotes is one"   "$(not_seen 'task-034-deploy-quoted-ok.md')"
 assert "a valid deploy: is silent, on either type"   "$(not_seen 'deploy-ok.md')"
+assert "a bare Service repo: warns, naming the doc"  "$(grep -q 'WARN   knowledge/services/repo-bare.md' <<<"$OUT" && echo 0 || echo 1)"
+assert "…as not the canonical form"                  "$(saw "repo: 'loopd' is not the canonical <org>/<repo> form")"
+assert "…and no ERROR names it"                      "$(grep -q 'ERROR  knowledge/services/repo-bare.md' <<<"$OUT" && echo 1 || echo 0)"
+assert "a canonical repo: cbmono/loopd is silent"    "$(not_seen 'repo-ok.md')"
 assert "files below knowledge/<kind>/ are ignored"   "$(not_seen 'raw-note.md')"
 
 echo "== the fifth knowledge kind, and the field deliberately left unchecked =="
@@ -358,7 +365,7 @@ echo "== a clean bundle passes, and --strict still passes with no warnings =="
 rm -f projects/live/tasks/task-00[2-9]*.md projects/live/tasks/task-01[02]*.md \
       projects/live/tasks/task-016*.md projects/live/tasks/task-017*.md \
       projects/live/tasks/task-02[01]*.md projects/live/tasks/task-03[023]*.md \
-      knowledge/services/bad-service.md knowledge/services/deploy-bad.md \
+      knowledge/services/bad-service.md knowledge/services/deploy-bad.md knowledge/services/repo-bare.md \
       knowledge/findings/no-lesson.md knowledge/findings/too-long.md \
       knowledge/references/bad-ref.md knowledge/references/no-status-ref.md
 set +e

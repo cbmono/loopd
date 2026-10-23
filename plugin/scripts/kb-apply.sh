@@ -51,7 +51,9 @@ lock="$(bash "$HERE/tick-lock.sh" status --instance "$INST" 2>&1)"; lrc=$?
 [ "$lrc" -eq 0 ] || die 1 "a tick holds the dispatch lock, and it may be writing knowledge/ — $lock"
 
 fm() { sed -n '2,/^---$/p' "$1"; }
-fmfield() { fm "$1" | sed -n "s/^$2:[[:space:]]*\([^[:space:]].*\)/\1/p" | head -n1; }
+# The trailing-comment rule is validate-bundle.sh's provenance reader's; keep them equal.
+fmfield() { fm "$1" | sed -n "s/^$2:[[:space:]]*\([^[:space:]].*\)/\1/p" | head -n1 |
+  sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//'; }
 fingerprint() { cksum <"$1" | awk '{print $1 "-" $2}'; }
 split7() { # <line> -> G1..G6 and G7, which keeps any ` · ` the reason carries
   local s="$1" i
@@ -159,7 +161,7 @@ while [ "$i" -lt "$N" ]; do
   PATHS+=("${FILES[$i]}"); i=$((i + 1))
 done
 
-set_field "$REPORT" status done || die 1 "applied $N proposal(s) but could not close $REPORT — NOTHING is committed"
+set_field "$REPORT" status "done" || die 1 "applied $N proposal(s) but could not close $REPORT — NOTHING is committed"
 PATHS+=("$REPORT")
 [ ! -f knowledge/.ledger-floor ] || PATHS+=(knowledge/.ledger-floor)
 

@@ -117,7 +117,7 @@ ok "the exclusion set: the per-item ledger entry"   "$(grep -c '^ledger:.*supers
 ok "…recording the human, never a role"             "$(grep -c 'by example-user-007' knowledge/findings/duplicate.md)" 1
 ok "the exclusion set: the derived index is regenerated" \
   "$([ "$(cksum <knowledge/index.md)" != "$(git show "$head_before":knowledge/index.md | cksum)" ] && echo yes || echo no)" yes
-ok "the exclusion set: the report is closed"        "$(head -1 <<<"$(sed -n 's/^status: //p' "$REPORT")")" done
+ok "the exclusion set: the report is closed"        "$(head -1 <<<"$(sed -n 's/^status: //p' "$REPORT")")" "done"
 ok "the exclusion set: exactly one commit"          "$(git rev-list --count "$head_before"..HEAD)" 1
 ok "…and nothing it touched is left uncommitted"    "$(git status --porcelain knowledge/ "$REPORT" | wc -l | tr -d ' ')" 0
 ok "the commit touches only what the report + the exclusion set name" \
@@ -163,7 +163,7 @@ for k in ledger provenance; do
   # waiting-report guard would short-circuit before the proposer ever ran.
   ok "a proposal writing $k: is dropped at propose" \
     "$("$PROPOSE" --proposer "$TMP/p-$k.sh" --project "kb-r2-$k" 2>&1 >/dev/null | grep -c "'$k' is not a proposal")" 1
-  ok "…and no report was written for it" "$([ -d "projects/kb-r2-$k/tasks" ] && ls "projects/kb-r2-$k/tasks" | grep -c . || echo 0)" 0
+  ok "…and no report was written for it" "$([ -d "projects/kb-r2-$k/tasks" ] && find "projects/kb-r2-$k/tasks" -type f | grep -c . || echo 0)" 0
 done
 # propose already refuses these, so apply needs a hand-built report of its own. Each
 # assertion reads the REFUSAL TEXT: an exit 1 for some earlier reason would prove nothing.
@@ -316,6 +316,30 @@ ok "a human doc gains only its field and one ledger: line" \
   "$(diff "$TMP/h1.before" knowledge/findings/h1.md | grep '^[<>]' | cut -c1-9 | tr '\n' '|')" "< tags: [|> tags: [|> ledger:|"
 ok "…the ledger names the human" "$(grep -c '^ledger:.* · edit · by example-user-007 · items h1 · ' knowledge/findings/h1.md)" 1
 ok "…and provenance: is untouched" "$(sed -n 's/^provenance: //p' knowledge/findings/h1.md)/$(sed -n 's/^status: //p' knowledge/findings/x1.md)" human/archived
+cd "$D" || exit 2
+
+echo "== a trailing # comment is read the way validate-bundle.sh reads it =="
+D3="$TMP/bundle-comment"
+mkdir -p "$D3/knowledge/findings" "$D3/.loopd"
+printf -- '---\ntype: Finding\ntitle: T\ndescription: d\nlesson: l\ncategory: learning\ntags: [ ]\nstatus: current\nprovenance: machine  # x\ntimestamp: 2026-10-01T00:00:00Z\n---\n\n# Finding\n\nA claim.\n' \
+  >"$D3/knowledge/findings/commented.md"
+cp "$REPO/plugin/seed/knowledge/vocab.md" "$D3/knowledge/vocab.md"
+printf 'index, regenerated\n' >"$D3/knowledge/index.md"
+printf '{ "org": "example-org" }\n' >"$D3/instance.config.json"
+cp "$REPO/plugin/seed/SCHEMA.md" "$D3/.loopd/SCHEMA.md"
+cd "$D3" || exit 2
+git init -q . && git config user.name example-user-007 && git config user.email u@example.com
+git add -A && git commit -qm init
+ok "validate-bundle reads provenance: machine  # x as machine" \
+  "$("$VALIDATE" knowledge/findings/commented.md 2>&1 | grep -c ERROR)" 0
+printf '#!/usr/bin/env bash\necho "edit · commented · title=New · - · retitle"\n' >"$TMP/p-comment.sh"
+chmod +x "$TMP/p-comment.sh"
+out="$("$PROPOSE" --proposer "$TMP/p-comment.sh" 2>"$TMP/comment.err")"; rc=$?
+RC3="$(sed -n 's/.* in \(projects[^ ]*\.md\) .*/\1/p' <<<"$out")"
+ok "kb-propose keeps the commented machine doc" "$rc/$(grep -c '^P1 · edit · commented · ' "$RC3" 2>/dev/null)" 0/1
+sed -i.bak 's/^status: draft$/status: draft  # awaiting the human/' "$RC3" && rm -f "$RC3.bak"
+ok "kb-apply accepts the report, its status: commented too" \
+  "$("$APPLY" --by example-user-007 "$RC3" >/dev/null 2>"$TMP/comment-apply.err"; echo $?)/$(sed -n 's/^title: //p' knowledge/findings/commented.md)" 0/New
 cd "$D" || exit 2
 
 echo "== the guards that keep agents out =="

@@ -2,12 +2,12 @@
 # service-doc.sh — the ONE matcher from a task to its Service doc; dispatch-brief.sh and any
 # other resolver call it rather than keep a second one.
 #   service-doc.sh <task-doc> [--instance <bundle>]   prints knowledge/services/<slug>.md
-#   service-doc.sh --repo <task-doc>                  prints the resolved target repo
+#   service-doc.sh --repo <task-doc>                  prints the resolved repo, normalised
 #   service-doc.sh --ties <task-doc>                  every equally-ranked doc, one per line
-# Repo: the task's target_repo:, else its project.md's. Candidates: repo: equal, status: not
-# deprecated. Several ⇒ a literal path the task names (longest first), then
-# <repo-basename>.md, then the lexically first slug. Exit: 0 printed · 1 no match · 2
-# unreadable task, usage, or (--ties) an unreadable services doc that may be the match.
+# Repo: the task's target_repo:, else its project.md's. Candidates: repo: equal under
+# kb_repo_norm, status: not deprecated. Several ⇒ a literal path the task names (longest
+# first), then <repo-basename>.md, then the lexically first slug. Exit: 0 printed · 1 no
+# match · 2 unreadable task, usage, or (--ties) an unreadable services doc that may match.
 # Reasoning: kb-retrieval-and-papercut-fixes/task-003.
 set -uo pipefail
 export LC_ALL=C
@@ -43,9 +43,9 @@ fm_value() { # <key> <file> — first occurrence in the frontmatter, unquoted
     }' "$2"
 }
 
-REPO="$(fm_value target_repo "$TASK")"
+REPO="$(kb_repo_norm "$(fm_value target_repo "$TASK")")"
 if [ -z "$REPO" ] && [ "${TASK_DIR##*/}" = tasks ] && [ -f "$TASK_DIR/../project.md" ]; then
-  REPO="$(fm_value target_repo "$TASK_DIR/../project.md")"
+  REPO="$(kb_repo_norm "$(fm_value target_repo "$TASK_DIR/../project.md")")"
 fi
 [ -n "$REPO" ] || exit 1
 [ "$MODE" = repo ] && { printf '%s\n' "$REPO"; exit 0; }
@@ -63,7 +63,7 @@ CANDS=(); UNREAD=""
 for f in "$INSTANCE"/knowledge/services/*.md; do
   [ -f "$f" ] || continue
   [ -r "$f" ] || { UNREAD="$f"; continue; }
-  [ "$(fm_value repo "$f")" = "$REPO" ] && [ "$(fm_value status "$f")" != deprecated ] && CANDS+=("$f")
+  [ "$(kb_repo_norm "$(fm_value repo "$f")")" = "$REPO" ] && [ "$(fm_value status "$f")" != deprecated ] && CANDS+=("$f")
 done
 [ "$MODE" = ties ] && [ -n "$UNREAD" ] && { echo "service-doc: cannot read $UNREAD" >&2; exit 2; }
 [ "${#CANDS[@]}" -gt 0 ] || exit 1

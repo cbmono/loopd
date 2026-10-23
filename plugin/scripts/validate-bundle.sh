@@ -93,6 +93,7 @@
 # Verified by tests/validate-bundle.test.sh.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/kb-words.sh" || exit 2
 
 STRICT=0; CHANGED=0; NAMED=(); NAMED_INDEX=0
 while [[ $# -gt 0 ]]; do
@@ -448,6 +449,14 @@ while IFS= read -r file; do
       print v }')"
   fi
 
+  if [[ $type == Service ]]; then
+    srepo="$(sed -n 's/^repo:[[:space:]]*//p' <<<"$fm" | head -1 | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//' \
+             | sed 's/^"\(.*\)"$/\1/; s/^'"'"'\(.*\)'"'"'$/\1/')"
+    if [[ -n "$srepo" ]] && { [[ "$(kb_repo_norm "$srepo")" != "$srepo" ]] || [[ ! "$srepo" =~ ^[^/]+/[^/]+$ ]]; }; then
+      warn "$rel" "repo: '$srepo' is not the canonical <org>/<repo> form (lowercase, no .git, no URL) — service-doc.sh matches it as '$(kb_repo_norm "$srepo")' ($AB_SCHEMA, type: Service)"
+    fi
+  fi
+
   if ! grep -q '^timestamp:[[:space:]]*[^[:space:]]' <<<"$fm"; then
     fail "$rel" "missing required field: timestamp"
   fi
@@ -492,7 +501,7 @@ while IFS= read -r file; do
 
     # `open_caveats` holds a TERMINAL write only — `done`/`cancelled`. Any other status
     # with a caveat outstanding is the normal working state and stays silent.
-    if [[ "$status" == done || "$status" == cancelled ]]; then
+    if [[ "$status" == "done" || "$status" == cancelled ]]; then
       while IFS= read -r caveat; do
         [[ -n "$caveat" ]] || continue
         fail "$rel" "status '$status' is held by an open caveat ($AB_SCHEMA 'open_caveats' — clear it with evidence, in its own edit): $caveat"
