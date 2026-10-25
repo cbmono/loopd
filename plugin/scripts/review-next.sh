@@ -9,7 +9,7 @@
 #
 # Exit 0 decided · 2 unknown input (stdout still `hold`). The same answer under gated and yolo.
 # `--clear` (required-checks.sh): may this head merge with no review at it? 0 yes — prints and
-# records last-round|qa-zero|zero-zero — · 1 hold, the reason on stderr · 2 unknown.
+# records last-round|qa-head|qa-zero|zero-zero — · 1 hold, the reason on stderr · 2 unknown.
 # Reasoning and the table: step-4-advance.md → "What next on a PR" and its merge-path row.
 set -uo pipefail
 
@@ -29,30 +29,30 @@ decide() {
     case "$n" in ''|*[!0-9]*) echo "review-next: crr, qar, crd and qad must be integers" >&2; echo hold; return 2 ;; esac
   done
 
-  # NEXT_KIND is the merge-path kind --clear acts on: review (at the head), last-round-coderabbit,
-  # last-round-qa, qa-zero or zero-zero.
+  # NEXT_KIND is the merge-path kind --clear acts on: review (at the head), qa-head (a QA pass at
+  # the head), last-round-coderabbit, last-round-qa, qa-zero or zero-zero.
   say() { echo "review-next: $2" >&2; echo "$1"; NEXT_ANSWER="$1"; NEXT_KIND="${3:-}"; }
   [ "$rc" = 7 ] && { say rebase-round "the PR conflicts (exit 7)"; return 0; }
   [ "$rc" = 2 ] && { say hold "reviewer state unreadable (exit 2)"; return 0; }
   [ "$rc" = 6 ] && { say implementer-round "CodeRabbit's threads are open at the head (exit 6): address them, then merge"; return 0; }
   [ "$crr" -eq 0 ] && [ "$qar" -eq 0 ] && { say merge-path "coderabbitRounds and qaRounds are both 0" zero-zero; return 0; }
 
-  local qa=""
+  local qa="" refused=""
   if [ "$crr" -eq 0 ] && [ "$qar" -ge 1 ]; then qa="coderabbitRounds is 0"
   elif [ "$rc" = 0 ]; then say merge-path "CodeRabbit reviewed the head (exit 0)" review; return 0
   elif { [ "$rc" = 5 ] || { [ "$rc" = 1 ] && [ "$class" = declined ]; }; } && [ "$crd" -lt "$crr" ]; then
-    qa="CodeRabbit refused after $crd of $crr round(s)"
+    qa="CodeRabbit refused after $crd of $crr round(s)"; refused=yes
   elif [ "$qad" -ge 1 ] || [ "$qrec" = yes ]; then qa="QA rounds already began on this PR"
   fi
 
   if [ -n "$qa" ]; then
-    [ "$qar" -eq 0 ] && { say merge-path "$qa and qaRounds is 0" qa-zero; return 0; }
     [ "$qlast" = unknown ] && { say hold "QA round $qad is inconclusive or unreadable (open threads?); surface it"; return 0; }
     if [ "$qhead" = yes ]; then
-      [ "$qlast" = pass ] && { say merge-path "QA passed the head" last-round-qa; return 0; }
+      [ "$qlast" = pass ] && { say merge-path "QA passed the head" qa-head; return 0; }
       say implementer-round "QA round $qad found problems at the head, no fix yet"; return 0
     fi
     [ "$qrec" = yes ] && { say hold "a QA round is in flight at this head"; return 0; }
+    [ "$qar" -eq 0 ] && [ -n "$refused" ] && [ "$qad" -eq 0 ] && { say merge-path "$qa and qaRounds is 0" qa-zero; return 0; }
     [ "$qad" -eq 0 ] && { say dispatch-qa "$qa"; return 0; }
     [ "$qlast" = pass ] && { say merge-path "QA stopped at its first pass" last-round-qa; return 0; }
     [ "$qad" -lt "$qar" ] && { say dispatch-qa "QA round $qad failed and a fix landed; round $((qad + 1)) of $qar"; return 0; }
@@ -138,6 +138,10 @@ decide "${facts[@]}" >/dev/null || unknown "the review state is unreadable"
 kind="$NEXT_KIND"
 case "$kind" in
   qa-zero|zero-zero) ;;
+  qa-head)
+    reviewed="$("$D/review-rounds.sh" "$num" --for qa --last --repo "$nwo" --instance "$inst" 2>/dev/null)"
+    [ $? -le 1 ] || unknown "the last qa round is unreadable"
+    [ "$reviewed" = "$head" ] || hold "the last QA round is not at the head" ;;
   last-round-coderabbit|last-round-qa)
     who="${kind#last-round-}"
     reviewed="$("$D/review-rounds.sh" "$num" --for "$who" --last --repo "$nwo" --instance "$inst" 2>/dev/null)"
@@ -157,7 +161,8 @@ case "$kind" in
     cmp="$(gh api "/repos/$nwo/compare/$reviewed...$head" 2>/dev/null)" || unknown "compare $reviewed...$head is unreadable"
     st="$(printf '%s' "$cmp" | jq -r '.status // ""' 2>/dev/null)"
     case "$st" in
-      ahead|identical) ;;
+      ahead) ;;
+      identical) hold "no fix has landed after the last round at $reviewed" ;;
       diverged|behind) hold "a rebase or force-push after the last round orphaned the reviewed commit $reviewed (compare: $st)" ;;
       *) unknown "compare $reviewed...$head answered no status" ;;
     esac
@@ -171,6 +176,7 @@ case "$kind" in
     [ -z "$odd" ] || hold "files with no countable lines (binary, rename, mode-only or submodule): $(printf '%s' "$odd" | tr '\n' ',' | sed 's/,$//')"
     lines="$(printf '%s' "$cmp" | jq '[.files // [] | .[] | (.additions // 0) + (.deletions // 0)] | add // 0' 2>/dev/null)"
     case "$lines" in ''|*[!0-9]*) unknown "compare line counts unreadable" ;; esac
+    [ "$lines" -gt 0 ] || hold "no line has changed since the last round at $reviewed, so no fix has landed"
     max="$(bash "$D/resolve-review-config.sh" --instance "$inst" reviewFixMaxLines)" || unknown "reviewFixMaxLines unreadable"
     if [ "$lines" -gt "$max" ]; then
       merges="$(printf '%s' "$cmp" | jq '[.commits // [] | .[] | select((.parents // []) | length > 1)] | length' 2>/dev/null)"

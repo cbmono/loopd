@@ -4,7 +4,7 @@
 # were checked against, so the PreToolUse hook can read them OFFLINE.
 #
 #   clearance-receipt.sh record <script> [--kind internal|external] [--fail] --repo O/R --pr N --head SHA [--bundle DIR]
-#   clearance-receipt.sh record review-next.sh --unreviewed last-round|qa-zero|zero-zero --repo O/R --pr N --head SHA [--bundle DIR]
+#   clearance-receipt.sh record review-next.sh --unreviewed last-round|qa-head|qa-zero|zero-zero --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh verify [--unreviewed] --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh path   --repo O/R --pr N --head SHA [--bundle DIR]
 #
@@ -49,7 +49,7 @@ while [ $# -gt 0 ]; do
     --unreviewed)
       case "$mode" in
         record) [ "$script" = review-next.sh ] || usage
-                case "${2:-}" in last-round|qa-zero|zero-zero) result="$2" ;; *) usage ;; esac; shift 2 ;;
+                case "${2:-}" in last-round|qa-head|qa-zero|zero-zero) result="$2" ;; *) usage ;; esac; shift 2 ;;
         verify) unrev=yes; shift ;;
         *) usage ;;
       esac ;;
@@ -100,12 +100,14 @@ case "$mode" in
       echo "clearance-receipt: the receipt for $repo#$pr does not name head $head — refusing" >&2
       exit 1
     }
-    # A merge with no review at this head (review-next.sh --clear) stands in for the review
-    # pass and the checker table; after the last round, its FAIL rows count as addressed.
-    path=""
-    [ -n "$unrev" ] && path="$(awk '$2 == "review-next.sh" && ($1 == "last-round" || $1 == "qa-zero" || $1 == "zero-zero") { print $1 }' \
-      "$file" 2>/dev/null | tail -n 1)"
-    failed="$(awk -v p="$path" '$1 == "fail" && !(p == "last-round" && $2 == "pr-verdict-clearance.sh") { print $2 }' \
+    # A review-next.sh --clear line stands in for the review pass (qa-head keeps the checker).
+    # After the last round, a checker FAIL recorded BEFORE the last-round line counts as
+    # addressed; one recorded after it still refuses.
+    path=""; at=""
+    [ -n "$unrev" ] && read -r path at <<EOF
+$(awk '$2 == "review-next.sh" && $1 ~ /^(last-round|qa-head|qa-zero|zero-zero)$/ { print $1, $3 }' "$file" 2>/dev/null | tail -n 1)
+EOF
+    failed="$(awk -v p="$path" -v t="$at" '$1 == "fail" && !(p == "last-round" && $2 == "pr-verdict-clearance.sh" && $3 < t) { print $2 }' \
       "$file" 2>/dev/null | tr '\n' ' ')"
     [ -z "$failed" ] || {
       echo "clearance-receipt: $repo#$pr at $head failed: ${failed% } — refusing" >&2
@@ -113,7 +115,9 @@ case "$mode" in
     }
     got="$(awk '$1 == "pass" { print $2 }' "$file" 2>/dev/null)"
     need="$REQUIRED"
-    if [ -n "$path" ]; then
+    if [ "$path" = qa-head ]; then
+      need="required-checks.sh pr-body-clearance.sh $CHECKER"
+    elif [ -n "$path" ]; then
       need="required-checks.sh pr-body-clearance.sh"
     else
       awk '$1 == "pass" && $2 == "review-clearance.sh" && $4 == "external" { f = 1 } END { exit !f }' \
@@ -136,7 +140,7 @@ case "$mode" in
     {
       printf 'repo %s\npr %s\nhead %s\n' "$repo" "$pr" "$head"
       # One line per script AND kind: an internal run at this head cannot erase an external one.
-      [ -f "$file" ] && awk '$1 ~ /^(pass|fail|last-round|qa-zero|zero-zero)$/ &&
+      [ -f "$file" ] && awk '$1 ~ /^(pass|fail|last-round|qa-head|qa-zero|zero-zero)$/ &&
         !($2 == s && ($4 == "external" ? "external" : "internal") == k)' \
         s="$script" k="${kind:-internal}" "$file"
       printf '%s %s %s%s\n' "$result" "$script" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${kind:+ $kind}"

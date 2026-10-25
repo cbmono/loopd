@@ -213,9 +213,9 @@ reviewed_at_x; printf '[]\n' > "$FIX/reviews_json"; printf '{"coderabbitRounds":
 ok "0/0 with no reviewer at all -> merge path" "$(live)" merge-path
 ok "…--clear clears as zero-zero" "$(clear | tr '\n' ' ')" "zero-zero rc=0 "
 
-qa_at_x() { # <verdict> — a qa-bot trailer at X, the head H
+qa_at_x() { # <verdict> [<sha>] — a qa-bot trailer at X (or <sha>), the head H
   reviewed_at_x; printf '[]\n' > "$FIX/reviews_json"
-  "$REAL_JQ" -n --arg b "$(printf 'Checked.\n\n<!-- okf-verdict v1\nverdict: %s\nhead_sha: %s\nreviewer: qa-reviewer\nlenses: correctness=done security=done repro=done\nunverified_criteria: none\ncaveats: none\n-->\n' "$1" "$X")" \
+  "$REAL_JQ" -n --arg b "$(printf 'Checked.\n\n<!-- okf-verdict v1\nverdict: %s\nhead_sha: %s\nreviewer: qa-reviewer\nlenses: correctness=done security=done repro=done\nunverified_criteria: none\ncaveats: none\n-->\n' "$1" "${2:-$X}")" \
     '[{user:{login:"qa-bot"}, body:$b}]' > "$FIX/comments_json"
 }
 qa_at_x changes-requested; cmpf ahead "$(f modified a.sh 6 2)"
@@ -223,6 +223,26 @@ ok "QA FAIL at the last round, a fix after it -> merge path" "$(live)" merge-pat
 ok "…--clear measures from the QA round and clears" "$(clear | tr '\n' ' ')" "last-round rc=0 "
 qa_at_x changes-requested; cmpf ahead "$(f modified a.sh 250 51)"
 ok "…over the cap from the QA round -> hold" "$(clear)" rc=1
+
+echo "== QA round 1 fixes: no waiver without a fix =="
+reviewed_at_x; cmpf ahead
+"$REAL_JQ" '.files = []' "$FIX/compare_json" > "$FIX/c" && mv "$FIX/c" "$FIX/compare_json"
+printf '%s\n' '{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[{"isResolved":false,"path":"a.sh","line":3,"comments":{"nodes":[{"author":{"login":"coderabbitai"},"url":"https://example.invalid/t/1","body":"quote it"}]}}]}}}}}' > "$FIX/threads_json"
+ok "1: an empty commit after the last round, threads open -> hold" "$(clear)/$(said 'no fix has landed')" rc=1/yes
+ok "…and writes no line" "$([ -f "$RCPT" ] && echo yes || echo no)" no
+reviewed_at_x; cmpf identical
+ok "1: compare identical after a CodeRabbit round -> hold" "$(clear)/$(said 'no fix has landed')" rc=1/yes
+qa_at_x pass "$H"
+ok "2: a QA PASS at the head -> merge path" "$(live)" merge-path
+ok "…--clear files it as qa-head, never last-round" "$(clear | tr '\n' ' ')" "qa-head rc=0 "
+ok "…and writes no last-round line" "$(grep -c '^last-round ' "$RCPT")" 0
+ok "3: qaRounds 0, no refusal, QA FAIL at the head -> implementer round" \
+   "$(d rc=4 crr=1 qar=0 crd=0 qad=1 qlast=fail qhead=yes)" implementer-round
+ok "3: qaRounds 0, a refusal, QA FAIL at the head -> implementer round" \
+   "$(d rc=1 class=declined crr=1 qar=0 crd=0 qad=1 qlast=fail qhead=yes)" implementer-round
+qa_at_x changes-requested "$H"; printf '{"qaRounds": 0}\n' > "$B/instance.config.json"
+ok "3: …the same live: --clear refuses" "$(clear)" rc=1
+ok "…and writes no waiver line" "$(grep -cE '^(last-round|qa-head|qa-zero|zero-zero) ' "$RCPT" 2>/dev/null || true)" 0
 
 echo
 echo "pass=$pass fail=$fail"

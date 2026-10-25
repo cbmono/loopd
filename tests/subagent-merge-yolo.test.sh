@@ -435,9 +435,21 @@ STUB
     is "…verify without --unreviewed ignores the line" \
        "$("$RECEIPT" verify --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H" >/dev/null 2>&1; echo $?)" 1
   done
-  forget; unrev last-round; others
+  age() { sed -i.bak "s/^$1 \\([^ ]*\\) [^ ]*/$1 \\1 2000-01-01T00:00:00Z/" "$RCPT"; }
+  forget; others
   "$RECEIPT" record pr-verdict-clearance.sh --fail --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
-  is "last-round + a stale checker FAIL line: addressed after the last round ⇒ permitted" "$(permit)" 0
+  age fail; unrev last-round
+  is "last-round after a stale checker FAIL line: addressed after the last round ⇒ permitted" "$(permit)" 0
+  forget; others; unrev last-round; age last-round
+  "$RECEIPT" record pr-verdict-clearance.sh --fail --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
+  is "a checker FAIL recorded AFTER the last-round line revokes it ⇒ refused" "$(permit)" 1
+  forget; others; unrev qa-head
+  is "qa-head without a checker pass ⇒ refused" "$(permit)" 1
+  record_all 42 "$H" pr-verdict-clearance.sh
+  is "…with the checker's pass ⇒ permitted" "$(permit)" 0
+  "$RECEIPT" record pr-verdict-clearance.sh --fail --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
+  age fail
+  is "…and qa-head filters no checker FAIL, however old ⇒ refused" "$(permit)" 1
   forget; unrev qa-zero; others
   "$RECEIPT" record pr-verdict-clearance.sh --fail --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
   is "qa-zero + a checker FAIL line ⇒ refused" "$(permit)" 1

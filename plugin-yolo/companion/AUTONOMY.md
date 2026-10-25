@@ -257,31 +257,35 @@ half only when `review-next.sh` already answers `merge-path` and one of these ho
   pass, or `qaRounds` reached). The reviewed commit is `review-rounds.sh --for <r> --last`;
   for CodeRabbit it must also be a vendor review object's `commit_id`, so a round evidenced
   only by the edited summary comment (route C) never opens this. The host's
-  `GET /repos/{o}/{r}/compare/{reviewed}...{head}` must say `ahead` (or `identical`), and its
-  per-file additions plus deletions must total at most **`reviewFixMaxLines`** (**300** when
-  absent). A binary, a rename, a mode-only change, a submodule bump or 300+ files hold for
+  `GET /repos/{o}/{r}/compare/{reviewed}...{head}` must say `ahead` with at least one changed
+  line — an empty commit is no fix — and its per-file additions plus deletions must total at
+  most **`reviewFixMaxLines`** (**300** when absent). A binary, a rename, a mode-only change, a submodule bump or 300+ files hold for
   the human instead of counting 0; so does a rebase that orphans the reviewed commit
   (`diverged`) and a merge from the base branch that busts the cap — the reason names which.
-- **`qa-zero`** — `qaRounds: 0` with a real CodeRabbit refusal: no review round runs.
+- **`qa-head`** — a QA pass at the head itself: the checker table is still required, and any
+  checker FAIL line refuses.
+- **`qa-zero`** — `qaRounds: 0` with a real CodeRabbit refusal before its last round and no QA
+  verdict at the head: no review round runs.
 - **`zero-zero`** — `coderabbitRounds: 0` and `qaRounds: 0`: no review round runs at all.
 
 **A fix is required first.** Open CodeRabbit threads at the head (exit 6) and FAIL rows from
 a QA round at the head answer `implementer-round`, never a merge. **Once a fix commit has
 landed after the last round, they block nothing**: no review is at the new head, so clause 9
-is not asked, and a `last-round` line ignores the `pr-verdict-clearance.sh` fail line.
+is not asked, and a `last-round` line ignores a `pr-verdict-clearance.sh` fail line recorded
+before it — never one recorded after it at the same head.
 
 **`qaRounds: 0` is an explicit opt-in to merging a PR nobody reviewed.** A refusal is read
 from comment text, so a misread comment can open such a merge. The owner accepted both
 (2026-10-24).
 
-The receipt gets one `last-round`, `qa-zero` or `zero-zero` line from `review-next.sh` at the
+The receipt gets one `last-round`, `qa-head`, `qa-zero` or `zero-zero` line from `review-next.sh` at the
 exact head. Then:
 
 - `required-checks.sh` accepts it for its review half; it reads no project mode. A
   reviewer's check the **host** requires is never waived — the host refuses the merge
   without it — so that PR holds for the human with that reason.
-- The hook's `merge-permit.sh` accepts the line in place of the review pass and the checker
-  table **only for a `yolo` project**; a `gated` one is refused and the human merges.
+- The hook's `merge-permit.sh` accepts the line in place of the review pass (and, except for
+  `qa-head`, the checker table) **only for a `yolo` project**; a `gated` one is refused and the human merges.
 - Every other precondition holds: required checks green at the head (a reviewer's check
   that is not required never blocks), `pr-body-clearance.sh` exit 0, every criteria row
   `✓`, not CONFLICTING, the head the verified SHA, the same squash merge pinned to it, and
