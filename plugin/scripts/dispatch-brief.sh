@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# dispatch-brief.sh — the seven fixed sections the PM pastes into a dispatch brief
+# dispatch-brief.sh — the eight fixed sections the PM pastes into a dispatch brief
 # verbatim: `## Grounding (<repo>)`, service-doc.sh's entry points capped at 15 lines (or
 # one line telling the agent to draft the missing doc); `## Effort`, the files/LOC/turns
 # budget; `## Commit attribution` and `## PR title`, the resolved `commitAttribution` and
 # `ticketPrefix`; `## Scratch`, a directory this task alone owns; `## Deliverables`, the
-# project's non-code paths; and `## Knowledge`, kb-select.sh's 1-5 Finding rows.
+# project's non-code paths; `## Signature`, the role-signature.sh call with this bundle;
+# and `## Knowledge`, kb-select.sh's 1-5 Finding rows.
 # Usage: dispatch-brief.sh <task-doc> [--instance <bundle>]. Exit: 0 printed, 2 cannot
 # answer (no task doc, unreadable frontmatter). Never fails a dispatch — an absent config
 # key falls back to the documented default. Reasoning: ai-bridge-next/task-017 (bands),
@@ -22,9 +23,10 @@ ATTRIBUTION_HEADING='## Commit attribution'
 TITLE_HEADING='## PR title'
 SCRATCH_HEADING='## Scratch'
 DELIVERABLES_HEADING='## Deliverables'
+SIGNATURE_HEADING='## Signature'
 KNOWLEDGE_HEADING='## Knowledge'
 
-usage() { sed -n '2,12p' "$0" >&2; exit 2; }
+usage() { sed -n '2,13p' "$0" >&2; exit 2; }
 
 fm_block() { # <file> — the frontmatter, or exit 3/4 for a shape we will not read
   awk '
@@ -210,6 +212,12 @@ printf '\n%s\n\n' "$DELIVERABLES_HEADING"
 printf 'A file a human or a later task consumes (sheet, instructions, export, report): %s/deliverables/ — and list it in this task'"'"'s `artifacts:`.\n' "$PROJ"
 printf 'Customer data, ticket exports, anything PII-adjacent: %s/deliverables/local/ (gitignored, never pushed). Inputs you gather: %s/sources/.\n' "$PROJ" "$PROJ"
 printf 'Never `~`, `/`, another repo or the bundle root — ask in `open_questions`. Hand a file over by this project path (CONVENTIONS.md → "Where files go").\n'
+
+# An agent runs in a target-repo worktree, where the helper cannot find ownerGithubUser
+# unless it is handed the bundle.
+printf '\n%s\n\n' "$SIGNATURE_HEADING"
+printf 'End every PR comment and review you post with the line this prints, as its last visible line, with no blank line before it (an okf-verdict trailer still goes after it). Not on a PR body, not on a bare `@coderabbitai review`:\n'
+printf '`%s/role-signature.sh <your-role> --instance %s`\n' "$BIN" "${INSTANCE:-<bundle>}"
 
 printf '\n%s\n\n' "$KNOWLEDGE_HEADING"
 bash "$BIN/kb-select.sh" "$TASK" ${INSTANCE:+--instance "$INSTANCE"}
