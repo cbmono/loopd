@@ -332,7 +332,7 @@ signature". Never on a PR body.
    carries (omit the line when it carries none; never copy it anywhere else). On a PR
    opened under your own login it is the only thing that makes your verdict count, so post
    the criteria table, signature and trailer as ONE PR comment (`gh pr comment`), which
-   both readers take. The trailer is the only part the loop reads, so a
+   both readers take, and never edit it: an edited or duplicated carrier counts for nobody. The trailer is the only part the loop reads, so a
    caveat you mention in prose but not in the trailer is a caveat you have hidden. If
    you can't assess the work, `verdict: inconclusive` is the correct answer — never
    `pass` with an explanation.

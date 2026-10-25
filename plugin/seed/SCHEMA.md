@@ -865,7 +865,9 @@ and prints the nonce, which goes into the `qa-reviewer`'s brief and nowhere else
 under the PR author's own login counts — in `review-clearance.sh` route B, in
 `pr-verdict-clearance.sh` and in `review-rounds.sh`'s QA count alike — only when its
 `okf-verdict` trailer names that head, carries `dispatch: <nonce>` hashing to that record,
-and was posted after it. **It stops a verdict nobody dispatched and a trailer the
+and was posted after it — in one unedited PR comment that is the only artifact from that
+login carrying the nonce, because once posted the nonce is public and the same login can
+post or edit another. **It stops a verdict nobody dispatched and a trailer the
 implementer typed**: every role agent can read and write the bundle, which is why the
 record holds a hash and never the nonce. **Out of scope:** a same-uid process that reads
 the QA session's own transcript or its command line, or runs `qa-dispatch.sh mint` itself

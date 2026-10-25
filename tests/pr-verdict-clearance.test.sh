@@ -196,7 +196,7 @@ if command -v jq >/dev/null 2>&1; then
     { cat "$AGREE"; printf '\n— solo-qa\n\n<!-- okf-verdict v1\nverdict: pass\nhead_sha: %s\nreviewer: qa-reviewer\ndispatch: %s\n-->\n' "${3:-$H}" "$1"; } > "$TMP/qa-table"
     jq -n --rawfile body "$WORKER" --rawfile new "$TMP/qa-table" --arg h "$H" --arg t "$2" \
       '{body:$body, author:{login:"solo"}, url:"https://github.com/acme/widgets/pull/42", headRefOid:$h,
-        comments:[{author:{login:"solo"},body:$new,createdAt:$t}]}' > "$FIX/pr_json"
+        comments:[{author:{login:"solo"},body:$new,createdAt:$t,includesCreatedEdit:false}]}' > "$FIX/pr_json"
   }
   mint() { "$REPO/plugin/scripts/qa-dispatch.sh" mint --repo acme/widgets --pr 42 --head "$H"; }
   serve_qa 0123456789abcdef0123456789abcdef 2099-01-01T00:00:00Z
@@ -209,6 +209,12 @@ if command -v jq >/dev/null 2>&1; then
   ok "…the right nonce, posted before the record: exit 4"   "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
   serve_qa "$(mint)" 2099-01-01T00:00:00Z 0123456789abcdef0123456789abcdef01234567
   ok "…the trailer names another head: exit 4"              "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+  serve_qa "$(mint)" 2099-01-01T00:00:00Z
+  jq '.comments[0].includesCreatedEdit = true' "$FIX/pr_json" > "$FIX/p2" && mv "$FIX/p2" "$FIX/pr_json"
+  ok "…the verdict comment was edited: exit 4"               "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+  serve_qa "$(mint)" 2099-01-01T00:00:00Z
+  jq '.comments = [.comments[0], .comments[0]]' "$FIX/pr_json" > "$FIX/p2" && mv "$FIX/p2" "$FIX/pr_json"
+  ok "…the nonce replayed in a second comment: exit 4"      "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
   unset CLAUDE_PROJECT_DIR
   serve worker-bot qa-bot "$AGREE"
   ok "--checker naming nobody finds no table"  \

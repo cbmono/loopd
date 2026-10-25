@@ -87,7 +87,15 @@ says "…and says it matched the record" "matching a recorded qa-reviewer dispat
 
 fresh; n="$(mint)"; add_review dev COMMENTED "$CLEAN_HEAD" "$(trailer "$n")"
 REVIEWS="$("$REAL_JQ" --arg t "$LATER" '.[0].submitted_at = $t' <<<"$REVIEWS")"
-expect "…the same verdict as a review object (submitted_at) -> clears" 0 --reviewer dev
+expect "…the same verdict as a review object -> no review (edits are invisible)" 3 --reviewer dev
+
+fresh; n="$(mint)"; add_comment_at dev "$LATER" "$(trailer "$n")"
+add_comment_at dev "$LATER" "$(trailer "$n" '— dev-qa (copied)')"
+expect "the nonce replayed in a second comment -> neither counts (3)" 3 --reviewer dev
+says "…and says why" "only"
+
+fresh; n="$(mint)"; add_comment_edited dev "$LATER" "2099-01-02T00:00:00Z" "$(trailer "$n")"
+expect "the recorded verdict comment, edited afterwards -> no review (3)" 3 --reviewer dev
 
 fresh; mint >/dev/null; add_comment_at dev "$LATER" "$(trailer 0123456789abcdef0123456789abcdef)"
 expect "a record, but the trailer's nonce is wrong -> no review (3)" 3 --reviewer dev

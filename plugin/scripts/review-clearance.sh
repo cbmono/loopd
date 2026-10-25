@@ -1634,7 +1634,7 @@ stale_from=""; stale_at=""; unproven_from=""
 refusal_at_head=""; empty_from=""; empty_state=""; held_from=""; held_state=""
 cleared_msg=""; cleared_kind=internal; ack_from=""; ack_at_head=""; incremental_from=""; marker_outranked=""
 skip_from=""; other_refusal=""; declined_seen=""
-self_reviews=0; self_at_head=0
+self_reviews=0; self_at_head=0; self_hits=0; self_msg=""
 # THE FIELDS ARE UNIT-SEPARATED, NOT TAB-SEPARATED, and that is not decoration: a tab is
 # IFS WHITESPACE, so `read` collapses a run of them into one delimiter and every empty
 # field shifts the rest left. A comment's empty state and commit used to sit at the end of
@@ -1669,11 +1669,15 @@ while IFS=$'\037' read -r kind login state commit created updated; do
   # objects at the head were invisible rather than refused: #227 carries two of them,
   # `COMMENTED` at the exact head, and nothing anywhere said why they did not count.
   if [ "$(norm "$login")" = "$(norm "$pr_author")" ]; then
+    # The nonce is public once the QA posts, and the author's login can post and edit: so
+    # only ONE artifact may carry it, and it must be an unedited comment (a review body's
+    # edits are invisible to the API). A second carrier refuses both.
     if [ -n "$self_qa" ]; then
       render_body "$body" "$TMPD/stripped" "$TMPD/strict"
       if tv="$(verdict_trailer "$TMPD/strict")" && self_qa_ok "$created" "${tv#* }"; then
-        considered=$((considered + 1))
-        [ -n "$cleared_msg" ] || cleared_msg="ok: a validated okf-verdict trailer (verdict ${tv%% *}) from $login ($kind) names head $head_sha on PR $pr, matching a recorded qa-reviewer dispatch"
+        self_hits=$((self_hits + 1))
+        [ "$kind" = comment ] && { [ -z "$updated" ] || [ "$updated" = "$created" ]; } \
+          && self_msg="ok: a validated okf-verdict trailer (verdict ${tv%% *}) from $login ($kind) names head $head_sha on PR $pr, matching a recorded qa-reviewer dispatch"
         continue
       fi
     fi
@@ -1884,6 +1888,13 @@ while IFS=$'\037' read -r kind login state commit created updated; do
   fatal_grep
   [ -n "$unproven_from" ] || unproven_from="$login ($kind)"
 done < "$TMPD/index"
+
+if [ "$self_hits" -eq 1 ] && [ -n "$self_msg" ]; then
+  considered=$((considered + 1)); [ -n "$cleared_msg" ] || cleared_msg="$self_msg"
+elif [ "$self_hits" -gt 0 ]; then
+  echo "note: $self_hits artifact(s) from $pr_author carry the recorded QA dispatch's nonce; only" >&2
+  echo "      one unedited comment counts, so none of them does." >&2
+fi
 
 # A held head marker clears only when the account's LATEST command receipt was posted at
 # this head, is not a refusal, and the marker's comment was edited after it — the edit is

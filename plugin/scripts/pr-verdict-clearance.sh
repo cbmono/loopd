@@ -285,7 +285,7 @@ fi
 
 validate_tables || exit 2
 
-PR=""; REPO=""; CHECKER=""; BODY_FILE=""; CHK_FILE=""; CLOGIN=""; ALOGIN=""; CREATED=""
+PR=""; REPO=""; CHECKER=""; BODY_FILE=""; CHK_FILE=""; CLOGIN=""; ALOGIN=""; CREATED=""; EDITED=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo)          REPO="${2:-}"; shift 2 || usage ;;
@@ -347,6 +347,7 @@ else
           echo "       checker != author rule cannot be applied. Unknown." >&2; exit 2; }
         cp "$TMPD/one" "$TMPD/chk"; CLOGIN="$L"
         CREATED="$(printf '%s' "$META" | jq -r --argjson i "$i" '.comments[$i].createdAt // ""')"
+        EDITED="$(printf '%s' "$META" | jq -r --argjson i "$i" 'if .comments[$i].includesCreatedEdit == false then "false" else "true" end')"
         break
       fi
     fi
@@ -357,8 +358,8 @@ fi
 render "$TMPD/body" "$TMPD/rbody"
 render "$TMPD/chk" "$TMPD/rchk"
 
-# SCHEMA.md clause 8 on a solo bundle: a same-login checker counts only when its comment's
-# trailer names this head and carries the nonce of a qa-reviewer dispatch recorded before it.
+# SCHEMA.md clause 8 on a solo bundle: a same-login checker counts only when its unedited
+# comment's trailer names this head and carries the nonce of a dispatch recorded before it.
 DISPATCHED=""
 HEAD_SHA="$(printf '%s' "${META:-}" | jq -r '.headRefOid // ""' 2>/dev/null)" || HEAD_SHA=""
 URL="$(printf '%s' "${META:-}" | jq -r '.url // ""' 2>/dev/null)" || URL=""
@@ -368,7 +369,11 @@ if [ -n "$CLOGIN" ] && [ -n "$HEAD_SHA" ] && [ "$(norm "$CLOGIN")" = "$(norm "$A
             b && /^[[:space:]]*head_sha:/ { s = $2 }
             b && /^[[:space:]]*dispatch:/ { n = $2 }' "$TMPD/rchk" | tail -n 1)"
   T_SHA="${T%% *}"; T_NONCE="${T#* }"
+  # The nonce is public once posted: only one unedited comment from that login may carry it.
+  CARRIERS="$(printf '%s' "$META" | jq -r --arg l "$CLOGIN" --arg n "${T_NONCE:-}" \
+              '[.comments[] | select(.author.login == $l and ((.body // "") | contains($n)))] | length' 2>/dev/null)"
   if [ -n "$T" ] && [ "$T_SHA" = "$HEAD_SHA" ] && [ "$T_NONCE" != - ] \
+     && [ "${EDITED:-true}" = false ] && [ "${CARRIERS:-0}" = 1 ] \
      && "$(dirname "${BASH_SOURCE[0]:-$0}")/qa-dispatch.sh" check \
           --repo "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')" \
           --pr "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/[^/]+/[^/]+/pull/([0-9]+).*#\1#')" \
