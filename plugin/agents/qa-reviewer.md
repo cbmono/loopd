@@ -43,9 +43,9 @@ signature". Never on a PR body.
    a PR, set `status: in-review`, set `pr:`, add `# Result`. Do not merge.
 
 ### B. Review an existing PR (no new branch)
-1. **Are you allowed to be here at all? Run `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh <pr> --repo
-   <org>/<repo>` before you read the diff.** **Exit 1** means the cap is reached — this PR
-   has already had its two verification rounds. **Exit 2, a missing script, or any other
+1. **Are you allowed to be here at all? Run `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh <pr> --for qa
+   --repo <org>/<repo> --instance <bundle>` before you read the diff.** **Exit 1** means the cap is
+   reached — this PR has already had its `qaRounds` (**1** when absent) QA rounds. **Exit 2, a missing script, or any other
    non-zero** means the count could not be read, which is *unknown*, not the cap and not
    permission. **Both stop you**: post the escalation block from step 6 and stop without
    reviewing — but say which of the two it was, because "the cap is reached" and "nothing
@@ -296,15 +296,16 @@ signature". Never on a PR body.
    head is required; it is not the "don't re-review to confirm a fix" cost rule, which is
    about paying an external reviewer twice for the *same* diff.
 
-   **That requirement is bounded by the two-round cap — `CONVENTIONS.md`, "TWO ROUNDS,
+   **That requirement is bounded by the `qaRounds` cap — `CONVENTIONS.md`, "TWO ROUNDS,
    THEN THE HUMAN DECIDES", is canonical for the rule and its escalation.** Applied here:
-   re-verification is *required* up to the cap and *forbidden* past it, so your second
-   verdict on a PR is your last. Stop and let the human decide.
+   re-verification is *required* up to the cap and *forbidden* past it, so your
+   `qaRounds`-th verdict on a PR (the first, when the key is absent) is your last. Stop
+   and let the human decide.
 
-   **And you do not count your own rounds — `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh <pr> --repo
-   <org>/<repo>` does, at the start of mode B, before you read a diff.** It counts the
-   rounds already on the PR from what the host recorded, not from what anyone remembers,
-   and exits non-zero at or past two. Non-zero ⇒ **do not verify again and post no third
+   **And you do not count your own rounds — `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh <pr> --for qa
+   --repo <org>/<repo> --instance <bundle>` does, at the start of mode B, before you read a diff.** It
+   counts the rounds already on the PR from what the host recorded, not from what anyone
+   remembers, and exits non-zero at or past `qaRounds`. Non-zero ⇒ **do not verify again and post no third
    verdict.** Post one escalation block instead — what the reviewer wants, what the
    implementer says, and what the acceptance criterion actually asks for, in that order
    and nothing else — write the same block into the task `# Result` and its

@@ -156,7 +156,7 @@ ok "the section it points at exists"       "$(hasf "$AUT" '## Spending the fallb
 # delegate the GATE. A verdict is still required; only its author changes.
 ok "what is delegated is WHO, never WHETHER" "$(saw "$AUT_FLAT" 'delegated is WHO reviews, never WHETHER anybody does')" yes
 ok "exit 1 is not this decision, in either mode" "$(saw "$AUT_FLAT" '**Exit 1 is NOT this decision, in either mode.**')" yes
-ok "…and the two-round cap is untouched"   "$(saw "$AUT_FLAT" 'The two-round cap is untouched')" yes
+ok "…and the round caps are untouched"     "$(saw "$AUT_FLAT" 'The round caps are untouched')" yes
 
 # ========================================= 4. no caller silently mis-reads the new code
 echo

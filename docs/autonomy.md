@@ -356,26 +356,31 @@ clean. Three rules keep it to one.
 
 ## Two rounds, then the human decides
 
-A **hard cap** on how many verification rounds one PR gets, so an unresolved disagreement
-costs the human one decision rather than an unbounded review.
+A **hard cap** on how many verification rounds each reviewer gets on one PR —
+`coderabbitRounds` and `qaRounds` in `instance.config.json`, **1** each when absent (any
+integer ≥ 0) — so an unresolved disagreement costs the human one decision rather than an
+unbounded review.
 [`plugin/seed/CONVENTIONS.md`](../plugin/seed/CONVENTIONS.md) → "TWO ROUNDS, THEN THE HUMAN
 DECIDES" is normative and carries the measurement behind the number.
 
 | Round | What happens |
 |---|---|
 | 1 | the reviewer reports findings; the implementer fixes them and replies **once** |
-| 2 | the reviewer checks **only** what it raised in round 1 — new findings outside that set are recorded, not blocking |
-| 3 | **there is none.** Whatever is unresolved goes to the human in one short block: what the reviewer wants, what the implementer says, what the criterion actually asks |
+| 2+ | (a cap above 1) the reviewer checks **only** what it raised before — new findings outside that set are recorded, not blocking |
+| past the cap | **there is none.** Whatever is unresolved goes to the human in one short block: what the reviewer wants, what the implementer says, what the criterion actually asks |
 
-`scripts/review-rounds.sh <pr> [--repo <owner>/<name>]` makes the cap a number a
-dispatcher **reads** rather than a rule it has to remember. Run it before dispatching a
+`scripts/review-rounds.sh <pr> --for coderabbit|qa [--last|--commits] [--repo <owner>/<name>] [--instance <bundle>]`
+makes the cap a number a dispatcher **reads** rather than a rule it has to remember. The two
+reviewers are counted separately — a commit both reviewed is one round for each — and
+`--last` prints that reviewer's last reviewed commit instead of the count (`--commits`, every
+one). `qa` never counts a vendor login, even one whose review quotes `okf-verdict`. Run it before dispatching a
 verifier, and before verifying as one.
 
 | Exit | Means |
 |---|---|
 | 0 | under the cap |
-| 1 | at or past two rounds — stop, and put both positions in front of the human |
-| 2 | cannot answer. **Unknown is not permission**, and a missing or broken script lands here too, so the failure direction is "ask the human" |
+| 1 | at or past that reviewer's cap — stop, and put both positions in front of the human |
+| 2 | cannot answer (a bad config value included). **Unknown is not permission**, and a missing or broken script lands here too, so the failure direction is "ask the human" |
 
 A round is one **completed verification of a distinct commit**, and whether a candidate
 counts is decided by `review-clearance.sh` unmodified — so a rate-limited reviewer's

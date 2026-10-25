@@ -53,11 +53,12 @@ count() { [ -f "$1/selftests.count" ] && wc -l < "$1/selftests.count" | tr -d ' 
 lab() { # <name> -> a dir holding the REAL caller beside a stand-in sibling
   mkdir -p "$TMP/$1" "$TMP/$1.cache"
   # The caller sources its layout resolver from beside itself before anything else.
-  cp "$RR" "$REPO/plugin/scripts/bundle-paths.sh" "$REPO/plugin/scripts/plugin-name.sh" "$TMP/$1/"
+  cp "$RR" "$REPO/plugin/scripts/bundle-paths.sh" "$REPO/plugin/scripts/plugin-name.sh" \
+     "$REPO/plugin/scripts/resolve-config.sh" "$REPO/plugin/scripts/resolve-review-config.sh" "$TMP/$1/"
   printf '%s' "$TMP/$1"
 }
 call() { # <lab dir> -> runs the real caller once; prints its exit code
-  PATH="$BIN:$PATH" TMPDIR="$1.cache" bash "$1/review-rounds.sh" 1 >/dev/null 2>"$1/err"; printf '%s' "$?"
+  PATH="$BIN:$PATH" TMPDIR="$1.cache" bash "$1/review-rounds.sh" 1 --for coderabbit >/dev/null 2>"$1/err"; printf '%s' "$?"
 }
 OKLINE="review-clearance: self-test ok"
 
@@ -114,7 +115,7 @@ ok "review-rounds.sh and required-checks.sh carry the same function" \
 ok "neither calls a sibling's --self-test outside it" \
    "$(cat "$RR" "$RC" | grep -v '^[[:space:]]*#' | grep -c -- '--self-test 2>/dev/null')" 2
 R="$(lab real)"; cp "$REPO/plugin/scripts/review-clearance.sh" "$R/"
-PATH="$BIN:$PATH" TMPDIR="$R.cache" bash "$R/review-rounds.sh" 1 >/dev/null 2>"$R/err"
+PATH="$BIN:$PATH" TMPDIR="$R.cache" bash "$R/review-rounds.sh" 1 --for coderabbit >/dev/null 2>"$R/err"
 ok "the REAL review-clearance.sh passes and is recorded" "$(find "$R.cache" -type f -name 'review-clearance.sh.*' | wc -l | tr -d ' ')" 1
 ok "…under a key that is its checksum and byte count"    "$(basename "$(find "$R.cache" -type f)")" "review-clearance.sh.$(cksum < "$R/review-clearance.sh" | tr ' ' '-')"
 

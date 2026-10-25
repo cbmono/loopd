@@ -122,6 +122,7 @@ seed-drift|idempotent|no
 config-uncommitted|ambiguous|yes
 config-layers|ambiguous|no
 config-unknown-keys|ambiguous|yes
+review-config|ambiguous|yes
 tick-lock|human|yes
 orphan-processes|human|yes'
 
@@ -938,6 +939,28 @@ EOF
   note "the agent was retired from the plugin, so the entry is inert — it configures nothing"
   note "and errors nowhere; remove it to stop this line. fix will not touch it"
   hint "yours, not fix's: delete the entry from the file named above (roles and/or roleTiers)"
+  return "$_warned"
+}
+
+# =========================================================================================
+# CHECK 6b — review-config (ambiguous): a review-round key the resolver refuses. Ambiguous
+# for the `maxPrLoc` reason, and `review-rounds.sh` refuses to count while it stands.
+# =========================================================================================
+check_review_config() {
+  _warned=0
+  local err keys
+  if [ ! -f "$BIN/resolve-review-config.sh" ] || ! command -v python3 >/dev/null 2>&1; then
+    good "review rounds: not resolvable here (resolve-review-config.sh or python3 absent)"
+    return 0
+  fi
+  if err="$(bash "$BIN/resolve-review-config.sh" --instance "$ROOT" 2>&1 >/dev/null)"; then
+    good "review rounds: coderabbitRounds, qaRounds and reviewFixMaxLines resolve"
+    return 0
+  fi
+  keys="$(printf '%s\n' "$err" | sed -n 's/^resolve-review-config: \([A-Za-z]*\) must be.*/\1/p' | tr '\n' ' ')"
+  keys="${keys% }"
+  if [ -n "$keys" ]; then warn "review-round config not an integer >= 0: $keys"
+  else warn "review-round config could not be read"; fi
   return "$_warned"
 }
 

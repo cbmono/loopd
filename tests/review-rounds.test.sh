@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #
-# review-rounds.test.sh — the two-round cap, at its boundary.
+# review-rounds.test.sh — the per-reviewer round caps, at their boundary.
+#
+# The legacy matrix runs at coderabbitRounds 2 / qaRounds 2 (CAPS2) so its counts and exits
+# read as they did under the old shared cap of two; the defaults (1/1) have their own cases.
 #
 # `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES" is the rule that answers this
 # bundle's most expensive recorded failure (one pull request, eight review rounds, closed
@@ -155,11 +158,15 @@ commit_fixtures() {
   printf '%s\n' "$COMMENTS" > "$FIX/comments_json"
 }
 
-# run — echoes "<exit> <stdout>" so a case can assert the code and the count together.
+CAPS2="$TMP/caps2"; NOCFG="$TMP/nocfg"; mkdir -p "$CAPS2" "$NOCFG"
+printf '{"coderabbitRounds": 2, "qaRounds": 2}\n' > "$CAPS2/instance.config.json"
+
+# run [coderabbit|qa] [instance] [extra...] — echoes "<exit> <stdout>".
 run() {
   commit_fixtures
-  local out rc
-  out="$("$SCRIPT" 7 --repo octo/demo 2>"$TMP/err")"; rc=$?
+  local out rc for="${1:-coderabbit}" inst="${2:-$CAPS2}"
+  shift 2 2>/dev/null || shift $#
+  out="$("$SCRIPT" 7 --for "$for" --repo octo/demo --instance "$inst" "$@" 2>"$TMP/err")"; rc=$?
   printf '%s %s' "$rc" "${out:-<none>}"
 }
 
@@ -299,59 +306,64 @@ echo "== the fallback verifier, and its trailer =="
 # that inherited it would miss the rounds the cap is mostly about.
 setup; commit "$CLEAN_HEAD"; commit "$THIRD"
 comment "dev" "$(verdict_body "$THIRD")"
-ok "an okf-verdict trailer from the PR author IS a round" "$(run)" "0 1"
+ok "an okf-verdict trailer from the PR author IS a qa round" "$(run qa)" "0 1"
+ok "…and no coderabbit round" "$(run coderabbit)" "0 0"
 
-# …and it is a SECOND round on top of an external review of another commit.
+# Counted per reviewer now: an external round and a fallback verdict are one round EACH.
 setup; commit "$CLEAN_HEAD"; commit "$THIRD"
 comment "coderabbitai[bot]" "$CLEAN_BODY"
 comment "dev" "$(verdict_body "$THIRD")"
-ok "external round + fallback verdict = 2 rounds, and REFUSES" "$(run)" "1 2"
+ok "external round + fallback verdict: 1 coderabbit round" "$(run coderabbit)" "0 1"
+ok "…and 1 qa round" "$(run qa)" "0 1"
 
 # The marker is in this repository's own diffs, and reviewers quote diffs. A quotation
 # must not be able to spend somebody's rounds — the sibling parses the STRICT rendering,
 # with fenced blocks removed, which is what stops this.
 setup; commit "$CLEAN_HEAD"; commit "$THIRD"
 comment "dev" "$(verdict_body "$THIRD" fenced)"
-ok "a trailer quoted inside a fenced block is not a round" "$(run)" "0 0"
+ok "a trailer quoted inside a fenced block is not a round" "$(run qa)" "0 0"
 
 # A trailer naming a commit that is not on this PR pins nothing the host vouched for.
 setup; commit "$CLEAN_HEAD"; commit "$THIRD"
 comment "dev" "$(verdict_body "0000000000000000000000000000000000000000")"
-ok "a trailer naming a commit not on the PR is not a round" "$(run)" "0 0"
+ok "a trailer naming a commit not on the PR is not a round" "$(run qa)" "0 0"
 
 echo
 echo "== unknown never reads as 'go ahead' =="
 
 setup; commit "$CLEAN_HEAD"; commit_fixtures; : > "$FIX/pr_broken"
-out="$("$SCRIPT" 7 --repo octo/demo 2>/dev/null)"; rc=$?
+out="$("$SCRIPT" 7 --for coderabbit --repo octo/demo --instance "$CAPS2" 2>/dev/null)"; rc=$?
 ok "an unreadable PR refuses (exit 2)" "$rc" "2"
 
 setup; commit "$CLEAN_HEAD"; commit_fixtures; : > "$FIX/commits_broken"
-out="$("$SCRIPT" 7 --repo octo/demo 2>/dev/null)"; rc=$?
+out="$("$SCRIPT" 7 --for coderabbit --repo octo/demo --instance "$CAPS2" 2>/dev/null)"; rc=$?
 ok "an unreadable commit list refuses (exit 2)" "$rc" "2"
 
 setup; commit "$CLEAN_HEAD"; commit_fixtures; : > "$FIX/comments_broken"
-out="$("$SCRIPT" 7 --repo octo/demo 2>/dev/null)"; rc=$?
+out="$("$SCRIPT" 7 --for coderabbit --repo octo/demo --instance "$CAPS2" 2>/dev/null)"; rc=$?
 ok "an unreadable comment list refuses (exit 2)" "$rc" "2"
 
-out="$("$SCRIPT" 2>/dev/null)"; rc=$?
+out="$("$SCRIPT" --for coderabbit 2>/dev/null)"; rc=$?
 ok "no PR argument refuses (exit 2)" "$rc" "2"
 
 # A sibling that is absent, and one that is present but does not run. Both would otherwise
 # answer 'not a review' to every candidate — every PR zero rounds, the cap gone rather
 # than failing.
 ALONE="$TMP/alone"; mkdir -p "$ALONE"
-cp "$SCRIPT" "$ALONE/review-rounds.sh" 2>/dev/null
+for f in review-rounds.sh bundle-paths.sh resolve-config.sh resolve-review-config.sh; do
+  cp "$REPO/plugin/scripts/$f" "$ALONE/$f" 2>/dev/null
+done
 setup; commit "$CLEAN_HEAD"; commit_fixtures
 if [ -f "$ALONE/review-rounds.sh" ]; then
-  out="$("$ALONE/review-rounds.sh" 7 --repo octo/demo 2>"$TMP/err2")"; rc=$?
+  out="$("$ALONE/review-rounds.sh" 7 --for qa --repo octo/demo --instance "$CAPS2" 2>"$TMP/err2")"; rc=$?
 else rc="no-script"; fi
 ok "a missing review-clearance.sh refuses (exit 2)" "$rc" "2"
+ok "…for that reason, not an earlier one" "$(grep -c 'review-clearance.sh not found' "$TMP/err2")" "1"
 
 printf '#!/usr/bin/env bash\nexit 1\n' > "$ALONE/review-clearance.sh"
 chmod +x "$ALONE/review-clearance.sh"
 if [ -f "$ALONE/review-rounds.sh" ]; then
-  out="$("$ALONE/review-rounds.sh" 7 --repo octo/demo 2>"$TMP/err2")"; rc=$?
+  out="$("$ALONE/review-rounds.sh" 7 --for qa --repo octo/demo --instance "$CAPS2" 2>"$TMP/err2")"; rc=$?
 else rc="no-script"; fi
 ok "a review-clearance.sh that does not run refuses (exit 2)" "$rc" "2"
 
@@ -393,6 +405,57 @@ commit_fixtures; threads true
 ok "...and the same fixture with it RESOLVED counts the same 1" "$(run)" "0 1"
 
 echo
+echo "== per-reviewer caps, at the defaults (no instance.config.json: 1 / 1) =="
+
+setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"
+comment "coderabbitai[bot]" "$CLEAN_BODY"
+ok "one CodeRabbit round, no QA round: coderabbit reads 1, at its cap" "$(run coderabbit "$NOCFG")" "1 1"
+ok "…and qa reads 0, under its cap" "$(run qa "$NOCFG")" "0 0"
+
+setup; commit "$CLEAN_HEAD"; commit "$THIRD"
+review "coderabbitai[bot]" "COMMENTED" "$THIRD" "$(body 'One nit on the helper.')"
+comment "dev" "$(verdict_body "$THIRD")"
+ok "BOTH AT ONE COMMIT: CodeRabbit + a qa trailer at one commit = 1 coderabbit" "$(run coderabbit "$NOCFG")" "1 1"
+ok "…and 1 qa" "$(run qa "$NOCFG")" "1 1"
+
+# A vendor review that QUOTES the marker is still the vendor's round, never a QA one.
+setup; commit "$CLEAN_HEAD"; commit "$THIRD"
+review "coderabbitai[bot]" "COMMENTED" "$THIRD" \
+  "$(body 'One nit: the new okf-verdict parser drops a trailing blank line.')"
+ok "a CodeRabbit review quoting okf-verdict: 1 coderabbit round" "$(run coderabbit "$NOCFG")" "1 1"
+ok "…and 0 qa rounds (the vendor login is never replayed as QA)" "$(run qa "$NOCFG")" "0 0"
+
+ZERO="$TMP/zero"; mkdir -p "$ZERO"; printf '{"coderabbitRounds": 0}\n' > "$ZERO/instance.config.json"
+setup; commit "$CLEAN_HEAD"
+ok "coderabbitRounds 0: no rounds is already at the cap" "$(run coderabbit "$ZERO")" "1 0"
+ok "…while qa keeps its default 1" "$(run qa "$ZERO")" "0 0"
+
+setup; commit "$CLEAN_HEAD"; commit_fixtures
+"$SCRIPT" 7 --repo octo/demo --instance "$NOCFG" >/dev/null 2>&1; rc=$?
+ok "no --for refuses (exit 2), so an old caller fails loudly" "$rc" "2"
+"$SCRIPT" 7 --for vendor --repo octo/demo --instance "$NOCFG" >/dev/null 2>&1; rc=$?
+ok "an unknown --for refuses (exit 2)" "$rc" "2"
+for bad in true '"1"' -1 1.0; do
+  printf '{"coderabbitRounds": %s}\n' "$bad" > "$ZERO/instance.config.json"
+  ok "coderabbitRounds $bad: unreadable config refuses (exit 2)" "$(run coderabbit "$ZERO")" "2 <none>"
+done
+
+echo
+echo "== --last: that reviewer's last reviewed commit, in the host's commit order =="
+# THIRD sorts BEFORE CLEAN_HEAD, so a sorted candidate list would answer CLEAN_HEAD here.
+setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"; commit "$THIRD"
+review "coderabbitai[bot]" "COMMENTED" "$CLEAN_HEAD" "$(body 'One nit on the helper.')"
+review "coderabbitai[bot]" "CHANGES_REQUESTED" "$THIRD" "$(body 'Two findings on the new guard.')"
+comment "dev" "$(verdict_body "$CLEAN_HEAD")"
+ok "--for coderabbit --last prints the newest reviewed commit" "$(run coderabbit "$CAPS2" --last)" "1 $THIRD"
+ok "--for qa --last prints the trailer's commit" "$(run qa "$CAPS2" --last)" "0 $CLEAN_HEAD"
+ok "--commits prints every counted commit, oldest first" \
+   "$(run coderabbit "$CAPS2" --commits | tr '\n' ' ')" "1 $CLEAN_HEAD $THIRD"
+setup; commit "$CLEAN_HEAD"
+comment "coderabbitai[bot]" "$REFUSAL_BODY"
+ok "--last with no round prints nothing (the refusal's named SHA is not one)" "$(run coderabbit "$CAPS2" --last)" "0 <none>"
+
+echo
 echo "== the wiring, so refusing is mechanical rather than remembered =="
 
 # The cap is prose in CONVENTIONS.md and in two agent documents. What this pins is that
@@ -402,18 +465,20 @@ has() { grep -q "review-rounds.sh" "$1" && echo 0 || echo 1; }
 ok "CONVENTIONS.md names the script"  "$(has "$REPO/plugin/seed/CONVENTIONS.md")" "0"
 ok "qa-reviewer.md names the script"  "$(has "$REPO/plugin/agents/qa-reviewer.md")" "0"
 ok "the tick's step 4 names it"       "$(has "$REPO/plugin/tick-steps/step-4-advance.md")" "0"
+# Every caller passes --for: a call line naming the script without it is an old caller.
+ok "every review-rounds.sh call passes --for" \
+   "$(cd "$REPO" && git grep -hE 'review-rounds\.sh"? +(<pr>|"\$pr_number")' -- plugin plugin-yolo docs | grep -vc -- '--for' | tr -d ' ')" "0"
 
-# The cap is a HARD number: CONVENTIONS.md says so, and a flag is how a hard cap becomes a
-# default (mergeAtReviewCap is a bundle key that acts AT the cap, not a way to move it). If someone adds one, this fails and they have to argue for it in review. Comment
+# The cap is bundle config, never a flag: a flag is how a hard cap becomes a per-call
+# default. If someone adds one, this fails and they have to argue for it in review. Comment
 # lines are excluded — the script's header discusses the flag it deliberately does not have,
 # and a scanner that could not tell prose from code would forbid saying so.
 ok "the cap is not configurable from the command line" \
    "$(grep -qE -- '--cap' <<<"$(grep -vE '^[[:space:]]*#' "$SCRIPT")" && echo 1 || echo 0)" "0"
-# The one opt-in exception (mergeAtReviewCap) changes what happens AT the cap, never the
-# number: the header names it, and the cap stays two.
 ok "the header names the one opt-in exception" \
-   "$(grep -c 'mergeAtReviewCap' "$SCRIPT")" "3"
-ok "…and the cap is still two" "$(grep -cx 'CAP=2' "$SCRIPT")" "1"
+   "$(grep -c 'mergeAtReviewCap' "$SCRIPT")" "1"
+ok "no hardcoded CAP=<n> is left" "$(grep -cE '^CAP=[0-9]' "$SCRIPT")" "0"
+ok "…the cap comes from resolve-review-config.sh" "$(grep -c 'resolve-review-config.sh"' "$SCRIPT")" "1"
 
 
 # A ROUND COUNT IS A QUESTION ABOUT THE PAST, so the sibling's mergeability check is

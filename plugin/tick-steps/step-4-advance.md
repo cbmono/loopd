@@ -240,10 +240,11 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    current head is reused, never re-earned. Only tasks actually at `in-review` are
    eligible: an `in-progress` one still has a live agent that may advance the head.
    - **Count the rounds BEFORE you dispatch a verifier —
-     `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh <pr> --repo <org>/<repo>`.** It exits non-zero at or
-     past **two**, the hard cap (`CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN
-     DECIDES"). Non-zero means **do not dispatch a third verifier and do not wait on
-     another external review**: surface the PR as a 🔴 item with **both positions in
+     `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh <pr> --for coderabbit|qa --repo <org>/<repo>`**,
+     `--for` naming the reviewer you are about to dispatch or wait on. It exits non-zero at
+     or past that reviewer's cap — `coderabbitRounds` / `qaRounds`, **1** each when absent
+     (`CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES"). Non-zero means **do not
+     dispatch that verifier again and do not wait on another of its reviews**: surface the PR as a 🔴 item with **both positions in
      one short block** — what the reviewer wants, what the implementer says, what the
      acceptance criterion asks. **Report exit 1 and exit 2 as different things**:
      1 is the cap reached; 2 (or a missing script) is a count nobody could read —
@@ -348,7 +349,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
        **`AUTONOMY.md` absent means every project is `gated`**, so the ask always holds.
      **Ask once per reviewer failure, not once per PR** — raise it on one task, name
      the other affected PRs in it. **The cap is untouched by any of this**: count with
-     `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh` **before** dispatching the fallback or re-requesting;
+     `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh` **before** dispatching the fallback or re-requesting (`--for qa` / `--for coderabbit`);
      if it refuses, surface both positions instead. Nothing here creates a third round.
    - **Fallback when none is configured — a SETUP decision, made once, not this.** If the
      repo runs **no** external reviewer at all, `qa-reviewer` is simply the independent
