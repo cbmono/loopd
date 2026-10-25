@@ -401,7 +401,7 @@ covers() { # <p> <x>
 # the tools falls through in microseconds. Narrowing one of these silently disables part of
 # a rule, so derive it from the rule body, and note that the deny half of that rule's tests
 # is what proves the filter still lets the real shapes through.
-RULES="terraform_destroy k8s_irreversible_delete k8s_production_target sql_destructive_remote rm_rf_repo_root force_push_protected secret_exfiltration subagent_merge subagent_push_default kb_apply_human_docs launcher_diagnoses_nothing"
+RULES="terraform_destroy k8s_irreversible_delete k8s_production_target sql_destructive_remote rm_rf_repo_root force_push_protected secret_exfiltration credential_write subagent_merge subagent_push_default kb_apply_human_docs launcher_diagnoses_nothing"
 
 # --- terraform_destroy --------------------------------------------------------------- #
 # JUSTIFIED BY: `destroy` deletes real infrastructure and there is no legitimate agent
@@ -801,6 +801,244 @@ EOT
     return 0
   done <<EOF
 $(segments "$1")
+EOF
+  return 1
+}
+
+# --- credential_write ---------------------------------------------------------------- #
+# JUSTIFIED BY: an overwritten, truncated, moved or deleted key or token locks the human out
+# of a host or an account, and nothing in the repo can restore it. Guarded: anything under
+# ~/.ssh, ~/.aws or ~/.config/gh wherever the command runs, and a *.pem, id_rsa* or
+# *credentials* file under $HOME and outside the cwd's repo root. NARROW ENOUGH TO KEEP:
+# reads pass (cat, ls, `ssh-keygen -l`, cp/mv FROM a store into the repo), and so does the
+# same write on a fixture or generated key inside the working tree. NO CARVE-OUTS:
+# `ssh-keyscan … >> ~/.ssh/known_hosts`, `chmod 600 ~/.ssh/<key>` and a new Host block in
+# ~/.ssh/config are refused on purpose — the human runs them. BASH ONLY: the hook's matcher
+# is `Bash`, so a Write/Edit tool call on the same path is not seen here. A `;` or space
+# inside quotes is judged both raw and blanked out, so a quoted sed script cannot split it.
+_cred_norm() { # <operand> -> the lexical absolute path, or 1 when a variable hides it
+  local t="$1"
+  t="${t//\"/}"; t="${t//\'/}"
+  t="${t//\$\{HOME\}/$HOME}"; t="${t//\$HOME/$HOME}"
+  case "$t" in ""|*'$'*|*'`'*) return 1 ;; esac
+  norm_path "$t"
+}
+
+_cred_hit() { # <operand> -> prints the path and returns 0 when it is a guarded credential path
+  local L P h x root
+  L="$(_cred_norm "$1")" || return 1
+  P="$(phys "$L")"
+  for h in "$_cred_hl" "$_cred_hp"; do
+    for x in "$L" "$P"; do
+      if covers "$h/.ssh" "$x" || covers "$h/.aws" "$x" || covers "$h/.config/gh" "$x"; then
+        printf '%s' "$L"; return 0
+      fi
+    done
+  done
+  case "${L##*/}" in *.pem|id_rsa*|*credentials*) ;; *) return 1 ;; esac
+  root="$(repo_root)"
+  [ -n "$root" ] && covers "$root" "$P" && return 1
+  for h in "$_cred_hl" "$_cred_hp"; do
+    for x in "$L" "$P"; do covers "$h" "$x" && { printf '%s' "$L"; return 0; }; done
+  done
+  return 1
+}
+
+_cred_neutral() { # <cmd> -> the command with every separator inside quotes turned into `_`
+  printf '%s' "$1" | awk 'BEGIN { RS = "\001" } {
+    n = length($0); q = ""; o = ""
+    for (i = 1; i <= n; i++) {
+      c = substr($0, i, 1)
+      if (q != "") { if (c == q) q = ""; else if (index(";|& \t\n()<>`", c)) c = "_" }
+      else if (c == "\047" || c == "\"") q = c
+      o = o c
+    }
+    printf "%s", o
+  }'
+}
+
+# A body is blanked only when its terminator is found and its `<<` is outside quotes and
+# arithmetic with a plain-word delimiter: a fake opener (`echo "<<EOF"`, `$((1<<n))`) must not
+# hide real code. An UNQUOTED delimiter still expands `$(…)` and backticks, so those lines stay,
+# and joins a trailing `\` onto the next line, so such a body is not blanked at all.
+_cred_noheredoc() { # <cmd> -> the command with each heredoc body blanked
+  printf '%s' "$1" | awk 'BEGIN { RS = "\001" } {
+    n = split($0, L, "\n"); q = ""; ar = 0
+    for (k = 1; k <= n; k++) {
+      line = L[k]; m = length(line); nd = 0
+      for (i = 1; i <= m; i++) {
+        c = substr(line, i, 1)
+        if (q != "") { if (c == q) q = ""; continue }
+        if (c == "\047" || c == "\"") { q = c; continue }
+        if (c == "(" && substr(line, i + 1, 1) == "(") { ar++; i++; continue }
+        if (c == ")" && substr(line, i + 1, 1) == ")" && ar > 0) { ar--; i++; continue }
+        if (ar > 0 || c != "<" || substr(line, i + 1, 1) != "<" || substr(line, i + 2, 1) == "<") continue
+        r = substr(line, i + 2); dash = 0; i++
+        if (substr(r, 1, 1) == "-") { dash = 1; r = substr(r, 2) }
+        sub(/^[ \t]+/, "", r); match(r, /^[^ \t;&|<>()]+/); w = substr(r, 1, RLENGTH)
+        wq = (w ~ /["\047\\]/); gsub(/["\047\\]/, "", w)
+        if (w ~ /^[A-Za-z_][A-Za-z0-9_]*$/) { nd++; D[nd] = w; DS[nd] = dash; DQ[nd] = wq }
+      }
+      for (d = 1; d <= nd; d++) {
+        for (e = k + 1; e <= n; e++) { t = L[e]; if (DS[d]) sub(/^\t+/, "", t); if (t == D[d]) break }
+        if (e > n) break
+        if (!DQ[d]) { cont = 0; for (j = k + 1; j < e; j++) if (L[j] ~ /\\$/) cont = 1; if (cont) break }
+        for (j = k + 1; j <= e; j++) if (DQ[d] || j == e || L[j] !~ /\$\(|`/) L[j] = ""
+        k = e
+      }
+    }
+    for (k = 1; k <= n; k++) printf "%s%s", L[k], (k < n ? "\n" : "")
+  }'
+}
+
+_cred_stages() { # <cmd> -> each stage whole (substitutions as `$_`), then their bodies as stages
+  local s="$1" u pre
+  s="${s//>|/>}"; u="$s"
+  while :; do
+    case "$u" in *'$('*')'*) ;; *) break ;; esac
+    pre="${u%%\$(*}"; u="${u#*\$(}"; u="$pre\$_${u#*)}"
+  done
+  while :; do
+    case "$u" in *'`'*'`'*) ;; *) break ;; esac
+    pre="${u%%\`*}"; u="${u#*\`}"; u="$pre\$_${u#*\`}"
+  done
+  stages "$u"; printf '\n'
+  s="${s//\$(/$SEP}"; s="${s//\`/$SEP}"
+  stages "$(printf '%s' "$s" | tr '()' "$SEP$SEP")"
+}
+
+_cred_abbr() { # <option> <long> <min-length>: 0 when <option>, before any `=`, abbreviates <long>
+  local g="${1%%=*}"
+  [ "${#g}" -ge "$3" ] || return 1
+  case "$2" in "$g"*) return 0 ;; esac
+  return 1
+}
+
+_cred_refuse() { # <what> <path>
+  printf '%s would change `%s`, a credential store outside this working tree — a lost or overwritten key or token locks the human out, and nothing in the repo restores it. Reading it is allowed, and so is the same write inside the working tree; anything else here is for the human to run.' "$1" "$2"
+}
+
+_cred_stage() { # <stage>
+  local s="$1" rest="" pre op t p c w root seen=0 endo=0 skip=0 tflag=0 ops="" dest="" inplace=0 script=0 i ch
+  while :; do
+    case "$s" in *[\<\>]*) ;; *) break ;; esac
+    pre="${s%%[<>]*}"; s="${s#"$pre"}"
+    op="${s%%[!<>&]*}"; s="${s#"$op"}"
+    case "$pre" in *'&') pre="${pre%&}"; op="&$op" ;; esac
+    t="${pre##*[!0-9]}"
+    if [ -n "$t" ]; then case "${pre%"$t"}" in ""|*[[:space:]]) pre="${pre%"$t"}" ;; esac; fi
+    s="${s#"${s%%[![:space:]]*}"}"
+    t="${s%%[[:space:]<>\;\&]*}"; s="${s#"$t"}"
+    rest="$rest$pre "
+    case "$op" in *'>'*) ;; *) continue ;; esac
+    case "$op" in *'&') case "$t" in -) continue ;; ''|*[!0-9]*) ;; *) continue ;; esac ;; esac
+    if p="$(_cred_hit "$t")"; then _cred_refuse "A \`$op\` redirect" "$p"; return 0; fi
+  done
+  rest="$rest$s"
+
+  c="$(first_word "$rest")" || return 1
+  case "$c" in rm|truncate|chmod|chown|tee|cp|mv|sed) ;; *) return 1 ;; esac
+  while IFS= read -r w; do
+    if [ "$seen" = 0 ]; then [ "${w##*/}" = "$c" ] && seen=1; continue; fi
+    if [ "$skip" = 1 ]; then skip=0; continue; fi
+    if [ "$tflag" = 1 ]; then tflag=0; dest="$w"; continue; fi
+    if [ "$endo" = 0 ]; then
+      case "$w" in
+        --) endo=1; continue ;;
+        --*)
+          case "$c" in
+            cp|mv)
+              if _cred_abbr "$w" --target-directory 3; then
+                case "$w" in *=*) dest="${w#*=}" ;; *) tflag=1 ;; esac
+              fi
+              case "$w" in *=*) ;; *) _cred_abbr "$w" --suffix 4 && skip=1 ;; esac ;;
+            sed)
+              _cred_abbr "$w" --in-place 3 && inplace=1
+              if _cred_abbr "$w" --expression 3 || _cred_abbr "$w" --file 3; then
+                script=1; case "$w" in *=*) ;; *) skip=1 ;; esac
+              fi
+              case "$w" in *=*) ;; *) _cred_abbr "$w" --line-length 3 && skip=1 ;; esac ;;
+            truncate) case "$w" in --size|--reference) skip=1 ;; esac ;;
+          esac
+          continue ;;
+        -?*)
+          case "$c" in
+            cp|mv|sed|truncate)
+              i=1
+              while [ "$i" -lt "${#w}" ]; do
+                ch="${w:$i:1}"; i=$((i + 1))
+                case "$c$ch" in
+                  cpt|mvt) if [ "$i" -lt "${#w}" ]; then dest="${w:$i}"; else tflag=1; fi; break ;;
+                  cpS|mvS|sedl|truncates|truncater) [ "$i" -lt "${#w}" ] || skip=1; break ;;
+                  sedi) inplace=1; break ;;
+                  sede|sedf) script=1; [ "$i" -lt "${#w}" ] || skip=1; break ;;
+                esac
+              done ;;
+          esac
+          continue ;;
+      esac
+    fi
+    if [ "$c" = sed ] && [ "$script" = 0 ]; then script=1; continue; fi
+    ops="$ops$w
+"
+  done <<EOT
+$(tokens_of "$rest")
+EOT
+  [ "$c" = sed ] && [ "$inplace" = 0 ] && return 1
+
+  if [ "$c" = cp ] || [ "$c" = mv ]; then
+    if [ -z "$dest" ]; then
+      dest="$(printf '%s' "$ops" | tail -n 1)"
+      ops="$(printf '%s' "$ops" | sed '$d')"
+    fi
+    if p="$(_cred_hit "$dest")"; then _cred_refuse "\`$c\` onto it" "$p"; return 0; fi
+    if [ "$c" = mv ]; then
+      p="$(_cred_norm "$dest")" && p="$(phys "$p")"
+      root="$(repo_root)"
+      if [ -z "$p" ] || [ -z "$root" ] || ! covers "$root" "$p"; then
+        while IFS= read -r w; do
+          [ -n "$w" ] || continue
+          if p="$(_cred_hit "$w")"; then _cred_refuse "\`mv\` out of the working tree" "$p"; return 0; fi
+        done <<EOT
+$ops
+EOT
+      fi
+    fi
+    # A directory destination writes <dest>/<basename of each source>.
+    p="$(_cred_norm "$dest")" || return 1
+    case "$dest" in */) ;; *) [ -d "$p" ] || return 1 ;; esac
+    while IFS= read -r w; do
+      [ -n "$w" ] || continue
+      if p="$(_cred_hit "${dest%/}/${w##*/}")"; then _cred_refuse "\`$c\` into its directory" "$p"; return 0; fi
+    done <<EOT
+$ops
+EOT
+    return 1
+  fi
+
+  while IFS= read -r w; do
+    [ -n "$w" ] || continue
+    if p="$(_cred_hit "$w")"; then _cred_refuse "\`$c\`" "$p"; return 0; fi
+  done <<EOT
+$ops
+EOT
+  return 1
+}
+
+rule_credential_write() {
+  case "$CWD $1" in *.ssh*|*.aws*|*/.config*|*.config/*|*[\ \"\'=].config*|*pem*|*id_rsa*|*credentials*) ;; *) return 1 ;; esac
+  _cred_hl="$(norm_path "$HOME")"; _cred_hp="$(phys "$_cred_hl")"
+  local stage all cmd
+  cmd="$1"
+  case "$cmd" in *'<<'*) cmd="$(_cred_noheredoc "$cmd")" ;; esac
+  all="$(_cred_stages "$cmd")"
+  case "$cmd" in *[\"\']*) all="$all
+$(_cred_stages "$(_cred_neutral "$cmd")")" ;; esac
+  while IFS= read -r stage; do
+    [ -n "$stage" ] || continue
+    _cred_stage "$stage" && return 0
+  done <<EOF
+$all
 EOF
   return 1
 }
