@@ -39,9 +39,10 @@
 #   * an `okf-verdict` trailer inside a FENCED BLOCK is not a round — this repository's
 #     own diffs contain that marker and reviewers quote diffs, so a quotation must not be
 #     able to spend somebody's rounds;
-#   * a real `okf-verdict` trailer from THE PR'S OWN AUTHOR IS a round, because in a
-#     single-login instance the fallback verifier posts under the account that opened the
-#     PR, and the rounds it spends are exactly the ones this cap is about;
+#   * a real `okf-verdict` trailer from THE PR'S OWN AUTHOR IS a round when it matches a
+#     recorded qa-reviewer dispatch (nonce, commit, posted after) — in a single-login
+#     instance the fallback verifier posts under the account that opened the PR — and a
+#     forged one with no record, a wrong nonce or an earlier date is not;
 #   * every unreadable input refuses (exit 2), including a missing or non-running
 #     `review-clearance.sh` — a sibling that fails every call would otherwise report every
 #     PR as zero rounds, which reads as "dispatch another" forever.
@@ -131,12 +132,21 @@ export PATH="$TMP/bin:$PATH"
 COMMITS=""; REVIEWS=""; COMMENTS=""
 
 setup() { # a readable PR 7 in octo/demo, authored by "dev", with no artifacts
-  rm -rf "$FIX"; mkdir -p "$FIX"
+  rm -rf "$FIX" "$CAPS2/.loopd" "$DEF/.loopd"; mkdir -p "$FIX"
   COMMITS='[]'; REVIEWS='[]'; COMMENTS='[]'
   printf '%s\n' '{"url":"https://github.com/octo/demo/pull/7","number":7,
                   "headRefOid":"'"$CLEAN_HEAD"'","author":{"login":"dev"}}' \
     > "$FIX/pr_json"
 }
+
+comment_at() { # <login> <created_at> <body-file>
+  COMMENTS="$("$REAL_JQ" --arg l "$1" --arg t "$2" --rawfile b "$3" \
+              '. + [{user:{login:$l}, body:$b, created_at:$t}]' <<<"$COMMENTS")"
+}
+
+# The project-manager's qa-reviewer dispatch record at <sha>; prints the nonce.
+mint_qa() { "$REPO/plugin/scripts/qa-dispatch.sh" mint --repo octo/demo --pr 7 --head "$2" --instance "$1"; }
+LATER="2099-01-01T00:00:00Z"
 
 commit() { COMMITS="$("$REAL_JQ" --arg s "$1" '. + [{sha:$s}]' <<<"$COMMITS")"; }
 
@@ -158,8 +168,9 @@ commit_fixtures() {
   printf '%s\n' "$COMMENTS" > "$FIX/comments_json"
 }
 
-CAPS2="$TMP/caps2"; NOCFG="$TMP/nocfg"; mkdir -p "$CAPS2" "$NOCFG"
+CAPS2="$TMP/caps2"; NOCFG="$TMP/nocfg"; DEF="$TMP/def"; mkdir -p "$CAPS2" "$NOCFG" "$DEF"
 printf '{"coderabbitRounds": 2, "qaRounds": 2}\n' > "$CAPS2/instance.config.json"
+printf '{}\n' > "$DEF/instance.config.json"
 
 # run [coderabbit|qa] [instance] [extra...] — echoes "<exit> <stdout>".
 run() {
@@ -170,9 +181,14 @@ run() {
   printf '%s %s' "$rc" "${out:-<none>}"
 }
 
-# A well-formed okf-verdict trailer for <sha>, per SCHEMA.md.
-verdict_body() { # <sha> [fenced]
-  if [ "${2:-}" = "fenced" ]; then
+# A well-formed okf-verdict trailer for <sha>, per SCHEMA.md; a third argument is the
+# dispatch nonce a same-login verdict must carry.
+verdict_body() { # <sha> [fenced|-] [nonce]
+  if [ -n "${3:-}" ]; then
+    body 'Verified.' '' '<!-- okf-verdict v1' "verdict: ${VERDICT:-pass}" "head_sha: $1" \
+         'reviewer: qa-reviewer' 'lenses: correctness=done security=done repro=done' \
+         'unverified_criteria: none' 'caveats: none' "dispatch: $3" '-->'
+  elif [ "${2:-}" = "fenced" ]; then
     body 'Quoting the block this repo ships, in a fenced diff:' \
          '```' \
          '<!-- okf-verdict v1' \
@@ -304,15 +320,27 @@ echo "== the fallback verifier, and its trailer =="
 # The qa-reviewer posts under the account that opened the PR in a single-login instance.
 # SCHEMA.md clause 8 makes that invisible to a CLEARANCE check, correctly; a round counter
 # that inherited it would miss the rounds the cap is mostly about.
+# Counted only through the dispatch record (SCHEMA.md clause 8): the trailer carries the
+# nonce the project-manager minted at that commit, and was posted after the record.
 setup; commit "$CLEAN_HEAD"; commit "$THIRD"
-comment "dev" "$(verdict_body "$THIRD")"
+comment_at "dev" "$LATER" "$(verdict_body "$THIRD" - "$(mint_qa "$CAPS2" "$THIRD")")"
 ok "an okf-verdict trailer from the PR author IS a qa round" "$(run qa)" "0 1"
 ok "…and no coderabbit round" "$(run coderabbit)" "0 0"
+
+setup; commit "$CLEAN_HEAD"; commit "$THIRD"
+comment_at "dev" "$LATER" "$(verdict_body "$THIRD" - 0123456789abcdef0123456789abcdef)"
+ok "a forged author trailer, no dispatch record: NOT a qa round" "$(run qa)" "0 0"
+mint_qa "$CAPS2" "$THIRD" >/dev/null
+ok "…a record, but the trailer's nonce is wrong: NOT a qa round" "$(run qa)" "0 0"
+
+setup; commit "$CLEAN_HEAD"; commit "$THIRD"
+comment_at "dev" "2000-01-01T00:00:00Z" "$(verdict_body "$THIRD" - "$(mint_qa "$CAPS2" "$THIRD")")"
+ok "an author trailer posted BEFORE the record: NOT a qa round" "$(run qa)" "0 0"
 
 # Counted per reviewer now: an external round and a fallback verdict are one round EACH.
 setup; commit "$CLEAN_HEAD"; commit "$THIRD"
 comment "coderabbitai[bot]" "$CLEAN_BODY"
-comment "dev" "$(verdict_body "$THIRD")"
+comment_at "dev" "$LATER" "$(verdict_body "$THIRD" - "$(mint_qa "$CAPS2" "$THIRD")")"
 ok "external round + fallback verdict: 1 coderabbit round" "$(run coderabbit)" "0 1"
 ok "…and 1 qa round" "$(run qa)" "0 1"
 
@@ -414,9 +442,9 @@ ok "…and qa reads 0, under its cap" "$(run qa "$NOCFG")" "0 0"
 
 setup; commit "$CLEAN_HEAD"; commit "$THIRD"
 review "coderabbitai[bot]" "COMMENTED" "$THIRD" "$(body 'One nit on the helper.')"
-comment "dev" "$(verdict_body "$THIRD")"
-ok "BOTH AT ONE COMMIT: CodeRabbit + a qa trailer at one commit = 1 coderabbit" "$(run coderabbit "$NOCFG")" "1 1"
-ok "…and 1 qa" "$(run qa "$NOCFG")" "1 1"
+comment_at "dev" "$LATER" "$(verdict_body "$THIRD" - "$(mint_qa "$DEF" "$THIRD")")"
+ok "BOTH AT ONE COMMIT: CodeRabbit + a qa trailer at one commit = 1 coderabbit" "$(run coderabbit "$DEF")" "1 1"
+ok "…and 1 qa" "$(run qa "$DEF")" "1 1"
 
 # A vendor review that QUOTES the marker is still the vendor's round, never a QA one.
 setup; commit "$CLEAN_HEAD"; commit "$THIRD"
@@ -446,9 +474,10 @@ echo "== --last: that reviewer's last reviewed commit, in the host's commit orde
 setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"; commit "$THIRD"
 review "coderabbitai[bot]" "COMMENTED" "$CLEAN_HEAD" "$(body 'One nit on the helper.')"
 review "coderabbitai[bot]" "CHANGES_REQUESTED" "$THIRD" "$(body 'Two findings on the new guard.')"
-comment "dev" "$(verdict_body "$CLEAN_HEAD")"
+comment_at "dev" "$LATER" "$(verdict_body "$CLEAN_HEAD" - "$(mint_qa "$CAPS2" "$CLEAN_HEAD")")"
 ok "--for coderabbit --last prints the newest reviewed commit" "$(run coderabbit "$CAPS2" --last)" "1 $THIRD"
 ok "--for qa --last prints the trailer's commit" "$(run qa "$CAPS2" --last)" "0 $CLEAN_HEAD"
+ok "--for qa --verdicts prints <sha> <verdict>" "$(run qa "$CAPS2" --verdicts)" "0 $CLEAN_HEAD pass"
 ok "--commits prints every counted commit, oldest first" \
    "$(run coderabbit "$CAPS2" --commits | tr '\n' ' ')" "1 $CLEAN_HEAD $THIRD"
 setup; commit "$CLEAN_HEAD"

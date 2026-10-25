@@ -3,7 +3,7 @@
 # review-rounds.sh — how many rounds has ONE reviewer already spent on this pull request,
 # and may it be dispatched again?
 #
-#   Usage: review-rounds.sh <pr> --for coderabbit|qa [--last|--commits] [--repo <o>/<n>] [--instance <bundle>]
+#   Usage: review-rounds.sh <pr> --for coderabbit|qa [--last|--commits|--verdicts] [--repo <o>/<n>] [--instance <bundle>]
 #
 # The mechanism behind `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES": one PR ran
 # EIGHT review rounds and, with its siblings, ~70% of a week's budget while the cap was prose.
@@ -103,20 +103,10 @@
 # by one, it takes a human deliberately pasting the marker, and it errs toward asking the
 # human — which is where the cap sends everything anyway.
 #
-# CLAUSE 8 IS MASKED FOR THE FALLBACK RUNS, DELIBERATELY, AND ONLY FOR THOSE. SCHEMA.md
-# clause 8 — an author is never its own independent reviewer — makes `review-clearance.sh`
-# refuse outright when `--reviewer` names the PR's own author. That is correct for
-# CLEARANCE and wrong for COUNTING: in a single-login instance the fallback verifier posts
-# under the same account that opened the PR (`qa-reviewer.md` says so in as many words),
-# so honouring clause 8 here would make the fallback verifier's rounds INVISIBLE — missing
-# exactly the rounds this cap exists to bound. So the replayed PR record carries an author
-# login no account can hold, for the `--reviewer` runs only. The vendor run keeps clause 8
-# untouched.
-#
-# THE MASK'S BLAST RADIUS IS ONE CASE, not "clause 8 is off". A `--reviewer` run already
-# considers only artifacts from that one login, so the author-exclusion it disables can
-# only ever have applied when the named account IS the author. Every other run is
-# unaffected by construction, not by care.
+# CLAUSE 8 IS NOT MASKED. In a single-login instance the fallback verifier posts under the
+# PR author's account, and such a trailer is a round only when the sibling accepts it: a
+# qa-reviewer dispatch recorded at that commit, its nonce in the trailer, posted after the
+# record (`qa-dispatch.sh`). A forged author trailer therefore never reaches `qaRounds`.
 #
 #   THIS SCRIPT CLEARS NOTHING AND MUST NEVER BE READ AS CLEARANCE. Exit 0 here means "the
 #   cap has room", never "this PR was reviewed". The merge gate is `required-checks.sh` +
@@ -148,7 +138,8 @@
 #
 # WHAT IT PRINTS. stdout is the round count and nothing else, so a caller can read it with
 # `$(...)`; with `--last`, that reviewer's last reviewed commit instead (a host-pinned
-# candidate, never comment text; nothing when it has none); `--commits`, every one. Everything else is stderr. No
+# candidate, never comment text; nothing when it has none); `--commits`, every one;
+# `--verdicts` (qa), `<sha> <verdict>` per QA round. Everything else is stderr. No
 # PR text is echoed — the sibling quotes untrusted bodies where that is useful.
 #
 # Verified by tests/review-rounds.test.sh.
@@ -159,7 +150,7 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 usage() {
-  echo "Usage: $(basename "$0") <pr> --for coderabbit|qa [--last|--commits] [--repo <owner>/<name>] [--instance <bundle>]" >&2
+  echo "Usage: $(basename "$0") <pr> --for coderabbit|qa [--last|--commits|--verdicts] [--repo <owner>/<name>] [--instance <bundle>]" >&2
   echo "       exit 0 under that reviewer's cap, 1 at or past it, 2 cannot answer" >&2
   exit 2
 }
@@ -172,6 +163,7 @@ while [ "$#" -gt 0 ]; do
     --instance) inst="${2:-}"; [ -n "$inst" ] || usage; shift 2 ;;
     --last)     last=yes; shift ;;
     --commits)  last=all; shift ;;
+    --verdicts) last=verdicts; shift ;;
     -h|--help) usage ;;
     -*) echo "error: unknown option '$1'" >&2; usage ;;
     *) [ -z "$pr" ] || { echo "error: unexpected argument '$1'" >&2; usage; }
@@ -212,6 +204,7 @@ done
 # answer "not a review" to every candidate, every PR would read as zero rounds, and the cap
 # would not fail — it would DISAPPEAR. `[ -x ]` cannot see that; `--self-test` can.
 CLEARANCE="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/review-clearance.sh"
+QA_DISPATCH="${CLEARANCE%/*}/qa-dispatch.sh"
 # selftest_ok — see required-checks.sh, where this function is explained; the two copies are
 # kept identical, because a shared file would have to be sourced before anything proved it runs.
 selftest_ok() {
@@ -259,9 +252,10 @@ raw="$(gh pr view "$pr" ${R[@]+"${R[@]}"} \
   exit 2
 }
 meta="$(printf '%s' "$raw" \
-        | jq -r '[.url, (.number // "" | tostring)] | @tsv' 2>/dev/null)" || meta=""
+        | jq -r '[.url, (.number // "" | tostring), (.author.login // "")] | @tsv' 2>/dev/null)" || meta=""
 url="$(printf '%s' "$meta" | cut -f1)"
 num="$(printf '%s' "$meta" | cut -f2)"
+author="$(printf '%s' "$meta" | cut -f3 | tr '[:upper:]' '[:lower:]')"; author="${author%\[bot\]}"
 nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')"
 [ -n "$url" ] && [ -n "$num" ] && [ "$nwo" != "$url" ] || {
   echo "error: could not resolve the repo / number of PR $pr — refusing (fail closed)" >&2
@@ -345,8 +339,7 @@ done < "$TMPD/verdict-logins-all"
 # NUL-joined vector: no hashing, so no collision can serve one call another's answer.
 #
 # ONE FIELD IS REWRITTEN, AND ONLY ON THE PR RECORD: `headRefOid`, to the candidate commit
-# this replay is about (`OKF_ROUNDS_HEAD`), and `author.login` to an impossible value when
-# `OKF_ROUNDS_MASK_AUTHOR` is set (see the clause-8 note in the header). Artifact bodies,
+# this replay is about (`OKF_ROUNDS_HEAD`). Artifact bodies,
 # review states and commit ids are served untouched — the evidence is never edited, only
 # the question is.
 #
@@ -382,10 +375,7 @@ else
   rm -f "$want"
 fi
 if [ "${1:-}" = "pr" ] && [ "${2:-}" = "view" ]; then
-  filter='.headRefOid = $h'
-  [ -n "${OKF_ROUNDS_MASK_AUTHOR:-}" ] && filter="$filter | .author = {login: \$m}"
-  "$JQ_REAL" --arg h "${OKF_ROUNDS_HEAD:-}" \
-             --arg m "${OKF_ROUNDS_MASK_AUTHOR:-}" "$filter" "$CACHE/out.$hit"
+  "$JQ_REAL" --arg h "${OKF_ROUNDS_HEAD:-}" '.headRefOid = $h' "$CACHE/out.$hit"
   exit $?
 fi
 cat "$CACHE/out.$hit"
@@ -394,11 +384,6 @@ chmod +x "$BIN/gh" || {
   echo "error: could not prepare the replay boundary — refusing (fail closed)" >&2
   exit 2
 }
-
-# The impossible author: GitHub logins are alphanumerics and hyphens, so nothing with a
-# slash in it can ever equal one, and the sibling's own guard (an empty author refuses)
-# still sees a non-empty value.
-MASK="okf-rounds/not-an-account"
 
 # --- count -------------------------------------------------------------------
 # One replay per (candidate commit x verifier identity). Nothing is decided here: each
@@ -448,12 +433,27 @@ while IFS= read -r sha; do
   if [ "$for" = qa ]; then
     while IFS= read -r login; do
       [ -n "$login" ] || continue
-      OKF_ROUNDS_HEAD="$sha" OKF_ROUNDS_MASK_AUTHOR="$MASK" PATH="$BIN:$PATH" \
-        "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --reviewer "$login" --no-merge-check \
-          >/dev/null 2>&1
+      # The PR author's own trailer is a round only through the sibling's record check
+      # (SCHEMA.md clause 8): with no qa-reviewer dispatch recorded at this commit the
+      # sibling would refuse at 2, so the commit is simply not that account's round.
+      lc="$(printf '%s' "$login" | tr '[:upper:]' '[:lower:]')"
+      if [ "${lc%\[bot\]}" = "$author" ]; then
+        "$QA_DISPATCH" check --repo "$nwo" --pr "$num" --head "$sha" --instance "$inst" >/dev/null 2>&1
+        case "$?" in
+          0) ;;
+          1) continue ;;
+          *) echo "error: the qa-reviewer dispatch records in $inst are unreadable — refusing" >&2
+             exit 2 ;;
+        esac
+      fi
+      out="$(OKF_ROUNDS_HEAD="$sha" CLAUDE_PROJECT_DIR="$inst" PATH="$BIN:$PATH" \
+        "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --reviewer "$login" --no-merge-check 2>/dev/null)"
       rc=$?
       case "$rc" in
-        0|6) counted=yes; break ;;   # a completed round, clause 9 notwithstanding — above
+        0|6) counted=yes
+             v="$(printf '%s' "$out" | sed -n 's/^ok: .*(verdict \([a-z-]*\)).*/\1/p' | head -n 1)"
+             printf '%s %s\n' "$sha" "${v:-unknown}" >> "$TMPD/verdicts"
+             break ;;   # a completed round, clause 9 notwithstanding — above
         1|3|4|5|8) ;;                # every refusal, 8 (nobody asked) included — above
         # Fatal here for the same reason it is fatal above, and spelled out because the
         # temptation is to shrug it off as "that one account just did not answer": exit 2
@@ -471,7 +471,9 @@ while IFS= read -r sha; do
   [ -n "$counted" ] && { rounds=$((rounds + 1)); printf '%s\n' "$sha" >> "$TMPD/counted"; }
 done < "$TMPD/commits"
 
-if [ "$last" = all ]; then
+if [ "$last" = verdicts ]; then
+  [ -f "$TMPD/verdicts" ] && cat "$TMPD/verdicts"
+elif [ "$last" = all ]; then
   cat "$TMPD/counted"
 elif [ -n "$last" ]; then
   tail -n 1 "$TMPD/counted"
