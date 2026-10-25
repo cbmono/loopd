@@ -6,7 +6,7 @@
 # WHY THIS EXISTS. A PR that CodeRabbit did not review used to fan out to `code-architect`
 # and `deep-bug-scan` unconditionally. Both declare `model: opus` in their OWN frontmatter,
 # so that fan-out is two Opus agents regardless of what model the dispatcher is running —
-# on top of an Opus `qa-reviewer`. Measured over one real diff, that pair cost 7.5x the
+# on top of an apex-tier `qa-reviewer`. Measured over one real diff, that pair cost 7.5x the
 # input tokens of one Sonnet agent running the built-in `/code-review low`. So the cheap
 # review is now the opening move and the expensive pair is an ESCALATION, fired on a
 # trigger.
@@ -224,7 +224,7 @@ for a in code-architect deep-bug-scan; do
 done
 # THE CHEAP SIDE, which is half the design and had no test at all until an independent
 # review pointed out that removing `model: sonnet` left every assertion green. A delegate
-# that inherits the dispatcher's model is an Opus delegate in this instance, i.e. the
+# that inherits the dispatcher's model is an apex-tier delegate in this instance, i.e. the
 # saving deleted while the prose still describes it.
 ok "the delegate is pinned to a cheap tier"   "$(yn near "$QA" 'default opening move' 'model: sonnet' 8)" yes
 ok "…and there is exactly ONE of it"          "$(yn near "$QA" 'model: sonnet' 'single agent|ONE cheap|one cheap' 8)" yes

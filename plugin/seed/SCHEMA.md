@@ -269,7 +269,7 @@ kind: build | research                # inherits the project's kind if omitted
 status: draft                         # initial state; see lifecycle below
 assignee:                             # BUILD: role slug set by PM (software-engineer | devops-engineer | qa-reviewer). RESEARCH: usually empty (human-driven)
 owner: <github-username>              # optional: overrides the project's `owner` for this one task, on a shared instance. Absent ⇒ the project's owner; absent there too ⇒ this clone's. See "Ownership on a shared instance". Gates DISPATCH only, never promotion. Omit the key entirely when the project's owner is right — an empty value reads as absent, and a placeholder would read as a declared owner.
-model:                                # optional: override model routing — a tier (light|standard|deep) or any raw model alias (e.g. haiku|sonnet|opus). PM resolves tiers via instance.config.json and passes aliases verbatim.
+model:                                # optional: override model routing — a tier (light|standard|deep|apex) or any raw model alias (e.g. haiku|sonnet|opus). PM resolves tiers via instance.config.json and passes aliases verbatim.
 target_repo: <org>/<repo>             # BUILD only: inherits project default if omitted
 objective: /objectives/<slug>.md
 phase: /projects/<slug>/phases/<n>-<slug>.md          # optional, links task to its phase
@@ -432,9 +432,9 @@ is broader: it maps a model tier to ANY agent this instance dispatches, includin
 ones no task is ever assigned to. `plan-architect` is the worked example — it is
 in `roleTiers` and absent from `roles`, because `/plan` and the PM's approach
 critique dispatch it directly and no task is ever assigned to it. The consequence:
-`models.apex` today affects exactly one agent, `plan-architect`, and that agent
-appears in no `roles` list, so "what does `apex` cost me?" is unanswerable from
-`roles` alone — read `roleTiers`. This asymmetry is intentional, not a bug to fix
+`models.apex` prices two agents, `plan-architect` and `qa-reviewer`, and
+`plan-architect` appears in no `roles` list, so "what does `apex` cost me?" is
+unanswerable from `roles` alone — read `roleTiers`. This asymmetry is intentional, not a bug to fix
 by adding `plan-architect` to `roles` or deleting its `roleTiers` row; see
 `tests/roles-roletiers-asymmetry.test.sh`, which pins it.
 

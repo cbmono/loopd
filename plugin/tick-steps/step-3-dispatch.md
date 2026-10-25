@@ -287,8 +287,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **Model routing.** Read `models` (tier → alias) and `roleTiers` (role → default
    tier) from `instance.config.json`. For each dispatch: start from the assignee's
    default tier; **bump one tier up** (toward `deep`) for a genuinely complex build
-   task (the same signal that makes the `plan-architect` approach critique mandatory); **drop toward `light`**
-   for a trivial one. A task may set a `model:` field — honor it verbatim. Resolve
+   task (the same signal that makes the `plan-architect` approach critique mandatory) —
+   a bump never lowers a role already above `deep`, so a `qa-reviewer` stays on `apex`;
+   **drop toward `light`** for a trivial one. A task may set a `model:` field — honor it verbatim. Resolve
    the chosen tier with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh <agent>` and pass it as the model
    when you spawn — the same for **every** dispatch, including the `cataloguer` and
    the `plan-architect` critique. If `models`/`roleTiers` are absent the script prints

@@ -234,8 +234,8 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    via `models`, default `deep` → `opus`) and pass that as the tick's model. If
    `models`/`roleTiers` are absent the script says so on stderr — **report that line in
    the tick summary** and then inherit the session model, so an unchosen model is
-   visible rather than assumed. (The `apex` tier is reserved for the `plan-architect`
-   critique, not the routine tick.) A LIVE tick refines drafts, dispatches `ready`
+   visible rather than assumed. (The `apex` tier is for the `plan-architect` critique
+   and the `qa-reviewer`, not the routine tick.) A LIVE tick refines drafts, dispatches `ready`
    tasks, advances/reflects PRs, reports finished worktrees, proposes closing completed
    projects, and — after reflecting merges — may dispatch the `cataloguer` (throttled
    to one per tick; skipped on idle/trivial ticks).

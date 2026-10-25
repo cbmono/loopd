@@ -205,7 +205,7 @@ make_tpl() { # <dir> — a throwaway plain-directory copy of the template
 TPL="$TMP/tpl"; make_tpl "$TPL"
 I="$(newinst 6)"
 # A local file with `models` already present (so the seed leaves it) and apex unset: the
-# stamp seeds roleTiers, and exactly one of them then resolves to nothing.
+# stamp seeds roleTiers, and exactly the two apex roles then resolve to nothing.
 printf '{\n  "models": { "light": "haiku", "standard": "sonnet", "deep": "opus", "apex": null }\n}\n' > "$I/instance.config.local.json"
 bash -x "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/stamp.out" 2>"$TMP/stamp.trace"; RCS=$?
 ok "the stamp exits 0"                           "$RCS" 0
@@ -214,8 +214,8 @@ ok "…with --all"                                 "$(grep -c 'resolve-model\.sh
 # The trace carries each `echo` twice — as the `+ echo …` trace line and as its output —
 # so the warning is read from the non-trace lines only.
 grep -v '^+' "$TMP/stamp.trace" > "$TMP/stamp.err"
-ok "the warning names the role that resolves to nothing" "$(yn grep -q 'session happens to be: plan-architect$' "$TMP/stamp.err")" yes
-ok "…and only that one"                          "$(grep -c 'session happens to be:' "$TMP/stamp.err" | tr -d ' ')" 1
+ok "the warning names the roles that resolve to nothing" "$(yn grep -q 'session happens to be: plan-architect qa-reviewer$' "$TMP/stamp.err")" yes
+ok "…and only those"                            "$(grep -c 'session happens to be:' "$TMP/stamp.err" | tr -d ' ')" 1
 # The other direction: a stamp where every role resolves warns about none of them.
 I="$(newinst 7)"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/stamp2.out" 2>&1; RCS=$?

@@ -440,7 +440,7 @@ never an option.
 
    **e. No usable external reviewer ⇒ `qa-reviewer` in scaffold mode. Not a skip — but
    whether it is automatic depends on WHICH class step a found, because the ask fires on
-   the SPEND, never on the hiccup.** Dispatching `qa-reviewer` costs a deep-tier session;
+   the SPEND, never on the hiccup.** Dispatching `qa-reviewer` costs an apex-tier session;
    a reviewer that is merely rate-limited is back within the hour (measured 2026-08-31 on
    four PRs), so spending one on it buys nothing.
 
