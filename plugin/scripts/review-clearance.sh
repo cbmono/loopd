@@ -934,9 +934,8 @@ nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.
 # Silent on any failure: it cannot change the answer this script gives. <kind> is
 # `external` only for a REVIEWERS vendor login clearing by route A or C — the one kind
 # that lets the merge go without a checker table (SCHEMA.md clause 7).
-mint_receipt() { # <internal|external> [--cap]
-  local k="$1"; shift
-  "$RC_DIR/clearance-receipt.sh" record review-clearance.sh --kind "$k" ${1+"$@"} \
+mint_receipt() { # <internal|external>
+  "$RC_DIR/clearance-receipt.sh" record review-clearance.sh --kind "$1" \
     --repo "$nwo" --pr "$pr_number" --head "$head_sha" >/dev/null 2>&1 || true
 }
 vendor_kind() { if match_reviewer "$1"; then echo external; else echo internal; fi; }
@@ -2027,7 +2026,7 @@ EOF
 }
 
 # `refuse_clause9` is called only where a clearance was otherwise about to be printed.
-refuse_clause9() { # <the clearance message that is being withheld> <internal|external>
+refuse_clause9() { # <the clearance message that is being withheld>
   if [ "$clause9_state" = "unreadable" ]; then
     echo "error: PR $pr has a review at head $head_sha, but its review THREADS could not be" >&2
     echo "       read, so $AB_SCHEMA clause 9 (no reviewer-authored thread still unresolved)" >&2
@@ -2054,19 +2053,6 @@ refuse_clause9() { # <the clearance message that is being withheld> <internal|ex
     printf '          | %s:%s  (%s)  %s\n' "$p_" "$l_" "$who" "$url_"
     printf '          |   %s\n' "$(printf '%s' "$first_" | tr -d '\000-\010\013-\037' | cut -c1-120)"
   done >&2
-  # mergeAtReviewCap (AUTONOMY.md -> "Merge at the review cap"): still exit 6, plus a `cap`
-  # line, never a pass. review-rounds.sh replays this file with --no-merge-check, so a
-  # replay can never recurse back into it. Two DISTINCT reviewed commits across both
-  # reviewers, not either one's own cap (one round at coderabbitRounds 1) nor the sum of the
-  # counts (one commit both reviewed would read as two).
-  if [ -z "$skip_merge_check" ] && "$RC_DIR/clearance-receipt.sh" armed >/dev/null 2>&1; then
-    cr="$("$RC_DIR/review-rounds.sh" "$pr_number" --for coderabbit --commits --repo "$nwo" 2>/dev/null)"
-    cr_rc=$?
-    qa="$("$RC_DIR/review-rounds.sh" "$pr_number" --for qa --commits --repo "$nwo" 2>/dev/null)"
-    qa_rc=$?
-    n="$(printf '%s\n%s\n' "$cr" "$qa" | grep -Ex '[0-9a-f]{40}' | sort -u | wc -l | tr -d ' ')"
-    [ "$cr_rc" -le 1 ] && [ "$qa_rc" -le 1 ] && [ "$n" -ge 2 ] && mint_receipt "$2" --cap
-  fi
   exit 6
 }
 
@@ -2098,7 +2084,7 @@ if [ -z "$refusal_at_head" ] || [ -n "$cleared_msg" ]; then
     # cleared"; printing it and then refusing at 6 tells the operator two opposite things
     # one line apart, and the second one is the answer.
     check_clause9
-    [ -z "$clause9_threads" ] && [ "$clause9_state" = "ok" ] || refuse_clause9 "$cleared_msg" "$cleared_kind"
+    [ -z "$clause9_threads" ] && [ "$clause9_state" = "ok" ] || refuse_clause9 "$cleared_msg"
     [ -n "$refusal_at_head" ] && {
       echo "note: $refusal_from also refused this head on PR $pr; a review artifact carrying" >&2
       echo "      evidence at the same commit outranks it, so this cleared. Look if unsure." >&2
@@ -2110,7 +2096,7 @@ if [ -z "$refusal_at_head" ] || [ -n "$cleared_msg" ]; then
   if [ -n "$held_from" ]; then
     check_clause9
     [ -z "$clause9_threads" ] && [ "$clause9_state" = "ok" ] || \
-      refuse_clause9 "a submitted review ($held_state) from $held_from" "$(vendor_kind "$held_from")"
+      refuse_clause9 "a submitted review ($held_state) from $held_from"
     echo "ok: a submitted review ($held_state) from $held_from was made at head $head_sha on PR $pr"
     mint_receipt "$(vendor_kind "$held_from")"
     exit 0

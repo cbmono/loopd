@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # subagent-merge-yolo.test.sh — the one merge `AUTONOMY.md` delegates, the ways it is
-# still refused, when an external review stands in for the checker table, and the opt-in merge at the review cap: `plugin/hooks/deny-destructive.sh` rule `subagent_merge`, the policy
+# still refused, when an external review stands in for the checker table, and the merge after the last round: `plugin/hooks/deny-destructive.sh` rule `subagent_merge`, the policy
 # it defers to in `plugin/scripts/merge-permit.sh`, and the clearance record
 # `plugin/scripts/clearance-receipt.sh` writes and reads.
 #
@@ -419,83 +419,51 @@ STUB
      "$(rc_exit plugin/scripts/merge-permit.sh)" 4
   is "…and plugin-name.sh, which names the merging role" "$(rc_exit plugin/scripts/plugin-name.sh)" 4
 
-  echo "== mergeAtReviewCap: exit 6 at the two-round cap, opt-in, yolo only =="
-  THIRD="fedcba9876543210fedcba9876543210fedcba98"
-  key() { printf '{"mergeAtReviewCap": %s}\n' "$1" > "$BUNDLE/instance.config.json"; }
-  caps() { cat "$RCPT" 2>/dev/null | awk '$1 == "cap" && $2 == "review-clearance.sh" { n++ } END { print n + 0 }'; }
-  reviewed_at() { # <sha>... — a vendor review at each, and one vendor thread still open
-    local c; setup "$H"
-    for c in "$@"; do add_review coderabbitai COMMENTED "$c" "$CLEAN"; done
-    add_thread false a.sh 3 coderabbitai https://example.invalid/t/1 'fix this'
+  echo "== merge after the last round: a named receipt line, yolo only =="
+  unrev() { # <name> [<head>] — the line review-next.sh --clear writes
+    "$RECEIPT" record review-next.sh --unreviewed "$1" --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "${2:-$H}"
   }
-
-  forget; printf '{}\n' > "$BUNDLE/instance.config.json"
-  reviewed_at "$OTHER_SHA" "$H"
-  expect "key absent: two rounds, threads open at the head ⇒ exit 6" 6
-  is "…and no cap line is written" "$(caps)" 0
-  record_all 42 "$H" required-checks.sh pr-body-clearance.sh
-  is "key absent at the cap ⇒ refused" "$(permit)" 1
-
-  forget; key true; reviewed_at "$OTHER_SHA" "$H"
-  expect "key true: the same PR still answers exit 6" 6
-  is "…and records one external cap line" "$(grep -c '^cap review-clearance.sh .* external$' "$RCPT")" 1
-  is "…and no pass line" "$(grep -c '^pass review-clearance.sh ' "$RCPT")" 0
-  others
-  is "key true + yolo + cap + exit 6, external, no pr-verdict pass ⇒ permitted" "$(permit)" 0
-  key false
-  is "…key false ignores the recorded cap line" "$(permit)" 1
-  key null
-  is "…key null too" "$(permit)" 1
-  key '"true"'
-  is "…and the string \"true\" too" "$(permit)" 1
-  key true
-  sed -i.bak 's/^autonomy: yolo$/autonomy: gated/' "$BUNDLE/projects/ext-proj/project.md"
-  is "key true + gated + cap line ⇒ refused" "$(permit)" 1
-  sed -i.bak 's/^autonomy: gated$/autonomy: yolo/' "$BUNDLE/projects/ext-proj/project.md"
+  gated() { sed -i.bak "s/^autonomy: $1\$/autonomy: $2/" "$BUNDLE/projects/ext-proj/project.md"; }
+  for name in last-round qa-zero zero-zero; do
+    forget; unrev "$name"
+    is "$name line alone, no required-checks pass ⇒ refused" "$(permit)" 1
+    others
+    is "$name line + required checks + body, no review, no checker ⇒ permitted" "$(permit)" 0
+    gated yolo gated
+    is "…the same receipt under gated ⇒ refused" "$(permit)" 1
+    gated gated yolo
+    is "…verify without --unreviewed ignores the line" \
+       "$("$RECEIPT" verify --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H" >/dev/null 2>&1; echo $?)" 1
+  done
+  age() { sed -i.bak "s/^$1 \\([^ ]*\\) [^ ]*/$1 \\1 2000-01-01T00:00:00Z/" "$RCPT"; }
+  forget; others
   "$RECEIPT" record pr-verdict-clearance.sh --fail --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
-  is "an external cap line + a pr-verdict fail line ⇒ refused" "$(permit)" 1
-
-  forget; reviewed_at "$OTHER_SHA" "$THIRD"
-  expect "key true, two rounds on earlier heads, none at this one ⇒ exit 4" 4
-  is "…writes no cap line" "$(caps)" 0
-  others
-  is "key true + yolo + cap + exit 4 ⇒ refused" "$(permit)" 1
-
-  forget; reviewed_at "$OTHER_SHA" "$H"; MERGEABLE=CONFLICTING; MERGE_STATE=DIRTY
-  expect "key true, at the cap, the PR conflicts ⇒ exit 7" 7
-  is "…writes no cap line" "$(caps)" 0
-  others
-  is "key true + yolo + cap + exit 7 ⇒ refused" "$(permit)" 1
-
-  forget; reviewed_at "$H"
-  expect "key true, one round, threads open ⇒ exit 6" 6
-  is "…below the cap writes no cap line" "$(caps)" 0
-  others
-  is "key true + yolo below the cap ⇒ refused" "$(permit)" 1
-
-  # Interim, until mergeAtReviewCap is retired: the cap line wants two rounds IN TOTAL, so
-  # coderabbitRounds 1 (one round is at THAT reviewer's cap) must not cap-merge after one.
-  forget; printf '{"mergeAtReviewCap": true, "coderabbitRounds": 1}\n' > "$BUNDLE/instance.config.json"
-  reviewed_at "$H"
-  expect "coderabbitRounds 1, one round, threads open ⇒ exit 6" 6
-  is "…one round writes no cap line, though it is at coderabbitRounds" "$(caps)" 0
-  forget; reviewed_at "$OTHER_SHA" "$H"
-  expect "coderabbitRounds 1, two rounds ⇒ exit 6" 6
-  is "…and two rounds in total write the cap line" "$(caps)" 1
-  forget; reviewed_at "$H"; add_comment dev "$(trailer_body)"
-  expect "CR + a QA trailer at ONE commit, threads open ⇒ exit 6" 6
-  is "…is one distinct commit, so no cap line" "$(caps)" 0
-  key true
-
-  forget
-  "$RECEIPT" record review-clearance.sh --cap --kind internal --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
-  others
-  is "an internal cap line, no pr-verdict pass ⇒ refused" "$(permit)" 1
+  age fail; unrev last-round
+  is "last-round after a stale checker FAIL line: addressed after the last round ⇒ permitted" "$(permit)" 0
+  forget; others; unrev last-round; age last-round
+  "$RECEIPT" record pr-verdict-clearance.sh --fail --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
+  is "a checker FAIL recorded AFTER the last-round line revokes it ⇒ refused" "$(permit)" 1
+  forget; others; unrev qa-head
+  is "qa-head without a checker pass ⇒ refused" "$(permit)" 1
   record_all 42 "$H" pr-verdict-clearance.sh
-  is "…and its pr-verdict pass is what permits it" "$(permit)" 0
-  forget; key false
-  "$RECEIPT" record review-clearance.sh --cap --kind external --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
-  is "record --cap with the key off writes nothing" "$(caps)" 0
+  is "…with the checker's pass ⇒ permitted" "$(permit)" 0
+  "$RECEIPT" record pr-verdict-clearance.sh --fail --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
+  age fail
+  is "…and qa-head filters no checker FAIL, however old ⇒ refused" "$(permit)" 1
+  forget; unrev qa-zero; others
+  "$RECEIPT" record pr-verdict-clearance.sh --fail --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
+  is "qa-zero + a checker FAIL line ⇒ refused" "$(permit)" 1
+  forget; unrev last-round "$OTHER_SHA"; others
+  is "a last-round line at another head ⇒ refused" "$(permit)" 1
+  forget; others
+  printf 'cap review-clearance.sh 2026-10-01T00:00:00Z external\n' >> "$RCPT"
+  is "the retired cap line no longer permits anything" "$(permit)" 1
+  is "record --unreviewed with an unknown name is a usage error" \
+     "$("$RECEIPT" record review-next.sh --unreviewed cap --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H" >/dev/null 2>&1; echo $?)" 2
+  is "…and from any script but review-next.sh too" \
+     "$("$RECEIPT" record review-clearance.sh --unreviewed last-round --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H" >/dev/null 2>&1; echo $?)" 2
+  is "mergeAtReviewCap is read nowhere in plugin/ or plugin-yolo/" \
+     "$(git -C "$REPO" grep -c mergeAtReviewCap -- plugin plugin-yolo | grep -c .)" 0
   printf '{}\n' > "$BUNDLE/instance.config.json"
   printf '%s %s\n' "$pass" "$fail" > "$YTALLY"
 )

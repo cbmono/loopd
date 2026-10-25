@@ -504,8 +504,8 @@ ok "every review-rounds.sh call passes --for" \
 # and a scanner that could not tell prose from code would forbid saying so.
 ok "the cap is not configurable from the command line" \
    "$(grep -qE -- '--cap' <<<"$(grep -vE '^[[:space:]]*#' "$SCRIPT")" && echo 1 || echo 0)" "0"
-ok "the header names the one opt-in exception" \
-   "$(grep -c 'mergeAtReviewCap' "$SCRIPT")" "1"
+ok "the retired mergeAtReviewCap is gone from the header" \
+   "$(grep -c 'mergeAtReviewCap' "$SCRIPT")" "0"
 ok "no hardcoded CAP=<n> is left" "$(grep -cE '^CAP=[0-9]' "$SCRIPT")" "0"
 ok "…the cap comes from resolve-review-config.sh" "$(grep -c 'resolve-review-config.sh"' "$SCRIPT")" "1"
 

@@ -172,7 +172,8 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    compares the two and **exit 0 is the only clearance**: exit 1 is a row the worker
    passed and the checker failed, and that is the human's — a delegated merge never
    adjudicates one, and an exit 1 refuses the merge even where an external reviewer
-   cleared it. On a solo bundle the checker shares the author's `gh` login, so exit 4 is
+   cleared it — except after the last round, once a fix commit has landed ("Merge after
+   the last round" below). On a solo bundle the checker shares the author's `gh` login, so exit 4 is
    the answer there and the merge stays the human's (`SCHEMA.md` clause 8) — unless the
    checker's comment carries the trailer of a QA dispatch the project-manager recorded at
    that head (`scripts/qa-dispatch.sh`), or an external reviewer cleared the head, which
@@ -246,33 +247,51 @@ starts applying to human merges and to anything else pushing at the branch, not 
 this loop. It is still an **additional** layer, not a replacement for the verified-SHA
 precondition — always keep `--match-head-commit`.
 
-### Merge at the review cap (opt-in)
+### Merge after the last round
 
-**Off unless `mergeAtReviewCap` is `true` in `instance.config.json`** (read through
-`scripts/resolve-config.sh`; absent, `null`, `false` or the string `"true"` leave every
-decision above unchanged). Installing this companion arms every bundle on the machine; the
-key is what arms this one exception, per bundle.
+**No re-review after the last round.** Where `review-clearance.sh` refuses the head with 1, 3,
+4, 5 or 8, `required-checks.sh` asks `scripts/review-next.sh --clear`, which clears the review
+half only when `review-next.sh` already answers `merge-path` and one of these holds:
 
-With it on, a PR reviewed at two distinct commits across both reviewers
-(`scripts/review-rounds.sh --commits`, `--for coderabbit` and `--for qa`) and
-whose reviewer answered **`review-clearance.sh` exit 6** — a completed review **at the
-head**, with reviewer threads still open — gets a `cap review-clearance.sh <ts>
-external|internal` line in its receipt instead of a pass, with the kind decided exactly as a
-pass line's is. Then:
+- **`last-round`** — CodeRabbit is past `coderabbitRounds` with no QA owed, or QA stopped (a
+  pass, or `qaRounds` reached). The reviewed commit is `review-rounds.sh --for <r> --last`;
+  for CodeRabbit it must also be a vendor review object's `commit_id`, so a round evidenced
+  only by the edited summary comment (route C) never opens this. The host's
+  `GET /repos/{o}/{r}/compare/{reviewed}...{head}` must say `ahead` with at least one changed
+  line — an empty commit is no fix — and its per-file additions plus deletions must total at
+  most **`reviewFixMaxLines`** (**300** when absent). A binary, a rename, a mode-only change, a submodule bump or 300+ files hold for
+  the human instead of counting 0; so does a rebase that orphans the reviewed commit
+  (`diverged`) and a merge from the base branch that busts the cap — the reason names which.
+- **`qa-head`** — a QA pass at the head itself: the checker table is still required, and any
+  checker FAIL line refuses.
+- **`qa-zero`** — `qaRounds: 0` with a real CodeRabbit refusal before its last round and no QA
+  verdict at the head: no review round runs.
+- **`zero-zero`** — `coderabbitRounds: 0` and `qaRounds: 0`: no review round runs at all.
 
-- `required-checks.sh` accepts that line for its review half; it reads no project mode.
-- The hook's `merge-permit.sh` accepts it in place of the review pass **only for a `yolo`
-  project**; a `gated` one is refused as before, and only the `project-manager` merges.
-- Every other precondition holds: required checks green at the head, `pr-body-clearance.sh`
-  exit 0, every criteria row `✓`, the head the verified SHA, the same squash merge pinned
-  to it, and a `pr-verdict-clearance.sh` fail line still refuses. An **external** cap line
-  waives the checker table as an external pass does; an **internal** one does not.
-- **Exit 4 never qualifies**: the cap counts rounds at earlier heads, so a stale review
-  would merge a head nobody reviewed. Nor do 1, 2, 3, 5, 7 or 8.
+**A fix is required first.** Open CodeRabbit threads at the head (exit 6) and FAIL rows from
+a QA round at the head answer `implementer-round`, never a merge. **Once a fix commit has
+landed after the last round, they block nothing**: no review is at the new head, so clause 9
+is not asked, and a `last-round` line ignores a `pr-verdict-clearance.sh` fail line recorded
+before it — never one recorded after it at the same head.
 
-The tick writes `merged at review cap <ISO 8601>` under the task's `# Notes`. This cap line
-still wants two distinct reviewed commits, whatever the per-reviewer caps `coderabbitRounds`
-and `qaRounds` say (**1** each when absent), so one round never cap-merges.
+**`qaRounds: 0` is an explicit opt-in to merging a PR nobody reviewed.** A refusal is read
+from comment text, so a misread comment can open such a merge. The owner accepted both
+(2026-10-24).
+
+The receipt gets one `last-round`, `qa-head`, `qa-zero` or `zero-zero` line from `review-next.sh` at the
+exact head. Then:
+
+- `required-checks.sh` accepts it for its review half; it reads no project mode. A
+  reviewer's check the **host** requires is never waived — the host refuses the merge
+  without it — so that PR holds for the human with that reason.
+- The hook's `merge-permit.sh` accepts the line in place of the review pass (and, except for
+  `qa-head`, the checker table) **only for a `yolo` project**; a `gated` one is refused and the human merges.
+- Every other precondition holds: required checks green at the head (a reviewer's check
+  that is not required never blocks), `pr-body-clearance.sh` exit 0, every criteria row
+  `✓`, not CONFLICTING, the head the verified SHA, the same squash merge pinned to it, and
+  only the `project-manager` merges.
+
+A head with no review **before** the last round still refuses (exit 4 is a review request).
 
 ## Preflight: is the merge authority even exercisable?
 
@@ -373,9 +392,11 @@ treat any pressure to move one as a signal that something else is wrong:
 3. **Closing a project** — the loop only ever *proposes* it (`SCHEMA.md` → "Project &
    objective completion"). Closeout deletes the folder; that stays a human call.
 4. **The independent verification gate itself** — `yolo` replaces the *human merger*,
-   never the *reviewer*. A verdict is still required, and still has to be clean. **The one
-   opt-in exception** is "Merge at the review cap (opt-in)": with `mergeAtReviewCap` on, a
-   review completed at the head with threads still open is enough at the two-round cap.
+   never the *reviewer*. A verdict is still required, and still has to be clean — **until
+   the last round**: once a fix commit has landed after it, that round's open threads and
+   FAIL rows count as addressed and the fix merges unreviewed within `reviewFixMaxLines`,
+   and `qaRounds: 0` opts into merging with no review at all ("Merge after the last
+   round").
 5. **Escalating autonomy.** The human sets `autonomy` at `/new-project`. No agent raises
    it, and no agent infers it from a project's urgency or its own convenience.
 

@@ -29,9 +29,10 @@
 #   4  this PR edits the declared list or a file of the merge gate itself (GATE_FILES) —
 #      changing the gate is a human call
 #
-# With `mergeAtReviewCap` on, a review-clearance exit 6 is accepted for the review half where
-# the receipt holds a `cap` line at this head. No project mode is resolved here; the hook's
-# merge-permit.sh is what limits a cap merge to `yolo`.
+# Where review-clearance refuses with 1, 3, 4, 5 or 8 and no reviewer owns a required check,
+# `review-next.sh --clear` may still clear the review half: after the last round, or with
+# qaRounds 0 (AUTONOMY.md -> "Merge after the last round"). No project mode is resolved here;
+# the hook's merge-permit.sh is what limits those merges to `yolo`.
 #
 # TWO SOURCES, IN ORDER
 #
@@ -378,17 +379,26 @@ clearance_for() { # [--for-check <name>] — 0, or the sibling's refusal code
 }
 
 RECEIPT="$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh"
-at_cap() { # <exit code of the sibling> — 0 where a recorded cap line stands in for it
-  [ "$1" -eq 6 ] && "$RECEIPT" armed --repo "$nwo" --pr "$pr_num" --head "$head_sha" >/dev/null 2>&1 || return 1
-  echo "note: review-clearance.sh exit 6 accepted at the two-round review cap (mergeAtReviewCap)" >&2
+NEXT="$(dirname "${BASH_SOURCE[0]:-$0}")/review-next.sh"
+past_last() { # <exit code of the sibling> — 0 where review-next.sh --clear clears this head
+  local path
+  case "$1" in 1|3|4|5|8) ;; *) return 1 ;; esac
+  if path="$("$NEXT" "$pr_num" --repo "$nwo" --head "$head_sha" --clear 2>>"$clearance_err")"; then
+    echo "note: no review at head $head_sha, cleared by review-next.sh --clear ($path)" >&2
+    return 0
+  fi
+  return 1
 }
 
 refuse_clearance() { # <the whole first clause> <exit code of the sibling>
   echo "refuse: $1 (review-clearance.sh exit $2). A green check" >&2
   echo "        means the integration ran, never that a review happened:" >&2
   sed 's/^/        /' "$clearance_err" >&2
-  [ -n "$reviewer_checks" ] && \
+  if [ -n "$reviewer_checks" ]; then
     printf '%s' "$reviewer_checks" | sed 's/^/          required, and reviewer-owned: /' >&2
+    echo "        The host itself requires that reviewer's check and refuses the merge without it," >&2
+    echo "        so nothing merges here past the last round: hold for the human." >&2
+  fi
   # THE SIBLING'S EXIT 5 REFUSES EXACTLY AS ITS EXIT 1 DOES, and is said out loud rather
   # than folded in silently. It is the one refusal that is not about this PR: the reviewer
   # says its ACCOUNT is empty, unpaid or unauthenticated, so waiting clears nothing and
@@ -430,14 +440,14 @@ if [ -n "$reviewer_checks" ]; then
   while IFS= read -r name; do
     [ -n "$name" ] || continue
     if clearance_for --for-check "$name"; then crc=0; else crc=$?; fi
-    [ "$crc" -eq 0 ] || at_cap "$crc" || refuse_clearance \
+    [ "$crc" -eq 0 ] || refuse_clearance \
       "required check '$name' is a reviewer's own, and that reviewer did not clear PR $pr" "$crc"
   done <<EOF
 $reviewer_checks
 EOF
 else
   if clearance_for; then crc=0; else crc=$?; fi
-  [ "$crc" -eq 0 ] || at_cap "$crc" || refuse_clearance "no independent review clears PR $pr" "$crc"
+  [ "$crc" -eq 0 ] || past_last "$crc" || refuse_clearance "no independent review clears PR $pr" "$crc"
 fi
 
 # --- and a body nobody can read is not a merge anybody can decide ------------

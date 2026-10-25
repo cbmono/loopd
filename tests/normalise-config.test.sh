@@ -129,7 +129,7 @@ d["org"] = "wrong-org"
 d["maxAgentMinutes"] = 120
 d["roleMinutes"] = {"project-manager": 200}
 d["reclaimIgnoreOk"] = ["target"]
-d["mergeAtReviewCap"] = True
+d["coderabbitRounds"] = 2
 d["continueAfterTasks"] = 16
 d["continueAfterDays"] = 20
 PY
@@ -144,7 +144,7 @@ ok "a local maxAgentMinutes is NOT misplaced"        "$(finding MISPLACED maxAge
 ok "…nor a local roleMinutes"                        "$(finding MISPLACED roleMinutes)" no
 ok "…nor a local reclaimIgnoreOk"                    "$(finding MISPLACED reclaimIgnoreOk)" no
 # SCHEMA marks these three shared facts, so a local copy is misplaced.
-ok "a local mergeAtReviewCap is MISPLACED"           "$(finding MISPLACED mergeAtReviewCap)" yes
+ok "a local coderabbitRounds is MISPLACED"           "$(finding MISPLACED coderabbitRounds)" yes
 ok "…and so is continueAfterTasks"                   "$(finding MISPLACED continueAfterTasks)" yes
 ok "…and so is continueAfterDays"                    "$(finding MISPLACED continueAfterDays)" yes
 ok "report mode wrote nothing"                "$(jget "$I/$TCFG" reposRoot)" /abs/path/on/one/machine

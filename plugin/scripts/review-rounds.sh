@@ -111,9 +111,8 @@
 #   THIS SCRIPT CLEARS NOTHING AND MUST NEVER BE READ AS CLEARANCE. Exit 0 here means "the
 #   cap has room", never "this PR was reviewed". The merge gate is `required-checks.sh` +
 #   `review-clearance.sh`, unchanged and unaffected by anything in this file.
-#   THE ONE OPT-IN EXCEPTION is `mergeAtReviewCap` (default off): `review-clearance.sh` asks
-#   both `--commits` lists on its exit 6 and records a `cap` line at two DISTINCT commits
-#   across both — never one reviewer's cap — that only a `yolo` merge permit reads.
+#   `review-next.sh --clear` reads `--last` as the commit a no-re-review merge is measured
+#   from; that gate, not this count, decides whether such a merge clears.
 #
 # THE CAP IS BUNDLE CONFIG, NEVER A FLAG: a `--cap` is how a hard cap becomes a per-call
 # default, and the two keys are a merge policy both clones read from the tracked file.

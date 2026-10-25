@@ -252,13 +252,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      on every tick you would otherwise dispatch a verifier, external path included: a
      round is a round whoever spent it. (The price tag that made the cap hard:
      `docs/pm-design.md#step-4`.)
-     **The one opt-in exception: `mergeAtReviewCap`** (`instance.config.json`, default
-     off). With it `true`, a `yolo` PR at the cap whose `review-clearance.sh` answers **6**
-     (reviewed at the head, threads open) is merged rather than surfaced, if every other
-     precondition of `AUTONOMY.md` → "Merge at the review cap (opt-in)" holds. Exit 4
-     never qualifies. After the merge, write one `# Notes` line on the task:
-     `merged at review cap <ISO 8601>`. Without the key, or under `gated`, surface it as
-     above.
+     **At the cap the last round's fix needs no re-review**: `review-next.sh` (below) answers
+     `merge-path`, and the merge gate measures the fix against `reviewFixMaxLines`
+     (`AUTONOMY.md` → "Merge after the last round"). Surface a PR at the cap only when that
+     gate holds it for the human.
    - **Check the acceptance_criteria travelled with the PR — and that they're
      ticked.** Role agents embed the task's criteria as a `✓`/`✗` table in the PR
      body. Missing ⇒ have the agent add them. A **`✗`** is a criterion nobody
@@ -327,10 +324,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      |---|---|---|
      | `dispatch-qa` | CodeRabbit is unavailable: a real refusal (`review-clearance.sh` exit 1 with `class: declined`, or exit 5) before its last round, `coderabbitRounds` `0` with `qaRounds` ≥ 1 (exit 8 and 3 are then never consulted), or a failed QA round whose fix landed while the QA count is under `qaRounds` | **Dispatch `loopd:qa-reviewer` in this tick — no ask, no waiting window, either mode.** Mint its nonce first (below). |
      | `request-review` | exit 4 (stale) or 8 (skipped: auto reviews are off, so NOBODY EVER ASKED and it never reopens), CodeRabbit under `coderabbitRounds` | **Re-request at the final head**: comment `@coderabbitai review`, bare. A request is not a round, never a merge and never a `qa-reviewer` spend. |
-     | `implementer-round` | the QA verdict at this head is not a pass | Dispatch the task's own agent with the checker's FAIL rows. |
+     | `implementer-round` | exit 6 (CodeRabbit's threads open at the head), or the QA verdict at this head is not a pass | Dispatch the task's own agent with the open threads or the checker's FAIL rows: address them, then merge. Never a merge at the reviewed commit itself. |
      | `rebase-round` | exit 7 | The EXIT 7 bullet above. |
-     | `merge-path` | exit 0 or 6, QA passed, or QA reached `qaRounds` after a fix | Run `AUTONOMY.md` → "Merge under `yolo`"; under `gated` surface the PR. A refusal there is surfaced, never worked around. |
-     | `hold` | the "currently processing" placeholder (exit 1, `class: placeholder`), exit 2 or 3, a QA round in flight at this head, CodeRabbit at its cap, or any input the script could not read (its exit 2) | Nothing this tick. At a cap, surface both positions as the round-count bullet says. |
+     | `merge-path` | exit 0; QA passed or reached `qaRounds`; past CodeRabbit's last round (exit 4, 8, a real refusal); `qaRounds` `0` with a real refusal; `coderabbitRounds` and `qaRounds` both `0` | Run `AUTONOMY.md` → "Merge under `yolo`"; with no review at the head, `required-checks.sh` asks `review-next.sh --clear` ("Merge after the last round"). Under `gated` surface the PR. A refusal there is surfaced with its reason, never worked around. |
+     | `hold` | the "currently processing" placeholder (exit 1, `class: placeholder`), exit 2 or 3, a QA round in flight at this head, or any input the script could not read (its exit 2) | Nothing this tick. |
 
      **The placeholder is not unavailable**: it is on nearly every PR, and a QA round on it
      would run QA everywhere. A real refusal outranks a placeholder at the same head whatever

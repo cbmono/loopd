@@ -203,7 +203,10 @@ before its last round, or `coderabbitRounds: 0`) dispatches one `qa-reviewer` in
 tick, no ask; the "currently processing" placeholder, exit 3 and exit 8 never do. Each QA
 dispatch is recorded first (`scripts/qa-dispatch.sh mint`, a nonce in the brief and only
 its hash on disk), which both stops a second QA at the same head and is the only way a
-verdict under the PR author's own login counts (`SCHEMA.md` clause 8).
+verdict under the PR author's own login counts (`SCHEMA.md` clause 8). Open threads at the
+head (exit 6) are an `implementer-round`; once a fix lands after the last round it merges
+with no re-review, bounded by `reviewFixMaxLines` (`AUTONOMY.md` → "Merge after the last
+round").
 
 **A 7 is tried by a script before it costs an agent.**
 `rebase-pr.sh <pr> --repo <org>/<repo> --dir <clone>` rebases in a throwaway worktree and
@@ -288,7 +291,11 @@ it would silently not be there.
 ### Under quota starvation, the order is fixed — and the override is the last step, not the first
 
 The gate stays correct when the reviewer runs out: exit 0 is still the only clearance, so
-a starved reviewer stalls the pipeline rather than opening it. What follows is what to do
+a starved reviewer stalls the pipeline rather than opening it — **unless the bundle sets
+`qaRounds: 0`, which is an explicit opt-in to the opposite**: with a CodeRabbit refusal (or
+`coderabbitRounds: 0` too) a `yolo` project merges a PR nobody reviewed once its required
+checks are green. The refusal is read from comment text, so a misread comment can open such
+a merge (`AUTONOMY.md` → "Merge after the last round"). What follows is what to do
 with the stall, **in this order**, and none of the earlier steps may be skipped because a
 later one is quicker:
 
@@ -377,7 +384,7 @@ DECIDES" is normative and carries the measurement behind the number.
 |---|---|
 | 1 | the reviewer reports findings; the implementer fixes them and replies **once** |
 | 2+ | (a cap above 1) the reviewer checks **only** what it raised before — new findings outside that set are recorded, not blocking |
-| past the cap | **there is none.** Whatever is unresolved goes to the human in one short block: what the reviewer wants, what the implementer says, what the criterion actually asks |
+| past the cap | **there is none.** The last round's fix merges under `yolo` with no re-review when the host's compare says it descends from the last reviewed commit and changes at most `reviewFixMaxLines` (**300** when absent) lines; anything else — over the cap, a rebase, a binary or renamed file — goes to the human in one short block: what the reviewer wants, what the implementer says, what the criterion actually asks |
 
 `scripts/review-rounds.sh <pr> --for coderabbit|qa [--last|--commits|--verdicts] [--repo <owner>/<name>] [--instance <bundle>]`
 makes the cap a number a dispatcher **reads** rather than a rule it has to remember. The two

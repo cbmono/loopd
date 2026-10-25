@@ -721,9 +721,9 @@ above it so none may grow its share.
   reviewer adds none. **An automatic incremental review counts, by design** (owner
   decision 2026-10-21): where a repo leaves CodeRabbit's `auto_incremental_review` on,
   its review of the first fix push is a completed verification of a new commit, so it
-  *is* another CodeRabbit round even though nobody asked for it. `mergeAtReviewCap`
-  (`SCHEMA.md`, off by default) changes what happens at two distinct reviewed commits, never where
-  a reviewer's cap is. Exit 2 is *unknown*, which is not permission. A missing or broken
+  *is* another CodeRabbit round even though nobody asked for it. At the cap, the last
+  round's fix merges with no re-review within `reviewFixMaxLines` (`AUTONOMY.md` → "Merge
+  after the last round"); that never moves where a reviewer's cap is. Exit 2 is *unknown*, which is not permission. A missing or broken
   script exits non-zero too, so the failure direction is "ask the human", never "review
   again". This rule spent a week of budget while it was prose; it is not prose now.
   **Corollary — grade against the criteria, not against your own taste.** If you believe
