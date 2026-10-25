@@ -418,6 +418,13 @@ comment "dev" "$(verdict_body "$THIRD")"
 ok "BOTH AT ONE COMMIT: CodeRabbit + a qa trailer at one commit = 1 coderabbit" "$(run coderabbit "$NOCFG")" "1 1"
 ok "…and 1 qa" "$(run qa "$NOCFG")" "1 1"
 
+# A vendor review that QUOTES the marker is still the vendor's round, never a QA one.
+setup; commit "$CLEAN_HEAD"; commit "$THIRD"
+review "coderabbitai[bot]" "COMMENTED" "$THIRD" \
+  "$(body 'One nit: the new okf-verdict parser drops a trailing blank line.')"
+ok "a CodeRabbit review quoting okf-verdict: 1 coderabbit round" "$(run coderabbit "$NOCFG")" "1 1"
+ok "…and 0 qa rounds (the vendor login is never replayed as QA)" "$(run qa "$NOCFG")" "0 0"
+
 ZERO="$TMP/zero"; mkdir -p "$ZERO"; printf '{"coderabbitRounds": 0}\n' > "$ZERO/instance.config.json"
 setup; commit "$CLEAN_HEAD"
 ok "coderabbitRounds 0: no rounds is already at the cap" "$(run coderabbit "$ZERO")" "1 0"
@@ -442,6 +449,8 @@ review "coderabbitai[bot]" "CHANGES_REQUESTED" "$THIRD" "$(body 'Two findings on
 comment "dev" "$(verdict_body "$CLEAN_HEAD")"
 ok "--for coderabbit --last prints the newest reviewed commit" "$(run coderabbit "$CAPS2" --last)" "1 $THIRD"
 ok "--for qa --last prints the trailer's commit" "$(run qa "$CAPS2" --last)" "0 $CLEAN_HEAD"
+ok "--commits prints every counted commit, oldest first" \
+   "$(run coderabbit "$CAPS2" --commits | tr '\n' ' ')" "1 $CLEAN_HEAD $THIRD"
 setup; commit "$CLEAN_HEAD"
 comment "coderabbitai[bot]" "$REFUSAL_BODY"
 ok "--last with no round prints nothing (the refusal's named SHA is not one)" "$(run coderabbit "$CAPS2" --last)" "0 <none>"

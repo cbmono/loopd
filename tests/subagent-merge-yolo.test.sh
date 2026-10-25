@@ -482,6 +482,9 @@ STUB
   forget; reviewed_at "$OTHER_SHA" "$H"
   expect "coderabbitRounds 1, two rounds ⇒ exit 6" 6
   is "…and two rounds in total write the cap line" "$(caps)" 1
+  forget; reviewed_at "$H"; add_comment dev "$(trailer_body)"
+  expect "CR + a QA trailer at ONE commit, threads open ⇒ exit 6" 6
+  is "…is one distinct commit, so no cap line" "$(caps)" 0
   key true
 
   forget

@@ -6,7 +6,8 @@
 #
 # No key prints `<key> <value>` for all three; a key prints its value alone. Absent (or no
 # instance.config.json) is the default: 1, 1, 300. Exit 0 resolved · 1 a value that is not
-# an unquoted integer >= 0, each bad key named on stderr · 2 usage, or the config unreadable.
+# an unquoted integer 0-999999999, each bad key named on stderr · 2 usage, or the config
+# unreadable.
 # Defaults and meaning: SCHEMA.md → "Per-machine config overrides".
 set -uo pipefail
 
@@ -44,9 +45,10 @@ for k in $KEYS; do
     1) v="$(default_of "$k")" ;;
     *) echo "resolve-review-config: could not read $k (resolve-config.sh exit $rc)" >&2; exit 2 ;;
   esac
+  # Nine digits at most: a longer one overflows the callers' `[ -lt ]`, which then errors.
   case "$v" in
-    ""|*[!0-9]*)
-      echo "resolve-review-config: $k must be an unquoted integer >= 0" >&2
+    ""|*[!0-9]*|??????????*)
+      echo "resolve-review-config: $k must be an unquoted integer >= 0 of at most 9 digits" >&2
       bad=1; continue ;;
   esac
   if [ -n "$want" ]; then out="$v"; else out="$out$k $v

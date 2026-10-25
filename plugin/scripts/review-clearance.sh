@@ -800,6 +800,12 @@ if [ "${1:-}" = "--match-check" ]; then
   validate_tables || exit 2
   match_check "$2"; exit $?
 fi
+# Is <login> a REVIEWERS vendor? 0 yes, 1 no — review-rounds.sh drops these from `--for qa`.
+if [ "${1:-}" = "--match-reviewer" ]; then
+  [ -n "${2:-}" ] && [ "$#" -eq 2 ] || usage
+  validate_tables || exit 2
+  match_reviewer "$2"; exit $?
+fi
 
 # --- argument parsing --------------------------------------------------------
 while [ "$#" -gt 0 ]; do
@@ -2002,14 +2008,16 @@ refuse_clause9() { # <the clearance message that is being withheld> <internal|ex
   done >&2
   # mergeAtReviewCap (AUTONOMY.md -> "Merge at the review cap"): still exit 6, plus a `cap`
   # line, never a pass. review-rounds.sh replays this file with --no-merge-check, so a
-  # replay can never recurse back into it. Two rounds IN TOTAL, not either reviewer's own
-  # cap: at coderabbitRounds 1 that cap is one round, and this would merge after it.
+  # replay can never recurse back into it. Two DISTINCT reviewed commits across both
+  # reviewers, not either one's own cap (one round at coderabbitRounds 1) nor the sum of the
+  # counts (one commit both reviewed would read as two).
   if [ -z "$skip_merge_check" ] && "$RC_DIR/clearance-receipt.sh" armed >/dev/null 2>&1; then
-    cr="$("$RC_DIR/review-rounds.sh" "$pr_number" --for coderabbit --repo "$nwo" 2>/dev/null)"
+    cr="$("$RC_DIR/review-rounds.sh" "$pr_number" --for coderabbit --commits --repo "$nwo" 2>/dev/null)"
     cr_rc=$?
-    qa="$("$RC_DIR/review-rounds.sh" "$pr_number" --for qa --repo "$nwo" 2>/dev/null)"
+    qa="$("$RC_DIR/review-rounds.sh" "$pr_number" --for qa --commits --repo "$nwo" 2>/dev/null)"
     qa_rc=$?
-    [ "$cr_rc" -le 1 ] && [ "$qa_rc" -le 1 ] && [ $((cr + qa)) -ge 2 ] && mint_receipt "$2" --cap
+    n="$(printf '%s\n%s\n' "$cr" "$qa" | grep -Ex '[0-9a-f]{40}' | sort -u | wc -l | tr -d ' ')"
+    [ "$cr_rc" -le 1 ] && [ "$qa_rc" -le 1 ] && [ "$n" -ge 2 ] && mint_receipt "$2" --cap
   fi
   exit 6
 }

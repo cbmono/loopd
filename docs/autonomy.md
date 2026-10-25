@@ -369,10 +369,11 @@ DECIDES" is normative and carries the measurement behind the number.
 | 2+ | (a cap above 1) the reviewer checks **only** what it raised before — new findings outside that set are recorded, not blocking |
 | past the cap | **there is none.** Whatever is unresolved goes to the human in one short block: what the reviewer wants, what the implementer says, what the criterion actually asks |
 
-`scripts/review-rounds.sh <pr> --for coderabbit|qa [--last] [--repo <owner>/<name>] [--instance <bundle>]`
+`scripts/review-rounds.sh <pr> --for coderabbit|qa [--last|--commits] [--repo <owner>/<name>] [--instance <bundle>]`
 makes the cap a number a dispatcher **reads** rather than a rule it has to remember. The two
 reviewers are counted separately — a commit both reviewed is one round for each — and
-`--last` prints that reviewer's last reviewed commit instead of the count. Run it before dispatching a
+`--last` prints that reviewer's last reviewed commit instead of the count (`--commits`, every
+one). `qa` never counts a vendor login, even one whose review quotes `okf-verdict`. Run it before dispatching a
 verifier, and before verifying as one.
 
 | Exit | Means |

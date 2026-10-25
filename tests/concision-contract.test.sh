@@ -48,7 +48,7 @@ BASELINE='577 plugin/hooks/agent-control.sh
 621 plugin/scripts/resolve-max-agents.sh
 578 plugin/scripts/resolve-model.sh
 522 plugin/scripts/review-clearance.sh
-487 plugin/scripts/review-rounds.sh
+475 plugin/scripts/review-rounds.sh
 416 plugin/scripts/task-owner.sh
 365 plugin/scripts/tick-delta.sh
 605 plugin/scripts/tick-lock.sh

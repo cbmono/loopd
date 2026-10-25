@@ -253,8 +253,8 @@ precondition — always keep `--match-head-commit`.
 decision above unchanged). Installing this companion arms every bundle on the machine; the
 key is what arms this one exception, per bundle.
 
-With it on, a PR that has had two rounds in total (`scripts/review-rounds.sh --for coderabbit`
-plus `--for qa`) and
+With it on, a PR reviewed at two distinct commits across both reviewers
+(`scripts/review-rounds.sh --commits`, `--for coderabbit` and `--for qa`) and
 whose reviewer answered **`review-clearance.sh` exit 6** — a completed review **at the
 head**, with reviewer threads still open — gets a `cap review-clearance.sh <ts>
 external|internal` line in its receipt instead of a pass, with the kind decided exactly as a
@@ -271,8 +271,8 @@ pass line's is. Then:
   would merge a head nobody reviewed. Nor do 1, 2, 3, 5, 7 or 8.
 
 The tick writes `merged at review cap <ISO 8601>` under the task's `# Notes`. This cap line
-still wants two rounds in total, whatever the per-reviewer caps `coderabbitRounds` and
-`qaRounds` say (**1** each when absent), so one round never cap-merges.
+still wants two distinct reviewed commits, whatever the per-reviewer caps `coderabbitRounds`
+and `qaRounds` say (**1** each when absent), so one round never cap-merges.
 
 ## Preflight: is the merge authority even exercisable?
 

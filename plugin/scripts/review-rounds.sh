@@ -3,7 +3,7 @@
 # review-rounds.sh — how many rounds has ONE reviewer already spent on this pull request,
 # and may it be dispatched again?
 #
-#   Usage: review-rounds.sh <pr> --for coderabbit|qa [--last] [--repo <o>/<n>] [--instance <bundle>]
+#   Usage: review-rounds.sh <pr> --for coderabbit|qa [--last|--commits] [--repo <o>/<n>] [--instance <bundle>]
 #
 # The mechanism behind `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES": one PR ran
 # EIGHT review rounds and, with its siblings, ~70% of a week's budget while the cap was prose.
@@ -122,8 +122,8 @@
 #   cap has room", never "this PR was reviewed". The merge gate is `required-checks.sh` +
 #   `review-clearance.sh`, unchanged and unaffected by anything in this file.
 #   THE ONE OPT-IN EXCEPTION is `mergeAtReviewCap` (default off): `review-clearance.sh` asks
-#   both counts on its exit 6 and records a `cap` line at two rounds IN TOTAL — never at one
-#   reviewer's own cap — that only a `yolo` merge permit reads (AUTONOMY.md).
+#   both `--commits` lists on its exit 6 and records a `cap` line at two DISTINCT commits
+#   across both — never one reviewer's cap — that only a `yolo` merge permit reads.
 #
 # THE CAP IS BUNDLE CONFIG, NEVER A FLAG: a `--cap` is how a hard cap becomes a per-call
 # default, and the two keys are a merge policy both clones read from the tracked file.
@@ -148,7 +148,7 @@
 #
 # WHAT IT PRINTS. stdout is the round count and nothing else, so a caller can read it with
 # `$(...)`; with `--last`, that reviewer's last reviewed commit instead (a host-pinned
-# candidate, never comment text; nothing when it has none). Everything else is stderr. No
+# candidate, never comment text; nothing when it has none); `--commits`, every one. Everything else is stderr. No
 # PR text is echoed — the sibling quotes untrusted bodies where that is useful.
 #
 # Verified by tests/review-rounds.test.sh.
@@ -159,7 +159,7 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 usage() {
-  echo "Usage: $(basename "$0") <pr> --for coderabbit|qa [--last] [--repo <owner>/<name>] [--instance <bundle>]" >&2
+  echo "Usage: $(basename "$0") <pr> --for coderabbit|qa [--last|--commits] [--repo <owner>/<name>] [--instance <bundle>]" >&2
   echo "       exit 0 under that reviewer's cap, 1 at or past it, 2 cannot answer" >&2
   exit 2
 }
@@ -171,6 +171,7 @@ while [ "$#" -gt 0 ]; do
     --for)      for="${2:-}"; [ -n "$for" ] || usage; shift 2 ;;
     --instance) inst="${2:-}"; [ -n "$inst" ] || usage; shift 2 ;;
     --last)     last=yes; shift ;;
+    --commits)  last=all; shift ;;
     -h|--help) usage ;;
     -*) echo "error: unknown option '$1'" >&2; usage ;;
     *) [ -z "$pr" ] || { echo "error: unexpected argument '$1'" >&2; usage; }
@@ -317,7 +318,20 @@ fi
 # A login is one token by GitHub's own rules (alphanumerics and hyphens); anything else is
 # not a login this script will hand to `--reviewer`.
 grep -Ex '[A-Za-z0-9][A-Za-z0-9-]{0,38}(\[bot\])?' "$TMPD/verdict-logins-raw" \
-  | sort -u > "$TMPD/verdict-logins"
+  | sort -u > "$TMPD/verdict-logins-all"
+# A vendor that QUOTES the marker is still the vendor: replayed by --reviewer it clears its
+# own review, which would count a CodeRabbit round as a QA round. The sibling's table decides.
+if [ "$for" = qa ]; then :; else : > "$TMPD/verdict-logins-all"; fi
+: > "$TMPD/verdict-logins"
+while IFS= read -r login; do
+  "$CLEARANCE" --match-reviewer "$login" >/dev/null 2>&1
+  case "$?" in
+    0) ;;
+    1) printf '%s\n' "$login" >> "$TMPD/verdict-logins" ;;
+    *) echo "error: review-clearance.sh --match-reviewer could not classify '$login' — refusing" >&2
+       exit 2 ;;
+  esac
+done < "$TMPD/verdict-logins-all"
 
 # --- the replay boundary ------------------------------------------------------
 # A `gh` that answers from a snapshot instead of the network, so the sibling can be run
@@ -457,7 +471,9 @@ while IFS= read -r sha; do
   [ -n "$counted" ] && { rounds=$((rounds + 1)); printf '%s\n' "$sha" >> "$TMPD/counted"; }
 done < "$TMPD/commits"
 
-if [ -n "$last" ]; then
+if [ "$last" = all ]; then
+  cat "$TMPD/counted"
+elif [ -n "$last" ]; then
   tail -n 1 "$TMPD/counted"
 else
   printf '%s\n' "$rounds"

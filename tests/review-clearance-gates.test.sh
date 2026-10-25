@@ -33,6 +33,13 @@ match "Greptile"                0
 match "Qodo Merge"              0
 match "Ellipsis"                0
 match "Build, Lint & Format"    1
+# --match-reviewer: is a LOGIN a REVIEWERS vendor (review-rounds.sh drops these from --for qa).
+mrev() { local rc; "$SCRIPT" --match-reviewer "$1" >/dev/null 2>&1; rc=$?
+  if [ "$rc" -eq "$2" ]; then printf '  PASS  %-58s (rc=%s)\n' "--match-reviewer '$1'" "$rc"; pass=$((pass+1))
+  else printf '  FAIL  %-58s expected rc=%s got rc=%s\n' "--match-reviewer '$1'" "$2" "$rc"; fail=$((fail+1)); fi; }
+mrev "coderabbitai[bot]" 0
+mrev "CodeRabbitAI"      0
+mrev "dev"               1
 match "Unit Tests (vitest)"     1
 match "review"                  1
 match "Cursor Bugbot"           1   # no row owns it — and the caller no longer cares

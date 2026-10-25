@@ -44,6 +44,10 @@ for k in coderabbitRounds qaRounds reviewFixMaxLines; do
     ok "…stderr names $k" "$(grep -c "$k" "$TMP/err" | tr -d ' ')" 1
   done
 done
+cfg '{"reviewFixMaxLines": 999999999}'
+ok "9 digits resolve" "$(res reviewFixMaxLines)" "999999999 rc=0"
+cfg '{"reviewFixMaxLines": 99999999999999999999}'
+ok "20 digits are refused (they overflow the callers' test)" "$(res reviewFixMaxLines)" " rc=1"
 cfg '{"qaRounds": true}'
 ok "one bad key fails the all-keys form too" "$(res)" " rc=1"
 
