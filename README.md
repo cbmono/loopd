@@ -836,7 +836,7 @@ commands.
 
 | Path | Holds | Why it is here and not in ai-setup |
 |---|---|---|
-| **`config/required/`** | `code-architect`, `deep-bug-scan`, `plan-architect` | the only three agents this repo's own role agents look for. Without them `qa-reviewer` loses the escalation behind its cheap second opinion and the PM loses its plan critic — **silently**. ai-setup ships them too, so on a machine that installed both, either copy satisfies the probe; this copy is what makes ai-setup optional |
+| **`config/required/`** | `code-architect`, `deep-bug-scan`, `plan-architect` | the only three agents this repo's own role agents look for. Without them `qa-reviewer` below the apex tier loses the escalation behind its cheap second opinion (at apex it adjudicates itself and never dispatches the pair) and the PM loses its plan critic — **silently**. ai-setup ships them too, so on a machine that installed both, either copy satisfies the probe; this copy is what makes ai-setup optional |
 
 That is the whole list, and it is enforced rather than documented:
 `tests/config-ownership.test.sh` derives the expected set from the `test -f` probes in
