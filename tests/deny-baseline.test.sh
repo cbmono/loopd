@@ -591,6 +591,16 @@ ok "a body fed to sh <<EOF is refused" \
    "$(verdict_agent "$GITREPO" "sh <<EOF${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
 ok "a body piped into bash (cat <<EOF | bash) is refused" \
    "$(verdict_agent "$GITREPO" "cat <<EOF | bash${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a quoted body sent to a remote shell (ssh host <<'EOF') is refused" \
+   "$(verdict_agent "$GITREPO" "ssh host <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a quoted body run by a wrapped interpreter (env /bin/bash <<'EOF') is refused" \
+   "$(verdict_agent "$GITREPO" "env /bin/bash <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a quoted body sourced from stdin (. /dev/stdin <<'EOF') is refused" \
+   "$(verdict_agent "$GITREPO" ". /dev/stdin <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a quoted body piped into xargs is refused" \
+   "$(verdict_agent "$GITREPO" "cat <<'EOF' | xargs -I{} sh -c {}${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a quoted body as gh pr create --body-file - is allowed" \
+   "$(verdict_agent "$GITREPO" "gh pr create --title t --body-file - <<'EOF'${NL}gh pr merge 12${NL}EOF")" "allow"
 
 # --- the allow half (load-bearing): the review verbs an agent MUST keep ---
 ok "subagent gh pr create is allowed" \
