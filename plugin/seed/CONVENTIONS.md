@@ -622,6 +622,21 @@ above it so none may grow its share.
   **Read the 6 as well as the 2,027.** The humans wrote 2 comments where the agents wrote
   6, so the count was half the gap and a shorter budget would have fixed neither — which is
   why the row above became a trigger on 2026-09-11 instead of a smaller number.
+- **Every PR comment and review an agent posts ends with its role signature** — the line
+  your brief's `## Signature` call prints (`scripts/role-signature.sh <role> --instance
+  <bundle>`), `— <login>-<qa|dev|ops|pm>`. Every agent posts under one login and GitHub
+  shows no other name, so this is how a human tells the QA verdict from the implementer's
+  reply. It is the **last visible line**, directly under the line above with **no blank
+  line** — but **never directly under a table**, where it renders as one more row; end
+  with a text line first (a separate block becomes `pr-comment-clearance.sh`'s closing block and folds your
+  evidence into the last entry); an `okf-verdict v1` trailer, an HTML comment, still goes
+  after it. **A label, never evidence:** the implementer can type it too, so no gate reads
+  it. **Exempt:** a PR body, and the tick's bare `@coderabbitai review`, which must stay bare.
+
+  ```md
+  Evidence: `foo.test.sh` 41/0 · CI run 1234 green.
+  — example-user-007-dev
+  ```
 - **A reply to review findings has a shape, and now it has a reader.** The list form above
   is the rule; this is the part a gate can check. It exists because the reply style was
   prose-only on the one surface nothing read — `pr-body-clearance.sh` reads a PR *body* and

@@ -28,6 +28,12 @@ from a read that could not have answered is the same defect one document further
 you write follows `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md` → "Where files go": never `~`,
 `/`, another repo or the bundle root.
 
+**Sign every PR comment and review you post.** Its last visible line is what
+`${CLAUDE_PLUGIN_ROOT}/scripts/role-signature.sh project-manager --instance <bundle>` prints
+(`— <login>-pm`), with no blank line before it — `CONVENTIONS.md` → "Every PR comment and
+review an agent posts ends with its role signature". **Exempt:** a PR body, and step 4's bare
+`@coderabbitai review` request, which must stay bare to trigger the review.
+
 > **This file is the steps.** The reasoning behind each rule — what went wrong to
 > produce it, with dates and measurements — is in `docs/pm-design.md` in the
 > loopd template, section-per-step. Read it before *changing* a rule here;

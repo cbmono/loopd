@@ -10,7 +10,7 @@
 # brief.md). Moving both sections into one script makes every criterion here a string
 # comparison on a fixture.
 #
-# ALL SEVEN HEADINGS ARE PINNED IN TWO PLACES ON PURPOSE — here as literals, `## Knowledge`
+# ALL EIGHT HEADINGS ARE PINNED IN TWO PLACES ON PURPOSE — here as literals, `## Knowledge`
 # included, and against step-3-dispatch.md, which tells the PM to paste the block unchanged.
 # A rename landing in the script alone leaves the PM hunting a heading nothing emits.
 #
@@ -257,13 +257,20 @@ assert "a task outside projects/<slug>/tasks/ gets the placeholder" \
 assert "…never a guessed path"                       "$(hasnt "$TMP/deliverables" "$D2")"
 assert "the PM is told to paste the Deliverables heading" "$(has '`## Deliverables`' "$(cat "$PM_DOC")")"
 
-echo "== Knowledge is the seventh section, and the repo the matcher resolved =="
+echo "== Signature hands the helper this bundle, so a worktree resolves ownerGithubUser =="
+
+SIG="$(awk '/^## Signature$/{f=1;next} /^## /{f=0} f' <<<"$(run "$DOC")")"
+assert "the Signature section names the helper by absolute path" "$(has "$REPO/plugin/scripts/role-signature.sh <your-role> --instance " "$SIG")"
+assert "…with the bundle the task lives in"                       "$(has "--instance $(cd "$TMP" && pwd)\`" "$SIG")"
+assert "…and exempts PR bodies and the bare review request"       "$(has 'Not on a PR body, not on a bare `@coderabbitai review`' "$SIG")"
+
+echo "== Knowledge is the last section, and the repo the matcher resolved =="
 
 PM="$(cat "$PM_DOC")"
-for h in "$GROUNDING (<target_repo>)" "$EFFORT" '## Commit attribution' '## PR title' '## Scratch' '## Deliverables' "$KNOWLEDGE"; do
+for h in "$GROUNDING (<target_repo>)" "$EFFORT" '## Commit attribution' '## PR title' '## Scratch' '## Deliverables' '## Signature' "$KNOWLEDGE"; do
   assert "the PM is told to paste '$h'" "$(has "\`$h\`" "$PM")"
 done
-assert "…all seven of them"                   "$(has 'all seven headings and all' "$PM")"
+assert "…all eight of them"                   "$(has 'all eight headings and all' "$PM")"
 assert "…and to record what Knowledge carried" "$(has 'kb-select.sh --record <task-path>' "$PM")"
 
 reset 4

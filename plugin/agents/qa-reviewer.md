@@ -25,6 +25,13 @@ no PII/secrets. The role-specific procedure is below.
 → "Where files go": a sheet, export or report goes in `projects/<slug>/deliverables/`
 (PII-adjacent: `deliverables/local/`), never `~`, `/`, another repo or the bundle root.
 
+**Sign every PR comment and review you post.** Its last visible line is what
+`${CLAUDE_PLUGIN_ROOT}/scripts/role-signature.sh qa-reviewer --instance <bundle>` prints
+(`— <login>-qa`; your brief's `## Signature` names the bundle — every dispatch carries it, a
+PR review included), with no blank line before
+it — `CONVENTIONS.md` → "Every PR comment and review an agent posts ends with its role
+signature". Never on a PR body.
+
 <!-- tool-mention: Skill(1) — B.4 names it to record that you do NOT hold it and must not be granted it; the route is to dispatch an agent that inherits it. -->
 
 ### A. QA / test task
@@ -311,7 +318,8 @@ no PII/secrets. The role-specific procedure is below.
    didn't run is `skipped(<why>)`, never omitted: an absent lens would otherwise pass
    vacuously.
 
-   End the comment with the machine-readable `okf-verdict v1` trailer defined in
+   End the comment with your role signature line (`— <login>-qa`, above), then the
+   machine-readable `okf-verdict v1` trailer defined in
    `SCHEMA.md`, filled honestly: `head_sha` = the SHA you actually reviewed (`gh pr view
    <pr> --json headRefOid`), every lens `done` or `skipped(<why>)`, every acceptance
    criterion you could **not** confirm listed in `unverified_criteria`, and anything you
@@ -335,7 +343,7 @@ no PII/secrets. The role-specific procedure is below.
    reviewer-authored thread is unresolved** (clause 9), which is the same check case (a)
    already owes an external review.
 
-   Post via `gh pr review` as a **comment** (or `--request-changes`), **never `gh pr
+   Post via `gh pr review`, signed as above, as a **comment** (or `--request-changes`), **never `gh pr
    merge`**. Don't plan on `--approve`: when the PR was opened by the same `gh` identity
    you're reviewing under — the normal case in a single-login instance — GitHub rejects
    self-approval, so the trailer-bearing **comment** review *is* the clearance signal.
