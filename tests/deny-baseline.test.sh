@@ -284,6 +284,88 @@ ok "….env.example is not a secret" \
 ok "…and a localhost target is not exfiltration" \
    "$(verdict "$GITREPO" 'curl -d "$(cat .env)" http://localhost:3000/import')" "allow"
 
+echo "== rule 7b: credential_write — no write, move, chmod or delete on a credential store"
+C="deny:credential_write"
+cw() { ok "$1" "$(verdict "$GITREPO" "$2")" "${3:-$C}"; }
+cw "a > redirect onto ~/.ssh/config"        'echo x > ~/.ssh/config'
+cw "…>>"                                     'echo x >> ~/.ssh/config'
+cw "…>|"                                     'echo x >| ~/.ssh/config'
+cw "…&>"                                     'ls &> ~/.ssh/config'
+cw "…1>"                                     'echo x 1> ~/.ssh/config'
+cw "…2> onto ~/.aws/credentials"             'ls 2> ~/.aws/credentials'
+cw "…no-space >path"                         'echo x>~/.ssh/config'
+cw "…cat > path <<EOF"                       "cat > ~/.ssh/config <<EOF
+Host x
+EOF"
+cw "no carve-out: ssh-keyscan >> known_hosts" 'ssh-keyscan github.com >> ~/.ssh/known_hosts'
+cw "…chmod 600 on a key"                     'chmod 600 ~/.ssh/id_ed25519'
+cw "…appending a Host block to ~/.ssh/config" "printf 'Host deploy\n  IdentityFile ~/.ssh/deploy\n' >> ~/.ssh/config"
+cw "tee"                                     'tee ~/.ssh/config'
+cw "…tee -a after a no-space pipe"           'echo x|tee -a ~/.ssh/config'
+cw "truncate"                                'truncate -s 0 ~/.aws/credentials'
+cw "rm"                                      'rm ~/.aws/credentials'
+cw "…rm -fr on ~/.config/gh"                 'rm -fr ~/.config/gh'
+cw "chown"                                   'chown nobody ~/.ssh/id_rsa'
+cw "mv onto ~/.config/gh/hosts.yml"          'mv hosts.yml ~/.config/gh/hosts.yml'
+cw "cp onto it"                              'cp hosts.yml ~/.config/gh/hosts.yml'
+cw "…cp -f (not a value flag)"               'cp -f a ~/.ssh/x'
+cw "…a credential directory as destination"  'cp key.pem ~/.ssh/'
+cw "…cp -t"                                  'cp -t ~/.ssh key.pem'
+cw "…cp -vt, combined"                       'cp -vt ~/.ssh key.pem'
+cw "…--target-directory="                    'cp --target-directory=~/.ssh key.pem'
+cw "…mv --target-directory"                  'mv --target-directory ~/.ssh key.pem'
+cw "…abbreviated --target"                   'mv --target ~/.ssh key.pem'
+cw "sed -i"                                  'sed -i s/a/b/ ~/.ssh/config'
+cw "…-i.bak"                                 'sed -i.bak s/a/b/ ~/.ssh/config'
+cw "…BSD -i ''"                              "sed -i '' s/a/b/ ~/.ssh/config"
+cw "…-ni"                                    'sed -ni 1p ~/.ssh/config'
+cw "…-Ei"                                    'sed -Ei s/a/b/ ~/.ssh/config'
+cw "…--in-place"                             'sed --in-place s/a/b/ ~/.ssh/config'
+cw "…--in-place=.bak"                        'sed --in-place=.bak s/a/b/ ~/.ssh/config'
+cw "…-e takes a value"                       'sed -i -e s/a/b/ ~/.ssh/config'
+cw "…--expression takes one too"            'sed -i --expression s/a/b/ ~/.ssh/config'
+cw "…a ; inside the quoted script"           "sed -i 's/a/b/;s/c/d/' ~/.ssh/config"
+cw "operand \$HOME"                          'rm $HOME/.ssh/id_rsa'
+cw "…\${HOME}"                               'rm ${HOME}/.ssh/id_rsa'
+cw "…\"\$HOME\"/…"                           'rm "$HOME"/.ssh/id_rsa'
+cw "…the absolute spelling"                  "rm $FIXHOME/.ssh/id_rsa"
+cw "a write inside \$( … )"                  'echo $(rm ~/.ssh/id_rsa)'
+cw "…inside backticks"                       'echo `rm ~/.ssh/id_rsa`'
+cw "…after &&"                               'true && rm ~/.ssh/id_rsa'
+cw "…after ;"                                'ls;rm ~/.ssh/id_rsa'
+cw "bare name *.pem under \$HOME"            'rm ~/server.pem'
+cw "…id_rsa*"                                'cp a ~/id_rsa_backup'
+cw "…*credentials*"                          'rm -f ~/.git-credentials'
+cw "…a .pem copied into a \$HOME directory"  'cp new.pem ~/'
+ok "…with no repo root, only the \$HOME test applies" "$(verdict "$FIXHOME" 'rm -f server.pem')" "$C"
+REASON="$(raw "$GITREPO" 'rm ~/.aws/credentials' | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+ok "the refusal names the rule"              "$(grep -cF 'rule `credential_write`' <<<"$REASON")" "1"
+ok "…and the path"                           "$(grep -cF "\`$FIXHOME/.aws/credentials\`" <<<"$REASON")" "1"
+# THE ALLOW HALF: reads, copies OUT of a store, and the same names off $HOME or in the tree.
+cw "a < redirect is a read"                  'cat < ~/.ssh/config' allow
+cw "cat"                                     'cat ~/.ssh/config' allow
+cw "ls -l"                                   'ls -l ~/.ssh' allow
+cw "ssh-keygen -l -f"                        'ssh-keygen -l -f ~/.ssh/id_rsa.pub' allow
+cw "gh auth status"                          'gh auth status' allow
+cw "ssh -i with a key"                       'ssh -i ~/.ssh/id_ed25519 host true' allow
+cw "cp FROM a store into the repo"           'cp ~/.aws/credentials ./credentials' allow
+cw "…cp -f FROM one"                         'cp -f ~/.ssh/x ./x' allow
+cw "…mv FROM one"                            'mv ~/.ssh/x ./x' allow
+cw "sed without -i"                          'sed s/a/b/ ~/.ssh/config' allow
+cw "…sed -e … > a file in the repo"          'sed -e s/a/b/ ~/.ssh/config > out.txt' allow
+cw "2>&1 is not a file"                      'ls ~/.ssh 2>&1' allow
+cw "a .pem outside \$HOME"                   'rm -f /tmp/x/server.pem' allow
+cw "…a variable path is not resolved"        'rm "$KEYDIR/id_rsa"' allow
+ok "…nor from a non-repo cwd outside \$HOME" "$(verdict "$OUTSIDE" 'rm -f server.pem')" "allow"
+# INSIDE THE WORKTREE, with $HOME and cwd the same UNRESOLVED mktemp path: on macOS this is
+# `/var/...` while git reports `/private/var/...`, so a lexical compare would refuse it.
+VARHOME="$TMP/varhome"; mkdir -p "$VARHOME/certs"; git -C "$VARHOME" init -q >/dev/null 2>&1
+: > "$VARHOME/server.pem"
+ok "a .pem inside the repo root passes (cwd = HOME, unresolved)" \
+   "$(FIXHOME="$VARHOME" verdict "$VARHOME" 'rm -f server.pem && cp a.pem certs/id_rsa && echo x > credentials')" "allow"
+ok "…while ~/.ssh from the same cwd refuses" \
+   "$(FIXHOME="$VARHOME" verdict "$VARHOME" 'echo x > ~/.ssh/config')" "$C"
+
 echo "== the guard's own edges — every one of these must let the call through"
 ok "an ordinary command is untouched"  "$(verdict "$GITREPO" 'ls -la && npm test')" "allow"
 ok "a non-Bash tool is untouched"      "$(raw "$GITREPO" 'rm -rf /' Read; echo -n allow)" "allow"
