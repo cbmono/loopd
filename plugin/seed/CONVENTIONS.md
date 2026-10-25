@@ -585,7 +585,7 @@ above it so none may grow its share.
   the finding back at the reviewer** — it wrote the finding, it still has it, and quoting
   it back is the single biggest source of reply length. The reviewer is deciding whether
   each finding is closed, not re-reading its own review. If you disagree, say so once with
-  the evidence and move on (the two-round cap below is what ends it, not persistence).
+  the evidence and move on (the round cap below is what ends it, not persistence).
 - **A GitHub comment is about 280 characters — roughly a tweet.** This covers the two
   surfaces the shapes above never reached: an **inline code comment** and a **PR thread
   comment**, whoever writes them. Longer only when the finding genuinely needs it — a race
@@ -690,6 +690,8 @@ above it so none may grow its share.
   a terseness gate is trimming the one thing the reader needed in order to act safely.
 - **TWO ROUNDS, THEN THE HUMAN DECIDES. This is a hard cap** — per reviewer, set by
   `coderabbitRounds` and `qaRounds` in `instance.config.json` (**1** each when absent).
+  The heading keeps the cap's original number because agents and scripts cite it by name;
+  the number in force is whatever those two keys say.
   A reviewer's job is to evaluate the diff **against the task's `acceptance_criteria`**.
   It is *not* to re-litigate those criteria, argue the design, or look for a reason the
   change should not land. Grade the work against the bar it was given.
@@ -837,7 +839,7 @@ above it so none may grow its share.
   stated reason rather than reading a stopped task as a verified artifact. Measured 2026-08-28: two agents finished their work, committed
   it — one had already pushed — then ended their turns waiting on a background job that
   nothing was left running to notify, and **reported as completed** with no PR open. The
-  wall-clock rule missed it (one parked at **16 minutes**), the two-round cap missed it
+  wall-clock rule missed it (one parked at **16 minutes**), the review-round cap missed it
   (neither reached review), and the completion notification *was* the failure. Asking
   whether the PR exists takes two seconds and nothing was doing it. This applies to
   **every** dispatch, including an **ad-hoc** dispatch from a main session — the path with

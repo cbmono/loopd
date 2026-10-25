@@ -44,6 +44,7 @@ person. Green `#76d6a4` marks only what is sent, saved or finished; no status ra
 | [docs/operations.md](docs/operations.md) | installing and upgrading (the plugin half and the bundle half), the board's three renderers, worktrees, editor setup |
 | [docs/migrating.md](docs/migrating.md) | **you already run a pre-plugin install** — upgrade it in place, or re-home it into a fresh folder without losing `projects/` or `knowledge/` |
 | [docs/sharing.md](docs/sharing.md) | **several people will share one bundle** — the org's repo, `--org`, and who sets what |
+| [Larger teams](#larger-teams) | **more than two or three people** — one bundle each, one shared knowledge repo |
 | [docs/conventions.md](docs/conventions.md) | **you are changing this repo** — every design invariant and why it exists |
 | [docs/releases/v1.0.0.md](docs/releases/v1.0.0.md) | **what 1.0.0 changed** — 91 merged PRs since the last tag, grouped: install, commands, agents, gates, docs |
 | [The config layer](#the-config-layer) | you want this repo's agents, commands and hooks in `~/.claude` too |
@@ -493,6 +494,27 @@ a table still fits, it prints one short block per project instead of wrapping.
 `watch-board.sh` uses `fswatch` when it is installed and a polling loop (default 2s) when
 it is not; either way it is stopped with Ctrl-C and leaves nothing behind.
 
+## Larger teams
+
+[docs/sharing.md](docs/sharing.md) shares **one** bundle: every person clones it and runs
+their own loop, and each tick pulls `--rebase` and pushes the bundle. That suits two or
+three people. Past that, the clones contend on the same repository every tick, and a pull
+conflict stops the tick that hits it. The shape that scales:
+
+| Piece | How |
+|---|---|
+| **One bundle per person** | each person runs `/loopd:init` on their own directory — a private repo of their own, or local git with no remote (the tick then skips pull and push). Projects, `AWAITING.md` and the loop stay theirs, and no `owner:` or `defaultOwner` is needed |
+| **One shared knowledge repo** | every bundle sets the same `knowledge` key in `instance.config.json` — `{ "repo": "<org>/<kb-repo>", "path": "/" }`, plus an optional `ref` naming a branch. `/loopd:init` mounts it into `knowledge/` as a nested, gitignored clone, and `scripts/kb-sync.sh` is its only writer. An existing `knowledge/` moves there with `scripts/kb-migrate.sh`. [SCHEMA.md → "A mounted knowledge base"](plugin/seed/SCHEMA.md) |
+| **A combined board (optional)** | `boardInstances` in `instance.config.json` lists bundle directories **on this machine** — absent, the board is just this instance. It reaches no bundle that lives only on a teammate's laptop |
+| **A pair that truly works together** | can still share one bundle exactly as [docs/sharing.md](docs/sharing.md) describes: `owner:` per project, `defaultOwner` and the `people` map |
+
+A worked example, for a team of twenty:
+
+1. One person creates the knowledge repo, `<org>/<kb-repo>`, with at least one commit on its default branch.
+2. Everyone else runs `/loopd:init ~/workspace/<group>/_loopd-<group>` for their **own** bundle and sets `"knowledge": { "repo": "<org>/<kb-repo>", "path": "/" }`.
+3. Each runs `/loopd:init` again, which mounts it. On a fresh bundle it first prints the `rm -r …/knowledge` that clears the seed's placeholders; run that and stamp once more. From then on each person's `Finding`s and `Service` docs land in the shared repo, and their task documents never leave their own bundle.
+4. Two people who split one project between them share one bundle instead, with `owner:` set per project.
+
 ## Safety rails
 
 The short version. Each line links to the full reasoning; **none of them is decoration.**
@@ -502,7 +524,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 | **Independent review** | every PR is cleared by a reviewer with fresh context, never the implementing agent's self-report. [→](docs/autonomy.md#the-verification-gate) |
 | **Merge gate** | `required-checks.sh` — **exit 0 is the only clearance.** Missing, pending, skipped and unreadable all refuse. [→](docs/autonomy.md#required-checks--exit-0-is-the-only-clearance) |
 | **Review gate** | `review-clearance.sh` — a **green check from a reviewer that declined to review is not verification.** It reads the reviewer's artifacts, takes evidence and pinning from the reviews **API** (`state` + `commit_id`), leaves text matching only the job of spotting a refusal, and refuses on unknown state. `required-checks.sh` asks it on **every** PR, so a check's name never settles whether anybody looked. [→](docs/autonomy.md#the-verification-gate) |
-| **Review rounds** | `review-rounds.sh` — **two rounds, then the human decides**, as a number a dispatcher reads rather than a rule it must remember. Counted per reviewer against `coderabbitRounds` / `qaRounds` (1 each when absent); exits non-zero at or past that cap, so another round is refused. [→](docs/autonomy.md#two-rounds-then-the-human-decides) |
+| **Review rounds** | `review-rounds.sh` — **a round cap per reviewer, then the human decides**, as a number a dispatcher reads rather than a rule it must remember. Counted per reviewer against `coderabbitRounds` / `qaRounds` (**1** each when absent); exits non-zero at or past that cap, so another round is refused. A real CodeRabbit refusal dispatches a `qa-reviewer` round instead (at the `apex` tier on a new install), and the last round's fix merges under `yolo` with no re-review when it changes at most `reviewFixMaxLines` (**300** when absent) lines. [→](docs/autonomy.md#a-round-cap-per-reviewer-then-the-human-decides) |
 | **Dispatch check** | `check-dispatch.sh` — an agent's "done" is not evidence that a PR exists. Did `status:` move, does `pr:` name a URL, does that PR resolve. **Report-only.** [→](docs/autonomy.md#did-the-dispatch-produce-its-pr) |
 | **Delegated autonomy** | one uninstallable plugin. Uninstall `loopd-yolo` and every project is `gated`; `resolve-autonomy.sh` is the one reader, and a bundle's own root file still wins. [→](docs/conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) |
 | **Dispatch lock** | `tick-lock.sh` — one PM tick at a time, taken by the launcher in the same operation that checks it, **and checked again by the tick itself**, since a resumed tick never passes through the launcher. A dispatched tick does not refuse its own lock: unclaimed means it is that dispatch. A tick that finds **no** lock was not dispatched at all — it is refused (exit 4), because **a tick is never resumed**. The claim on a lock records **whose** it is and from **which source**, and the trust is asymmetric — a runtime-derived id (`CLAUDE_CODE_SESSION_ID` names the *session*, not the tick) may refuse a claim but never clears one, so a merely-matching identity is exit 2 rather than a guess in either direction. Stale, or unattributable, means **ask the human**, never silently delete and never silently adopt. Per clone, not cross-machine. [→](docs/operations.md#one-tick-at-a-time-the-dispatch-lock) |
@@ -535,6 +557,8 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `maxPrFiles` | **100** | yes |
 | `models` / `roleTiers` | everything inherits the session model | yes |
 | `externalReviewer` | the CodeRabbit CLI | yes |
+| `coderabbitRounds` / `qaRounds` | **1** review round each | **no** — a merge policy both clones must agree on |
+| `reviewFixMaxLines` | **300** | **no** |
 | `boardInstances` | the board is just this instance | yes |
 | `boardPort` | derived from the bundle path, in the 4xxxx band | **per machine only** — a port belongs to a laptop, not to a bundle everyone clones |
 | `board` | **on** — `SNAPSHOT.json` is seeded and each tick renders `.board-live/board.html`, which `/loopd:board serve` serves | **no** — one instance, one answer |
