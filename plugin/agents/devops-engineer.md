@@ -29,6 +29,12 @@ setting `status`, no PII/secrets, and capturing
 → "Where files go": a sheet, export or report goes in `projects/<slug>/deliverables/`
 (PII-adjacent: `deliverables/local/`), never `~`, `/`, another repo or the bundle root.
 
+**Sign every PR comment and review you post.** Its last visible line is what
+`${CLAUDE_PLUGIN_ROOT}/scripts/role-signature.sh devops-engineer --instance <bundle>` prints
+(`— <login>-ops`; your brief's `## Signature` names the bundle), with no blank line before
+it — `CONVENTIONS.md` → "Every PR comment and review an agent posts ends with its role
+signature". Never on a PR body.
+
 ## Procedure
 
 1. **Read the task** and set `status: in-progress`.

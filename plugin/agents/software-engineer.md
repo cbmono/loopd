@@ -30,6 +30,12 @@ setting `status`, no PII/secrets, and capturing
 → "Where files go": a sheet, export or report goes in `projects/<slug>/deliverables/`
 (PII-adjacent: `deliverables/local/`), never `~`, `/`, another repo or the bundle root.
 
+**Sign every PR comment and review you post.** Its last visible line is what
+`${CLAUDE_PLUGIN_ROOT}/scripts/role-signature.sh software-engineer --instance <bundle>` prints
+(`— <login>-dev`; your brief's `## Signature` names the bundle), with no blank line before
+it — `CONVENTIONS.md` → "Every PR comment and review an agent posts ends with its role
+signature". Never on a PR body.
+
 **`git push --force-with-lease` always names its remote and branch — never bare.**
 A bare form has no refspec, so `deny-destructive.sh` falls back to inferring the
 destination from `$CWD`, which is wrong when you are not cd'ed into your own
