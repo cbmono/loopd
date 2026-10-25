@@ -37,8 +37,8 @@ Most ticks never need it.
 
 # Mode: `yolo`
 
-One mode, deliberately. `yolo` runs a project **all-out** — it delegates *both* gates,
-browser writes, and the one spend decision that would otherwise stop the loop to ask.
+One mode, deliberately. `yolo` runs a project **all-out** — it delegates *both* gates
+and browser writes.
 There is no partial variant, and adding ask-first carve-outs
 on top of it is a mistake we already made and reverted: a loop that self-promotes and
 self-merges but stops to ask about a form submit is inconsistent without being safer.
@@ -50,16 +50,14 @@ What it delegates, and to what anchor:
 | Promote `draft → ready` | Human only | The loop may promote | The draft is fully refined (`acceptance_criteria` filled) with an **empty** `open_questions` |
 | Merge the PR | Human only | The loop may merge | Independent clearance + required checks green at the exact verified SHA (below) |
 | Browser writes | Ask first | Permitted without asking | The task itself — a write nobody asked for is still out of scope |
-| Spend the `qa-reviewer` fallback on a reviewer that failed **terminally** | Ask first | The loop may dispatch it without asking | `scripts/review-clearance.sh` exit **5** — the reviewer's own words, machine-classified (below) |
 
 The anchor is always a **machine** signal, never a self-report. `yolo` removes the
 human, not the evidence.
 
-**The fourth row is a SPEND, not a gate, and it is in this table because this file is the
-only place a mode is defined.** Asserting "yolo delegates this too" in the instruction
-files that read it would define autonomy outside the switch, which is the drift this file
-exists to prevent — so a caller asks THIS table whether the decision is delegated, and the
-answer for every mode but `yolo` is no.
+**Dispatching the `qa-reviewer` fallback is not in this table, because no mode gates it.**
+It used to be a fourth row (gated asked first on exit 5). It is now decided by
+`scripts/review-next.sh` identically under `gated` and `yolo` — see "The QA fallback, in
+every mode" below.
 
 ## Promotion under `yolo`
 
@@ -175,8 +173,10 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    passed and the checker failed, and that is the human's — a delegated merge never
    adjudicates one, and an exit 1 refuses the merge even where an external reviewer
    cleared it. On a solo bundle the checker shares the author's `gh` login, so exit 4 is
-   the standing answer there and the merge stays the human's (`SCHEMA.md` clause 8) —
-   unless an external reviewer cleared the head, which needs no checker table.
+   the answer there and the merge stays the human's (`SCHEMA.md` clause 8) — unless the
+   checker's comment carries the trailer of a QA dispatch the project-manager recorded at
+   that head (`scripts/qa-dispatch.sh`), or an external reviewer cleared the head, which
+   needs no checker table.
 
    **And the table has to BE THERE for that to mean anything**, which is a separate
    question with a separate reader. Two halves, stated together because neither is worth
@@ -322,36 +322,29 @@ provide. The fix is the human's: configure an external reviewer (e.g. CodeRabbit
 branch protection, or commit a `.github/required-checks.txt` where the host can't enforce
 one; or accept that this project's merges are manual.
 
-## Spending the fallback reviewer under `yolo`
+## The QA fallback, in every mode
 
-**What is delegated is WHO reviews, never WHETHER anybody does.** A verdict is still
-required and still has to be clean — see "What `yolo` never delegates", item 4. This row
-delegates one purchase decision and nothing else.
+**What this decides is WHO reviews, never WHETHER anybody does.** A verdict is still
+required and still has to be clean — see "What `yolo` never delegates", item 4.
 
-The decision arises exactly once: the configured external reviewer answered, and its
-answer was **`scripts/review-clearance.sh` exit 5** — a *terminal* refusal, meaning the
-reviewer says its own account is out of credits, unpaid, expired or unauthenticated, and
-no amount of waiting reopens it. Then:
+`scripts/review-next.sh` decides it, and **it reads no mode**: `gated` and `yolo` get the
+same answer. It answers `dispatch-qa` when CodeRabbit is **unavailable** — a real refusal
+(`review-clearance.sh` exit 1 with `class: declined`: a rate limit, a used-up allowance;
+or exit 5: out of credits, unpaid, unauthenticated) before its last round, or
+`coderabbitRounds: 0` with `qaRounds` ≥ 1 — and the project-manager dispatches
+`loopd:qa-reviewer` **in the same tick, with no ask and no waiting window**, then records
+that it did. Under `gated` the human still merges.
 
-- **Under `gated`** (and under every project when this file is absent): **ask**. A
-  `/new-project` run asks in-session; a `/loopd:dispatch` tick is a subagent that
-  cannot ask, so it writes the question into the task's `open_questions` — where the
-  human answers by appending ` --- <answer>` — and holds the PR meanwhile.
-- **Under `yolo`**: dispatch `loopd:qa-reviewer` and record that you did, without asking.
+**Not unavailable, in either mode, and never a QA round:** the "currently processing"
+placeholder (exit 1, `class: placeholder`, on nearly every PR) and exit 3 hold; exit 8 is a
+request at the head (above). A real refusal outranks a placeholder at the same head, in
+whatever order the host streamed them.
 
-**Exit 1 is NOT this decision, in either mode.** A transient refusal — rate-limited,
-skipped, still processing — reopens by itself, so the loop **holds and asks again next
-tick**, spends nothing, and involves no human. Measured 2026-08-31 across four pull
-requests, the reviewer was rate-limited on all four and reviewed all four properly within
-the hour: an automatic fallback there would have bought four deep-tier sessions for
-nothing. **Waiting needs no permission, because waiting is free and defers the gate rather
-than skipping it.** Everything this file does not map — including exits 2, 3 and 4 —
-holds too.
-
-**The round caps are untouched.** `scripts/review-rounds.sh --for qa` is asked before the
-fallback is dispatched, in either mode, and its refusal is final: nothing here creates a
-third round. The one opt-in exception is a merge, never a round: "Merge at the review cap
-(opt-in)" above.
+**QA runs only while CodeRabbit is unavailable.** Once CodeRabbit has completed its
+`coderabbitRounds` rounds, a later refusal dispatches nothing. QA round n+1 runs only when
+round n was not a pass and a fix landed after it; QA stops at the first pass or at
+`qaRounds` (`scripts/review-rounds.sh --for qa`, **1** when absent). A dispatch record at
+the head with no verdict yet holds, so a second tick never dispatches a second QA there.
 
 ## Browser writes under `yolo`
 

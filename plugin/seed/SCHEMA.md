@@ -767,6 +767,7 @@ reviewer: qa-reviewer
 lenses: correctness=done security=done repro=skipped(<why>)
 unverified_criteria: none | <criterion>, <criterion>
 caveats: none | <what the reviewer could not settle>
+dispatch: <the nonce from the brief's `## QA dispatch`; omit when there is none>
 -->
 ```
 
@@ -800,6 +801,7 @@ predicate is how a bad input gets accepted:
    so does one row the implementer marked `✓` that the checker's own re-derived table
    marks `FAIL` (see below), whoever cleared the review.
 8. **`reviewer` is the independent reviewer** — never the implementing agent's own report.
+   Under the PR author's own login, only a verdict matching a QA dispatch record counts (below).
 9. **No reviewer-authored review thread is still unresolved.** A thread the PR
    author/executor resolved itself does not count unless the reviewer re-acknowledged it
    by re-reviewing the current head without re-raising.
@@ -851,9 +853,24 @@ the author's own login, **2** unknown. Only exit 0 is clearance.
 **The identity rule is clause 8's, and on a solo bundle it is a KNOWN LIMIT rather than a
 gate.** `pr-verdict-clearance.sh` compares the checker's `login` with the PR author's,
 exactly as `review-clearance.sh` does — and where every agent shares one `gh` login, those
-are equal by construction, so exit 4 is the standing answer and the routing to a human *is*
-the gate — unless an external reviewer cleared the head, where no checker table is needed. It is stated rather than worked around: a second principal needs a second account
+are equal by construction, so exit 4 is the answer and the routing to a human *is* the
+gate — unless an external reviewer cleared the head, where no checker table is needed, or
+**the verdict matches a QA dispatch record**. A second principal needs a second account
 (`docs/sharing.md`), and nothing in a comment can evidence one that does not exist.
+
+**The QA dispatch record, and exactly what it stops.** When the project-manager dispatches
+`loopd:qa-reviewer` it runs `qa-dispatch.sh mint`, which appends the PR, the head SHA, the
+role and the **sha256 of a fresh nonce** to the bundle's ignored `.loopd/.qa-dispatch/records`
+and prints the nonce, which goes into the `qa-reviewer`'s brief and nowhere else. A verdict
+under the PR author's own login counts — in `review-clearance.sh` route B, in
+`pr-verdict-clearance.sh` and in `review-rounds.sh`'s QA count alike — only when its
+`okf-verdict` trailer names that head, carries `dispatch: <nonce>` hashing to that record,
+and was posted after it. **It stops a verdict nobody dispatched and a trailer the
+implementer typed**: every role agent can read and write the bundle, which is why the
+record holds a hash and never the nonce. **Out of scope:** a same-uid process that reads
+the QA session's own transcript or its command line, or runs `qa-dispatch.sh mint` itself
+— a shell on the same account is not a second principal, and nothing on one machine under
+one login can make it one.
 
 **A verdict that reports a refusal must carry its trailer, or it classifies as one.** The
 fallback reviewer's job on a rate-limited PR is to *say* the hosted reviewer declined —

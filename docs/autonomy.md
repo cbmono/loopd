@@ -186,14 +186,24 @@ last tick's answer is not this tick's. The full table:
 | Exit | Means | Next |
 |---|---|---|
 | **0** | a review artifact evidences a completed review of this head | the only clearance |
-| **1** | transient refusal — rate limit, quota, placeholder | wait; it reopens by itself |
+| **1** | transient refusal — rate limit, quota, placeholder; stdout `class: declined` or `class: placeholder` | a real refusal dispatches the QA fallback; a placeholder waits |
 | **2** | unknown state, including an UNKNOWN mergeability | hold, re-ask next tick |
 | **3** | no reviewer signal on this PR | hold |
 | **4** | an artifact that is stale or evidences nothing | ask for a review at this head |
-| **5** | terminal refusal — credits, billing, auth | a human fixes the reviewer |
+| **5** | terminal refusal — credits, billing, auth | the QA fallback reviews; a human fixes the reviewer |
 | **6** | a review at this head, refused by clause 9 (open threads) | answer the threads; do **not** re-request |
 | **7** | the PR CONFLICTS with its base | `rebase-pr.sh` first; do **not** re-request a review |
 | **8** | skipped — auto reviews are off here, so NOBODY EVER ASKED | ask once at this head (`@coderabbitai review`); it never reopens by itself |
+
+**What the loop does next is one script's answer, the same under `gated` and `yolo`.**
+`scripts/review-next.sh <pr>` turns that exit, both round counts and the QA dispatch record
+into one word — `dispatch-qa`, `request-review`, `implementer-round`, `rebase-round`,
+`merge-path` or `hold` — and the tick acts on it. CodeRabbit unavailable (a real refusal
+before its last round, or `coderabbitRounds: 0`) dispatches one `qa-reviewer` in the same
+tick, no ask; the "currently processing" placeholder, exit 3 and exit 8 never do. Each QA
+dispatch is recorded first (`scripts/qa-dispatch.sh mint`, a nonce in the brief and only
+its hash on disk), which both stops a second QA at the same head and is the only way a
+verdict under the PR author's own login counts (`SCHEMA.md` clause 8).
 
 **A 7 is tried by a script before it costs an agent.**
 `rebase-pr.sh <pr> --repo <org>/<repo> --dir <clone>` rebases in a throwaway worktree and
@@ -284,8 +294,8 @@ later one is quicker:
 
 | # | Step | When it applies | What it costs |
 |---|---|---|---|
-| 1 | **Wait for the window.** | `review-clearance.sh` exit **1** — a *transient* refusal, which quotes the reopen time the reviewer published | minutes to an hour, and nothing else. Measured 2026-08-31 on #85–#88: the reviewer came back within the hour and reviewed all four properly |
-| 2 | **A second human on the bundle reviews it.** | the wait is not acceptable, or the refusal is exit **5** — *terminal*, so no waiting reopens it | one human's attention. The `people` map in `instance.config.json` is where a bundle's second human is named; `scripts/add-second-human.sh` prepares the shared half |
+| 1 | **The `qa-reviewer` fallback reviews it, this tick.** | `review-next.sh` answers `dispatch-qa`: exit 1 `class: declined` or exit 5 before CodeRabbit's last round | one deep-tier session per QA round, up to `qaRounds` (**1** when absent) |
+| 2 | **A second human on the bundle reviews it.** | QA reached `qaRounds`, or a solo bundle's same-login verdict is not enough for you | one human's attention. The `people` map in `instance.config.json` is where a bundle's second human is named; `scripts/add-second-human.sh` prepares the shared half |
 | 3 | **The owner overrides, recorded on the PR.** | steps 1 and 2 are both unavailable | the review. This is the step that costs something irreversible, which is why it is last |
 
 **Step 2 has a precondition that is easy to get wrong and fails silently.** Clause 8 is
@@ -369,11 +379,13 @@ DECIDES" is normative and carries the measurement behind the number.
 | 2+ | (a cap above 1) the reviewer checks **only** what it raised before — new findings outside that set are recorded, not blocking |
 | past the cap | **there is none.** Whatever is unresolved goes to the human in one short block: what the reviewer wants, what the implementer says, what the criterion actually asks |
 
-`scripts/review-rounds.sh <pr> --for coderabbit|qa [--last|--commits] [--repo <owner>/<name>] [--instance <bundle>]`
+`scripts/review-rounds.sh <pr> --for coderabbit|qa [--last|--commits|--verdicts] [--repo <owner>/<name>] [--instance <bundle>]`
 makes the cap a number a dispatcher **reads** rather than a rule it has to remember. The two
 reviewers are counted separately — a commit both reviewed is one round for each — and
 `--last` prints that reviewer's last reviewed commit instead of the count (`--commits`, every
-one). `qa` never counts a vendor login, even one whose review quotes `okf-verdict`. Run it before dispatching a
+one; `--verdicts`, `<sha> <verdict>` per QA round). `qa` never counts a vendor login, even
+one whose review quotes `okf-verdict`, nor a PR author's trailer that matches no QA
+dispatch record. Run it before dispatching a
 verifier, and before verifying as one.
 
 | Exit | Means |

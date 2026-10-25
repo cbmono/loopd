@@ -399,7 +399,9 @@ state, and act only on deltas.
    Gate 3 above binds whether or not you read it.
 
 4. **Advance in-flight work** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-4-advance.md`. Gate 2
-   above binds whether or not you read it.
+   above binds whether or not you read it. What to do next on an in-review PR is
+   `${CLAUDE_PLUGIN_ROOT}/scripts/review-next.sh`'s one-word answer, the same in every mode;
+   every `qa-reviewer` dispatch starts with `qa-dispatch.sh mint`, its nonce in that brief only.
 
 5. **Reflect merges.** For `in-review` tasks, check the PR(s): when **all** of a
    task's PRs are **merged** → `status: done`, then **reclaim that one task's worktree**

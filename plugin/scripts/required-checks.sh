@@ -90,6 +90,8 @@ plugin/scripts/required-checks.sh
 plugin/scripts/pr-body-clearance.sh
 plugin/scripts/pr-verdict-clearance.sh
 plugin/scripts/review-rounds.sh
+plugin/scripts/review-next.sh
+plugin/scripts/qa-dispatch.sh
 plugin/scripts/resolve-config.sh
 plugin/scripts/resolve-review-config.sh
 plugin/scripts/bundle-paths.sh

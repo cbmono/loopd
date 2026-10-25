@@ -324,7 +324,11 @@ signature". Never on a PR body.
    `SCHEMA.md`, filled honestly: `head_sha` = the SHA you actually reviewed (`gh pr view
    <pr> --json headRefOid`), every lens `done` or `skipped(<why>)`, every acceptance
    criterion you could **not** confirm listed in `unverified_criteria`, and anything you
-   could not settle in `caveats`. The trailer is the only part the loop reads, so a
+   could not settle in `caveats`, and `dispatch:` = the nonce your brief's `## QA dispatch`
+   carries (omit the line when it carries none; never copy it anywhere else). On a PR
+   opened under your own login it is the only thing that makes your verdict count, so post
+   the criteria table, signature and trailer as ONE PR comment (`gh pr comment`), which
+   both readers take. The trailer is the only part the loop reads, so a
    caveat you mention in prose but not in the trailer is a caveat you have hidden. If
    you can't assess the work, `verdict: inconclusive` is the correct answer — never
    `pass` with an explanation.
