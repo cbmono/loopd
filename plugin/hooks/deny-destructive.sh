@@ -857,9 +857,48 @@ _cred_neutral() { # <cmd> -> the command with every separator inside quotes turn
   }'
 }
 
-_cred_stages() { # <cmd> -> stages, with command-substitution bodies as stages of their own
-  local s="$1"
-  s="${s//>|/>}"; s="${s//\$(/$SEP}"; s="${s//\`/$SEP}"
+# A body is blanked only when its terminator is found and its `<<` is outside quotes with a
+# plain-word delimiter: a fake opener (`echo "<<EOF"`, `$((1<<n))`) must not hide real code.
+_cred_noheredoc() { # <cmd> -> the command with each heredoc body blanked
+  printf '%s' "$1" | awk 'BEGIN { RS = "\001" } {
+    n = split($0, L, "\n"); q = ""
+    for (k = 1; k <= n; k++) {
+      line = L[k]; m = length(line); nd = 0
+      for (i = 1; i <= m; i++) {
+        c = substr(line, i, 1)
+        if (q != "") { if (c == q) q = ""; continue }
+        if (c == "\047" || c == "\"") { q = c; continue }
+        if (c != "<" || substr(line, i + 1, 1) != "<" || substr(line, i + 2, 1) == "<") continue
+        r = substr(line, i + 2); dash = 0; i++
+        if (substr(r, 1, 1) == "-") { dash = 1; r = substr(r, 2) }
+        sub(/^[ \t]+/, "", r); match(r, /^[^ \t;&|<>()]+/); w = substr(r, 1, RLENGTH)
+        gsub(/["\047\\]/, "", w)
+        if (w ~ /^[A-Za-z_][A-Za-z0-9_]*$/) { nd++; D[nd] = w; DS[nd] = dash }
+      }
+      for (d = 1; d <= nd; d++) {
+        for (e = k + 1; e <= n; e++) { t = L[e]; if (DS[d]) sub(/^\t+/, "", t); if (t == D[d]) break }
+        if (e > n) break
+        for (j = k + 1; j <= e; j++) L[j] = ""
+        k = e
+      }
+    }
+    for (k = 1; k <= n; k++) printf "%s%s", L[k], (k < n ? "\n" : "")
+  }'
+}
+
+_cred_stages() { # <cmd> -> each stage whole (substitutions as `$_`), then their bodies as stages
+  local s="$1" u pre
+  s="${s//>|/>}"; u="$s"
+  while :; do
+    case "$u" in *'$('*')'*) ;; *) break ;; esac
+    pre="${u%%\$(*}"; u="${u#*\$(}"; u="$pre\$_${u#*)}"
+  done
+  while :; do
+    case "$u" in *'`'*'`'*) ;; *) break ;; esac
+    pre="${u%%\`*}"; u="${u#*\`}"; u="$pre\$_${u#*\`}"
+  done
+  stages "$u"; printf '\n'
+  s="${s//\$(/$SEP}"; s="${s//\`/$SEP}"
   stages "$(printf '%s' "$s" | tr '()' "$SEP$SEP")"
 }
 
@@ -875,7 +914,7 @@ _cred_refuse() { # <what> <path>
 }
 
 _cred_stage() { # <stage>
-  local s="$1" rest="" pre op t p c w seen=0 endo=0 skip=0 tflag=0 ops="" dest="" inplace=0 script=0 i ch
+  local s="$1" rest="" pre op t p c w root seen=0 endo=0 skip=0 tflag=0 ops="" dest="" inplace=0 script=0 i ch
   while :; do
     case "$s" in *[\<\>]*) ;; *) break ;; esac
     pre="${s%%[<>]*}"; s="${s#"$pre"}"
@@ -948,6 +987,18 @@ EOT
       ops="$(printf '%s' "$ops" | sed '$d')"
     fi
     if p="$(_cred_hit "$dest")"; then _cred_refuse "\`$c\` onto it" "$p"; return 0; fi
+    if [ "$c" = mv ]; then
+      p="$(_cred_norm "$dest")" && p="$(phys "$p")"
+      root="$(repo_root)"
+      if [ -z "$p" ] || [ -z "$root" ] || ! covers "$root" "$p"; then
+        while IFS= read -r w; do
+          [ -n "$w" ] || continue
+          if p="$(_cred_hit "$w")"; then _cred_refuse "\`mv\` out of the working tree" "$p"; return 0; fi
+        done <<EOT
+$ops
+EOT
+      fi
+    fi
     # A directory destination writes <dest>/<basename of each source>.
     p="$(_cred_norm "$dest")" || return 1
     case "$dest" in */) ;; *) [ -d "$p" ] || return 1 ;; esac
@@ -972,10 +1023,12 @@ EOT
 rule_credential_write() {
   case "$CWD $1" in *.ssh*|*.aws*|*/.config*|*.config/*|*[\ \"\'=].config*|*pem*|*id_rsa*|*credentials*) ;; *) return 1 ;; esac
   _cred_hl="$(norm_path "$HOME")"; _cred_hp="$(phys "$_cred_hl")"
-  local stage all
-  all="$(_cred_stages "$1")"
-  case "$1" in *[\"\']*) all="$all
-$(_cred_stages "$(_cred_neutral "$1")")" ;; esac
+  local stage all cmd
+  cmd="$1"
+  case "$cmd" in *'<<'*) cmd="$(_cred_noheredoc "$cmd")" ;; esac
+  all="$(_cred_stages "$cmd")"
+  case "$cmd" in *[\"\']*) all="$all
+$(_cred_stages "$(_cred_neutral "$cmd")")" ;; esac
   while IFS= read -r stage; do
     [ -n "$stage" ] || continue
     _cred_stage "$stage" && return 0

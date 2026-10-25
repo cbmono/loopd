@@ -333,6 +333,19 @@ cw "a write inside \$( … )"                  'echo $(rm ~/.ssh/id_rsa)'
 cw "…inside backticks"                       'echo `rm ~/.ssh/id_rsa`'
 cw "…after &&"                               'true && rm ~/.ssh/id_rsa'
 cw "…after ;"                                'ls;rm ~/.ssh/id_rsa'
+cw "a substitution beside the path keeps the verb: chown" 'chown $(id -u) ~/.ssh/id_rsa'
+cw "…rm \$(:)"                                'rm $(:) ~/.ssh/id_rsa'
+cw "…tee \$(mktemp)"                          'tee $(mktemp) ~/.ssh/config'
+cw "…a backtick substitution"                'chown `id -u` ~/.ssh/id_rsa'
+cw "mv a store away"                         'mv ~/.ssh ~/.ssh.bak'
+cw "…mv a key out to /tmp"                   'mv ~/.ssh/id_rsa /tmp/'
+cw "code after a heredoc terminator is judged" "cat > a.md <<EOF
+x
+EOF
+chmod 600 ~/.ssh/id_rsa"
+cw "…a quoted << is not a heredoc"           "echo \"<<EOF\"
+rm ~/.ssh/id_rsa
+EOF"
 cw "bare name *.pem under \$HOME"            'rm ~/server.pem'
 cw "…id_rsa*"                                'cp a ~/id_rsa_backup'
 cw "…*credentials*"                          'rm -f ~/.git-credentials'
@@ -342,6 +355,13 @@ REASON="$(raw "$GITREPO" 'rm ~/.aws/credentials' | jq -r '.hookSpecificOutput.pe
 ok "the refusal names the rule"              "$(grep -cF 'rule `credential_write`' <<<"$REASON")" "1"
 ok "…and the path"                           "$(grep -cF "\`$FIXHOME/.aws/credentials\`" <<<"$REASON")" "1"
 # THE ALLOW HALF: reads, copies OUT of a store, and the same names off $HOME or in the tree.
+cw "a heredoc body is text, not code"        "cat > docs/setup.md <<EOF
+chmod 600 ~/.ssh/id_rsa
+EOF" allow
+cw "…<<-'EOF' with a tab-indented terminator" "cat > docs/setup.md <<-'EOF'
+	rm ~/.ssh/id_rsa
+	EOF" allow
+cw "…a substitution beside an in-repo path"  'chown $(id -u) ./build' allow
 cw "a < redirect is a read"                  'cat < ~/.ssh/config' allow
 cw "cat"                                     'cat ~/.ssh/config' allow
 cw "ls -l"                                   'ls -l ~/.ssh' allow
