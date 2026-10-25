@@ -346,6 +346,12 @@ chmod 600 ~/.ssh/id_rsa"
 cw "…a quoted << is not a heredoc"           "echo \"<<EOF\"
 rm ~/.ssh/id_rsa
 EOF"
+cw "…an unquoted heredoc still runs \$( )"   "cat > a.md <<EOF
+\$(rm ~/.ssh/id_rsa)
+EOF"
+cw "…a << inside \$(( )) is a shift, not a heredoc" "echo \$((1<<n))
+rm ~/.ssh/id_rsa
+n"
 cw "bare name *.pem under \$HOME"            'rm ~/server.pem'
 cw "…id_rsa*"                                'cp a ~/id_rsa_backup'
 cw "…*credentials*"                          'rm -f ~/.git-credentials'

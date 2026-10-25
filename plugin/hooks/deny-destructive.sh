@@ -857,28 +857,31 @@ _cred_neutral() { # <cmd> -> the command with every separator inside quotes turn
   }'
 }
 
-# A body is blanked only when its terminator is found and its `<<` is outside quotes with a
-# plain-word delimiter: a fake opener (`echo "<<EOF"`, `$((1<<n))`) must not hide real code.
+# A body is blanked only when its terminator is found and its `<<` is outside quotes and
+# arithmetic with a plain-word delimiter: a fake opener (`echo "<<EOF"`, `$((1<<n))`) must not
+# hide real code. An UNQUOTED delimiter still expands `$(…)` and backticks, so those lines stay.
 _cred_noheredoc() { # <cmd> -> the command with each heredoc body blanked
   printf '%s' "$1" | awk 'BEGIN { RS = "\001" } {
-    n = split($0, L, "\n"); q = ""
+    n = split($0, L, "\n"); q = ""; ar = 0
     for (k = 1; k <= n; k++) {
       line = L[k]; m = length(line); nd = 0
       for (i = 1; i <= m; i++) {
         c = substr(line, i, 1)
         if (q != "") { if (c == q) q = ""; continue }
         if (c == "\047" || c == "\"") { q = c; continue }
-        if (c != "<" || substr(line, i + 1, 1) != "<" || substr(line, i + 2, 1) == "<") continue
+        if (c == "(" && substr(line, i + 1, 1) == "(") { ar++; i++; continue }
+        if (c == ")" && substr(line, i + 1, 1) == ")" && ar > 0) { ar--; i++; continue }
+        if (ar > 0 || c != "<" || substr(line, i + 1, 1) != "<" || substr(line, i + 2, 1) == "<") continue
         r = substr(line, i + 2); dash = 0; i++
         if (substr(r, 1, 1) == "-") { dash = 1; r = substr(r, 2) }
         sub(/^[ \t]+/, "", r); match(r, /^[^ \t;&|<>()]+/); w = substr(r, 1, RLENGTH)
-        gsub(/["\047\\]/, "", w)
-        if (w ~ /^[A-Za-z_][A-Za-z0-9_]*$/) { nd++; D[nd] = w; DS[nd] = dash }
+        wq = (w ~ /["\047\\]/); gsub(/["\047\\]/, "", w)
+        if (w ~ /^[A-Za-z_][A-Za-z0-9_]*$/) { nd++; D[nd] = w; DS[nd] = dash; DQ[nd] = wq }
       }
       for (d = 1; d <= nd; d++) {
         for (e = k + 1; e <= n; e++) { t = L[e]; if (DS[d]) sub(/^\t+/, "", t); if (t == D[d]) break }
         if (e > n) break
-        for (j = k + 1; j <= e; j++) L[j] = ""
+        for (j = k + 1; j <= e; j++) if (DQ[d] || j == e || L[j] !~ /\$\(|`/) L[j] = ""
         k = e
       }
     }
