@@ -361,17 +361,30 @@ render "$TMPD/chk" "$TMPD/rchk"
 # SCHEMA.md clause 8 on a solo bundle: a same-login checker counts only when its unedited
 # comment's trailer names this head and carries the nonce of a dispatch recorded before it.
 DISPATCHED=""
+trailer_of() { # <rendered> -> "<head_sha> <dispatch>" of its last okf-verdict block, or nothing
+  awk '/^[[:space:]]*<!--[[:space:]]*okf-verdict[[:space:]]+v1[[:space:]]*$/ { b = 1; s = "-"; n = "-"; next }
+       b && /-->/ { b = 0; print s, n; next }
+       b && /^[[:space:]]*head_sha:/ { s = $2 }
+       b && /^[[:space:]]*dispatch:/ { n = $2 }' "$1" | tail -n 1
+}
 HEAD_SHA="$(printf '%s' "${META:-}" | jq -r '.headRefOid // ""' 2>/dev/null)" || HEAD_SHA=""
 URL="$(printf '%s' "${META:-}" | jq -r '.url // ""' 2>/dev/null)" || URL=""
 if [ -n "$CLOGIN" ] && [ -n "$HEAD_SHA" ] && [ "$(norm "$CLOGIN")" = "$(norm "$ALOGIN")" ]; then
-  T="$(awk '/^[[:space:]]*<!--[[:space:]]*okf-verdict[[:space:]]+v1[[:space:]]*$/ { b = 1; s = "-"; n = "-"; next }
-            b && /-->/ { b = 0; print s, n; next }
-            b && /^[[:space:]]*head_sha:/ { s = $2 }
-            b && /^[[:space:]]*dispatch:/ { n = $2 }' "$TMPD/rchk" | tail -n 1)"
+  T="$(trailer_of "$TMPD/rchk")"
   T_SHA="${T%% *}"; T_NONCE="${T#* }"
-  # The nonce is public once posted: only one unedited comment from that login may carry it.
-  CARRIERS="$(printf '%s' "$META" | jq -r --arg l "$CLOGIN" --arg n "${T_NONCE:-}" \
-              '[.comments[] | select(.author.login == $l and ((.body // "") | contains($n)))] | length' 2>/dev/null)"
+  printf '%s' "$T_NONCE" | grep -Eqx '[0-9a-f]{32}' || T_NONCE=-
+  # The nonce is public once posted: only one unedited comment from that login may carry it,
+  # counted by each comment's parsed trailer and case-folded, so a re-cased copy is a carrier.
+  CARRIERS=0; k=0; NC="$(printf '%s' "$META" | jq -r '.comments | length' 2>/dev/null)"
+  while [ "$k" -lt "${NC:-0}" ]; do
+    if [ "$(printf '%s' "$META" | jq -r --argjson i "$k" '.comments[$i].author.login // ""')" = "$CLOGIN" ]; then
+      printf '%s' "$META" | jq -r --argjson i "$k" '.comments[$i].body // ""' > "$TMPD/c"
+      render "$TMPD/c" "$TMPD/rc"
+      [ "$(trailer_of "$TMPD/rc" | cut -d' ' -f2 | tr '[:upper:]' '[:lower:]')" \
+        = "$(printf '%s' "${T_NONCE:-}" | tr '[:upper:]' '[:lower:]')" ] && CARRIERS=$((CARRIERS + 1))
+    fi
+    k=$((k + 1))
+  done
   if [ -n "$T" ] && [ "$T_SHA" = "$HEAD_SHA" ] && [ "$T_NONCE" != - ] \
      && [ "${EDITED:-true}" = false ] && [ "${CARRIERS:-0}" = 1 ] \
      && "$(dirname "${BASH_SOURCE[0]:-$0}")/qa-dispatch.sh" check \

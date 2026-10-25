@@ -215,6 +215,12 @@ if command -v jq >/dev/null 2>&1; then
   serve_qa "$(mint)" 2099-01-01T00:00:00Z
   jq '.comments = [.comments[0], .comments[0]]' "$FIX/pr_json" > "$FIX/p2" && mv "$FIX/p2" "$FIX/pr_json"
   ok "…the nonce replayed in a second comment: exit 4"      "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+  n="$(mint)"; serve_qa "$n" 2099-01-01T00:00:00Z; cp "$TMP/qa-table" "$TMP/qa-real"
+  serve_qa "$(printf '%s' "$n" | tr '[:lower:]' '[:upper:]')" 2099-01-01T00:00:00Z
+  jq --rawfile r "$TMP/qa-real" '.comments = [(.comments[0] | .body = $r), .comments[0]]' "$FIX/pr_json" > "$FIX/p2" && mv "$FIX/p2" "$FIX/pr_json"
+  ok "…an upper-cased copy in a second pass comment: exit 4" "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+  jq '.comments = [.comments[0]] | .comments[0].body |= ascii_upcase' "$FIX/pr_json" > "$FIX/p2" && mv "$FIX/p2" "$FIX/pr_json"
+  ok "…a lone upper-cased nonce is not one: exit 4"         "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
   unset CLAUDE_PROJECT_DIR
   serve worker-bot qa-bot "$AGREE"
   ok "--checker naming nobody finds no table"  \

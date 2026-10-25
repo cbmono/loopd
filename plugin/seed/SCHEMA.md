@@ -867,7 +867,9 @@ under the PR author's own login counts — in `review-clearance.sh` route B, in
 `okf-verdict` trailer names that head, carries `dispatch: <nonce>` hashing to that record,
 and was posted after it — in one unedited PR comment that is the only artifact from that
 login carrying the nonce, because once posted the nonce is public and the same login can
-post or edit another. **It stops a verdict nobody dispatched and a trailer the
+post or edit another. **That is not a seal:** the same login can delete the QA's comment and
+repost the public nonce under its own verdict, and that single unedited carrier clears; only
+the PR timeline shows the deletion. It is the same-login limit, stated, not closed. **It stops a verdict nobody dispatched and a trailer the
 implementer typed**: every role agent can read and write the bundle, which is why the
 record holds a hash and never the nonce. **Out of scope:** a same-uid process that reads
 the QA session's own transcript or its command line, or runs `qa-dispatch.sh mint` itself

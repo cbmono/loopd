@@ -352,7 +352,7 @@ signature". Never on a PR body.
    reviewer-authored thread is unresolved** (clause 9), which is the same check case (a)
    already owes an external review.
 
-   Post via `gh pr review`, signed as above, as a **comment** (or `--request-changes`), **never `gh pr
+   Post via `gh pr comment`, signed as above, as ONE comment (step 6's trailer in it), **never `gh pr
    merge`**. Don't plan on `--approve`: when the PR was opened by the same `gh` identity
    you're reviewing under — the normal case in a single-login instance — GitHub rejects
    self-approval, so the trailer-bearing **comment** review *is* the clearance signal.

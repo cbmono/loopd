@@ -5,7 +5,7 @@
 #
 #   Usage: review-next.sh <pr> [--repo <o>/<n>] [--head <sha>] [--record <task-doc>] [--instance <bundle>]
 #          review-next.sh --decide rc=<0-8> class=<placeholder|declined|-> crr=<n> qar=<n> \
-#                         crd=<n> qad=<n> qlast=<none|pass|fail> qhead=<yes|no> qrec=<yes|no>
+#                         crd=<n> qad=<n> qlast=<none|pass|fail|unknown> qhead=<yes|no> qrec=<yes|no>
 #
 # Exit 0 decided · 2 unknown input (stdout still `hold`). The same answer under gated and yolo.
 # Reasoning and the table: step-4-advance.md → "What next on a PR".
@@ -41,6 +41,7 @@ decide() {
 
   if [ -n "$qa" ]; then
     [ "$qar" -eq 0 ] && { say merge-path "$qa and qaRounds is 0"; return 0; }
+    [ "$qlast" = unknown ] && { say hold "QA round $qad is inconclusive or unreadable (open threads?); surface it"; return 0; }
     if [ "$qhead" = yes ]; then
       [ "$qlast" = pass ] && { say merge-path "QA passed the head"; return 0; }
       say implementer-round "QA round $qad found problems at the head, no fix yet"; return 0
@@ -108,7 +109,7 @@ qad="$(printf '%s' "$qv" | grep -c .)"
 last="$(printf '%s\n' "$qv" | tail -n 1)"
 qlast=none; qhead=no
 if [ -n "$last" ]; then
-  [ "${last#* }" = pass ] && qlast=pass || qlast=fail
+  case "${last#* }" in pass) qlast=pass ;; changes-requested) qlast=fail ;; *) qlast=unknown ;; esac
   [ "${last%% *}" = "$head" ] && qhead=yes
 fi
 "$D/qa-dispatch.sh" check --repo "$nwo" --pr "$num" --head "$head" --instance "$inst" >/dev/null 2>&1

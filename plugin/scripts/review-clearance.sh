@@ -1579,7 +1579,7 @@ verdict_trailer() { # <strict-body-file> -> prints "<verdict> <dispatch nonce or
           inblk = 0
           if (verdict ~ /^(pass|changes-requested|inconclusive)$/ && reviewer != "" \
               && sha ~ /^[0-9a-f]{7,40}$/ && substr(head, 1, length(sha)) == sha) {
-            found = 1; fv = verdict; fn = (nonce ~ /^[0-9a-f]{32}$/ ? nonce : "-")
+            found = 1; fv = verdict; fn = (nonce ~ /^[0-9a-fA-F]{32}$/ ? nonce : "-")
           }
           next
         }
@@ -1593,7 +1593,7 @@ verdict_trailer() { # <strict-body-file> -> prints "<verdict> <dispatch nonce or
           if (key == "verdict")  verdict  = val
           if (key == "reviewer") reviewer = val
           if (key == "head_sha") sha      = val
-          if (key == "dispatch") nonce    = val
+          if (key == "dispatch") nonce    = trim(substr(f, index(f, ":") + 1))
         }
         next
       }
@@ -1633,7 +1633,7 @@ terminal_body=""; terminal_from=""
 stale_from=""; stale_at=""; unproven_from=""
 refusal_at_head=""; empty_from=""; empty_state=""; held_from=""; held_state=""
 cleared_msg=""; cleared_kind=internal; ack_from=""; ack_at_head=""; incremental_from=""; marker_outranked=""
-skip_from=""; other_refusal=""; declined_seen=""
+skip_from=""; other_refusal=""; declined_seen=""; declined_any=""; unfinished_seen=""
 self_reviews=0; self_at_head=0; self_hits=0; self_msg=""
 # THE FIELDS ARE UNIT-SEPARATED, NOT TAB-SEPARATED, and that is not decoration: a tab is
 # IFS WHITESPACE, so `read` collapses a run of them into one delimiter and every empty
@@ -1674,9 +1674,12 @@ while IFS=$'\037' read -r kind login state commit created updated; do
     # edits are invisible to the API). A second carrier refuses both.
     if [ -n "$self_qa" ]; then
       render_body "$body" "$TMPD/stripped" "$TMPD/strict"
-      if tv="$(verdict_trailer "$TMPD/strict")" && self_qa_ok "$created" "${tv#* }"; then
+      # A case-changed copy of the nonce is a carrier too, and can never be the one that clears.
+      if tv="$(verdict_trailer "$TMPD/strict")" \
+         && self_qa_ok "$created" "$(printf '%s' "${tv#* }" | tr '[:upper:]' '[:lower:]')"; then
         self_hits=$((self_hits + 1))
-        [ "$kind" = comment ] && { [ -z "$updated" ] || [ "$updated" = "$created" ]; } \
+        printf '%s' "${tv#* }" | grep -Eqx '[0-9a-f]{32}' \
+          && [ "$kind" = comment ] && { [ -z "$updated" ] || [ "$updated" = "$created" ]; } \
           && self_msg="ok: a validated okf-verdict trailer (verdict ${tv%% *}) from $login ($kind) names head $head_sha on PR $pr, matching a recorded qa-reviewer dispatch"
         continue
       fi
@@ -1749,8 +1752,12 @@ while IFS=$'\037' read -r kind login state commit created updated; do
     else
       other_refusal=yes
     fi
-    # A real refusal outranks the processing placeholder whatever the stream order.
-    [ "$kind_of_refusal" = declined ] && declined_seen=yes
+    # A real refusal outranks the processing placeholder whatever the stream order — but an
+    # old refusal (it names another commit) does not outrank a placeholder at this head.
+    if [ "$kind_of_refusal" = declined ]; then
+      declined_any=yes; refusal_concerns_head "$TMPD/stripped" && declined_seen=yes
+    fi
+    [ "$kind_of_refusal" = unfinished ] && unfinished_seen=yes
     if [ -z "$refusal_body" ] || { [ "$refusal_kind" = unfinished ] && [ "$kind_of_refusal" != unfinished ]; }; then
       refusal_body="$TMPD/refusal"; refusal_from="$login"; refusal_kind="$kind_of_refusal"
       cp "$TMPD/stripped" "$TMPD/refusal"
@@ -2221,7 +2228,8 @@ if [ -n "$refusal_body" ]; then
     echo "        published at that commit — see the note at TEST 2.)" >&2
   }
   # stdout, for review-next.sh: a real refusal (QA may run) or a placeholder (hold).
-  if [ -n "$declined_seen" ]; then echo "class: declined"; else echo "class: placeholder"; fi
+  if [ -n "$declined_seen" ] || { [ -n "$declined_any" ] && [ -z "$unfinished_seen" ]; }; then
+    echo "class: declined"; else echo "class: placeholder"; fi
   exit 1
 fi
 

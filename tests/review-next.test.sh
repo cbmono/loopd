@@ -64,6 +64,8 @@ ok "round 1 FAIL, fix landed, qaRounds 2 -> dispatch QA round 2" "$(d rc=1 class
 ok "…the same once CodeRabbit answers 8 at the fix commit" "$(d rc=8 crr=1 qar=2 crd=0 qad=1 qlast=fail qhead=no)" dispatch-qa
 ok "round 2 FAIL, fix landed, qaRounds 2 -> merge path (cap)" "$(d rc=1 class=declined crr=1 qar=2 crd=0 qad=2 qlast=fail qhead=no)" merge-path
 ok "round 1 FAIL, fix landed, qaRounds 1 -> merge path (cap)" "$(d rc=1 class=declined crr=1 qar=1 crd=0 qad=1 qlast=fail qhead=no)" merge-path
+ok "QA verdict at the head inconclusive or unreadable (exit 6) -> hold, surface" "$(d rc=1 class=declined crr=1 qar=2 crd=0 qad=1 qlast=unknown qhead=yes qrec=yes)" hold
+ok "…the same after a commit landed: no endless round" "$(d rc=8 crr=1 qar=2 crd=0 qad=1 qlast=unknown qhead=no)" hold
 ok "qaRounds 0 with a real refusal -> merge path, no QA" "$(d rc=1 class=declined crr=1 qar=0 crd=0 qad=0)" merge-path
 ok "coderabbitRounds 0, qaRounds 0 -> no QA (CodeRabbit flow)" "$(d rc=8 crr=0 qar=0 crd=0 qad=0)" hold
 }

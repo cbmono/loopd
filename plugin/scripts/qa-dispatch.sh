@@ -6,8 +6,8 @@
 #          qa-dispatch.sh check --repo <o>/<n> --pr <n> --head <sha> [--nonce <hex>] [--after <ISO>] [--instance <bundle>]
 #
 # mint prints a fresh nonce for the qa-reviewer's brief and records only its sha256.
-# check: 0 a record matches (with --nonce, its hash; with --after, a record older than that
-# time) · 1 none, or no bundle · 2 usage or unreadable. Threat model: SCHEMA.md → clause 8.
+# check: 0 a record matches (with --nonce — 32 lowercase hex — its hash; with --after, a record
+# older than that time) · 1 none, or no bundle · 2 usage or unreadable. Threat model: SCHEMA.md → clause 8.
 set -uo pipefail
 
 ROLE="loopd:qa-reviewer"
@@ -67,7 +67,11 @@ if [ "$cmd" = mint ]; then
 fi
 
 digits() { printf '%s' "$1" | grep -Eqx '[0-9]{4}(-[0-9]{2}){2}T([0-9]{2}:){2}[0-9]{2}Z' && printf '%s' "$1" | tr -cd '0-9'; }
-want_h=""; [ -z "$nonce" ] || want_h="$(printf '%s' "$(printf '%s' "$nonce" | tr '[:upper:]' '[:lower:]')" | sha256)"
+want_h=""
+if [ -n "$nonce" ]; then
+  printf '%s' "$nonce" | grep -Eqx '[0-9a-f]{32}' || exit 1
+  want_h="$(printf '%s' "$nonce" | sha256)"
+fi
 after_d=""; if [ -n "$after" ]; then after_d="$(digits "$after")" || exit 1; fi
 [ -e "$log" ] || exit 1
 [ -r "$log" ] || { echo "qa-dispatch: $log is unreadable" >&2; exit 2; }

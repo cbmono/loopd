@@ -57,12 +57,19 @@ Payment failed for this organization.
 ROWS
 
 echo "== a real refusal outranks the placeholder, whatever the stream order =="
-setup; add_comment "coderabbitai[bot]" "$PLACEHOLDER"; add_comment "coderabbitai[bot]" "$REFUSAL"
+# The recorded refusal names REFUSAL_HEAD, so these PRs are AT that head.
+setup "$REFUSAL_HEAD"; add_comment "coderabbitai[bot]" "$PLACEHOLDER"; add_comment "coderabbitai[bot]" "$REFUSAL"
 expect "placeholder first, then the recorded rate limit -> exit 1" 1
 class_is "…class: declined" declined
 says "…and the quote is the refusal, not the placeholder" "DECLINED"
-setup; add_comment "coderabbitai[bot]" "$REFUSAL"; add_comment "coderabbitai[bot]" "$PLACEHOLDER"
+setup "$REFUSAL_HEAD"; add_comment "coderabbitai[bot]" "$REFUSAL"; add_comment "coderabbitai[bot]" "$PLACEHOLDER"
 expect "rate limit first, then the placeholder -> exit 1" 1
+class_is "…class: declined" declined
+setup; add_comment "coderabbitai[bot]" "$REFUSAL"; add_comment "coderabbitai[bot]" "$PLACEHOLDER"
+expect "an OLD rate limit (another commit) + a placeholder at the head" 1
+class_is "…class: placeholder, so no QA" placeholder
+setup; add_comment "coderabbitai[bot]" "$REFUSAL"
+expect "an old rate limit alone, nothing processing -> exit 1" 1
 class_is "…class: declined" declined
 setup; add_comment "coderabbitai[bot]" "$SKIP"
 expect "the recorded skip notice is still exit 8, not a refusal" 8
@@ -93,6 +100,13 @@ fresh; n="$(mint)"; add_comment_at dev "$LATER" "$(trailer "$n")"
 add_comment_at dev "$LATER" "$(trailer "$n" '— dev-qa (copied)')"
 expect "the nonce replayed in a second comment -> neither counts (3)" 3 --reviewer dev
 says "…and says why" "only"
+
+fresh; n="$(mint)"; add_comment_at dev "$LATER" "$(trailer "$n")"
+add_comment_at dev "$LATER" "$(trailer "$(printf '%s' "$n" | tr '[:lower:]' '[:upper:]')" '— dev-qa (re-cased)')"
+expect "the nonce re-cased in a second comment -> neither counts (3)" 3 --reviewer dev
+
+fresh; n="$(mint)"; add_comment_at dev "$LATER" "$(trailer "$(printf '%s' "$n" | tr '[:lower:]' '[:upper:]')")"
+expect "only a re-cased copy of the nonce -> no review (3)" 3 --reviewer dev
 
 fresh; n="$(mint)"; add_comment_edited dev "$LATER" "2099-01-02T00:00:00Z" "$(trailer "$n")"
 expect "the recorded verdict comment, edited afterwards -> no review (3)" 3 --reviewer dev
