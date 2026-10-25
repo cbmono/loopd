@@ -12,7 +12,7 @@ mkdir -p "$CLAUDE_PROJECT_DIR"; printf '{}\n' > "$CLAUDE_PROJECT_DIR/instance.co
 LATER="2099-01-01T00:00:00Z"
 
 class_is() { # <name> <expected class>
-  local got; got="$(sed -n 's/^class: //p' <<<"$LAST_OUT" | head -n 1)"
+  local got; got="$(sed -n 's/^class: //p' <<<"$LAST_OUT")"; got="${got%%$'\n'*}"
   if [ "$got" = "$2" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$got"; pass=$((pass+1))
   else printf '  FAIL  %-58s got class %s, want %s\n' "$1" "${got:-<none>}" "$2"; fail=$((fail+1)); fi
 }
