@@ -575,6 +575,23 @@ ok "subagent gh api PUT pulls/N/merge is refused" \
 ok "subagent gh api /merges is refused" \
    "$(verdict_agent "$GITREPO" 'gh api /repos/o/r/merges -f base=main -f head=feat')" "deny:subagent_merge"
 
+# --- a heredoc body is text, unless a shell runs it or it substitutes (task-021) ---
+NL=$'\n'
+ok "a quoted heredoc body naming gh pr merge is allowed (cat > file)" \
+   "$(verdict_agent "$GITREPO" "cat > notes.md <<'EOF'${NL}gh pr merge 12${NL}EOF")" "allow"
+ok "…and as a commit message (git commit -F -)" \
+   "$(verdict_agent "$GITREPO" "git commit -F - <<'EOF'${NL}docs: note${NL}${NL}gh pr merge 12${NL}EOF")" "allow"
+ok "the merge as the stage's own command after a body is refused" \
+   "$(verdict_agent "$GITREPO" "cat > notes.md <<'EOF'${NL}x${NL}EOF${NL}gh pr merge 12")" "deny:subagent_merge"
+ok "\$(gh pr merge) inside an unquoted body is refused" \
+   "$(verdict_agent "$GITREPO" "cat > notes.md <<EOF${NL}\$(gh pr merge 12)${NL}EOF")" "deny:subagent_merge"
+ok "a body fed to bash <<'EOF' is refused" \
+   "$(verdict_agent "$GITREPO" "bash <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a body fed to sh <<EOF is refused" \
+   "$(verdict_agent "$GITREPO" "sh <<EOF${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a body piped into bash (cat <<EOF | bash) is refused" \
+   "$(verdict_agent "$GITREPO" "cat <<EOF | bash${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+
 # --- the allow half (load-bearing): the review verbs an agent MUST keep ---
 ok "subagent gh pr create is allowed" \
    "$(verdict_agent "$GITREPO" 'gh pr create --fill')" "allow"

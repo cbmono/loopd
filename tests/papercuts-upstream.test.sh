@@ -31,7 +31,7 @@ rc() { "$@" >/dev/null 2>&1; echo $?; }
 up() { bash "$PC" "$@" --date 2026-09-05; }
 
 echo "== 1. the classifier resolves the name in the installed plugin; the prefix never decides =="
-for row in script:validate-bundle.sh=plugin script:package.json=instance agent:project-manager=plugin \
+for row in script:validate-bundle.sh=plugin script:deny-destructive.sh=plugin script:package.json=instance agent:project-manager=plugin \
            skill:close-project=plugin agent:no-such-agent=instance skill:no-such-skill=instance \
            script:../scripts/papercuts.sh=instance; do
   ok "${row%=*}" "$(bash "$PC" classify --surface "${row%=*}")" "${row#*=}"

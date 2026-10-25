@@ -1148,7 +1148,18 @@ merge_permitted() { # <stage> -> 0 when this exact merge is delegated in this bu
 
 rule_subagent_merge() {
   case "$1" in *gh*) ;; *) return 1 ;; esac
-  local stage c sub next
+  local stage c sub next cmd="$1" all s
+  case "$cmd" in *'<<'*)
+    cmd="$(_cred_noheredoc "$1")"
+    while IFS= read -r stage; do
+      case "$(first_word "$stage")" in bash|sh|zsh|dash|ksh) cmd="$1"; break ;; esac
+    done <<EOF
+$(stages "$cmd")
+EOF
+  ;; esac
+  all="$(stages "$cmd")"
+  case "$cmd" in *'$('*|*'`'*) s="${cmd//\$(/$SEP}"; all="$all
+$(stages "${s//\`/$SEP}")" ;; esac
   while IFS= read -r stage; do
     [ -n "$stage" ] || continue
     c="$(first_word "$stage")" || continue
@@ -1187,7 +1198,7 @@ rule_subagent_merge() {
         ;;
     esac
   done <<EOF
-$(stages "$1")
+$all
 EOF
   return 1
 }
