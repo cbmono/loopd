@@ -57,8 +57,9 @@ if [ "$cmd" = mint ]; then
   [ "${#n}" -eq 32 ] || { echo "qa-dispatch: could not generate a nonce" >&2; exit 2; }
   h="$(printf '%s' "$n" | sha256)"
   [ "${#h}" -eq 64 ] || { echo "qa-dispatch: could not hash the nonce" >&2; exit 2; }
-  mkdir -p "$dir" && { [ -e "$dir/.gitignore" ] || printf '*\n' > "$dir/.gitignore"; } || {
-    echo "qa-dispatch: cannot write $dir" >&2; exit 2; }
+  if ! mkdir -p "$dir" || ! { [ -e "$dir/.gitignore" ] || printf '*\n' > "$dir/.gitignore"; }; then
+    echo "qa-dispatch: cannot write $dir" >&2; exit 2
+  fi
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$repo" "$pr" "$head" "$ROLE" "$h" \
     >> "$log" || { echo "qa-dispatch: cannot append to $log" >&2; exit 2; }
   printf '%s\n' "$n"
