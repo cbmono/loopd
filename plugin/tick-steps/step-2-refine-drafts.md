@@ -82,7 +82,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    never `# Notes`** — which `SCHEMA.md` defines as deliberately not a gate: it
    does not block promotion, puts no row in `AWAITING.md`, and no validator reads it.
    One entry per concern, `<ISO 8601> · <the concern, as a question>`; you triage the
-   list on a later tick. The critique sets no status, gates no `draft → ready`, and
+   list on a later tick. **Triaging writes exactly one `* <ISO 8601> triage: …` line under
+   `# Notes`** — the one `# Notes` line a critique produces — and that line is what
+   `tick-delta.sh check` reads: a `draft` whose newest concern is dated after it, or that
+   has none, is a `DELTA`, so a tick that leaves a critique for "next tick" gets one. The critique sets no status, gates no `draft → ready`, and
    leaves the human's promotion gate exactly where it was — an aid, not a new authority.
 
    **Once per task, and a tick can tell that it already ran.** Refinement is itself
