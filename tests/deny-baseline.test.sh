@@ -352,6 +352,15 @@ EOF"
 cw "…a << inside \$(( )) is a shift, not a heredoc" "echo \$((1<<n))
 rm ~/.ssh/id_rsa
 n"
+cw "…a \\-newline cannot split \$( in an unquoted body" 'cat > a.md <<EOF
+$\
+(rm ~/.ssh/id_rsa)
+EOF'
+cw "…nor fake a terminator"                  'cat > a.md <<EOF
+EO\
+F
+rm ~/.ssh/id_rsa
+EOF'
 cw "bare name *.pem under \$HOME"            'rm ~/server.pem'
 cw "…id_rsa*"                                'cp a ~/id_rsa_backup'
 cw "…*credentials*"                          'rm -f ~/.git-credentials'
