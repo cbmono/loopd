@@ -605,6 +605,28 @@ ok "a quoted body to a git shell alias (git -c alias.x='!sh' x) is refused" \
    "$(verdict_agent "$GITREPO" "git -c alias.x='!sh' x <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
 ok "a quoted body to a gh alias (gh x) is refused" \
    "$(verdict_agent "$GITREPO" "gh x <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a \$( split over lines in an unquoted body is refused" \
+   "$(verdict_agent "$GITREPO" "cat > n.md <<EOF${NL}\$(${NL}gh pr merge 12${NL})${NL}EOF")" "deny:subagent_merge"
+ok "…and a backtick split over lines" \
+   "$(verdict_agent "$GITREPO" "cat > n.md <<EOF${NL}\`${NL}gh pr merge 12${NL}\`${NL}EOF")" "deny:subagent_merge"
+ok "an escaped \\<< is no heredoc (cat \\<<EOF)" \
+   "$(verdict_agent "$GITREPO" "cat \\<<EOF${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "…nor a << inside a string with an escaped quote" \
+   "$(verdict_agent "$GITREPO" "cat \"x\\\" <<EOF\"${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a git sink after an assignment with -e (GIT_EDITOR=sh) is refused" \
+   "$(verdict_agent "$GITREPO" "GIT_EDITOR=sh git commit -F - -e <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "…after a quoted assignment (GIT_EDITOR='sh -s')" \
+   "$(verdict_agent "$GITREPO" "GIT_EDITOR='sh -s' git commit -F - -e <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "…after env, with --edit" \
+   "$(verdict_agent "$GITREPO" "env GIT_EDITOR=sh git commit -F - --edit <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "…and with -e alone (git commit -F - -e)" \
+   "$(verdict_agent "$GITREPO" "git commit -F - -e <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a body written to a file then run by path is refused" \
+   "$(verdict_agent "$GITREPO" "cat > x.sh <<'EOF'${NL}gh pr merge 12${NL}EOF${NL}chmod +x x.sh; ./x.sh")" "deny:subagent_merge"
+ok "…through tee, then exec ./x.sh" \
+   "$(verdict_agent "$GITREPO" "cat <<'EOF' | tee x.sh; exec ./x.sh${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "…or made executable by chmod and run off PATH" \
+   "$(verdict_agent "$GITREPO" "cat > x.sh <<'EOF'${NL}gh pr merge 12${NL}EOF${NL}chmod +x x.sh && PATH=.:\$PATH x.sh")" "deny:subagent_merge"
 ok "a quoted body as gh pr create --body-file - is allowed" \
    "$(verdict_agent "$GITREPO" "gh pr create --title t --body-file - <<'EOF'${NL}gh pr merge 12${NL}EOF")" "allow"
 

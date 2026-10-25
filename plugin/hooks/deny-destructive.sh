@@ -859,8 +859,8 @@ _cred_neutral() { # <cmd> -> the command with every separator inside quotes turn
 
 # A body is blanked only when its terminator is found and its `<<` is outside quotes and
 # arithmetic with a plain-word delimiter: a fake opener (`echo "<<EOF"`, `$((1<<n))`) must not
-# hide real code. An UNQUOTED delimiter still expands `$(…)` and backticks, so those lines stay,
-# and joins a trailing `\` onto the next line, so such a body is not blanked at all.
+# hide real code. An UNQUOTED delimiter expands `$(…)` and backticks — a substitution can span
+# lines — and joins a trailing `\` onto the next line, so such a body is not blanked at all.
 _cred_noheredoc() { # <cmd> -> the command with each heredoc body blanked
   printf '%s' "$1" | awk 'BEGIN { RS = "\001" } {
     n = split($0, L, "\n"); q = ""; ar = 0
@@ -868,6 +868,8 @@ _cred_noheredoc() { # <cmd> -> the command with each heredoc body blanked
       line = L[k]; m = length(line); nd = 0
       for (i = 1; i <= m; i++) {
         c = substr(line, i, 1)
+        if (q == "\047") { if (c == q) q = ""; continue }
+        if (c == "\\") { i++; continue }
         if (q != "") { if (c == q) q = ""; continue }
         if (c == "\047" || c == "\"") { q = c; continue }
         if (c == "(" && substr(line, i + 1, 1) == "(") { ar++; i++; continue }
@@ -882,8 +884,8 @@ _cred_noheredoc() { # <cmd> -> the command with each heredoc body blanked
       for (d = 1; d <= nd; d++) {
         for (e = k + 1; e <= n; e++) { t = L[e]; if (DS[d]) sub(/^\t+/, "", t); if (t == D[d]) break }
         if (e > n) break
-        if (!DQ[d]) { cont = 0; for (j = k + 1; j < e; j++) if (L[j] ~ /\\$/) cont = 1; if (cont) break }
-        for (j = k + 1; j <= e; j++) if (DQ[d] || j == e || L[j] !~ /\$\(|`/) L[j] = ""
+        if (!DQ[d]) { cont = 0; for (j = k + 1; j < e; j++) if (L[j] ~ /\\$|\$\(|`/) cont = 1; if (cont) break }
+        for (j = k + 1; j <= e; j++) L[j] = ""
         k = e
       }
     }
@@ -1148,15 +1150,18 @@ merge_permitted() { # <stage> -> 0 when this exact merge is delegated in this bu
 
 rule_subagent_merge() {
   case "$1" in *gh*) ;; *) return 1 ;; esac
-  local stage c sub next cmd="$1" all s seg
+  local stage c sub next cmd="$1" all s seg t
   case "$cmd" in *'<<'*)
     cmd="$(_cred_noheredoc "$1")"
     while IFS= read -r seg; do
       case "$seg" in *'>('*|*'<('*) cmd="$1"; break ;; *'<<'*) ;; *) continue ;; esac
       while IFS= read -r stage; do
-        case "$(first_word "$stage")" in
+        c="$(first_word "$stage")"; t="$(tokens_of "$stage" | head -1)"
+        [ "${t##*/}" = "$c" ] || { cmd="$1"; break 2; }
+        case "$c" in
           cat|tee) ;;
           git) has_token "$stage" -c && { cmd="$1"; break 2; }
+               tokens_of "$stage" | grep -Eqx -- '--e|--ed|--edi|--edit|-[^-]*e.*' && { cmd="$1"; break 2; }
                case "$(word_after "$stage" git)" in commit|tag) ;; *) cmd="$1"; break 2 ;; esac ;;
           gh) case "$(word_after "$stage" gh)" in pr|issue|api|release|gist) ;; *) cmd="$1"; break 2 ;; esac ;;
           *) cmd="$1"; break 2 ;;
@@ -1168,7 +1173,9 @@ EOT
 $(segments "$cmd")
 EOF
     [ "$cmd" = "$1" ] || while IFS= read -r stage; do
-      case "$(first_word "$stage")" in bash|sh|zsh|dash|ksh|fish|busybox|source|.|eval) cmd="$1"; break ;; esac
+      c="$(first_word "$stage")"
+      case "$c" in bash|sh|zsh|dash|ksh|fish|busybox|source|.|eval|chmod) cmd="$1"; break ;; esac
+      case "$stage" in *"/$c"*) cmd="$1"; break ;; esac
     done <<EOF
 $(stages "$cmd")
 EOF
