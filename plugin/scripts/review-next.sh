@@ -10,7 +10,7 @@
 # Exit 0 decided · 2 unknown input (stdout still `hold`). The same answer under gated and yolo.
 # `--clear` (required-checks.sh): may this head merge with no review at it? 0 yes — prints and
 # records last-round|qa-zero|zero-zero — · 1 hold, the reason on stderr · 2 unknown.
-# Reasoning and the table: step-4-advance.md → "What next on a PR"; AUTONOMY.md → "Merge after the last round".
+# Reasoning and the table: step-4-advance.md → "What next on a PR" and its merge-path row.
 set -uo pipefail
 
 decide() {
@@ -165,7 +165,7 @@ case "$kind" in
     odd="$(printf '%s' "$cmp" | jq -r '.files // [] | .[]
       | select((.status | IN("renamed","copied","changed")) or ((.patch // "") == "")
                or (((.additions // 0) + (.deletions // 0)) == 0)
-               or ((.patch // "") | test("^[-+]Subproject commit "; "m")))
+               or ((.patch // "") | test("(^|\n)[-+]Subproject commit ")))
       | "\(.status) \(.filename)"' 2>/dev/null)" || unknown "compare files unreadable"
     [ -z "$odd" ] || hold "files with no countable lines (binary, rename, mode-only or submodule): $(printf '%s' "$odd" | tr '\n' ',' | sed 's/,$//')"
     lines="$(printf '%s' "$cmp" | jq '[.files // [] | .[] | (.additions // 0) + (.deletions // 0)] | add // 0' 2>/dev/null)"

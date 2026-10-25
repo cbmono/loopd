@@ -392,21 +392,52 @@ setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
 reviewer_pr "$CR_CLEAN"; open_thread true
 expect "...and the same fixture with the thread RESOLVED -> clear" 0
 
-# mergeAtReviewCap: a `cap` line recorded at this head stands in for exit 6's review half,
-# and only while the key is true. No project mode is read here (merge-permit.sh does that).
-CAPB="$TMP/capbundle"; mkdir -p "$CAPB"
-cap_case() { # <key json> <name> <expected rc>
-  printf '{"mergeAtReviewCap": %s}\n' "$1" > "$CAPB/instance.config.json"
-  setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
-  reviewer_pr "$CR_CLEAN"; open_thread false
-  CLAUDE_PROJECT_DIR="$CAPB" expect "$2" "$3"
+# After the last round: where review-clearance refuses, review-next.sh --clear may still
+# clear the review half. A copy of the scripts with that one sibling stubbed, so each case
+# asks only how required-checks.sh wires the answer (review-next.test.sh drives the answer).
+NB="$TMP/nextbundle"; mkdir -p "$NB"; printf '{}\n' > "$NB/instance.config.json"
+SC="$TMP/scripts"; cp -R "$(dirname "$SCRIPT")" "$SC"
+cat > "$SC/review-next.sh" <<'STUB'
+#!/usr/bin/env bash
+echo "--clear asked: $*" >> "$FIX/next_calls"
+[ -f "$FIX/next" ] || { echo "review-next: hold for the human: the fix after the last round changes 301 lines since X, over reviewFixMaxLines (300)" >&2; exit 1; }
+cat "$FIX/next"
+STUB
+chmod +x "$SC/review-next.sh"
+next_case() { # <name> <expected rc> — run the copied gate
+  local out rc
+  out="$(CLAUDE_PROJECT_DIR="$NB" "$SC/required-checks.sh" 42 2>&1)"; rc=$?
+  if [ "$rc" -eq "$2" ]; then printf '  PASS  %-56s (rc=%s)\n' "$1" "$rc"; pass=$((pass+1))
+  else printf '  FAIL  %-56s expected rc=%s got rc=%s\n' "$1" "$2" "$rc"
+       printf '        output: %s\n' "$(head -3 <<<"$out" | tr '\n' '|')"; fail=$((fail+1)); fi
+  LAST_OUT="$out"
 }
-printf '{"mergeAtReviewCap": true}\n' > "$CAPB/instance.config.json"
-"$(dirname "$SCRIPT")/clearance-receipt.sh" record review-clearance.sh --cap --kind external \
-  --bundle "$CAPB" --repo acme/widgets --pr 42 --head "$CR_HEAD"
-cap_case true  "exit 6 + a cap line at the head, key true -> clear" 0
-says "  ...naming the cap" "accepted at the two-round review cap"
-cap_case false "...the same cap line, key false -> refuse" 1
+stale_review() { # a CodeRabbit review object one commit back: review-clearance exit 4 at the head
+  reviewer_pr ""
+  jq -n --rawfile b "$CR_CLEAN" '[{user:{login:"coderabbitai"}, state:"COMMENTED",
+    commit_id:"1111111111111111111111111111111111111111", body:$b}]' > "$FIX/reviews_json"
+}
+setup; checks "pass	Build" "fail	CodeRabbit"; declared "Build"; stale_review; echo last-round > "$FIX/next"
+next_case "exit 4 past the last round, --clear says last-round -> clear" 0
+says "  ...naming the waiver" "cleared by review-next.sh --clear (last-round)"
+setup; checks "pass	Build" "fail	CodeRabbit"; declared "Build"; stale_review; rm -f "$FIX/next"
+next_case "...over the cap, --clear holds -> refuse" 1
+says "  ...surfacing the hold reason with both numbers" "changes 301 lines since X, over reviewFixMaxLines (300)"
+says "  ...and the exit 4 it refused on" "review-clearance.sh exit 4"
+setup; checks "pass	Build" "pending	CodeRabbit"; declared "Build"; reviewer_pr "$CR_REFUSAL"; echo qa-zero > "$FIX/next"
+next_case "a refusal, pending CodeRabbit check not required, qa-zero -> clear" 0
+setup; checks "pass	Build"; declared "Build"; reviewer_pr ""; echo zero-zero > "$FIX/next"
+next_case "no reviewer signal (exit 3), zero-zero -> clear" 0
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build"; reviewer_pr "$CR_CLEAN"; open_thread false
+echo last-round > "$FIX/next"; : > "$FIX/next_calls"
+next_case "exit 6 at the head is never asked about -> refuse" 1
+LAST_OUT="calls=$(grep -c . "$FIX/next_calls")"
+says "  ...--clear was not consulted" "calls=0"
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"; stale_review; echo last-round > "$FIX/next"
+next_case "the host requires CodeRabbit's own check -> refuse, never waived" 1
+says "  ...saying the host refuses it anyway" "The host itself requires that reviewer's check"
+setup; checks "fail	Build" "pass	CodeRabbit"; declared "Build"; stale_review; echo last-round > "$FIX/next"
+next_case "a red required check still refuses past the last round" 1
 
 setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
 reviewer_pr "$CR_REFUSAL"

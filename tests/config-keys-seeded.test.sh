@@ -39,16 +39,14 @@ read_keys() {
 KEYS="$(read_keys)"
 
 echo "== the extractor sees the readers it must (else every assertion below is vacuous) =="
-for k in mergeAtReviewCap reclaimIgnoreOk maxStallRounds roleMinutes continueAfterTasks; do
+for k in reclaimIgnoreOk maxStallRounds roleMinutes continueAfterTasks; do
   ok "read key found: $k" "$(printf '%s\n' "$KEYS" | grep -cx "$k" | tr -d ' ')" 1
 done
 
-echo "== SEEDED: the two keys #397 and #399 added, each with its \$-doc line and default =="
-ok "mergeAtReviewCap seeded false" "$(jq -c '.mergeAtReviewCap' "$SEED")" false
+echo "== SEEDED: the key #399 added, with its \$-doc line and default; the retired one is gone =="
 ok "reclaimIgnoreOk seeded []" "$(jq -c '.reclaimIgnoreOk' "$SEED")" "[]"
-for k in mergeAtReviewCap reclaimIgnoreOk; do
-  ok "\$$k doc line present" "$(jq -r --arg k "\$$k" 'has($k) and (.[$k] | type == "string")' "$SEED")" true
-done
+ok "\$reclaimIgnoreOk doc line present" "$(jq -r 'has("$reclaimIgnoreOk") and (.["$reclaimIgnoreOk"] | type == "string")' "$SEED")" true
+ok "mergeAtReviewCap (retired) is not seeded" "$(jq -r 'has("mergeAtReviewCap") or has("$mergeAtReviewCap")' "$SEED")" false
 
 # Every read key goes in the LOCAL file, where welcome.sh also knows the per-machine ones.
 INST="$TMP/inst"; mkdir -p "$INST"
@@ -62,12 +60,21 @@ ok "no read key is called one nothing reads" "$(printf '%s\n' "$OUT" | grep -c '
 ok "…and the row reports healthy" \
   "$(printf '%s\n' "$OUT" | grep -c 'every top-level key is one the machinery knows' | tr -d ' ')" 1
 
+echo "== RETIRED: a bundle that still sets mergeAtReviewCap is told nothing reads it =="
+jq '. + {mergeAtReviewCap: true}' "$INST/instance.config.json" > "$INST/c" && mv "$INST/c" "$INST/instance.config.json"
+GIT -C "$INST" commit -qam retired
+OUT="$(env -u CLAUDE_PLUGIN_ROOT bash "$SH" check --instance "$INST" --template "$TMP/no-checkout" 2>&1)"
+ok "a tracked mergeAtReviewCap is named as a key nothing reads" \
+  "$(printf '%s\n' "$OUT" | grep 'nothing reads' | grep -c 'instance\.config\.json:mergeAtReviewCap' | tr -d ' ')" 1
+jq 'del(.mergeAtReviewCap)' "$INST/instance.config.json" > "$INST/c" && mv "$INST/c" "$INST/instance.config.json"
+GIT -C "$INST" commit -qam unretired
+
 echo "== PINNED: a read key missing from the seed fails the row above =="
 mkdir -p "$TMP/plugin/seed"
-jq 'del(.mergeAtReviewCap)' "$SEED" > "$TMP/plugin/seed/instance.config.json"
+jq 'del(.reclaimIgnoreOk)' "$SEED" > "$TMP/plugin/seed/instance.config.json"
 OUT="$(CLAUDE_PLUGIN_ROOT="$TMP/plugin" bash "$SH" check --instance "$INST" --template "$TMP/no-checkout" 2>&1)"
-ok "unseeded mergeAtReviewCap is named as a key nothing reads" \
-  "$(printf '%s\n' "$OUT" | grep 'nothing reads' | grep -c 'instance\.config\.local\.json:mergeAtReviewCap' | tr -d ' ')" 1
+ok "unseeded reclaimIgnoreOk is named as a key nothing reads" \
+  "$(printf '%s\n' "$OUT" | grep 'nothing reads' | grep -c 'instance\.config\.local\.json:reclaimIgnoreOk' | tr -d ' ')" 1
 
 printf '\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
