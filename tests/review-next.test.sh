@@ -161,6 +161,9 @@ ok "…and writes the named receipt line at the head" "$(grep -c '^last-round re
 ok "--clear at a head that is not the PR's -> hold" "rc=$?" rc=1
 "$REAL_JQ" 'del(.files)' "$FIX/compare_json" > "$FIX/c" && mv "$FIX/c" "$FIX/compare_json"
 ok "a compare with no files array is unknown, never 0 lines" "$(clear | tail -n 1)" rc=2
+reviewed_at_x; cmpf ahead "$(f modified a.sh 6 2)"
+printf '%s\n' '{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[{"isResolved":false,"path":"a.sh","line":3,"comments":{"nodes":[{"author":{"login":"coderabbitai"},"url":"https://example.invalid/t/1","body":"quote it"}]}}]}}}}}' > "$FIX/threads_json"
+ok "threads still open from the last round, a fix after it -> clears" "$(clear | tr '\n' ' ')" "last-round rc=0 "
 reviewed_at_x; cmpf diverged "$(f modified a.sh 6 2)"
 ok "a rebase orphaned the reviewed commit (diverged) -> hold" "$(clear)" rc=1
 ok "…naming the rebase" "$(said 'orphaned the reviewed commit')" yes
