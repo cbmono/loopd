@@ -232,6 +232,21 @@ ok "…and there is exactly ONE of it"          "$(yn near "$QA" 'model: sonnet'
 # a verdict. The reviewer posts; the delegate does not.
 ok "the delegate may not write to the PR"     "$(yn near "$QA" '--comment' 'pass \*\*no\*\*|do not pass|never pass' 2)" yes
 
+# ================================================ 8. at apex, QA is the adjudicator
+# The pair runs on opus; an apex qa-reviewer escalating to it hands the judgement down a
+# tier. So at apex (c) and (d) dispatch nothing, the tier is READ by a named command, an
+# unreadable tier keeps today's behaviour, and the verdict names the route.
+echo "== the apex exception =="
+APX='At the apex tier, adjudicate it yourself'
+ok "(c) carries the apex exception"           "$(yn near "$QA" 'Escalate when' 'At the apex tier, adjudicate' 16)" yes
+ok "…and it dispatches neither agent"         "$(yn near "$QA" "$APX" 'dispatch neither' 1)" yes
+ok "…reading the tier by command"             "$(yn near "$QA" "$APX" 'resolve-model\.sh qa-reviewer' 4)" yes
+ok "…against the apex alias"                  "$(yn near "$QA" "$APX" 'resolve-config\.sh' 5)" yes
+ok "…unreadable ⇒ below apex"                 "$(yn near "$QA" "$APX" 'empty or failing.{0,40}' 6)" yes
+ok "(d) at apex is inline, never the pair"    "$(yn near "$QA" 'unreachable' 'inline review by you, never by the pair' 12)" yes
+ok "the verdict names the apex route"         "$(yn near "$QA" 'Name the route that ran' 'adjudicated at apex, no escalation' 2)" yes
+ok "the description states the exception"     "$(awk 'NR==1&&$0=="---"{fm=1;next} fm==1&&$0=="---"{exit} fm==1&&/^description:/' "$QA" | grep -c 'never at the apex tier')" 1
+
 # ================================================== 7. non-vacuity: the matchers can fail
 # Every check above is paired here with input it must reject, EXCEPT the plain presence
 # greps (which fail trivially on absent text) — the gaps are named at the end rather than
@@ -285,6 +300,10 @@ ok "case (b) prose does not satisfy (d)"      "$(yn grep -qF -- 'unreachable' "$
 printf -- '---\nname: fx\nmodel: sonnet\n---\nbody\n' > "$FX/a.md"
 ok "the model: extractor reads the real value" \
    "$(awk 'NR==1&&$0=="---"{fm=1;next} fm==1&&$0=="---"{exit} fm==1&&/^model:/{sub(/^model:[[:space:]]*/,"");print}' "$FX/a.md")" sonnet
+
+# 7h. the apex exception lives in the BODY: a frontmatter-only mention must not satisfy it.
+printf -- '---\nname: fx\ndescription: never at the apex tier. At the apex tier, adjudicate it yourself\n---\nEscalate when any trigger holds.\n' > "$FX/a.md"
+ok "a description-only apex rule fails (c)"   "$(yn near "$FX/a.md" 'Escalate when' 'At the apex tier, adjudicate' 16)" no
 
 # NOT PAIRED, stated rather than implied: the plain `grep -qF` presence checks (the
 # `/code-review low` literal, the Finding path, the two `test -f` probe strings,

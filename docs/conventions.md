@@ -259,7 +259,7 @@ still yields files, so the set is not empty while the links beneath it read as d
 **The arrow stays one-way, and that is what makes this modular rather than merely
 bundled.** `plugin/` must never *require* `config/`: the role agents keep probing with
 `test -f`, so an instance stamped on a machine that never ran `--config` still works — it
-loses `qa-reviewer`'s Opus **escalation** (the cheap `/code-review low` second opinion needs
+loses `qa-reviewer`'s Opus **escalation** below the apex tier (at apex it adjudicates itself; the cheap `/code-review low` second opinion needs
 nothing installed) and the PM's plan critic, not a feature. The bare `/loopd:init <dir>` interface is unchanged
 for the same reason: three live instances and `/loopd:welcome fix` call it that way, so
 `--instance` is only its explicit spelling and never a new requirement.
