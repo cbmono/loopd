@@ -437,6 +437,48 @@ $prs"
   return 0
 }
 
+# WORK THE LAST TICK QUEUED FOR THIS ONE sits in both fingerprints, so it never reads as a
+# change. These are `check` short-circuits like `inflight yes`, NEVER fingerprint lines:
+# `record` must not capture them. Cheapest first; every doubt is a DELTA.
+# A draft is untriaged when a concern in `advisor_notes` postdates its newest
+# `* <ISO 8601> triage: …` line under `# Notes` (step-2-refine-drafts.md writes it).
+untriaged() { # <file> -> 0 untriaged, 1 not, 2 unreadable
+  [ "$(fmcount "$1" advisor_notes)" -gt 0 ] || return 1
+  local notes con tri
+  notes="$(bash "$FOLD" --list "$1" advisor_notes 2>/dev/null)" || return 2
+  con="$(printf '%s\n' "$notes" | grep . | grep -vE '^[^ ]+ · advisor: approach critique — no concerns[[:space:]]*$' || true)"
+  [ -n "$con" ] || return 1
+  con="$(printf '%s\n' "$con" | sed 's/[[:space:]].*//' | sort | tail -n1)"
+  tri="$(awk '/^# /{n = ($0 ~ /^# Notes[[:space:]]*$/); next}
+              n && /^\* [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[^ ]* triage:/ {print $2}' "$1" | sort | tail -n1)"
+  [ -z "$tri" ] || [[ "$con" > "$tri" ]]
+}
+owed_work() {
+  local t p cap crc n
+  while IFS= read -r t; do
+    [ -n "$t" ] || continue
+    untriaged "$inst/$t"; case $? in
+      0) echo "DELTA: $t has an untriaged approach critique — step 2 owes it a triage."; exit 1 ;;
+      2) fail2 "could not read advisor_notes on $t" ;;
+    esac
+  done <<EOF
+$(printf '%s\n' "$FP" | sed -n 's/^task \(.*\) draft$/\1/p')
+EOF
+  printf '%s\n' "$FP" | grep -q '^task .* ready$' || return 0
+  p="$(bash "$DREADY" --instance "$inst" --first 2>/dev/null)" || fail2 "dispatchable-ready.sh could not read the tasks"
+  [ -n "$p" ] || return 0
+  crc=0; cap="$(bash "$MAXA" --instance "$inst" 2>/dev/null)" || crc=$?
+  [ "$crc" = 1 ] && cap=4
+  n="$(bash "$SESS" in-flight "$inst" 2>/dev/null)" || n=""
+  if ! [[ "$n" =~ ^[0-9]+$ && "$cap" =~ ^[0-9]+$ ]]; then
+    echo "DELTA: ${p#/} is ready and in-flight is unknown — unknown is not a full cap."; exit 1
+  fi
+  [ "$n" -lt "$cap" ] || return 0
+  echo "DELTA: ${p#/} is ready to dispatch ($n of $cap agents in flight) — step 3 owes it."; exit 1
+}
+DREADY="$(dirname "${BASH_SOURCE[0]}")/dispatchable-ready.sh"
+MAXA="$(dirname "${BASH_SOURCE[0]}")/resolve-max-agents.sh"
+
 mode=probe; [ "$cmd" = digest ] && mode=digest
 FP="$(fingerprint "$mode")" || fail2 "could not complete the fingerprint (an unreadable task file, gh missing or offline, a bad PR URL, or \`claude agents\` failing)"
 
@@ -483,6 +525,7 @@ case "$cmd" in
     OLD="$(grep -v '^#' "$STATE" | grep -v '^recorded:' || true)"
     [ -n "$OLD" ] || fail2 "$STATE_NAME is empty or unreadable"
     if [ "$FP" = "$OLD" ]; then
+      owed_work
       # Reported verbatim as the whole tick, so it names the next check — else a human
       # cannot tell a quiet loop from a stopped one.
       echo "IDLE: fingerprint unchanged since $(sed -n 's/^recorded: //p' "$STATE" | head -n1) — nothing moved; next check $next_check."

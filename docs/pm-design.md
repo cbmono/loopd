@@ -342,6 +342,15 @@ SUCCESS), the state of each role session recorded on an `in-review` or `blocked`
 (one `claude agents` listing; `sessions unavailable` where `claude` is not on PATH), and
 the presence of the two opt-in artifacts (a `touch AWAITING.md` re-enable needs one full tick to populate the queue).
 
+Work a tick queues for the next one sits unchanged in both fingerprints, so `check` also
+short-circuits on it — never as a fingerprint line, which `record` would capture. Measured
+2026-10-25: a task promoted to `ready` and a critique left for "next tick" sat through three
+IDLE ticks until an unrelated merge moved HEAD. So a `ready` task `dispatchable-ready.sh`
+clears (the banner's reader; a pause or owner gate that cannot answer counts) while
+in-flight is under the cap, and a `draft` whose newest `advisor_notes` concern postdates its
+newest `* <ISO 8601> triage:` line, are each a DELTA. The file gates run first, so a
+dependency-blocked task forks nothing.
+
 What the probe deliberately does not see, stated rather than discovered: a PR body edit
 at an unchanged head (an unticked criteria box, an edited description) and an edit to a
 comment already posted. Those defer to the next real delta. That is the same

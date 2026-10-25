@@ -45,19 +45,31 @@ cp "$(dirname "$SRC")/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"
 cp "$(dirname "$SRC")/fold-answers.sh" "$INST/scripts/fold-answers.sh"
 cp "$(dirname "$SRC")/web-queue.sh" "$INST/scripts/web-queue.sh"
 cp "$(dirname "$SRC")/agent-sessions.sh" "$INST/scripts/agent-sessions.sh"
+for f in dispatchable-ready.sh resolve-max-agents.sh resolve-config.sh; do cp "$(dirname "$SRC")/$f" "$INST/scripts/$f"; done
+# The two gates log each call to $GATELOG, so the cost order can be asserted.
+GATELOG="$TMP/gates"; export GATELOG; : > "$GATELOG"
+for g in task-owner project-paused; do
+  cp "$(dirname "$SRC")/$g.sh" "$INST/scripts/$g.real.sh"
+  printf '#!/usr/bin/env bash\necho %s >> "$GATELOG"\nexec bash "$(dirname "$0")/%s.real.sh" "$@"\n' "$g" "$g" > "$INST/scripts/$g.sh"
+done
 cp -R "$REPO/plugin/tick-steps" "$INST/tick-steps"
 SH="$INST/scripts/tick-delta.sh"
 
 # Delimited frontmatter, not just the keys: the digest reads `open_questions` through
 # fold-answers.sh's parser, which refuses a document it cannot bound.
-task() { # <file> <status> [pr-url]
+task() { # <file> <status> [pr-url] [depends_on]
   { printf -- '---\ntype: Task\nkind: build\nstatus: %s\n' "$2"
-    [ $# -ge 3 ] && printf 'pr: ["%s"]\n' "$3" || printf 'pr: []\n'
+    [ -n "${3:-}" ] && printf 'pr: ["%s"]\n' "$3" || printf 'pr: []\n'
+    [ -n "${4:-}" ] && printf 'depends_on: [ %s ]\n' "$4"
     printf -- '---\n'
   } > "$1"
 }
 printf 'type: Project\nstatus: active\nautonomy: gated\n' > "$INST/projects/proj-a/project.md"
-task "$INST/projects/proj-a/tasks/t1.md" ready
+# t1 is `ready` but NOT dispatchable — it depends on the in-review t2 — so every IDLE below
+# holds because the dependency gate stops it, before task-owner.sh or project-paused.sh
+# (which answer 2 in this SCHEMA-less fixture, and 2 counts as dispatchable) are asked.
+T1DEP=/projects/proj-a/tasks/t2.md
+task "$INST/projects/proj-a/tasks/t1.md" ready "" "$T1DEP"
 task "$INST/projects/proj-a/tasks/t2.md" in-review "https://github.com/example-org/example-repo/pull/7"
 # The real instance gitignores the fingerprint (install.sh's guard block); without this,
 # `git add -A` below would COMMIT .tick-state and every later record would dirty the tree.
@@ -136,7 +148,7 @@ task "$INST/projects/proj-a/tasks/t1.md" in-progress
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm dispatch
 WITH record
 ok "an in-progress task is a DELTA even against its own record" "$(run check)" "rc:1 DELTA: task("
-task "$INST/projects/proj-a/tasks/t1.md" ready
+task "$INST/projects/proj-a/tasks/t1.md" ready "" "$T1DEP"
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm undo
 WITH record; ok "…and clears when nothing is in flight"        "$(run check)" "rc:0 IDLE: finger"
 
@@ -424,6 +436,97 @@ ok 'an empty open_questions with --- in the body and a later list does not name 
 ok '...while the steps line keeps its shape' \
    "$(printf '%s\n' "$D" | grep -c '^steps: .*step-3-dispatch.md')" 1
 rm -rf "$INST/projects/proj-q"; GIT -C "$INST" add -A && GIT -C "$INST" commit -qm uncounts
+
+echo "== owed work the fingerprint cannot see: a dispatchable ready task, an untriaged critique =="
+# Both sit unchanged in the fingerprint, so `check` short-circuits on them. The fixture is
+# a stamped instance here — SCHEMA.md present — so the pause and owner gates answer 0 or 1.
+printf '/instance.config.local.json\n/%s\n' "$AB_SCHEMA" >> "$INST/.gitignore"
+mkdir -p "$INST/$AB_DIR" "$INST/projects/proj-d/tasks"; printf 'stub\n' > "$INST/$AB_SCHEMA"
+printf '{}\n' > "$INST/instance.config.json"
+DP="$INST/projects/proj-d/project.md"; D1="$INST/projects/proj-d/tasks/d1.md"
+printf -- '---\ntype: Project\nstatus: active\n---\n' > "$DP"
+printf -- '---\ntype: Task\nstatus: done\npr: []\n---\n' > "$INST/projects/proj-d/tasks/d0.md"
+d1() { printf -- '---\ntype: Task\n%bstatus: ready\npr: []\n---\n' "${1:-}" > "$D1"; }
+: > "$CLDIR/states"; rm -f "$CLDIR/raw" "$CLDIR/fail" "$CLDIR/junk"
+cr() { GIT -C "$INST" add -A && GIT -C "$INST" commit -qm "$1" && CLW record; }
+crun1() { local out rc; out="$(CLW check 2>&1)"; rc=$?; printf 'rc:%s %s' "$rc" "$(head -1 <<<"$out")"; }
+DREADY_MSG="rc:1 DELTA: projects/proj-d/tasks/d1.md is ready to dispatch (0 of 4 agents in flight) — step 3 owes it."
+
+d1 "kind: build\n"; cr dispatchable
+ok "a dispatchable ready task, fingerprint unchanged, is a DELTA naming it" "$(crun1)" "$DREADY_MSG"
+d1; cr no-kind
+ok "…and so is one with no kind (build by default)" "$(crun1)" "$DREADY_MSG"
+d1 'depends_on: [ d0 ]\n'; cr bare-id
+ok "…and one whose bare-id depends_on is done" "$(crun1)" "$DREADY_MSG"
+sed -i.bak 's/^status: done/status: cancelled/' "$INST/projects/proj-d/tasks/d0.md"; rm -f "$INST/projects/proj-d/tasks/d0.md.bak"; cr cancelled-dep
+ok "…or cancelled (terminal, as step 3 reads it)" "$(crun1)" "$DREADY_MSG"
+ok "…while record wrote no owed-work line: every line is a fingerprint key" \
+   "$(grep -v '^#' "$INST/$AB_STATE_DIR" | grep -cvE '^(recorded:|head|queue|snapshot|task|inflight|pr|session|sessions|checkpoint|reclaim) ')" 0
+
+: > "$GATELOG"; : > "$CLDIR/calls"
+for c in "unmet depends_on|depends_on: [ /projects/proj-a/tasks/t2.md ]\n" \
+         "unresolvable depends_on|depends_on: [ /projects/proj-d/tasks/nope.md ]\n" \
+         "unresolvable bare id|depends_on:\n  - task-006\n" \
+         "non-empty open_questions|open_questions: [ \"Q1: which?\" ]\n" \
+         "kind: research|kind: research\n"; do
+  d1 "${c#*|}"; cr "${c%%|*}"
+  ok "${c%%|*} stays IDLE" "$(crun check)" "rc:0 IDLE: finger"
+done
+ok "…and the file gates forked neither task-owner.sh nor project-paused.sh" "$(wc -l < "$GATELOG" | tr -d ' ')" 0
+ok "…nor the claude agents listing"         "$(grep -c 'agents' "$CLDIR/calls")" 0
+
+d1; cr reset
+printf '{"ownerGithubUser":"example-user-007"}\n' > "$INST/instance.config.local.json"
+d1 'owner: example-user-008\n'; cr owner
+ok "another human's ready task (task-owner.sh exit 1) stays IDLE" "$(crun check)" "rc:0 IDLE: finger"
+printf '{"ownerGithubUser":"bad--name"}\n' > "$INST/instance.config.local.json"
+ok "…but task-owner.sh exit 2 is a DELTA, never IDLE" "$(crun check)" "rc:1 DELTA: proje"
+rm -f "$INST/instance.config.local.json"; d1; cr unowned
+printf -- '---\ntype: Project\nstatus: paused\n---\n' > "$DP"; cr paused
+ok "a paused project's ready task (project-paused.sh exit 1) stays IDLE" "$(crun check)" "rc:0 IDLE: finger"
+rm -f "$INST/$AB_SCHEMA"
+ok "…but project-paused.sh exit 2 (no SCHEMA.md) is a DELTA" "$(crun check)" "rc:1 DELTA: proje"
+printf 'stub\n' > "$INST/$AB_SCHEMA"
+printf -- '---\ntype: Project\nstatus: active\n---\n' > "$DP"; cr active
+
+echo "== the cap is counted as step 3 counts it: sessions, through resolve-max-agents.sh =="
+SC=33333333-aaaa-bbbb-cccc-000000000003
+printf -- '---\ntype: Task\nkind: build\nstatus: in-review\nsession: %s\npr: []\n---\n' "$SC" > "$INST/projects/proj-d/tasks/d9.md"
+printf '%s working\n' "$SC" > "$CLDIR/states"
+printf '{"maxAgentsInFlight": 1}\n' > "$INST/instance.config.local.json"; cr at-cap
+at_cap="$(grep -v '^recorded:' "$INST/$AB_STATE_DIR")"
+ok "at the cap (1 of 1 in flight) a dispatchable task stays IDLE" "$(crun check)" "rc:0 IDLE: finger"
+printf '{"maxAgentsInFlight": 2}\n' > "$INST/instance.config.local.json"
+ok "…and under it (1 of 2) it is a DELTA" "$(crun1)" "rc:1 DELTA: projects/proj-d/tasks/d1.md is ready to dispatch (1 of 2 agents in flight) — step 3 owes it."
+CLW record
+ok "…while record writes the same state either side of the cap" \
+   "$([ "$(grep -v '^recorded:' "$INST/$AB_STATE_DIR")" = "$at_cap" ] && echo same)" same
+rm -f "$INST/instance.config.local.json" "$INST/projects/proj-d/tasks/d9.md"; cr no-d9
+touch "$CLDIR/fail"
+ok "an unreadable session listing is a DELTA, never a full cap" "$(crun1)" "rc:1 DELTA: projects/proj-d/tasks/d1.md is ready and in-flight is unknown — unknown is not a full cap."
+rm -f "$CLDIR/fail"
+d1 'depends_on: [ /projects/proj-a/tasks/t2.md ]\n'; cr blocked-again
+
+echo "== a draft whose approach critique awaits triage =="
+D2="$INST/projects/proj-d/tasks/d2.md"
+d2() { { printf -- '---\ntype: Task\nstatus: draft\nadvisor_notes: [ %s ]\n---\n\n# Notes\n\n' "$1"; printf '%b' "${2:-}"; } > "$D2"; }
+d2 '"2026-10-25T15:45:00Z · a concern?"'; cr critique
+ok "a concern with no triage line is a DELTA naming the draft" "$(crun1)" "rc:1 DELTA: projects/proj-d/tasks/d2.md has an untriaged approach critique — step 2 owes it a triage."
+d2 '"2026-10-25T15:45:00Z · a concern?"' '* 2026-10-25T15:00:00Z triage: an older one\n'; cr old-triage
+ok "…and so is one dated after the newest triage line" "$(crun check)" "rc:1 DELTA: proje"
+d2 '"2026-10-25T15:45:00Z · a concern?"' '* 2026-10-25T16:16:00Z triage: folded\n'; cr triaged
+ok "a later triage line makes it IDLE" "$(crun check)" "rc:0 IDLE: finger"
+d2 '"2026-10-25T15:45:00Z · advisor: approach critique — no concerns"'; cr receipt
+ok "the no-concerns receipt alone is IDLE" "$(crun check)" "rc:0 IDLE: finger"
+d2 '"2026-10-25T15:45:00Z · does \"2026-01-01T00:00:00Z · advisor: approach critique — no concerns\" hold?"'; cr quotes-receipt
+ok "…but a concern that quotes the receipt is a DELTA" "$(crun check)" "rc:1 DELTA: proje"
+sed -i.bak 's/^status: draft/status: done/' "$D2"; rm -f "$D2.bak"; d2x="$(cat "$D2")"
+printf '%s\n' "$d2x" | sed 's/no concerns/a concern?/' > "$D2"; cr done-keeps-notes
+ok "advisor_notes kept through done are never read" "$(crun check)" "rc:0 IDLE: finger"
+printf -- '---\ntype: Project\nstatus: done\n---\n' > "$DP"; d1
+ok "a ready task in a done project is not dispatchable (the walk skips it too)" \
+   "$(bash "$INST/scripts/dispatchable-ready.sh" --instance "$INST" | grep -c proj-d)" 0
+rm -rf "${INST:?}/projects/proj-d" "${INST:?}/$AB_SCHEMA"; cr unproj-d
 
 echo "== plumbing =="
 ok "not a git repo is exit 2"    "$(mkdir -p "$TMP/plain"; "$SH" check --instance "$TMP/plain" >/dev/null 2>&1; echo $?)" 2

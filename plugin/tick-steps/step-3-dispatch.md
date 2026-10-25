@@ -54,7 +54,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    Tier `human`: nothing in the plugin changes the session's mode or writes a grant, and the
    preflight writes no `open_questions` entry — there is no refusal yet to report.
 
-   For each **build** `ready` task whose `depends_on` are all `done`, that clears the
+   For each **build** `ready` task whose `depends_on` are all terminal (`done` or `cancelled`), that clears the
    ownership check, and that is not already in-progress: set `assignee` +
    `status: in-progress`, **and record `worktree:` (absolute) and `branch:` on the
    task — both, or neither** (`SCHEMA.md`: a recorded path with no recorded branch is a
