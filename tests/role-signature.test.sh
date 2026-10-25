@@ -6,8 +6,8 @@
 #
 # The PROMPTS and NO-GATE checks are driven over fixtures first, so neither can pass by
 # matching nothing.
-set -uo pipefail
 # shellcheck disable=SC2016  # backticks below are markdown, never an expansion
+set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 HELPER="$REPO/plugin/scripts/role-signature.sh"
