@@ -175,7 +175,7 @@ to guess.
 "maxAgentsInFlight": 4,
 "models":    { "light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable" },
 "roleTiers": { "project-manager": "deep", "software-engineer": "deep",
-               "devops-engineer": "deep", "qa-reviewer": "deep",
+               "devops-engineer": "deep", "qa-reviewer": "apex",
                "cataloguer": "standard", "auditor": "deep", "plan-architect": "apex",
                "explorer": "light" }
 ```
@@ -837,20 +837,22 @@ Two knobs in `instance.config.json`:
 | Key | What it does |
 |---|---|
 | `models` | maps tiers to model aliases: `{ "light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable" }`. Aliases track the latest model in each tier, so you retune per instance without editing agents |
-| `roleTiers` | each role's default tier (e.g. `project-manager` → `deep`, `qa-reviewer` → `deep`, `cataloguer` → `light`, engineers → `standard`) |
+| `roleTiers` | each role's default tier (e.g. `project-manager` → `deep`, `qa-reviewer` → `apex`, `cataloguer` → `light`, engineers → `standard`) |
 
 **`explorer` is a role tier with no role**: it prices the Explore subagent a role agent
 sends a broad read to instead of reading ten files itself (`CONVENTIONS.md`). Seeded at
 `light`; with no entry at all the dispatch brief says `light` and says it is the default.
 
-The top **`apex`** tier (`fable`) is reserved for the **deepest, rarest reasoning** — the
-`plan-architect` critique the PM dispatches on genuinely complex tasks — where a frontier
-model earns its cost. The orchestrator itself runs on `deep` (opus): plenty for routing,
-and it ticks often. Retune per instance as cost dictates.
+The top **`apex`** tier (`fable`) is for **finding what is wrong** — the `plan-architect`
+critique the PM dispatches on genuinely complex tasks, and the `qa-reviewer`, so the
+independent review runs on a different, stronger model than the `deep` implementer. The
+orchestrator itself runs on `deep` (opus): plenty for routing, and it ticks often. Retune
+per instance as cost dictates.
 
 Per tick the PM starts from the role's default tier, **bumps a complex build task up**
-(multi-file/service, or heavily-inferred `acceptance_criteria`) and **drops a trivial one
-down**, then resolves the tier via `models` and passes that model on dispatch. A task can
+toward `deep` (multi-file/service, or heavily-inferred `acceptance_criteria`) — never
+lowering a role already above it, so a `qa-reviewer` stays on `apex` — and **drops a
+trivial one down**, then resolves the tier via `models` and passes that model on dispatch. A task can
 force a specific model with a `model:` field (a tier or a raw alias) — the PM honors it
 verbatim. Omit both maps and everything just inherits the session model.
 

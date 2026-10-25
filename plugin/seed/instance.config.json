@@ -75,11 +75,11 @@
     "project-manager": "deep",
     "software-engineer": "deep",
     "devops-engineer": "deep",
-    "qa-reviewer": "deep",
+    "qa-reviewer": "apex",
     "cataloguer": "standard",
     "plan-architect": "apex",
     "auditor": "deep",
     "explorer": "light"
   },
-  "$roleTiers": "PER-MACHINE SPEND, seeded and overridden exactly as `models` above (see `$models`). The model tier for ANY agent this instance dispatches, including ones no task is ever assigned to \u2014 broader than `roles`. `plan-architect: apex` here and nowhere in `roles` is the intentional case: `models.apex` today affects exactly that one agent, which appears in no `roles` list, so 'what does apex cost me?' is unanswerable from `roles` alone. `explorer: light` is the second: it prices the Explore subagent a role agent delegates a broad read to (CONVENTIONS.md), which is a harness subagent type and never a task assignee. Do not delete either row to make the two lists match; see SCHEMA.md 'type: Agent' and tests/roles-roletiers-asymmetry.test.sh."
+  "$roleTiers": "PER-MACHINE SPEND, seeded and overridden exactly as `models` above (see `$models`). The model tier for ANY agent this instance dispatches, including ones no task is ever assigned to \u2014 broader than `roles`. `plan-architect: apex` here and nowhere in `roles` is the intentional case: `models.apex` prices two agents, `plan-architect` and `qa-reviewer`, and `plan-architect` appears in no `roles` list, so 'what does apex cost me?' is unanswerable from `roles` alone. `explorer: light` is the second: it prices the Explore subagent a role agent delegates a broad read to (CONVENTIONS.md), which is a harness subagent type and never a task assignee. Do not delete either row to make the two lists match; see SCHEMA.md 'type: Agent' and tests/roles-roletiers-asymmetry.test.sh."
 }

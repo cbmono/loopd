@@ -148,6 +148,7 @@ ok "…deep→opus"                            "$(jget "$LC" models deep)" opus
 ok "…apex→fable"                           "$(jget "$LC" models apex)" fable
 ok "…and the tracked roleTiers, entry for entry" \
    "$(jget "$LC" roleTiers)"               "$(jget "$I/instance.config.json" roleTiers)"
+ok "…qa-reviewer seeded on apex"           "$(jget "$LC" roleTiers qa-reviewer)" apex
 # The acceptance question for the whole task, asked of the real reader.
 ok "EVERY role resolves to a model, no editing" "$(all_resolve "$I")" yes
 ok "…and there is more than one of them"   "$([ "$(nroles "$I")" -ge 4 ] && echo yes || echo no)" yes
@@ -200,6 +201,23 @@ ok "models is now seeded"                  "$(jcount "$LC" models)" 4
 ok "roleTiers is now seeded"               "$(jget "$LC" roleTiers)" "$(jget "$I/instance.config.json" roleTiers)"
 ok "…and the identity that was there survived" "$(jget "$LC" ownerGithubUser)" example-user-007
 ok "…and every role resolves"              "$(all_resolve "$I")" yes
+
+# NO MIGRATION: an install whose tracked config predates the apex default keeps its own
+# tier on a re-stamp — the seed copies the tracked layer, never DEFAULTS.
+I="$(newinst 9)"
+stamp "$I" >/dev/null 2>&1
+python3 - "$I/instance.config.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+d["roleTiers"]["qa-reviewer"] = "deep"
+json.dump(d, open(sys.argv[1], "w"), indent=2)
+PY
+LC="$I/instance.config.local.json"
+printf '{\n  "ownerGithubUser": "example-user-007"\n}\n' > "$LC"
+stamp "$I"; RC=$?
+ok "a tracked-deep re-stamp exits 0"       "$RC" 0
+ok "…seeds qa-reviewer deep, not apex"     "$(jget "$LC" roleTiers qa-reviewer)" deep
+ok "…and it resolves to opus"              "$(MODEL "$I" qa-reviewer)" opus
 
 # =========================================================================== #
 echo
@@ -316,6 +334,7 @@ stamp "$I" >/dev/null 2>&1
 ok "a config with NEITHER key is seeded from the defaults" "$(jcount "$I/instance.config.local.json" models)" 4
 ok "…and every role resolves from them"                    "$(all_resolve "$I")" yes
 ok "…deep→opus, as documented"                             "$(MODEL "$I" software-engineer)" opus
+ok "…and qa-reviewer is seeded on apex"                    "$(jget "$I/instance.config.local.json" roleTiers qa-reviewer)" apex
 
 # =========================================================================== #
 echo

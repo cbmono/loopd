@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
 # reviewer-fallback-spend.test.sh — an unavailable external reviewer is FOUR conditions,
-# and only one of them may spend a deep-tier `qa-reviewer` session.
+# and only one of them may spend an apex-tier `qa-reviewer` session.
 #
 # WHY THIS EXISTS, WITH THE MEASUREMENT. Both surfaces that route around an unavailable
 # reviewer used to treat every failure as one condition and fall through to `qa-reviewer`
 # automatically. On 2026-08-31 the reviewer was rate-limited on four pull requests
 # (#85-#88) and reviewed all four properly within the hour; under an automatic fallback the
-# panel would have bought four deep-tier sessions for nothing. The rule that fixes it is
+# panel would have bought four apex-tier sessions for nothing. The rule that fixes it is
 # one sentence — **the loop never needs permission to WAIT, it needs permission to SPEND** —
 # and it is worth exactly nothing as prose, because the collapse back to "no reviewer ⇒
 # dispatch the fallback" is one deleted paragraph and reads perfectly afterwards.

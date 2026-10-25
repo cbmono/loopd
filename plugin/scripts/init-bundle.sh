@@ -3077,7 +3077,7 @@ DEFAULTS = {
         "project-manager": "deep",
         "software-engineer": "deep",
         "devops-engineer": "deep",
-        "qa-reviewer": "deep",
+        "qa-reviewer": "apex",
         "cataloguer": "standard",
         "plan-architect": "apex",
         "auditor": "deep",
