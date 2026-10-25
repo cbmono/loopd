@@ -186,6 +186,42 @@ if command -v jq >/dev/null 2>&1; then
   ok "the LATEST comment decides, not the first" "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 1
   serve solo solo "$AGREE"
   ok "one login for both is exit 4 here too"   "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+
+  # The same login, with the checker comment carrying the okf-verdict trailer of a
+  # qa-reviewer dispatch the project-manager recorded (qa-dispatch.sh, SCHEMA.md clause 8).
+  H="8f40f2ed565a31e141f5ae54a6935ad0810314c4"
+  export CLAUDE_PROJECT_DIR="$TMP/bundle"; mkdir -p "$CLAUDE_PROJECT_DIR"
+  printf '{}\n' > "$CLAUDE_PROJECT_DIR/instance.config.json"
+  serve_qa() { # <nonce> <created_at> [head_sha in the trailer]
+    { cat "$AGREE"; printf '\n— solo-qa\n\n<!-- okf-verdict v1\nverdict: pass\nhead_sha: %s\nreviewer: qa-reviewer\ndispatch: %s\n-->\n' "${3:-$H}" "$1"; } > "$TMP/qa-table"
+    jq -n --rawfile body "$WORKER" --rawfile new "$TMP/qa-table" --arg h "$H" --arg t "$2" \
+      '{body:$body, author:{login:"solo"}, url:"https://github.com/acme/widgets/pull/42", headRefOid:$h,
+        comments:[{author:{login:"solo"},body:$new,createdAt:$t,includesCreatedEdit:false}]}' > "$FIX/pr_json"
+  }
+  mint() { "$REPO/plugin/scripts/qa-dispatch.sh" mint --repo acme/widgets --pr 42 --head "$H"; }
+  serve_qa 0123456789abcdef0123456789abcdef 2099-01-01T00:00:00Z
+  ok "same login, forged trailer + signature, no record: exit 4" "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+  serve_qa "$(mint)" 2099-01-01T00:00:00Z
+  ok "same login, the recorded dispatch's nonce: clears"   "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 0
+  serve_qa 0123456789abcdef0123456789abcdef 2099-01-01T00:00:00Z
+  ok "…a record exists but the nonce is wrong: exit 4"      "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+  serve_qa "$(mint)" 2000-01-01T00:00:00Z
+  ok "…the right nonce, posted before the record: exit 4"   "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+  serve_qa "$(mint)" 2099-01-01T00:00:00Z 0123456789abcdef0123456789abcdef01234567
+  ok "…the trailer names another head: exit 4"              "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+  serve_qa "$(mint)" 2099-01-01T00:00:00Z
+  jq '.comments[0].includesCreatedEdit = true' "$FIX/pr_json" > "$FIX/p2" && mv "$FIX/p2" "$FIX/pr_json"
+  ok "…the verdict comment was edited: exit 4"               "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+  serve_qa "$(mint)" 2099-01-01T00:00:00Z
+  jq '.comments = [.comments[0], .comments[0]]' "$FIX/pr_json" > "$FIX/p2" && mv "$FIX/p2" "$FIX/pr_json"
+  ok "…the nonce replayed in a second comment: exit 4"      "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+  n="$(mint)"; serve_qa "$n" 2099-01-01T00:00:00Z; cp "$TMP/qa-table" "$TMP/qa-real"
+  serve_qa "$(printf '%s' "$n" | tr '[:lower:]' '[:upper:]')" 2099-01-01T00:00:00Z
+  jq --rawfile r "$TMP/qa-real" '.comments = [(.comments[0] | .body = $r), .comments[0]]' "$FIX/pr_json" > "$FIX/p2" && mv "$FIX/p2" "$FIX/pr_json"
+  ok "…an upper-cased copy in a second pass comment: exit 4" "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+  jq '.comments = [.comments[0]] | .comments[0].body |= ascii_upcase' "$FIX/pr_json" > "$FIX/p2" && mv "$FIX/p2" "$FIX/pr_json"
+  ok "…a lone upper-cased nonce is not one: exit 4"         "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+  unset CLAUDE_PROJECT_DIR
   serve worker-bot qa-bot "$AGREE"
   ok "--checker naming nobody finds no table"  \
      "$(rc_of "$SCRIPT" 42 --repo acme/widgets --checker someone-else)" 2

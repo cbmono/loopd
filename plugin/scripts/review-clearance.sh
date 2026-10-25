@@ -142,7 +142,8 @@
 #   1  the reviewer REFUSED to review and the refusal is TRANSIENT — a rate limit, an
 #      exhausted included-review allowance, a skip, or a not-yet-reviewed placeholder. It
 #      reopens with NOBODY doing anything. Quoted on stderr, with the reopen time when the
-#      reviewer published one
+#      reviewer published one. stdout says which: `class: declined` (a real refusal is on
+#      the PR, which outranks a placeholder) or `class: placeholder` (only "still working")
 #   2  usage error, or the environment cannot answer (no `gh`/`jq`, unreadable PR or
 #      review list, NO AUTHOR LOGIN on the PR — which would switch off the rule that an
 #      author is not its own reviewer rather than fail — NO AUTHOR LOGIN ON AN ARTIFACT,
@@ -156,7 +157,7 @@
 #      a `--head` that no longer matches the PR
 #   5  the reviewer REFUSED to review and the refusal is TERMINAL — it says the ACCOUNT is
 #      out of credits, unpaid, expired or unauthenticated, so no amount of waiting reopens
-#      it. Quoted on stderr, exactly as exit 1 is
+#      it. Quoted on stderr, exactly as exit 1 is; stdout `class: declined`
 #   6  a review artifact DOES evidence a completed review of the current head — routes A,
 #      B or C all held — but SCHEMA.md CLAUSE 9 refuses it: a reviewer-authored review
 #      thread is still unresolved. Every open thread is NAMED on stderr (path, line, the
@@ -1043,7 +1044,7 @@ fi
 # like the reviews, and the two sources are now read the same way.
 gh api "/repos/$nwo/pulls/$pr_number/reviews?per_page=100" --paginate \
   --jq '.[] | {login: (.user.login // ""), state: (.state // ""),
-               commit: (.commit_id // ""), body: (.body // "")}' \
+               commit: (.commit_id // ""), created: (.submitted_at // ""), body: (.body // "")}' \
   > "$TMPD/reviews.ndjson" 2>/dev/null || {
   echo "error: could not read the review objects on PR $pr ($nwo) — refusing." >&2
   echo "       Whether anybody reviewed this head is unknown, and unknown fails closed." >&2
@@ -1085,12 +1086,27 @@ if [ -n "$want_head" ] && [ "$want_head" != "$head_sha" ]; then
   exit 4
 fi
 
-# The implementing author is never its own independent reviewer (SCHEMA.md, clause 8).
+# The implementing author is never its own independent reviewer (SCHEMA.md, clause 8) —
+# unless the project-manager recorded a qa-reviewer dispatch to this PR at this head. Then
+# only a trailer carrying that dispatch's nonce, posted after the record, counts (route B).
+QA_DISPATCH="$RC_DIR/qa-dispatch.sh"
+self_qa=""
 if [ -n "$want_reviewer" ] && [ "$(norm "$want_reviewer")" = "$(norm "$pr_author")" ]; then
-  echo "error: --reviewer $want_reviewer is the author of PR $pr — an author cannot be" >&2
-  echo "       its own independent reviewer. Refusing." >&2
-  exit 2
+  if [ -n "$trailer_armed" ] \
+     && "$QA_DISPATCH" check --repo "$nwo" --pr "$pr_number" --head "$head_sha" >/dev/null 2>&1; then
+    self_qa=yes
+  else
+    echo "error: --reviewer $want_reviewer is the author of PR $pr — an author cannot be" >&2
+    echo "       its own independent reviewer, and no qa-reviewer dispatch is recorded at" >&2
+    echo "       head $head_sha. Refusing." >&2
+    exit 2
+  fi
 fi
+self_qa_ok() { # <created_at> <nonce> — a verdict the recorded dispatch could have produced
+  [ -n "$self_qa" ] && [ "$2" != "-" ] && [ -n "$1" ] \
+    && "$QA_DISPATCH" check --repo "$nwo" --pr "$pr_number" --head "$head_sha" \
+         --nonce "$2" --after "$1" >/dev/null 2>&1
+}
 
 # --- split the artifacts into files ------------------------------------------
 # Bodies are multi-line markdown, so they cannot travel as TSV fields. jq emits a header
@@ -1112,7 +1128,7 @@ SEP="okf-$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')"
 jq -rn --arg s "$SEP" --slurpfile rv "$TMPD/reviews.ndjson" \
                        --slurpfile cm "$TMPD/comments.ndjson" '
     ( ($rv[] | {kind:"review",  login:(.login // ""), state:(.state // ""),
-                commit:(.commit // ""), created:"", updated:"",    body:(.body // "")}),
+                commit:(.commit // ""), created:(.created // ""), updated:"", body:(.body // "")}),
       ($cm[] | {kind:"comment", login:(.login // ""), state:"",
                 commit:"", created:(.created // ""), updated:(.updated // ""), body:(.body // "")}) )
     | "\($s)\u001f\(.kind)\u001f\(.login)\u001f\(.state)\u001f\(.commit)\u001f\(.created)\u001f\(.updated)",
@@ -1553,7 +1569,7 @@ refusal_hits() { # <stripped-body-file> — the refusal lines, from any refusal 
 }
 
 # --- tier 4, parsed: is there a well-formed okf-verdict block for THIS head? ---
-verdict_trailer() { # <strict-body-file>
+verdict_trailer() { # <strict-body-file> -> prints "<verdict> <dispatch nonce or ->" of the block found
   awk -v head="$head_sha" -v marker="$VERDICT_MARKER" '
     function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
     {
@@ -1562,7 +1578,9 @@ verdict_trailer() { # <strict-body-file>
         if (line ~ /^[[:space:]]*-->[[:space:]]*$/) {
           inblk = 0
           if (verdict ~ /^(pass|changes-requested|inconclusive)$/ && reviewer != "" \
-              && sha ~ /^[0-9a-f]{7,40}$/ && substr(head, 1, length(sha)) == sha) found = 1
+              && sha ~ /^[0-9a-f]{7,40}$/ && substr(head, 1, length(sha)) == sha) {
+            found = 1; fv = verdict; fn = (nonce ~ /^[0-9a-fA-F]{32}$/ ? nonce : "-")
+          }
           next
         }
         # A nested comment marker inside the block means this is not the flat, structured
@@ -1575,13 +1593,14 @@ verdict_trailer() { # <strict-body-file>
           if (key == "verdict")  verdict  = val
           if (key == "reviewer") reviewer = val
           if (key == "head_sha") sha      = val
+          if (key == "dispatch") nonce    = trim(substr(f, index(f, ":") + 1))
         }
         next
       }
       # A trailer that opens INSIDE another HTML comment is rendered blank by the host and
       # is not a claim anybody can see — it is not a trailer.
       if (htmlopen == 0 && line ~ marker) {
-        inblk = 1; verdict = ""; reviewer = ""; sha = ""; next
+        inblk = 1; verdict = ""; reviewer = ""; sha = ""; nonce = ""; next
       }
       o = gsub(/<!--/, "&", line); c = gsub(/-->/, "&", line)
       htmlopen += o - c
@@ -1589,7 +1608,7 @@ verdict_trailer() { # <strict-body-file>
     }
     # A block nobody closed is not a block: dropping out of the loop inside one must not
     # leave its fields to be completed by the next one.
-    END { exit(found ? 0 : 1) }
+    END { if (found) print fv, fn; exit(found ? 0 : 1) }
   ' "$1"
 }
 
@@ -1614,8 +1633,8 @@ terminal_body=""; terminal_from=""
 stale_from=""; stale_at=""; unproven_from=""
 refusal_at_head=""; empty_from=""; empty_state=""; held_from=""; held_state=""
 cleared_msg=""; cleared_kind=internal; ack_from=""; ack_at_head=""; incremental_from=""; marker_outranked=""
-skip_from=""; other_refusal=""
-self_reviews=0; self_at_head=0
+skip_from=""; other_refusal=""; declined_seen=""; declined_any=""; unfinished_seen=""
+self_reviews=0; self_at_head=0; self_hits=0; self_msg=""
 # THE FIELDS ARE UNIT-SEPARATED, NOT TAB-SEPARATED, and that is not decoration: a tab is
 # IFS WHITESPACE, so `read` collapses a run of them into one delimiter and every empty
 # field shifts the rest left. A comment's empty state and commit used to sit at the end of
@@ -1650,6 +1669,21 @@ while IFS=$'\037' read -r kind login state commit created updated; do
   # objects at the head were invisible rather than refused: #227 carries two of them,
   # `COMMENTED` at the exact head, and nothing anywhere said why they did not count.
   if [ "$(norm "$login")" = "$(norm "$pr_author")" ]; then
+    # The nonce is public once the QA posts, and the author's login can post and edit: so
+    # only ONE artifact may carry it, and it must be an unedited comment (a review body's
+    # edits are invisible to the API). A second carrier refuses both.
+    if [ -n "$self_qa" ]; then
+      render_body "$body" "$TMPD/stripped" "$TMPD/strict"
+      # A case-changed copy of the nonce is a carrier too, and can never be the one that clears.
+      if tv="$(verdict_trailer "$TMPD/strict")" \
+         && self_qa_ok "$created" "$(printf '%s' "${tv#* }" | tr '[:upper:]' '[:lower:]')"; then
+        self_hits=$((self_hits + 1))
+        printf '%s' "${tv#* }" | grep -Eqx '[0-9a-f]{32}' \
+          && [ "$kind" = comment ] && { [ -z "$updated" ] || [ "$updated" = "$created" ]; } \
+          && self_msg="ok: a validated okf-verdict trailer (verdict ${tv%% *}) from $login ($kind) names head $head_sha on PR $pr, matching a recorded qa-reviewer dispatch"
+        continue
+      fi
+    fi
     if [ "$kind" = "review" ]; then
       self_reviews=$((self_reviews + 1))
       [ "$commit" = "$head_sha" ] && self_at_head=$((self_at_head + 1))
@@ -1688,7 +1722,7 @@ while IFS=$'\037' read -r kind login state commit created updated; do
   is_ack=""
   [ "$kind" != "review" ] && [ -n "$(hits "$INVOCATION_ACK" "$TMPD/stripped")" ] && is_ack=yes
   verdict=""
-  if [ -n "$trailer_armed" ] && verdict_trailer "$TMPD/strict"; then verdict=yes; fi
+  if [ -n "$trailer_armed" ] && tv="$(verdict_trailer "$TMPD/strict")"; then verdict=yes; fi
   refusal=""; kind_of_refusal=""
   if [ -z "$verdict" ]; then
     if [ -n "$(hits "$REFUSALS_SENTINEL" "$TMPD/stripped")" ]; then
@@ -1718,9 +1752,16 @@ while IFS=$'\037' read -r kind login state commit created updated; do
     else
       other_refusal=yes
     fi
-    [ -n "$refusal_body" ] || { refusal_body="$TMPD/refusal"; refusal_from="$login"
-                                refusal_kind="$kind_of_refusal"
-                                cp "$TMPD/stripped" "$TMPD/refusal"; }
+    # A real refusal outranks the processing placeholder whatever the stream order — but an
+    # old refusal (it names another commit) does not outrank a placeholder at this head.
+    if [ "$kind_of_refusal" = declined ]; then
+      declined_any=yes; refusal_concerns_head "$TMPD/stripped" && declined_seen=yes
+    fi
+    [ "$kind_of_refusal" = unfinished ] && unfinished_seen=yes
+    if [ -z "$refusal_body" ] || { [ "$refusal_kind" = unfinished ] && [ "$kind_of_refusal" != unfinished ]; }; then
+      refusal_body="$TMPD/refusal"; refusal_from="$login"; refusal_kind="$kind_of_refusal"
+      cp "$TMPD/stripped" "$TMPD/refusal"
+    fi
     # IS THIS ONE TERMINAL? (table 2d — exit 5 rather than exit 1.) Recorded SEPARATELY
     # from the first refusal above and NOT first-wins, because the two answers rank
     # differently: the first refusal is whichever the host streamed first, while "the
@@ -1782,7 +1823,7 @@ while IFS=$'\037' read -r kind login state commit created updated; do
   #   C. the vendor's machine-emitted review marker, pinned by the head named in the
   #      strict rendering of the body
   if [ -n "$verdict" ]; then
-    [ -n "$cleared_msg" ] || cleared_msg="ok: a validated okf-verdict trailer from $login ($kind) names head $head_sha on PR $pr"
+    [ -n "$cleared_msg" ] || cleared_msg="ok: a validated okf-verdict trailer (verdict ${tv%% *}) from $login ($kind) names head $head_sha on PR $pr"
     continue
   fi
   if [ "$kind" = "review" ]; then
@@ -1854,6 +1895,13 @@ while IFS=$'\037' read -r kind login state commit created updated; do
   fatal_grep
   [ -n "$unproven_from" ] || unproven_from="$login ($kind)"
 done < "$TMPD/index"
+
+if [ "$self_hits" -eq 1 ] && [ -n "$self_msg" ]; then
+  considered=$((considered + 1)); [ -n "$cleared_msg" ] || cleared_msg="$self_msg"
+elif [ "$self_hits" -gt 0 ]; then
+  echo "note: $self_hits artifact(s) from $pr_author carry the recorded QA dispatch's nonce; only" >&2
+  echo "      one unedited comment counts, so none of them does." >&2
+fi
 
 # A held head marker clears only when the account's LATEST command receipt was posted at
 # this head, is not a refusal, and the marker's comment was edited after it — the edit is
@@ -1965,7 +2013,7 @@ check_clause9() {
     else
       match_reviewer "$who" || continue
     fi
-    [ "$(norm "$who")" = "$(norm "$pr_author")" ] && continue
+    [ -z "$self_qa" ] && [ "$(norm "$who")" = "$(norm "$pr_author")" ] && continue
     open_n="${open_n}${p_}	${l_:--}	${who}	${url_}	${first_}
 "
   done <<EOF
@@ -2117,6 +2165,7 @@ if [ -n "$terminal_from" ]; then
   echo "        or the app installation), or decide once — not per PR — to spend the" >&2
   echo "        fallback reviewer instead. Either way it is a decision, and it is not this" >&2
   echo "        script's and not the caller's." >&2
+  echo "class: declined"
   exit 5
 fi
 
@@ -2135,6 +2184,7 @@ if [ -n "$skip_from" ] && [ -z "$other_refusal" ]; then
     echo "        that review; do not ask again at this head. It said:" >&2
     cat "$TMPD/skip-quote" >&2
     incremental_note
+    echo "class: placeholder"
     exit 1
   fi
   echo "refuse: $skip_from SKIPPED PR $pr — reviews are not automatic on this repository, so" >&2
@@ -2177,6 +2227,9 @@ if [ -n "$refusal_body" ]; then
     echo "        with an EMPTY body. An empty review object does not outrank a refusal" >&2
     echo "        published at that commit — see the note at TEST 2.)" >&2
   }
+  # stdout, for review-next.sh: a real refusal (QA may run) or a placeholder (hold).
+  if [ -n "$declined_seen" ] || { [ -n "$declined_any" ] && [ -z "$unfinished_seen" ]; }; then
+    echo "class: declined"; else echo "class: placeholder"; fi
   exit 1
 fi
 

@@ -9,7 +9,8 @@
 #          pr-verdict-clearance.sh --self-test
 #
 #   0 agree · 1 disagree (worker ✓, checker FAIL) · 2 unknown · 3 checker table
-#   malformed · 4 the checker posted under the PR author's own login
+#   malformed · 4 the checker posted under the PR author's own login, with no trailer
+#   matching a recorded qa-reviewer dispatch (qa-dispatch.sh) at this head
 #
 # Reasoning: ai-bridge-next/task-013. The gate it feeds is SCHEMA.md clause 7.
 set -uo pipefail
@@ -168,8 +169,8 @@ nlines() { [ -n "$1" ] && printf '%s' "$1" | grep -c '^' || echo 0; }
 # Order: unknown, the checker's own shape, the disagreement, then identity. Shape comes
 # before the comparison because a malformed checker row cannot be compared with
 # anything; identity comes last because it is the one refusal that survives agreement.
-decide() { # <worker-scan> <checker-scan> <checker-login> <author-login>
-  local ws="$1" cs="$2" clogin="$3" alogin="$4"
+decide() { # <worker-scan> <checker-scan> <checker-login> <author-login> [dispatch-matched]
+  local ws="$1" cs="$2" clogin="$3" alogin="$4" dispatched="${5:-}"
   local wn cn i wv cv cml cevi crow wrow bad=0
 
   wn="$(nlines "$ws")"; cn="$(nlines "$cs")"
@@ -230,14 +231,16 @@ EOF
     echo "refuse: $cn criteria compared, at least one disagreement. This is the human's." >&2
     return 1; }
 
-  if [ -n "$clogin" ] && [ -n "$alogin" ] \
+  if [ -n "$clogin" ] && [ -n "$alogin" ] && [ -z "$dispatched" ] \
      && [ "$(norm "$clogin")" = "$(norm "$alogin")" ]; then
     echo "refuse: the checker posted under $(safe "$clogin"), the PR author's own login," >&2
     echo "        so nothing here shows a second principal ($AB_SCHEMA clause 8)." >&2
     echo "        KNOWN LIMIT: on a solo bundle every agent shares one gh login, so this" >&2
-    echo "        is the standing answer there and routing to a human IS the gate." >&2
+    echo "        is the standing answer there unless the comment's okf-verdict trailer carries" >&2
+    echo "        the nonce of a recorded qa-reviewer dispatch at this head (qa-dispatch.sh)." >&2
     return 4
   fi
+  [ -z "$dispatched" ] || echo "note: the checker shares the author's login; accepted against a recorded qa-reviewer dispatch." >&2
   [ -n "$clogin" ] && [ -n "$alogin" ] \
     || echo "note: no logins given, so the checker != author rule was not applied." >&2
   echo "clear: $cn criteria, both tables agree."
@@ -282,7 +285,7 @@ fi
 
 validate_tables || exit 2
 
-PR=""; REPO=""; CHECKER=""; BODY_FILE=""; CHK_FILE=""; CLOGIN=""; ALOGIN=""
+PR=""; REPO=""; CHECKER=""; BODY_FILE=""; CHK_FILE=""; CLOGIN=""; ALOGIN=""; CREATED=""; EDITED=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo)          REPO="${2:-}"; shift 2 || usage ;;
@@ -342,7 +345,10 @@ else
         [ -n "$L" ] || {
           echo "error: the checker comment on PR $PR has no author login, so the" >&2
           echo "       checker != author rule cannot be applied. Unknown." >&2; exit 2; }
-        cp "$TMPD/one" "$TMPD/chk"; CLOGIN="$L"; break
+        cp "$TMPD/one" "$TMPD/chk"; CLOGIN="$L"
+        CREATED="$(printf '%s' "$META" | jq -r --argjson i "$i" '.comments[$i].createdAt // ""')"
+        EDITED="$(printf '%s' "$META" | jq -r --argjson i "$i" 'if .comments[$i].includesCreatedEdit == false then "false" else "true" end')"
+        break
       fi
     fi
     i=$((i - 1))
@@ -351,14 +357,49 @@ fi
 
 render "$TMPD/body" "$TMPD/rbody"
 render "$TMPD/chk" "$TMPD/rchk"
-decide "$(scan "$TMPD/rbody" worker)" "$(scan "$TMPD/rchk" checker)" "$CLOGIN" "$ALOGIN"; DRC=$?
+
+# SCHEMA.md clause 8 on a solo bundle: a same-login checker counts only when its unedited
+# comment's trailer names this head and carries the nonce of a dispatch recorded before it.
+DISPATCHED=""
+trailer_of() { # <rendered> -> "<head_sha> <dispatch>" of its last okf-verdict block, or nothing
+  awk '/^[[:space:]]*<!--[[:space:]]*okf-verdict[[:space:]]+v1[[:space:]]*$/ { b = 1; s = "-"; n = "-"; next }
+       b && /-->/ { b = 0; print s, n; next }
+       b && /^[[:space:]]*head_sha:/ { s = $2 }
+       b && /^[[:space:]]*dispatch:/ { n = $2 }' "$1" | tail -n 1
+}
+HEAD_SHA="$(printf '%s' "${META:-}" | jq -r '.headRefOid // ""' 2>/dev/null)" || HEAD_SHA=""
+URL="$(printf '%s' "${META:-}" | jq -r '.url // ""' 2>/dev/null)" || URL=""
+if [ -n "$CLOGIN" ] && [ -n "$HEAD_SHA" ] && [ "$(norm "$CLOGIN")" = "$(norm "$ALOGIN")" ]; then
+  T="$(trailer_of "$TMPD/rchk")"
+  T_SHA="${T%% *}"; T_NONCE="${T#* }"
+  printf '%s' "$T_NONCE" | grep -Eqx '[0-9a-f]{32}' || T_NONCE=-
+  # The nonce is public once posted: only one unedited comment from that login may carry it,
+  # counted by each comment's parsed trailer and case-folded, so a re-cased copy is a carrier.
+  CARRIERS=0; k=0; NC="$(printf '%s' "$META" | jq -r '.comments | length' 2>/dev/null)"
+  while [ "$k" -lt "${NC:-0}" ]; do
+    if [ "$(printf '%s' "$META" | jq -r --argjson i "$k" '.comments[$i].author.login // ""')" = "$CLOGIN" ]; then
+      printf '%s' "$META" | jq -r --argjson i "$k" '.comments[$i].body // ""' > "$TMPD/c"
+      render "$TMPD/c" "$TMPD/rc"
+      [ "$(trailer_of "$TMPD/rc" | cut -d' ' -f2 | tr '[:upper:]' '[:lower:]')" \
+        = "$(printf '%s' "${T_NONCE:-}" | tr '[:upper:]' '[:lower:]')" ] && CARRIERS=$((CARRIERS + 1))
+    fi
+    k=$((k + 1))
+  done
+  if [ -n "$T" ] && [ "$T_SHA" = "$HEAD_SHA" ] && [ "$T_NONCE" != - ] \
+     && [ "${EDITED:-true}" = false ] && [ "${CARRIERS:-0}" = 1 ] \
+     && "$(dirname "${BASH_SOURCE[0]:-$0}")/qa-dispatch.sh" check \
+          --repo "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')" \
+          --pr "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/[^/]+/[^/]+/pull/([0-9]+).*#\1#')" \
+          --head "$HEAD_SHA" --nonce "$T_NONCE" --after "${CREATED:-}" >/dev/null 2>&1; then
+    DISPATCHED=yes
+  fi
+fi
+decide "$(scan "$TMPD/rbody" worker)" "$(scan "$TMPD/rchk" checker)" "$CLOGIN" "$ALOGIN" "$DISPATCHED"; DRC=$?
 
 # The clearance record the PreToolUse hook reads offline (ai-bridge-v3/task-044). Host mode
 # only — a draft comparison says nothing about any pull request — and silent on any failure.
 # A disagreement (1) is recorded too, replacing an earlier pass: it refuses the merge even
 # where an external review means no pass from here is required.
-HEAD_SHA="$(printf '%s' "${META:-}" | jq -r '.headRefOid // ""' 2>/dev/null)" || HEAD_SHA=""
-URL="$(printf '%s' "${META:-}" | jq -r '.url // ""' 2>/dev/null)" || URL=""
 if { [ "$DRC" -eq 0 ] || [ "$DRC" -eq 1 ]; } && [ -n "$HEAD_SHA" ] && [ -n "$URL" ]; then
   FAIL_FLAG=(); [ "$DRC" -eq 1 ] && FAIL_FLAG=(--fail)
   "$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record pr-verdict-clearance.sh ${FAIL_FLAG[@]+"${FAIL_FLAG[@]}"} \

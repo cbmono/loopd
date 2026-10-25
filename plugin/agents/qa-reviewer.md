@@ -147,6 +147,10 @@ signature". Never on a PR body.
      visible rather than merely absent. Exit 1 waits; exit 5 escalates. Treating 5 as 1 waits
      forever.
 
+     **Unless the refusal is why you were sent.** A brief carrying `## QA dispatch` means
+     the loop dispatched you because CodeRabbit is unavailable: you ARE the review, so name
+     the refusal in your verdict's prose, not in `caveats`, and review the diff yourself.
+
      **Your own verdict quotes refusal language, so end it with the `okf-verdict`
      trailer.** Writing "CodeRabbit answered *Review limit reached*" makes your comment
      match the very table your comment is about, and a `review-clearance.sh` run scoped
@@ -324,7 +328,11 @@ signature". Never on a PR body.
    `SCHEMA.md`, filled honestly: `head_sha` = the SHA you actually reviewed (`gh pr view
    <pr> --json headRefOid`), every lens `done` or `skipped(<why>)`, every acceptance
    criterion you could **not** confirm listed in `unverified_criteria`, and anything you
-   could not settle in `caveats`. The trailer is the only part the loop reads, so a
+   could not settle in `caveats`, and `dispatch:` = the nonce your brief's `## QA dispatch`
+   carries (omit the line when it carries none; never copy it anywhere else). On a PR
+   opened under your own login it is the only thing that makes your verdict count, so post
+   the criteria table, signature and trailer as ONE PR comment (`gh pr comment`), which
+   both readers take, and never edit it: an edited or duplicated carrier counts for nobody. The trailer is the only part the loop reads, so a
    caveat you mention in prose but not in the trailer is a caveat you have hidden. If
    you can't assess the work, `verdict: inconclusive` is the correct answer — never
    `pass` with an explanation.
@@ -344,7 +352,7 @@ signature". Never on a PR body.
    reviewer-authored thread is unresolved** (clause 9), which is the same check case (a)
    already owes an external review.
 
-   Post via `gh pr review`, signed as above, as a **comment** (or `--request-changes`), **never `gh pr
+   Post via `gh pr comment`, signed as above, as ONE comment (step 6's trailer in it), **never `gh pr
    merge`**. Don't plan on `--approve`: when the PR was opened by the same `gh` identity
    you're reviewing under — the normal case in a single-login instance — GitHub rejects
    self-approval, so the trailer-bearing **comment** review *is* the clearance signal.
