@@ -1152,9 +1152,15 @@ rule_subagent_merge() {
   case "$cmd" in *'<<'*)
     cmd="$(_cred_noheredoc "$1")"
     while IFS= read -r seg; do
-      case "$seg" in *'<<'*) ;; *) continue ;; esac
+      case "$seg" in *'>('*|*'<('*) cmd="$1"; break ;; *'<<'*) ;; *) continue ;; esac
       while IFS= read -r stage; do
-        case "$(first_word "$stage")" in cat|tee|git|gh) ;; *) cmd="$1"; break 2 ;; esac
+        case "$(first_word "$stage")" in
+          cat|tee) ;;
+          git) has_token "$stage" -c && { cmd="$1"; break 2; }
+               case "$(word_after "$stage" git)" in commit|tag) ;; *) cmd="$1"; break 2 ;; esac ;;
+          gh) case "$(word_after "$stage" gh)" in pr|issue|api|release|gist) ;; *) cmd="$1"; break 2 ;; esac ;;
+          *) cmd="$1"; break 2 ;;
+        esac
       done <<EOT
 $(printf '%s' "$seg" | tr '|' '\n')
 EOT

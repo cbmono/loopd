@@ -599,6 +599,12 @@ ok "a quoted body sourced from stdin (. /dev/stdin <<'EOF') is refused" \
    "$(verdict_agent "$GITREPO" ". /dev/stdin <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
 ok "a quoted body piped into xargs is refused" \
    "$(verdict_agent "$GITREPO" "cat <<'EOF' | xargs -I{} sh -c {}${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a quoted body into a process substitution (cat > >(bash)) is refused" \
+   "$(verdict_agent "$GITREPO" "cat > >(bash) <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a quoted body to a git shell alias (git -c alias.x='!sh' x) is refused" \
+   "$(verdict_agent "$GITREPO" "git -c alias.x='!sh' x <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
+ok "a quoted body to a gh alias (gh x) is refused" \
+   "$(verdict_agent "$GITREPO" "gh x <<'EOF'${NL}gh pr merge 12${NL}EOF")" "deny:subagent_merge"
 ok "a quoted body as gh pr create --body-file - is allowed" \
    "$(verdict_agent "$GITREPO" "gh pr create --title t --body-file - <<'EOF'${NL}gh pr merge 12${NL}EOF")" "allow"
 
