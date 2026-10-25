@@ -959,7 +959,8 @@ check_review_config() {
   fi
   keys="$(printf '%s\n' "$err" | sed -n 's/^resolve-review-config: \([A-Za-z]*\) must be.*/\1/p' | tr '\n' ' ')"
   keys="${keys% }"
-  warn "review-round config not an integer >= 0: ${keys:-unreadable}"
+  if [ -n "$keys" ]; then warn "review-round config not an integer >= 0: $keys"
+  else warn "review-round config could not be read"; fi
   return "$_warned"
 }
 

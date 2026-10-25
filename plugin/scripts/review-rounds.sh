@@ -148,8 +148,8 @@
 #
 # WHAT IT PRINTS. stdout is the round count and nothing else, so a caller can read it with
 # `$(...)`; with `--last`, that reviewer's last reviewed commit instead (a host-pinned
-# candidate, never comment text; nothing when it has none). Everything else is stderr. No PR text is echoed — the sibling
-# already quotes untrusted bodies where that is useful, and this file has no reason to.
+# candidate, never comment text; nothing when it has none). Everything else is stderr. No
+# PR text is echoed — the sibling quotes untrusted bodies where that is useful.
 #
 # Verified by tests/review-rounds.test.sh.
 #

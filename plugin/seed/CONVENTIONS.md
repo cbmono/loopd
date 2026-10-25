@@ -680,11 +680,11 @@ above it so none may grow its share.
   change should not land. Grade the work against the bar it was given.
   - **Round 1** — the reviewer reports findings. The implementer fixes them and replies
     once, saying what changed or why it disagrees.
-  - **Round 2**, where the cap allows one — the reviewer checks *only the things it raised in round 1*. New
-    findings outside that set are **recorded, not blocking**.
+  - **Round 2**, where the cap allows one — the reviewer checks *only the things it
+    raised in round 1*. New findings outside that set are **recorded, not blocking**.
   - **There is no round past the cap.** Anything still unresolved after the last round
-    **stops and goes to the human**, with both positions stated in one short block: what the reviewer wants,
-    what the implementer says, and what the criterion actually asks for. The block goes in
+    **stops and goes to the human**, with both positions stated in one short block: what
+    the reviewer wants, what the implementer says, and what the criterion actually asks for. The block goes in
     the task's `open_questions`, not the final message. The human decides; the agents do
     not converge on it.
   **Why this is a hard number and not a guideline.** loopd#34 ran **eight rounds**,
@@ -693,7 +693,8 @@ above it so none may grow its share.
   stop. That single PR, and others like it, consumed roughly **70% of a Max account's
   weekly budget**. An unresolved disagreement costs the human one decision; an unbounded
   review costs a week.
-  **And the number is countable — `scripts/review-rounds.sh <pr> --for coderabbit|qa --repo <org>/<repo>`.**
+  **And the number is countable —
+  `scripts/review-rounds.sh <pr> --for coderabbit|qa --repo <org>/<repo>`.**
   It prints how many rounds that reviewer has already spent on a PR and **exits non-zero at
   or past its cap** (`coderabbitRounds` / `qaRounds`, 1 each when absent), so
   whoever is about to spawn a verifier can be refused instead of trusted to remember. Run
