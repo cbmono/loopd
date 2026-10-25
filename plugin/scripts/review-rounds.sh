@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 #
-# review-rounds.sh — how many verification rounds has this pull request already had, and
-# may another verifier be dispatched against it?
+# review-rounds.sh — how many rounds has ONE reviewer already spent on this pull request,
+# and may it be dispatched again?
 #
-#   Usage: review-rounds.sh <pr> [--repo <owner>/<name>]
+#   Usage: review-rounds.sh <pr> --for coderabbit|qa [--last] [--repo <o>/<n>] [--instance <bundle>]
 #
-# This is the mechanism behind `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES".
-# That cap answers the most expensive failure this bundle has recorded — one pull request
-# ran EIGHT review rounds, was closed unmerged, and with its siblings consumed roughly 70%
-# of a week's account budget — and until this file existed the cap lived in two markdown
-# paragraphs and nothing counted anything. An agent that did not follow it was not stopped;
-# it was merely out of compliance with a document. Prose without a mechanism has failed
-# three times in this bundle's own history, which is why the rule now has a number a
-# dispatcher can read.
+# The mechanism behind `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES": one PR ran
+# EIGHT review rounds and, with its siblings, ~70% of a week's budget while the cap was prose.
+# `--for coderabbit` counts the external reviewer (the sibling's REVIEWERS table) against
+# `coderabbitRounds`; `--for qa` counts `okf-verdict` trailers against `qaRounds` — each
+# default 1, from `resolve-review-config.sh`. The two are separate: a commit reviewed by
+# both is one round for each. `--for` is required, so a caller from before the split fails.
 #
 # WHAT A ROUND IS. One completed verification of one commit of this PR. Not "an artifact":
 # a single review run routinely leaves two artifacts (a review object AND a summary
@@ -23,8 +21,7 @@
 #
 # AN UNREQUESTED INCREMENTAL REVIEW IS A ROUND TOO, and that is intended (owner decision
 # 2026-10-21): CodeRabbit's automatic review of the first fix push completes at a new
-# commit, so it counts as round 2. The relief valve is `mergeAtReviewCap`, not a change
-# to this count.
+# commit, so it counts as another CodeRabbit round.
 #
 # WHAT IT ANCHORS ON, AND WHY A REVIEWER THAT DID NOT REVIEW CANNOT ADD TO IT. Two halves,
 # and neither is this file's own opinion:
@@ -62,13 +59,11 @@
 # the tables, the renderers or the ranking is touched or re-implemented, and if the sibling
 # gets stricter tomorrow this file gets stricter with it.
 #
-# WHOSE ROUNDS ARE COUNTED — the two verifiers this loop actually pays for:
+# HOW EACH REVIEWER IS REPLAYED:
 #
-#   * THE EXTERNAL REVIEWER, via a plain `review-clearance.sh <pr>` run per candidate,
-#     which scopes to the vendor accounts in the sibling's own REVIEWERS table.
-#   * THE FALLBACK VERIFIER (`qa-reviewer`), which SCHEMA.md requires to end its verdict
-#     with an `okf-verdict v1` trailer, via `review-clearance.sh <pr> --reviewer <login>`
-#     per candidate — the sibling's route B. The candidate logins are the accounts that
+#   * `coderabbit`: a plain `review-clearance.sh <pr>` run per candidate.
+#   * `qa`: `review-clearance.sh <pr> --reviewer <login>` per candidate — the sibling's
+#     route B over the `okf-verdict v1` trailer. The candidate logins are the accounts that
 #     published an artifact whose raw body contains the literal `okf-verdict`. THAT
 #     PRE-FILTER ONLY EVER NARROWS: containing the string is a NECESSARY condition for a
 #     trailer and nowhere near a sufficient one (this repository's own diffs contain it,
@@ -126,14 +121,12 @@
 #   THIS SCRIPT CLEARS NOTHING AND MUST NEVER BE READ AS CLEARANCE. Exit 0 here means "the
 #   cap has room", never "this PR was reviewed". The merge gate is `required-checks.sh` +
 #   `review-clearance.sh`, unchanged and unaffected by anything in this file.
-#   THE ONE OPT-IN EXCEPTION is `mergeAtReviewCap` (default off): with it true,
-#   `review-clearance.sh` asks this script on its exit 6 and, at exit 1 here, records a `cap`
-#   line that only a `yolo` project's merge permit reads (AUTONOMY.md -> "Merge at the
-#   review cap (opt-in)"). Exit 4, a stale review, never qualifies.
+#   THE ONE OPT-IN EXCEPTION is `mergeAtReviewCap` (default off): `review-clearance.sh` asks
+#   both counts on its exit 6 and records a `cap` line at two rounds IN TOTAL — never at one
+#   reviewer's own cap — that only a `yolo` merge permit reads (AUTONOMY.md).
 #
-# THE CAP IS NOT CONFIGURABLE, and that is the point of it being a hard number:
-# `CONVENTIONS.md` calls it "a hard cap", and a `--cap` flag is how a hard cap becomes a
-# default. Two. `mergeAtReviewCap` changes what happens AT the cap, never where it is.
+# THE CAP IS BUNDLE CONFIG, NEVER A FLAG: a `--cap` is how a hard cap becomes a per-call
+# default, and the two keys are a merge policy both clones read from the tracked file.
 #
 # BROKEN OR ABSENT FAILS CLOSED BY CONSTRUCTION. Both callers (`project-manager.md`'s
 # verification step and `qa-reviewer.md` mode B) are told to refuse on ANY non-zero exit,
@@ -148,14 +141,14 @@
 #
 # Exit codes:
 #
-#   0  UNDER THE CAP — fewer than 2 rounds. The count is on stdout. Dispatch away.
-#   1  AT OR PAST THE CAP — 2 or more rounds. The count is on stdout. Do NOT dispatch a
-#      third verifier: stop, and put both positions in front of the human.
+#   0  UNDER that reviewer's cap. Dispatch away.
+#   1  AT OR PAST it. Do NOT dispatch that reviewer again: put both positions to the human.
 #   2  cannot answer — usage, no `gh`/`jq`, a sibling that is missing or does not run, an
-#      unreadable PR, or an artifact list that did not come back. Unknown is never "fine".
+#      unreadable PR or config value, or an artifact list that did not come back.
 #
 # WHAT IT PRINTS. stdout is the round count and nothing else, so a caller can read it with
-# `$(...)`. Everything a human reads is on stderr. No PR text is echoed — the sibling
+# `$(...)`; with `--last`, that reviewer's last reviewed commit instead (a host-pinned
+# candidate, never comment text; nothing when it has none). Everything else is stderr. No PR text is echoed — the sibling
 # already quotes untrusted bodies where that is useful, and this file has no reason to.
 #
 # Verified by tests/review-rounds.test.sh.
@@ -165,18 +158,19 @@
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
-CAP=2
-
 usage() {
-  echo "Usage: $(basename "$0") <pr> [--repo <owner>/<name>]" >&2
-  echo "       exit 0 under the cap, 1 at or past it, 2 cannot answer" >&2
+  echo "Usage: $(basename "$0") <pr> --for coderabbit|qa [--last] [--repo <owner>/<name>] [--instance <bundle>]" >&2
+  echo "       exit 0 under that reviewer's cap, 1 at or past it, 2 cannot answer" >&2
   exit 2
 }
 
-pr=""; repo=""
+pr=""; repo=""; for=""; last=""; inst=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --repo)    repo="${2:-}"; [ -n "$repo" ] || usage; shift 2 ;;
+    --repo)     repo="${2:-}"; [ -n "$repo" ] || usage; shift 2 ;;
+    --for)      for="${2:-}"; [ -n "$for" ] || usage; shift 2 ;;
+    --instance) inst="${2:-}"; [ -n "$inst" ] || usage; shift 2 ;;
+    --last)     last=yes; shift ;;
     -h|--help) usage ;;
     -*) echo "error: unknown option '$1'" >&2; usage ;;
     *) [ -z "$pr" ] || { echo "error: unexpected argument '$1'" >&2; usage; }
@@ -184,6 +178,24 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 [ -n "$pr" ] || usage
+case "$for" in
+  coderabbit) cap_key=coderabbitRounds ;;
+  qa)         cap_key=qaRounds ;;
+  *) echo "error: --for coderabbit|qa is required" >&2; usage ;;
+esac
+
+if [ -z "$inst" ]; then
+  if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -f "$CLAUDE_PROJECT_DIR/instance.config.json" ]; then
+    inst="$CLAUDE_PROJECT_DIR"
+  else
+    inst="$PWD"
+    while [ "$inst" != / ] && [ ! -f "$inst/instance.config.json" ]; do inst="$(dirname "$inst")"; done
+  fi
+fi
+CAP="$(bash "$(dirname "${BASH_SOURCE[0]:-$0}")/resolve-review-config.sh" --instance "$inst" "$cap_key")" || {
+  echo "error: $cap_key is unreadable in $inst — refusing (fail closed)" >&2
+  exit 2
+}
 
 for tool in gh jq; do
   command -v "$tool" >/dev/null 2>&1 || {
@@ -264,17 +276,20 @@ nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.
 # under-counting there is a host limit, not a judgement, and it is stated rather than
 # hidden.)
 gh api "/repos/$nwo/pulls/$num/commits?per_page=100" --paginate \
-  --jq '.[].sha // empty' > "$TMPD/candidates" 2>/dev/null || {
+  --jq '.[].sha // empty' > "$TMPD/listed" 2>/dev/null || {
   echo "error: could not read the commits of PR $pr ($nwo) — refusing. Which commits" >&2
   echo "       could have been reviewed is unknown, and unknown is not zero rounds." >&2
   exit 2
 }
 gh api "/repos/$nwo/pulls/$num/reviews?per_page=100" --paginate \
-  --jq '.[].commit_id // empty' >> "$TMPD/candidates" 2>/dev/null || {
+  --jq '.[].commit_id // empty' > "$TMPD/reviewed" 2>/dev/null || {
   echo "error: could not read the review objects of PR $pr ($nwo) — refusing." >&2
   exit 2
 }
-grep -Ex '[0-9a-f]{40}' "$TMPD/candidates" | sort -u > "$TMPD/commits"
+# Oldest first, which is what makes `--last` mean last: the host lists a PR's commits in
+# order, and a reviewed commit it no longer lists predates the force-push that orphaned it.
+{ grep -Fxv -f "$TMPD/listed" "$TMPD/reviewed"; cat "$TMPD/listed"; } \
+  | grep -Ex '[0-9a-f]{40}' | awk '!seen[$0]++' > "$TMPD/commits"
 [ -s "$TMPD/commits" ] || {
   echo "error: PR $pr ($nwo) reports no commits at all, so there is nothing a review" >&2
   echo "       could have been of. That is not an answer — refusing (fail closed)." >&2
@@ -385,9 +400,12 @@ while IFS= read -r sha; do
 
   # `--no-merge-check`: a conflict today does not un-happen a review at commit X. Left on,
   # exit 7 lands in the `*` arm and "this PR conflicts" becomes "the rounds are unknown".
-  OKF_ROUNDS_HEAD="$sha" PATH="$BIN:$PATH" \
-    "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --no-merge-check >/dev/null 2>&1
-  rc=$?
+  rc=1
+  [ "$for" = coderabbit ] && {
+    OKF_ROUNDS_HEAD="$sha" PATH="$BIN:$PATH" \
+      "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --no-merge-check >/dev/null 2>&1
+    rc=$?
+  }
   # 5 AND 8 ARE REFUSALS, LISTED HERE BESIDE THE OTHERS BECAUSE OMITTING EITHER IS A LIVE
   # BUG, NOT A CONSERVATIVE DEFAULT. The sibling splits its refusal into transient (1),
   # terminal (5) and skipped-because-nobody-asked (8); NO round happened at that commit in
@@ -413,7 +431,7 @@ while IFS= read -r sha; do
        exit 2 ;;
   esac
 
-  if [ -z "$counted" ]; then
+  if [ "$for" = qa ]; then
     while IFS= read -r login; do
       [ -n "$login" ] || continue
       OKF_ROUNDS_HEAD="$sha" OKF_ROUNDS_MASK_AUTHOR="$MASK" PATH="$BIN:$PATH" \
@@ -439,16 +457,20 @@ while IFS= read -r sha; do
   [ -n "$counted" ] && { rounds=$((rounds + 1)); printf '%s\n' "$sha" >> "$TMPD/counted"; }
 done < "$TMPD/commits"
 
-printf '%s\n' "$rounds"
+if [ -n "$last" ]; then
+  tail -n 1 "$TMPD/counted"
+else
+  printf '%s\n' "$rounds"
+fi
 
 if [ "$rounds" -lt "$CAP" ]; then
-  echo "ok: PR $pr ($nwo) has had $rounds verification round(s); the cap is $CAP." >&2
+  echo "ok: PR $pr ($nwo) has had $rounds $for round(s); $cap_key is $CAP." >&2
   exit 0
 fi
 
-echo "refuse: PR $pr ($nwo) has already had $rounds verification round(s), and the cap" >&2
+echo "refuse: PR $pr ($nwo) has already had $rounds $for round(s), and $cap_key" >&2
 echo "        is $CAP — $AB_CONVENTIONS, \"TWO ROUNDS, THEN THE HUMAN DECIDES\". Do NOT" >&2
-echo "        dispatch another verifier. Rounds 3-8 on the pull request this rule comes" >&2
+echo "        dispatch $for again. Rounds 3-8 on the pull request this rule comes" >&2
 echo "        from produced adversary-shaped findings against a change that already met" >&2
 echo "        its criteria, because nothing told the reviewer to stop." >&2
 echo "        Stop here and put ONE block in front of the human: what the reviewer" >&2

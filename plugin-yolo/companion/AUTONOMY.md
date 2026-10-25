@@ -253,7 +253,8 @@ precondition — always keep `--match-head-commit`.
 decision above unchanged). Installing this companion arms every bundle on the machine; the
 key is what arms this one exception, per bundle.
 
-With it on, a PR that has reached the two-round cap (`scripts/review-rounds.sh` exit 1) and
+With it on, a PR that has had two rounds in total (`scripts/review-rounds.sh --for coderabbit`
+plus `--for qa`) and
 whose reviewer answered **`review-clearance.sh` exit 6** — a completed review **at the
 head**, with reviewer threads still open — gets a `cap review-clearance.sh <ts>
 external|internal` line in its receipt instead of a pass, with the kind decided exactly as a
@@ -269,8 +270,9 @@ pass line's is. Then:
 - **Exit 4 never qualifies**: the cap counts rounds at earlier heads, so a stale review
   would merge a head nobody reviewed. Nor do 1, 2, 3, 5, 7 or 8.
 
-The tick writes `merged at review cap <ISO 8601>` under the task's `# Notes`. The cap
-stays two and stays non-configurable.
+The tick writes `merged at review cap <ISO 8601>` under the task's `# Notes`. This cap line
+still wants two rounds in total, whatever the per-reviewer caps `coderabbitRounds` and
+`qaRounds` say (**1** each when absent), so one round never cap-merges.
 
 ## Preflight: is the merge authority even exercisable?
 
@@ -346,7 +348,7 @@ nothing. **Waiting needs no permission, because waiting is free and defers the g
 than skipping it.** Everything this file does not map — including exits 2, 3 and 4 —
 holds too.
 
-**The two-round cap is untouched.** `scripts/review-rounds.sh` is asked before the
+**The round caps are untouched.** `scripts/review-rounds.sh --for qa` is asked before the
 fallback is dispatched, in either mode, and its refusal is final: nothing here creates a
 third round. The one opt-in exception is a merge, never a round: "Merge at the review cap
 (opt-in)" above.

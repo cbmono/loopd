@@ -91,6 +91,7 @@ plugin/scripts/pr-body-clearance.sh
 plugin/scripts/pr-verdict-clearance.sh
 plugin/scripts/review-rounds.sh
 plugin/scripts/resolve-config.sh
+plugin/scripts/resolve-review-config.sh
 plugin/scripts/bundle-paths.sh
 plugin/hooks/deny-destructive.sh
 plugin-yolo/companion/AUTONOMY.md

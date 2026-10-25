@@ -473,6 +473,17 @@ STUB
   others
   is "key true + yolo below the cap ⇒ refused" "$(permit)" 1
 
+  # Interim, until mergeAtReviewCap is retired: the cap line wants two rounds IN TOTAL, so
+  # coderabbitRounds 1 (one round is at THAT reviewer's cap) must not cap-merge after one.
+  forget; printf '{"mergeAtReviewCap": true, "coderabbitRounds": 1}\n' > "$BUNDLE/instance.config.json"
+  reviewed_at "$H"
+  expect "coderabbitRounds 1, one round, threads open ⇒ exit 6" 6
+  is "…one round writes no cap line, though it is at coderabbitRounds" "$(caps)" 0
+  forget; reviewed_at "$OTHER_SHA" "$H"
+  expect "coderabbitRounds 1, two rounds ⇒ exit 6" 6
+  is "…and two rounds in total write the cap line" "$(caps)" 1
+  key true
+
   forget
   "$RECEIPT" record review-clearance.sh --cap --kind internal --bundle "$BUNDLE" --repo "$NWO" --pr 42 --head "$H"
   others

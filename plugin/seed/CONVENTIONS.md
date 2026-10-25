@@ -673,16 +673,17 @@ above it so none may grow its share.
   with one of those clears at any element size, and the clearance quotes the line that
   claimed the exemption so the exemption is visible rather than silent. The failure mode of
   a terseness gate is trimming the one thing the reader needed in order to act safely.
-- **TWO ROUNDS, THEN THE HUMAN DECIDES. This is a hard cap.**
+- **TWO ROUNDS, THEN THE HUMAN DECIDES. This is a hard cap** — per reviewer, set by
+  `coderabbitRounds` and `qaRounds` in `instance.config.json` (**1** each when absent).
   A reviewer's job is to evaluate the diff **against the task's `acceptance_criteria`**.
   It is *not* to re-litigate those criteria, argue the design, or look for a reason the
   change should not land. Grade the work against the bar it was given.
   - **Round 1** — the reviewer reports findings. The implementer fixes them and replies
     once, saying what changed or why it disagrees.
-  - **Round 2** — the reviewer checks *only the things it raised in round 1*. New
+  - **Round 2**, where the cap allows one — the reviewer checks *only the things it raised in round 1*. New
     findings outside that set are **recorded, not blocking**.
-  - **There is no round 3.** Anything still unresolved after round 2 **stops and goes to
-    the human**, with both positions stated in one short block: what the reviewer wants,
+  - **There is no round past the cap.** Anything still unresolved after the last round
+    **stops and goes to the human**, with both positions stated in one short block: what the reviewer wants,
     what the implementer says, and what the criterion actually asks for. The block goes in
     the task's `open_questions`, not the final message. The human decides; the agents do
     not converge on it.
@@ -692,8 +693,9 @@ above it so none may grow its share.
   stop. That single PR, and others like it, consumed roughly **70% of a Max account's
   weekly budget**. An unresolved disagreement costs the human one decision; an unbounded
   review costs a week.
-  **And the number is countable — `scripts/review-rounds.sh <pr> --repo <org>/<repo>`.**
-  It prints how many rounds a PR has already had and **exits non-zero at or past two**, so
+  **And the number is countable — `scripts/review-rounds.sh <pr> --for coderabbit|qa --repo <org>/<repo>`.**
+  It prints how many rounds that reviewer has already spent on a PR and **exits non-zero at
+  or past its cap** (`coderabbitRounds` / `qaRounds`, 1 each when absent), so
   whoever is about to spawn a verifier can be refused instead of trusted to remember. Run
   it *before* dispatching one (the `project-manager`'s verification step) and *before*
   verifying one (`qa-reviewer` mode B, first thing); non-zero means stop and write the
@@ -703,9 +705,9 @@ above it so none may grow its share.
   reviewer adds none. **An automatic incremental review counts, by design** (owner
   decision 2026-10-21): where a repo leaves CodeRabbit's `auto_incremental_review` on,
   its review of the first fix push is a completed verification of a new commit, so it
-  *is* round 2 even though nobody asked for it. The relief valve is `mergeAtReviewCap`
-  (`SCHEMA.md`, off by default), which changes what happens at the cap, never where it
-  is. Exit 2 is *unknown*, which is not permission. A missing or broken
+  *is* another CodeRabbit round even though nobody asked for it. `mergeAtReviewCap`
+  (`SCHEMA.md`, off by default) changes what happens at two rounds in total, never where
+  a reviewer's cap is. Exit 2 is *unknown*, which is not permission. A missing or broken
   script exits non-zero too, so the failure direction is "ask the human", never "review
   again". This rule spent a week of budget while it was prose; it is not prose now.
   **Corollary — grade against the criteria, not against your own taste.** If you believe

@@ -2002,10 +2002,14 @@ refuse_clause9() { # <the clearance message that is being withheld> <internal|ex
   done >&2
   # mergeAtReviewCap (AUTONOMY.md -> "Merge at the review cap"): still exit 6, plus a `cap`
   # line, never a pass. review-rounds.sh replays this file with --no-merge-check, so a
-  # replay can never recurse back into it.
+  # replay can never recurse back into it. Two rounds IN TOTAL, not either reviewer's own
+  # cap: at coderabbitRounds 1 that cap is one round, and this would merge after it.
   if [ -z "$skip_merge_check" ] && "$RC_DIR/clearance-receipt.sh" armed >/dev/null 2>&1; then
-    "$RC_DIR/review-rounds.sh" "$pr_number" --repo "$nwo" >/dev/null 2>&1
-    [ $? -eq 1 ] && mint_receipt "$2" --cap
+    cr="$("$RC_DIR/review-rounds.sh" "$pr_number" --for coderabbit --repo "$nwo" 2>/dev/null)"
+    cr_rc=$?
+    qa="$("$RC_DIR/review-rounds.sh" "$pr_number" --for qa --repo "$nwo" 2>/dev/null)"
+    qa_rc=$?
+    [ "$cr_rc" -le 1 ] && [ "$qa_rc" -le 1 ] && [ $((cr + qa)) -ge 2 ] && mint_receipt "$2" --cap
   fi
   exit 6
 }
