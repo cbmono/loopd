@@ -1615,76 +1615,16 @@ fi
 # no slug, no question text. What differs is that the ONE number this reads out of the task
 # documents no longer reaches the human at all.
 #
-# DISPATCHABLE, not merely `ready`: a `ready` task whose `depends_on` are not yet terminal
-# cannot be handed to anyone, and offering to dispatch it is the prompt a human learns to
-# dismiss. An unknown dependency (a path no task document answers to) counts as NOT
-# terminal — fail closed, because over-offering is the failure this bound exists to
-# prevent, and validate-bundle.sh is what reports the dangling reference itself.
-#
-# One awk pass over every task document, resolving dependencies in END once every status
-# is known — rather than one process per task, at every session start.
+# DISPATCHABLE, not merely `ready`, and asked of the ONE reader tick-delta.sh's idle probe
+# uses too (dispatchable-ready.sh): kind, open questions, dependencies, pause, ownership.
+# An unknown dependency counts as NOT terminal — over-offering is the failure this bound
+# exists to prevent — while a pause or owner script that cannot answer (exit 2) COUNTS,
+# because an unanswered question must not silently hide work from its owner.
 if [ -d "$root/projects" ]; then
-  queue="$(awk -v rootlen="${#root}" '
-    function flush() { if (cur != "") { status[cur] = st; depsof[cur] = deps } }
-    FNR==1 { flush(); cur = substr(FILENAME, rootlen+1)
-             st = ""; deps = ""; infm = 0; fmdone = 0; indep = 0 }
-    fmdone { next }
-    FNR==1 { if ($0 == "---") { infm = 1 } ; next }
-    !infm  { next }
-    $0 == "---" { fmdone = 1; next }
-    {
-      line = $0
-      sub(/[[:space:]]+#.*$/, "", line)              # a trailing comment is not a value
-      if (line ~ /^depends_on:/) { indep = 1; deps = deps " " line; next }
-      if (indep) {
-        # A block list continues with an indent or a dash; anything at column 0 that is
-        # neither is the next frontmatter key, and the region has ended.
-        if (line ~ /^[[:space:]-]/) { deps = deps " " line; next }
-        indep = 0
-      }
-      if (line ~ /^status:/) {
-        st = line; sub(/^status:[[:space:]]*/, "", st)
-        gsub(/["\047]/, "", st); sub(/[[:space:]]+$/, "", st)
-      }
-    }
-    END {
-      flush()
-      for (p in status) {
-        if (status[p] != "ready") continue
-        ok = 1; s = depsof[p]
-        while (match(s, /\/projects\/[A-Za-z0-9._\/-]+\.md/)) {
-          d = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
-          if (!(d in status) || (status[d] != "done" && status[d] != "cancelled")) ok = 0
-        }
-        if (ok) print "ready\t" p
-      }
-    }
-  ' "$root"/projects/*/tasks/*.md 2>/dev/null || true)"
-
   n_ready=0
-  while IFS="$TAB" read -r kind val; do
-    [ "$kind" = ready ] || continue
-    # OWNERSHIP IS ASKED OF THE SCRIPT THAT OWNS THE QUESTION. On a bundle shared by two
-    # humans the other human's ready work is theirs to dispatch, and counting it here would
-    # offer a loop that then refuses. Exit 1 is the only skip: exit 2 means task-owner.sh
-    # could not answer (no SCHEMA.md, an unreadable frontmatter), and an unanswered question
-    # must not silently hide work from its owner.
-    # A paused project is skipped the same way, and on the same rule: exit 1 only.
-    if [ -x "$bin/project-paused.sh" ]; then
-      prc=0
-      ( cd "$root" && bash "$bin/project-paused.sh" "$root$val" >/dev/null 2>&1 ) || prc=$?
-      [ "$prc" -eq 1 ] && continue
-    fi
-    if [ -x "$bin/task-owner.sh" ]; then
-      orc=0
-      ( cd "$root" && bash "$bin/task-owner.sh" "$root$val" >/dev/null 2>&1 ) || orc=$?
-      [ "$orc" -eq 1 ] || n_ready=$((n_ready+1))
-    else
-      n_ready=$((n_ready+1))
-    fi
-  done <<EOF
-$queue
-EOF
+  if [ -n "$bin" ] && [ -f "$bin/dispatchable-ready.sh" ]; then
+    n_ready="$(bash "$bin/dispatchable-ready.sh" --instance "$root" 2>/dev/null | grep -c .)" || n_ready=0
+  fi
 
   # ZERO PRINTS NOTHING, on the model's channel too. "Ready to dispatch 0" is the line a
   # reader stops reading, and the offer rule keys off the line's PRESENCE — so a zero line
