@@ -326,7 +326,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      | Answer | When | What you do |
      |---|---|---|
      | `dispatch-qa` | CodeRabbit is unavailable: a real refusal (`review-clearance.sh` exit 1 with `class: declined`, or exit 5) before its last round, `coderabbitRounds` `0` with `qaRounds` ≥ 1 (exit 8 and 3 are then never consulted), or a failed QA round whose fix landed while the QA count is under `qaRounds` | **Dispatch `loopd:qa-reviewer` in this tick — no ask, no waiting window, either mode.** Mint its nonce first (below). |
-     | `request-review` | exit 4 (stale) or 8 (skipped), CodeRabbit under `coderabbitRounds` | **Re-request at the final head**: comment `@coderabbitai review`, bare. A request is not a round, never a merge and never a `qa-reviewer` spend. |
+     | `request-review` | exit 4 (stale) or 8 (skipped: auto reviews are off, so NOBODY EVER ASKED and it never reopens), CodeRabbit under `coderabbitRounds` | **Re-request at the final head**: comment `@coderabbitai review`, bare. A request is not a round, never a merge and never a `qa-reviewer` spend. |
      | `implementer-round` | the QA verdict at this head is not a pass | Dispatch the task's own agent with the checker's FAIL rows. |
      | `rebase-round` | exit 7 | The EXIT 7 bullet above. |
      | `merge-path` | exit 0 or 6, QA passed, or QA reached `qaRounds` after a fix | Run `AUTONOMY.md` → "Merge under `yolo`"; under `gated` surface the PR. A refusal there is surfaced, never worked around. |
