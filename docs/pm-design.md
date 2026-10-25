@@ -665,6 +665,13 @@ reading of the tick's own would re-decide what the script already decided.
 about every future PR, not this one, so working around it per-PR hides a broken
 reviewer behind a per-PR fix and the human never learns it needs fixing.
 
+**Superseded on 2026-10-25 by the owner's revised review policy** (configurable-review-rounds
+task-002): a REAL refusal — exit 1 with `class: declined`, or exit 5 — before CodeRabbit's
+last round now dispatches one `qa-reviewer` in the same tick, with no ask, under `gated`
+and `yolo` alike, decided by `scripts/review-next.sh`. The measurement above survives where
+it applies: the "currently processing" placeholder still holds, because a QA round on it
+would run QA on nearly every PR. Exit 5 is still surfaced for the human to fix the reviewer.
+
 <a id="step-5"></a>
 ### Step 5 — why ONE script deletes a worktree, and pruning is still report-only
 

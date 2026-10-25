@@ -147,6 +147,10 @@ signature". Never on a PR body.
      visible rather than merely absent. Exit 1 waits; exit 5 escalates. Treating 5 as 1 waits
      forever.
 
+     **Unless the refusal is why you were sent.** A brief carrying `## QA dispatch` means
+     the loop dispatched you because CodeRabbit is unavailable: you ARE the review, so name
+     the refusal in your verdict's prose, not in `caveats`, and review the diff yourself.
+
      **Your own verdict quotes refusal language, so end it with the `okf-verdict`
      trailer.** Writing "CodeRabbit answered *Review limit reached*" makes your comment
      match the very table your comment is about, and a `review-clearance.sh` run scoped

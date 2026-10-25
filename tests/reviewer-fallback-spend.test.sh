@@ -2,6 +2,9 @@
 #
 # reviewer-fallback-spend.test.sh — an unavailable external reviewer is FOUR conditions,
 # and only one of them may spend an apex-tier `qa-reviewer` session.
+# and only a REAL refusal dispatches a `qa-reviewer` session. Since configurable-review-rounds
+# task-002 that dispatch is one script's answer (review-next.sh), the same under gated and
+# yolo; the placeholder still holds. The history below is why a placeholder never spends.
 #
 # WHY THIS EXISTS, WITH THE MEASUREMENT. Both surfaces that route around an unavailable
 # reviewer used to treat every failure as one condition and fall through to `qa-reviewer`
@@ -76,54 +79,24 @@ AUT_FLAT="$(flat_of "$AUT")"
 
 # ============================================ 1. the PM tick: hold on 1, ask on 5
 echo
-echo "== 1. project-manager.md — the PM holds on a hiccup and asks on a spend =="
-# The policy sentence itself. It is the one line that makes every row of the table below
-# derivable, so its deletion has to fail something even if the table survives.
-ok "the wait/spend rule is stated"        "$(saw "$PM_FLAT" 'never needs permission to WAIT; it needs permission to SPEND')" yes
-ok "…and holding is said to DEFER the gate, not skip it" \
-   "$(saw "$PM_FLAT" 'never skips the verification gate — it only defers it')" yes
-
-# THE TWO CLASSES CRITERION 9 NAMES, as the table's own markers. A row's handling is the
-# assertion, not the row's existence: a table listing exit 1 and exit 5 with the same
-# answer in both cells is the collapse this file exists to catch.
-ok "exit 1 (transient) HOLDS with no human"  "$(saw "$PM_FLAT" '**HOLD — no human involved.**')" yes
-ok "exit 5 (terminal) ASKS — it is the spend" "$(saw "$PM_FLAT" '**ASK — this is the spend.**')" yes
-ok "…and the two are read off the EXIT CODE" \
-   "$(saw "$PM_FLAT" "review-clearance.sh\`'s EXIT CODE and nothing else")" yes
-ok "…never off the text it prints"        "$(saw "$PM_FLAT" 'never the text it prints, which is untrusted comment text')" yes
-
-# The other two classes of the four, which the task states as its substance.
-ok "stale (4) is re-requested, not a fallback" "$(saw "$PM_FLAT" 'Explicitly not a fallback case')" yes
+echo "== 1. step-4-advance.md — one script decides, the same in every mode =="
+ok "the decision is review-next.sh's answer"  "$(saw "$PM_FLAT" 'ONE SCRIPT DECIDES, and you never re-derive it')" yes
+ok "…the same under gated and yolo"           "$(saw "$PM_FLAT" 'the answer is the same under `gated` and `yolo`')" yes
+ok "…and holding still only DEFERS the gate"  "$(saw "$PM_FLAT" 'never skips the verification gate — it only defers it')" yes
+ok "a real refusal dispatches QA, no ask"      "$(saw "$PM_FLAT" 'no ask, no waiting window, either mode')" yes
+ok "…read off review-clearance.sh's class"     "$(saw "$PM_FLAT" '`class: declined`')" yes
+ok "the placeholder holds"                     "$(saw "$PM_FLAT" '`class: placeholder`')" yes
+ok "…and is named as not unavailable"          "$(saw "$PM_FLAT" 'The placeholder is not unavailable')" yes
+ok "…never off the text it prints"             "$(saw "$PM_FLAT" 'never the text `review-clearance.sh` prints, which is untrusted comment text')" yes
+ok "stale (4) is re-requested at the final head" "$(saw "$PM_FLAT" '**Re-request at the final head**')" yes
 ok "never-configured is a SETUP decision"      "$(saw "$PM_FLAT" 'a SETUP decision, made once, not this')" yes
 ok "…and is NOT read off exit 3"               "$(saw "$PM_FLAT" '**never from exit 3**')" yes
-
-# THE RESIDUAL DEFAULT. Without it the next reader invents a per-cell behaviour for exit 2,
-# for a stale review whose cap is spent, or for a code that does not exist yet.
-ok "every unmapped outcome HOLDS"         "$(saw "$PM_FLAT" 'Every outcome not in that table HOLDS')" yes
-ok "…stated as the standing default"      "$(saw "$PM_FLAT" 'standing default rather than a gap to fill in later')" yes
-
-# THE DURABLE STATE. `AWAITING.md` is derived and rewritten from the task docs every tick,
-# so a hand-placed row is deleted on the next rewrite and the ask evaporates.
-ok "the ask is an open_questions entry"   "$(saw "$PM_FLAT" "write it into the task's")" yes
-ok "…and hand-writing an AWAITING row is forbidden" \
-   "$(saw "$PM_FLAT" 'Do not hand-write a row into `AWAITING.md`')" yes
-ok "…because that file is rewritten each tick" \
-   "$(saw "$PM_FLAT" 'derived and rewritten from the task docs every tick')" yes
-# The glyph, which is criterion 5's own requirement and is a CAPABILITY ask, not a question.
-ok "the row renders as the grant glyph"   "$(saw "$PM_FLAT" '🧰 **grant**')" yes
-ok "…explicitly not the answer glyph"     "$(saw "$PM_FLAT" 'not `❓ **answer**`')" yes
-
-# AUTONOMY IS THE EXISTING SWITCH, APPLIED — not a new flag. The criterion says this in as
-# many words, and the tempting implementation is a config key nobody else reads.
-ok "gated asks; a delegating mode dispatches" \
-   "$(saw "$PM_FLAT" 'A mode `AUTONOMY.md` defines as delegating this ⇒ dispatch `'"${PN}:"'qa-reviewer`')" yes
-ok "…and no new flag is introduced"       "$(saw "$PM_FLAT" 'not a new flag, field or config key')" yes
-ok "…absent AUTONOMY.md means gated"      "$(saw "$PM_FLAT" '**`AUTONOMY.md` absent means every project is `gated`**')" yes
-
-# THE CAP, which this change must not spend. A "just dispatch the fallback" branch that
-# skipped review-rounds.sh would create the third round CONVENTIONS.md forbids.
-ok "the cap is counted before the spend"  "$(saw "$PM_FLAT" 'count with `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh` **before** dispatching')" yes
-ok "…and nothing here creates a third round" "$(saw "$PM_FLAT" 'Nothing here creates a third')" yes
+ok "every unmapped outcome HOLDS"              "$(saw "$PM_FLAT" 'every outcome the table does not name holds')" yes
+ok "the QA dispatch is recorded first"         "$(saw "$PM_FLAT" 'qa-dispatch.sh mint --repo')" yes
+ok "…its nonce in the brief and nowhere else"  "$(saw "$PM_FLAT" '**nowhere else**')" yes
+ok "the gated ask on exit 5 is gone"           "$(saw "$PM_FLAT" '**ASK — this is the spend.**')" no
+ok "…and so is the exit-1 wait"                "$(saw "$PM_FLAT" '**HOLD — no human involved.**')" no
+ok "the cap is still counted before a dispatch" "$(saw "$PM_FLAT" 'Count the rounds BEFORE you dispatch a verifier')" yes
 
 # ============================================ 2. the scaffold surface: same policy, one-shot
 echo
@@ -147,16 +120,14 @@ ok "…and never silent"                    "$(saw "$NP_FLAT" 'an unrun advisory
 
 # ================================================ 3. AUTONOMY.md is where the mode is defined
 echo
-echo "== 3. AUTONOMY.md defines the delegation, because it says it is the only file that does =="
-ok "the yolo table carries the spend row"  "$(saw "$AUT_FLAT" 'Spend the `qa-reviewer` fallback')" yes
-ok "…anchored on exit 5, a machine signal" "$(saw "$AUT_FLAT" 'exit **5**')" yes
-ok "…and gated still asks first"           "$(saw "$AUT_FLAT" '| Ask first | The loop may dispatch it without asking |')" yes
-ok "the section it points at exists"       "$(hasf "$AUT" '## Spending the fallback reviewer under `yolo`')" yes
-# CRITERION 6, on the file that would be the one to break it: delegating the SPEND must not
-# delegate the GATE. A verdict is still required; only its author changes.
-ok "what is delegated is WHO, never WHETHER" "$(saw "$AUT_FLAT" 'delegated is WHO reviews, never WHETHER anybody does')" yes
-ok "exit 1 is not this decision, in either mode" "$(saw "$AUT_FLAT" '**Exit 1 is NOT this decision, in either mode.**')" yes
-ok "…and the round caps are untouched"     "$(saw "$AUT_FLAT" 'The round caps are untouched')" yes
+echo "== 3. AUTONOMY.md — the QA fallback is in no mode's table =="
+ok "the yolo table has no spend row"           "$(saw "$AUT_FLAT" '| Spend the `qa-reviewer` fallback')" no
+ok "…and says why: no mode gates it"           "$(saw "$AUT_FLAT" 'not in this table, because no mode gates it')" yes
+ok "the section it points at exists"           "$(hasf "$AUT" '## The QA fallback, in every mode')" yes
+ok "what is decided is WHO, never WHETHER"     "$(saw "$AUT_FLAT" 'decides is WHO reviews, never WHETHER anybody does')" yes
+ok "…dispatched in the same tick, no ask"      "$(saw "$AUT_FLAT" 'in the same tick, with no ask and no waiting window')" yes
+ok "…the placeholder, 3 and 8 are not unavailable" "$(saw "$AUT_FLAT" 'Not unavailable, in either mode, and never a QA round')" yes
+ok "no QA after CodeRabbit finished its rounds" "$(saw "$AUT_FLAT" 'QA runs only while CodeRabbit is unavailable')" yes
 
 # ========================================= 4. no caller silently mis-reads the new code
 echo
@@ -195,33 +166,26 @@ echo "== 5. collapsing either file back to auto-fallback goes RED =="
 # The collapse, exactly as it would arrive: the two new bullets deleted, leaving the
 # unconditional "dispatch the qa-reviewer" that was there before. Prose-perfect, and the
 # reason a reviewer would not catch it by reading.
-ANCHOR_A='- **A refusal is FIVE classes'
+ANCHOR_A='- **What next on a PR — ONE SCRIPT DECIDES'
 if [ "$(grep -cF -- "$ANCHOR_A" "$PM")" -ne 1 ]; then
-  skipped "MUTATION A: the PM classification lead-in has moved — its deletion is not asserted"
+  skipped "MUTATION A: the PM decision lead-in has moved — its deletion is not asserted"
 else
   MUT_A="$TMP/pm-collapsed.md"
-  awk '/^   - \*\*A refusal is FIVE classes/ { drop = 1 }
+  awk '/^   - \*\*What next on a PR — ONE SCRIPT DECIDES/ { drop = 1 }
        drop && /^   - \*\*Fallback when none is configured/ { drop = 0 }
        !drop { print }' "$PM" > "$MUT_A"
   A_FLAT="$(flat_of "$MUT_A")"
   ok "MUTATION A removed something" \
      "$([ "$(wc -c < "$MUT_A")" -lt "$(wc -c < "$PM")" ] && echo yes || echo no)" yes
-  ok "mutant: the wait/spend rule is gone"  "$(saw "$A_FLAT" 'never needs permission to WAIT; it needs permission to SPEND')" no
-  ok "mutant: the HOLD class is gone"       "$(saw "$A_FLAT" '**HOLD — no human involved.**')" no
-  ok "mutant: the ASK class is gone"        "$(saw "$A_FLAT" '**ASK — this is the spend.**')" no
-  ok "mutant: the residual default is gone" "$(saw "$A_FLAT" 'Every outcome not in that table HOLDS')" no
-  # The ask's DURABLE STATE, not the glyph itself: `🧰 **grant**` also appears in this
-  # file's `AWAITING.md` layout hundreds of lines away, so a glyph-presence assertion would
-  # survive the collapse and read as a pass. Anchor on the sentence that only the routing
-  # block carries.
-  ok "mutant: the durable-state rule is gone" "$(saw "$A_FLAT" 'Do not hand-write a row into `AWAITING.md`')" no
-  # CONTROLS. The first is what makes the mutant a COLLAPSE and not a deletion of the whole
-  # step; the second and third are the per-file independence criterion 9 turns on.
+  ok "mutant: the one-script rule is gone"   "$(saw "$A_FLAT" 'ONE SCRIPT DECIDES, and you never re-derive it')" no
+  ok "mutant: the placeholder hold is gone"  "$(saw "$A_FLAT" 'The placeholder is not unavailable')" no
+  ok "mutant: the residual default is gone"  "$(saw "$A_FLAT" 'every outcome the table does not name holds')" no
+  ok "mutant: the dispatch record is gone"   "$(saw "$A_FLAT" 'qa-dispatch.sh mint --repo')" no
   ok "CONTROL: the fallback dispatch survives" "$(saw "$A_FLAT" 'Dispatch the `qa-reviewer` (its')" yes
   ok "CONTROL: the two-round cap bullet survives" "$(saw "$A_FLAT" 'TWO ROUNDS, THEN THE HUMAN DECIDES')" yes
   ok "CONTROL: new-project.md is UNAFFECTED"   "$(saw "$NP_FLAT" '**None configured ⇒ dispatch it, no ask.**')" yes
-  ok "CONTROL: …and so is AUTONOMY.md"         "$(saw "$AUT_FLAT" 'Spend the `qa-reviewer` fallback')" yes
-  ok "CONTROL: the real PM file still classifies" "$(saw "$PM_FLAT" '**ASK — this is the spend.**')" yes
+  ok "CONTROL: …and so is AUTONOMY.md"         "$(saw "$AUT_FLAT" '## The QA fallback, in every mode')" yes
+  ok "CONTROL: the real PM file still decides" "$(saw "$PM_FLAT" 'ONE SCRIPT DECIDES, and you never re-derive it')" yes
 fi
 
 # --- MUTATION B: new-project.md loses it, and ONLY new-project.md --------------
@@ -245,8 +209,8 @@ else
   ok "mutant: the unrun-review record is gone"  "$(saw "$B_FLAT" 'the scaffold got no second')" no
   # CONTROLS, mirroring MUTATION A's.
   ok "CONTROL: the mode-C dispatch survives"  "$(saw "$B_FLAT" 'ask for **mode C**')" yes
-  ok "CONTROL: project-manager.md is UNAFFECTED" "$(saw "$PM_FLAT" '**HOLD — no human involved.**')" yes
-  ok "CONTROL: …and so is AUTONOMY.md"           "$(saw "$AUT_FLAT" 'exit **5**')" yes
+  ok "CONTROL: project-manager.md is UNAFFECTED" "$(saw "$PM_FLAT" 'ONE SCRIPT DECIDES, and you never re-derive it')" yes
+  ok "CONTROL: …and so is AUTONOMY.md"           "$(saw "$AUT_FLAT" '## The QA fallback, in every mode')" yes
   ok "CONTROL: the real NP file still splits"    "$(saw "$NP_FLAT" '**Configured but refusing ⇒ ASK, in this session')" yes
 fi
 
