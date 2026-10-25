@@ -286,7 +286,7 @@ state, and act only on deltas.
      clean, nothing untracked under `projects/`, no task `in-progress`, and every
      open PR's head, state, review decision, latest review and commit statuses exactly
      as the last full tick recorded them — and nothing the last tick queued for this one:
-     no `ready` task `dispatchable-ready.sh` clears while in-flight is under the cap,
+     no `ready` task `dispatchable-ready.sh` clears while in-flight is under the `maxAgentsInFlight` cap (absent ⇒ 4),
      and no `draft` whose newest `advisor_notes` concern postdates its newest
      `* <ISO 8601> triage:` line (either one is a `DELTA:` naming the task). **Skip steps 1–7.** Append ONE already-closed line to the root `log.md` —
      `* TICK <ISO-8601> by <login> idle — fingerprint unchanged (tick-delta)` — then go to step 8

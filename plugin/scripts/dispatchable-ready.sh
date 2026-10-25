@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # dispatchable-ready.sh — the ONE reader of "which `ready` tasks could step 3 dispatch?"
 #   Usage: dispatchable-ready.sh [--instance DIR] [--first]
-# Prints `/projects/<slug>/tasks/<id>.md` per task: `ready`, kind build (task, else project,
-# else build), no open_questions, every depends_on (a path, or a bare id in the same project)
-# done or cancelled — unresolvable is unmet — then project-paused.sh and task-owner.sh not 1.
+# Prints `/projects/<slug>/tasks/<id>.md` per task: `ready`, outside a done project, kind build
+# (task, else project, else build), no open_questions, every depends_on (a path, or a bare id in
+# the same project) done or cancelled — unresolvable is unmet — then project-paused.sh and
+# task-owner.sh not 1.
 # Their exit 2 COUNTS: doubt never hides work. Cheapest gates first; `--first` stops at one.
 # Exit 0 answered (maybe empty) · 2 cannot read · 3 usage. The cap is the caller's.
 # Read by tick-delta.sh check and session-banner.sh; verified by tests/tick-delta.test.sh.
@@ -29,7 +30,7 @@ done
 cands="$(awk -v rootlen="${#root}" '
   function flush() {
     if (cur == "") return
-    if (isproj) { pkind[slug] = kd; return }
+    if (isproj) { pkind[slug] = kd; pst[slug] = st; return }
     status[cur] = st; kindof[cur] = kd; slugof[cur] = slug; nq[cur] = q; depsof[cur] = deps
   }
   function add(v,   k) {
@@ -54,8 +55,10 @@ cands="$(awk -v rootlen="${#root}" '
   FNR == 1 {
     flush(); cur = substr(FILENAME, rootlen + 1); isproj = (cur ~ /\/project\.md$/)
     slug = cur; sub(/^\/projects\//, "", slug); sub(/\/.*/, "", slug)
-    st = ""; kd = ""; q = 0; deps = ""; infm = ($0 == "---"); fmdone = 0; inlist = 0; inblock = 0
-    next
+    st = ""; kd = ""; q = 0; deps = ""; infm = 1; fmdone = 0; inlist = 0; inblock = 0
+    if ($0 == "---") next
+    # A project.md is read as the fingerprint walk reads it, delimited or not.
+    if (!isproj) infm = 0
   }
   fmdone || !infm { next }
   $0 == "---" { fmdone = 1; next }
@@ -82,7 +85,7 @@ cands="$(awk -v rootlen="${#root}" '
   END {
     flush()
     for (p in status) {
-      if (status[p] != "ready") continue
+      if (status[p] != "ready" || pst[slugof[p]] == "done") continue
       k = kindof[p]; if (k == "") k = pkind[slugof[p]]
       if (k != "" && k != "build") continue
       if (nq[p] > 0) continue

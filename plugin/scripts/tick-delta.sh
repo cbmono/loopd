@@ -446,7 +446,7 @@ untriaged() { # <file> -> 0 untriaged, 1 not, 2 unreadable
   [ "$(fmcount "$1" advisor_notes)" -gt 0 ] || return 1
   local notes con tri
   notes="$(bash "$FOLD" --list "$1" advisor_notes 2>/dev/null)" || return 2
-  con="$(printf '%s\n' "$notes" | grep . | grep -vF 'advisor: approach critique — no concerns' || true)"
+  con="$(printf '%s\n' "$notes" | grep . | grep -vE '^[^ ]+ · advisor: approach critique — no concerns[[:space:]]*$' || true)"
   [ -n "$con" ] || return 1
   con="$(printf '%s\n' "$con" | sed 's/[[:space:]].*//' | sort | tail -n1)"
   tri="$(awk '/^# /{n = ($0 ~ /^# Notes[[:space:]]*$/); next}

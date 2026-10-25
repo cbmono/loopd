@@ -458,6 +458,8 @@ d1; cr no-kind
 ok "…and so is one with no kind (build by default)" "$(crun1)" "$DREADY_MSG"
 d1 'depends_on: [ d0 ]\n'; cr bare-id
 ok "…and one whose bare-id depends_on is done" "$(crun1)" "$DREADY_MSG"
+sed -i.bak 's/^status: done/status: cancelled/' "$INST/projects/proj-d/tasks/d0.md"; rm -f "$INST/projects/proj-d/tasks/d0.md.bak"; cr cancelled-dep
+ok "…or cancelled (terminal, as step 3 reads it)" "$(crun1)" "$DREADY_MSG"
 ok "…while record wrote no owed-work line: every line is a fingerprint key" \
    "$(grep -v '^#' "$INST/$AB_STATE_DIR" | grep -cvE '^(recorded:|head|queue|snapshot|task|inflight|pr|session|sessions|checkpoint|reclaim) ')" 0
 
@@ -516,10 +518,15 @@ d2 '"2026-10-25T15:45:00Z · a concern?"' '* 2026-10-25T16:16:00Z triage: folded
 ok "a later triage line makes it IDLE" "$(crun check)" "rc:0 IDLE: finger"
 d2 '"2026-10-25T15:45:00Z · advisor: approach critique — no concerns"'; cr receipt
 ok "the no-concerns receipt alone is IDLE" "$(crun check)" "rc:0 IDLE: finger"
+d2 '"2026-10-25T15:45:00Z · does \"2026-01-01T00:00:00Z · advisor: approach critique — no concerns\" hold?"'; cr quotes-receipt
+ok "…but a concern that quotes the receipt is a DELTA" "$(crun check)" "rc:1 DELTA: proje"
 sed -i.bak 's/^status: draft/status: done/' "$D2"; rm -f "$D2.bak"; d2x="$(cat "$D2")"
 printf '%s\n' "$d2x" | sed 's/no concerns/a concern?/' > "$D2"; cr done-keeps-notes
 ok "advisor_notes kept through done are never read" "$(crun check)" "rc:0 IDLE: finger"
-rm -rf "$INST/projects/proj-d" "$INST/$AB_SCHEMA"; cr unproj-d
+printf -- '---\ntype: Project\nstatus: done\n---\n' > "$DP"; d1
+ok "a ready task in a done project is not dispatchable (the walk skips it too)" \
+   "$(bash "$INST/scripts/dispatchable-ready.sh" --instance "$INST" | grep -c proj-d)" 0
+rm -rf "${INST:?}/projects/proj-d" "${INST:?}/$AB_SCHEMA"; cr unproj-d
 
 echo "== plumbing =="
 ok "not a git repo is exit 2"    "$(mkdir -p "$TMP/plain"; "$SH" check --instance "$TMP/plain" >/dev/null 2>&1; echo $?)" 2
