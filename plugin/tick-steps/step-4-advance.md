@@ -354,7 +354,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      repo runs **no** external reviewer at all, `qa-reviewer` is simply the independent
      verifier (`SCHEMA.md`) and dispatching it needs no permission. That question is
      answered from the repo's configuration, **never from exit 3**. Dispatch the
-     `qa-reviewer` (its own fresh context) to verify the PR against the task's
+     `qa-reviewer` (its own fresh context) — its brief carrying
+     `${CLAUDE_PLUGIN_ROOT}/scripts/dispatch-brief.sh <task-path>`'s output unchanged, as
+     step 3's does, so its `## Signature` names the bundle — to verify the PR against the task's
      `acceptance_criteria` and real CI/test results. Counts toward the concurrency
      cap. Its verdict is the `okf-verdict v1` trailer (`SCHEMA.md`) — evaluate it
      against **every clause of the clearance predicate** there, record the trailer's

@@ -7,7 +7,7 @@
 #                            [--instance <bundle>]
 #
 # A LABEL FOR HUMANS, NEVER EVIDENCE: every agent posts under one login, and the implementer
-# can type this line too. Exit 0 printed (`<unknown>` when no ownerGithubUser), 2 usage.
+# can type this line too. Exit 0 printed (`(unknown)` when no ownerGithubUser), 2 usage.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -33,4 +33,6 @@ case "$role" in
 esac
 
 login="$(bash "$HERE/decision-stamp.sh" --self --instance "$inst" 2>/dev/null)"
-printf '— %s-%s\n' "${login:-<unknown>}" "$short"
+# GitHub strips `<unknown>` as an HTML tag; parentheses render and cannot be in a login.
+[ -n "$login" ] && [ "$login" != "<unknown>" ] || login="(unknown)"
+printf '— %s-%s\n' "$login" "$short"

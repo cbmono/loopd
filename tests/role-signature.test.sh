@@ -35,10 +35,10 @@ for pair in qa-reviewer:qa software-engineer:dev devops-engineer:ops project-man
 done
 ok "inside the bundle, no --instance needed" \
    "$(cd "$BUNDLE" && "$HELPER" qa-reviewer)" "— example-user-007-qa"
-ok "no ownerGithubUser -> <unknown> as-is" "$("$HELPER" software-engineer --instance "$EMPTY")" "— <unknown>-dev"
+ok "no ownerGithubUser -> (unknown), which GitHub renders" "$("$HELPER" software-engineer --instance "$EMPTY")" "— (unknown)-dev"
 ok "…and still exit 0, so the line is posted" "$("$HELPER" software-engineer --instance "$EMPTY" >/dev/null; echo $?)" 0
-ok "outside the bundle with no --instance -> <unknown>" \
-   "$(cd "$TMP/elsewhere" && "$HELPER" devops-engineer)" "— <unknown>-ops"
+ok "outside the bundle with no --instance -> (unknown)" \
+   "$(cd "$TMP/elsewhere" && "$HELPER" devops-engineer)" "— (unknown)-ops"
 ok "an unknown role is a usage error" "$("$HELPER" cataloguer --instance "$BUNDLE" >/dev/null 2>&1; echo $?)" 2
 ok "no role is a usage error"         "$("$HELPER" >/dev/null 2>&1; echo $?)" 2
 

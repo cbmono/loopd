@@ -27,7 +27,8 @@ no PII/secrets. The role-specific procedure is below.
 
 **Sign every PR comment and review you post.** Its last visible line is what
 `${CLAUDE_PLUGIN_ROOT}/scripts/role-signature.sh qa-reviewer --instance <bundle>` prints
-(`— <login>-qa`; your brief's `## Signature` names the bundle), with no blank line before
+(`— <login>-qa`; your brief's `## Signature` names the bundle — every dispatch carries it, a
+PR review included), with no blank line before
 it — `CONVENTIONS.md` → "Every PR comment and review an agent posts ends with its role
 signature". Never on a PR body.
 
