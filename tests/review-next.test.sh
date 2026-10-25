@@ -157,6 +157,10 @@ reviewed_at_x; cmpf ahead "$(f modified a.sh 6 2)" "$(f added b.md 2 0)"
 ok "past CodeRabbit's last round, decision -> merge path" "$(live)" merge-path
 ok "ahead, 10 of 300 lines -> clears as last-round" "$(clear | tr '\n' ' ')" "last-round rc=0 "
 ok "…and writes the named receipt line at the head" "$(grep -c '^last-round review-next.sh ' "$RCPT")" 1
+"$SCRIPT" 42 --repo acme/widgets --head "$X" --clear >/dev/null 2>&1
+ok "--clear at a head that is not the PR's -> hold" "rc=$?" rc=1
+"$REAL_JQ" 'del(.files)' "$FIX/compare_json" > "$FIX/c" && mv "$FIX/c" "$FIX/compare_json"
+ok "a compare with no files array is unknown, never 0 lines" "$(clear | tail -n 1)" rc=2
 reviewed_at_x; cmpf diverged "$(f modified a.sh 6 2)"
 ok "a rebase orphaned the reviewed commit (diverged) -> hold" "$(clear)" rc=1
 ok "…naming the rebase" "$(said 'orphaned the reviewed commit')" yes

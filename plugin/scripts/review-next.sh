@@ -131,6 +131,7 @@ facts=(rc="$rc" class="${class:--}" crr="$crr" qar="$qar" crd="$crd" qad="$qad" 
 [ -n "$clear" ] || { decide "${facts[@]}"; exit $?; }
 
 # --- --clear: the merge gate's question, asked only where review-clearance.sh refused --------
+[ "$head" = "$(printf '%s' "$meta" | cut -f3)" ] || hold "--head $head is not the PR's head"
 NEXT_ANSWER=""; NEXT_KIND=""
 decide "${facts[@]}" >/dev/null || unknown "the review state is unreadable"
 [ "$NEXT_ANSWER" = merge-path ] || hold "the review loop is not finished ($NEXT_ANSWER)"
@@ -160,7 +161,7 @@ case "$kind" in
       diverged|behind) hold "a rebase or force-push after the last round orphaned the reviewed commit $reviewed (compare: $st)" ;;
       *) unknown "compare $reviewed...$head answered no status" ;;
     esac
-    nf="$(printf '%s' "$cmp" | jq '.files // [] | length' 2>/dev/null)" || unknown "compare files unreadable"
+    nf="$(printf '%s' "$cmp" | jq -e '.files | arrays | length' 2>/dev/null)" || unknown "compare $reviewed...$head lists no files array"
     [ "${nf:-0}" -lt 300 ] || hold "the compare lists $nf files, past what the host counts"
     odd="$(printf '%s' "$cmp" | jq -r '.files // [] | .[]
       | select((.status | IN("renamed","copied","changed")) or ((.patch // "") == "")

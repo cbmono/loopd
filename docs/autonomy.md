@@ -203,7 +203,10 @@ before its last round, or `coderabbitRounds: 0`) dispatches one `qa-reviewer` in
 tick, no ask; the "currently processing" placeholder, exit 3 and exit 8 never do. Each QA
 dispatch is recorded first (`scripts/qa-dispatch.sh mint`, a nonce in the brief and only
 its hash on disk), which both stops a second QA at the same head and is the only way a
-verdict under the PR author's own login counts (`SCHEMA.md` clause 8).
+verdict under the PR author's own login counts (`SCHEMA.md` clause 8). Open threads at the
+head (exit 6) are an `implementer-round`; once a fix lands after the last round it merges
+with no re-review, bounded by `reviewFixMaxLines` (`AUTONOMY.md` → "Merge after the last
+round").
 
 **A 7 is tried by a script before it costs an agent.**
 `rebase-pr.sh <pr> --repo <org>/<repo> --dir <clone>` rebases in a throwaway worktree and
