@@ -193,7 +193,7 @@ footer nav{gap:16px;font-size:13px}
     <h2>Four steps. Two of them are yours.</h2>
     <p class="lede">Blue is the machine's — agents, code, refs, running state. <span class="pink">Pink is yours</span> — every pink pixel is a decision waiting. Nothing is dispatched until you promote, and nothing reaches main until you merge.</p>
 
-    <div class="diagram" role="img" aria-label="The core loop. /loopd:new-project scaffolds draft tasks; you promote draft to ready; /loopd:dispatch sends an agent to build and open a pull request; an independent review either sends it back to the agent, at most two rounds, or clears it; you merge, and it ships to main.">
+    <div class="diagram" role="img" aria-label="The core loop. /loopd:new-project scaffolds draft tasks; you promote draft to ready; /loopd:dispatch sends an agent to build and open a pull request; an independent review either sends it back to the agent, within each reviewer's round cap, or clears it; you merge, and it ships to main.">
       <svg class="wide" viewBox="0 0 1080 330" aria-hidden="true">
         <defs>
           <marker id="ah-blue" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5ea2ff"/></marker>
@@ -239,7 +239,7 @@ footer nav{gap:16px;font-size:13px}
         <text class="note" x="392" y="294">one ✗ blocks it, however green CI is</text>
         <text class="chip" x="160" y="265" text-anchor="middle">shipped to main</text>
         <text class="edge" x="866" y="166" text-anchor="end">PR opened</text>
-        <text class="edge" x="1040" y="166" text-anchor="end">fix · ≤ 2 rounds</text>
+        <text class="edge" x="1040" y="166" text-anchor="end">fix · ≤ round cap</text>
         <text class="edge" x="695" y="248" text-anchor="middle">cleared</text>
         <text class="edge" x="331" y="248" text-anchor="middle">merge</text>
       </svg>
@@ -283,7 +283,7 @@ footer nav{gap:16px;font-size:13px}
         <text class="note" x="30" y="364">own worktree, opens the PR</text>
         <text class="ref" x="30" y="456">review</text>
         <text class="step" x="30" y="482">Independent review</text>
-        <text class="note" x="30" y="504">fix · ≤ 2 rounds, then you decide</text>
+        <text class="note" x="30" y="504">fix · ≤ round cap, then you decide</text>
         <text class="gate" x="30" y="596">GATE 2 · YOU</text>
         <text class="step" x="30" y="622">Merge the PR</text>
         <text class="note" x="30" y="644">one ✗ blocks it, however green CI is</text>
@@ -321,8 +321,8 @@ footer nav{gap:16px;font-size:13px}
     </ol>
 
     <div class="card retry">
-      <div class="label">The retry edge · two rounds, then you decide</div>
-      <p>Review sends the PR back to its agent. Round 1: the reviewer reports, the agent fixes and replies once. Round 2: the reviewer checks only what it raised. There is no round 3 — whatever is still open comes to you in one short block. <a href="https://github.com/cbmono/loopd/blob/main/docs/autonomy.md#two-rounds-then-the-human-decides">docs/autonomy.md</a></p>
+      <div class="label">The retry edge · a round cap per reviewer, then you decide</div>
+      <p>Review sends the PR back to its agent: the reviewer reports, the agent fixes and replies once. Each reviewer gets one round by default — <code>coderabbitRounds</code> and <code>qaRounds</code> raise it. When CodeRabbit refuses to review, out of quota or credits, a QA reviewer takes the round instead. After the last round a <code>yolo</code> project merges the fix on green with no re-review, if it changes at most <code>reviewFixMaxLines</code> lines (300 by default). Anything bigger, or still disputed, comes to you in one short block. <a href="https://github.com/cbmono/loopd/blob/main/docs/autonomy.md#a-round-cap-per-reviewer-then-the-human-decides">docs/autonomy.md</a></p>
     </div>
   </section>
 
@@ -383,6 +383,9 @@ footer nav{gap:16px;font-size:13px}
       <div class="card"><h3>Done means a PR exists</h3><p>An agent's "done" is not evidence. The dispatch check asks whether the status moved and the PR resolves — and only reports.</p></div>
       <div class="card"><h3>One tick at a time</h3><p>A lock refuses a second orchestrator. Stale or unattributable means ask the human — never delete, never adopt.</p></div>
       <div class="card"><h3>Never deletes on a guess</h3><p>The worktree pruner only reports. A worktree goes when its task is done with every PR merged, or when you say yes to <code>/loopd:prune-wt</code>. The bundle repair is report-only by default.</p></div>
+      <div class="card"><h3>QA on the top tier</h3><p>A new install runs the QA reviewer on the apex model tier, where it weighs a cheap review's findings itself instead of handing them to a weaker model.</p></div>
+      <div class="card"><h3>Every comment is signed</h3><p>Each agent comment and review on a PR ends with <code>— &lt;login&gt;-&lt;role&gt;</code>, so you can tell who wrote it. A label for people; no gate reads it.</p></div>
+      <div class="card"><h3>Credential stores stay shut</h3><p>Agents cannot write, move or delete <code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.config/gh</code>, key files or credential files outside their own worktree.</p></div>
       <div class="card human"><h3>The gates can be delegated</h3><p>Only through the separate <code>loopd-yolo</code> companion plugin, which <code>loopd-all</code> includes; each project stays gated until it opts in. Uninstall it and every project is gated again, with no other edits.</p></div>
     </div>
   </section>

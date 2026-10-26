@@ -782,7 +782,8 @@ text an attacker can write, so no quantity of it may clear anything. An unchecke
 read as *state*, never as an argument.
 
 **The mandatory lens set is `correctness`, `security`, `repro`** — the three the
-`qa-reviewer` fans out (see its "Deep review" step). **All three must be present** in the
+`qa-reviewer` covers: below the `apex` tier by fanning out to parallel lens agents, at
+`apex` by adjudicating them itself (its "second opinion" step). **All three must be present** in the
 trailer. "Every lens listed is `done`" is not sufficient on its own: a trailer that simply
 omits a lens would pass vacuously, which is the exact failure mode this contract exists to
 stop. A lens that genuinely didn't apply is `skipped(<reason>)` — never absent.

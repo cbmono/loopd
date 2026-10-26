@@ -5,6 +5,9 @@ OKF knowledge bundle: a single repo, cloned once per person, each clone running 
 `/loopd:dispatch` loop. Everyone sees one set of projects and one knowledge base, and
 anyone can hand a project or a single task across.
 
+This is sized for **two or three people**. Past that, give each person their own bundle
+and share only the knowledge base: [README → Larger teams](../README.md#larger-teams).
+
 ## Step 0 — the bundle is the org's repo
 
 ```sh

@@ -301,7 +301,7 @@ later one is quicker:
 
 | # | Step | When it applies | What it costs |
 |---|---|---|---|
-| 1 | **The `qa-reviewer` fallback reviews it, this tick.** | `review-next.sh` answers `dispatch-qa`: exit 1 `class: declined` or exit 5 before CodeRabbit's last round | one deep-tier session per QA round, up to `qaRounds` (**1** when absent) |
+| 1 | **The `qa-reviewer` fallback reviews it, this tick.** | `review-next.sh` answers `dispatch-qa`: exit 1 `class: declined` or exit 5 before CodeRabbit's last round | one `qa-reviewer` session per QA round at its configured tier (`apex` on a new install, where it adjudicates without dispatching the `code-architect` + `deep-bug-scan` pair), up to `qaRounds` (**1** when absent) |
 | 2 | **A second human on the bundle reviews it.** | QA reached `qaRounds`, or a solo bundle's same-login verdict is not enough for you | one human's attention. The `people` map in `instance.config.json` is where a bundle's second human is named; `scripts/add-second-human.sh` prepares the shared half |
 | 3 | **The owner overrides, recorded on the PR.** | steps 1 and 2 are both unavailable | the review. This is the step that costs something irreversible, which is why it is last |
 
@@ -371,7 +371,7 @@ clean. Three rules keep it to one.
    to be verified before it can merge — that's re-verification of different code, not
    re-review of the same code, and the loop does it automatically.
 
-## Two rounds, then the human decides
+## A round cap per reviewer, then the human decides
 
 A **hard cap** on how many verification rounds each reviewer gets on one PR —
 `coderabbitRounds` and `qaRounds` in `instance.config.json`, **1** each when absent (any
