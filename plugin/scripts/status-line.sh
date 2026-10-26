@@ -128,12 +128,12 @@ esac
 
 # --- need you: AWAITING.md's own items, counted the way the banner counts them -----------
 # THREE STATES, THREE RENDERINGS, and `[ -r ]` alone cannot tell the first two apart.
-# ABSENT IS CHOSEN — build-awaiting.sh never recreates the file, so deleting it is how the
-# queue is switched off, and a state the human typed is not an error: the segment goes.
+# OFF IS CHOSEN — `awaiting: false`, or the file deleted (build-awaiting.sh never recreates
+# it) — and a state the human typed is not an error: the segment goes.
 # UNREADABLE IS ARRIVED AT, so it speaks, and it names its own repair in the line.
 awaiting=""
 queue=off
-if [ -e "$root/$AB_AWAITING" ]; then
+if ab_awaiting_on "$root" && [ -e "$root/$AB_AWAITING" ]; then
   queue=unreadable
   if [ -r "$root/$AB_AWAITING" ]; then
     queue=on

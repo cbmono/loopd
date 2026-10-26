@@ -4,7 +4,7 @@
 # instance root. Reads that file and `tick-lock.sh status`, nothing else: no task document,
 # no `gh`, no `git`, so it never becomes a second status view (docs/conventions.md #3).
 #
-# Exit: 0 printed (an absent file is the off switch, and is never created) · 2 not an
+# Exit: 0 printed (`awaiting: false` or an absent file is off; never created here) · 2 not an
 # instance root · 3 AWAITING.md unreadable or not a file. Backs /<plugin>:whats-up; verified by
 # tests/whats-up.test.sh.
 set -uo pipefail
@@ -14,11 +14,15 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 ab_is_bundle . || { echo "whats-up: run from a control-panel instance root (instance.config.json)."; exit 2; }
 f="$AB_AWAITING"
 
-if [ ! -e "$f" ]; then
-  echo "The Needs-you queue is off: no $f. \`touch $f\` turns it back on; the next dispatch tick that changes something fills it."
+if ! ab_awaiting_on .; then
+  echo "The Needs-you queue is off: \"awaiting\": false in instance.config.json. Remove the key (or set it true) and run /${PLUGIN_NAME}:init to turn it back on."
   exit 0
 fi
-[ -f "$f" ] || { echo "whats-up: $f exists but is not a regular file — remove it, then \`touch $f\`."; exit 3; }
+if [ ! -e "$f" ]; then
+  echo "The Needs-you queue is off until the next stamp: no $f. /${PLUGIN_NAME}:init recreates it; the next dispatch tick that changes something fills it."
+  exit 0
+fi
+[ -f "$f" ] || { echo "whats-up: $f exists but is not a regular file — remove it, then run /${PLUGIN_NAME}:init."; exit 3; }
 [ -r "$f" ] || { echo "whats-up: $f exists but cannot be read — chmod +r $f."; exit 3; }
 
 if ! grep -qE '^##[[:space:]].*Awaiting you' "$f"; then

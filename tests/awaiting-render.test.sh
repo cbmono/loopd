@@ -56,7 +56,7 @@ cat > "$TMP/want" <<'WANT'
 # Awaiting you
 
 Derived and gitignored — **do not hand-edit**. Rewritten from `projects/*/tasks/*.md`
-by each dispatch tick that changed something. Delete this file to turn the queue off for good.
+by each dispatch tick that changed something. Set "awaiting": false in instance.config.json to turn the queue off.
 Last refreshed: <ISO>.
 
 ## 🔴 Awaiting you (5)

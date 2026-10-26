@@ -1192,6 +1192,7 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `worktreeRoot` | **yes** — an absolute path on this machine | `<reposRoot>/_wt`, which is also still swept as the legacy root |
 | `boardInstances` | **yes** — a list of paths to sibling instances | just this instance |
 | `board` | **no** — one instance, one answer, and `/loopd:init` reads it from the tracked file at stamp time | on: `SNAPSHOT.json` is seeded, and each tick renders `.loopd/.board-live/board.html` |
+| `awaiting` | **no** — one instance, one answer, read from the tracked file by `/loopd:init` and every queue reader; a local-only copy is reported `MISPLACED` | on: `AWAITING.md` is created on any stamp that finds it missing. `false` ⇒ never created, and the banner, status line, `/loopd:whats-up` and `push-state.sh` stay off the queue |
 | `boardArtifactUrl` | **local ONLY** — the page **this clone** published with `/loopd:board publish`. Never in the tracked file, and never seeded: publishing is account-scoped, so a shared value is one clone's URL that the other can never write | nothing was published from this machine; the banner prints the `file://` path alone and the tick says nothing about a published page |
 | `models` | **yes**, and **seeded** — which model each tier costs **this human**. `/loopd:init` writes this key into the local file on any stamp that finds it missing, so local is normally the layer in force and the banner reads `local` | the tracked map, which stays as the fallback; absent from **both**, `resolve-model.sh` prints nothing on stdout, **says so on stderr**, and exits 1 |
 | `roleTiers` | **yes**, and **seeded** on the same terms — the same bill, per agent. **A partial override replaces only the entries it names**, so moving one agent to a cheaper tier leaves every other agent's tier standing, and the installer never tops a partial map up | as `models` above |
@@ -1329,9 +1330,9 @@ account-scoping requires. `session-banner.sh` reads it through `resolve-config.s
 checks the **source**: a value resolving from `tracked` is dropped rather than printed, so
 the old shape cannot come back by someone pasting a URL into the wrong file.
 
-**`board` stays not overridable, and for its own reason** — `/loopd:init` reads that key
-from the tracked file at stamp time, and a per-machine override would give one switch two
-answers. It gates `boardArtifactUrl` too: `board: false` silences the published row like
+**`board` and `awaiting` stay not overridable, and for their own reason** — `/loopd:init`
+reads each key from the tracked file at stamp time, and a per-machine override would give
+one switch two answers. It gates `boardArtifactUrl` too: `board: false` silences the published row like
 every other one.
 
 **Nothing about a shared bundle depends on the published page**, then or now. The

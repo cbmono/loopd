@@ -198,11 +198,10 @@ you, and scrolling past it is how a queue stops getting read. Each `/loopd:dispa
 rewrites the file, and a `SessionStart` hook injects these items when you launch
 Claude here — so you see what needs a decision without reading the loop.
 
-**On by default, off by deletion.** The template's installer created this file when
-it first stamped out the instance; from then on the loop refreshes it only if it
-already exists and never recreates it. So `rm AWAITING.md` turns the queue off for
-good — a later installer re-run won't resurrect it — and `touch AWAITING.md` turns
-it back on. Derived and gitignored — never hand-edit it. With it off, ask the
+**On by default; `"awaiting": false` in `instance.config.json` turns it off.**
+`/loopd:init` creates this file on any stamp that finds it missing, unless that key is
+`false`; the loop refreshes it only if it exists and never creates it. `rm AWAITING.md`
+turns the queue off until the next stamp. Derived and gitignored — never hand-edit it. With it off, ask the
 assistant directly and it reads the task docs.
 
 ## Keep it up to date — two halves, two commands

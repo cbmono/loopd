@@ -1757,7 +1757,7 @@ The old `/status` command and `DASHBOARD.md` are gone. In each existing instance
 1. Replace the `DASHBOARD.md` line in its `.gitignore` with `AWAITING.md` (that line is
    seed content, so `/loopd:init` won't rewrite it for you).
 2. `rm DASHBOARD.md` — it's a derived, gitignored leftover that nothing reads now.
-3. `touch AWAITING.md` if you want the startup queue; skip it if you don't.
+3. Re-run `/loopd:init`, which creates `AWAITING.md`; set `"awaiting": false` in `instance.config.json` first if you don't want the startup queue.
 4. **Port the prose in its `CLAUDE.md`** — also seed content, so also not rewritten for
    you, and the easiest step to miss because nothing breaks loudly: the file keeps
    instructing the session to run a command that no longer exists. Drop the `/status` row

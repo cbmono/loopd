@@ -100,7 +100,7 @@ write_queue() {
 # Awaiting you
 
 Derived and gitignored — **do not hand-edit**. Rewritten each `/pm-loop` tick
-from `projects/*/tasks/*.md`. Delete this file to turn the queue off for good.
+from `projects/*/tasks/*.md`. Set "awaiting": false in instance.config.json to turn the queue off.
 Last refreshed: 2026-08-11T10:04:00Z.
 
 ## 🔴 Awaiting you (6)
@@ -340,10 +340,9 @@ simple_ok "no AWAITING.md and an empty AWAITING.md say the same nothing" \
 simple_ok "…and neither mentions the queue on the model's channel either" \
   "$(grep -qE 'AWAITING ITEMS|🔔' <<<"$MODEL" && echo 1 || echo 0)"
 
-# --- installer: on by first stamp, off by deletion, forever ---------------
-# The queue is created once so a new instance has a working nudge, but a
-# deliberate `rm` must survive every later refresh. Get this wrong and the off
-# switch quietly stops being one.
+# --- installer: on by default, off by config ------------------------------
+# `awaiting` in the TRACKED instance.config.json is the switch; any stamp creates the file
+# when it is missing, and `rm` is off only until the next stamp.
 #
 # install.sh refuses to run from a linked git worktree (deliberately — see its own
 # header), and every role agent's checkout of this template is one (CONVENTIONS.md).
@@ -388,15 +387,72 @@ out="$(CLAUDE_PROJECT_DIR="$inst" bash "$HOOK" --format json 2>/dev/null)"
 simple "seeded queue adds no awaiting section until the first tick" \
   "$(grep -qE '🔔|AWAITING ITEMS' <<<"$out" && echo noisy || echo silent)" silent
 
+SEEDED="$(cat "$inst/$AB_AWAITING")"
+simple "…with the seed's valid empty queue" \
+  "$(grep -c '^## 🔴 Awaiting you (0)$' "$inst/$AB_AWAITING")" 1
+simple "…and no delete-for-good advice" "$(grep -c 'for good' "$inst/$AB_AWAITING")" 0
+
 printf 'LOCAL EDIT\n' >> "$inst/$AB_AWAITING"
+cp "$inst/$AB_AWAITING" "$TMP/before"
 bash "$BRIDGE_INSTALL" "$inst" >/dev/null 2>&1
-simple "refresh never clobbers an existing queue" \
-  "$(grep -c 'LOCAL EDIT' "$inst/$AB_AWAITING")" 1
+simple "refresh leaves an existing queue byte-for-byte" \
+  "$(cmp -s "$TMP/before" "$inst/$AB_AWAITING" && echo same || echo changed)" same
 
 rm "$inst/$AB_AWAITING"
-bash "$BRIDGE_INSTALL" "$inst" >/dev/null 2>&1
-simple "deletion survives an installer re-run" \
-  "$([ -f "$inst/$AB_AWAITING" ] && echo resurrected || echo "stays-deleted")" stays-deleted
+mkdir -p "$inst/$AB_DIR"; echo 'queue present' > "$inst/$AB_STATE_DIR"
+out="$(bash "$BRIDGE_INSTALL" "$inst" 2>&1)"
+simple "…and drops the idle fingerprint, so the next tick runs in full" \
+  "$([ -e "$inst/$AB_STATE_DIR" ] && echo kept || echo dropped)" dropped
+simple "rm + re-stamp (seeded awaiting: true) brings it back" \
+  "$([ -f "$inst/$AB_AWAITING" ] && echo yes || echo no)" yes
+simple "…as the seeded file"   "$([ "$(cat "$inst/$AB_AWAITING")" = "$SEEDED" ] && echo yes || echo no)" yes
+simple "…and says seed"        "$(grep -c "seed  $AB_AWAITING" <<<"$out")" 1
+simple "…never touch advice"   "$(grep -i 'touch' <<<"$out" | grep -c 'AWAITING')" 0
+
+# An OLD bundle: a config with no `awaiting` key and no file — the pre-seed state.
+python3 - "$inst/instance.config.json" <<'PYJ'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p)); d.pop("awaiting", None); d.pop("$awaiting", None)
+json.dump(d, open(p, "w"), indent=2)
+PYJ
+rm "$inst/$AB_AWAITING"
+out="$(bash "$BRIDGE_INSTALL" "$inst" 2>&1)"
+simple "old bundle (no key, no file): the stamp creates it" \
+  "$([ "$(cat "$inst/$AB_AWAITING" 2>/dev/null)" = "$SEEDED" ] && echo yes || echo no)" yes
+simple "…printing a seed line, not 'absent by choice'" \
+  "$(grep -c "seed  $AB_AWAITING" <<<"$out")/$(grep -c 'absent by choice' <<<"$out")" 1/0
+simple "…and writes no awaiting key into the config" \
+  "$(grep -c '"awaiting"' "$inst/instance.config.json")" 0
+
+set_awaiting() { # <file> <true|false|-> — `-` drops the key
+  python3 - "$1" "$2" <<'PYJ'
+import json, os, sys
+p, v = sys.argv[1], sys.argv[2]
+d = json.load(open(p)) if os.path.exists(p) else {}
+d.pop("awaiting", None)
+if v != "-": d["awaiting"] = (v == "true")
+json.dump(d, open(p, "w"), indent=2)
+PYJ
+}
+set_awaiting "$inst/instance.config.json" false
+rm "$inst/$AB_AWAITING"
+out="$(bash "$BRIDGE_INSTALL" "$inst" 2>&1)"
+simple "awaiting: false — the stamp never creates it" \
+  "$([ -e "$inst/$AB_AWAITING" ] && echo created || echo absent)" absent
+simple "…and says skip, naming the key" \
+  "$(grep -c "skip  $AB_AWAITING (awaiting: false in instance.config.json)" <<<"$out")" 1
+
+set_awaiting "$inst/instance.config.json" -
+set_awaiting "$inst/instance.config.local.json" false
+out="$(bash "$BRIDGE_INSTALL" "$inst" 2>&1)"
+simple "awaiting: false ONLY in the local file does not turn it off" \
+  "$([ -f "$inst/$AB_AWAITING" ] && echo created || echo absent)" created
+rm -f "$inst/instance.config.local.json"
+
+# THE BANNER HONOURS THE KEY even with a full queue on disk: off means no nudge.
+setup; write_queue
+printf '{\n  "org": "example-org",\n  "awaiting": false\n}\n' > "$TMP/inst/instance.config.json"
+check "awaiting: false with a full queue on disk: no nudge" 0
 
 # WHAT A TICK REPORT'S AWAITING ITEMS MUST CARRY (ai-bridge-v3/task-025). The queue file is
 # one surface; the tick's own report to the human is the other, and it is prose in

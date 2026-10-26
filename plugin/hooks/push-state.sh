@@ -211,11 +211,13 @@ fi
 
 # ---------------------------------------------------------------- awaiting count
 # Counted from the awaiting queue with the same extraction session-banner.sh uses — this
-# hook only READS that file and never reshapes it. Absent means the human turned
-# the queue off, which is not the same claim as "nothing awaits you", so say so
-# rather than printing a 0 nobody measured.
+# hook only READS that file and never reshapes it. Off (by config, or the file
+# deleted) is not the same claim as "nothing awaits you", so say so rather than
+# printing a 0 nobody measured.
 awaiting="off (no $AB_AWAITING)"
-if [ -f "$root/$AB_AWAITING" ]; then
+if ! ab_awaiting_on "$root"; then
+  awaiting="off (awaiting: false in instance.config.json)"
+elif [ -f "$root/$AB_AWAITING" ]; then
   awaiting="$(awk '
     /^##[[:space:]].*Awaiting you/ { inblk=1; next }
     inblk && /^##[[:space:]]/       { exit }

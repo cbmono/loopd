@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # continue-checkpoint.sh + build-awaiting.sh — the "should this continue?" row
-# (value-gate-at-intake task-003). Every fixture CREATES AWAITING.md: absent is off for good,
+# (value-gate-at-intake task-003). Every fixture CREATES AWAITING.md: absent is off,
 # so a fixture without it would pass while the feature was dead.
 set -uo pipefail
 

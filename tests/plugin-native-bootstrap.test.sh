@@ -154,13 +154,13 @@ ok "…and says how to set the three values by hand" "$(grep -c '<your-login>' "
 # derivable on any machine (the bundle's parent). Login and address depend on the host.
 ok "…while this clone's local config is written" "$(yn test -f "$FRESH/instance.config.local.json")" yes
 ok "…carrying the derived reposRoot"     "$(grep -c '"reposRoot"' "$FRESH/instance.config.local.json" | tr -d ' ')" 1
-# IDEMPOTENT, and the queue's off switch survives it: AWAITING.md is created on a FIRST
-# stamp only, so a deletion must be permanent.
+# IDEMPOTENT: a re-stamp seeds nothing new — except a deleted AWAITING.md, which any stamp
+# recreates while `awaiting` is on (the config key is the durable off switch).
 rm -f "$FRESH/$AB_AWAITING"
 bash "$INIT" "$FRESH" >"$TMP/fresh2.out" 2>&1
 ok "a re-stamp exits 0"                  "$?" 0
-ok "…and does NOT resurrect AWAITING.md" "$(yn test -e "$FRESH/$AB_AWAITING")" no
-ok "…seeding nothing new"                "$(grep -c '^  seed ' "$TMP/fresh2.out" | tr -d ' ')" 0
+ok "…recreates a deleted AWAITING.md"    "$(yn test -e "$FRESH/$AB_AWAITING")" yes
+ok "…and seeds nothing else"             "$(grep '^  seed ' "$TMP/fresh2.out" | grep -vc "seed  $AB_AWAITING " | tr -d ' ')" 0
 
 # =========================================================================================
 echo "== 3. that bundle holds ZERO symlinks outside repos/ =="

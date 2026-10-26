@@ -120,9 +120,8 @@ this instance alone.
 |---|---|---|---|
 | 1 | Record who is who | either clone | `people` map in `instance.config.json` |
 | 2 | Name who owns unowned work | either clone | `defaultOwner` in `instance.config.json` |
-| 3 | Turn the nudges on (a clone is not a first stamp) | second clone | `touch AWAITING.md` — `SNAPSHOT.json` is seeded by the stamp itself |
-| 4 | Untrack the derived indexes if already committed | either clone | run the `git rm --cached` that `/loopd:init` prints |
-| 5 | Assign work | either clone | `owner: <github-login>` on a `project.md` or one `tasks/<id>.md` |
+| 3 | Untrack the derived indexes if already committed | either clone | run the `git rm --cached` that `/loopd:init` prints |
+| 4 | Assign work | either clone | `owner: <github-login>` on a `project.md` or one `tasks/<id>.md` |
 
 ## The config split at a glance
 
@@ -195,13 +194,12 @@ Covered by `tests/task-owner.test.sh` (74 assertions, mostly refusals), `commit-
 
 ## One thing a second clone does not get automatically
 
-The second clone is **not a first stamp** (`instance.config.json` arrives tracked), so
-`/loopd:init` there will **not** create `AWAITING.md`. It says so, with the `touch` to turn
-it on. See [conventions.md invariant 3](conventions.md#3-awaitingmd-is-loopds-only-status-artifact-and-it-is-opt-in-by-presence)
-for why that creation is gated on the first stamp.
+The second clone is **not a first stamp** (`instance.config.json` arrives tracked). That
+no longer costs it the queue: `/loopd:init` creates `AWAITING.md` on any stamp where it is
+missing, unless `awaiting` is `false` — see [conventions.md invariant 3](conventions.md#3-awaitingmd-is-loopds-only-status-artifact-and-awaiting-in-config-is-its-switch).
 
-`SNAPSHOT.json` is **not** gated that way and needs no `touch`: the installer seeds it on
-any stamp where it is missing, unless `board` is `false`. The board's off switch is that
+`SNAPSHOT.json` follows the same rule: the installer seeds it on any stamp where it is
+missing, unless `board` is `false`. The board's off switch is that
 key, not the file's absence.
 
 Two rules survive the per-machine override and are checked against the *effective*
@@ -251,7 +249,7 @@ only the collection step it was missing.
 
 | Guard | Why it exists |
 |---|---|
-| Only on the **first stamp** | `/loopd:welcome fix` calls `/loopd:init` on *every* run, including its non-interactive report-only mode, so an unguarded prompt would block every upgrade. It reuses the same `FIRST_STAMP` that gates `AWAITING.md`, rather than inventing a second notion of "new" |
+| Only on the **first stamp** | `/loopd:welcome fix` calls `/loopd:init` on *every* run, including its non-interactive report-only mode, so an unguarded prompt would block every upgrade. It reuses the stamp's one `FIRST_STAMP`, rather than inventing a second notion of "new" |
 | Only when **stdin is a terminal** | otherwise it skips, leaves the placeholder, and prints the instruction. A prompt nobody can see is a hang, and a hang in a background agent is invisible |
 | **Never overwrite** | only the seeded placeholder is ever rewritten, and the local file only when absent. Seeds-if-absent is what makes the installer safe to re-run on a repo full of somebody's work |
 

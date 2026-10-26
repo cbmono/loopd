@@ -190,6 +190,11 @@ new_instance; run
 assert "absent AWAITING.md -> reports 'off', not an error" "$(has "awaiting off (no $AB_AWAITING)" "$OUT")"
 assert "  ...and exits 0 (deletion is a documented off switch)" "$(eq "$RC" 0)"
 
+new_instance; queue 3; printf '{"awaiting":\n false}\n' > "$INST/instance.config.json"; run
+assert "awaiting: false -> off, naming the config key" "$(has 'awaiting off (awaiting: false in instance.config.json)' "$OUT")"
+assert "  ...not the count on disk"                     "$(hasnt 'awaiting 3' "$OUT")"
+assert "  ...and no touch advice"                       "$(hasnt 'touch' "$OUT")"
+
 new_instance; queue 0; run
 assert "present but empty queue -> awaiting 0 (a measured zero)" "$(has 'awaiting 0' "$OUT")"
 assert "  ...distinct from the absent case"                      "$(hasnt 'awaiting off' "$OUT")"

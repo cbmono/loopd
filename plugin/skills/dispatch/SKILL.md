@@ -420,9 +420,9 @@ ticks, regardless of how long a tick runs.
   that line can say when you will next hear from the loop.
 - Each tick refreshes `AWAITING.md` **only when that file already exists, and only
   when the tick changed something** (a `noop: true` tick leaves it alone rather than
-  restamping its `Last refreshed:` line); deleting
-  it turns the queue off for good (the loop never recreates it); `touch AWAITING.md`
-  turns it back on.
+  restamping its `Last refreshed:` line). The loop never creates it: `/loopd:init`
+  does, on any stamp, unless `"awaiting": false` in `instance.config.json` — the
+  durable off switch; deleting the file turns the queue off until the next stamp.
 - Each tick also refreshes `SNAPSHOT.json` (`${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet`, at
   the end of the tick) — same rule and same off switch: the writer rewrites the file
   **only when it already exists**, so `rm SNAPSHOT.json` takes this instance off the

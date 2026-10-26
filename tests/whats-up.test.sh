@@ -36,8 +36,17 @@ out="$(run)"; rc=$?
 ok "absent: exits 0"                         "$rc" 0
 ok "absent: one line"                        "$(grep -c . <<<"$out")" 1
 ok "…says the queue is off"                  "$(has "$out" 'queue is off')" yes
-ok "…names touch to turn it back on"         "$(has "$out" 'touch .loopd/AWAITING.md')" yes
+ok "…names the stamp that brings it back"    "$(has "$out" "/${PN}:init recreates it")" yes
+ok "…and gives no touch advice"              "$(grep -ci touch <<<"$out")" 0
 ok "…and leaves the file absent"             "$([ -e "$B/.loopd/AWAITING.md" ] && echo yes || echo no)" no
+
+printf '{"awaiting":\n false}\n' > "$B/instance.config.json"
+printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — x\n' > "$B/.loopd/AWAITING.md"
+out="$(run)"; rc=$?
+ok "awaiting: false: exits 0, one line"      "$rc/$(grep -c . <<<"$out")" 0/1
+ok "…names the config key"                   "$(has "$out" '"awaiting": false in instance.config.json')" yes
+ok "…no touch advice, no rows"               "$(grep -ciE 'touch|approve' <<<"$out")" 0
+rm -f "$B/.loopd/AWAITING.md"; echo '{}' > "$B/instance.config.json"
 
 : > "$B/.loopd/AWAITING.md"
 out="$(run)"
@@ -50,7 +59,7 @@ ok "empty section: one line"                 "$(grep -c . <<<"$out")" 1
 ok "…says nothing needs you"                 "$(has "$out" 'Nothing needs you')" yes
 
 echo "== the seeded file reads as never refreshed =="
-printf '# Awaiting you\n\nDerived. Delete this file to turn the queue off for good;\nthe loop never recreates it. Last refreshed: never (no tick has run yet).\n\n## 🔴 Awaiting you (0)\n_None._\n' > "$B/.loopd/AWAITING.md"
+printf '# Awaiting you\n\nDerived. Set "awaiting": false in instance.config.json\nto turn the queue off. Last refreshed: never (no tick has run yet).\n\n## 🔴 Awaiting you (0)\n_None._\n' > "$B/.loopd/AWAITING.md"
 out="$(run)"
 ok "seeded: one line"                        "$(grep -c . <<<"$out")" 1
 ok "…says never refreshed"                   "$(has "$out" 'Never refreshed')" yes

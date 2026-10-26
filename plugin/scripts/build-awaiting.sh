@@ -423,7 +423,7 @@ tmp="$out.tmp.$$"
 {
   printf '# Awaiting you\n\n'
   printf 'Derived and gitignored — **do not hand-edit**. Rewritten from `projects/*/tasks/*.md`\n'
-  printf 'by each dispatch tick that changed something. Delete this file to turn the queue off for good.\n'
+  printf 'by each dispatch tick that changed something. Set "awaiting": false in instance.config.json to turn the queue off.\n'
   printf 'Last refreshed: %s.\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf '## 🔴 Awaiting you (%s)\n' "$n"
   printf '%s' "$body"

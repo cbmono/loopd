@@ -101,5 +101,22 @@ ok "the notice names the file"     "$(printf '%s' "$notice" | grep -c "SCHEMA.md
 ok "…and the one command that fixes it" "$(printf '%s' "$notice" | grep -c 'migrate-bundle.sh --layout-only --apply$')" 1
 
 echo
+echo "== 7. ab_awaiting_on: the one reader of \`awaiting\`, tracked file only =="
+A="$(mktemp -d "${TMPDIR:-/tmp}/bp-awaiting.XXXXXX")" || exit 2
+on() { ab_awaiting_on "$A" && echo on || echo off; }
+cp "$REPO/plugin/seed/instance.config.json" "$A/instance.config.json"
+ok "the seed config reads as on"            "$(on)" on
+printf '{ "org": "x" }\n' > "$A/instance.config.json"
+ok "a config with no key reads as on"       "$(on)" on
+printf '{"awaiting":\nfalse}\n' > "$A/instance.config.json"
+ok "key and false on two lines read as off" "$(on)" off
+printf '{ "awaiting": true }\n' > "$A/instance.config.json"
+printf '{ "awaiting": false }\n' > "$A/instance.config.local.json"
+ok "a local-only false is ignored"          "$(on)" on
+rm -f "$A/instance.config.json" "$A/instance.config.local.json"
+ok "no config file reads as on, silently"   "$(ab_awaiting_on "$A" 2>&1 && echo on || echo off)" on
+rm -rf "$A"
+
+echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
