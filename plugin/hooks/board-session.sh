@@ -66,8 +66,7 @@ prune() { # exit 0 when a live record remains
 
 SPORT="" SPID="" SOWNER=""
 serving() {
-  local r=""
-  { read -r SPORT; read -r SPID; read -r r; read -r SOWNER; } 2>/dev/null < "$dir/.serve"
+  { read -r SPORT; read -r SPID; read -r _; read -r SOWNER; } 2>/dev/null < "$dir/.serve"
   case "$SPORT$SPID" in ''|*[!0-9]*) return 1 ;; esac
   kill -0 "$SPID" 2>/dev/null
 }
