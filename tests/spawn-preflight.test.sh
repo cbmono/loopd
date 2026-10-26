@@ -138,7 +138,8 @@ spawn_at="$(head -n1 <<<"$(grep -nF "claude --bg --agent loopd:<assignee> --perm
 ok "the preflight is named in step 3"        "$([ -n "$pre_at" ] && echo yes || echo no)" yes
 # The spawn line, with and without --effort, against the UNCHANGED per-role rule: a
 # permission rule's `*` is a glob, so bash's own `==` pattern match stands in for it.
-RULE_BODY="$(grep -o "printf 'Bash(claude --bg --agent %s:%s [^)]*)" "$REPO/plugin/scripts/init-bundle.sh" | head -n1 | sed "s/^printf 'Bash(//; s/)\$//")"
+RULE_BODY="$(head -n1 <<<"$(grep -o "printf 'Bash(claude --bg --agent %s:%s [^)]*)" "$REPO/plugin/scripts/init-bundle.sh")")"
+RULE_BODY="${RULE_BODY#printf \'Bash(}"; RULE_BODY="${RULE_BODY%)}"
 pat="$(printf "$RULE_BODY" loopd software-engineer /b)"
 eff_line="claude --bg --agent loopd:software-engineer --permission-mode auto --add-dir /b --model opus --effort high 'brief'"
 bare_line="claude --bg --agent loopd:software-engineer --permission-mode auto --add-dir /b --model opus 'brief'"
