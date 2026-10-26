@@ -169,7 +169,16 @@ ok "…the first one is not overwritten"          "$(has "$DOC" 'usage tokens=20
 ok "…each names its role and model"             "$(grep -c '^\* DISPATCH .* · software-engineer · model opus · usage ' "$DOC" | tr -d ' ')" 2
 ok "…written INSIDE # Notes, above the next heading" \
    "$(awk '/^# Notes$/{n=NR} /^\* DISPATCH /{d=NR} /^# Superseded/{s=NR} END{print (n<d && d<s) ? "yes" : "no"}' "$DOC")" yes
-ok "…and a line names no session and no path"   "$(grep -c '^\* DISPATCH [0-9T:Z-]* · [a-z-]* · model [a-z-]* · usage tokens=[0-9]* tools=[0-9]* ms=[0-9]*$' "$DOC" | tr -d ' ')" 2
+ok "…and a line names no session and no path"   "$(grep -cE '^\* DISPATCH [0-9T:Z-]* · [a-z-]* · model [a-z-]*( · effort [a-z]*)? · usage tokens=[0-9]* tools=[0-9]* ms=[0-9]*$' "$DOC" | tr -d ' ')" 2
+
+echo "== --effort lands right after the model; without it the line is today's =="
+EDOC="$TMP/effort.md"; printf '%s\n' '---' 'type: Task' '---' '' '# Notes' '' > "$EDOC"
+"$AU" dispatch "$EDOC" --role software-engineer --model opus --effort high >/dev/null
+"$AU" dispatch "$EDOC" --role qa-reviewer --model fable >/dev/null
+ok "the effort form reads · model opus · effort high · usage" "$(grep -c '^\* DISPATCH [0-9T:Z-]* · software-engineer · model opus · effort high · usage UNKNOWN$' "$EDOC" | tr -d ' ')" 1
+ok "…and the flag-free form carries no effort field" "$(grep -c '^\* DISPATCH [0-9T:Z-]* · qa-reviewer · model fable · usage UNKNOWN$' "$EDOC" | tr -d ' ')" 1
+ok "settle fills the effort-form line too"      "$("$AU" settle "$EDOC" --tokens 3 --tools 2 --duration-ms 1 >/dev/null; "$AU" settle "$EDOC" --tokens 5 --tools 1 --duration-ms 2 >/dev/null; grep -c '· effort high · usage tokens=5 tools=1 ms=2$' "$EDOC" | tr -d ' ')" 1
+ok "total sums both forms"                      "$("$AU" total "$EDOC" --pr https://example.com/pr/2 >/dev/null; grep -c '^\* TOTAL .* rounds=2 · usage tokens=8 tools=3 ms=3 ' "$EDOC" | tr -d ' ')" 1
 
 echo "== the reflect-time sum equals the dispatch lines it was built from =="
 PR=https://github.com/example-org/example-repo/pull/7

@@ -231,7 +231,9 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    id you minted at step 1, verbatim — and not with state** — it reads the bundle, `git` and `gh` itself. **Run the tick on the
    orchestrator's configured model:** resolve it with
    `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager` (`roleTiers`, default `deep` → an alias
-   via `models`, default `deep` → `opus`) and pass that as the tick's model. If
+   via `models`, default `deep` → `opus`) and pass that as the tick's model, and pass
+   `effort:` what `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh project-manager` prints
+   (nothing printed ⇒ no `effort:`, and the agent's frontmatter `medium` applies). If
    `models`/`roleTiers` are absent the script says so on stderr — **report that line in
    the tick summary** and then inherit the session model, so an unchosen model is
    visible rather than assumed. (The `apex` tier is for the `plan-architect` critique

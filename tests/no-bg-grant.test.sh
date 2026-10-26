@@ -80,6 +80,14 @@ with_rules() { # <instance> <rule>… -> a settings.local.json holding exactly t
 # A trust key lives in ~/.claude.json under projects.<path>; none may appear anywhere.
 trust_written() { grep -rl 'hasTrustDialogAccepted' "$TMP/home" "$1" 2>/dev/null | grep -c . | tr -d ' '; }
 
+echo "== 0. the rule is unchanged, and the spawn matches it with and without --effort =="
+r0="$(head -n1 <<<"$(rules /b)")"; p0="${r0#Bash(}"; p0="${p0%)}"
+ok "the rule still ends at --model *" "$p0" "claude --bg --agent $PN:software-engineer --permission-mode auto --add-dir /b --model *"
+# shellcheck disable=SC2053
+ok "…a spawn with --effort matches it" "$([[ "claude --bg --agent $PN:software-engineer --permission-mode auto --add-dir /b --model opus --effort high 'x'" == $p0 ]] && echo yes || echo no)" yes
+# shellcheck disable=SC2053
+ok "…and one without" "$([[ "claude --bg --agent $PN:software-engineer --permission-mode auto --add-dir /b --model opus 'x'" == $p0 ]] && echo yes || echo no)" yes
+
 echo "== 1. no terminal: a fresh stamp writes no grant, and says how to say yes =="
 I="$TMP/i1"; git init -q "$I"; set_rules "$I"; stamp "$MK" "$I"; rc=$?
 ok "stamp exits 0" "$rc" 0

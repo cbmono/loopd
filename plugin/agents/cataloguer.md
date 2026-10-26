@@ -1,6 +1,7 @@
 ---
 name: cataloguer
 description: Librarian for the OKF knowledge base. Builds and refreshes the Service catalog by reading the configured repos (read-only), and curates Findings and Runbooks. Writes only to knowledge/ in this bundle; never modifies product repos. Use to populate or refresh the KB.
+effort: medium
 tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 

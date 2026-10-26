@@ -148,7 +148,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `cd <worktree> && claude --bg --resume <the UUID full printed> '<the message>'`**,
    and nothing else: the session keeps the agent, model, permission mode and add-dir it
    was spawned with, and passing any of them starts a COPY under a new id (measured on
-   2.1.296). `full` runs on every recorded value, so a task
+   2.1.296). Its `--effort` is one of those saved options: a flag-free wake of a stopped
+   session ran at the spawn's level, and a copy ran at the model default (2.1.310). `full` runs on every recorded value, so a task
    dispatched before step 3 recorded the full id — its `session:` still the short
    one — is resolved before any resume. **`--resume` takes the FULL session id, never the
    short one**: a short id is a picker search term, the picker finds "No sessions match",

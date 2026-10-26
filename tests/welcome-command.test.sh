@@ -327,13 +327,13 @@ ok "instance.config.json is byte-identical after fix"      "$(sha "$INST2/instan
 ok "the local file's existing value is untouched by fix" \
   "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("ownerGithubUser","-"))' "$INST2/instance.config.local.json")" \
   example-user-007
-# And nothing else appeared: exactly the two documented spend keys, and no third.
-ok "…and the ONLY keys added are the seeded spend pair" \
+# And nothing else appeared: exactly the three documented spend keys, and no fourth.
+ok "…and the ONLY keys added are the seeded spend keys" \
   "$(python3 -c '
 import json, sys
 after = set(json.load(open(sys.argv[1])))
 print(",".join(sorted(after - {"ownerGithubUser", "$schema"})))' "$INST2/instance.config.local.json")" \
-  models,roleTiers
+  models,roleEffort,roleTiers
 # Non-vacuity for both: this run really did seed, so "untouched" is a measurement rather
 # than the absence of any action at all.
 ok "…in a run that really did seed them"                   "$(printf '%s\n' "$FIX2" | grep -c 'wrote instance.config.local.json' | tr -d ' ')" 1
@@ -598,6 +598,34 @@ ok "a corrupt sibling file does not mute a real unknown key" \
   "$(printf '%s\n' "$OUT6e" | grep -c 'config carries key(s) nothing reads:.*instance\.config\.json:unknownKeyProbe' | tr -d ' ')" 1
 ok "…and the unparseable sibling is named beside it" \
   "$(printf '%s\n' "$OUT6e" | grep -c 'no answer for instance\.config\.local\.json' | tr -d ' ')" 1
+
+# roleEffort, one level down: an unknown level and a key with no roleTiers twin are named;
+# a key naming a plugin agent (failure-analyst) is a valid override; the seed is clean.
+printf '{\n  "org": "example-org",\n  "roleTiers": { "software-engineer": "deep" },\n  "roleEffort": { "software-engineer": "hgih", "ghost-role": "low" }\n}\n' > "$INST6/instance.config.json"
+printf '{\n  "roleEffort": { "failure-analyst": "max" }\n}\n' > "$INST6/instance.config.local.json"
+OUT6h="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"; rc6h=$?
+WARN6H="$(printf '%s\n' "$OUT6h" | grep 'roleEffort entries no spawn uses:')"
+ok "an unknown effort level is named as file:roleEffort.<role>=<value>" \
+  "$(printf '%s\n' "$WARN6H" | grep -c 'roleEffort entries no spawn uses:.*instance\.config\.json:roleEffort\.software-engineer=hgih' | tr -d ' ')" 1
+ok "…a key with no roleTiers twin is named too" \
+  "$(printf '%s\n' "$WARN6H" | grep -c 'instance\.config\.json:roleEffort\.ghost-role(no roleTiers twin)' | tr -d ' ')" 1
+ok "…a plugin agent with no roleTiers entry is NOT an orphan" \
+  "$(printf '%s\n' "$WARN6H" | grep -c 'failure-analyst' | tr -d ' ')" 0
+ok "…and check still exits 0" "$rc6h" 0
+# Equality, never substring: a multi-word or partial value is named too.
+printf '{\n  "org": "example-org",\n  "roleTiers": { "auditor": "deep", "cataloguer": "standard", "explorer": "light" },\n  "roleEffort": { "auditor": "low medium", "cataloguer": "med", "explorer": "low" }\n}\n' > "$INST6/instance.config.json"
+printf '{\n  "ownerGithubUser": "example-user-007"\n}\n' > "$INST6/instance.config.local.json"
+WARN6M="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1 | grep 'roleEffort entries no spawn uses:')"
+ok "a multi-word level ('low medium') is named" \
+  "$(printf '%s\n' "$WARN6M" | grep -c 'roleEffort\.auditor=low medium' | tr -d ' ')" 1
+ok "…a partial level ('med') too" \
+  "$(printf '%s\n' "$WARN6M" | grep -c 'roleEffort\.cataloguer=med' | tr -d ' ')" 1
+ok "…while a valid level beside them is not" \
+  "$(printf '%s\n' "$WARN6M" | grep -c 'roleEffort\.explorer' | tr -d ' ')" 0
+mkinstance "$TMP/inst6s"; cp "$TPL/plugin/seed/instance.config.json" "$TMP/inst6s/instance.config.json"
+OUT6s="$(bash "$SH" check --instance "$TMP/inst6s" --template "$SRC" 2>&1)"
+ok "the seed's own roleEffort reports neither" \
+  "$(printf '%s\n' "$OUT6s" | grep -c 'roleEffort entries no spawn uses' | tr -d ' ')" 0
 
 # =======================================================================================
 echo "== 10. it ships like every other script here =="

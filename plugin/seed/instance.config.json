@@ -1,5 +1,5 @@
 {
-  "$schema": "Instance config for a loopd control panel. Customize, then commit. TRACKED, so every value here is a statement both clones of a shared bundle read; the per-machine half lives beside it in the gitignored instance.config.local.json, whose overridable set is listed in ONE place -- SCHEMA.md, 'Per-machine config overrides'. `models` and `roleTiers` below are SEEDED into that local file by /loopd:init and are kept here as the FALLBACK: with neither layer, scripts/resolve-model.sh resolves to nothing and every agent inherits the session model.",
+  "$schema": "Instance config for a loopd control panel. Customize, then commit. TRACKED, so every value here is a statement both clones of a shared bundle read; the per-machine half lives beside it in the gitignored instance.config.local.json, whose overridable set is listed in ONE place -- SCHEMA.md, 'Per-machine config overrides'. `models`, `roleTiers` and `roleEffort` below are SEEDED into that local file by /loopd:init and are kept here as the FALLBACK: with neither layer, scripts/resolve-model.sh resolves to nothing and every agent inherits the session model.",
   "org": "your-github-org",
   "$group": "OPTIONAL short name for this bundle -- the label the board, print-board.sh and the seeded <group>.code-workspace use. ABSENT (or null, as here) the group is the bundle DIRECTORY's name minus a bundle prefix (`_ai-bridge-` or `_loopd-`), which is the behaviour every bundle has today. Set it and the directory can be renamed freely without the board relabelling the bundle or the KB indexer losing track of it. TRACKED, never per-machine: a bundle has one name and both clones of a shared bundle must agree on it.",
   "group": null,
@@ -83,5 +83,16 @@
     "auditor": "deep",
     "explorer": "light"
   },
-  "$roleTiers": "PER-MACHINE SPEND, seeded and overridden exactly as `models` above (see `$models`). The model tier for ANY agent this instance dispatches, including ones no task is ever assigned to \u2014 broader than `roles`. `plan-architect: apex` here and nowhere in `roles` is the intentional case: `models.apex` prices two agents, `plan-architect` and `qa-reviewer`, and `plan-architect` appears in no `roles` list, so 'what does apex cost me?' is unanswerable from `roles` alone. `explorer: light` is the second: it prices the Explore subagent a role agent delegates a broad read to (CONVENTIONS.md), which is a harness subagent type and never a task assignee. Do not delete either row to make the two lists match; see SCHEMA.md 'type: Agent' and tests/roles-roletiers-asymmetry.test.sh."
+  "$roleTiers": "PER-MACHINE SPEND, seeded and overridden exactly as `models` above (see `$models`). The model tier for ANY agent this instance dispatches, including ones no task is ever assigned to \u2014 broader than `roles`. `plan-architect: apex` here and nowhere in `roles` is the intentional case: `models.apex` prices two agents, `plan-architect` and `qa-reviewer`, and `plan-architect` appears in no `roles` list, so 'what does apex cost me?' is unanswerable from `roles` alone. `explorer: light` is the second: it prices the Explore subagent a role agent delegates a broad read to (CONVENTIONS.md), which is a harness subagent type and never a task assignee. Do not delete either row to make the two lists match; see SCHEMA.md 'type: Agent' and tests/roles-roletiers-asymmetry.test.sh.",
+  "roleEffort": {
+    "project-manager": "medium",
+    "software-engineer": "high",
+    "devops-engineer": "high",
+    "qa-reviewer": "high",
+    "cataloguer": "medium",
+    "plan-architect": "high",
+    "auditor": "medium",
+    "explorer": "low"
+  },
+  "$roleEffort": "PER-MACHINE SPEND, seeded and overridden exactly as `roleTiers` (see `$models`): one entry per `roleTiers` key, the reasoning effort (low|medium|high|xhigh|max) that agent is spawned at. scripts/resolve-effort.sh is the one reader; a spawn passes its answer as `claude --bg --effort` or the Agent tool's `effort:`. Medium for the orchestration roles, high for the roles that write code or adjudicate; a role's `maxStallRounds` escalations are the evidence to move it up. Absent from both layers => no effort is passed: an Agent-tool spawn runs at the agent's frontmatter `effort:`, while a `claude --bg` spawn reads no frontmatter and runs at the machine's `modelSettings[<model>].effortLevel`, else the model default -- as before this key, until the next /loopd:init seeds the map. See SCHEMA.md 'Per-machine config overrides'."
 }

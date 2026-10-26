@@ -157,7 +157,8 @@ cat > "$I/$LOCAL" <<'JSON'
   "authorEmail": "first@example.org",
   "reposRoot": "/somewhere/of/their/own",
   "models": { "deep": "opus" },
-  "roleTiers": { "software-engineer": "deep" }
+  "roleTiers": { "software-engineer": "deep" },
+  "roleEffort": { "software-engineer": "high" }
 }
 JSON
 BEFORE="$(cat "$I/$LOCAL")"
@@ -176,7 +177,8 @@ cat > "$I/$LOCAL" <<'JSON'
 {
   "ownerGithubUser": "example-user-007",
   "models": { "deep": "opus" },
-  "roleTiers": { "software-engineer": "deep" }
+  "roleTiers": { "software-engineer": "deep" },
+  "roleEffort": { "software-engineer": "high" }
 }
 JSON
 stamp "$I"
@@ -194,7 +196,7 @@ ok "a second stamp changes nothing"        "$([ "$(cat "$I/$LOCAL")" = "$BEFORE"
 # non-first stamp runs is skipped, since only step 4c's lines are read.
 one_person_cfg() { printf '{ "org": "acme", "group": "acme", "people": { "example-user-007": "example-user-007@example.com" } }\n' > "$1/$TRACKED"; }
 I="$(newinst 8b)"; one_person_cfg "$I"
-printf '{\n  "ownerGithubUser": "example-user-008",\n  "models": { "deep": "opus" },\n  "roleTiers": { "software-engineer": "deep" }\n}\n' > "$I/$LOCAL"
+printf '{\n  "ownerGithubUser": "example-user-008",\n  "models": { "deep": "opus" },\n  "roleTiers": { "software-engineer": "deep" },\n  "roleEffort": { "software-engineer": "high" }\n}\n' > "$I/$LOCAL"
 BEFORE="$(cat "$I/$LOCAL")"
 LOOPD_INIT_PASS=1 stamp "$I"
 ok "a login absent from people: untouched" "$([ "$(cat "$I/$LOCAL")" = "$BEFORE" ] && echo yes || echo no)" yes

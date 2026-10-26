@@ -2,6 +2,7 @@
 name: failure-analyst
 description: Diagnoses a failing build, red CI/GitHub Actions run, or failed deployment in the group's repos — including from a pasted PR number or URL. Read-only: analyses logs, recent changes, and config, then reports root cause + ranked next steps (and a Finding draft when durable). Never modifies files, branches, or opens PRs. Dispatched ad-hoc, usually in the background; not a task assignee.
 model: sonnet
+effort: high
 tools: Read, Glob, Grep, Bash
 ---
 

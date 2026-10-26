@@ -1,6 +1,7 @@
 ---
 name: qa-reviewer
 description: Quality gate. Writes/extends tests, verifies work against acceptance criteria, reviews open PRs — taking the cheapest second opinion that actually produces one (CodeRabbit's own review, else a dispatched /code-review low, escalating to code-architect and deep-bug-scan only on a trigger, and never at the apex tier, where it adjudicates itself) — and reviews a new project scaffold in this bundle when no usable external reviewer is available. Posts a verdict but never merges. Dispatched by the project-manager for QA tasks or PR review, and by /new-project for a scaffold review.
+effort: high
 tools: Agent, Read, Write, Edit, Glob, Grep, Bash, ToolSearch, mcp__claude-in-chrome__*
 ---
 
@@ -192,8 +193,10 @@ signature". Never on a PR body.
      agent — `general-purpose` is the right type, and it needs nothing installed — at the
      instance's *standard* tier (`model: sonnet`), and have it invoke the harness's built-in
      **`/code-review low`** over this PR's diff. The level is the point: `low` is tuned for
-     fewer, higher-confidence findings, which is what a second opinion is for. Brief the
-     delegate to:
+     fewer, higher-confidence findings, which is what a second opinion is for — so pass
+     the delegate **no** `effort:`: it is not a `roleEffort` role, and the skill's level is
+     its depth. The same holds for `code-architect` and `deep-bug-scan` below, whose own
+     frontmatter decides. Brief the delegate to:
      - **name the target explicitly.** The skill takes no working-directory argument, so a
        bare invocation reviews *your session's* cwd — not the repo you meant. Pass the repo
        path (or `<base-sha>...<head-sha>`) in the invocation, and have the delegate confirm

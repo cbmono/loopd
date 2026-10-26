@@ -51,6 +51,7 @@ TRACKED, LOCAL = "instance.config.json", "instance.config.local.json"
 # order and the membership test for what may live there, in one list.
 LOCAL_ORDER = ["$schema", "ownerGithubUser", "authorEmail", "reposRoot", "worktreeRoot",
                "boardInstances", "boardArtifactUrl", "boardPort", "models", "roleTiers",
+               "roleEffort",
                "maxAgentsInFlight", "maxRepeatedToolCalls", "maxAgentMinutes", "roleMinutes",
                "allowSubstituteBackend", "commitAttribution", "reclaimIgnoreOk"]
 

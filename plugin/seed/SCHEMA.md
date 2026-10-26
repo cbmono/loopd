@@ -438,6 +438,20 @@ unanswerable from `roles` alone — read `roleTiers`. This asymmetry is intentio
 by adding `plan-architect` to `roles` or deleting its `roleTiers` row; see
 `tests/roles-roletiers-asymmetry.test.sh`, which pins it.
 
+**`roleEffort` is the second axis beside `roleTiers`: one entry per `roleTiers` key**, the
+reasoning effort (`low|medium|high|xhigh|max`) that agent is spawned at. The seed is
+**medium** for the orchestration roles (`project-manager`, `cataloguer`, `auditor`),
+**high** for the roles that write code or adjudicate (`software-engineer`,
+`devops-engineer`, `qa-reviewer`, `plan-architect`) and `low` for `explorer`. Move a role
+up on evidence: its `maxStallRounds` escalations. `scripts/resolve-effort.sh <agent>` is the
+one reader; a spawn passes what it prints as `claude --bg --effort` or the Agent tool's
+`effort:`, and passes none when it prints nothing. With no entry, an Agent-tool spawn runs at
+the agent's frontmatter `effort:` while a `claude --bg` spawn does not read frontmatter
+(measured, Claude Code 2.1.310) and runs at the machine's per-model
+`modelSettings[<model>].effortLevel`, else the model default — as before this key. A bundle
+spawns that way only until its next `/loopd:init`, which seeds the map. A flag-free resume of
+a stopped session keeps its spawn's level; a resume that forks a copy does not.
+
 ## Knowledge base types  (`knowledge/`)
 
 OKF's native use: curated knowledge about systems and decisions. The `knowledge/`
@@ -1198,6 +1212,7 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `boardPort` | **local ONLY** — a port is a property of this laptop, and two clones on one machine must not share one | derived from the bundle path, 40000–49999 |
 | `models` | **yes**, and **seeded** — which model each tier costs **this human**. `/loopd:init` writes this key into the local file on any stamp that finds it missing, so local is normally the layer in force and the banner reads `local` | the tracked map, which stays as the fallback; absent from **both**, `resolve-model.sh` prints nothing on stdout, **says so on stderr**, and exits 1 |
 | `roleTiers` | **yes**, and **seeded** on the same terms — the same bill, per agent. **A partial override replaces only the entries it names**, so moving one agent to a cheaper tier leaves every other agent's tier standing, and the installer never tops a partial map up | as `models` above |
+| `roleEffort` | **yes**, and **seeded** on the same terms as `roleTiers` (local first, tracked second, merged per entry) — effort is spend too. An entry may name a plugin agent with no `roleTiers` entry (`failure-analyst`) | no `effort` is passed: `resolve-effort.sh` prints nothing and exits 0. An unknown level exits 1 and `/loopd:welcome check` names it |
 | `maxAgentsInFlight` | **yes** — how many agents **this machine** can carry (below) | the tracked value; absent from both, `resolve-max-agents.sh` prints nothing and exits 1, and the caller applies the fallback its own document states |
 | `maxRepeatedToolCalls` | **yes** — a doom loop is a spend, and how tolerant a machine is of one is a per-machine call | **off**: `agent-control.sh` hashes, counts and writes nothing, so a bundle that predates the key is unaffected. Set it (the seed ships **3**) and an armed instance refuses one agent's Nth identical tool call with a `deny`, never a kill. **Reach:** this is enforced by `agent-control.sh`, which keys on `agent_id` — it bounds an in-session subagent (a reviewer's lenses), never a top-level `claude --bg` role agent, for which the operator's tool is `claude stop <id>` (`docs/pm-design.md`) |
 | `maxAgentMinutes` | **yes** — an hour of agent is a spend, and how long one machine tolerates is a per-machine call | **45**, for every role `roleMinutes` does not name: past it an armed instance refuses the agent's next tool call with a `deny` that says to commit, push, open or update the PR and report. `Read`/`Grep`/`Glob`, the subagent handback that delivers its report, and a shell command made only of `git add\|commit\|push`, `commit-as.sh`, `cd` and `gh pr create\|edit\|view\|checks` stay allowed so that report is accurate; `0` (or anything not a positive integer) is off. **Reach:** this is enforced by `agent-control.sh`, which keys on `agent_id` — it bounds an in-session subagent (a reviewer's lenses), never a top-level `claude --bg` role agent, for which the operator's tool is `claude stop <id>` (`docs/pm-design.md`) |
@@ -1227,6 +1242,8 @@ All three are read by a script rather than by whoever remembered to look:
 `scripts/resolve-model.sh <agent>` for the first two, `scripts/resolve-max-agents.sh` for
 the cap. Neither script invents a value it cannot find; both print nothing on stdout and
 exit 1 instead, and the caller applies its own documented fallback.
+`scripts/resolve-effort.sh <agent>` reads `roleEffort` the same way, with `--all` printing
+`<role> TAB <from> TAB <level>` (level empty for an unknown one, which a stamp warns about).
 `resolve-model.sh --all` answers for every `roleTiers` entry in one call — one row per
 role, `<role> TAB <from> TAB <tier> TAB <model>`, the model column empty for a role that
 resolves to nothing and exit 1 if any did — which is what `/loopd:init` asks at the end
@@ -1256,7 +1273,7 @@ dispatch, because that is the only point at which the split is cheap. It propose
 human decides, exactly as with every other refinement, and a task the human leaves whole
 is dispatched whole.
 
-**`models` and `roleTiers` are SEEDED into the local file, and the tracked pair is the
+**`models` and `roleTiers` (and `roleEffort`) are SEEDED into the local file, and the tracked pair is the
 fallback — both halves are load-bearing.** `/loopd:init` writes them into
 `instance.config.local.json` on any stamp that finds the key missing, seeded from the
 tracked values when present and from the documented defaults (`light→haiku`,

@@ -746,6 +746,11 @@ above it so none may grow its share.
   `/loopd:init` seeds `models`/`roleTiers` into `instance.config.local.json`, which is where
   the fix goes. This applies to **every** dispatch, including an ad-hoc dispatch from a
   main session, which is exactly the path the prose never reached.
+  **Effort is the second axis, read the same way: `scripts/resolve-effort.sh <agent>`.** It
+  prints a level from `roleEffort` (`low|medium|high|xhigh|max`) — pass it as the Agent
+  tool's `effort:` or `claude --bg --effort` — or nothing, exit 0, when the agent has no
+  entry: then pass none, and an Agent-tool spawn falls back to the agent's frontmatter
+  `effort:`. Exit 1 is an unknown level; report its stderr line and pass none.
 - **Don't grow the harness without a reason — and past ~150 lines, ask.** This machinery
   is a means, not the product. Before you open a PR, measure what you added to it:
 
@@ -1056,8 +1061,9 @@ above it so none may grow its share.
   then read the one file you are about to change.
   **Which route you take is decided by your own `tools:` list, not by what is installed on
   the machine.** Hold `Agent`? — `qa-reviewer` does — dispatch an Explore subagent on the
-  model your dispatch brief names (`scripts/resolve-model.sh explorer`; no entry ⇒ the seed
-  default `light`, and the brief says which it is). Don't hold it? — `software-engineer`,
+  model and effort your dispatch brief names (`scripts/resolve-model.sh explorer`;
+  no entry ⇒ the seed default `light`, and the brief says which it is;
+  `scripts/resolve-effort.sh explorer`, nothing printed ⇒ no `effort:`). Don't hold it? — `software-engineer`,
   `devops-engineer` and `failure-analyst` don't — then the second half is your whole route:
   narrow with `Grep`/`Glob`, read only what you will edit or verify, and put the `Agent`
   request in the task's `open_questions` (the middle rung above) when a question genuinely

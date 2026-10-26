@@ -34,7 +34,8 @@ merges, dispatches, or changes task status.
    then inherit the session model rather than dispatching on a guess.
 2. Dispatch the **`auditor`** agent (`subagent_type: loopd:auditor` — the plugin
    namespace, because a BARE agent name does not resolve) for one pass, passing the
-   resolved model. It's read-only — it grounds each goal's `success_criteria` against
+   resolved model and, as `effort:`, what `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh auditor`
+   prints (nothing ⇒ no `effort:`; the frontmatter default applies). It's read-only — it grounds each goal's `success_criteria` against
    live `gh`/`git` reality (an **objective**'s, or a **project's own** where it carries
    no `objective:` — `objectives/` is optional), reports **"no criteria"** for anything
    carrying neither, flags the four drift modes (Goodhart · measurement decay ·
