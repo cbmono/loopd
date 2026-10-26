@@ -193,8 +193,10 @@ signature". Never on a PR body.
      agent — `general-purpose` is the right type, and it needs nothing installed — at the
      instance's *standard* tier (`model: sonnet`), and have it invoke the harness's built-in
      **`/code-review low`** over this PR's diff. The level is the point: `low` is tuned for
-     fewer, higher-confidence findings, which is what a second opinion is for. Brief the
-     delegate to:
+     fewer, higher-confidence findings, which is what a second opinion is for — so pass
+     the delegate **no** `effort:`: it is not a `roleEffort` role, and the skill's level is
+     its depth. The same holds for `code-architect` and `deep-bug-scan` below, whose own
+     frontmatter decides. Brief the delegate to:
      - **name the target explicitly.** The skill takes no working-directory argument, so a
        bare invocation reviews *your session's* cwd — not the repo you meant. Pass the repo
        path (or `<base-sha>...<head-sha>`) in the invocation, and have the delegate confirm

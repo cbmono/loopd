@@ -189,9 +189,9 @@ DOC="$TMP/task.md"
 mk() { printf '%s\n' '---' 'type: Task' 'status: in-progress' '---' '' '# Context' '' 'x' '' '# Notes' '' "$@" > "$DOC"; }
 mk '* DISPATCH 2026-01-01T00:00:00Z · software-engineer · model opus · usage tokens=5 tools=1 ms=9' \
    '* DISPATCH 2026-01-02T00:00:00Z · software-engineer · model opus · usage UNKNOWN' \
-   '* DISPATCH 2026-01-03T00:00:00Z · qa-reviewer · model opus · usage UNKNOWN'
+   '* DISPATCH 2026-01-03T00:00:00Z · qa-reviewer · model opus · effort high · usage UNKNOWN'
 ok "settle through the reader succeeds"           "$(run "$SID" --settle "$DOC" >/dev/null; echo $?)" 0
-ok "the LAST unknown line carries the numbers"    "$(grep -c "^\* DISPATCH 2026-01-03T00:00:00Z · qa-reviewer · model opus · $LINE\$" "$DOC")" 1
+ok "the LAST unknown line carries the numbers"    "$(grep -c "^\* DISPATCH 2026-01-03T00:00:00Z · qa-reviewer · model opus · effort high · $LINE\$" "$DOC")" 1
 ok "the EARLIER unknown line is untouched"        "$(grep -c '^\* DISPATCH 2026-01-02T00:00:00Z · software-engineer · model opus · usage UNKNOWN$' "$DOC")" 1
 ok "the MEASURED line is untouched"               "$(grep -c '^\* DISPATCH 2026-01-01T00:00:00Z · software-engineer · model opus · usage tokens=5 tools=1 ms=9$' "$DOC")" 1
 ok "no line was added or lost"                    "$(grep -c '^\* DISPATCH ' "$DOC")" 3

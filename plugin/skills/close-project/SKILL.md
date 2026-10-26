@@ -3,7 +3,7 @@ name: close-project
 disable-model-invocation: true
 description: Close a completed project — final KB consolidation, log the closeout, roll up status, then remove the project folder (git history + KB are the record; no archive) — or, with `retain: true`, freeze and keep it. With no slug it opens a multi-select picker of the projects and asks whether to run `--force` or `--dry-run`. Human-gated; run once a project's tasks are all done/cancelled.
 argument-hint: [<project-slug>]  [--dry-run] [--force]  — no slug opens the picker
-allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent, AskUserQuestion
+allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent, AskUserQuestion
 ---
 
 **Close a completed Project.** This is the human-triggered form of the closeout the
@@ -124,7 +124,8 @@ nothing to the explicit-slug path and never runs on it.
 
 1. **The names.** `ls projects/` — allowlist item 1, directory names and nothing else.
 2. **The state, from a subagent.** Spawn **one background subagent**, on the model
-   `bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh explorer` prints, and ask it for **one
+   `bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh explorer` prints, at the `effort:`
+   `bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh explorer` prints (none when empty), and ask it for **one
    short line per project**: the slug, the project's own `status:`, how many of its tasks
    are terminal and how many are not, and whether it carries `retain: true`. It reads the
    documents; you read its report, and nothing else about any project enters this thread.
@@ -171,7 +172,8 @@ closeout agent's brief" below verbatim, the slug, and any `--dry-run`/`--force` 
 Namespace it — a bare agent name does not resolve. **Several projects from the picker are
 several dispatches, in series** (→ "Several projects close ONE AT A TIME"), never one agent
 carrying a list. Resolve its model with
-`bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager`. **Never wake a completed
+`bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager` and its `effort:` with
+`bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh project-manager` (nothing printed ⇒ none). **Never wake a completed
 closeout agent with a message** — dispatch a fresh one.
 
 **A closeout is NOT a tick, and the brief must say so.** It runs once, it is not

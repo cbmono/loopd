@@ -30,7 +30,7 @@ case "$cmd" in
     [ -f "$doc" ] && [ -w "$doc" ] || die2 "no writable task document: $doc" ;;
 esac
 
-inst="."; tokens=""; tools=""; ms=""; role=""; model=""; prs=""; cached=""; errors=""; by=""
+inst="."; tokens=""; tools=""; ms=""; role=""; model=""; effort=""; prs=""; cached=""; errors=""; by=""
 while [ $# -gt 0 ]; do
   [ $# -ge 2 ] || die3 "$1 needs a value"
   case "$1" in
@@ -43,6 +43,7 @@ while [ $# -gt 0 ]; do
     --by)          by="$2" ;;
     --role)        role="$2" ;;
     --model)       model="$2" ;;
+    --effort)      effort="$2" ;;
     --pr)          prs="${prs:+$prs }$2" ;;
     *) usage ;;
   esac
@@ -91,7 +92,7 @@ case "$cmd" in
 
   dispatch)
     [ -n "$role" ] || die3 "dispatch needs --role"
-    append_note "$doc" "* DISPATCH $now · $role · model ${model:-unset} · $(fmt "$tokens" "$tools" "$ms")"
+    append_note "$doc" "* DISPATCH $now · $role · model ${model:-unset}${effort:+ · effort $effort} · $(fmt "$tokens" "$tools" "$ms")"
     echo "recorded: $doc" ;;
 
   settle)

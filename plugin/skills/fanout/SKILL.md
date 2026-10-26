@@ -55,7 +55,9 @@ of independent asks the user has already given in this turn.
 
 ## Model for each dispatched agent
 
-Resolve it with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh <agent>` before spawning, never from memory.
+Resolve it with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh <agent>` before spawning, never from memory,
+and its `effort:` with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh <agent>` — which prints nothing,
+exit 0, for an agent with no `roleEffort` entry (`general-purpose` among them): pass no `effort:` then.
 Most fan-outs use `general-purpose`, which has no `roleTiers` entry — the script then
 prints nothing on stdout, exits 1, and says why on stderr, and inheriting the session model
 is the correct answer. **That line is the expected answer here, not a fault**, so there is

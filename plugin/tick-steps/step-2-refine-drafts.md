@@ -108,7 +108,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    for the next tick, which its missing receipt already arranges.
    Its model comes from `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh plan-architect` — `roleTiers`
    (`apex`) through `models` — never a hard-coded alias; and `plan-architect` stays out
-   of `roles`.
+   of `roles`. Its `effort:` is what `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh plan-architect`
+   prints; nothing printed ⇒ pass none.
 
 
 <!-- end of step 2 -->
