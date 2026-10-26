@@ -122,7 +122,7 @@ owner_of() {
   [ -z "$ROOT_ERR" ] || { echo unknown; return; }
   case "$n" in ''|*/*) echo instance; return ;; esac
   case "$k" in
-    script) p="$PLUGIN_ROOT/scripts/$n" ;;
+    script) p="$PLUGIN_ROOT/scripts/$n"; [ -f "$p" ] || p="$PLUGIN_ROOT/hooks/$n" ;;
     agent)  p="$PLUGIN_ROOT/agents/$n.md" ;;
     skill)  p="$PLUGIN_ROOT/skills/$n/SKILL.md" ;;
   esac
