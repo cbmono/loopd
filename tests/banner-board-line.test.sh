@@ -481,6 +481,8 @@ if command -v python3 >/dev/null 2>&1; then
   assert "…and the local page stays reachable under it"        "$(has "file://$PAGE" "$OUT")"
   assert "…labelled as the route for someone without artifact access" \
     "$(has 'without artifact access' "$OUT")"
+  assert "…and, with nothing serving, the Run row under it says why" \
+    "$(eq "$(section)" "$(printf 'Board   %s\n        file://%s — the local copy, for anyone without artifact access\nRun     /'"${PN}:"'board serve for a live URL\n%s' "$URL" "$PAGE" "$UPDATE_ROW")")"
   # SERVED: the artifact stays the headline; the continuation line carries the served path.
   printf '43210\n%s\n%s\nhand\n%s\n' "$$" "$INST" "$(ps -o lstart= -p $$ | tr -s ' ' | sed 's/^ //; s/ $//')" > "$STATE"
   run

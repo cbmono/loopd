@@ -474,7 +474,8 @@ re-renders the local page and reports its path ([below](#rendering-it-from-each-
 With `boardServe` on (the default; `boardServe: false` or `board: false` turns it off, read
 from the tracked config only), every Claude session that starts in the bundle starts the
 server, and the banner's `Board` row is `http://localhost:<port>/loopd/board` with
-`Run     /loopd:board --help to see the options` under it. The port is still
+`Run     /loopd:board --help to see the options` under it. With `boardArtifactUrl` recorded
+the `Board` row stays the published artifact and the served URL is the line under it. The port is still
 `boardPort` from `instance.config.local.json`, else derived — per machine on purpose.
 
 - **Start.** The banner calls `hooks/board-session.sh start`, which records the session in
@@ -1977,8 +1978,8 @@ them; the **published artifact** is the one that reaches a device with no checko
 
 | Where you are | Do this | Freshness |
 |---|---|---|
-| **Laptop** (the canonical route) | open the banner's `Board` row, `http://localhost:<port>/loopd/board` — every session starts the server while `boardServe` is on (the default); `/loopd:board --help` lists the forms | within seconds of the snapshot changing, while the server runs |
-| **Laptop, no server** (`boardServe: false`, no `python3`, port taken) | the banner's `Board` row is then the `file://` path (`.loopd/.board-live/board.html`) — its `Run` row says why nothing serves; `/loopd:board serve` starts one by hand | the last tick that rendered it |
+| **Laptop** (the canonical route) | open `http://localhost:<port>/loopd/board` — the banner's `Board` row, or the line under it when a published artifact heads the block; every session starts the server while `boardServe` is on (the default); `/loopd:board --help` lists the forms | within seconds of the snapshot changing, while the server runs |
+| **Laptop, no server** (`boardServe: false`, no `python3`, port taken) | open the `file://` path (`.loopd/.board-live/board.html`) the banner prints; its `Run` row says why nothing serves. `boardServe: false`: `/loopd:board serve` starts one by hand. No `python3`: install it first. Port taken: free it, or set `boardPort` in `instance.config.local.json` | the last tick that rendered it |
 | **Phone** | open the artifact URL — the session banner prints it, and it is the same URL every time | the last `/loopd:board publish` you ran |
 | **Between ticks** | `scripts/watch-board.sh` → `.loopd/.board-live/board.html`, on this machine | live, while the watcher runs |
 

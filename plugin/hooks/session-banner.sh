@@ -1422,8 +1422,9 @@ if [ "$board_on" -eq 1 ]; then
       # byte glued to it can end up inside the link.
       printf '        %s%s — this machine'"'"'s live copy%s\n' "$serve_url" "$C_DIM" "$C_OFF"
       echo "$(pad Run "$BOARD_LW")$help_row"
-    elif [ -f "$page" ]; then
-      say "$C_DIM" "        file://$page — the local copy, for anyone without artifact access"
+    else
+      [ -f "$page" ] && say "$C_DIM" "        file://$page — the local copy, for anyone without artifact access"
+      echo "$(pad Run "$BOARD_LW")$run_row"
     fi
   elif [ -n "$serve_url" ]; then
     board_shown=1

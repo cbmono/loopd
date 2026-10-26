@@ -448,7 +448,8 @@ is only as fresh as the last tick — the page's masthead says when that was, an
 
 **The local web app starts with the session**: with `boardServe` on (the default) every
 Claude session on the bundle starts it, the banner's `Board` row is its
-`http://localhost:<port>/loopd/board`, and it stops after the last session ends.
+`http://localhost:<port>/loopd/board` (the line under it when a published artifact heads
+the block), and it stops after the last session ends.
 `boardServe: false` in the tracked `instance.config.json` turns that off and the banner
 falls back to the `file://` row. `/loopd:board serve` — what a bare `/loopd:board` does —
 starts it by hand, and `/loopd:board --help` lists the forms. One process per bundle, on a port
