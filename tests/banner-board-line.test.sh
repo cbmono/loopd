@@ -308,7 +308,7 @@ echo "== the local server: its URL when it is up, the way to start it when it is
 # to a dead port. Both directions are asserted from ONE fixture file, differing only in the
 # pid it names, which is what makes the live case non-vacuous.
 STATE="$INST/$AB_BOARD_DIR/.serve"
-printf '43210\n%s\n%s\n' "$$" "$INST" > "$STATE"
+printf '43210\n%s\n%s\nhand\n%s\n' "$$" "$INST" "$(ps -o lstart= -p $$ | tr -s ' ' | sed 's/^ //; s/ $//')" > "$STATE"
 run
 # A LIVE SERVER TAKES THE SECOND ROW, not the first: the command that would start one is
 # the thing it replaces, and the `file://` copy stays because a human with the page on disk
@@ -320,6 +320,10 @@ assert "…and the file:// row is still row 1"  "$(has "Board   file://$PAGE" "$
 assert "…with the label still in the same column as row 1's" \
   "$(eq "$(val_col "$(section)" 1)" "$(val_col "$(section)" 2)")"
 assert "…and the command it replaced is gone"  "$(hasnt '/'"${PN}:"'board serve for a live URL' "$OUT")"
+# A REUSED pid: alive, but not the process that wrote the file.
+printf '43210\n%s\n%s\nhand\nThu Jan  1 00:00:00 1970\n' "$$" "$INST" > "$STATE"
+run
+assert "a live pid with another start time does not print a URL" "$(hasnt 'http://localhost:43210' "$OUT")"
 
 # A pid nothing is running under. `awk` picks one above this machine's live range rather
 # than a literal, so the case cannot silently become "a pid that happens to exist".

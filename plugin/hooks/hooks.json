@@ -71,7 +71,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-banner.sh\" --format json"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-banner.sh\" --format json --session"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/board-session.sh\" end"
           }
         ]
       }

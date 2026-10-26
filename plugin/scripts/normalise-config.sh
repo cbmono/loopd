@@ -50,7 +50,7 @@ TRACKED, LOCAL = "instance.config.json", "instance.config.local.json"
 # SCHEMA.md → "Per-machine config overrides", in that table's order: the local file's key
 # order and the membership test for what may live there, in one list.
 LOCAL_ORDER = ["$schema", "ownerGithubUser", "authorEmail", "reposRoot", "worktreeRoot",
-               "boardInstances", "boardArtifactUrl", "models", "roleTiers",
+               "boardInstances", "boardArtifactUrl", "boardPort", "models", "roleTiers",
                "maxAgentsInFlight", "maxRepeatedToolCalls", "maxAgentMinutes", "roleMinutes",
                "allowSubstituteBackend", "commitAttribution", "reclaimIgnoreOk"]
 
@@ -58,7 +58,7 @@ LOCAL_ORDER = ["$schema", "ownerGithubUser", "authorEmail", "reposRoot", "worktr
 # whole test: SCHEMA names the tracked value as the answer for authorEmail, models,
 # roleTiers, maxAgentsInFlight and commitAttribution, and names no tracked answer for these.
 PER_MACHINE_ONLY = ["ownerGithubUser", "reposRoot", "worktreeRoot", "boardInstances",
-                    "boardArtifactUrl", "allowSubstituteBackend"]
+                    "boardArtifactUrl", "boardPort", "allowSubstituteBackend"]
 
 
 def load(path, what):
@@ -136,7 +136,7 @@ for key in list(new_local):
 # Their absence is reported nowhere, because the seed cannot know the right value.
 PLACEHOLDER_VALUED = {"org", "authorEmail", "people"}
 # Seed keys whose absence already reads as the seed value, so adding one migrates nothing.
-ABSENT_IS_SEED = {"awaiting"}
+ABSENT_IS_SEED = {"awaiting", "boardServe"}
 
 for key, value in seed.items():
     # A `$doc` key is the seed's own commentary, so it is never added to a bundle; a
