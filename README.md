@@ -6,6 +6,8 @@
 
 **You steer. They build. Two gates stay yours.**
 
+> [cbmono.github.io/loopd](https://cbmono.github.io/loopd/)
+
 **A control panel for running a small team of AI agents on your repositories.**
 
 You describe the work. A project-manager agent breaks it into tasks. You approve. Engineer
