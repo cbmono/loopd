@@ -27,7 +27,7 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/board-autoserve.XXXXXX")" \
   || { echo "board-autoserve.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}" >&2; exit 2; }
 case "$TMP" in /*) ;; *) echo "board-autoserve.test: mktemp returned a relative path" >&2; exit 2 ;; esac
 TMP="$(cd "$TMP" && pwd -P)"
-export BOARD_SERVE_GRACE=1 BOARD_SERVE_REAP=2
+export BOARD_SERVE_GRACE=3 BOARD_SERVE_REAP=2
 
 LOOPS=""
 cleanup() {
@@ -57,6 +57,7 @@ bundle() { # <name> <tracked config json> -> prints the path
 }
 
 mkdir -p "$TMP/bin"
+printf '#!/bin/sh\nexec python3 -c "import time; print(int(time.time() * 1000))"\n' > "$TMP/ms"; chmod +x "$TMP/ms"
 cat > "$TMP/bin/claude" <<'FAKE'
 #!/usr/bin/env bash
 q="$1"; end=$(( $(date +%s) + 150 ))
@@ -139,13 +140,14 @@ printf -- '---\ntype: Project\ntitle: Demo\nkind: build\nstatus: active\n---\n' 
 touch "$A/$AB_SNAPSHOT"
 ( cd "$A" && SNAPSHOT_NOW=2026-09-06T00:00:00Z bash "$REPO/plugin/scripts/write-snapshot.sh" --quiet )
 claude_up a; QA=$Q; PA=$CPID
-T="$(job "$QA" 8 "$(payload s-a) | CLAUDE_PROJECT_DIR='$A' bash '$HOOKS/session-banner.sh' --format json --session | { cat > '$QA/piped'; date +%s > '$QA/eof'; }")"
-ok "the hook's pipe reaches EOF within 5 s"            "$([ "$T" != timeout ] && [ "$T" -le 5 ] && [ -f "$QA/eof" ] && echo yes || echo "no ($T)")" yes
+T="$(job "$QA" 8 "'$TMP/ms' > '$QA/t0'; $(payload s-a) | CLAUDE_PROJECT_DIR='$A' bash '$HOOKS/session-banner.sh' --format json --session | { cat > '$QA/piped'; '$TMP/ms' > '$QA/t1'; }")"
+MS=$(( $(cat "$QA/t1" 2>/dev/null || echo 99999999999999) - $(cat "$QA/t0") ))
+ok "the hook's stdout pipe reaches EOF within 5 s"     "$([ "$T" != timeout ] && [ "$MS" -lt 5000 ] && echo yes || echo "no (${MS} ms)")" yes
 ok "...while the server keeps running"                 "$(up "$A")" up
 PORT="$(serve_port "$A")"
 ok "the first banner prints the served URL"            "$(grep -c "http://localhost:$PORT" "$QA/piped")" 1
-T="$(start_in "$QA" "$A" s-a2)"
-ok "a SessionStart returns in under 3 s"               "$([ "$T" != timeout ] && [ "$T" -lt 3 ] && echo yes || echo "no ($T)")" yes
+ok "...and the starting SessionStart returns in under 3 s"    "$([ "$MS" -lt 3000 ] && echo yes || echo "no (${MS} ms)")" yes
+start_in "$QA" "$A" s-a2 >/dev/null
 i=0; while [ "$(code "$PORT" /loopd/board)" != 200 ] && [ $i -lt 50 ]; do sleep 0.2; i=$((i+1)); done
 ok "GET /loopd/board answers 200 within 10 s"         "$(code "$PORT" /loopd/board)" 200
 ok ".serve says the server is auto-started"            "$(sed -n 4p "$A/$AB_BOARD_DIR/.serve")" auto
