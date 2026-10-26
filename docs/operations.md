@@ -832,12 +832,23 @@ git rm -r --cached --quiet knowledge && git add .gitignore \
 
 ### Model routing
 
-Two knobs in `instance.config.json`:
+Three knobs in `instance.config.json` (all per-machine overridable, and seeded into
+`instance.config.local.json` by `/loopd:init`):
 
 | Key | What it does |
 |---|---|
 | `models` | maps tiers to model aliases: `{ "light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable" }`. Aliases track the latest model in each tier, so you retune per instance without editing agents |
 | `roleTiers` | each role's default tier (e.g. `project-manager` → `deep`, `qa-reviewer` → `apex`, `cataloguer` → `light`, engineers → `standard`) |
+| `roleEffort` | the second axis: each role's reasoning effort (`low\|medium\|high\|xhigh\|max`), resolved by `resolve-effort.sh` and passed as `--effort` / `effort:` |
+
+**Effort: medium for the orchestration roles, high for the roles that write code or
+adjudicate** (seed: `project-manager`, `cataloguer`, `auditor` medium; engineers,
+`qa-reviewer`, `plan-architect` high; `explorer` low). Move a role up on evidence — its
+`maxStallRounds` escalations — not by default. With no entry no effort is passed: an
+Agent-tool spawn runs at the agent's frontmatter `effort:`, but `claude --bg` reads no
+frontmatter (measured on 2.1.310), so a role session runs at the machine's per-model
+`modelSettings[<model>].effortLevel`, else the model default. A bundle spawns that way only
+until its next stamp seeds the map.
 
 **`explorer` is a role tier with no role**: it prices the Explore subagent a role agent
 sends a broad read to instead of reading ten files itself (`CONVENTIONS.md`). Seeded at

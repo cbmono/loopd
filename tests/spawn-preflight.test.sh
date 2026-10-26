@@ -134,8 +134,21 @@ echo
 echo "== step 3: the preflight runs before the wave, through task-003's channel =="
 pre_at="$(head -n1 <<<"$(grep -n 'scripts/spawn-preflight.sh --instance' "$S3")" | cut -d: -f1)"
 write_at="$(head -n1 <<<"$(grep -n 'set `assignee` +' "$S3")" | cut -d: -f1)"
-spawn_at="$(head -n1 <<<"$(grep -nF "claude --bg --agent loopd:<assignee> --permission-mode auto --add-dir <bundle root> --model <alias> '<the whole brief>'" "$S3")" | cut -d: -f1)"
+spawn_at="$(head -n1 <<<"$(grep -nF "claude --bg --agent loopd:<assignee> --permission-mode auto --add-dir <bundle root> --model <alias> --effort <level> '<the whole brief>'" "$S3")" | cut -d: -f1)"
 ok "the preflight is named in step 3"        "$([ -n "$pre_at" ] && echo yes || echo no)" yes
+# The spawn line, with and without --effort, against the UNCHANGED per-role rule: a
+# permission rule's `*` is a glob, so bash's own `==` pattern match stands in for it.
+RULE_BODY="$(grep -o "printf 'Bash(claude --bg --agent %s:%s [^)]*)" "$REPO/plugin/scripts/init-bundle.sh" | head -n1 | sed "s/^printf 'Bash(//; s/)\$//")"
+pat="$(printf "$RULE_BODY" loopd software-engineer /b)"
+eff_line="claude --bg --agent loopd:software-engineer --permission-mode auto --add-dir /b --model opus --effort high 'brief'"
+bare_line="claude --bg --agent loopd:software-engineer --permission-mode auto --add-dir /b --model opus 'brief'"
+ok "the init-bundle rule still ends at --model *" "$pat" "claude --bg --agent loopd:software-engineer --permission-mode auto --add-dir /b --model *"
+# shellcheck disable=SC2053
+ok "…and matches the spawn WITH --effort"     "$([[ $eff_line == $pat ]] && echo yes || echo no)" yes
+# shellcheck disable=SC2053
+ok "…and the spawn WITHOUT it"                "$([[ $bare_line == $pat ]] && echo yes || echo no)" yes
+# shellcheck disable=SC2053
+ok "…while --effort BEFORE --model matches nothing" "$([[ "claude --bg --agent loopd:software-engineer --permission-mode auto --add-dir /b --effort high --model opus 'b'" == $pat ]] && echo yes || echo no)" no
 ok "…before the first status write"          "$([ "${pre_at:-999}" -lt "${write_at:-0}" ] && echo yes || echo no)" yes
 ok "…and so before the first spawn"          "$([ "${pre_at:-999}" -lt "${spawn_at:-0}" ] && echo yes || echo no)" yes
 ok "…with a per-call token"                  "$(yn grep -qF 'spawn-preflight.sh --instance <bundle root> --token <token>' "$S3")" yes

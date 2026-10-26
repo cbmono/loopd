@@ -843,6 +843,9 @@ check_config_layers() {
 # stamped before the retirement still carries the key, and a pruned entry stops answering for
 # exactly the bundles that need it.
 RETIRED_ROLES="advisor"
+# The same row names a bad `roleEffort` entry: a level resolve-effort.sh refuses (the spawn
+# then passes none), or a role with no `roleTiers` twin and no plugin agent of that name.
+EFFORT_LEVELS="low medium high xhigh max"
 check_config_unknown_keys() {
   _warned=0
   if ! command -v jq >/dev/null 2>&1; then
@@ -877,7 +880,14 @@ boardInstances"
   # which is precisely the "looks authoritative, configures nothing" state this check
   # exists to name. Adding it to the global set would have made that state pass as
   # healthy, and it is the exact shape the key was deleted for the first time round.
-  unknown=""; unparsed=""; fkeys=""; retired=""
+  unknown=""; unparsed=""; fkeys=""; retired=""; effort=""
+  local tiers="" agents="" e v
+  for f in instance.config.json instance.config.local.json; do
+    [ -f "$ROOT/$f" ] || continue
+    tiers="$tiers
+$(jq -r '(.roleTiers // {}) | if type == "object" then keys[] else empty end' "$ROOT/$f" 2>/dev/null)"
+  done
+  for e in "$PLUGIN_ROOT"/agents/*.md; do [ -f "$e" ] && agents="$agents ${e##*/}"; done
   for f in instance.config.json instance.config.local.json; do
     [ -f "$ROOT/$f" ] || continue
     fknown="$known"
@@ -909,9 +919,18 @@ EOF
         retired="${retired:+$retired }$f:roles[$r]"
       fi
     done
+    while IFS="$(printf '\t')" read -r e v; do
+      [ -n "$e" ] || continue
+      case " $EFFORT_LEVELS " in *" $v "*) ;; *) effort="${effort:+$effort }$f:roleEffort.$e=$v"; continue ;; esac
+      printf '%s\n' "$tiers" | grep -qFx -- "$e" && continue
+      case "$agents " in *" $e.md "*) continue ;; esac
+      effort="${effort:+$effort }$f:roleEffort.$e(no roleTiers twin)"
+    done <<EOF
+$(jq -r '(.roleEffort // {}) | if type == "object" then to_entries[] | select(.value != null) | "\(.key)\t\(.value)" else empty end' "$ROOT/$f" 2>/dev/null)
+EOF
   done
 
-  if [ -z "$unknown" ] && [ -z "$retired" ]; then
+  if [ -z "$unknown" ] && [ -z "$retired" ] && [ -z "$effort" ]; then
     # Exactly ONE headline either way — the banner's row count depends on it. A corrupt
     # file is a non-answer about ITS keys, not a clean bill for the instance.
     if [ -n "$unparsed" ]; then
@@ -925,6 +944,7 @@ EOF
     warn "config carries key(s) nothing reads: $unknown"
     [ -n "$unparsed" ] && note "(and no answer for $unparsed — not parseable as JSON)"
     [ -n "$retired" ] && note "(and names retired role(s) nothing dispatches: $retired — remove each entry)"
+    [ -n "$effort" ] && note "(and roleEffort entries no spawn uses: $effort — levels: $EFFORT_LEVELS)"
     note "a retired or typo'd key looks authoritative and configures nothing; the known set"
     note "is the template seed's key list, plus ownerGithubUser in either file and"
     note "boardArtifactUrl in instance.config.local.json only — nothing reads a tracked one"
@@ -932,9 +952,18 @@ EOF
     hint "yours, not fix's: edit the file, or compare: jq -r 'keys[]' $ROOT/instance.config.json"
     return "$_warned"
   fi
+  if [ -z "$retired" ]; then
+    warn "config has roleEffort entries no spawn uses: $effort"
+    [ -n "$unparsed" ] && note "(and no answer for $unparsed — not parseable as JSON)"
+    note "an unknown level is passed to no spawn, and a role with no roleTiers twin is"
+    note "dispatched by nothing; levels are $EFFORT_LEVELS. fix will not touch it"
+    hint "yours, not fix's: correct or delete the roleEffort entry in the file named above"
+    return "$_warned"
+  fi
   # Only retired roles: the headline is theirs, and it is still a report. Nothing errors on
   # the entry, nothing dispatches the role, and `fix` does not touch a config file.
   warn "config names retired role(s) nothing dispatches: $retired"
+  [ -n "$effort" ] && note "(and roleEffort entries no spawn uses: $effort — levels: $EFFORT_LEVELS)"
   [ -n "$unparsed" ] && note "(and no answer for $unparsed — not parseable as JSON)"
   note "the agent was retired from the plugin, so the entry is inert — it configures nothing"
   note "and errors nowhere; remove it to stop this line. fix will not touch it"
