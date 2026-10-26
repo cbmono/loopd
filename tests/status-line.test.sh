@@ -134,6 +134,9 @@ ok "no AWAITING.md ⇒ the queue is off, so the segment is GONE" \
    "$(plain "$D" | grep -c 'need you\|AWAITING' | tr -d ' ')" 0
 ok "…and the rest of the line is untouched" "$(plain "$D")" \
    "loopd · 2 in flight · agents 0 running · lock free · last tick $HM"
+D="$TMP/d1b"; mk "$D"; printf '{ "org": "acme", "awaiting":\n false }\n' > "$D/instance.config.json"
+ok "awaiting: false ⇒ the segment is GONE, as for an absent file" "$(plain "$D")" \
+   "loopd · 2 in flight · agents 0 running · lock free · last tick $HM"
 D="$TMP/d2"; mk "$D"; rm -f "$D/$AB_LEDGER"
 ok "no log.md ⇒ the time is unknown"       "$(plain "$D" | sed 's/.*· //')" "last tick ?"
 D="$TMP/d3"; mk "$D"; printf '# Log\n\nnothing yet\n' > "$D/$AB_LEDGER"

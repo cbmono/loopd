@@ -1528,10 +1528,9 @@ fi
 # ---------------------------------------------------------------------------------------
 # 6. AWAITING — ONE COUNT LINE FOR THE HUMAN, THE TRANSCRIPT FOR THE MODEL.
 # ---------------------------------------------------------------------------------------
-# Absence is the off switch. No AWAITING.md — because no /<plugin>:dispatch tick has run yet, or
-# because the human deleted it to stop the nudge — means this section is absent. The
-# project-manager only refreshes the file when it already exists and never recreates it,
-# so a deletion sticks.
+# Off means absent. `awaiting: false` in the tracked config, or no AWAITING.md (deleted to
+# stop the nudge; the project-manager only refreshes the file when it exists) — either way
+# this section prints nothing.
 #
 # THE HUMAN USED TO GET THE WHOLE LIST INSIDE THE MODEL'S FENCE, and the owner's reaction
 # on reading it in a real terminal is the reason this section is shaped the way it is:
@@ -1548,7 +1547,7 @@ fi
 # all rather than a reassuring nil line (the "only fire what is true" rule in the header —
 # and the reason `item(s)` is gone: it reads identically however many there are).
 awaiting="$root/$AB_AWAITING"
-if [ -f "$awaiting" ]; then
+if ab_awaiting_on "$root" && [ -f "$awaiting" ]; then
   # The block under the "Awaiting you" heading, up to the next "## " heading.
   block="$(awk '
     /^##[[:space:]].*Awaiting you/ { inblk=1; next }

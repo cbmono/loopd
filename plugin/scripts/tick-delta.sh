@@ -56,8 +56,8 @@
 #                           is an immediate DELTA, because the queue is gitignored and moves
 #                           nothing above — and the tick's step 0.95 is what consumes it.
 #   queue/snapshot <present|absent>
-#                           the two opt-in artifacts' presence — `touch AWAITING.md`
-#                           re-enables the queue and needs one full tick to populate.
+#                           the two artifacts' presence — a stamp that recreates
+#                           AWAITING.md needs one full tick to populate it.
 #
 # WHAT IT DELIBERATELY DOES NOT SEE, stated rather than discovered: a PR body edit at
 # an unchanged head (an unticked box, an edited description) and an edit to a comment

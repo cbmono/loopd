@@ -205,6 +205,20 @@ ok "…and commitAttribution"                   "$(finding MISSING commitAttribu
 ok "the seed's \$doc key is NOT reported"      "$(grep -c 'MISSING *\$' "$TMP/out")" 0
 ok "a placeholder-valued key (authorEmail) is NOT added" "$(finding MISSING authorEmail)" no
 ok "…nor the example people map"             "$(finding MISSING people)" no
+
+# `awaiting` reads as on when absent, so an old bundle is not reported and never migrated;
+# like `board`, it is not overridable, so a local-only copy is MISPLACED.
+I2="$(newinst 21)"
+jedit "$I2/$TCFG" <<'PY'
+d.pop("awaiting", None)
+PY
+norm "$I2" >/dev/null
+ok "a bundle with no awaiting key is NOT MISSING" "$(finding MISSING awaiting)" no
+norm "$I2" --apply >/dev/null
+ok "…and --apply never writes it"             "$(jget "$I2/$TCFG" awaiting)" -
+printf '{ "awaiting": false }\n' > "$I2/$LCFG"
+norm "$I2" >/dev/null
+ok "awaiting in the local file is MISPLACED"  "$(finding MISPLACED awaiting)" yes
 norm "$I" --apply >/dev/null
 ok "maxPrFiles arrived with the seed default" "$(jget "$I/$TCFG" maxPrFiles)" "$(jget "$SEED" maxPrFiles)"
 ok "maxStallRounds too"                       "$(jget "$I/$TCFG" maxStallRounds)" "$(jget "$SEED" maxStallRounds)"

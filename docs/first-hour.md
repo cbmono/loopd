@@ -29,8 +29,7 @@ read; a bundle with no stamp has the data and no way to drive it. Do the plugin 
 | 2 | Get the bundle | once per **bundle** | **joining** one: `git clone <bundle-remote> ~/workspace/<group>/_loopd-<group>` · **starting** one: [README § Install](../README.md#install), steps 2-5 |
 | 3 | Stamp it | **each** clone | `/loopd:init ~/workspace/<group>/_loopd-<group>` — seeds what is absent and links `repos/` |
 | 4 | Say which login this clone is | **each** clone | `{ "ownerGithubUser": "<login>" }` in `instance.config.local.json` (gitignored, per machine) |
-| 5 | Turn the nudges on — **joining only** | your clone | `touch ~/workspace/<group>/_loopd-<group>/AWAITING.md`. A clone is not a first stamp, so the stamp deliberately does not create it |
-| 6 | Open a session | | `cd ~/workspace/<group>/_loopd-<group>` then `claude` |
+| 5 | Open a session | | `cd ~/workspace/<group>/_loopd-<group>` then `claude` |
 
 **There is no "clone the template" step.** The machinery ships in the plugin, so step 1 is
 the whole of what a machine needs; the bundle holds data and nothing else.
@@ -109,8 +108,8 @@ deletable file — delete it and every project is gated again, with no other edi
 **`AWAITING.md` is where the gates queue up** — the instance's one status artifact, and
 just the items a human decision unblocks, each marked with what it needs from you
 ([README § What needs you](../README.md#what-needs-you) has the markers). It is derived
-and gitignored, so **never hand-edit it**: each tick rewrites it. Deleting it turns the
-nudges off for good, and `touch AWAITING.md` turns them back on.
+and gitignored, so **never hand-edit it**: each tick rewrites it. `"awaiting": false` in
+`instance.config.json` turns the nudges off; deleting the file turns them off until the next stamp.
 
 ---
 

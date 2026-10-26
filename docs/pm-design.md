@@ -340,7 +340,7 @@ state (a COMMENTED review moves no decision), the latest issue comment's id and 
 every commit status's state and description (a rate-limited reviewer still reports
 SUCCESS), the state of each role session recorded on an `in-review` or `blocked` task
 (one `claude agents` listing; `sessions unavailable` where `claude` is not on PATH), and
-the presence of the two opt-in artifacts (a `touch AWAITING.md` re-enable needs one full tick to populate the queue).
+the presence of the two derived artifacts (a stamp that recreates `AWAITING.md` needs one full tick to populate the queue).
 
 Work a tick queues for the next one sits unchanged in both fingerprints, so `check` also
 short-circuits on it — never as a fingerprint line, which `record` would capture. Measured

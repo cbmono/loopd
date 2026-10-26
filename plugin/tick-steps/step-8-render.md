@@ -27,8 +27,10 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    head — merge-eligibility is this tick's judgement and is written down nowhere the script
    can read.
 
-   **No `AWAITING.md` ⇒ it writes nothing and exits 0** — absence is the off switch, and
-   never create the file. A `noop: true` tick leaves `AWAITING.md` exactly as it is — not
+   **No `AWAITING.md` ⇒ it writes nothing and exits 0.** **Presence means rewrite, never
+   create — for `AWAITING.md` and `SNAPSHOT.json` alike:** `/loopd:init` is their one
+   creator, gated by `awaiting` and `board` in the tracked `instance.config.json`, and a
+   deleted file stays off until the next stamp. A `noop: true` tick leaves `AWAITING.md` exactly as it is — not
    rewritten with the same items, not restamped: the `Last refreshed:` line moves on every
    render, so an unconditional rewrite churns the file the SessionStart banner reads and
    makes a stale queue indistinguishable from a fresh one, and the queue derives from
@@ -48,8 +50,7 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    of the tick, after the curation commit and the queue rewrite, run
    `${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet` — the script, never hand-assembled JSON (the
    field allowlist is a data-governance boundary). **No `SNAPSHOT.json` ⇒ it writes
-   nothing and exits 0** — absence is how a human takes this instance off the board.
-   Never create the file, never stage or commit it.
+   nothing and exits 0** — the presence rule above. Never stage or commit it.
 
    **Then re-render the page, if this instance has a board.** Nothing here publishes
    anything (that path is deleted — `docs/pm-design.md#step-8`). Immediately after the

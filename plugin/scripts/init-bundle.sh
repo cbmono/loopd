@@ -1336,8 +1336,7 @@ echo "Initialising the loopd bundle at $TARGET"
 convert_bundle
 
 # Is this the first stamp, or a refresh of an existing instance? Decided BEFORE
-# seeding, since seeding is what creates instance.config.json. Only the awaiting
-# queue below needs to know, and it needs to badly: see there for why.
+# seeding, since seeding is what creates instance.config.json.
 # Read a boolean from instance.config.json without requiring jq. Absent key, absent
 # file, or an unreadable file all yield the DEFAULT — absence must never flip a
 # behaviour to the unsafe side, and here the default is the caller's business.
@@ -1478,38 +1477,39 @@ if [ "$WITH_OBJECTIVES" = 1 ] && [ "$LAYER" = instance ]; then
   fi
 fi
 
-# 1b. The awaiting-you queue, created ONLY on the first stamp.
+# 1b. The awaiting-you queue — ON BY DEFAULT, and `awaiting` in instance.config.json is
+# the off switch. The board's contract (1c below), and for the board's reason.
 #
-# AWAITING.md is opt-in by presence: the project-manager refreshes it only when
-# it exists and never creates it, so deleting it turns the startup nudge off for
-# good. That switch is the whole design — but it also means a brand-new instance
-# would start with the queue OFF, and the SessionStart nudge would never fire
-# until someone happened to read the docs and touch the file. So the installer
-# provides the initial file, exactly once.
+# It used to be created on the first stamp ONLY, so `rm AWAITING.md` was permanent. That
+# inverted the common case: the file is gitignored, so it never travels with a clone, and
+# every bundle stamped before the first-stamp seed existed never got one. Three of three
+# instances ran with the Needs-you queue silently off, told to `touch` a core file by hand.
 #
-# It must NOT run on a refresh: re-creating the file would silently undo a
-# deliberate `rm`, which is the one thing the off switch has to survive. That's
-# what FIRST_STAMP guards. It's also gitignored, so this never becomes tracked
-# state. Content is a valid empty queue, so session-banner.sh stays silent until
+#   · `awaiting` absent or true  => create AWAITING.md when missing, on ANY stamp.
+#   · `awaiting: false`          => never create it, and say so.
+#
+# `rm AWAITING.md` still turns the queue off at once — the tick only rewrites a file that
+# exists — but only until the next stamp. A deletion is a moment's decision, a config key
+# is a durable one. Read through ab_awaiting_on, the one reader every surface shares, from
+# the TRACKED file only. Content is a valid empty queue, so the banner stays silent until
 # the first tick fills it in.
-if [ "$FIRST_STAMP" = yes ] && [ ! -e "$TARGET/$AB_AWAITING" ]; then
+if ! ab_awaiting_on "$TARGET"; then
+  echo "  skip  $AB_AWAITING (awaiting: false in instance.config.json)"
+elif [ ! -e "$TARGET/$AB_AWAITING" ]; then
   cat > "$TARGET/$AB_AWAITING" <<'AWAITING'
 # Awaiting you
 
 Derived and gitignored — **do not hand-edit**. Rewritten from `projects/*/tasks/*.md`
-by each dispatch tick that changed something. Delete this file to turn the queue off for good;
-the loop never recreates it. Last refreshed: never (no tick has run yet).
+by each dispatch tick that changed something. Set "awaiting": false in instance.config.json
+to turn the queue off. Last refreshed: never (no tick has run yet).
 
 ## 🔴 Awaiting you (0)
 _None._
 AWAITING
-  echo "  seed  $AB_AWAITING (queue on; delete it to turn the startup nudge off)"
-elif [ "$FIRST_STAMP" = no ] && [ ! -e "$TARGET/$AB_AWAITING" ]; then
-  echo "  skip  $AB_AWAITING (absent by choice — run 'touch $AB_AWAITING' to re-enable)"
+  echo "  seed  $AB_AWAITING (queue on; set \"awaiting\": false to opt out)"
 fi
 
-# 1c. The board snapshot, created ONLY on the first stamp — same contract, same
-# reason, same guard as AWAITING.md above.
+# 1c. The board snapshot — the same contract as AWAITING.md above.
 #
 # SNAPSHOT.json is ON BY DEFAULT, and `board` in instance.config.json is the off switch.
 #
@@ -2368,7 +2368,7 @@ fi
 #
 #   1. FIRST_STAMP ONLY. upgrade.sh calls this installer on EVERY run, including its
 #      non-interactive report-only mode, so an unguarded prompt would block every
-#      upgrade. It reuses the FIRST_STAMP computed before seeding for AWAITING.md rather
+#      upgrade. It reuses the FIRST_STAMP computed before seeding rather
 #      than inventing a second notion of "new" — two notions are two things to get out
 #      of step.
 #   2. A TTY ONLY. Otherwise skip, leave the placeholder, and print the instruction.

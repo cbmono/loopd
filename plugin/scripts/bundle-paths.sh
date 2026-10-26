@@ -99,6 +99,14 @@ print(g if isinstance(g,str) else "")' "$root/instance.config.json" 2>/dev/null)
   printf '%s\n' "$name"
 }
 
+# Is the Needs-you queue on? `awaiting` in the TRACKED config only — never a per-machine
+# override, so one switch has one answer. Newlines are flattened first: JSON may put a
+# key and its value on different lines, and a line-wise grep reads that `false` as on.
+ab_awaiting_on() { # [<bundle root>] — exit 0 on (absent key or file), 1 off
+  ! tr '\n' ' ' < "${1:-.}/instance.config.json" 2>/dev/null \
+    | grep -q '"awaiting"[[:space:]]*:[[:space:]]*false'
+}
+
 # Every AB_* path now has a PARENT DIRECTORY, which the pre-3.0 root spellings did not.
 # A writer that skipped this reported "the instance root is not writable" on a perfectly
 # writable bundle, so it is the resolver's job rather than each caller's.

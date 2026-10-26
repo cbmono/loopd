@@ -401,15 +401,15 @@ In-flight and upcoming work is deliberately **excluded** — it needs no decisio
 queue you scroll past is a queue you stop reading. **There is no `/status` command and no
 full board; don't reintroduce one.**
 
-**On by default, off by deletion.**
+**On by default; the config key is the switch.**
 
 | Action | Effect |
 |---|---|
-| `rm AWAITING.md` | the queue is off **for good** — an installer re-run will not resurrect it |
-| `touch AWAITING.md` | back on |
+| `"awaiting": false` in `instance.config.json` | the queue is off **for good** — no stamp creates the file |
+| `rm AWAITING.md` | off until the next `/loopd:init`, which recreates it |
 
 Derived and gitignored; never hand-edit it. Reasoning:
-[docs/conventions.md invariant 3](docs/conventions.md#3-awaitingmd-is-loopds-only-status-artifact-and-it-is-opt-in-by-presence).
+[docs/conventions.md invariant 3](docs/conventions.md#3-awaitingmd-is-loopds-only-status-artifact-and-awaiting-in-config-is-its-switch).
 
 A cross-instance board is available too, on the same off-by-deletion rule
 ([docs/operations.md § the board](docs/operations.md#5-the-cross-instance-board-optional)).
@@ -637,9 +637,9 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `close-project-folder.sh` | closeout's folder step — `git rm -r` the project, or freeze and keep it on `retain: true` | only with `--apply` |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
 | `build-board.sh` | renders the HTML board (anywhere; needs `python3`) — pass `.` to render THIS instance only | yes, the output file |
-| `whats-up.sh` | backs `/loopd:whats-up` — `AWAITING.md`'s rows as a numbered `Needs you:` block, verbatim and in the file's order, plus its `Last refreshed:` age and the `tick-lock.sh status` verdict. Reads no task document, no `gh`, no `git`; no `AWAITING.md` ⇒ one off-switch line, and the file is never created | no |
+| `whats-up.sh` | backs `/loopd:whats-up` — `AWAITING.md`'s rows as a numbered `Needs you:` block, verbatim and in the file's order, plus its `Last refreshed:` age and the `tick-lock.sh status` verdict. Reads no task document, no `gh`, no `git`; `"awaiting": false` or no `AWAITING.md` ⇒ one off line naming the switch, and the file is never created | no |
 | `print-board.sh` | prints the board in the terminal | no |
-| `status-line.sh` | the bundle's Claude Code `statusLine`: one coloured line — `loopd · <n> in flight · agents <n> running[, <n> no process] · <n> need you · lock free\|held · last tick <hh:mm>` — from task frontmatter, `agent-sessions.sh view`, `AWAITING.md`, `.tick-lock` and `log.md`'s last `* TICK`. No `jq`, no `gh`, no model; a number it cannot establish renders `?`, and outside a bundle it prints nothing. The `need you` segment is three-state: a deleted `AWAITING.md` is the queue's off switch, so the segment goes; an unreadable one says so and names its own `chmod +r` repair. `/loopd:init` installs it into the BUNDLE's `.claude/settings.json` and never the user's | yes — the 10-second `agents` cache under `${XDG_CACHE_HOME:-~/.cache}/loopd/` |
+| `status-line.sh` | the bundle's Claude Code `statusLine`: one coloured line — `loopd · <n> in flight · agents <n> running[, <n> no process] · <n> need you · lock free\|held · last tick <hh:mm>` — from task frontmatter, `agent-sessions.sh view`, `AWAITING.md`, `.tick-lock` and `log.md`'s last `* TICK`. No `jq`, no `gh`, no model; a number it cannot establish renders `?`, and outside a bundle it prints nothing. The `need you` segment is three-state: `"awaiting": false` or a deleted `AWAITING.md` is the queue off, so the segment goes; an unreadable one says so and names its own `chmod +r` repair. `/loopd:init` installs it into the BUNDLE's `.claude/settings.json` and never the user's | yes — the 10-second `agents` cache under `${XDG_CACHE_HOME:-~/.cache}/loopd/` |
 | `watch-board.sh` | renders the board into `.board-live/` and re-renders on every change | yes, the page (gitignored) |
 | `board-serve.sh` | serves `.board-live/` on `127.0.0.1:<boardPort>` and re-renders it when `SNAPSHOT.json` changes — one process per bundle | yes, the page (gitignored) |
 | `link-repos.sh` | refreshes `<instance>/repos/`, and writes each linked repo's `.git/loopd-bundle` — the marker the two safety hooks follow from a role agent's worktree back to this bundle | yes |
@@ -682,7 +682,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | A seed change from a pull never arrived | seed is copied only when absent, by design | `/loopd:init` and port what it reports |
 | Commands and hooks vanished later, having worked | the installer was run from a git **worktree** | re-run `/loopd:init` from the main working tree |
 | Installer exits 2, "refusing to install from a git worktree" | working as designed | `git -C <src> worktree list` — the first entry is the main tree |
-| The startup nudge is empty | `AWAITING.md` was deleted, or the PM reshaped its layout | `touch AWAITING.md`; `session-banner.sh` greps the heading and bullets **literally** |
+| The startup nudge is empty | `AWAITING.md` was deleted, `"awaiting": false` is set, or the PM reshaped its layout | `/loopd:init` recreates the file unless the key is `false`; `session-banner.sh` greps the heading and bullets **literally** |
 | An instance is missing from the board | it has no `SNAPSHOT.json`, or `boardInstances` doesn't name it | `touch SNAPSHOT.json` in it |
 | `print-board.sh` printed nothing at all | it was not run from an instance root — that is silence by design, not an error | `cd` into the instance |
 | The terminal board is missing a status column | every row was zero there, so it was dropped to fit the width; the footer names which | widen the terminal, or `--width 0` |

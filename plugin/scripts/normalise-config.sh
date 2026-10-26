@@ -135,11 +135,13 @@ for key in list(new_local):
 # organisation, a reserved example.com address or two unclaimed logins into a real bundle.
 # Their absence is reported nowhere, because the seed cannot know the right value.
 PLACEHOLDER_VALUED = {"org", "authorEmail", "people"}
+# Seed keys whose absence already reads as the seed value, so adding one migrates nothing.
+ABSENT_IS_SEED = {"awaiting"}
 
 for key, value in seed.items():
     # A `$doc` key is the seed's own commentary, so it is never added to a bundle; a
     # per-machine key is not missing from the tracked file, it is absent by design.
-    if key.startswith("$") or key in PER_MACHINE_ONLY or key in PLACEHOLDER_VALUED or key in new_tracked:
+    if key.startswith("$") or key in PER_MACHINE_ONLY or key in PLACEHOLDER_VALUED or key in ABSENT_IS_SEED or key in new_tracked:
         continue
     new_tracked[key] = value
     findings[TRACKED].append(("MISSING", key, "added with the seed default"))
