@@ -881,7 +881,7 @@ boardInstances"
   # exists to name. Adding it to the global set would have made that state pass as
   # healthy, and it is the exact shape the key was deleted for the first time round.
   unknown=""; unparsed=""; fkeys=""; retired=""; effort=""
-  local tiers="" agents="" e v
+  local tiers="" agents="" e v l lv
   for f in instance.config.json instance.config.local.json; do
     [ -f "$ROOT/$f" ] || continue
     tiers="$tiers
@@ -921,7 +921,8 @@ EOF
     done
     while IFS="$(printf '\t')" read -r e v; do
       [ -n "$e" ] || continue
-      case " $EFFORT_LEVELS " in *" $v "*) ;; *) effort="${effort:+$effort }$f:roleEffort.$e=$v"; continue ;; esac
+      lv=""; for l in $EFFORT_LEVELS; do [ "$v" = "$l" ] && lv=1; done
+      [ -n "$lv" ] || { effort="${effort:+$effort }$f:roleEffort.$e=$v"; continue; }
       printf '%s\n' "$tiers" | grep -qFx -- "$e" && continue
       case "$agents " in *" $e.md "*) continue ;; esac
       effort="${effort:+$effort }$f:roleEffort.$e(no roleTiers twin)"

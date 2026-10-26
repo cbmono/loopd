@@ -73,6 +73,12 @@ ERR="$(bash "$RE" --instance "$I" software-engineer 2>&1 >/dev/null)"
 ok "…one stderr line"                            "$(printf '%s\n' "$ERR" | wc -l | tr -d ' ')" 1
 ok "…naming the role and the value"              "$(yn grep -q "'hgih' for 'software-engineer'" <<<"$ERR")" yes
 ok "a known role beside it still resolves"       "$(EFF "$I" project-manager)" medium
+# Equality, never substring: two levels, a level's prefix, or one inside a longer word.
+for bad in "low medium" "medium high" "med" "hig" "xhigh max" "lowest"; do
+  printf '{\n  "roleEffort": { "auditor": "%s" }\n}\n' "$bad" > "$I/instance.config.local.json"
+  ok "'$bad' is refused: nothing printed, exit 1" "[$(EFF "$I" auditor)]:$(RC "$I" auditor)" "[]:1"
+done
+rm -f "$I/instance.config.local.json"
 ALL "$I" > "$TMP/all.4"
 ok "--all exits 1"                               "$(cat "$TMP/all.rc")" 1
 ok "…the bad row prints with an EMPTY level"     "$(awk -F'\t' '$1=="software-engineer"{print "[" $3 "]"}' "$TMP/all.4")" "[]"

@@ -44,7 +44,8 @@ tab=$'\t'
 
 # check_one <role> <value> — 0 for a known level; else the one stderr line and 1.
 check_one() {
-  case " $LEVELS " in *" $2 "*) [ -n "$2" ] && return 0 ;; esac
+  local l
+  for l in $LEVELS; do [ "$2" = "$l" ] && return 0; done
   echo "resolve-effort: unknown effort '$2' for '$1' in roleEffort — expected one of: $LEVELS" >&2
   return 1
 }

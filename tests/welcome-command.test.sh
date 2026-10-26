@@ -612,6 +612,16 @@ ok "…a key with no roleTiers twin is named too" \
 ok "…a plugin agent with no roleTiers entry is NOT an orphan" \
   "$(printf '%s\n' "$WARN6H" | grep -c 'failure-analyst' | tr -d ' ')" 0
 ok "…and check still exits 0" "$rc6h" 0
+# Equality, never substring: a multi-word or partial value is named too.
+printf '{\n  "org": "example-org",\n  "roleTiers": { "auditor": "deep", "cataloguer": "standard", "explorer": "light" },\n  "roleEffort": { "auditor": "low medium", "cataloguer": "med", "explorer": "low" }\n}\n' > "$INST6/instance.config.json"
+printf '{\n  "ownerGithubUser": "example-user-007"\n}\n' > "$INST6/instance.config.local.json"
+WARN6M="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1 | grep 'roleEffort entries no spawn uses:')"
+ok "a multi-word level ('low medium') is named" \
+  "$(printf '%s\n' "$WARN6M" | grep -c 'roleEffort\.auditor=low medium' | tr -d ' ')" 1
+ok "…a partial level ('med') too" \
+  "$(printf '%s\n' "$WARN6M" | grep -c 'roleEffort\.cataloguer=med' | tr -d ' ')" 1
+ok "…while a valid level beside them is not" \
+  "$(printf '%s\n' "$WARN6M" | grep -c 'roleEffort\.explorer' | tr -d ' ')" 0
 mkinstance "$TMP/inst6s"; cp "$TPL/plugin/seed/instance.config.json" "$TMP/inst6s/instance.config.json"
 OUT6s="$(bash "$SH" check --instance "$TMP/inst6s" --template "$SRC" 2>&1)"
 ok "the seed's own roleEffort reports neither" \
