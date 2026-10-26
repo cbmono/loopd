@@ -60,7 +60,7 @@ mkdir -p "$TMP/bin"
 printf '#!/bin/sh\nexec python3 -c "import time; print(int(time.time() * 1000))"\n' > "$TMP/ms"; chmod +x "$TMP/ms"
 cat > "$TMP/bin/claude" <<'FAKE'
 #!/usr/bin/env bash
-q="$1"; end=$(( $(date +%s) + 150 ))
+q="$1"; end="$2"
 echo $$ > "$q/pid"
 while [ "$(date +%s)" -lt "$end" ]; do
   for j in "$q"/*.job; do
@@ -75,7 +75,7 @@ chmod +x "$TMP/bin/claude"
 claude_up() { # <name> -> sets Q (its queue dir) and CPID (its pid); never call it in $( )
   local q="$TMP/q-$1"
   mkdir -p "$q"
-  "$TMP/bin/claude" "$q" </dev/null >/dev/null 2>&1 &
+  "$TMP/bin/claude" "$q" "$(( $(date +%s) + 150 ))" </dev/null >/dev/null 2>&1 &
   LOOPS="$LOOPS $!"; CPID=$!
   local i=0; while [ ! -f "$q/pid" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done
   Q="$q"
@@ -248,7 +248,7 @@ done
 ok "python3 missing"     "$(nothing "$(bundle off3 '{ "org": "x" }')" "$QF" f3 "PATH='$TMP/nopy'")" down:0
 O="$(bundle held '{ "org": "x" }')"
 OP="$(cd "$O" && bash "$SERVE" --print-port)"
-python3 -c 'import socket,sys,time; s=socket.socket(); s.bind(("127.0.0.1",int(sys.argv[1]))); s.listen(1); time.sleep(20)' "$OP" &
+python3 -c 'import socket,sys,time; s=socket.socket(); s.bind(("127.0.0.1",int(sys.argv[1]))); s.listen(1); time.sleep(max(0,int(sys.argv[2])-time.time()))' "$OP" "$(( $(date +%s) + 20 ))" &
 HELD=$!; LOOPS="$LOOPS $HELD"; sleep 0.5
 ok "a port held by something else" "$(nothing "$O" "$QF" f4)" down:0
 kill "$HELD" 2>/dev/null
