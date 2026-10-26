@@ -188,8 +188,19 @@ ok "…and stays human-gated" \
 # bare call serves, and the argument-hint is where a human reads that before typing.
 ok "a bare /${PN}:board serves, and the skill says so" \
   "$(ge1 "$(grep -cF 'no argument means' "$SK/board/SKILL.md")")" yes
-ok "…and the argument-hint shows serve as the default" \
-  "$(ge1 "$(grep -cF 'argument-hint: "[serve] | publish"' "$SK/board/SKILL.md")")" yes
+ok "…and the argument-hint shows serve as the default, and --help" \
+  "$(ge1 "$(grep -cF 'argument-hint: "[serve] | publish | --help"' "$SK/board/SKILL.md")")" yes
+# shellcheck disable=SC2016 # backticks are markdown, not expansion
+ok "…and the description names --help" \
+  "$(ge1 "$(grep -c '^description: .*`--help`' "$SK/board/SKILL.md")")" yes
+# shellcheck disable=SC2016 # backticks are markdown, not expansion
+ok "--help and help both print the forms and stop" \
+  "$(ge1 "$(grep -cF '| `--help` or `help` | prints the three forms and stops. |' "$SK/board/SKILL.md")")" yes
+ok "…and the help text is the three forms, one line each" \
+  "$(awk '/^## `--help`/{f=1} f&&/^```text$/{b=1; next} b&&/^```$/{exit} b' "$SK/board/SKILL.md" | grep -cE "^/${PN}:board (\[serve\]|publish|--help) ")" 3
+# shellcheck disable=SC2016 # backticks are markdown, not expansion
+ok "…while any other argument is still a typo naming all three" \
+  "$(ge1 "$(grep -cF 'Anything else is a typo: say so, name the three forms (`serve`, `publish`,' "$SK/board/SKILL.md")")" yes
 ok "…while publish stays something the human typed" \
   "$(ge1 "$(grep -cF 'Only ever on an explicit `publish`' "$SK/board/SKILL.md")")" yes
 ok "…and the skill refuses outside an instance root in its own words" \

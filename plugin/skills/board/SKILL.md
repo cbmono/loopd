@@ -1,19 +1,34 @@
 ---
 name: board
 disable-model-invocation: true
-description: The board, two ways. Bare or `serve` runs the local board server on a fixed localhost port — a script, no tokens. `publish` publishes the board as a PRIVATE artifact at a stable URL. Run from the instance root.
-argument-hint: "[serve] | publish"
+description: The board, two ways. Bare or `serve` runs the local board server on a fixed localhost port — a script, no tokens. `publish` publishes the board as a PRIVATE artifact at a stable URL. `--help` lists the forms. Run from the instance root.
+argument-hint: "[serve] | publish | --help"
 ---
 
-**Two forms, and `$ARGUMENTS` picks one. `serve` is the default: no argument means
-`serve`.** Anything else is a typo: say so, name the two forms, and stop. Never guess, and
-never read a typo as `publish` — publishing leaves the machine, so it is only ever what the
-human typed.
+**Three forms, and `$ARGUMENTS` picks one. `serve` is the default: no argument means
+`serve`.** Anything else is a typo: say so, name the three forms (`serve`, `publish`,
+`--help`), and stop. Never guess, and never read a typo as `publish` — publishing leaves the
+machine, so it is only ever what the human typed.
 
 | `$ARGUMENTS` | What it does |
 |---|---|
 | empty or `serve` | the **local** board server, on this machine only. One command, no tokens. **The default.** |
 | `publish` | the **private artifact**, at a stable URL. Interactive only, and it leaves the machine. |
+| `--help` or `help` | prints the three forms and stops. |
+
+## `--help` — the forms, and nothing else
+
+Print exactly these three lines, run nothing, and stop:
+
+```text
+/loopd:board [serve]   serve the board on http://localhost:<port>/loopd/board (the default)
+/loopd:board publish   publish it as a private artifact at a stable URL
+/loopd:board --help    show these options
+```
+
+**The server usually needs no command.** With `boardServe` on (the default) every session on
+the bundle starts it and the banner's `Board` row is its URL; `boardServe: false` in the
+tracked `instance.config.json` turns that off, and `serve` still starts it by hand.
 
 ## `serve` — the local board server, and what a bare `/loopd:board` does
 
@@ -39,7 +54,8 @@ documents as the page is served — never into the file, so
 `publish` below never carries it. **No model is in that
 path** — do not render, summarise or reformat the board yourself, and do not read the page
 back into the session. It runs until the human stops it; a second start on the same bundle
-says the port is already served and exits 0. The next session's banner prints the URL.
+says the port is already served and exits 0. The next session's banner prints the URL as its
+`Board` row.
 
 ## `publish` — the private artifact
 

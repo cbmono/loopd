@@ -147,7 +147,8 @@ MS=$(( $(cat "$QA/t1" 2>/dev/null || echo 99999999999999) - $(cat "$QA/t0") ))
 ok "the hook's stdout pipe reaches EOF within 5 s"     "$([ "$T" != timeout ] && [ "$MS" -lt 5000 ] && echo yes || echo "no (${MS} ms)")" yes
 ok "...while the server keeps running"                 "$(up "$A")" up
 PORT="$(serve_port "$A")"
-ok "the first banner prints the served URL"            "$(grep -c "http://localhost:$PORT" "$QA/piped")" 1
+ok "the first banner prints the served URL"            "$(grep -c "Board   http://localhost:$PORT/loopd/board" "$QA/piped")" 1
+ok "...with the --help Run row and no file:// row"     "$(grep -c 'Run     /loopd:board --help to see the options' "$QA/piped"):$(grep -c 'file://' "$QA/piped")" 1:0
 ok "...and the starting SessionStart returns in under 3 s"    "$([ "$MS" -lt 3000 ] && echo yes || echo "no (${MS} ms)")" yes
 start_in "$QA" "$A" s-a2 >/dev/null
 i=0; while [ "$(code "$PORT" /loopd/board)" != 200 ] && [ $i -lt 50 ]; do sleep 0.2; i=$((i+1)); done
@@ -279,6 +280,10 @@ OP="$(cd "$O" && bash "$SERVE" --print-port)"
 python3 -c 'import socket,sys,time; s=socket.socket(); s.bind(("127.0.0.1",int(sys.argv[1]))); s.listen(1); time.sleep(max(0,int(sys.argv[2])-time.time()))' "$OP" "$(( $(date +%s) + 20 ))" &
 HELD=$!; LOOPS="$LOOPS $HELD"; sleep 0.5
 ok "a port held by something else" "$(nothing "$O" "$QF" f4)" down:0
+mkdir -p "$O/$AB_BOARD_DIR"; printf '<!doctype html>\n' > "$O/$AB_BOARD_DIR/board.html"
+start_in "$QF" "$O" f5 >/dev/null
+ok "...and the banner keeps the file:// row and names the held port" \
+  "$(grep -c "Board   file://" "$QF/banner.f5"):$(grep -c "Run     port $OP is taken" "$QF/banner.f5")" 1:1
 kill "$HELD" 2>/dev/null
 
 echo

@@ -901,6 +901,36 @@ assert "--color always colours a pipe"                 "$(coloured "$OUT")"
 assert "…and an unknown argument is ignored, not fatal" \
   "$(eq "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --wat >/dev/null 2>&1; echo $?)" 0)"
 
+# CLICKABLE: a terminal links on the scheme, so the served URL must reach it with no SGR
+# byte inside it or open around it — asserted on the pty's bytes, where colour is on.
+SURL='http://localhost:43210/loopd/board'
+clickable() { # <tty output> -> 0 when the URL is preceded by no open span and carries no ESC
+  python3 -c '
+import re, sys
+out, url = sys.argv[1], sys.argv[2]
+i = out.find(url)
+if i < 0: print(1); sys.exit()
+spans = re.findall(r"\x1b\[([0-9;]*)m", out[:i])
+print(0 if (not spans or spans[-1] in ("", "0")) and "\x1b" not in out[i:i + len(url)] else 1)
+' "$1" "$SURL"
+}
+mkdir -p "$INST/$AB_BOARD_DIR"; printf '<!doctype html>\n' > "$INST/$AB_BOARD_DIR/board.html"
+printf '43210\n%s\n%s\nhand\n%s\n' "$$" "$INST" "$(ps -o lstart= -p $$ | tr -s ' ' | sed 's/^ //; s/ $//')" \
+  > "$INST/$AB_BOARD_DIR/.serve"
+TTYOUT="$(tty_run)"
+assert "served, on a terminal: the Board row is the URL with its scheme" \
+  "$(has "Board   $SURL" "$(strip "$TTYOUT")")"
+assert "…coloured elsewhere, so the pin below is not vacuous" "$(coloured "$TTYOUT")"
+assert "…and the URL sits outside any colour span, no ESC inside it" "$(clickable "$TTYOUT")"
+assert "…the Run row points at --help"  "$(has ":board --help to see the options" "$(strip "$TTYOUT")")"
+assert "…and no file:// row"            "$(hasnt 'file://' "$(strip "$TTYOUT")")"
+printf '{ "boardArtifactUrl": "https://example.com/artifact/abc123" }\n' > "$INST/instance.config.local.json"
+TTYOUT="$(tty_run)"
+assert "with an artifact, the served continuation URL is outside the dim span too" "$(clickable "$TTYOUT")"
+assert "…and that check fails a URL wrapped in dim (non-vacuity)" \
+  "$(eq "$(clickable "$(printf '%s[2m        %s%s[0m' "$ESC" "$SURL" "$ESC")")" 1)"
+rm -f "$INST/instance.config.local.json"; rm -rf "${INST:?}/${AB_BOARD_DIR:?}"
+
 # =======================================================================================
 echo "== 9. no \$var may touch a non-ASCII character, anywhere in the shipped shell =="
 # =======================================================================================

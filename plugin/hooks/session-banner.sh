@@ -1289,9 +1289,10 @@ fi
 # one thing it can be right about — so a value that resolves from `tracked` is ignored here
 # rather than printed, and `/<plugin>:board publish` writes only the local file.
 #
-# THE PAGE ITSELF NEVER STOPS BEING A FILE. The URL is an addition to the `file://` line,
-# never a replacement: `/board.html` is what a human without artifact access reads, and a
-# banner that dropped the path would take that route away from them.
+# THE PUBLISHED URL IS AN ADDITION, never a replacement: a human without artifact access
+# still needs a local route under it. A SERVED URL is the one thing that replaces the
+# `file://` row, because it serves that same file, re-rendered, so the path would be a staler
+# copy of the row above it. When nothing serves, the `file://` row is back.
 #
 # THE `board` GATE IS READ FROM THE TRACKED FILE ONLY, and not through resolve-config.sh,
 # because `board` is deliberately NOT in the per-machine override set (SCHEMA.md →
@@ -1328,14 +1329,28 @@ BOARD_LW=8
 # pid's start time (a reused pid) rather than the file. Not up is the safe
 # direction: a banner may never send a human to a port nothing is listening on.
 bsess="${self%/*}/board-session.sh"
+_started=""
 if [ "$SESSION" -eq 1 ] && [ "$board_on" -eq 1 ]; then
-  bash "$bsess" start >/dev/null 2>&1 3>&-
+  _started="$(bash "$bsess" start 2>/dev/null 3>&-)"
 fi
 serve_url=""
 if [ -f "$root/$AB_BOARD_DIR/.serve" ]; then
   _sport="$(bash "$bsess" serving 2>/dev/null </dev/null)"
-  case "$_sport" in ''|*[!0-9]*) ;; *) serve_url="http://localhost:$_sport" ;; esac
+  case "$_sport" in ''|*[!0-9]*) ;; *) serve_url="http://localhost:$_sport/loopd/board" ;; esac
 fi
+# WHY NOTHING SERVES, so the Run row never advises a command that cannot work.
+run_row="/${PLUGIN_NAME}:board serve for a live URL"
+if [ -z "$serve_url" ] && [ "$board_on" -eq 1 ] && bash "$bsess" enabled </dev/null 2>/dev/null; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    run_row="no live URL: python3 is not on PATH"
+  else
+    case "$_started" in
+      held\ [0-9]*) _hport="${_started#held }"
+        case "$_hport" in *[!0-9]*) ;; *) run_row="port $_hport is taken — set boardPort in instance.config.local.json" ;; esac ;;
+    esac
+  fi
+fi
+help_row="/${PLUGIN_NAME}:board --help to see the options"
 # THREE STATES, THREE DISTINGUISHABLE OUTPUTS — and the middle one used to be silence.
 # `board: true` with nothing rendered printed exactly what `board: false` printed: nothing.
 # Measured on a real instance, the owner read that absence as the Board line having been
@@ -1344,14 +1359,11 @@ fi
 # and a broken one is the wallpaper this file exists not to print, and printing NOTHING is
 # the worst version of it — there is not even a line to be suspicious of.
 #
-#   board: true  + a local URL   -> the published page, and the `file://` copy under it
-#   board: true  + page present  -> ONE line: the label and the `file://` link
+#   board: true  + a local URL   -> the published page, and the served or `file://` copy under it
+#   board: true  + served        -> the served URL, and the `--help` row
+#   board: true  + page present  -> the `file://` link, and why nothing serves
 #   board: true  + page ABSENT   -> enabled but never rendered, and what renders it
 #   board: false                 -> SILENCE, whatever is on disk
-#
-# THE FIRST ROW IS AN ADDITION AND CHANGES NOTHING BELOW IT. An instance that has never
-# published prints exactly the bytes it printed before this row existed, which is what
-# keeps the three states three rather than turning them into a matrix nobody can read.
 #
 # THE THIRD ROW STAYS SILENT AND THAT IS NOT AN OVERSIGHT. The human turned the board off;
 # telling them so every session start is the "only fire what is true" rule broken in the
@@ -1402,57 +1414,27 @@ if [ "$board_on" -eq 1 ]; then
   echo
   if [ -n "$art" ]; then
     # THE PUBLISHED PAGE IS THE HEADLINE ROW when there is one: it is the only route that
-    # works from a phone without a checkout, which is the whole reason it exists. The local
-    # file follows it as a dim continuation line — still there, still openable, and labelled
-    # as the route for a reader with no access to the published page.
+    # works from a phone without a checkout. The local route follows as a continuation line.
     board_shown=1
     echo "Board   $art"
     if [ -n "$serve_url" ]; then
-      say "$C_DIM" "        $serve_url — this machine's live copy"
+      # The URL stays outside the dim span: a terminal links it on the scheme, and an SGR
+      # byte glued to it can end up inside the link.
+      printf '        %s%s — this machine'"'"'s live copy%s\n' "$serve_url" "$C_DIM" "$C_OFF"
+      echo "$(pad Run "$BOARD_LW")$help_row"
     elif [ -f "$page" ]; then
       say "$C_DIM" "        file://$page — the local copy, for anyone without artifact access"
     fi
+  elif [ -n "$serve_url" ]; then
+    board_shown=1
+    echo "$(pad Board "$BOARD_LW")$serve_url"
+    echo "$(pad Run "$BOARD_LW")$help_row"
   elif [ -f "$page" ]; then
     board_shown=1
-    # ONE PATH, PRINTED ONCE. This row used to be THREE lines for one link: the `file://`
-    # URL, the same path again bare on a line of its own, and a note about staleness. The
-    # owner saw the duplicate in a real session and read it as a bug, which is the only
-    # verdict that matters for a surface whose entire job is to be scanned in one look.
-    #
-    # `file://` IS THE FORM THAT SURVIVES, and the choice is not a coin toss. A terminal
-    # that auto-links does so on the SCHEME, so the bare line was never the clickable one;
-    # a terminal that does not auto-link renders the whole URL as text, where the path is
-    # still complete and still selectable. So the bare line was clickable in no terminal
-    # the URL was not, and its only remaining claim — a cleaner triple-click — is worth
-    # less than a duplicated path costs. If some terminal ever does need the bare form,
-    # that is a reason to change WHICH line prints, never to print both again.
-    #
-    # AND THE STALENESS NOTE IS DELETED OUTRIGHT, not shortened. The masthead of the page
-    # itself carries the render time, and `watch-board.sh` is documentation — a
-    # banner fact is something true of THIS session, and neither of those is.
-    # TWO ROWS, ONE LABEL COLUMN — and that is not the deleted three-line row coming back.
-    # The repair rode on the row as `— run /<plugin>:board serve for a live URL`, which put
-    # a path and a sentence on one line and wrapped on any normal terminal width. What
-    # returns is a second VALUE under the first, in the same column, so the block reads as a
-    # table; what stays deleted is the bare path and the staleness note, neither of which
-    # said anything the row above had not.
-    #
-    # `pad`, NOT A HAND-COUNTED RUN OF SPACES: it measures in characters, so the labels stay
-    # a column in any locale and the width is one number rather than three literals.
+    # ONE PATH, PRINTED ONCE, as `file://`: a terminal auto-links on the scheme, and the
+    # bare-path line and the staleness note this row once carried stay deleted.
     echo "$(pad Board "$BOARD_LW")file://$page"
-    if [ -n "$serve_url" ]; then
-      # THE SERVER IS THE LIVE ROUTE when it is up, so it takes the second row from the
-      # command that would start it: a `file://` a human reloads by hand is strictly worse
-      # than a URL that reloads itself, and both are worth printing.
-      echo "$(pad Live "$BOARD_LW")$serve_url"
-    else
-      echo "$(pad Run "$BOARD_LW")/${PLUGIN_NAME}:board serve for a live URL"
-    fi
-  elif [ -n "$serve_url" ]; then
-    # A SERVER UP WITH NO PAGE ON DISK — one row, because there is no `file://` to head the
-    # block with. Unchanged from before the split.
-    board_shown=1
-    echo "Board   $serve_url"
+    echo "$(pad Run "$BOARD_LW")$run_row"
   else
     # IT NAMES THE STATE AND THE REPAIR, because the question this row answers is "is this
     # broken?" and half an answer leaves the human where the silence did. The path is

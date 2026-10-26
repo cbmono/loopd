@@ -17,8 +17,9 @@
 #
 # THE HOOK PRINTS A PATH, AND — WHEN THIS MACHINE PUBLISHED ONE — A URL ABOVE IT. The path
 # is `.board-live/board.html`, which `watch-board.sh` already writes and `install.sh`
-# already gitignores, and it never stops printing: it is the route for a reader with no
-# artifact access. The URL is written by `/<plugin>:board` into
+# already gitignores. A live local server replaces it with the served URL, which serves that
+# same file re-rendered; nothing else does, so a reader with no artifact access always has a
+# local route. The URL is written by `/<plugin>:board` into
 # `instance.config.local.json` and read from the LOCAL layer only. That last word is the
 # whole constraint. The key was banished from this repo when publishing was deleted, and it
 # was banished because it had been TRACKED: publishing is account-scoped, so exactly one
@@ -121,7 +122,7 @@ section() { awk '/^Board   /{f=1} f&&/^[[:space:]]*$/{exit} f' <<<"$OUT"; }
 # each comparison: a fixture copied into six places is six chances for one of them to drift
 # into asserting the shape the row is being moved away from.
 rendered_block() { printf 'Board   file://%s\nRun     /'"${PN}:"'board serve for a live URL\n%s' "$PAGE" "$UPDATE_ROW"; }
-serving_block()  { printf 'Board   file://%s\nLive    %s\n%s' "$PAGE" "$1" "$UPDATE_ROW"; }
+serving_block()  { printf 'Board   %s\nRun     /'"${PN}:"'board --help to see the options\n%s' "$1" "$UPDATE_ROW"; }
 # The column a row's VALUE starts in — past the label and the spaces after it. This is what
 # "the second row's value starts under `file://`" is asserted with, rather than a count of
 # literal spaces, so a relabelled row that keeps the column still passes and one that does
@@ -310,16 +311,21 @@ echo "== the local server: its URL when it is up, the way to start it when it is
 STATE="$INST/$AB_BOARD_DIR/.serve"
 printf '43210\n%s\n%s\nhand\n%s\n' "$$" "$INST" "$(ps -o lstart= -p $$ | tr -s ' ' | sed 's/^ //; s/ $//')" > "$STATE"
 run
-# A LIVE SERVER TAKES THE SECOND ROW, not the first: the command that would start one is
-# the thing it replaces, and the `file://` copy stays because a human with the page on disk
-# still wants the path. Compared as a whole block, so a live URL appended to row 1 fails.
-assert "a live pid prints the localhost URL on row 2" \
-  "$(eq "$(section)" "$(serving_block 'http://localhost:43210')")"
-assert "…and the section is still three lines"  "$(eq "$(section | grep -c .)" 3)"
-assert "…and the file:// row is still row 1"  "$(has "Board   file://$PAGE" "$OUT")"
-assert "…with the label still in the same column as row 1's" \
+# A LIVE SERVER REPLACES THE `file://` ROW: it serves that same file, re-rendered, so the
+# path would only be a staler copy of the row above it. The Run row stops naming the command
+# that is already running and points at `--help`. Compared as a whole block.
+SURL='http://localhost:43210/loopd/board'
+assert "a live pid prints the served URL as the Board row, and the --help Run row" \
+  "$(eq "$(section)" "$(serving_block "$SURL")")"
+assert "…and no file:// row anywhere in the banner"  "$(hasnt 'file://' "$OUT")"
+assert "…with the Run value in the same column as the Board value" \
   "$(eq "$(val_col "$(section)" 1)" "$(val_col "$(section)" 2)")"
 assert "…and the command it replaced is gone"  "$(hasnt '/'"${PN}:"'board serve for a live URL' "$OUT")"
+assert "…and the Update row is untouched"      "$(line_is "$UPDATE_ROW" "$OUT")"
+rm -f "$PAGE"; run
+assert "a live server with no page on disk prints the same block" \
+  "$(eq "$(section)" "$(serving_block "$SURL")")"
+render
 # A REUSED pid: alive, but not the process that wrote the file.
 printf '43210\n%s\n%s\nhand\nThu Jan  1 00:00:00 1970\n' "$$" "$INST" > "$STATE"
 run
@@ -334,6 +340,23 @@ assert "a DEAD pid does not print a URL"      "$(hasnt 'http://localhost:43210' 
 assert "…it falls back to the file:// row"    "$(has "Board   file://$PAGE" "$OUT")"
 assert "…which names the way to start one"    "$(has '/'"${PN}:"'board serve for a live URL' "$OUT")"
 rm -f "$STATE"
+
+echo "== nothing serves: the file:// row, and a Run row that names why =="
+printf '{ "board": true, "boardServe": false }\n' > "$INST/instance.config.json"
+run
+assert "boardServe: false prints today's file:// block" "$(eq "$(section)" "$(rendered_block)")"
+printf '{ "board": true }\n' > "$INST/instance.config.json"
+NOPY="$TMP/nopy"; mkdir -p "$NOPY"
+for d in /bin /usr/bin; do
+  for t in "$d"/*; do
+    case "${t##*/}" in python3*) continue ;; esac
+    [ -e "$NOPY/${t##*/}" ] || ln -s "$t" "$NOPY/${t##*/}"
+  done
+done
+ln -sf "$(command -v bash)" "$NOPY/bash"
+OUT="$(PATH="$NOPY" CLAUDE_PLUGIN_ROOT="$PLUG" CLAUDE_PROJECT_DIR="$INST" "$NOPY/bash" "$HOOK" 2>&1)"
+assert "python3 missing: the file:// row, and a Run row naming python3" \
+  "$(eq "$(section)" "$(printf 'Board   file://%s\nRun     no live URL: python3 is not on PATH\n%s' "$PAGE" "$UPDATE_ROW")")"
 run
 
 echo "== the third line is deleted, and nothing wearing its clothes replaced it =="
@@ -458,6 +481,12 @@ if command -v python3 >/dev/null 2>&1; then
   assert "…and the local page stays reachable under it"        "$(has "file://$PAGE" "$OUT")"
   assert "…labelled as the route for someone without artifact access" \
     "$(has 'without artifact access' "$OUT")"
+  # SERVED: the artifact stays the headline; the continuation line carries the served path.
+  printf '43210\n%s\n%s\nhand\n%s\n' "$$" "$INST" "$(ps -o lstart= -p $$ | tr -s ' ' | sed 's/^ //; s/ $//')" > "$STATE"
+  run
+  assert "served with an artifact: artifact headline, served continuation, --help Run row" \
+    "$(eq "$(section)" "$(printf 'Board   %s\n        %s — this machine'"'"'s live copy\nRun     /'"${PN}:"'board --help to see the options\n%s' "$URL" "$SURL" "$UPDATE_ROW")")"
+  rm -f "$STATE"
   # THE DIRECTION THAT MATTERS. The same URL, moved to the tracked file, must not print:
   # that file is shared, and a shared URL is the deleted design.
   rm -f "$INST/instance.config.local.json"
