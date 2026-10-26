@@ -3238,7 +3238,7 @@ EOF
     echo "        Give each one's tier an entry in \`models\`, in instance.config.local.json." >&2
   fi
   # A bad level is passed to no spawn (the resolver prints nothing), so the role would
-  # silently fall back to its frontmatter effort; this is the moment a human reads it.
+  # silently run at its default effort; this is the moment a human reads it.
   spend_eff_err="$(bash "$BIN_DIR/resolve-effort.sh" --instance "$TARGET" --all 2>&1 >/dev/null)" || true
   while IFS= read -r spend_line; do
     [ -n "$spend_line" ] && echo "  warn  ${spend_line#resolve-effort: }" >&2
