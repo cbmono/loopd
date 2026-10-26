@@ -1,6 +1,7 @@
 ---
 name: software-engineer
 description: Implements feature and bug-fix tasks in the configured product repos. Works in an isolated branch, runs build/lint/tests, opens a PR, and reports back. Never merges. Dispatched by the project-manager with a task file path and target repo.
+effort: high
 tools: Read, Write, Edit, Glob, Grep, Bash, ToolSearch, mcp__claude-in-chrome__*
 ---
 

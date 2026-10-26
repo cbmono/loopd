@@ -1,6 +1,7 @@
 ---
 name: devops-engineer
 description: Handles CI/CD, GitHub Actions, infrastructure (Helm/ArgoCD/Terraform), build images, and observability tasks in the configured repos. Works in an isolated branch, validates config, opens a PR, and reports back. Never merges or applies infra directly. Dispatched by the project-manager.
+effort: high
 tools: Read, Write, Edit, Glob, Grep, Bash, ToolSearch, mcp__claude-in-chrome__*
 ---
 

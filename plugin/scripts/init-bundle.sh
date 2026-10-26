@@ -3012,7 +3012,7 @@ else
 fi
 
 # ===========================================================================
-# 4d. PER-MACHINE SPEND — seed `models` and `roleTiers` into the local file.
+# 4d. PER-MACHINE SPEND — seed `models`, `roleTiers` and `roleEffort` into the local file.
 # ===========================================================================
 #
 # WHY THE INSTALLER WRITES THEM AT ALL. These two keys decide what every dispatched
@@ -3051,11 +3051,12 @@ SPEND_LCFG="$TARGET/instance.config.local.json"
 spend_manual_note() {
   echo "        Set them by hand instead ($AB_SCHEMA → 'Per-machine config overrides'):"
   echo "          instance.config.local.json  { \"models\": { \"deep\": \"opus\", … },"
-  echo "                                        \"roleTiers\": { \"software-engineer\": \"deep\", … } }"
+  echo "                                        \"roleTiers\": { \"software-engineer\": \"deep\", … },"
+  echo "                                        \"roleEffort\": { \"software-engineer\": \"high\", … } }"
 }
 
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "  skip  per-machine models/roleTiers (no python3 here, and resolve-config.sh"
+  echo "  skip  per-machine models/roleTiers/roleEffort (no python3 here, and resolve-config.sh"
   echo "        needs it to read them at all — the tracked instance.config.json still answers)."
   spend_manual_note
 else
@@ -3085,6 +3086,16 @@ DEFAULTS = {
         "plan-architect": "apex",
         "auditor": "deep",
         "explorer": "light",
+    },
+    "roleEffort": {
+        "project-manager": "medium",
+        "software-engineer": "high",
+        "devops-engineer": "high",
+        "qa-reviewer": "high",
+        "cataloguer": "medium",
+        "plan-architect": "high",
+        "auditor": "medium",
+        "explorer": "low",
     },
 }
 SCHEMA_NOTE = (
@@ -3123,7 +3134,7 @@ if not existed:
     local = {"$schema": SCHEMA_NOTE}
 
 seeded = []
-for key in ("models", "roleTiers"):
+for key in ("models", "roleTiers", "roleEffort"):
     # `in`, not a truth test: a key present and null is a deliberate unset, and a key
     # present and empty is a deliberate empty map. Both are answers, so both are kept.
     if key in local:
@@ -3178,7 +3189,7 @@ PY
         spend_manual_note >&2
       fi ;;
     keep)
-      echo "  keep  instance.config.local.json models/roleTiers (already set — left alone)" ;;
+      echo "  keep  instance.config.local.json models/roleTiers/roleEffort (already set — left alone)" ;;
     unreadable)
       rm -f "$spend_tmp"
       echo "  warn  instance.config.local.json does not parse as JSON, so models/roleTiers" >&2
@@ -3226,6 +3237,14 @@ EOF
     echo "        session happens to be:$spend_unresolved" >&2
     echo "        Give each one's tier an entry in \`models\`, in instance.config.local.json." >&2
   fi
+  # A bad level is passed to no spawn (the resolver prints nothing), so the role would
+  # silently fall back to its frontmatter effort; this is the moment a human reads it.
+  spend_eff_err="$(bash "$BIN_DIR/resolve-effort.sh" --instance "$TARGET" --all 2>&1 >/dev/null)" || true
+  while IFS= read -r spend_line; do
+    [ -n "$spend_line" ] && echo "  warn  ${spend_line#resolve-effort: }" >&2
+  done <<EOF
+$spend_eff_err
+EOF
 fi
 
 # ===========================================================================

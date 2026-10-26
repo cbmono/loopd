@@ -63,7 +63,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    record. Then spawn the role in its own worktree:
 
    ```bash
-   cd <worktree> && claude --bg --agent loopd:<assignee> --permission-mode auto --add-dir <bundle root> --model <alias> '<the whole brief>' < /dev/null
+   cd <worktree> && claude --bg --agent loopd:<assignee> --permission-mode auto --add-dir <bundle root> --model <alias> --effort <level> '<the whole brief>' < /dev/null
    ```
 
    It returns in about a second printing `backgrounded · <id>` — the 8-character short
@@ -87,7 +87,11 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    - **Keep the flags in exactly that order, the brief last.** `/loopd:init`'s grant is one
      rule per role ending `--model *`, so a reordered spawn or one without `--model` matches
      no rule and waits on a prompt; `--model` also stops `--add-dir` taking the brief as a
-     second directory. `<bundle root>` is the bundle's physical path (`pwd -P` there), typed
+     second directory. `--effort <level>` sits after `--model`, inside that trailing `*`,
+     and is **dropped** when `resolve-effort.sh` prints nothing — the line is then today's,
+     byte for byte. A `--bg --agent` session does NOT read its agent's frontmatter
+     `effort:` (measured on 2.1.310), so without the flag it runs at the machine's
+     `modelSettings[<model>].effortLevel`, else the model's default — as today. `<bundle root>` is the bundle's physical path (`pwd -P` there), typed
      unquoted, the spelling the grant names.
    - **The brief is SINGLE-quoted**, and every `'` inside it is written `'\''`. Inside
      single quotes a backtick and a `$` are literal; inside double quotes bash runs a
@@ -297,11 +301,18 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    a `claude --bg` spawn passes `--model` your own session's model, never no `--model`.
    Don't guess aliases.
 
+   **Effort routing is the second axis, and it is read, never chosen here.** Run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh <agent>` for every dispatch and pass
+   what it prints as `--effort <level>` (or the Agent tool's `effort:`); it prints nothing
+   when `roleEffort` has no entry, and then you pass none. Exit 1 is an unknown level:
+   pass none and report its stderr line. A tier bump never moves the effort.
+
    **Name the Explore model in every role-agent brief.** Broad reads go to an Explore
    subagent (`CONVENTIONS.md`), which is dispatched with a model override like any other,
    so the brief has to carry the alias: run
-   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh explorer` and include *"Explore
-   subagents: model `<alias>`"*. **No entry ⇒ write the seeded default `light` and say
+   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh explorer` and
+   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh explorer` and include *"Explore
+   subagents: model `<alias>`, effort `<level>`"* (no effort printed ⇒ drop `, effort …`). **No entry ⇒ write the seeded default `light` and say
    that is what it is** — *"Explore subagents: model `light` (this instance sets no
    `roleTiers.explorer`; seed default)"* — so the reader can tell a chosen tier from an
    unset one.
@@ -311,7 +322,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/agent-usage.sh dispatch <task-path> \
-     --role <assignee> --model <the alias you dispatched on>
+     --role <assignee> --model <the alias you dispatched on> [--effort <the level you passed>]
    ```
 
    It appends to the task's `# Notes`, so a **re-dispatch adds a second line** and the

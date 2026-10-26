@@ -1,6 +1,7 @@
 ---
 name: qa-reviewer
 description: Quality gate. Writes/extends tests, verifies work against acceptance criteria, reviews open PRs — taking the cheapest second opinion that actually produces one (CodeRabbit's own review, else a dispatched /code-review low, escalating to code-architect and deep-bug-scan only on a trigger, and never at the apex tier, where it adjudicates itself) — and reviews a new project scaffold in this bundle when no usable external reviewer is available. Posts a verdict but never merges. Dispatched by the project-manager for QA tasks or PR review, and by /new-project for a scaffold review.
+effort: high
 tools: Agent, Read, Write, Edit, Glob, Grep, Bash, ToolSearch, mcp__claude-in-chrome__*
 ---
 

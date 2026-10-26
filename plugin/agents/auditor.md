@@ -1,6 +1,7 @@
 ---
 name: auditor
 description: Read-only audit loop — the slow-cadence counter-metric for the control panel. Grounds each goal — an objective's `success_criteria`, or a project's own where it carries no objective — against reality (are we actually advancing them, or just closing tasks?), and flags Goodhart drift, stale knowledge, and green-but-not-progressing work. Returns a dated audit report (the /audit command persists it); never promotes, merges, dispatches, changes task status, or writes files itself. Dispatched by /audit on a slow cadence; not a task assignee.
+effort: medium
 tools: Read, Glob, Grep, Bash
 ---
 
