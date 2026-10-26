@@ -136,7 +136,7 @@ for key in list(new_local):
 # Their absence is reported nowhere, because the seed cannot know the right value.
 PLACEHOLDER_VALUED = {"org", "authorEmail", "people"}
 # Seed keys whose absence already reads as the seed value, so adding one migrates nothing.
-ABSENT_IS_SEED = {"awaiting"}
+ABSENT_IS_SEED = {"awaiting", "boardServe"}
 
 for key, value in seed.items():
     # A `$doc` key is the seed's own commentary, so it is never added to a bundle; a

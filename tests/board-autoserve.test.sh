@@ -118,6 +118,8 @@ printf '{ "boardPort": 41999 }\n' > "$R/instance.config.local.json"
 ok "...and leaves a local boardPort where it is" \
   "$(bash "$REPO/plugin/scripts/normalise-config.sh" "$R" | grep -c 'boardPort')" 0
 rm -f "$R/instance.config.local.json"
+ok "...and reports no MISSING boardServe: absent already reads on" \
+  "$(bash "$REPO/plugin/scripts/normalise-config.sh" "$R" | grep -c 'boardServe')" 0
 # shellcheck disable=SC2016 # `$boardServe` is a JSON key, not a variable
 ok "the seed ships boardServe: true beside board"      \
   "$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("boardServe"), "$boardServe" in d, d.get("board"))' "$REPO/plugin/seed/instance.config.json")" "True True True"
