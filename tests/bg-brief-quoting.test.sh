@@ -39,7 +39,7 @@ ESC="${ESC%x}"
 run() { # <block with the brief marker replaced by its quoted form>
   local cmd="$1"
   cmd="${cmd//<worktree>/$TMP/wt}"; cmd="${cmd//<assignee>/software-engineer}"
-  cmd="${cmd//<alias>/haiku}"; cmd="${cmd//<bundle root>/$TMP}"
+  cmd="${cmd//<alias>/haiku}"; cmd="${cmd//<level>/low}"; cmd="${cmd//<bundle root>/$TMP}"
   rm -f "$TMP/got" "$TMP/ran" "$TMP/ran2"
   printf '%s\n' "$cmd" > "$TMP/spawn.sh"
   PATH="$TMP/bin:$PATH" GOT="$TMP/got" bash "$TMP/spawn.sh" >/dev/null 2>&1

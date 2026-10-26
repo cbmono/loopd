@@ -1061,9 +1061,9 @@ above it so none may grow its share.
   then read the one file you are about to change.
   **Which route you take is decided by your own `tools:` list, not by what is installed on
   the machine.** Hold `Agent`? — `qa-reviewer` does — dispatch an Explore subagent on the
-  model and effort your dispatch brief names (`scripts/resolve-model.sh explorer`; no entry ⇒
-  the seed default `light`, and the brief says which it is; `scripts/resolve-effort.sh
-  explorer`, nothing printed ⇒ no `effort:`). Don't hold it? — `software-engineer`,
+  model and effort your dispatch brief names (`scripts/resolve-model.sh explorer`;
+  no entry ⇒ the seed default `light`, and the brief says which it is;
+  `scripts/resolve-effort.sh explorer`, nothing printed ⇒ no `effort:`). Don't hold it? — `software-engineer`,
   `devops-engineer` and `failure-analyst` don't — then the second half is your whole route:
   narrow with `Grep`/`Glob`, read only what you will edit or verify, and put the `Agent`
   request in the task's `open_questions` (the middle rung above) when a question genuinely

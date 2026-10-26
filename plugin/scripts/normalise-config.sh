@@ -50,7 +50,7 @@ TRACKED, LOCAL = "instance.config.json", "instance.config.local.json"
 # SCHEMA.md → "Per-machine config overrides", in that table's order: the local file's key
 # order and the membership test for what may live there, in one list.
 LOCAL_ORDER = ["$schema", "ownerGithubUser", "authorEmail", "reposRoot", "worktreeRoot",
-               "boardInstances", "boardArtifactUrl", "models", "roleTiers",
+               "boardInstances", "boardArtifactUrl", "models", "roleTiers", "roleEffort",
                "maxAgentsInFlight", "maxRepeatedToolCalls", "maxAgentMinutes", "roleMinutes",
                "allowSubstituteBackend", "commitAttribution", "reclaimIgnoreOk"]
 

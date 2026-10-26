@@ -269,7 +269,7 @@ ok "…and was really seeded, so the check is not vacuous" "$(jcount "$LC" model
 I="$(newinst 4)"
 stamp "$I" >/dev/null 2>&1
 LC="$I/instance.config.local.json"
-printf '{\n  "models": null,\n  "roleTiers": null\n}\n' > "$LC"
+printf '{\n  "models": null,\n  "roleTiers": null,\n  "roleEffort": null\n}\n' > "$LC"
 stamp "$I" >/dev/null 2>&1
 ok "an explicit null models survives"      "$(jget "$LC" models)" null
 ok "…and an explicit null roleTiers too"   "$(jget "$LC" roleTiers)" null
