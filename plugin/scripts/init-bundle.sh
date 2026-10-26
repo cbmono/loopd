@@ -1496,6 +1496,9 @@ fi
 if ! ab_awaiting_on "$TARGET"; then
   echo "  skip  $AB_AWAITING (awaiting: false in instance.config.json)"
 elif [ ! -e "$TARGET/$AB_AWAITING" ]; then
+  # The idle fingerprint records only that the queue EXISTS, so rm + stamp would read IDLE
+  # and never refill it; with no record, tick-delta.sh's next check forces a full tick.
+  rm -f "$TARGET/$AB_STATE_DIR"
   cat > "$TARGET/$AB_AWAITING" <<'AWAITING'
 # Awaiting you
 

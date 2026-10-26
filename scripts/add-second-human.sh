@@ -154,7 +154,7 @@ echo "  #    commits get authored as one person. Add --repos-root <dir> if their
 echo "  #    do not sit beside the bundle."
 echo "  /$PLUGIN_NAME:init . --owner $SECOND_LOGIN"
 echo
-echo "  # 4. the stamp created the Needs-you queue (\`awaiting\` defaults to on)"
+echo "  # 4. the stamp created the Needs-you queue, unless \"awaiting\": false is set"
 echo "  ./scripts/write-snapshot.sh        # board presence (\`board\` defaults to on)"
 echo
 echo "  # 5. sanity-check ownership BEFORE starting a loop — exit 0 means 'this clone's'"

@@ -399,7 +399,10 @@ simple "refresh leaves an existing queue byte-for-byte" \
   "$(cmp -s "$TMP/before" "$inst/$AB_AWAITING" && echo same || echo changed)" same
 
 rm "$inst/$AB_AWAITING"
+mkdir -p "$inst/$AB_DIR"; echo 'queue present' > "$inst/$AB_STATE_DIR"
 out="$(bash "$BRIDGE_INSTALL" "$inst" 2>&1)"
+simple "…and drops the idle fingerprint, so the next tick runs in full" \
+  "$([ -e "$inst/$AB_STATE_DIR" ] && echo kept || echo dropped)" dropped
 simple "rm + re-stamp (seeded awaiting: true) brings it back" \
   "$([ -f "$inst/$AB_AWAITING" ] && echo yes || echo no)" yes
 simple "…as the seeded file"   "$([ "$(cat "$inst/$AB_AWAITING")" = "$SEEDED" ] && echo yes || echo no)" yes

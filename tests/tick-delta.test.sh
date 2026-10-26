@@ -294,6 +294,20 @@ touch "$INST/$AB_AWAITING"
 ok "a touched AWAITING.md (queue re-enable) is a DELTA" "$(run check)" "rc:1 DELTA: the f"
 rm -f "$INST/$AB_AWAITING"
 
+# rm + a stamp that recreates AWAITING.md must not read IDLE: the fingerprint only records
+# that the queue exists, so the stamp drops the record and the next tick runs in full.
+# The first stamp seeds tracked files (a DELTA of its own), so it is committed first and
+# the second stamp's recreation is the only thing that moves.
+R="$TMP/restamp"; rm -rf "$R"; cp -R "$INST" "$R"
+bash "$(dirname "$SRC")/init-bundle.sh" "$R" >/dev/null 2>&1
+GIT -C "$R" add -A >/dev/null 2>&1; GIT -C "$R" commit -qm stamped >/dev/null 2>&1
+INST="$R" WITH record >/dev/null 2>&1
+ok "a recorded, present queue is IDLE (precondition)" "$(INST="$R" run check)" "rc:0 IDLE: finger"
+rm -f "$R/$AB_AWAITING"
+bash "$(dirname "$SRC")/init-bundle.sh" "$R" >/dev/null 2>&1
+ok "rm + a stamp that recreates AWAITING.md is NOT IDLE" \
+   "$([ -f "$R/$AB_AWAITING" ] && echo recreated) $(INST="$R" run check)" "recreated rc:2 CANNOT ANSWE"
+
 echo "== a poisoned fingerprint is no answer at all — and record refuses to write it =="
 touch "$GHDIR/7.fail"
 ok "an unreadable PR makes check exit 2"         "$(run check)" "rc:2 CANNOT ANSWE"
