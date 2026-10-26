@@ -469,6 +469,30 @@ Each `/loopd:dispatch` tick refreshes the snapshot at the end of the tick, so on
 instance you never run the writer by hand — and unless `board` is `false`, the same tick
 re-renders the local page and reports its path ([below](#rendering-it-from-each-tick)).
 
+### The server starts with the session
+
+With `boardServe` on (the default; `boardServe: false` or `board: false` turns it off, read
+from the tracked config only), every Claude session that starts in the bundle starts the
+server, and the banner prints `http://localhost:<port>/loopd/board`. The port is still
+`boardPort` from `instance.config.local.json`, else derived — per machine on purpose.
+
+- **Start.** The banner calls `hooks/board-session.sh start`, which records the session in
+  `.loopd/.board-live/sessions/<session_id>` (the pid and start time of the nearest `claude`
+  ancestor — the hook's own shell dies with the hook) and runs `board-serve.sh --detach
+  --auto` when nothing serves. `--detach` binds first, then double-forks into its own
+  session with stdin on `/dev/null` and output in `.serve.log`, so the hook never waits on
+  it. No `session_id` on stdin (as when `/loopd:welcome` runs the banner) records and starts
+  nothing; so does a missing `python3` or a port someone else holds.
+- **Stop.** `SessionEnd` only removes its record, prunes dead ones and nudges the server
+  (`SIGUSR1`). The server is the one decider: when no recorded session is alive it waits a
+  grace period (5 s; `BOARD_SERVE_GRACE`) and checks again, so `/clear` — an end, then a new
+  start in the same process — does not bounce it. It also checks every 30 s
+  (`BOARD_SERVE_REAP`), which reaps a session killed with `-9`. A pid alive under a
+  different start time is a reused pid and counts as dead.
+- **Ownership.** `.serve`'s fourth line is `auto` or `hand`, its fifth the server's start time: a pid alive under another start time is not this server, so nothing signals it and the banner prints no URL for it. Only an `auto` server is ever
+  stopped by this; one started by `/loopd:board serve` outlives every session and stops on
+  Ctrl-C, as before.
+
 ### Which renderer to reach for
 
 | | `print-board.sh` | `build-board.sh --standalone` | `build-board.sh` | `watch-board.sh` | `/loopd:board` (`serve`) | `/loopd:board publish` |
@@ -480,10 +504,10 @@ re-renders the local page and reports its path ([below](#rendering-it-from-each-
 | Reach for it | by default, when you are already in a terminal | you want to open the page — and it is what each tick renders | you are embedding the markup in something else | while actively working a queue | you want the board in a browser — the banner's `Run` row names it | somebody needs the board on a phone, or without a clone |
 
 **The watcher and the server need a process you keep alive, and that is a real cost, not a detail.**
-loopd deliberately has no resident process: its agents are ephemeral subagents inside
-one Claude Code session, nothing runs between sessions, and no daemon is installed or
-supervised. It is the same constraint that made munder-difflin's live telemetry
-unreachable for us. So the live page is a terminal tab you keep open — it stops when you
+loopd deliberately has no resident process between sessions: its agents are ephemeral
+subagents inside one Claude Code session, and no daemon is installed or supervised — the
+auto-started server lives only while a session on the bundle does ([above](#the-server-starts-with-the-session)). It is the same constraint that made munder-difflin's live telemetry
+unreachable for us. So a hand-started live page is a terminal tab you keep open — it stops when you
 close it, sleep the machine, or lose the session, it gives you nothing to share and no
 phone access, and it is per-machine. If any of that matters, the other two cost nothing
 and you re-run them.

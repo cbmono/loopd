@@ -4,7 +4,10 @@
 # $AB_BOARD_DIR and serves that directory on 127.0.0.1:<boardPort>, re-rendering
 # whenever the snapshot changes. No LLM, no network, nothing published.
 #
-#   Usage: board-serve.sh [--port N] [--interval SECS] [--out DIR] [--print-port]
+#   Usage: board-serve.sh [--port N] [--interval SECS] [--out DIR] [--print-port] [--detach] [--auto]
+#
+#   --detach daemonises after the bind (log: $AB_BOARD_DIR/.serve.log); --auto marks the server
+#   session-owned: it exits once no session board-session.sh recorded is alive.
 #
 #   POST /__queue appends one web-board entry through web-queue.sh, behind a per-launch token.
 #   Exits 0 (served until Ctrl-C, or this bundle's port was already served),
@@ -17,6 +20,8 @@ PORT=""
 INTERVAL=1
 OUT_DIR="$AB_BOARD_DIR"
 PRINT_PORT=0
+DETACH=0
+AUTO=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --port) shift; [[ $# -gt 0 ]] || { echo "board-serve: --port needs a number" >&2; exit 2; }; PORT="$1" ;;
@@ -26,6 +31,8 @@ while [[ $# -gt 0 ]]; do
     --out) shift; [[ $# -gt 0 ]] || { echo "board-serve: --out needs a path" >&2; exit 2; }; OUT_DIR="$1" ;;
     --out=*) OUT_DIR="${1#--out=}" ;;
     --print-port) PRINT_PORT=1 ;;
+    --detach) DETACH=1 ;;
+    --auto) AUTO=1 ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit 0 ;;
     *) echo "board-serve: unknown argument '$1'" >&2; exit 2 ;;
   esac
@@ -89,7 +96,8 @@ mkdir -p "$OUT_DIR"
 OUT_ABS="$(cd "$OUT_DIR" && pwd)"
 
 BOARD_ROOT="$ROOT" BOARD_OUT="$OUT_ABS" BOARD_PORT="$PORT" BOARD_INTERVAL="$INTERVAL" \
-BOARD_RENDER="$BOARD" BOARD_WRITER="$WRITER" \
+BOARD_RENDER="$BOARD" BOARD_WRITER="$WRITER" BOARD_DETACH="$DETACH" BOARD_AUTO="$AUTO" \
+BOARD_SESSION="$HERE/../hooks/board-session.sh" \
 BOARD_FROM="$(bash "$HERE/decision-stamp.sh" --self 2>/dev/null)" \
 exec python3 - <<'PY'
 import errno, hmac, html, http.server, json, os, re, secrets, signal, socketserver, subprocess, sys, threading, time, urllib.parse, urllib.request
@@ -110,6 +118,11 @@ FROM     = os.environ.get("BOARD_FROM") or "<unknown>"
 # Per launch, in memory only: it reaches the page in the HTTP response and is in no file.
 TOKEN    = secrets.token_urlsafe(32)
 HOSTS    = ("127.0.0.1:%d" % PORT, "localhost:%d" % PORT)
+AUTO     = os.environ.get("BOARD_AUTO") == "1"
+SESSION  = os.environ["BOARD_SESSION"]
+GRACE    = float(os.environ.get("BOARD_SERVE_GRACE") or 5)
+REAP     = float(os.environ.get("BOARD_SERVE_REAP") or 30)
+NUDGE    = threading.Event()
 
 # The auto-reload: poll a revision endpoint, reload only when the page actually changed.
 # A `<meta refresh>` would reload on a timer and collapse every expanded project card
@@ -349,6 +362,9 @@ def resolve(path):
     full = os.path.realpath(os.path.join(OUT, rel))
     if full != OUT and not full.startswith(OUT + os.sep):
         return None
+    parts = os.path.relpath(full, OUT).split(os.sep)
+    if parts[0] == "sessions" or any(x.startswith(".") for x in parts):
+        return None
     if not os.path.isfile(full):
         return None
     return full
@@ -394,7 +410,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(403, b"forbidden\n")
             out = self._queue(["status"])
             return self._send(200 if out[0] == 0 else 500, out[1], "application/json")
-        if path in ("/", "/index.html"):
+        if path in ("/", "/index.html", "/loopd/board"):
             path = "/board.html"
         full = resolve(path)
         if full is None:
@@ -501,11 +517,61 @@ except OSError as exc:
                      " — set \"boardPort\" in instance.config.local.json\n" % PORT)
     sys.exit(3)
 
+# After the bind, so a collision still answers the caller; the socket is the one fd kept.
+def detach(keep):
+    if os.fork():
+        os._exit(0)
+    os.setsid()
+    if os.fork():
+        os._exit(0)
+    log = os.open(os.path.join(OUT, ".serve.log"), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    null = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(null, 0)
+    os.dup2(log, 1)
+    os.dup2(log, 2)
+    os.closerange(3, keep)
+    os.closerange(keep + 1, 4096)
+
+
+def alive():
+    try:
+        return subprocess.run(["bash", SESSION, "alive"], cwd=ROOT, env=dict(os.environ, CLAUDE_PROJECT_DIR=ROOT),
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30).returncode != 1
+    except Exception:
+        return True
+
+
+def started(pid):
+    try:
+        out = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, timeout=10).stdout
+        return " ".join(out.decode().split())
+    except Exception:
+        return ""
+
+
+# The one stop decider: a nudge or the interval, then a grace period, so `/clear` (an end
+# and a new start) never bounces the server.
+def reap():
+    while True:
+        NUDGE.wait(REAP)
+        NUDGE.clear()
+        if alive():
+            continue
+        time.sleep(GRACE)
+        if not alive():
+            os.kill(os.getpid(), signal.SIGTERM)
+            return
+
+
+if os.environ.get("BOARD_DETACH") == "1":
+    detach(httpd.fileno())
 # SIGTERM has to unwind rather than kill, or the state file below outlives the server and
 # the banner reads a dead port as a live one.
 signal.signal(signal.SIGTERM, lambda *_a: sys.exit(0))
+signal.signal(signal.SIGUSR1, lambda *_a: NUDGE.set())
 with open(STATE, "w") as fh:
-    fh.write("%d\n%d\n%s\n" % (PORT, os.getpid(), ROOT))
+    fh.write("%d\n%d\n%s\n%s\n%s\n" % (PORT, os.getpid(), ROOT, "auto" if AUTO else "hand", started(os.getpid())))
 # The port answers at once; the first render runs beside it (it can take tens of seconds
 # on a cold machine) and the page shows "rendering" until it lands.
 def first_render():
@@ -514,6 +580,8 @@ def first_render():
     render()
 threading.Thread(target=first_render, daemon=True).start()
 threading.Thread(target=watch, daemon=True).start()
+if AUTO:
+    threading.Thread(target=reap, daemon=True).start()
 print("board-serve: serving %s from %s — Ctrl-C to stop." % (URL, OUT), flush=True)
 try:
     httpd.serve_forever()
