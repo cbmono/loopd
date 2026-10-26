@@ -50,7 +50,7 @@ TRACKED, LOCAL = "instance.config.json", "instance.config.local.json"
 # SCHEMA.md → "Per-machine config overrides", in that table's order: the local file's key
 # order and the membership test for what may live there, in one list.
 LOCAL_ORDER = ["$schema", "ownerGithubUser", "authorEmail", "reposRoot", "worktreeRoot",
-               "boardInstances", "boardArtifactUrl", "models", "roleTiers",
+               "boardInstances", "boardArtifactUrl", "boardPort", "models", "roleTiers",
                "maxAgentsInFlight", "maxRepeatedToolCalls", "maxAgentMinutes", "roleMinutes",
                "allowSubstituteBackend", "commitAttribution", "reclaimIgnoreOk"]
 
@@ -58,7 +58,7 @@ LOCAL_ORDER = ["$schema", "ownerGithubUser", "authorEmail", "reposRoot", "worktr
 # whole test: SCHEMA names the tracked value as the answer for authorEmail, models,
 # roleTiers, maxAgentsInFlight and commitAttribution, and names no tracked answer for these.
 PER_MACHINE_ONLY = ["ownerGithubUser", "reposRoot", "worktreeRoot", "boardInstances",
-                    "boardArtifactUrl", "allowSubstituteBackend"]
+                    "boardArtifactUrl", "boardPort", "allowSubstituteBackend"]
 
 
 def load(path, what):

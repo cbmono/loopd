@@ -254,6 +254,7 @@ COLOR=auto
 FORMAT=text
 LOGO=1
 FULL=0
+SESSION=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --color) shift; COLOR="${1:-auto}"; shift || true ;;
@@ -268,6 +269,8 @@ while [ $# -gt 0 ]; do
     # is capped at 12 lines and the tables are 17 of the 29 it used to spend; `welcome` asks
     # for them by name, because they are the surface its own SKILL.md documents it by.
     --full) FULL=1; shift ;;
+    # Only hooks.json passes it: stdin then carries the SessionStart payload.
+    --session) SESSION=1; shift ;;
     # An unknown argument is IGNORED rather than fatal. This is a SessionStart hook: if a
     # future settings.json passes it something it does not know, printing the banner is
     # still the better outcome than exiting 2 at every session start.
@@ -1324,6 +1327,9 @@ BOARD_LW=8
 # pid) and removed when it stops — but a SIGKILL leaves it behind, so the pid is checked
 # rather than the file's presence. A dead pid reads as "not up", which is the safe
 # direction: a banner may never send a human to a port nothing is listening on.
+if [ "$SESSION" -eq 1 ] && [ "$board_on" -eq 1 ] && [ -n "$plugin_root" ]; then
+  bash "$plugin_root/hooks/board-session.sh" start >/dev/null 2>&1 3>&-
+fi
 serve_url=""
 _state="$root/$AB_BOARD_DIR/.serve"
 if [ -f "$_state" ]; then
