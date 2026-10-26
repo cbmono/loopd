@@ -489,7 +489,7 @@ server, and the banner prints `http://localhost:<port>/loopd/board`. The port is
   start in the same process — does not bounce it. It also checks every 30 s
   (`BOARD_SERVE_REAP`), which reaps a session killed with `-9`. A pid alive under a
   different start time is a reused pid and counts as dead.
-- **Ownership.** `.serve`'s fourth line is `auto` or `hand`. Only an `auto` server is ever
+- **Ownership.** `.serve`'s fourth line is `auto` or `hand`, its fifth the server's start time: a pid alive under another start time is not this server, so nothing signals it and the banner prints no URL for it. Only an `auto` server is ever
   stopped by this; one started by `/loopd:board serve` outlives every session and stops on
   Ctrl-C, as before.
 

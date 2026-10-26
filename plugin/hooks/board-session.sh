@@ -5,6 +5,7 @@
 #   Usage: board-session.sh start|end    (hook JSON on stdin; always exit 0, print nothing)
 #          board-session.sh alive        (exit 0 while a recorded session lives, else 1)
 #          board-session.sh enabled      (exit 0 when `boardServe` and `board` are on)
+#          board-session.sh serving      (print the port while .serve's pid AND start time match)
 #
 # start records the session and starts `board-serve.sh --detach --auto` if nothing serves;
 # end drops its record, prunes dead ones and nudges the server, which alone decides to stop.
@@ -66,14 +67,16 @@ prune() { # exit 0 when a live record remains
 
 SPORT="" SPID="" SOWNER=""
 serving() {
-  { read -r SPORT; read -r SPID; read -r _; read -r SOWNER; } 2>/dev/null < "$dir/.serve"
+  local start=""
+  { read -r SPORT; read -r SPID; read -r _; read -r SOWNER; read -r start; } 2>/dev/null < "$dir/.serve"
   case "$SPORT$SPID" in ''|*[!0-9]*) return 1 ;; esac
-  kill -0 "$SPID" 2>/dev/null
+  kill -0 "$SPID" 2>/dev/null && [ -n "$start" ] && [ "$(started "$SPID")" = "$start" ]
 }
 
 case "$cmd" in
   enabled) enabled; exit ;;
   alive) prune; exit ;;
+  serving) serving && echo "$SPORT"; exit ;;
   start)
     enabled || exit 0
     sid="$(session_id)" || exit 0

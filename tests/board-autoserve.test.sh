@@ -162,6 +162,8 @@ ok "/loopd/board serves the page /board.html serves"   "$(same "$PORT" "localhos
 ok "...and carries the queue token only for an allowed Host" \
   "$(curl -s --max-time 3 -H "Host: localhost:$PORT" "http://127.0.0.1:$PORT/loopd/board" | grep -o 'name="loopd-queue" content' | wc -l | tr -d ' ')|$(curl -s --max-time 3 -H 'Host: evil.example.com' "http://127.0.0.1:$PORT/loopd/board" | grep -o 'name="loopd-queue" content' | wc -l | tr -d ' ')" "1|0"
 ok "session records are never served"                  "$(code "$PORT" /sessions/s-a)|$(code "$PORT" /.serve)" "404|404"
+asis() { curl -s --path-as-is -o /dev/null -w '%{http_code}' --max-time 3 -H "Host: localhost:$PORT" "http://127.0.0.1:$PORT$1"; }
+ok "...nor reached through a ../ segment"              "$(asis /x/../sessions/s-a)|$(asis /x/../.serve)|$(asis /x/../board.html)" "404|404|200"
 
 echo "== IDEMPOTENT and SESSION RECORD =="
 SP="$(serve_pid "$A")"
@@ -220,6 +222,30 @@ sleep 4
 ok "...and survives the session's end and death"       "$(serve_pid "$Hb")" "$HP"
 kill -TERM "$HP" 2>/dev/null
 ok "...and still stops on SIGTERM, removing .serve"    "$(wait_down "$Hb" 10)" down
+
+echo "== a stale .serve naming a reused pid is not this server =="
+S="$(bundle stale '{ "org": "x" }')"
+sleep 30 & SL=$!; LOOPS="$LOOPS $SL"
+mkdir -p "$S/$AB_BOARD_DIR"
+printf '%s\n%s\n%s\nauto\nThu Jan  1 00:00:00 1970\n' "$(cd "$S" && bash "$SERVE" --print-port)" "$SL" "$S" > "$S/$AB_BOARD_DIR/.serve"
+ok "serving answers nothing for it"                    "$(CLAUDE_PROJECT_DIR="$S" bash "$SESSION" serving </dev/null)" ""
+claude_up s; QS=$Q
+end_in "$QS" "$S" s-s >/dev/null
+sleep 1
+ok "end never signals that process"                    "$(kill -0 "$SL" 2>/dev/null && echo alive || echo killed)" alive
+start_in "$QS" "$S" s-s >/dev/null
+ok "start launches a real server in its place"         "$(p="$(serve_pid "$S")"; [ -n "$p" ] && [ "$p" != "$SL" ] && kill -0 "$p" 2>/dev/null && echo yes || echo no)" yes
+ok "...whose .serve carries its start time"           "$(sed -n 5p "$S/$AB_BOARD_DIR/.serve")" "$(ps -o lstart= -p "$(serve_pid "$S")" | tr -s ' ' | sed 's/^ //; s/ $//')"
+kill -TERM "$(serve_pid "$S")" 2>/dev/null; kill "$SL" 2>/dev/null
+
+echo "== a check that cannot run is not \"no session alive\" =="
+mkdir -p "$TMP/plug"; cp -R "$REPO/plugin/scripts" "$REPO/plugin/hooks" "$TMP/plug/"
+G="$(bundle gone '{ "org": "x" }')"
+( cd "$G" && bash "$TMP/plug/scripts/board-serve.sh" --detach --auto ) </dev/null >/dev/null 2>&1
+rm -f "$TMP/plug/hooks/board-session.sh"
+sleep 8
+ok "the auto server outlives REAP + GRACE with its check missing" "$(up "$G")" up
+kill -TERM "$(serve_pid "$G")" 2>/dev/null
 
 echo "== CONCURRENT starts leave exactly one server =="
 C="$(bundle concurrent '{ "org": "x" }')"

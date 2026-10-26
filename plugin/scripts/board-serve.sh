@@ -357,10 +357,13 @@ def watch():
 # symlink planted inside the directory — and refused unless it lands inside OUT.
 def resolve(path):
     rel = urllib.parse.unquote(path).lstrip("/")
-    if not rel or "\x00" in rel or rel.startswith(("sessions/", ".")):
+    if not rel or "\x00" in rel:
         return None
     full = os.path.realpath(os.path.join(OUT, rel))
     if full != OUT and not full.startswith(OUT + os.sep):
+        return None
+    parts = os.path.relpath(full, OUT).split(os.sep)
+    if parts[0] == "sessions" or any(x.startswith(".") for x in parts):
         return None
     if not os.path.isfile(full):
         return None
@@ -533,9 +536,18 @@ def detach(keep):
 def alive():
     try:
         return subprocess.run(["bash", SESSION, "alive"], cwd=ROOT, env=dict(os.environ, CLAUDE_PROJECT_DIR=ROOT),
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30).returncode == 0
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30).returncode != 1
     except Exception:
         return True
+
+
+def started(pid):
+    try:
+        out = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, timeout=10).stdout
+        return " ".join(out.decode().split())
+    except Exception:
+        return ""
 
 
 # The one stop decider: a nudge or the interval, then a grace period, so `/clear` (an end
@@ -559,7 +571,7 @@ if os.environ.get("BOARD_DETACH") == "1":
 signal.signal(signal.SIGTERM, lambda *_a: sys.exit(0))
 signal.signal(signal.SIGUSR1, lambda *_a: NUDGE.set())
 with open(STATE, "w") as fh:
-    fh.write("%d\n%d\n%s\n%s\n" % (PORT, os.getpid(), ROOT, "auto" if AUTO else "hand"))
+    fh.write("%d\n%d\n%s\n%s\n%s\n" % (PORT, os.getpid(), ROOT, "auto" if AUTO else "hand", started(os.getpid())))
 # The port answers at once; the first render runs beside it (it can take tens of seconds
 # on a cold machine) and the page shows "rendering" until it lands.
 def first_render():

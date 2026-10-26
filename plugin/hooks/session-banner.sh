@@ -1323,22 +1323,18 @@ page="$root/$AB_BOARD_DIR/board.html"
 # THE BOARD SECTION'S LABEL COLUMN, in characters, so its rows are a table rather than a
 # sentence: `Board`, the widest label, plus the gap the dim continuation lines already use.
 BOARD_LW=8
-# IS THE LOCAL SERVER UP? `$AB_BOARD_DIR/.serve` is written by board-serve.sh (port, then
-# pid) and removed when it stops — but a SIGKILL leaves it behind, so the pid is checked
-# rather than the file's presence. A dead pid reads as "not up", which is the safe
+# IS THE LOCAL SERVER UP? `$AB_BOARD_DIR/.serve` is written by board-serve.sh and removed
+# when it stops — but a SIGKILL leaves it behind, so board-session.sh checks its pid and that
+# pid's start time (a reused pid) rather than the file. Not up is the safe
 # direction: a banner may never send a human to a port nothing is listening on.
-if [ "$SESSION" -eq 1 ] && [ "$board_on" -eq 1 ] && [ -n "$plugin_root" ]; then
-  bash "$plugin_root/hooks/board-session.sh" start >/dev/null 2>&1 3>&-
+bsess="${self%/*}/board-session.sh"
+if [ "$SESSION" -eq 1 ] && [ "$board_on" -eq 1 ]; then
+  bash "$bsess" start >/dev/null 2>&1 3>&-
 fi
 serve_url=""
-_state="$root/$AB_BOARD_DIR/.serve"
-if [ -f "$_state" ]; then
-  _sport="$(sed -n 1p "$_state" 2>/dev/null)"
-  _spid="$(sed -n 2p "$_state" 2>/dev/null)"
-  case "$_sport$_spid" in
-    ''|*[!0-9]*) ;;
-    *) kill -0 "$_spid" 2>/dev/null && serve_url="http://localhost:$_sport" ;;
-  esac
+if [ -f "$root/$AB_BOARD_DIR/.serve" ]; then
+  _sport="$(bash "$bsess" serving 2>/dev/null </dev/null)"
+  case "$_sport" in ''|*[!0-9]*) ;; *) serve_url="http://localhost:$_sport" ;; esac
 fi
 # THREE STATES, THREE DISTINGUISHABLE OUTPUTS — and the middle one used to be silence.
 # `board: true` with nothing rendered printed exactly what `board: false` printed: nothing.
