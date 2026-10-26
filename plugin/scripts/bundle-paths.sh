@@ -103,7 +103,7 @@ print(g if isinstance(g,str) else "")' "$root/instance.config.json" 2>/dev/null)
 # override, so one switch has one answer. Newlines are flattened first: JSON may put a
 # key and its value on different lines, and a line-wise grep reads that `false` as on.
 ab_awaiting_on() { # [<bundle root>] — exit 0 on (absent key or file), 1 off
-  ! tr '\n' ' ' < "${1:-.}/instance.config.json" 2>/dev/null \
+  ! tr '\n' ' ' 2>/dev/null < "${1:-.}/instance.config.json" \
     | grep -q '"awaiting"[[:space:]]*:[[:space:]]*false'
 }
 

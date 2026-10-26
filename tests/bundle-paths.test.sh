@@ -113,6 +113,8 @@ ok "key and false on two lines read as off" "$(on)" off
 printf '{ "awaiting": true }\n' > "$A/instance.config.json"
 printf '{ "awaiting": false }\n' > "$A/instance.config.local.json"
 ok "a local-only false is ignored"          "$(on)" on
+rm -f "$A/instance.config.json" "$A/instance.config.local.json"
+ok "no config file reads as on, silently"   "$(ab_awaiting_on "$A" 2>&1 && echo on || echo off)" on
 rm -rf "$A"
 
 echo
