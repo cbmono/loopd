@@ -874,9 +874,17 @@ frontmatter (measured on 2.1.310), so a role session runs at the machine's per-m
 `modelSettings[<model>].effortLevel`, else the model default. A bundle spawns that way only
 until its next stamp seeds the map.
 
-**`explorer` is a role tier with no role**: it prices the Explore subagent a role agent
-sends a broad read to instead of reading ten files itself (`CONVENTIONS.md`). Seeded at
-`light`; with no entry at all the dispatch brief says `light` and says it is the default.
+**`explorer` is a role tier with no role**: it prices Claude Code's built-in Explore
+subagent, which a role agent sends a broad read to instead of reading ten files itself
+(`CONVENTIONS.md` → "Reading a product repo"). Explore's whole job is to answer a
+question about a repo — where something is read, which callers a change touches, what a
+convention looks like — read-only, scoped to the target repos, returning the conclusion
+instead of the file dumps; the role agent then reads the one file it will edit. Role
+agents that hold the `Agent` tool dispatch it, every dispatch brief names its model and
+effort (`resolve-model.sh explorer`, `resolve-effort.sh explorer`), and the
+`/loopd:close-project` picker reads project state through it. It is never a task's
+`assignee` and never writes. Seeded at `light` and `low`; with no entry at all the
+dispatch brief says `light` and says it is the default.
 
 The top **`apex`** tier (`fable`) is for **finding what is wrong** — the `plan-architect`
 critique the PM dispatches on genuinely complex tasks, and the `qa-reviewer`, so the

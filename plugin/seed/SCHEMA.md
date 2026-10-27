@@ -434,8 +434,13 @@ in `roleTiers` and absent from `roles`, because `/plan` and the PM's approach
 critique dispatch it directly and no task is ever assigned to it. The consequence:
 `models.apex` prices two agents, `plan-architect` and `qa-reviewer`, and
 `plan-architect` appears in no `roles` list, so "what does `apex` cost me?" is
-unanswerable from `roles` alone — read `roleTiers`. This asymmetry is intentional, not a bug to fix
-by adding `plan-architect` to `roles` or deleting its `roleTiers` row; see
+unanswerable from `roles` alone — read `roleTiers`. `explorer` is the second example,
+and it is not a loopd agent at all: the row prices Claude Code's built-in Explore
+subagent, the read-only harness subagent a role agent delegates a broad repo read to
+(`CONVENTIONS.md` → "Reading a product repo"), named in every dispatch brief and used by
+the `/loopd:close-project` picker. It takes no task and writes nothing; it only answers
+questions. This asymmetry is intentional, not a bug to fix
+by adding `plan-architect` to `roles` or deleting either `roleTiers` row; see
 `tests/roles-roletiers-asymmetry.test.sh`, which pins it.
 
 **`roleEffort` is the second axis beside `roleTiers`: one entry per `roleTiers` key**, the
