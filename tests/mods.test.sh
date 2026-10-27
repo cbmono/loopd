@@ -71,6 +71,13 @@ path_literals() {
   } | tr -d "'\"" | grep -vE '^/*$' | LC_ALL=C sort -u
 }
 globs() { grep -oE "['\"][^'\"]*\*[^'\"]*['\"]" "$1" 2>/dev/null | grep -c . | tr -d ' '; }
+# Validator output minus the plugin-directory block (CLI 2.1.310+), which states it does not
+# change the result. Only a block closed by that sentence is dropped; an unclosed one counts.
+outside_directory_block() {
+  awk '/^Plugin directory checks for /{printf "%s", buf; buf=""; b=1}
+       b{buf=buf $0 "\n"; if ($0=="These plugin directory checks do not change the result below.") {b=0; buf=""}; next}
+       {print} END{printf "%s", buf}'
+}
 # yes when the README has the section AND every path literal the module names is in it.
 # Prints the missing ones on stderr so a FAIL names the path rather than a count.
 reads_declared() { # <module> <readme>
@@ -173,7 +180,7 @@ for d in "$REPO"/plugin-mod-*/; do
     vout="$(claude plugin validate "$d" --strict </dev/null 2>&1)"; vrc=$?
     ok "$name: claude plugin validate --strict passes" "$vrc" 0
     [ "$vrc" -eq 0 ] || printf '%s\n' "$vout" | sed 's/^/        | /'
-    ok "$name: …with zero warnings"                     "$(grep -ci 'warning' <<<"$vout")" 0
+    ok "$name: …with zero warnings"                     "$(outside_directory_block <<<"$vout" | grep -ci 'warning')" 0
     hooks_line="$(grep -E 'hooks:' <<<"$vout")"
     calls_line="$(grep -E 'calls:' <<<"$vout")"
     ok "$name: …the validator saw the module's hooks"   "$([ -n "$hooks_line" ] && echo yes || echo no)" yes
@@ -216,6 +223,17 @@ ok "…a \$.fs.read in a mod with no 'What it reads' section is refused" \
    "$(reads_declared "$TMP/undeclared.ts" "$REPO/plugin-mod-usage/README.md" 2>/dev/null)" no
 { cat "$SRC"; printf '\nasync function walk($: any, d: string) { return $.fs.list(d + "/tasks") }\n'; } > "$TMP/unglobbed.ts"
 ok "…a \$.fs.list in a mod that spells no glob is caught" "$(globs "$TMP/unglobbed.ts")" 0
+
+# Real 2.1.310 output: the zero-warnings pin drops the plugin-directory block and nothing else.
+FX_BLOCK="$REPO/tests/fixtures/mods-validate/directory-block.txt"
+FX_MANIFEST="$REPO/tests/fixtures/mods-validate/manifest-warning.txt"
+ok "…the zero-warnings pin ignores the closed plugin-directory block" \
+   "$(outside_directory_block <"$FX_BLOCK" | grep -ci 'warning')" 0
+ok "…but a manifest warning beside that block survives the filter, so it fails the pin" \
+   "$(outside_directory_block <"$FX_MANIFEST" | grep -cE '^⚠ Found 1 warning:$|^  ❯ description: No description provided')" 2
+grep -v '^These plugin directory checks do not change the result below\.$' "$FX_BLOCK" > "$TMP/unclosed.txt"
+ok "…and a block missing its closing sentence is counted" \
+   "$([ "$(outside_directory_block <"$TMP/unclosed.txt" | grep -ci 'warning')" -ge 1 ] && echo yes || echo no)" yes
 
 echo
 echo "== the fs widening is read-only and declared — the mutants that must stay red, per declared reader =="
