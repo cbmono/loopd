@@ -322,6 +322,20 @@ namespace when it spawns.
 Role dispatches are routed to a cost-appropriate model per tier
 ([docs/operations.md § model routing](docs/operations.md#model-routing)).
 
+**Two `roleTiers` rows are not team members.** `plan-architect` is the approach critique
+the PM dispatches at refine time (it ships with `ai-setup`, and no task is ever assigned
+to it). `explorer` is not a loopd agent at all: it is the price tag for Claude Code's
+built-in **Explore** subagent, which a role agent sends a broad read to — "which
+services call this endpoint?", "where is this config read?" — instead of reading ten
+files into its own context. Explore is read-only, returns the conclusion rather than
+the file dumps, and is scoped to the target repos; a role agent then reads the one file
+it is about to edit itself. Role agents that hold the `Agent` tool (the `qa-reviewer`,
+the PM) dispatch it, every dispatch brief names its model and effort, and the
+`/loopd:close-project` picker runs its state read on it. It never takes a task and never
+writes. Seeded at `light` / `low`; with no entry the brief says `light` and says it is
+the default. Delete the row and nothing breaks, but the only dial for the cheapest reads
+in the system is gone.
+
 ## Where the work lives
 
 ```
