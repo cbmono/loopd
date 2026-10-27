@@ -225,12 +225,13 @@ ok "…a \$.fs.read in a mod with no 'What it reads' section is refused" \
 ok "…a \$.fs.list in a mod that spells no glob is caught" "$(globs "$TMP/unglobbed.ts")" 0
 
 # Real 2.1.310 output: the zero-warnings pin drops the plugin-directory block and nothing else.
-FX="$REPO/tests/fixtures/mods-validate"
+FX_BLOCK="$REPO/tests/fixtures/mods-validate/directory-block.txt"
+FX_MANIFEST="$REPO/tests/fixtures/mods-validate/manifest-warning.txt"
 ok "…the zero-warnings pin ignores the closed plugin-directory block" \
-   "$(outside_directory_block <"$FX/directory-block.txt" | grep -ci 'warning')" 0
-ok "…but a manifest warning beside that block still fails it" \
-   "$([ "$(outside_directory_block <"$FX/manifest-warning.txt" | grep -ci 'warning')" -ge 1 ] && echo yes || echo no)" yes
-grep -v '^These plugin directory checks do not change the result below\.$' "$FX/directory-block.txt" > "$TMP/unclosed.txt"
+   "$(outside_directory_block <"$FX_BLOCK" | grep -ci 'warning')" 0
+ok "…but a manifest warning beside that block survives the filter, so it fails the pin" \
+   "$(outside_directory_block <"$FX_MANIFEST" | grep -cE '^⚠ Found 1 warning:$|^  ❯ description: No description provided')" 2
+grep -v '^These plugin directory checks do not change the result below\.$' "$FX_BLOCK" > "$TMP/unclosed.txt"
 ok "…and a block missing its closing sentence is counted" \
    "$([ "$(outside_directory_block <"$TMP/unclosed.txt" | grep -ci 'warning')" -ge 1 ] && echo yes || echo no)" yes
 
