@@ -284,7 +284,7 @@ Run these inside an instance.
 | `/loopd:dispatch [gap]` | (plugin) the serial background loop: dispatch, track, report. `/loopd:dispatch 10m` ticks every ten minutes |
 | `/loopd:answer` | (plugin) answer the PM's open questions from inside the session — or one, as `<task> [Q<n>] <n \| more \| later \| text>` |
 | `/loopd:unblock <task>` | (plugin) see why a `blocked` task stopped, give your one decision, and send it back to `ready` with that decision in its `# Notes` |
-| `/loopd:board` | (plugin) `serve` — **the default, so a bare call serves** — the board on a local URL, one process per bundle; `publish` — the same page as a private artifact, at the same URL every run |
+| `/loopd:board` | (plugin) `serve` — **the default, so a bare call serves** — the board on a local URL, one process per bundle (every session starts it while `boardServe` is on); `publish` — the same page as a private artifact, at the same URL every run; `--help` — the forms |
 | `/loopd:pr-review-request <pr>` | (plugin) ask for an independent review of a PR |
 | `/loopd:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/loopd:fanout <task>` | (plugin) parallel work across several repos |
@@ -460,8 +460,13 @@ tick](docs/operations.md#rendering-it-from-each-tick)). It
 is only as fresh as the last tick — the page's masthead says when that was, and
 `watch-board.sh` is the view that follows your work in between.
 
-**`/loopd:board serve` is the local web app, and it is what a bare
-`/loopd:board` does**: one process per bundle, on a port
+**The local web app starts with the session**: with `boardServe` on (the default) every
+Claude session on the bundle starts it, the banner's `Board` row is its
+`http://localhost:<port>/loopd/board` (the line under it when a published artifact heads
+the block), and it stops after the last session ends.
+`boardServe: false` in the tracked `instance.config.json` turns that off and the banner
+falls back to the `file://` row. `/loopd:board serve` — what a bare `/loopd:board` does —
+starts it by hand, and `/loopd:board --help` lists the forms. One process per bundle, on a port
 derived from the bundle path (`boardPort` in `instance.config.local.json` overrides it),
 serving `.board-live/` on `127.0.0.1` and nothing else. It re-renders within two seconds of
 `SNAPSHOT.json` changing and the page reloads itself. No LLM is in that path — a tick used

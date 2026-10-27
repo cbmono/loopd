@@ -473,7 +473,9 @@ re-renders the local page and reports its path ([below](#rendering-it-from-each-
 
 With `boardServe` on (the default; `boardServe: false` or `board: false` turns it off, read
 from the tracked config only), every Claude session that starts in the bundle starts the
-server, and the banner prints `http://localhost:<port>/loopd/board`. The port is still
+server, and the banner's `Board` row is `http://localhost:<port>/loopd/board` with
+`Run     /loopd:board --help to see the options` under it. With `boardArtifactUrl` recorded
+the `Board` row stays the published artifact and the served URL is the line under it. The port is still
 `boardPort` from `instance.config.local.json`, else derived — per machine on purpose.
 
 - **Start.** The banner calls `hooks/board-session.sh start`, which records the session in
@@ -501,7 +503,7 @@ server, and the banner prints `http://localhost:<port>/loopd/board`. The port is
 | Freshness | the moment you ran it | the moment you ran it — or **every tick**, on a looping instance | the moment you ran it | live, to the second | re-rendered within seconds of the snapshot changing | the last time you ran it — no tick can refresh it |
 | Leaves the machine | no | no | only if you carry it somewhere | no | no — `127.0.0.1` only | **yes — titles go to claude.ai** |
 | Costs | nothing | a re-run, or a looping instance | a re-run to refresh | **a resident process** | **a resident process**, no tokens | a re-run, and it must be a human typing |
-| Reach for it | by default, when you are already in a terminal | you want to open the page — and it is what each tick renders | you are embedding the markup in something else | while actively working a queue | you want the board in a browser — the banner's `Run` row names it | somebody needs the board on a phone, or without a clone |
+| Reach for it | by default, when you are already in a terminal | you want to open the page — and it is what each tick renders | you are embedding the markup in something else | while actively working a queue | you want the board in a browser — the banner's `Board` row is its URL while it runs | somebody needs the board on a phone, or without a clone |
 
 **The watcher and the server need a process you keep alive, and that is a real cost, not a detail.**
 loopd deliberately has no resident process between sessions: its agents are ephemeral
@@ -1391,8 +1393,8 @@ AGENT (role)          TIER     → MODEL                    FROM
 cataloguer            standard → sonnet                   tracked
 software-engineer     deep     → opus                     local
 
-Board   file:///Users/you/workspace/_loopd-example/.board-live/board.html
-Run     /loopd:board serve for a live URL
+Board   http://localhost:41234/loopd/board
+Run     /loopd:board --help to see the options
 Update  claude plugin update loopd  (2.0.3 → 2.0.4) — restart to apply it
 ```
 
@@ -1940,8 +1942,12 @@ cross-owner section is untouched either way: it never came from the published pa
 prints where it is when a session starts, so the human can open it instead of digging for
 it: **two rows sharing one label column — `Board` and a `file://` link, then `Run` and the
 command that serves it**, with the path exactly once, plus the published URL above them on
-a machine that has published one (the fourth row below). When a local server is already up
-the second row is `Live` and carries its `http://localhost:<port>` instead of the command.
+a machine that has published one (the fourth row below). **When a local server answers, its
+URL replaces the `file://` row** — `Board   http://localhost:<port>/loopd/board`, then `Run`
+and `/loopd:board --help to see the options` — because the server serves that same file,
+re-rendered, so the path would be a staler copy of the row above it. When nothing serves the
+`file://` row is back, and the `Run` row says why: `/loopd:board serve for a live URL` when
+`boardServe` is off, the missing `python3`, or the port another process holds.
 It was three lines until ai-bridge-v5/task-023 and one until ai-bridge-next/task-029, where
 the repair sentence riding on the end of the link row (`— run … for a live URL`) wrapped on
 every normal terminal width; what task-023 deleted stays deleted — the same path again bare
@@ -1955,7 +1961,7 @@ same nothing:
 
 | `board` | `.board-live/board.html` | the banner says |
 |---|---|---|
-| `true` (or absent) | present | two rows: the `file://` link, then `Run` (or `Live`, when a server is up) |
+| `true` (or absent) | present, or a server up | two rows: the served URL and `Run … --help` when a server answers; else the `file://` link and a `Run` row naming why nothing serves |
 | `true` (or absent) | **absent** | enabled, but never rendered — and that a `/loopd:dispatch` tick or `scripts/build-board.sh` renders one |
 | `false` | either | **nothing**, in silence |
 
@@ -1991,8 +1997,8 @@ them; the **published artifact** is the one that reaches a device with no checko
 
 | Where you are | Do this | Freshness |
 |---|---|---|
-| **Laptop** (the canonical route) | `/loopd:board`, then open the `http://localhost:<port>` it prints — the next session's banner shows it as the `Live` row | within seconds of the snapshot changing, while the server runs |
-| **Laptop, no server** | open the `file://` path the banner's `Board` row prints (`.loopd/.board-live/board.html`) | the last tick that rendered it |
+| **Laptop** (the canonical route) | open `http://localhost:<port>/loopd/board` — the banner's `Board` row, or the line under it when a published artifact heads the block; every session starts the server while `boardServe` is on (the default); `/loopd:board --help` lists the forms | within seconds of the snapshot changing, while the server runs |
+| **Laptop, no server** (`boardServe: false`, no `python3`, port taken) | open the `file://` path (`.loopd/.board-live/board.html`) the banner prints; its `Run` row says why nothing serves. `boardServe: false`: `/loopd:board serve` starts one by hand. No `python3`: install it first. Port taken: free it, or set `boardPort` in `instance.config.local.json` | the last tick that rendered it |
 | **Phone** | open the artifact URL — the session banner prints it, and it is the same URL every time | the last `/loopd:board publish` you ran |
 | **Between ticks** | `scripts/watch-board.sh` → `.loopd/.board-live/board.html`, on this machine | live, while the watcher runs |
 

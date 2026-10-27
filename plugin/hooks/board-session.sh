@@ -2,7 +2,8 @@
 #
 # board-session.sh — ties an auto-started board server to the Claude sessions on a bundle.
 #
-#   Usage: board-session.sh start|end    (hook JSON on stdin; always exit 0, print nothing)
+#   Usage: board-session.sh start|end    (hook JSON on stdin; always exit 0; start prints
+#                                         `held <port>` when another process holds the port)
 #          board-session.sh alive        (exit 0 while a recorded session lives, else 1)
 #          board-session.sh enabled      (exit 0 when `boardServe` and `board` are on)
 #          board-session.sh serving      (print the port while .serve's pid AND start time match)
@@ -88,6 +89,10 @@ case "$cmd" in
       && mv -f "$sessions/.$sid.$$" "$sessions/$sid"
     serving && exit 0
     ( cd "$root" && bash "$here/../scripts/board-serve.sh" --detach --auto ) </dev/null >/dev/null 2>&1
+    if [ "$?" -eq 3 ]; then
+      echo "held $(cd "$root" && bash "$here/../scripts/board-serve.sh" --print-port 2>/dev/null </dev/null)"
+      exit 0
+    fi
     for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
       serving && break
       sleep 0.1
