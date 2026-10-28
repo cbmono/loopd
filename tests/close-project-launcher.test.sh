@@ -155,6 +155,7 @@ Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*)
 Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*)
 Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*)
 Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*)
+Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh:*)
 Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*)
 Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*)
 Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh:*)
@@ -314,12 +315,22 @@ ok "brief points back at the launcher's rule" \
 # none of the launcher. Matching the RUNNABLE form (`${CLAUDE_PLUGIN_ROOT}/scripts/...`)
 # and not the bare name is deliberate: the measurement above names `prune-worktrees.sh`
 # as prose, which is a citation and not a step.
-for s in close-project-folder prune-worktrees validate-bundle build-kb-index papercuts commit-as decision-stamp; do
+for s in close-project-folder prune-worktrees validate-bundle build-kb-index papercuts commit-as decision-stamp build-awaiting; do
   ok "the brief runs $s.sh" \
     "$(grep -qF "\${CLAUDE_PLUGIN_ROOT}/scripts/$s.sh" <<<"$(brief)" && echo yes || echo no)" yes
   ok "…and the launcher does not" \
     "$(launcher | grep -cF "\${CLAUDE_PLUGIN_ROOT}/scripts/$s.sh" | tr -d ' ')" 0
 done
+# THE QUEUE IS REBUILT AFTER THE FOLDER STEP. A closeout removes the project whose
+# `🏁 close` row is on the banner, and the tick rewrites AWAITING.md only when IT changed
+# something — so without this line the row outlives the project through every idle tick.
+# Measured 2026-10-28: closed one evening, still the banner's one item the next morning.
+# Pinned in order: the rebuild must come after the folder step, or it re-renders the row.
+ok "the brief rebuilds AWAITING.md after the folder step" \
+  "$(awk '/close-project-folder.sh <slug> --apply/{f=1} f && /scripts\/build-awaiting.sh/{y="yes"} END{print (y ? y : "no")}' <<<"$(brief)")" yes
+ok "…and says the tick will not do it"          "$(in_brief 'the tick changed something** — so the')" yes
+ok "…and that the file is not committed"        "$(in_brief 'the file is gitignored, so it is **not** in the')" yes
+ok "…and --dry-run skips it"                    "$(in_brief 'rebuild `AWAITING.md`, or')" yes
 # …and the folder step itself, the one irreversible line, is nowhere near the launcher.
 ok "the launcher never applies the folder step" "$(in_launcher '--apply')" no
 ok "…while the brief does"                      "$(in_brief '<slug> --apply')" yes

@@ -3,7 +3,7 @@ name: close-project
 disable-model-invocation: true
 description: Close a completed project — final KB consolidation, log the closeout, roll up status, then remove the project folder (git history + KB are the record; no archive) — or, with `retain: true`, freeze and keep it. With no slug it opens a multi-select picker of the projects and asks whether to run `--force` or `--dry-run`. Human-gated; run once a project's tasks are all done/cancelled.
 argument-hint: [<project-slug>]  [--dry-run] [--force]  — no slug opens the picker
-allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent, AskUserQuestion
+allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent, AskUserQuestion
 ---
 
 **Close a completed Project.** This is the human-triggered form of the closeout the
@@ -211,7 +211,8 @@ is, while the log entry still names the human who decided.
 > **`--dry-run` short-circuits every mutation.** Do step 1 (read-only checks),
 > then for steps 2–7 *report exactly what you would do* — do **not** dispatch the
 > cataloguer, run `build-kb-index.sh` without `--check`, edit
-> `log.md`/`index.md`/`project.md`/objective, prune worktrees, or commit/remove anything.
+> `log.md`/`index.md`/`project.md`/objective, prune worktrees, rebuild `AWAITING.md`, or
+> commit/remove anything.
 > Only a run without the flag actually changes state. Step 7's
 > `bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug>` **without `--apply`** is the one thing you
 > may run: it is report-only by design and prints the exact removal or prune it would
@@ -409,6 +410,21 @@ is, while the log entry still names the human who decided.
    gate. Print the closing commit SHA and the `log.md` entry. For a removal, remind the
    user the full record stays recoverable via `git log -- projects/<slug>/`; for a
    retention, that the folder is deliberately partial and the log entry says how.
+
+   **Then rebuild the queue — after the folder step, every time:**
+
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh
+   ```
+
+   `AWAITING.md` is derived from the task documents, and the tick rewrites it **only when
+   the tick changed something** — so the `🏁 close` row that proposed this very closeout
+   stays on the banner through every idle tick that follows, and nothing else ever
+   removes it. Measured 2026-10-28: a project closed the evening before was still the
+   banner's one item the next morning, and `/loopd:close-project` on it found no folder.
+   The script is the one writer of that page (never hand-edit it), it is a no-op where the
+   file is absent (the off switch), and the file is gitignored, so it is **not** in the
+   commit below.
 
 **Report back** — one tight summary: what the cataloguer folded in, the `log.md` entry,
 the closing commit SHA, this project's worktree lines, and anything you skipped. You never
