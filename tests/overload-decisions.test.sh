@@ -32,7 +32,7 @@ pinned() {
 echo "== step 2 carries the three sentences, each in its section =="
 for i in 0 1 2; do ok "sentence $((i+1)): ${SENT[$i]:0:48}…" "$(pinned "$flat" "$i")" yes; done
 ok "the six-class string decisions.test.sh pins is untouched" \
-   "$(printf '%s' "$flat" | grep -qF 'technology, topology, data-model, consistency or caching, security-model or external-dependency choice' && echo yes || echo no)" yes
+   "$(grep -cF 'technology, topology, data-model, consistency or caching, security-model or external-dependency choice' <<<"$flat")" 1
 
 echo; echo "== a mutant removing any one sentence fails its pin =="
 for i in 0 1 2; do
