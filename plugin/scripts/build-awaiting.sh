@@ -152,6 +152,21 @@ print("".join(out) + tail + (" · then answer %s `done`" % q.group(1) if q else 
 PY
 }
 
+# design.md's `pre_mortem:` as row text: YAML quotes off, capped at 200 at a word, escaped.
+pre_mortem_of() { # <design.md>
+  local v; v="$(fmfirst "$1" pre_mortem)"; [ -n "$v" ] || return 0
+  python3 - "$v" <<'PY' 2>/dev/null || true
+import re, sys
+v = sys.argv[1].strip()
+m = re.fullmatch(r"""(["'])(.*)\1\s*(?:#.*)?""", v)
+if m: v = m.group(2).replace('\\"', '"') if m.group(1) == '"' else m.group(2).replace("''", "'")
+v = v.strip()
+if len(v) > 200:
+    cut = v.rfind(" ", 0, 200); v = v[:cut if cut > 0 else 200].rstrip() + " …"
+if v: print(" · " + re.sub(r"([\\`*_\[\]()<>|~!#])", r"\\\1", v), end="")
+PY
+}
+
 handoffs_of() { # <file> <rel> <title> -> one 👉 row per unanswered hand-off or deploy entry
   local e
   while IFS= read -r e; do
@@ -429,7 +444,7 @@ while IFS= read -r i; do
   dz="${row_design[$i]}"
   # One design link per project: its first promote row in render order, never again.
   if [ -n "$dz" ] && [ "${linked#* "$dz" }" = "$linked" ]; then
-    rows="$rows${row_txt[$i]} · [design]($dz)
+    rows="$rows${row_txt[$i]} · [design]($dz)$(pre_mortem_of "$inst$dz")
 "; linked="$linked$dz "
   else
     rows="$rows${row_txt[$i]}
