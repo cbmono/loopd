@@ -37,13 +37,13 @@ looked two directories above `scripts/` for `seed/`, which is where a *checkout*
 and not where a plugin cache does, so init exited 2 on every machine that installed it the
 supported way.
 
-**`init-bundle.sh --config` is the exception, and it is the only one.** It links three
-agent files into `${CLAUDE_CONFIG_DIR:-~/.claude}` by absolute path, so it must know where
-those paths point and `config/` deliberately stays outside the plugin: it is a per-machine
-decision, not a bundle one, and `plugin/` must never *require* it. Run it from a clone;
-run it never, and a bundle stamp behaves exactly the same, because the role agents probe
-for those agents with `test -f`. From an installed plugin `--config` refuses by name and
-prints the clone command rather than reporting a missing directory.
+**There is no exception any more.** `init-bundle.sh --config` used to link three advisory
+agent files (`code-architect`, `deep-bug-scan`, `plan-architect`) into
+`${CLAUDE_CONFIG_DIR:-~/.claude}` from a clone of this repo, because they were not plugin
+agents. Since 2026-10-28 they ship in `agents/` beside the role agents, dispatched as
+`loopd:code-architect` and so on, so "install the plugin, stamp a bundle" is the whole
+setup and nothing on a machine needs a clone. A stale link an older `--config` left in
+`~/.claude/agents/` is reported by `/loopd:init` with the `rm`, never removed.
 
 ## Skills today
 
@@ -184,6 +184,7 @@ they follow.
 **Agents had the REVERSE precedence, and that is why they moved last:** a same-named
 project agent shadows the plugin copy (plugins are the lowest agent scope). So the eight
 role agents shipped here in byte-parity with the instance copies first, and the name swap
-retired those copies — the plugin is the only place they ship from now.
+retired those copies — the plugin is the only place they ship from now. The three advisory
+review agents followed on 2026-10-28, from the retired `config/` layer.
 **Dispatch them namespaced, `loopd:<role>`.** A bare agent name does NOT resolve
 (measured 2026-09-02), which is why the strings changed exactly once, here.

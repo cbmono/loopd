@@ -431,7 +431,9 @@ dispatch a task to — every agent that can ever be a task's `assignee`. `roleTi
 is broader: it maps a model tier to ANY agent this instance dispatches, including
 ones no task is ever assigned to. `plan-architect` is the worked example — it is
 in `roleTiers` and absent from `roles`, because `/plan` and the PM's approach
-critique dispatch it directly and no task is ever assigned to it. The consequence:
+critique dispatch it directly (as `loopd:plan-architect`: it ships in the plugin
+with the role agents, and the bare `roleTiers` key is only the row's name) and no
+task is ever assigned to it. The consequence:
 `models.apex` prices two agents, `plan-architect` and `qa-reviewer`, and
 `plan-architect` appears in no `roles` list, so "what does `apex` cost me?" is
 unanswerable from `roles` alone — read `roleTiers`. `explorer` is the second example,

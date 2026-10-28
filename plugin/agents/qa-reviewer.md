@@ -1,6 +1,6 @@
 ---
 name: qa-reviewer
-description: Quality gate. Writes/extends tests, verifies work against acceptance criteria, reviews open PRs — taking the cheapest second opinion that actually produces one (CodeRabbit's own review, else a dispatched /code-review low, escalating to code-architect and deep-bug-scan only on a trigger, and never at the apex tier, where it adjudicates itself) — and reviews a new project scaffold in this bundle when no usable external reviewer is available. Posts a verdict but never merges. Dispatched by the project-manager for QA tasks or PR review, and by /new-project for a scaffold review.
+description: Quality gate. Writes/extends tests, verifies work against acceptance criteria, reviews open PRs — taking the cheapest second opinion that actually produces one (CodeRabbit's own review, else a dispatched /code-review low, escalating to loopd:code-architect and loopd:deep-bug-scan only on a trigger, and never at the apex tier, where it adjudicates itself) — and reviews a new project scaffold in this bundle when no usable external reviewer is available. Posts a verdict but never merges. Dispatched by the project-manager for QA tasks or PR review, and by /new-project for a scaffold review.
 effort: high
 tools: Agent, Read, Write, Edit, Glob, Grep, Bash, ToolSearch, mcp__claude-in-chrome__*
 ---
@@ -195,8 +195,8 @@ signature". Never on a PR body.
      **`/code-review low`** over this PR's diff. The level is the point: `low` is tuned for
      fewer, higher-confidence findings, which is what a second opinion is for — so pass
      the delegate **no** `effort:`: it is not a `roleEffort` role, and the skill's level is
-     its depth. The same holds for `code-architect` and `deep-bug-scan` below, whose own
-     frontmatter decides. Brief the delegate to:
+     its depth. The same holds for `loopd:code-architect` and `loopd:deep-bug-scan` below,
+     whose own frontmatter decides. Brief the delegate to:
      - **name the target explicitly.** The skill takes no working-directory argument, so a
        bare invocation reviews *your session's* cwd — not the repo you meant. Pass the repo
        path (or `<base-sha>...<head-sha>`) in the invocation, and have the delegate confirm
@@ -211,13 +211,13 @@ signature". Never on a PR body.
      **dispatch** declares no `tools:` allowlist and so inherits the capability, which is
      rung 2 of that Finding: reachable by dispatch, no allowlist widened. Never widen one to
      shortcut this.
-   - **c. Escalate to the expensive pair only on a trigger.** `code-architect` and
-     `deep-bug-scan` each declare `model: opus` in their **own** frontmatter, so dispatching
-     the pair is two Opus agents whatever model you are running — worth paying on a trigger,
-     wasteful as an opening move. Probe first (no runtime agent registry — check the
-     filesystem): `test -f ~/.claude/agents/code-architect.md` and
-     `test -f ~/.claude/agents/deep-bug-scan.md`; absent, there is nothing to escalate to.
-     Escalate when **any** of these holds:
+   - **c. Escalate to the expensive pair only on a trigger.** `loopd:code-architect` and
+     `loopd:deep-bug-scan` each declare `model: opus` in their **own** frontmatter, so
+     dispatching the pair is two Opus agents whatever model you are running — worth paying
+     on a trigger, wasteful as an opening move. Both ship in the `loopd` plugin beside you,
+     so there is nothing to probe for: a plugin agent exists wherever the plugin does, and
+     only under its namespace — the bare names `code-architect` / `deep-bug-scan` do NOT
+     resolve (measured 2026-09-02). Escalate when **any** of these holds:
      - the **cheap** review returned any finding — cheap proposes, expensive adjudicates.
        This trigger is about a *weak* reviewer finding something, so it does not fire for a
        real external review's findings — see (a);
@@ -238,10 +238,10 @@ signature". Never on a PR body.
      own** review instead of a dispatch: validate each cheap finding against the code, and
      go deep on the sensitive surface or the skipped part yourself.
      Scope the escalation to **what triggered it**, not the whole diff. Brief
-     `code-architect` with the exact range — *"Review `git -C <reposRoot>/<repo> diff
+     `loopd:code-architect` with the exact range — *"Review `git -C <reposRoot>/<repo> diff
      <baseRefName>...<headRefName>`"* (fetch the refs first if needed); it reviews
      working-tree diffs by default, so without the range it reviews **nothing** — and scope
-     `deep-bug-scan` to the directories the PR touches (`gh pr diff --name-only`). Dispatch
+     `loopd:deep-bug-scan` to the directories the PR touches (`gh pr diff --name-only`). Dispatch
      them, plus any further read-only lens the diff calls for, as several `Agent` calls **in
      one message** so they run in parallel, then synthesize by **deduplicating and
      validating the evidence**. A specialized lens's finding counts on its own (a security-
@@ -256,9 +256,10 @@ signature". Never on a PR body.
      existed.** That means the pair from (c) **unconditionally, with no trigger required**
      — there is no cheap signal left to gate on, so gating here would hand the PR *no*
      second opinion at all, which is the one outcome this branch exists to prevent — or,
-     if the probe finds them absent, review the diff **inline yourself**: correctness, edge
-     cases, security (injection, authz, secrets/PII leakage), tests, conventions. A missing
-     skill must never fail a review, and must never leave a PR unreviewed by anyone.
+     if the pair's dispatch itself fails (an older plugin that does not ship them), review
+     the diff **inline yourself**: correctness, edge cases, security (injection, authz,
+     secrets/PII leakage), tests, conventions. A missing skill must never fail a review,
+     and must never leave a PR unreviewed by anyone.
      **At the apex tier (read as in (c)), an unreachable or empty cheap review is followed
      by that inline review by you, never by the pair.** Below apex, or with the tier
      unreadable, this case stands as written.

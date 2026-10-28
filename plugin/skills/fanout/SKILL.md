@@ -39,7 +39,7 @@ of independent asks the user has already given in this turn.
    units, data-question routing) from `CLAUDE.md`.
 4. **Dispatch in one message.** Spawn all units as **`general-purpose` agents with
    `run_in_background: true`** in a single turn so they run concurrently. Use a more
-   specific agent type when one fits (e.g. `deep-bug-scan`, `Explore`, or one of this
+   specific agent type when one fits (e.g. `loopd:deep-bug-scan`, `Explore`, or one of this
    plugin's seven role agents — **namespaced**, `loopd:cataloguer`,
    `loopd:failure-analyst` for a failing build / red CI / failed deploy, read-only
    diagnosis — because a bare role-agent name does NOT resolve).

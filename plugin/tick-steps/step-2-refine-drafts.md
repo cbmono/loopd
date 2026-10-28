@@ -71,9 +71,11 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **Approach critique — MANDATORY on its trigger, advisory in what it may decide.**
    For a genuinely complex **`kind: build`** task — spans multiple files/services, or
    its `acceptance_criteria` had to be heavily inferred — you **must** dispatch the
-   `plan-architect` agent (installed globally in `~/.claude/agents/`; skip silently if
-   absent) on the task's `# Context` + `acceptance_criteria`, **before the human is
-   asked to promote**. On that trigger it runs: not a judgement call, not a budget call.
+   `loopd:plan-architect` agent on the task's `# Context` + `acceptance_criteria`,
+   **before the human is asked to promote**. It ships in the `loopd` plugin beside you
+   and resolves only under that namespace — a bare `plan-architect` does NOT resolve;
+   skip silently if absent (an older plugin that does not ship it): mandatory on its
+   trigger is not mandatory to exist, and a missing critic never parks a task. On that trigger it runs: not a judgement call, not a budget call.
    (The cost objection is answered in `docs/pm-design.md#step-2`.)
    **The trigger itself is unchanged** — what stopped being discretionary is WHEN the
    critique runs, never WHAT it may decide. **Not** on `kind: research` tasks.
@@ -109,7 +111,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    Its model comes from `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh plan-architect` — `roleTiers`
    (`apex`) through `models` — never a hard-coded alias; and `plan-architect` stays out
    of `roles`. Its `effort:` is what `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh plan-architect`
-   prints; nothing printed ⇒ pass none.
+   prints; nothing printed ⇒ pass none. **The resolvers take the bare `roleTiers` key,
+   `plan-architect`; the dispatch takes the namespaced agent, `loopd:plan-architect`** —
+   the key names a row in the config, the namespace names a file in the plugin.
 
 
 <!-- end of step 2 -->
