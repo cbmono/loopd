@@ -148,7 +148,7 @@ ok "…the job's prompt is the skill, with its gap" "$(saw "$D" '`prompt` = `/'"
 ok "…created only when no job names it"   "$(saw "$D" 'if **no** listed job'"'"'s prompt names `/'"${PN}:"'dispatch`, `CronCreate` one')" yes
 ok "…never two jobs"                      "$(saw "$D" '**Never two jobs.**')" yes
 ok "…a human's /loop job is honoured, not doubled" "$(saw "$D" 'one a human'"'"'s `/loop 10m /'"${PN}:"'dispatch` created — means the cadence is owned: create nothing')" yes
-ok "…CronCreate is granted"               "$(awk '/^---$/{d++; next} d==1 && /^allowed-tools:/' "$DISPATCH" | grep -q 'CronCreate' && echo yes || echo no)" yes
+ok "…CronCreate is granted"               "$(saw "$(awk '/^---$/{d++; next} d==1 && /^allowed-tools:/' "$DISPATCH")" 'CronCreate')" yes
 ok "…once is a single tick"               "$(saw "$D" '**`/'"${PN}:"'dispatch once`** | one tick, no cadence')" yes
 ok "…stop deletes every job naming the skill" "$(saw "$D" '`CronDelete` every listed job whose prompt names `/'"${PN}:"'dispatch`')" yes
 ok "…the seven-day expiry is stated"      "$(saw "$D" 'The job expires after seven days')" yes
