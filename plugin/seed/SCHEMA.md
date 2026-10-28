@@ -438,6 +438,7 @@ type: Design
 title: <project title> — design
 timestamp: <ISO 8601>
 tasks: [ "<component or edge> → task-NNN", ... ]   # every refined task appears
+pre_mortem: "the most likely reason this project fails as designed is …"   # optional: one sentence naming a component or edge on the diagram
 ---
 ```
 
@@ -447,7 +448,11 @@ integrations as edges, trust boundaries as `subgraph`s — then one paragraph re
 id `tasks:` lacks; `tick-delta.sh check` reports that as a `DELTA` naming the project.
 `validate-bundle.sh` errors on a mapped `task-NNN` with no file under the project's
 `tasks/`. `AWAITING.md` links it once per project, on its first promote row; the snapshot
-carries its presence and path, never its body. **No internal hostnames, no secrets, no
+carries its presence and path, never its body. **`pre_mortem:`** is written in the same
+refine pass from the diagram and the project's `decisions:`, and rewritten by every redraw —
+an unmapped task or an overturned `D<n>` — and by nothing else. `AWAITING.md` appends it to
+the row carrying the link, unquoted, escaped and capped at 200 characters; the board does
+not render it. **No internal hostnames, no secrets, no
 customer PII** — the board links it.
 
 ## type: Agent  (`agents/index.md` lists the roster)

@@ -28,6 +28,18 @@ for s in 'you write `projects/<slug>/design.md` yourself, once per' 'after its l
          '`tick-delta.sh check` reports that state as a `DELTA` naming the project'; do
   ok "step 2 says: $s" "$(has "$STEP" "$s")" yes
 done
+for s in '**Pre-mortem — in the same pass, write `pre_mortem:`**' \
+         '`the most likely reason this project fails as designed is …`' \
+         "from the
+   diagram and the project's \`decisions:\`" 'naming a component or an edge the diagram draws' \
+         'Any
+   overturned `D<n>` of the project redraws it too' \
+         '**Every redraw of design.md — the unmapped-task redraw or an overturned `D<n>` —
+   rewrites `pre_mortem:`, and nothing else does.**'; do
+  ok "step 2 says: ${s%%$'\n'*}…" "$(python3 -c 'import sys; print("yes" if sys.argv[2] in open(sys.argv[1]).read() else "no")' "$STEP" "$s")" yes
+done
+ok "SCHEMA.md's type: Design documents pre_mortem:" \
+  "$(awk '/^## type: Design/,/^## type: Agent/' "$REPO/plugin/seed/SCHEMA.md" | grep -cE '^pre_mortem: "the most likely reason this project fails as designed is …" +# optional: one sentence naming a component or edge on the diagram$')" 1
 ok "SCHEMA.md names design.md where a project's files live" \
   "$(awk '/^\*\*Where a project.s files live/,/^$/' "$REPO/plugin/seed/SCHEMA.md" | grep -cF '**`design.md`** — optional, written by the PM at refine')" 1
 
@@ -94,6 +106,30 @@ ok "no design.md ⇒ every row byte-identical to the link-free render" "$without
 ok "…and no row names design" "$(printf '%s\n' "$without" | grep -c design)" 0
 cp "$TMP/design.keep" "$P/design.md"
 
+echo; echo "== build-awaiting.sh: pre_mortem: after the link =="
+pm() { cp "$TMP/design.keep" "$P/design.md"; printf '%s\n' "/^tasks:/a\\" "pre_mortem: $1" > "$TMP/pm.sed"; sed -i.bak -f "$TMP/pm.sed" "$P/design.md"; rm -f "$P/design.md.bak"; }
+SENT='the most likely reason this project fails as designed is the edge from ui to api'
+pm "\"$SENT\""
+ok "present: the sentence follows the link, unquoted" "$(aw | sed -n 1p)" \
+  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md)$DEF$LINK · $SENT"
+pm "\"$SENT\"   # a YAML comment"
+ok "a trailing YAML comment is not part of it" "$(aw | sed -n 1p)" \
+  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md)$DEF$LINK · $SENT"
+ok "…on the linked row only" "$(aw | grep -c 'fails as designed')" 1
+ok "trailer: trailer, then link, then sentence" "$(aw --trailer "$P/tasks/task-001-a.md=an agent sentence" | sed -n 1p)" \
+  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md) · an agent sentence$LINK · $SENT"
+pm "'it''s the \`cache\` *edge* [x](https://example.com) <b>|#_~!'"
+ok "markup and an apostrophe: single-quoted YAML unescaped, markup escaped" "$(aw | sed -n 1p)" \
+  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md)$DEF$LINK · it's the \\\`cache\\\` \\*edge\\* \\[x\\]\\(https://example.com\\) \\<b\\>\\|\\#\\_\\~\\!"
+pm "\"$(printf 'word%.0s ' $(seq 1 60))\""
+tail_="$(aw | sed -n 1p)"; tail_="${tail_#*"$LINK · "}"
+ok "cap: at most 200 characters, cut at a word" "$(python3 -c 'import sys; t=sys.argv[1]; print(len(t) <= 202 and t.endswith("word …"))' "$tail_")" True
+cp "$TMP/design.keep" "$P/design.md"
+ok "absent key: the linked row is unchanged" "$(aw | sed -n 1p)" "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md)$DEF$LINK"
+pm "\"$SENT\""; mv "$P/design.md" "$TMP/design.pm"
+ok "absent file: no row carries the sentence" "$(aw | grep -c 'fails as designed')" 0
+mv "$TMP/design.pm" "$P/design.md"
+
 echo; echo "== write-snapshot.sh + build-board.sh: the path, never the body =="
 GIT remote add origin https://github.com/example-user-007/example-bundle.git
 render() { : > "$I/$AB_SNAPSHOT"
@@ -105,9 +141,11 @@ render "$TMP/with.html"; cp "$I/$AB_SNAPSHOT" "$TMP/with.json"
 ok "snapshot carries the design path" "$(has "$TMP/with.json" '"design": "projects/p1/design.md"')" yes
 ok "…and the bundle's repo" "$(has "$TMP/with.json" '"repo": "example-user-007/example-bundle"')" yes
 ok "…never the body" "$(grep -cE 'BODY-SENTINEL|mermaid|flowchart' "$TMP/with.json")" 0
+ok "…nor pre_mortem:" "$(grep -cE 'pre_mortem|fails as designed' "$TMP/with.json")" 0
 ok "…and only p1 carries a design key" "$(grep -c '"design"' "$TMP/with.json")" 1
 if command -v python3 >/dev/null 2>&1; then
   ok "board links design.md on GitHub" "$(grep -c "$URL" "$TMP/with.html")" 1
+  ok "…and renders no pre_mortem: text" "$(grep -c 'fails as designed' "$TMP/with.html")" 0
   ok "…renders no Mermaid" "$(grep -ciE 'mermaid|BODY-SENTINEL' "$TMP/with.html")" 0
 fi
 rm "$P/design.md"; render "$TMP/without.html"

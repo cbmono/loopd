@@ -127,9 +127,16 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `D<n>` id, not the bound's text**, so an overturn needs no redraw; retry budgets and
    in-memory maps need no node. **Before you stop, check each such node against the
    project's overload `D<n>` rows and add any missing row.**
+   **Pre-mortem — in the same pass, write `pre_mortem:`** into design.md's frontmatter:
+   one sentence, `the most likely reason this project fails as designed is …`, from the
+   diagram and the project's `decisions:`, naming a component or an edge the diagram draws.
+   AWAITING.md appends it to the promote row that links design.md.
    **Redraw rule:** when a task of the project is refined whose id design.md's `tasks:`
    list lacks, redraw it — diagram, paragraph and mapping — in the same tick.
-   `tick-delta.sh check` reports that state as a `DELTA` naming the project.
+   `tick-delta.sh check` reports that state as a `DELTA` naming the project. Any
+   overturned `D<n>` of the project redraws it too, in the tick that folds the overturn.
+   **Every redraw of design.md — the unmapped-task redraw or an overturned `D<n>` —
+   rewrites `pre_mortem:`, and nothing else does.**
 
    **Approach critique — MANDATORY on its trigger, advisory in what it may decide.**
    For a genuinely complex **`kind: build`** task — spans multiple files/services, or
