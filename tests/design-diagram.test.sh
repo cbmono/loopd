@@ -111,6 +111,14 @@ if command -v python3 >/dev/null 2>&1; then
   ok "…renders no Mermaid" "$(grep -ciE 'mermaid|BODY-SENTINEL' "$TMP/with.html")" 0
 fi
 rm "$P/design.md"; render "$TMP/without.html"
+ok "design.md adds exactly the keys design and repo" "$(python3 -c 'import json,sys
+def k(v):
+    if isinstance(v, dict):
+        for x, c in v.items(): yield x; yield from k(c)
+    elif isinstance(v, list):
+        for c in v: yield from k(c)
+w = set(k(json.load(open(sys.argv[1])))); o = set(k(json.load(open(sys.argv[2]))))
+print(" ".join(sorted(w - o)))' "$TMP/with.json" "$I/$AB_SNAPSHOT" 2>/dev/null)" "design repo"
 ok "no design.md ⇒ no design key" "$(grep -c '"design"' "$I/$AB_SNAPSHOT")" 0
 ok "…and no repo key" "$(grep -c '"repo"' "$I/$AB_SNAPSHOT")" 0
 if command -v python3 >/dev/null 2>&1; then
