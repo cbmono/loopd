@@ -350,7 +350,6 @@ fingerprint() { # <probe|digest>
     # tick and write-snapshot.sh already apply: nothing in a done project can need a
     # tick, and the point is the read that never happens.
     [ "$pst" = "done" ] && continue
-    # An answered `D<n>` is owed step 2's fold whatever the tasks' statuses.
     if grep -q '^decisions:' "$p"; then
       answered_open "$p" decisions; case $? in
         0) printf 'decision answered %s\n' "${p#"$inst"/}"; step2=1 ;;
