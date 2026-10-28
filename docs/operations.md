@@ -1390,8 +1390,8 @@ owner asked three times in one session, for three different instances.
 ```text
 
    ▄▄▄▄
-◀━▐    ▌ loopd v3.16.1 · _loopd-example · org: cbmono
-  ▝▄▄▄▄▘ ────────────────────────────────────────────
+◀━▐    ▌ loopd v4.0.0 · _loopd-example · org: cbmono
+  ▝▄▄▄▄▘ ───────────────────────────────────────────
 
 SETTING               VALUE                               FROM
 owner                 example-user-007 · you@example.com  local/tracked
