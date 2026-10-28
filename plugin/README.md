@@ -13,9 +13,10 @@ and converts one stamped by the retired `install.sh`.
 /plugin install loopd@loopd
 ```
 
-That is the **minimal** install — core alone, gated, no mods. The recommended one is the
-bundle, [`loopd-all@loopd`](../plugin-all/README.md): one command that installs core, the
-autonomy companion and the three mods as dependencies, and ships nothing of its own.
+That is the whole install — core, gated, with the three **mods** (usage, pane, signal) on by
+default and each a `/config` switch ([`hooks/MODS.md`](hooks/MODS.md)). The one companion,
+[`loopd-yolo`](../plugin-yolo/README.md), is a separate install on purpose: delegated
+autonomy is a choice, never a default.
 
 Updates ship by version bump (no ambient auto-update): `/plugin` → Marketplaces.
 Joining somebody's bundle and running two commands, no more: [`docs/onboarding.md`](../docs/onboarding.md).
@@ -29,7 +30,7 @@ theme file may use are listed once, in
 [`tests/fixtures/theme-tokens.txt`](../tests/fixtures/theme-tokens.txt).
 
 **What ships here, and the one thing that does not.** An installed plugin is the CONTENTS
-of this directory — `agents/ evals/ hooks/ scripts/ skills/` and, since task-022, the three
+of this directory — `agents/ evals/ hooks/ scripts/ skills/ themes/` and, since task-022, the three
 files a stamp reads: `seed/`, `RETIRED` and a mirror of the template `VERSION`. So
 `/loopd:init` needs **no clone of `cbmono/loopd`**, which is the whole point of
 shipping the installer in the plugin and was not true before 0.15.0: the root detection
@@ -89,6 +90,7 @@ guarantee that depends on someone remembering to run it is not a guarantee.
 | `hooks/session-banner.sh` | The `SessionStart` banner: which bundle this is, what it is configured to do, where the board is, what awaits the human — and, above all of it, an alarm if the bundle still carries machinery symlinks into a template checkout. Every line is a fact that can be false; none of it is a rules recital. |
 | `hooks/board-session.sh` | `SessionEnd`, and called by the banner at `SessionStart`. With `boardServe` on, a session that starts records itself under `.loopd/.board-live/sessions/` and starts `scripts/board-serve.sh --detach --auto` if nothing serves; a session that ends drops its record and nudges the server, which stops itself once no recorded session is alive. A hand-started server is never stopped. |
 | `hooks/push-state.sh` | `UserPromptSubmit`. Encodes the bundle's live state — projects, tasks in flight, what is awaiting a human — into the turn's context, at one awk choke point so a filename cannot forge the fence's markers. |
+| `hooks/register.ts` | The three **mods**, one hooks module Claude Code runs in-process (`modules` in `hooks.json`): **usage** records what the session spent under `loopd.usage.<session id>` in the plugin store, which `scripts/session-usage.sh` reads before the transcript; **pane** adds `/pane`, the fourth renderer over `.loopd/SNAPSHOT.json` (or, `paneMode: simple`, an inbox read from the task documents); **signal** lets a role agent's session tell the PM session its turn is over with one `loopd-signal:` line. Each is a `/config` switch, default on; off registers nothing. Observe-only by `tests/mods.test.sh`: no model call, no permission decision, no process, network or environment, no file write, reads only what [`hooks/MODS.md`](hooks/MODS.md) → "What it reads" names. |
 
 **All of them no-op SILENTLY outside a bundle root.** A plugin is installed once per user, so
 these fire in every project on the machine. Each resolves `$CLAUDE_PROJECT_DIR` (never the
@@ -108,11 +110,15 @@ manifest has no permissions block to carry it.
 
 ## Companion plugins
 
-**Core is gated-only, and stays that way.** Optional behaviour — delegated autonomy
-today, an account switch and an alternative LLM backend next — ships as a **separate
-plugin in this same marketplace**, and core picks it up **by presence**. Nothing is
-configured, nothing is flagged: install the companion and the behaviour exists, uninstall
-it and it doesn't.
+**Core is gated-only, and stays that way.** Behaviour that holds a human gate less —
+delegated autonomy — ships as a **separate plugin in this same marketplace**, and core picks
+it up **by presence**. Nothing is configured, nothing is flagged: install the companion and
+the behaviour exists, uninstall it and it doesn't. The marketplace is exactly two plugins:
+`loopd` and `loopd-yolo`. Behaviour that only observes, records or draws — the three mods —
+is core with a `/config` switch each, not a companion: a switch costs the human nothing to
+flip and removes no gate, so the companion shape bought it nothing (2026-10-28, when the
+mods, the `loopd-all` bundle, the `ai-bridge` alias and the accounts and llm launchers were
+retired — `MIGRATION.md`).
 
 **One rule, and it is not negotiable: a companion may ADD behaviour but may never remove a core gate.**
 The two human authorities (`SCHEMA.md`) — the human promotes
@@ -122,8 +128,8 @@ not delete a gate, it ships the file that defines a mode in which the loop may h
 and the human still chooses that mode per project. A companion that removed a gate would
 be indistinguishable from a supply-chain downgrade of the thing this whole design exists
 to protect. Read it as a constraint on what may be *built*, not only on what is
-installed today: the next companion (an account switch, an alternative LLM backend) is
-held to it too, and a companion that could remove a core gate would not be a companion.
+installed today: any next companion is held to it too, and a companion that could remove a
+core gate would not be a companion.
 
 ### The contract
 
@@ -132,7 +138,7 @@ held to it too, and a companion that could remove a core gate would not be a com
 | **How it registers** | An entry in [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) with its own `source: ./<dir>` and `.claude-plugin/plugin.json` — installed with `/plugin install <name>@loopd`. |
 | **Where core looks** | `<companion plugin root>/companion/<file>` — a **fixed relative path**, so a companion's own `README.md` or docs can never be mistaken for something core reads. |
 | **Which plugins count** | Only those installed from the **same marketplace core itself came from**, read out of `~/.claude/plugins/installed_plugins.json`. An unrelated plugin that happens to carry that path is not a companion. |
-| **What core reads** | Only names it already knows. Core never executes a companion's code, and a companion ships no settings hook and no agent — a second copy of a `PreToolUse` hook fires in every session on the machine. A **mod** companion (`plugin-mod-*/`, a hooks module Claude Code runs in-process) is the one shape that does ship under `hooks/`, and it is held to a narrower rule by `tests/mods.test.sh`: it observes, records and draws; it never calls a model, never answers the permission event, never starts a process or reaches the network, never writes a file — it reads a file only when its own README's "What it reads" section names the exact path, and a message it sends another session is a line Claude there reads as plain text, never a prompt it submits or a status it decides. |
+| **What core reads** | Only names it already knows. Core never executes a companion's code, and a companion ships no settings hook, no hooks module and no agent — a second copy of a `PreToolUse` hook fires in every session on the machine. A hooks module that observes, records or draws is a **mod**, and mods are core (`hooks/register.ts`, one `/config` switch each), held to the narrower rule `tests/mods.test.sh` keeps: never a model call, never the permission event, never a process, the network or the environment, never a file write — a file read only where [`hooks/MODS.md`](hooks/MODS.md) → "What it reads" names the exact path, and a message sent to another session is a line Claude there reads as plain text, never a prompt it submits or a status it decides. |
 | **When it is absent** | The gated default, silently. Absence is never an error, and every unknown (no registry, an unreadable one, a root gone from disk) resolves to absence. |
 
 ### How a companion is versioned
@@ -156,12 +162,14 @@ and leave the rest alone. A history that cannot name that commit (a shallow clon
 | Companion | Ships | Read by |
 |---|---|---|
 | [`loopd-yolo`](../plugin-yolo/README.md) | `companion/AUTONOMY.md` — the delegated-autonomy capability and the `yolo` preflight | `scripts/resolve-autonomy.sh`, and through it `scripts/commit-as.sh`'s promotion guard |
-| [`loopd-accounts`](../plugin-accounts/README.md) | `companion/accounts.md` — the per-bundle account capability — and `bin/loopd-claude`, the launcher the **human** runs | `scripts/resolve-account.sh`, and through it the SessionStart banner's account line |
-| [`loopd-llm`](../plugin-llm/README.md) | `companion/llm.md` — the alternative-LLM-backend capability — and `bin/loopd-deepseek`, the launcher the **human** runs, opt-in per machine | nothing — core reads its presence nowhere. The banner's backend warning reads `ANTHROPIC_BASE_URL` from its own environment, so it fires with or without this companion |
-| [`loopd-mod-usage`](../plugin-mod-usage/README.md) | `hooks/register.ts` — a mod that records each session's tokens, requests, tool calls, tool errors, wall time and model in the plugin store under `loopd.usage.<session id>` | `scripts/session-usage.sh`, which reads that store record before the transcript and falls back to the transcript on any doubt |
-| [`loopd-mod-pane`](../plugin-mod-pane/README.md) | `hooks/register.ts` — a mod whose `/pane` opens a pane drawing this bundle's board from `.loopd/SNAPSHOT.json` in the session's cwd: a **fourth renderer** over `scripts/write-snapshot.sh`'s contract, with a Tick button that runs `/loopd:dispatch` in that session and a Refresh button; its `simple` mode (`/config`) draws projects, open questions and blocked tasks from the task documents, every answer a `/loopd:answer` run | nothing — core reads its presence nowhere. In `operator` mode it reads core's snapshot (never the bundle), and absent, the three core renderers are all there is |
-| [`loopd-mod-signal`](../plugin-mod-signal/README.md) | `hooks/register.ts` — a mod that records the PM session of a bundle under `loopd.pm.<bundle root>`, and from a role agent's marked worktree writes `loopd.signal.<session id>` on every `turn.complete` and sends that PM session **one** `loopd-signal:` line | nothing in code — `tick-steps/step-4-advance.md` tells the tick what the line is worth (the order of its sweep, never a verdict); absent, no line arrives and step 4 runs exactly as before |
-| [`loopd-all`](../plugin-all/README.md) | nothing — a **bundle**: `.claude-plugin/plugin.json` carries a `dependencies` list (`loopd`, `loopd-yolo`, the three mods) and no hook, skill, agent, command or `companion/` file, so disabling one dependency disables only this empty plugin and never `loopd`. `loopd-accounts` and `loopd-llm` are left out on purpose: per-machine decisions their READMEs make the human take by hand | nothing — core reads its presence nowhere. It is the one-command install, and its one maintenance rule is to stay component-free |
+
+That is the whole list, on purpose. Retired 2026-10-28 (`MIGRATION.md` names the uninstall
+for each): the three mods, folded into core as `hooks/register.ts`; `loopd-all`, the
+one-command bundle, because with the mods in core it would have bundled only core and `yolo`,
+and a one-command install that includes `yolo` makes delegated autonomy a default instead of a
+choice; the `ai-bridge` rename alias, kept for one release since 3.0.0; and the accounts and
+llm launchers, which nothing used — core already behaved as if they were absent, and now
+carries no code path for them at all.
 
 `scripts/resolve-autonomy.sh` is the **one** reader of "does delegated autonomy exist
 here": the **bundle root wins outright** (a v1-era bundle carrying its own real

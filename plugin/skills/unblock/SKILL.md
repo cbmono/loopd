@@ -21,7 +21,7 @@ Any further words are the decision.
 1. **Show.** Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/unblock.sh <task path>` and relay its
    output here: the task's `last_blocker` and its escalation note. **Exit 1** — the task is
    not `blocked`: relay its one sentence and stop. This text belongs in the session, never
-   in the pane, which draws no blocker text (`plugin-mod-pane/README.md`).
+   in the pane, which draws no blocker text (`hooks/MODS.md`, Stuck — you can help).
 2. **Decide.** When the arguments carried no decision, ask for exactly one with
    `AskUserQuestion` — what the next agent should do differently, in a line. Offer the
    obvious ways forward as options when the blocker suggests them; take free text otherwise.

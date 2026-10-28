@@ -28,9 +28,10 @@ tmp/
 # a transcript of a model run is not something to commit by accident.
 /plugin/evals/results/
 
-# A `claude --plugin-dir <mod>` session writes that build's TypeScript declarations into
-# the mod's `.claude-plugin/types/`, and a one-line `tsconfig.json` that only `extends`
-# them. The copy for YOUR binary, never a source: the mods trust it over the docs while
-# developing and nobody else's build should read it, and the tsconfig dangles without it.
-/plugin-mod-*/.claude-plugin/types/
-/plugin-mod-*/tsconfig.json
+# A `claude --plugin-dir plugin` session writes that build's TypeScript declarations into
+# the plugin's `.claude-plugin/types/`, and a one-line `tsconfig.json` that only `extends`
+# them. The copy for YOUR binary, never a source: the mods (hooks/register.ts) trust it over
+# the docs while developing and nobody else's build should read it, and the tsconfig dangles
+# without it. (`claude plugin test` and `validate` write neither, measured 2026-10-28.)
+/plugin/.claude-plugin/types/
+/plugin/tsconfig.json
