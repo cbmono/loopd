@@ -72,10 +72,11 @@
 # stamped from) is covered instead, and `upgrade.sh` is the route for existing ones.
 #
 # Agents that declare NO `tools:` key inherit the full tool set and are therefore
-# unconstrained — every agent shipped under `config/*/agents/` (found dynamically below,
-# not by naming a tier, so this stays correct as tiers are added or removed). They are
-# skipped, and that skip is asserted rather than assumed: if one of them ever grows a
-# `tools:` key, the assertion below fails and points here.
+# unconstrained — the three advisory review agents (`code-architect`, `deep-bug-scan`,
+# `plan-architect`), which ship under `plugin/agents/` beside the role agents since
+# 2026-10-28 (they came from the retired `config/required/agents/`). They are skipped,
+# and that skip is asserted rather than assumed, from both sides: exactly those three are
+# skipped (§1), and if one of them ever grows a `tools:` key §3 fails and points here.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
@@ -606,7 +607,13 @@ while IFS= read -r f; do
 done <<EOF
 $AGENTS
 EOF
-ok "every shipped agent declares tools:" "$SKIPPED" 0
+# The skip is a CLOSED set, named: the three unrestricted review agents and nothing else,
+# so a role agent that loses its `tools:` line fails here instead of vanishing from the
+# audit — "no tools: key ⇒ skipped" is otherwise the silent hole this file is about.
+REVIEW_AGENTS="code-architect deep-bug-scan plan-architect"
+skipped_names="$(while IFS= read -r f; do [ -n "$f" ] && [ "$(has_tools_key "$f")" = no ] && basename "$f" .md; done <<<"$AGENTS" | sort | tr '\n' ' ' | sed 's/ $//')"
+ok "every shipped ROLE agent declares tools:"  "$skipped_names" "$(printf '%s\n' $REVIEW_AGENTS | sort | tr '\n' ' ' | sed 's/ $//')"
+ok "…and only the three review agents are skipped" "$SKIPPED" 3
 ok "shipped agents scanned"              "$([ "$SCANNED" -ge 7 ] && echo yes || echo no)" yes
 
 # =============================================== 2. the shared docs an agent is told to read
@@ -728,8 +735,8 @@ ok "no redundant tool-mention"        "$R" 0
 # The shared review agents must keep declaring NO `tools:` key — that is what makes
 # skill- and workflow-shaped capability reachable BY DISPATCH without widening any
 # restricted allowlist (knowledge/findings/role-agents-cannot-invoke-skills.md, rung 2).
-UNRESTRICTED="$(find "$REPO/config" -type f -path '*/agents/*.md' | sort)"
-ok "shared review agents found" "$([ -n "$UNRESTRICTED" ] && echo yes || echo no)" yes
+UNRESTRICTED="$(for a in $REVIEW_AGENTS; do printf '%s\n' "$REPO/plugin/agents/$a.md"; done)"
+ok "shared review agents found" "$(while IFS= read -r f; do [ -f "$f" ] && echo y; done <<<"$UNRESTRICTED" | grep -c y)" 3
 restricted=0
 while IFS= read -r f; do
   [ -n "$f" ] || continue

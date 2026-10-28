@@ -49,6 +49,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"   # PN: the plugin namespace a dispatch string carries
 PM="$REPO/plugin/tick-steps/step-2-refine-drafts.md"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
@@ -173,7 +174,11 @@ ok "an absent plan-architect is skipped silently" "$(in_block 'skip silently if 
 # task. A missing optional agent that produced a `blocked` status would be exactly
 # mandatory-to-exist wearing a different word.
 ok "…and nothing in the block blocks a task"  "$(in_block 'blocked')" no
-ok "…the agent is still the globally installed one" "$(in_block '~/.claude/agents/')" yes
+# Since 2026-10-28 the critic ships in the plugin, so the block dispatches it NAMESPACED
+# (a bare name does not resolve) and names no `~/.claude/agents/` path at all.
+ok "…the agent is the plugin's, namespaced"   "$(in_block "${PN}:plan-architect")" yes
+ok "…and no user-level path is named"        "$(in_block '~/.claude/agents/')" no
+ok "…while the plugin ships it"              "$([ -f "$REPO/plugin/agents/plan-architect.md" ] && echo yes || echo no)" yes
 
 echo
 echo "== 6. the model comes from roleTiers, and plan-architect stays out of roles =="

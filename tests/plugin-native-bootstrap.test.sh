@@ -346,25 +346,40 @@ ok "a plugin root with no seed/ is REFUSED"      "$?" 2
 ok "…naming the plugin root it could not verify" "$(grep -c 'cannot locate the loopd plugin root' "$TMP/mut.out" | tr -d ' ')" 1
 ok "…and nothing was stamped"                    "$(yn test -e "$TMP/_never")" no
 
-# `--config` is the ONE thing an installed plugin cannot do, and it must say so by name.
-# `config/` links absolute paths into ${CLAUDE_CONFIG_DIR:-~/.claude}, a per-machine
-# decision, so it deliberately stays outside the plugin — and the refusal has to be
-# distinguishable from "some directory is missing" or nobody knows to clone.
+# `--config` is RETIRED (2026-10-28): the three agents it linked into
+# ${CLAUDE_CONFIG_DIR:-~/.claude}/agents/ from a clone ship in the plugin now. It is refused
+# BY NAME, with where the agents went — a bookmarked command or a stale doc should learn
+# that, not that a flag vanished — and nothing is written: the refusal must stay
+# distinguishable from "unknown flag" and from a run that linked something.
 CLAUDE_CONFIG_DIR="$TMP/cfgdest" bash "$CACHE/scripts/init-bundle.sh" --config >"$TMP/cfg.out" 2>&1
-ok "--config from an installed plugin refuses"   "$?" 2
-ok "…saying a checkout is what it needs"         "$(grep -c 'needs a checkout of this repo' "$TMP/cfg.out" | tr -d ' ')" 1
-ok "…and printing the clone command"             "$(grep -c 'git clone' "$TMP/cfg.out" | tr -d ' ')" 1
+ok "--config refuses"                            "$?" 2
+ok "…saying it is retired"                       "$(grep -c -- '--config is retired' "$TMP/cfg.out" | tr -d ' ')" 1
+ok "…and where the agents went"                  "$(grep -c "ship in the ${PN} plugin now" "$TMP/cfg.out" | tr -d ' ')" 1
+ok "…not as an unknown flag"                     "$(grep -c 'unknown flag' "$TMP/cfg.out" | tr -d ' ')" 0
 ok "…having written nothing into the config dir" "$(yn test -e "$TMP/cfgdest")" no
-# AND THE UNINSTALL HALF, which is the one with teeth. `config_ours` classifies a link by
-# `case $(readlink …) in "$CONFIG_SRC"/*`, so an EMPTY $CONFIG_SRC would make that pattern
-# `/*` — matching every absolute symlink in the config dir and removing links this layer
-# never wrote. `config_require_src` runs first on both paths, which is what keeps the
-# empty value from ever reaching the glob; asserted here rather than trusted.
+# AND THE UNINSTALL HALF, which used to be the one with teeth: it removed links. Now it is
+# the same refusal, and a stranger's absolute link in the config dir is untouched.
 mkdir -p "$TMP/cfgdest2/agents"
 ln -s "$TMP" "$TMP/cfgdest2/agents/somebody-elses.md"
 CLAUDE_CONFIG_DIR="$TMP/cfgdest2" bash "$CACHE/scripts/init-bundle.sh" --config --uninstall >"$TMP/cfgu.out" 2>&1
 ok "--config --uninstall refuses too"            "$?" 2
 ok "…leaving a stranger's absolute link alone"   "$(yn test -L "$TMP/cfgdest2/agents/somebody-elses.md")" yes
+# THE STALE LINK AN OLDER `--config` LEFT is reported by a bundle stamp — with the rm, and
+# never removed (report-only, the RETIRED contract). Only OUR shape is named: a dangling
+# link whose target ends in config/required/agents/<name>.md. A dangling link to anywhere
+# else, a live link, and a real file are somebody's and are not mentioned.
+mkdir -p "$TMP/cfgdest3/agents" "$TMP/cfgdest3/real"
+ln -s "$TMP/gone-clone/config/required/agents/code-architect.md" "$TMP/cfgdest3/agents/code-architect.md"
+ln -s "$TMP/elsewhere/deep-bug-scan.md" "$TMP/cfgdest3/agents/deep-bug-scan.md"
+printf 'mine\n' > "$TMP/cfgdest3/real/plan-architect.md"
+ln -s "$TMP/cfgdest3/real/plan-architect.md" "$TMP/cfgdest3/agents/plan-architect.md"
+CLAUDE_CONFIG_DIR="$TMP/cfgdest3" bash "$CACHE/scripts/init-bundle.sh" "$TMP/stale-bundle" >"$TMP/stale.out" 2>&1 </dev/null
+ok "a stamp beside a stale --config link exits 0" "$?" 0
+ok "…names the dangling one from config/required" "$(grep -c 'agents/code-architect.md is a dangling link from the retired' "$TMP/stale.out" | tr -d ' ')" 1
+ok "…with the rm to run"                         "$(grep -c "rm \"$TMP/cfgdest3/agents/code-architect.md\"" "$TMP/stale.out" | tr -d ' ')" 1
+ok "…and still dangling: it removed nothing"     "$(yn test -L "$TMP/cfgdest3/agents/code-architect.md")" yes
+ok "…a dangling link to elsewhere is not named"  "$(grep -c 'deep-bug-scan' "$TMP/stale.out" | tr -d ' ')" 0
+ok "…nor a live link"                            "$(grep -c 'plan-architect.md is a dangling' "$TMP/stale.out" | tr -d ' ')" 0
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
