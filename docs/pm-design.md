@@ -18,10 +18,13 @@ moved both step files out of a stamped `symlink/.claude/` and into `plugin/`.
 <a id="launcher-shape"></a>
 ### Why this shape, and not `/goal` (v2 audit, 2026-08)
 
-The looping **mechanism is already first-party**: `ScheduleWakeup` is the same
-primitive `/loop`'s dynamic mode uses. The command is a policy layer over it — the
-serial guarantee, the instance-root preconditions, the in-flight check, and what a tick
-may do — not a hand-rolled loop engine.
+The looping **mechanism is already first-party**: a session cron job (`CronCreate`) is
+the same primitive `/loop [interval]` uses, and `ScheduleWakeup` the one its dynamic mode
+uses. The command is a policy layer over them — the serial guarantee, the instance-root
+preconditions, the in-flight check, and what a tick may do — not a hand-rolled loop
+engine. Since 2026-10-28 the skill creates that job itself on a bare `/loopd:dispatch`
+(one per session, never two), so the human types one command and no `/loop` prefix; a
+human's `/loop 10m /loopd:dispatch` is the same job and is honoured, not duplicated.
 
 `/goal` was considered and does **not** fit. It terminates on a condition, while this
 loop runs until a human stops it; its evaluator judges only what is in the transcript
@@ -40,7 +43,8 @@ slice) and a sibling's package install corrupts an in-flight worktree. So the lo
 on **completion**.
 
 **That is no longer an argument against a clock, and the distinction matters because
-`/loop 10m /loopd:dispatch` is now the documented cadence** (`docs/operations.md` →
+a clock is now the documented cadence — the session cron a bare `/loopd:dispatch`
+creates** (`docs/operations.md` →
 "Running the loop on a cadence"). A clock is allowed to *ask*; it is not allowed to
 *overlap*. The firing that lands mid-tick is refused by `acquire` before anything is
 spawned — one line, exit 1, `--as loop` — so the interval decides how often the loop

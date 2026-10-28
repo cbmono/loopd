@@ -916,17 +916,30 @@ what `/loopd:init` reads, once, instead of one call per role.
 
 ### Running the loop on a cadence
 
-**`/loop 10m /loopd:dispatch`.** That is the whole answer, and it is first-party:
-`/loop [interval] <prompt>` ships with Claude Code (measured on **2.1.261**, whose own help
-string is `/loop 5m /foo`) and re-fires a slash command on a clock in the session you are
-already in. **Nothing is installed for cadence** — no watcher process, no `sleep` loop, no
-cron entry, and no script in this repo. `/loopd:dispatch`'s precondition 2 goes further
-and *deletes* the fixed-interval PM cron an older approach left behind.
+**`/loopd:dispatch`.** That is the whole answer, and the primitive under it is
+first-party: the skill creates **one session-scoped cron job** (`CronCreate`, prompt
+`/loopd:dispatch <gap>`) on its first pass, and that job re-fires the skill on the clock.
+It is the same job `/loop [interval] <prompt>` creates — `/loop` ships with Claude Code
+(measured on **2.1.261**, whose own help string is `/loop 5m /foo`) and is a `CronCreate`
+over the prompt you give it — so `/loop 10m /loopd:dispatch` still works and is the same
+loop: the skill sees that job and creates none. **Nothing is installed for cadence** — no
+watcher process, no `sleep` loop and no script in this repo; the one cron job is session
+memory, written to no file, gone when the session ends. `/loopd:dispatch`'s precondition
+2 also *deletes* the fixed-interval PM cron an older approach left behind.
 
 | | |
 |---|---|
-| **`/loop 10m /loopd:dispatch`** | the default. A fixed heartbeat while work is landing. |
+| **`/loopd:dispatch`** | the default. A fixed heartbeat every 10m while work is landing. `/loopd:dispatch 30m` for another gap — `stop` first to change a running one. |
+| **`/loopd:dispatch once`** | one tick, no cadence. |
+| **`/loopd:dispatch stop`** | ends the loop: deletes every session job whose prompt names `/loopd:dispatch`, its own or a `/loop`'s. |
 | **`/loop /loopd:dispatch`** | no interval ⇒ `/loop`'s dynamic mode, where the model paces itself. The right shape for a quiet bundle whose passes would mostly find nothing. |
+
+**Two things the clock does that the number does not say.** A recurring session job is
+shifted by a fixed per-job offset of up to half its period, so a 10m job fires 10–15
+minutes apart and the skill reports the next-run time the scheduler gives rather than the
+expression; and it fires only while the session is idle. **And it expires after seven
+days** — it fires once more and is deleted — so a pass that finds no job re-creates it, and
+a session left alone for a week stops until the next bare `/loopd:dispatch`.
 
 **Why 10m, since the interval is not tuned to tick length.** A tick that dispatches role
 agents runs as long as it runs; the lock below is what makes that safe, so the interval
@@ -936,14 +949,16 @@ minutes, so a pass every 10 minutes notices a merged PR or a finished review abo
 after it happens. Below ~5m the extra passes find the state the last one found; past ~30m
 the loop stops being the thing that notices.
 
-**A `/loop` never spawns a second orchestrator, and the lock is the proof.** Firing into a
+**A clock never spawns a second orchestrator, and the lock is the proof.** Firing into a
 running tick is not an edge case here — it is what a clock does, several times per tick. In
 that firing `scripts/tick-lock.sh acquire` refuses at exit 1 *before* anything is spawned,
 and the check and the write are one `O_EXCL` create, so there is no window to interleave.
 The guarantee never rested on the cadence, which is why putting a clock in front of it
-changes nothing. **One `/loop` per clone** still holds for the same reason two
+changes nothing. **One loop per clone** still holds for the same reason two
 `/loopd:dispatch` sessions on one working tree was always the bug: the lock bounds
-ticks, not loops.
+ticks, not loops. Inside one session, the skill's **never two jobs** rule — it creates a
+job only when none naming `/loopd:dispatch` is listed — is what keeps a second
+`/loopd:dispatch`, or a `/loop` typed over a running loop, from doubling the passes.
 
 **A firing that lands mid-tick is a clean skip, not a fault** — `acquire --as loop` prints
 one line on **stdout** and exits 1:

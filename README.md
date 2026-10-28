@@ -197,12 +197,14 @@ Answer its questions. Review the draft tasks. Promote the ones you want (`draft 
 Then:
 
 ```text
-/loop 10m /loopd:dispatch
+/loopd:dispatch
 ```
 
-`/loop` is Claude Code's own repeat-a-slash-command primitive, and it is the standard way
-to run the cadence: one pass every ten minutes, in the session you are already in, with
-nothing installed to drive it. Omit the interval (`/loop /loopd:dispatch`) on a quiet
+That is the loop: one pass every ten minutes, in the session you are already in, with
+nothing installed to drive it. The skill owns one session-scoped cron job — the same
+primitive Claude Code's `/loop 10m /loopd:dispatch` creates, which still works and is the
+same loop. `/loopd:dispatch 30m` sets the gap, `/loopd:dispatch once` runs a single tick,
+`/loopd:dispatch stop` ends it. Prefer `/loop /loopd:dispatch` (no interval) on a quiet
 bundle and the model paces itself. A pass that fires while a tick is still running prints
 one line and skips — the dispatch lock refuses it, so a clock can never start a second
 orchestrator. `docs/operations.md` → "Running the loop on a cadence" has the reasoning.
@@ -281,7 +283,7 @@ Run these inside an instance.
 | Command | What it does |
 |---|---|
 | `/loopd:new-project <description>` | (plugin) scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
-| `/loopd:dispatch [gap]` | (plugin) the serial background loop: dispatch, track, report. `/loopd:dispatch 10m` ticks every ten minutes |
+| `/loopd:dispatch [gap\|once\|stop]` | (plugin) the serial background loop: dispatch, track, report. Bare, it ticks every ten minutes on its own; `once` is a single tick, `stop` ends it |
 | `/loopd:answer` | (plugin) answer the PM's open questions from inside the session — or one, as `<task> [Q<n>] <n \| more \| later \| text>` |
 | `/loopd:unblock <task>` | (plugin) see why a `blocked` task stopped, give your one decision, and send it back to `ready` with that decision in its `# Notes` |
 | `/loopd:board` | (plugin) `serve` — **the default, so a bare call serves** — the board on a local URL, one process per bundle (every session starts it while `boardServe` is on); `publish` — the same page as a private artifact, at the same URL every run; `--help` — the forms |
