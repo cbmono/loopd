@@ -69,6 +69,12 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **Naming a file or a function is not one.** Each renders one `👀 review` row; none
    withholds the `approve` row.
 
+   **How it fails is a decision too.** Every queue, buffer, cache, connection pool, retry
+   budget or in-memory map the project adds or changes the load on gets one `D<n>` stating
+   its bound and what happens at it — dropped, refused, delayed, or unbounded on purpose —
+   recorded per draft at refine whatever its reversibility. `unbounded` is a legal answer;
+   an unstated one is not.
+
    **The decision fold is this step's whatever the project's task statuses** —
    `tick-delta.sh digest` names step 2 for any ` --- `-answered `D<n>`, even with every task
    promoted. ` --- ok` or ` --- ack` acknowledges. Any other answer is an **overturn**: fold
@@ -107,6 +113,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    in design.md** — the board links it, so name a component by its role, never by its
    address. The approach critique reads design.md when it runs and may challenge it in
    `advisor_notes`.
+   **Label each queue, buffer, cache or connection pool that is a node with its overload
+   `D<n>` id, not the bound's text**, so an overturn needs no redraw; retry budgets and
+   in-memory maps need no node. **Before you stop, check each such node against the
+   project's overload `D<n>` rows and add any missing row.**
    **Redraw rule:** when a task of the project is refined whose id design.md's `tasks:`
    list lacks, redraw it — diagram, paragraph and mapping — in the same tick.
    `tick-delta.sh check` reports that state as a `DELTA` naming the project.
