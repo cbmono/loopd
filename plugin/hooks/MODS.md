@@ -27,7 +27,7 @@ After every turn it writes one record to the plugin store, keyed by the session:
 | `loopd.usage.<session id>` | `{ input, output, cacheRead, cacheWrite, requests, turns, ms, model, tools: { <tool name>: <calls> }, toolErrors }` — tokens from each request's usage (`turn.step`), or the turn's totals when a turn's requests carried none; `ms` is the sum of `durationMs` over turns; `toolErrors` counts tool results with `isError` |
 | `loopd.usage.<session id>.ended` | `true`, written at `session.end` |
 
-Core's `scripts/session-usage.sh <session-id>` reads that record **first** and prints the
+Core's `plugin/scripts/session-usage.sh <session-id>` reads that record **first** and prints the
 same `usage tokens=N tools=N ms=N cached=N errors=N by=Name:N,…` line it prints from a
 transcript (`tokens` = input + cacheWrite + output; `cached` = cacheRead; `tools` = the sum
 over names; `errors` = toolErrors; `by` = the top five names by count, then name). No
@@ -49,7 +49,7 @@ in a narrow terminal). `paneMode` decides what it draws:
 
 ### operator mode
 
-The **fourth renderer** over the one board contract, `scripts/write-snapshot.sh` →
+The **fourth renderer** over the one board contract, `plugin/scripts/write-snapshot.sh` →
 `.loopd/SNAPSHOT.json` (`docs/conventions.md` §11 in `cbmono/loopd`). It reads the snapshot,
 never the bundle, so the snapshot writer's field allowlist holds here without being
 re-implemented: nothing this pane shows is anything the file does not already carry.
@@ -133,7 +133,7 @@ retried on the next scan.
 
 **The new project form is the skill's, not the pane's.** Five fields — 1 Title, 2 What, 3 For
 whom, 4 Done when, 5 Target repo (prefilled with `defaultRepo`) — live in one gitignored file,
-`.loopd/.new-project/form.json`, which `scripts/new-project-form.sh` writes on each run above;
+`.loopd/.new-project/form.json`, which `plugin/scripts/new-project-form.sh` writes on each run above;
 the pane draws it in place of the inbox and writes nothing. A field just typed shows
 *· saving…* until the file moves. **Start the project** asks the script to check every field:
 one missing redraws the form with a pink *✗* and a plain fix under each, and nothing is
@@ -191,7 +191,7 @@ file names. Every path literal the module spells is in this table; `tests/mods.t
 `cbmono/loopd` asserts it, and that a module which lists a directory spells its walk as a
 quoted glob. The `.loopd/SNAPSHOT.json`, `.loopd/.answer-later` and
 `.loopd/.new-project/form.json` spellings are `AB_SNAPSHOT`, `AB_ANSWER_LATER` and
-`AB_NEW_PROJECT_FORM` in `scripts/bundle-paths.sh`; `.git`, `commondir` and `loopd-bundle`
+`AB_NEW_PROJECT_FORM` in `plugin/scripts/bundle-paths.sh`; `.git`, `commondir` and `loopd-bundle`
 are git's and `link-repos.sh`'s.
 
 | Path | Mod | Call | Why |
@@ -233,7 +233,7 @@ source and on what `claude plugin validate` reads out of it:
 Claude Code keeps one JSON file per plugin under
 `${CLAUDE_CONFIG_DIR:-~/.claude}/plugins/store/`, named `<plugin name>_<marketplace>-<hash>.json`
 (`<plugin name>_inline-<hash>.json` for a `--plugin-dir` load), a flat object of key → value;
-this plugin's file is `loopd_loopd-….json` once it has written, and `scripts/session-usage.sh`
+this plugin's file is `loopd_loopd-….json` once it has written, and `plugin/scripts/session-usage.sh`
 reads it by that glob. One `loopd.usage.*` record per session, one `loopd.pm.*` record per
 bundle and one `loopd.signal.*` record per role session, a few hundred bytes each; the 4 MiB
 store limit is the vendor's and nothing here prunes.

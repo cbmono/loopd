@@ -271,13 +271,16 @@ if [ -n "$BASE" ]; then
     git -C "$REPO" show "$1:$2" 2>/dev/null \
       | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | tr '\n' ' '
   }
-  # A marketplace entry the branch ADDS carries a version and changes none, so the
-  # marketplace is compared per source: every base entry keeps its number.
+  # A marketplace entry the branch ADDS carries a version and changes none, and one it
+  # REMOVES changes none either (seven entries retired at once, 2026-10-28), so the
+  # marketplace is compared per source: every base entry the branch KEEPS keeps its number.
   if command -v jq >/dev/null 2>&1; then
     vers_mk() { git -C "$REPO" show "$1:.claude-plugin/marketplace.json" 2>/dev/null \
       | jq -r '.plugins[] | "\(.source)=\(.version)"' 2>/dev/null | LC_ALL=C sort; }
-    ok "every base marketplace entry keeps its version" \
-       "$(LC_ALL=C comm -23 <(vers_mk "$BASE") <(vers_mk HEAD) | tr '\n' ' ')" ""
+    kept() { git -C "$REPO" show "HEAD:.claude-plugin/marketplace.json" 2>/dev/null \
+      | jq -r '.plugins[].source | . + "="' 2>/dev/null; }
+    ok "every base marketplace entry the branch keeps keeps its version" \
+       "$(LC_ALL=C comm -23 <(vers_mk "$BASE") <(vers_mk HEAD) | grep -F -f <(kept) | tr '\n' ' ')" ""
   fi
   for m in plugin/.claude-plugin/plugin.json .claude-plugin/marketplace.json; do
     [ "$m" = .claude-plugin/marketplace.json ] && command -v jq >/dev/null 2>&1 \

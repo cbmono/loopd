@@ -128,8 +128,8 @@ not delete a gate, it ships the file that defines a mode in which the loop may h
 and the human still chooses that mode per project. A companion that removed a gate would
 be indistinguishable from a supply-chain downgrade of the thing this whole design exists
 to protect. Read it as a constraint on what may be *built*, not only on what is
-installed today: any next companion is held to it too, and a companion that could remove a
-core gate would not be a companion.
+installed today: any next companion is held to it too, and a companion that could
+remove a core gate would not be a companion.
 
 ### The contract
 

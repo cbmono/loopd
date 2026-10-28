@@ -4,7 +4,7 @@
 //
 //   · usage  — what this session spent, written to the plugin store after every turn under
 //              `loopd.usage.<session id>`, and `loopd.usage.<session id>.ended` at session end.
-//              Core's scripts/session-usage.sh reads that record before the transcript.
+//              Core's plugin/scripts/session-usage.sh reads that record before the transcript.
 //   · pane   — `/pane`, a pane beside the transcript drawing this bundle's board from
 //              `.loopd/SNAPSHOT.json` (operator mode, with Tick and Refresh), or — `paneMode:
 //              simple` — an inbox of open questions, stuck tasks and progress read from the
