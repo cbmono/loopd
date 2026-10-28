@@ -285,10 +285,10 @@ step2=0 step3=0 step4=0 step5=0 step6=0
 FOLD="$(dirname "${BASH_SOURCE[0]}")/fold-answers.sh"
 CKPT="$(dirname "${BASH_SOURCE[0]}")/continue-checkpoint.sh"
 SESS="$(dirname "${BASH_SOURCE[0]}")/agent-sessions.sh"
-answered_open() { # <file> [key]
-  local key="${2:-open_questions}" parsed
-  fmlist "$1" "$key" text 2>/dev/null | grep -qF -- ' --- ' && return 0
-  parsed="$(bash "$FOLD" --list "$1" "$key" 2>/dev/null)" || return 2
+answered_open() { # <file>
+  fmlist "$1" open_questions text 2>/dev/null | grep -qF -- ' --- ' && return 0
+  local parsed
+  parsed="$(bash "$FOLD" --list "$1" open_questions 2>/dev/null)" || return 2
   printf '%s\n' "$parsed" | grep -qF -- ' --- '
 }
 
@@ -333,7 +333,7 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs inflight=0 urls="" ntask nterm wtp sid sids=""
+  local p d pst f st prs inflight=0 urls="" ntask nterm wtp sid sids="" dl
   for d in "$inst"/projects/*/; do
     [ -d "$d" ] || continue
     p="$d/project.md"
@@ -351,10 +351,11 @@ fingerprint() { # <probe|digest>
     # tick, and the point is the read that never happens.
     [ "$pst" = "done" ] && continue
     if grep -q '^decisions:' "$p"; then
-      answered_open "$p" decisions; case $? in
-        0) printf 'decision answered %s\n' "${p#"$inst"/}"; step2=1 ;;
-        2) return 1 ;;
-      esac
+      dl="$(bash "$FOLD" --list "$p" decisions 2>/dev/null)" || return 1
+      # The text after the FINAL ` --- ` must have content, as fold-answers.sh decides.
+      if printf '%s\n' "$dl" | awk -F' --- ' 'NF > 1 && $NF ~ /[^[:space:]]/ { f = 1 } END { exit !f }'; then
+        printf 'decision answered %s\n' "${p#"$inst"/}"; step2=1
+      fi
     fi
 
     ntask=0; nterm=0

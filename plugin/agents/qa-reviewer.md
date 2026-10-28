@@ -358,7 +358,9 @@ signature". Never on a PR body.
    new dependency, a schema or migration change, or a new public interface that neither
    `acceptance_criteria`, `answered_questions` nor the project's `acknowledged_decisions:`
    (in the `project.md` your brief names) records gets one "Unapproved decision:" line in
-   the comment. Style or design preference never qualifies — "grade against the criteria, not against your own taste" (`CONVENTIONS.md`).
+   the comment. An `acknowledged_decisions:` entry approves its choice only when answered
+   `ok` or `ack`; any other answer overturned it, so the owner's answer is the approved
+   choice and a PR that implements the original one gets the line. Style or design preference never qualifies — "grade against the criteria, not against your own taste" (`CONVENTIONS.md`).
 
    **`pass` is only ever `pass`: a non-empty `unverified_criteria` or `caveats` forces
    `changes-requested` or `inconclusive`, whichever fits.** `SCHEMA.md`'s clearance

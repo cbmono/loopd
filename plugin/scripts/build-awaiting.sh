@@ -320,7 +320,9 @@ EOF
     dlist="$(entries "$pm" decisions)" || fail3 "cannot read decisions in ${pm#"$inst"}"
     add_node "$pm" "${pm#"$inst"}" "$slug"
     while IFS= read -r e; do
-      case "$e" in D[0-9]*:*) case "$e" in *' --- '*) ;; *) add "👀" review "$(title_of "$pm")" "${pm#"$inst"}" "$e" ;; esac ;; esac
+      case "$e" in D[0-9]*:*) ;; *) continue ;; esac
+      case "$e" in *' --- '*[![:space:]]*) [ -n "$(printf '%s' "${e##* --- }" | tr -d '[:space:]')" ] && continue ;; esac
+      add "👀" review "$(title_of "$pm")" "${pm#"$inst"}" "$e"
     done <<EOF
 $dlist
 EOF

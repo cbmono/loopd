@@ -73,7 +73,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `tick-delta.sh digest` names step 2 for any ` --- `-answered `D<n>`, even with every task
    promoted. ` --- ok` or ` --- ack` acknowledges. Any other answer is an **overturn**: fold
    it into each affected task first, the same way as an answer, and `--add` the new choice
-   as a fresh `D<n>`. Then
+   as a fresh `D<n>`. **A `done` or `in-review` task already built the old choice**: the
+   change it now needs is a new `draft` task, never a rewrite of that one — and the new
+   draft keeps the project from closing until it lands. Then
    `${CLAUDE_PLUGIN_ROOT}/scripts/fold-answers.sh --keys decisions acknowledged_decisions <project.md>`
    moves every answered entry, acknowledged or overturned, to `acknowledged_decisions:` with
    its answer verbatim, so `decisions:` holds only unanswered entries, nothing re-folds and

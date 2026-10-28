@@ -76,6 +76,10 @@ bash "$S/build-awaiting.sh" --instance "$I" >/dev/null 2>&1
 ok "the other human's project ⇒ 0 review rows" "$(grep -c 'review\*\* — \[Theirs' "$AW" | tr -d ' ')" 0
 ok "a paused project ⇒ 0 review rows"          "$(grep -c 'review\*\* — \[Held' "$AW" | tr -d ' ')" 0
 ok "…and mine still renders"                   "$(grep -c 'review\*\* — \[Demo' "$AW" | tr -d ' ')" 1
+proj empty Empty "decisions: [ \"$D1 --- \", \"$D2 --- a --- \" ]
+"
+bash "$S/build-awaiting.sh" --instance "$I" >/dev/null 2>&1
+ok "an empty final \` --- \` answer keeps its review row" "$(grep -c 'review\*\* — \[Empty' "$AW" | tr -d ' ')" 2
 
 echo
 echo "== tick-delta: an answered D<n> is a DELTA naming step 2; folded, it is IDLE =="
@@ -96,6 +100,11 @@ bash "$S/tick-delta.sh" record --instance "$B" >/dev/null 2>&1
 ok "folded ⇒ IDLE (exit 0)" "$(bash "$S/tick-delta.sh" check --instance "$B" >/dev/null 2>&1; echo $?)" 0
 ok "…and digest no longer names step 2" \
    "$(bash "$S/tick-delta.sh" digest --instance "$B" 2>/dev/null | grep '^steps:' | grep -c 'step-2' | tr -d ' ')" 0
+FOLD --add "$B/projects/p/project.md" "$D2" >/dev/null 2>&1
+sed -i.bak "s/\"$D2\"/\"$D2 --- \"/" "$B/projects/p/project.md"; rm -f "$B/projects/p/project.md.bak"
+GIT -C "$B" commit -qam empty; bash "$S/tick-delta.sh" record --instance "$B" >/dev/null 2>&1
+ok "an empty \` --- \` answer is not owed a fold ⇒ IDLE" \
+   "$(grep -c "$D2 --- \"" "$B/projects/p/project.md" | tr -d ' ')/$(bash "$S/tick-delta.sh" check --instance "$B" >/dev/null 2>&1; echo $?)" 1/0
 
 echo
 echo "== the prompt text =="
@@ -103,11 +112,15 @@ QA="$REPO/plugin/agents/qa-reviewer.md"; S2="$REPO/plugin/tick-steps/step-2-refi
 ok "qa-reviewer's Unapproved decision check reads acknowledged_decisions:" \
    "$(grep -B4 'gets one "Unapproved decision:"' "$QA" | tr '\n' ' ' | grep -c 'answered_questions` nor the project.s `acknowledged_decisions:`' | tr -d ' ')" 1
 ok "…from the project.md its brief names" "$(grep -c 'in the `project.md` your brief names' "$QA" | tr -d ' ')" 1
+ok "…and an overturned entry approves the answer, not the original" \
+   "$(tr '\n' ' ' < "$QA" | grep -c 'the owner.s answer is the approved *choice and a PR that implements the original one gets the line' | tr -d ' ')" 1
 ok "the QA brief carries the project.md path" \
    "$(grep -c "The brief also names the task's \`project.md\` path" "$REPO/plugin/tick-steps/step-4-advance.md" | tr -d ' ')" 1
 ok "step 2 names the six decision classes" \
    "$(tr '\n' ' ' < "$S2" | grep -c 'technology, topology, *data-model, consistency or caching, security-model or external-dependency choice' | tr -d ' ')" 1
 ok "…says a file or function name is not one" "$(grep -c 'Naming a file or a function is not one' "$S2" | tr -d ' ')" 1
+ok "…an overturn of a done task becomes a new draft task" \
+   "$(tr '\n' ' ' < "$S2" | grep -c 'the *change it now needs is a new `draft` task, never a rewrite of that one' | tr -d ' ')" 1
 ok "…and owns the fold whatever the task statuses" \
    "$(grep -c "decision fold is this step's whatever the project's task statuses" "$S2" | tr -d ' ')" 1
 
