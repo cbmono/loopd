@@ -190,9 +190,12 @@ ok "no shipped doc probes ~/.claude/agents/ for an agent" \
 # one: the resolvers key on the bare row name on purpose, and only the dispatch string
 # carries the namespace. Scoped to what ships — `plugin/` — and to `*.md`, where a
 # dispatch instruction lives.
+# The backtick in the pattern is RAW inside single quotes: an escaped one (`\``) is a
+# buffer-start anchor to GNU grep (the incident .github/workflows/tests.yml records), so
+# the escaped form matched nothing on the Linux gate while passing on BSD grep.
+BARE_DISPATCH_RE='((^|[^a-z-])[Dd]ispatch(es|ed|ing)?|[Bb]rief|[Ee]scalat(e|es|ing)( to)?|subagent_type[:=]) *(the )?`?(code-architect|deep-bug-scan|plan-architect)`?([^a-z:-]|$)'
 bare_dispatches() { # <root> -> count of bare review-agent names in a dispatch position
-  grep -rnoE "((^|[^a-z-])[Dd]ispatch(es|ed|ing)?|[Bb]rief|[Ee]scalat(e|es|ing)( to)?|subagent_type[:=]) *(the )?\\\`?(code-architect|deep-bug-scan|plan-architect)\\\`?([^a-z:-]|\$)" \
-    --include='*.md' "$1" 2>/dev/null | grep -c . | tr -d ' '
+  grep -rnoE -e "$BARE_DISPATCH_RE" --include='*.md' "$1" 2>/dev/null | grep -c . | tr -d ' '
 }
 ok "no shipped document dispatches a review agent by its bare name" "$(bare_dispatches "$TPL/plugin")" 0
 # Non-vacuity: the three shapes the sweep exists for are each caught in a scratch tree,

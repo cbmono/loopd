@@ -196,7 +196,8 @@ signature". Never on a PR body.
      fewer, higher-confidence findings, which is what a second opinion is for — so pass
      the delegate **no** `effort:`: it is not a `roleEffort` role, and the skill's level is
      its depth. The same holds for `loopd:code-architect` and `loopd:deep-bug-scan` below,
-     whose own frontmatter decides. Brief the delegate to:
+     whose own frontmatter decides (`effort: high`, beside their `model: opus`). Brief the
+     delegate to:
      - **name the target explicitly.** The skill takes no working-directory argument, so a
        bare invocation reviews *your session's* cwd — not the repo you meant. Pass the repo
        path (or `<base-sha>...<head-sha>`) in the invocation, and have the delegate confirm
