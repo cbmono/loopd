@@ -332,3 +332,21 @@ machine uses it, so do not uninstall `loopd`. Uninstall `ai-bridge-v2` if it is 
 listed. The optional `~/.claude` config layer is retired (2026-10-28): a link it left in
 `~/.claude/agents/` is reported by `/loopd:init` with the `rm`
 ([README § The config layer](../README.md#the-config-layer)).
+
+## The Brief output style (3.17.0 onward)
+
+The `Needs you:` reporting contract ships in the seed as `.claude/output-styles/brief.md`,
+selected by `"outputStyle": "Brief"` in the seed `.claude/settings.json`. A bundle stamped
+**before 2026-10-28** gets the file on its next `/loopd:init` but not the key — that file is
+copied once and never merged. Add it by hand:
+
+```json
+"outputStyle": "Brief"
+```
+
+`/loopd:welcome check` names the missing half until it is there, and nothing writes it for
+you. If the machine still carries the old `~/.claude/output-styles/brief.md` from
+`cbmono/ai-setup`, both copies are identical and the bundle-level one wins inside a bundle;
+the user-level one can stay or go. Details and the measurement behind the location:
+`docs/operations.md` → "The Brief output style".
+

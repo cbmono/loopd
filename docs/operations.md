@@ -1586,6 +1586,31 @@ overwritten, so merge the paragraph in by hand if you want the offer.
 left behind. Until then the instance runs whatever its own `.claude/hooks/` still points
 at.
 
+### The Brief output style — the `Needs you:` contract ships with the bundle
+
+Every loopd report ends the same way: what changed, then `ℹ️ **Needs you:**` as numbered,
+executable steps, each with its URL or path inline, so a reply can be `1 mrgd` or `2 go`
+(the seed `CLAUDE.md` → "Replies to a `Needs you:` list are shorthand"). That shape is an
+**output style**, `Brief`, and since 2026-10-28 it ships **in the seed** —
+`.claude/output-styles/brief.md`, selected by `"outputStyle": "Brief"` in the seed's
+`.claude/settings.json` — so a machine that installs the plugin and stamps a bundle has it,
+with no second repository to clone.
+
+**Why the seed and not the plugin — measured, 2026-10-28, Claude Code 2.1.312.** The
+plugin manifest accepts `output-styles/` as plugin content, but a style placed there was
+not loaded under either `Brief` or `loopd:Brief` (two probes, each answered NO to "does
+your system prompt contain *Report like a briefing.*"), while the same file at a project's
+`.claude/output-styles/` was (YES; an unknown name as the negative control: NO). So the
+style is bundle-scoped seed content, and nothing is written to `~/.claude`.
+
+**Two halves, two owners — and a bundle stamped before that date has one without the
+other.** The style *file* is a seed document, so the next `/loopd:init` delivers it (a stamp
+seeds what is absent). The settings *key* is config, copied once and never merged, so an
+older bundle never receives it and the style is a file nothing selects. The welcome check's
+`output-style` row says which half is missing and prints the one-line fix; it writes neither
+— config is the human's, and a different style chosen on purpose is reported as `✓` with
+its name, never as a problem. `tests/brief-output-style.test.sh` pins all four states.
+
 ### Per-instance settings
 
 `.claude/settings.json` is **shared machinery** (symlinked) — editing it changes every
