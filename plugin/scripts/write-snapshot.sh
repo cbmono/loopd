@@ -38,6 +38,9 @@
 #              deliverable_paths (bundle-relative paths, VERBATIM from project.md —
 #              closeout stamps these, this file only forwards them; see task-007's
 #              board panel and the shape check build-board.sh applies before render)
+#     design:  `projects/<slug>/design.md` when that file exists — its presence and path,
+#              never its body — plus a top-level `repo` (the bundle's own GitHub
+#              `<org>/<repo>`, already inside every `closed` permalink) only then
 #     phase:   file, order, title, status
 #     closed:  slug, close date, pinned sha, one-line outcome, and one bundle-relative
 #              path + GitHub permalink per deliverable — read from the TRACKED
@@ -558,13 +561,14 @@ project_stanza() { # <awaiting_close> <ph_done> <ph_total> <phases_json> <tasks_
       \"phase_progress\": {\"done\": $2, \"total\": $3},
       \"phases\": [$4],
       \"tasks\": [$5],
-      \"deliverable_paths\": [$p_deliverable_paths_json]
+      \"deliverable_paths\": [$p_deliverable_paths_json]$p_design_json
     }"
 }
 
 # ---------------------------------------------------------------- assembly
 tasks_total=0
 awaiting_total=0
+any_design=0
 projects_json=""
 projects_n=0
 
@@ -597,6 +601,11 @@ while IFS= read -r pfile; do
     [[ -n "$p_deliverable_paths_json" ]] && p_deliverable_paths_json="$p_deliverable_paths_json, "
     p_deliverable_paths_json="$p_deliverable_paths_json$(jstr "$dp")"
   done <<< "$(deliverable_path_entries "$pfm")"
+  p_design_json=""
+  if [[ -f "$pdir/design.md" ]]; then
+    p_design_json=",
+      \"design\": $(jstr "projects/$slug/design.md")"; any_design=1
+  fi
 
   # ---- a DONE project is read no further than this line.
   #
@@ -803,6 +812,16 @@ CLOSED_BLOCK=""
 if [[ -n "$closed_json" ]]; then CLOSED_BLOCK="\"closed\": [$closed_json],
   "; fi
 
+# The bundle's own `<org>/<repo>`, only when some project has a design.md: the board needs
+# it to link that file on GitHub, and every other snapshot stays byte-identical.
+REPO_LINE=""
+if [[ $any_design -eq 1 ]]; then
+  u="$(git config --get remote.origin.url 2>/dev/null || true)"; u="${u%.git}"
+  case "$u" in *github.com[:/]*) u="${u##*github.com}"; u="${u#[:/]}" ;; *) u="" ;; esac
+  [[ "$u" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] && REPO_LINE="\"repo\": $(jstr "$u"),
+  "
+fi
+
 # ---------------------------------------------------------------- write
 # Temp file BESIDE the target, never $TMPDIR: a cross-filesystem `mv` degrades to
 # copy-and-remove, where an interruption leaves a half-written snapshot that the
@@ -813,11 +832,11 @@ cat > "$tmp" <<JSON
 {
   "_schema": "loopd board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
-  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/pr_mergeable (MERGEABLE|CONFLICTING|UNKNOWN, the tick's last host read)/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links. Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
+  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); design (the PATH of projects/<slug>/design.md when it exists, never its body) and, only then, repo (this bundle's own GitHub org/repo); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/pr_mergeable (MERGEABLE|CONFLICTING|UNKNOWN, the tick's last host read)/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links. Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
   "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},
-  ${CLOSED_BLOCK}"projects": [$projects_json]
+  ${CLOSED_BLOCK}${REPO_LINE}"projects": [$projects_json]
 }
 JSON
 

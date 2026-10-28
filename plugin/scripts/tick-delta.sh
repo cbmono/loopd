@@ -333,7 +333,7 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs inflight=0 urls="" ntask nterm wtp sid sids="" dl
+  local p d pst f st prs inflight=0 urls="" ntask nterm wtp sid sids="" dl redraw mapped b
   for d in "$inst"/projects/*/; do
     [ -d "$d" ] || continue
     p="$d/project.md"
@@ -358,7 +358,8 @@ fingerprint() { # <probe|digest>
       fi
     fi
 
-    ntask=0; nterm=0
+    ntask=0; nterm=0; redraw=0; mapped=""
+    [ -f "${d}design.md" ] && mapped=" $(fmlist "${d}design.md" tasks text | grep -oE 'task-[0-9]+' | tr '\n' ' ')"
     for f in "$d"tasks/*.md; do
       [ -f "$f" ] || continue
       # An UNREADABLE task file poisons the whole walk rather than degrading to a fake
@@ -371,6 +372,10 @@ fingerprint() { # <probe|digest>
         printf 'task %s %s\n' "${f#"$inst"/}" "${st:-unset}"
       fi
       [ "$st" = "in-progress" ] && inflight=1
+      if [ -n "$mapped" ] && [ "$st" != cancelled ] && b="$(basename "$f" | grep -oE '^task-[0-9]+')" \
+         && [ "${mapped#* "$b" }" = "$mapped" ] && [ "$(fmcount "$f" acceptance_criteria)" -gt 0 ]; then
+        redraw=1
+      fi
       # Step 5's reclaim retry: nothing else on disk moves while an own-session refusal waits.
       if [ "$st" = "done" ] && wtp="$(fmfirst "$f" worktree)" && [ -n "$wtp" ] && [ -d "$wtp" ] \
          && ! grep -qF 'worktree retained:' "$f"; then
@@ -402,6 +407,7 @@ $prs"
       fi
     done
     [ "$mode" = digest ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && step6=1
+    [ "$redraw" = 1 ] && { printf 'redraw owed %s\n' "${d#"$inst"/}design.md"; step2=1; }
   done
 
   # A live dispatch is owed its monitoring whatever the record says. Signalled as a
@@ -534,6 +540,11 @@ case "$cmd" in
     fi
     if printf '%s\n' "$FP" | grep -q '^reclaim owed '; then
       echo "DELTA: a done task's worktree is still on disk — step 5 owes its reclaim a retry."
+      exit 1
+    fi
+    rd="$(printf '%s\n' "$FP" | sed -n 's/^redraw owed //p' | head -n1)"
+    if [ -n "$rd" ]; then
+      echo "DELTA: ${rd%/design.md} has a refined task its $rd does not map — step 2 owes it a redraw."
       exit 1
     fi
     [ -f "$STATE" ] || fail2 "no $STATE_NAME record yet (first tick, or an upgrade)"

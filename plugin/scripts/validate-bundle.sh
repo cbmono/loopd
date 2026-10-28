@@ -56,6 +56,7 @@
 #
 # WHAT COUNTS AS A CONCEPT DOCUMENT. Only the schema-defined locations:
 # `objectives/*.md` (OPTIONAL — a bundle with none is valid), `projects/*/project.md`,
+# `projects/*/design.md` (OPTIONAL, build projects),
 # `projects/*/phases/*.md`, `projects/*/tasks/*.md`, `knowledge/<kind>/*.md`. Everything
 # else — `index.md`, `log.md`, the `knowledge/{log,papercuts}/` month shards, `sources/`,
 # `deliverables/`, a doc a human dropped into a project — is content or navigation. The
@@ -127,7 +128,7 @@ enum_for() {
   esac
 }
 
-KNOWN_TYPES="Objective Project Phase Task Agent Service Finding Team Runbook Reference"
+KNOWN_TYPES="Objective Project Phase Task Design Agent Service Finding Team Runbook Reference"
 # Who wrote a knowledge document — SCHEMA.md, "provenance:". Its own enum, because Team and
 # Runbook have no status, so enum_for never reaches them.
 KB_TYPES="Service Finding Team Runbook Reference"
@@ -340,6 +341,7 @@ warn() { printf '  WARN   %s\n         %s\n' "$1" "$2"; warns=$((warns+1)); }
 collect_files() {
   find ./objectives -maxdepth 1 -name '*.md' 2>/dev/null || true
   find ./projects -maxdepth 2 -name 'project.md' 2>/dev/null || true
+  find ./projects -mindepth 2 -maxdepth 2 -name 'design.md' 2>/dev/null || true
   find ./projects -path '*/phases/*.md' 2>/dev/null || true
   find ./projects -path '*/tasks/*.md' 2>/dev/null || true
   find ./knowledge -mindepth 2 -maxdepth 2 -type f -name '*.md' 2>/dev/null || true
@@ -522,6 +524,14 @@ while IFS= read -r file; do
       [[ "$nopt" -gt 0 ]] || warn "$rel" "'### $label' has an empty 'Options:' list ($AB_SCHEMA, 'Question details')"
       [[ "$ndepth" -ge 3 ]] || warn "$rel" "'### $label' has $ndepth of 3 context depths ($AB_SCHEMA, 'Question details')"
     done <<< "$(list_entries "$fm" open_questions)"
+  fi
+
+  if [[ "$type" == Design ]]; then
+    while IFS= read -r tid; do
+      [[ -n "$tid" ]] || continue
+      compgen -G "$(dirname "$file")/tasks/$tid.md" >/dev/null || compgen -G "$(dirname "$file")/tasks/$tid-*.md" >/dev/null \
+        || fail "$rel" "tasks: maps $tid, but no $tid file is under $(dirname "$rel")/tasks/ ($AB_SCHEMA, 'type: Design')"
+    done <<< "$(list_entries "$fm" tasks | grep -oE 'task-[0-9]+' | sort -u || true)"
   fi
 
   structural="$(refs_for "$fm" 'objective|project|phase|depends_on' '/(objectives|projects|knowledge|agents)/[A-Za-z0-9._/-]+[.]md')"

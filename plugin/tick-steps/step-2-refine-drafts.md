@@ -94,6 +94,23 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    threshold** — propose the split before a task exceeds it, and let the human decide
    whether to keep the work together.
 
+   **Design diagram — you write `projects/<slug>/design.md` yourself, once per
+   `kind: build` project, after its last draft is refined.** The file's presence is the
+   once-only receipt: do not redraw a project that has one, except under the redraw rule
+   below. Never on a `kind: research` project. Its shape is `SCHEMA.md` → `type: Design`:
+   frontmatter `type: Design`, `timestamp:` and a `tasks:` list of
+   `"<component or edge> → task-NNN"` entries, then one fenced `mermaid` block
+   (`flowchart` or `graph`) of the components the project adds or touches — frontends,
+   APIs, services, data stores, caches, queues, functions, infra — with integrations as
+   edges and trust boundaries as `subgraph`s, then one paragraph reading it: what is new,
+   what changes, what is reused. **No internal hostnames, no secrets and no customer PII
+   in design.md** — the board links it, so name a component by its role, never by its
+   address. The approach critique reads design.md when it runs and may challenge it in
+   `advisor_notes`.
+   **Redraw rule:** when a task of the project is refined whose id design.md's `tasks:`
+   list lacks, redraw it — diagram, paragraph and mapping — in the same tick.
+   `tick-delta.sh check` reports that state as a `DELTA` naming the project.
+
    **Approach critique — MANDATORY on its trigger, advisory in what it may decide.**
    For a genuinely complex **`kind: build`** task — spans multiple files/services, or
    its `acceptance_criteria` had to be heavily inferred — you **must** dispatch the
