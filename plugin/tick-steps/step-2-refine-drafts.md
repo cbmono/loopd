@@ -124,7 +124,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    address. The approach critique reads design.md when it runs and may challenge it in
    `advisor_notes`.
    **Label each queue, buffer, cache or connection pool that is a node with its overload
-   `D<n>` id, not the bound's text**, so an overturn needs no redraw; retry budgets and
+   `D<n>` id, not the bound's text**, so an overturn needs no redraw of the label — the
+   diagram itself still redraws under the redraw rule below; retry budgets and
    in-memory maps need no node. **Before you stop, check each such node against the
    project's overload `D<n>` rows and add any missing row.**
    **Pre-mortem — in the same pass, write `pre_mortem:`** into design.md's frontmatter:
