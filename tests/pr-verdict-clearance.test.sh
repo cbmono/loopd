@@ -45,7 +45,8 @@ WORKER="$(mk \
   '| Criterion | ✓ | Verified by |' \
   '|---|---|---|' \
   '| the retry backs off on 429 | ✓ | `foo.test.sh` 40/0 |' \
-  '| the token is never logged | ✓ | `grep -r TOKEN src/` clean |')"
+  '| the token is never logged | ✓ | `grep -r TOKEN src/` clean |' '' \
+  '### Decided without asking' 'none — every choice is named by a criterion.')"
 
 AGREE="$(mk \
   '| Criterion | Verdict | Evidence |' \

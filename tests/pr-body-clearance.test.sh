@@ -125,9 +125,17 @@ chmod +x "$TMP/bin/gh" "$TMP/bin/jq"
 export PATH="$TMP/bin:$PATH"
 
 # --- fixtures -----------------------------------------------------------------
-body_file() { # <lines...> -> a file holding them
+raw_body_file() { # <lines...> -> a file holding them
   local f; f="$(mktemp "$TMP/body.XXXXXX")"; printf '%s\n' "$@" > "$f"; printf '%s' "$f"
 }
+# Every built body carries a declared-none `Decided without asking` section; only the
+# cases about that section use raw_body_file. Not exempt from the ceiling, so a padded
+# fixture's count is unchanged.
+DECIDED_HEAD='### Decided without asking'
+DECIDED_NONE='none — every choice is named by a criterion.'
+body_file() { raw_body_file "$@" '' "$DECIDED_HEAD" "$DECIDED_NONE"; }
+# What body_file adds, in code points: a fixture padded to a pinned count subtracts it.
+DECIDED_CHARS="$(printf '\n%s\n%s\n' "$DECIDED_HEAD" "$DECIDED_NONE" | "$REAL_JQ" -Rs length)"
 
 serve() { # <body-file> [head] — publish it as the PR the script will read
   rm -f "$FIX/gh_broken" "$FIX/jq_broken"
@@ -288,15 +296,16 @@ echo
 echo "== the BODY ceiling: the two bodies the owner measured, and one that fits =="
 # Exact lengths, so a ceiling moved anywhere above 5,826 stops catching #122 and goes red
 # here rather than quietly clearing the evidence it was set on.
-sized_body() { # <chars> -> a complete body padded to COUNT exactly that many characters
-  local want="$1" f; f="$TMP/sized.$want.md"
+sized_body() { # <chars> [<decision row>] -> a complete body padded to COUNT exactly that many
+  local want="$1" row="${2:-}" f ex=0; f="$TMP/sized.$want.${#row}.md"
+  [ -z "$row" ] || ex="$(printf '%s' "${row#- }" | "$REAL_JQ" -Rs length)"
   { printf '%s\n' '## Description' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" ''
-    printf '%s\n' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW"
+    printf '%s\n' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' "$DECIDED_HEAD" "${row:-$DECIDED_NONE}"
     printf '\n'
   } > "$f"
   # `printf %*s` then a translate: ordinary prose characters, no newline, so the count is
-  # exact rather than approximately right.
-  printf '%*s' "$(( want + ${#TABLE_CRIT} - $(chars "$f") ))" '' | tr ' ' 'x' >> "$f"
+  # exact rather than approximately right. A decision row is not counted (element 8).
+  printf '%*s' "$(( want + ${#TABLE_CRIT} + ex - $(chars "$f") ))" '' | tr ' ' 'x' >> "$f"
   printf '%s' "$f"
 }
 
@@ -477,7 +486,7 @@ expect "a 2,600-character cell in a SECOND marked table -> REFUSE" 4 --body-file
 
 # ONLY WHAT SURVIVES IN THE AUTHORED COPY: a table inside a marked block is already gone
 # from the count, so its criterion is not subtracted a second time.
-INBLOCK="$(body_file '## Description' "Adds the gate. $(cell 2361)" '' "$VERIFIED" '' \
+INBLOCK="$(body_file '## Description' "Adds the gate. $(cell $(( 2361 - DECIDED_CHARS )))" '' "$VERIFIED" '' \
                      "$(crit_head 1)" '' "$OPEN195" "$TABLE_HEAD" "$TABLE_RULE" \
                      "| $(cell 700) | ✓ | \`foo.test.sh\` 40/0 |" "$CLOSE195")"
 expect "a criteria table inside a marked block -> nothing subtracted -> REFUSE" 4 \
@@ -1007,6 +1016,39 @@ says   "  naming both cells under the floor"  "but 2 acceptance-criteria"
 says   "  row 11, 'binary slice'"             "row 11 under the FLOOR at 12 bytes"
 says   "  row 16, 'see Notes'"                "row 16 under the FLOOR at 9 bytes"
 says_not "  and nothing structural is wrong with it" "MISSING:"
+
+echo
+echo "== element 8: ### Decided without asking =="
+DROW='- Replaced Redis with an in-process queue — alternatives: keep Redis; why: no Redis in CI; reversible: yes'
+dw_body() { raw_body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
+                          "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' "$@"; }
+expect "a row -> CLEAR"              0 --body-file "$(dw_body "$DECIDED_HEAD" "$DROW")"
+expect "none — <why> -> CLEAR"       0 --body-file "$(dw_body '## decided without asking' "$DECIDED_NONE")"
+says_not "  ...with no notice"       "Decided without asking' section —"
+expect "no section -> CLEAR for one release" 0 --body-file "$(dw_body)"
+says   "  ...told, not refused"      "note: no '### Decided without asking' section"
+expect "an empty section -> REFUSE"  1 --body-file "$(dw_body "$DECIDED_HEAD" '' '### Notes')"
+says   "  ...naming the section"     "EMPTY: the 'Decided without asking' section"
+expect "rows and a none line -> REFUSE" 1 --body-file "$(dw_body "$DECIDED_HEAD" "$DROW" "$DECIDED_NONE")"
+says   "  ...naming the section"     "CONTRADICTED: the 'Decided without asking' section"
+expect "a bare none -> REFUSE"       1 --body-file "$(dw_body "$DECIDED_HEAD" 'none')"
+says   "  ...naming the section"     "INCOMPLETE: the 'Decided without asking' section"
+expect "none with an empty why -> REFUSE" 1 --body-file "$(dw_body "$DECIDED_HEAD" '- none —')"
+
+# The allowance: a body AT the ceiling plus one row still clears, and the row is reported.
+DROW_CHARS="$(printf '%s' "${DROW#- }" | "$REAL_JQ" -Rs length)"
+expect "the ceiling plus one decision row -> CLEAR" 0 --body-file "$(sized_body "$BODY_CEILING" "$DROW")"
+says   "  ...at the ceiling"       "is $BODY_CEILING characters (ceiling $BODY_CEILING)"
+says   "  ...not charging the row" "nor $DROW_CHARS characters of Decided without asking rows"
+expect "…one prose character more -> REFUSE" 4 --body-file "$(sized_body "$(( BODY_CEILING + 1 ))" "$DROW")"
+
+# A mutant that accepts every section state must fail the refusals above and its self-test.
+MUT="$TMP/mutant.sh"; sed 's/absent|rows|none) true ;;/absent|rows|none|empty|both|bare) true ;;/' \
+  "$SCRIPT" > "$MUT"; cp "$(dirname "$SCRIPT")/bundle-paths.sh" "$TMP/"; chmod +x "$MUT"
+ok "the mutant differs from the script" "$(cmp -s "$SCRIPT" "$MUT" && echo same || echo differs)" differs
+ok "…clears an empty section" \
+   "$("$MUT" --body-file "$(dw_body "$DECIDED_HEAD")" >/dev/null 2>&1; echo $?)" 0
+ok "…and fails its own self-test" "$(selftest_contract "$MUT")" no
 
 echo
 echo "== unreadable is never clearance =="

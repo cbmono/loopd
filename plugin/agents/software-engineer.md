@@ -94,6 +94,9 @@ blocked session. This is for background sessions only: interactive ones keep the
    narration of how you got there, and stays readable enough that a person can check the
    claim from it. The table is what the independent reviewer checks against; the reasoning
    goes in the commit message and the task doc, not the PR body.
+   **Last, before you post: write `### Decided without asking`** under the table — one row
+   per technical choice no criterion or answered question named, a row for any choice
+   that departs from a project `D<n>` (your brief names the `project.md`), or `none — <why>`.
    If the change alters behaviour that a document in the repo describes, update that document in the same PR.
 6. **Report back** per the shared conventions (`status: in-review`, `pr:`,
    `# Result`). Your final message reports what exists — PRs, criteria tally, task note —

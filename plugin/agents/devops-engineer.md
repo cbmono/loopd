@@ -66,6 +66,9 @@ signature". Never on a PR body.
    narrating it (`` `hadolint Dockerfile` clean ``), and **any threshold question as one
    `⚠️` line each, last** (per the shared PR-body shape in
    `CONVENTIONS.md` — PR size and harness growth included, not only the rollout/risk note).
+   **Last, before you post: write `### Decided without asking`** under the table — one row
+   per technical choice no criterion or answered question named, a row for any choice
+   that departs from a project `D<n>` (your brief names the `project.md`), or `none — <why>`.
 6. **Report back** per the shared conventions (`status: in-review`, `pr:`,
    `# Result`). Your final message reports what exists — PRs, criteria tally, task note —
    and ends with one status line; anything the human must decide or provide goes in the

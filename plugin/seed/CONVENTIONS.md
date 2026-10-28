@@ -170,7 +170,7 @@ above it so none may grow its share.
 - **The PR body has a required shape, and it is short — 2,500 characters, hard** (→ "Write
   less"). Its reader is a **human deciding whether to merge** — not an agent
   reconstructing how you worked. **It opens with the
-  literal heading `## Description`.** Four required parts, in this order, plus an
+  literal heading `## Description`.** Five required parts, in this order, plus an
   optional `## Notes` section (below) and nothing else:
 
   ```md
@@ -186,6 +186,10 @@ above it so none may grow its share.
   |---|---|---|
   | the retry backs off on 429     | ✓ | `foo.test.sh` 40/0 |
   | works with two host accounts   | ✗ | needs two accounts — see task doc |
+
+  ### Decided without asking
+
+  - Kept the retry in awk — alternatives: jq; why: no new dependency; reversible: yes.
 
   ### Notes
 
@@ -228,7 +232,16 @@ above it so none may grow its share.
      because it is the one number a reader never re-derives. **When there are no `✗`, no
      reason is needed**; when there are any, the reason is required and *that it is there*
      is what is checked — whether it is a good one stays the reviewer's call.
-  4. **A short flagged line per threshold question** the owner must answer — harness
+  4. **`### Decided without asking`, after the table** — your answer to "what did you
+     decide that I did not tell you to decide?". One row per technical choice that no
+     criterion, `answered_questions` entry or `acknowledged_decisions:` entry named, shaped
+     `<decision> — alternatives: …; why: …; reversible: …` — the shape of a project's `D<n>`
+     rows, so the two lists compare directly. A choice that departs from a `D<n>` is always
+     a row. Nothing to declare is the single line `none — <why>`, never a bare `none`.
+     `pr-body-clearance.sh` refuses an empty section, rows beside a none line, and a bare
+     `none`; a body without the section is told, not refused, for one release. Its rows
+     are not charged against the 2,500, up to 800 characters each.
+  5. **A short flagged line per threshold question** the owner must answer — harness
      growth, PR size, a wide change you could not split. One line each, `⚠️`-prefixed,
      last. Not a section, not an essay. **Each `⚠️` stays one line — the figure, and the
      call you need from the owner.** A `⚠️` that runs to a paragraph has stopped being a
@@ -272,7 +285,8 @@ above it so none may grow its share.
   `scripts/pr-body-clearance.sh <pr>` fetches the actual PR body from the host and
   refuses one that is missing the TL;DR line, the `Verified:` line or a link on it, the
   criteria table, its heading's tally, a tally that matches the rows, the reason for any
-  `✗` in that tally, or the bold claim opening a `## Notes` bullet;
+  `✗` in that tally, the bold claim opening a `## Notes` bullet, or a well-formed
+  `### Decided without asking`;
   `scripts/required-checks.sh` asks it for every PR it is about to clear, and
   `AUTONOMY.md` precondition 3 names it. **It refuses on missing structure at exit 1 and
   on LENGTH at exit 4** — over 2,500 characters, or more than 3 `## Notes` bullets, per

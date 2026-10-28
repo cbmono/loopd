@@ -188,6 +188,13 @@
 #      `### Notes`; pinning either depth would refuse one of the two documents this file
 #      exists to enforce.
 #
+#   8. `### Decided without asking` — the author's answer to "what did you decide that
+#      nobody told you to?". Matched by heading text at any depth, as Notes is. It holds
+#      bullet rows or ONE `none — <why>` line; empty, both, or a `none` with no why is
+#      refused at 1. ABSENT IS TOLD, NOT REFUSED, FOR ONE RELEASE — the precedent of the
+#      retired TL;DR spelling above: open PRs and un-restamped instances predate the rule.
+#      Its rows are not charged against the ceiling, up to `CRITERION_ALLOWANCE` each.
+#
 # WHAT THIS DOES NOT DO, AND WHOSE JOB THAT IS. It answers "is the criteria table there
 # and well-formed", never "is every row `✓`". WHETHER EVERY ROW IS `✓` STAYS
 # `AUTONOMY.md` PRECONDITION 3 / `SCHEMA.md` CLAUSE 7 — an unverified criterion blocking
@@ -358,6 +365,8 @@ GENERATED_CEILING=1000
 # --- table 8: verbatim criterion text, NOT counted against the ceiling ----------
 # The author copies it from the task doc and may not shorten it (element 3's reason, one
 # level up). Bounded per row like the block above: 800 over a largest real criterion of 702.
+# The same allowance covers each `Decided without asking` row (element 8), so declaring a
+# decision never costs a body its Notes.
 CRITERION_ALLOWANCE=800
 
 # The body less every marked block. Byte-for-byte the input when there is no block, so a
@@ -389,33 +398,37 @@ authored_half() { # <src> <dst>
 # THE number the ceiling compares and `report_length` prints: the authored copy less its
 # own criteria table's criterion cells. ONE unit for both terms, chosen once — bytes off
 # code points would over-subtract every multibyte glyph, which fails open.
-counted_chars() { # <raw-body> -> "<counted> <exempt>"; leaves $TMPD/authored
-  local n c
+counted_chars() { # <raw-body> -> "<counted> <criteria-exempt> <decisions-exempt>"; leaves $TMPD/authored
+  local n c d
   authored_half "$1" "$TMPD/authored"
   render_body "$TMPD/authored" "$TMPD/authored.rendered"
   table_scan "$TMPD/authored.rendered" \
     | awk '/^criterion\t/ { sub(/^criterion\t/, ""); print }' > "$TMPD/criteria"
+  decided_scan "$TMPD/authored.rendered" \
+    | awk '/^decision\t/ { sub(/^decision\t/, ""); print }' > "$TMPD/decisions"
+  n="$(char_count "$TMPD/authored")"
+  c="$(capped_sum "$TMPD/criteria")"; d="$(capped_sum "$TMPD/decisions")"
+  case "$n$c$d" in ''|*[!0-9]*) return 2 ;; esac
+  printf '%s %s %s\n' "$(( n - c - d ))" "$c" "$d"
+}
+
+capped_sum() { # <one-exempt-text-per-line> -> its length, each line capped at the allowance
+  local s
   if command -v jq >/dev/null 2>&1 \
-     && n="$(jq -Rs 'length' < "$TMPD/authored" 2>/dev/null)" && [ -n "$n" ] \
-     && c="$(jq -Rn --argjson cap "$CRITERION_ALLOWANCE" \
+     && s="$(jq -Rn --argjson cap "$CRITERION_ALLOWANCE" \
                '[inputs | length | if . > $cap then $cap else . end] | add // 0' \
-               < "$TMPD/criteria" 2>/dev/null)" && [ -n "$c" ]; then
-    :
-  else
-    n="$(LC_ALL=C wc -c < "$TMPD/authored" | tr -d ' ')"
-    c="$(LC_ALL=C awk -v cap="$CRITERION_ALLOWANCE" \
-           '{ l = length($0); s += (l > cap ? cap : l) } END { print s + 0 }' \
-           "$TMPD/criteria")"
+               < "$1" 2>/dev/null)" && [ -n "$s" ]; then
+    printf '%s' "$s"; return 0
   fi
-  case "$n$c" in ''|*[!0-9]*) return 2 ;; esac
-  printf '%s %s\n' "$(( n - c ))" "$c"
+  LC_ALL=C awk -v cap="$CRITERION_ALLOWANCE" \
+    '{ l = length($0); s += (l > cap ? cap : l) } END { print s + 0 }' "$1"
 }
 
 # What the caller is measured on, said before the verdict. The second line only appears
 # where a block was actually found, so a body nobody appended to prints what it always did.
 report_length() { # <body-file> <label>
-  local counted exempt authored posted
-  read -r counted exempt <<EOF
+  local counted exempt dexempt authored posted
+  read -r counted exempt dexempt <<EOF
 $(counted_chars "$1")
 EOF
   authored="$(char_count "$TMPD/authored")"
@@ -425,6 +438,8 @@ EOF
     echo "pr-body-clearance: …not counting $exempt characters of verbatim criterion text" >&2
     echo "pr-body-clearance:    (at most $CRITERION_ALLOWANCE a row)" >&2
   }
+  [ "${dexempt:-0}" = 0 ] || \
+    echo "pr-body-clearance: …nor $dexempt characters of Decided without asking rows" >&2
   if [ "$posted" != "$authored" ]; then
     echo "pr-body-clearance: …of $posted posted; the rest is a reviewer-generated block" >&2
   elif grep -Fq -- "$GENERATED_OPEN" "$1" && grep -Fq -- "$GENERATED_CLOSE" "$1"; then
@@ -642,6 +657,57 @@ notes_scan() { # <rendered-body>
       else if (bare == "") printf "notes\tok\n"
       else                 printf "%s", bare
       printf "notecount\t%d\n", nth
+    }
+  ' "$1"
+}
+
+# --- element 8: `### Decided without asking` ----------------------------------
+# One `decided<TAB><state>` line — absent | rows | none | empty | both | bare — then one
+# `decision<TAB><text>` per row, its indented continuation lines joined, for the ceiling.
+# A bullet or line opening with the word `none` is a none-line, never a row.
+decided_scan() { # <rendered-body>
+  LC_ALL=C awk '
+    function flush() { if (cur != "") printf "decision\t%s\n", cur; cur = "" }
+    function none_line(t,   r) {
+      r = t; sub(/^(\*\*|__|\*|_)/, "", r)
+      if (tolower(r) !~ /^none([^a-z0-9]|$)/) return 0
+      r = substr(r, 5); sub(/^(\*\*|__|\*|_)/, "", r); sub(/^[[:space:]]+/, "", r)
+      if (r !~ /^(—|–|-|:)/) { bare++; return 1 }
+      sub(/^(—|–|-|:)/, "", r); gsub(/[^0-9A-Za-z]/, "", r)
+      if (r == "") bare++; else why++
+      return 1
+    }
+    {
+      line = $0
+      if (line ~ /^[[:space:]]{0,3}#{1,6}[[:space:]]+/) {
+        flush()
+        h = line
+        sub(/^[[:space:]]*#+[[:space:]]*/, "", h); sub(/[[:space:]]*#+[[:space:]]*$/, "", h)
+        in_s = (tolower(h) ~ /^decided without asking[^0-9a-z]*$/) ? 1 : 0
+        if (in_s) seen = 1
+        next
+      }
+      if (!in_s) next
+      if (line ~ /^[[:space:]]*$/) { flush(); next }
+      if (line ~ /^[-*+][[:space:]]+/) {
+        flush(); t = line; sub(/^[-*+][[:space:]]+/, "", t)
+        if (!none_line(t)) { rows++; cur = t }
+        next
+      }
+      if (line ~ /^[[:space:]]/ && cur != "") {
+        t = line; sub(/^[[:space:]]+/, "", t); cur = cur " " t; next
+      }
+      flush(); none_line(line)
+    }
+    END {
+      flush()
+      if (!seen)                    st = "absent"
+      else if (rows && (why || bare)) st = "both"
+      else if (bare)                st = "bare"
+      else if (rows)                st = "rows"
+      else if (why)                 st = "none"
+      else                          st = "empty"
+      printf "decided\t%s\n", st
     }
   ' "$1"
 }
@@ -981,8 +1047,8 @@ EOF
 # its bound — so its advice is always "relocate", never "add". Both ceilings are reported
 # in one pass: an author over both should learn both in one run.
 report_concision() { # <raw-body> <notes-scan> <label> -> 0 clear, 4 over a ceiling
-  local raw="$1" nscan="$2" label="$3" chars exempt notes rc=0
-  read -r chars exempt <<EOF
+  local raw="$1" nscan="$2" label="$3" chars exempt dexempt notes rc=0
+  read -r chars exempt dexempt <<EOF
 $(counted_chars "$raw")
 EOF
   notes="$(printf '%s\n' "$nscan" | awk -F'\t' '$1 == "notecount" { print $2; exit }')"
@@ -995,7 +1061,8 @@ EOF
     echo "        'Write less'. A marked reviewer block is not counted, up to $GENERATED_CEILING" >&2
     echo "        characters; a larger one is counted in full, markers or no markers." >&2
     echo "        Nor is each criteria row's verbatim criterion text, up to" >&2
-    echo "        $CRITERION_ALLOWANCE characters a row; its evidence is yours and is counted." >&2
+    echo "        $CRITERION_ALLOWANCE characters a row, nor each Decided without asking row; the" >&2
+    echo "        criteria evidence is yours and is counted." >&2
     echo "        Keep the TL;DR line, the Verified line and the criteria table. Move the" >&2
     echo "        design, the alternatives and the incident into the task doc and the" >&2
     echo "        commit message, which travel with the change and have no ceiling." >&2
@@ -1014,7 +1081,7 @@ EOF
 # draft) answer identically. <label> only names the subject in the messages.
 decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too long
   local raw="$1" rendered="$2" label="$3" tldr verified scan tstate tally tkind rc
-  local nscan nstate bare_n bare_txt
+  local nscan nstate bare_n bare_txt dstate
   local tab; tab="$(printf '\t')"
   has_tldr "$rendered"; tldr=$?
   [ "$tldr" -eq 2 ] && return 2
@@ -1036,13 +1103,19 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
   nscan="$(notes_scan "$rendered")"
   nstate="$(printf '%s\n' "$nscan" | awk -F'\t' '$1 == "notes" { print $2; exit }')"
   case "$nstate" in ok|absent|bare) : ;; *) return 2 ;; esac
+  dstate="$(decided_scan "$rendered" | awk -F'\t' '$1 == "decided" { print $2; exit }')"
+  case "$dstate" in absent|rows|none|empty|both|bare) : ;; *) return 2 ;; esac
+  # A notice, never a verdict, for one release — element 8.
+  [ "$dstate" = absent ] \
+    && echo "note: no '### Decided without asking' section — add one ('none — <why>' when there is nothing to declare); it is required from the next release." >&2
 
   # STRUCTURE IS DECIDED BEFORE THE ROW BOUND, AND THAT ORDER IS THE POINT. Exit 1 says a
   # required element is missing; exit 3 says every element is there and one row is out of
   # bounds. Reporting the second while the first is unresolved would tell an author to
   # trim rows of a table the gate has not agreed exists.
   if [ "$tldr" -eq 0 ] && [ "$verified" -eq 0 ] && [ "$tstate" = ok ] \
-     && [ "$tkind" = ok ] && [ "$nstate" != bare ]; then
+     && [ "$tkind" = ok ] && [ "$nstate" != bare ] \
+     && case "$dstate" in absent|rows|none) true ;; *) false ;; esac; then
     report_rows "$scan" "$label" || return $?
     report_concision "$raw" "$nscan" "$label" || return $?
     echo "ok: $label carries a TL;DR line and a well-formed acceptance-criteria" >&2
@@ -1124,6 +1197,16 @@ EOF
     echo "        with the explanation after it, so the section is skimmable in bold" >&2
     echo "        alone. The section is optional; a note that buries its claim is not." >&2
   fi
+  case "$dstate" in
+    empty) echo "        EMPTY: the 'Decided without asking' section holds no row and no" >&2
+           echo "        'none — <why>' line. Write one row per choice nobody named, or" >&2
+           echo "        the one none line." >&2 ;;
+    both)  echo "        CONTRADICTED: the 'Decided without asking' section holds rows AND a" >&2
+           echo "        'none' line. Keep the rows, or the none line — not both." >&2 ;;
+    bare)  echo "        INCOMPLETE: the 'Decided without asking' section says 'none' with no" >&2
+           echo "        why. Write 'none — <why>', e.g. 'none — every choice is named by a" >&2
+           echo "        criterion or an answered question'." >&2 ;;
+  esac
   echo "        This is the STRUCTURE refusal. Length is a separate check with a" >&2
   echo "        separate code (4). See $AB_CONVENTIONS, 'The PR body has a required" >&2
   echo "        shape'." >&2
@@ -1166,7 +1249,13 @@ if [ "${1:-}" = "--self-test" ]; then
   trap 'rm -rf "$TMPD"' EXIT
   validate_tables || exit 2
 
+  # Every probe body carries a declared-none section (element 8) unless it is `st_raw`.
+  ST_DECIDED='none — every choice is named by a criterion.'
   st_probe() { # <expected-rc> <name> <body lines...>
+    local want="$1" name="$2"; shift 2
+    st_raw "$want" "$name" "$@" '' '### Decided without asking' "$ST_DECIDED"
+  }
+  st_raw() { # <expected-rc> <name> <body lines...>
     local want="$1" name="$2"; shift 2
     printf '%s\n' "$@" > "$TMPD/raw"
     render_body "$TMPD/raw" "$TMPD/rendered"
@@ -1304,6 +1393,17 @@ if [ "${1:-}" = "--self-test" ]; then
     '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
     '' '### Notes' '' "$ST_NOTE1" "$ST_NOTE2" "$ST_NOTE3" "$ST_NOTE4"
+
+  # ELEMENT 8, every state. The missing section clears for one release; a copy that
+  # dropped the check answers 0 on the three refusals.
+  ST_BODY=('## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' '')
+  ST_ROW='- Kept awk — alternatives: jq; why: no new dependency; reversible: yes'
+  st_raw 0 "a Decided without asking row" "${ST_BODY[@]}" '### Decided without asking' "$ST_ROW"
+  st_raw 0 "…a body with no such section, told for one release" "${ST_BODY[@]}"
+  st_raw 1 "…an empty section" "${ST_BODY[@]}" '### Decided without asking'
+  st_raw 1 "…rows and a none line" "${ST_BODY[@]}" '### Decided without asking' "$ST_ROW" "$ST_DECIDED"
+  st_raw 1 "…a bare none" "${ST_BODY[@]}" '### Decided without asking' 'none'
 
   printf '%s\n' "$SELFTEST_OK"
   exit 0

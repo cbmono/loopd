@@ -362,7 +362,11 @@ signature". Never on a PR body.
    (in the `project.md` your brief names) records gets one "Unapproved decision:" line in
    the comment. An `acknowledged_decisions:` entry approves its choice only when answered
    `ok` or `ack`; any other answer overturned it, so the owner's answer is the approved
-   choice and a PR that implements the original one gets the line. Style or design preference never qualifies — "grade against the criteria, not against your own taste" (`CONVENTIONS.md`).
+   choice and a PR that implements the original one gets the line. Read the PR body's
+   `### Decided without asking` rows beside those three: a declared row is reviewed on
+   its merits and not re-raised, unless it departs from a `D<n>` — then it gets the line
+   with `(departs from D<n>)`; a qualifying choice the diff shows under a section that
+   declared `none` gets the line with `(declared none)`. Style or design preference never qualifies — "grade against the criteria, not against your own taste" (`CONVENTIONS.md`).
 
    **`pass` is only ever `pass`: a non-empty `unverified_criteria` or `caveats` forces
    `changes-requested` or `inconclusive`, whichever fits.** `SCHEMA.md`'s clearance

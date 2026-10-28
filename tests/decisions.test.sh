@@ -112,6 +112,16 @@ QA="$REPO/plugin/agents/qa-reviewer.md"; S2="$REPO/plugin/tick-steps/step-2-refi
 ok "qa-reviewer's Unapproved decision check reads acknowledged_decisions:" \
    "$(grep -B4 'gets one "Unapproved decision:"' "$QA" | tr '\n' ' ' | grep -c 'answered_questions` nor the project.s `acknowledged_decisions:`' | tr -d ' ')" 1
 ok "…from the project.md its brief names" "$(grep -c 'in the `project.md` your brief names' "$QA" | tr -d ' ')" 1
+ok "…beside the PR body's Decided without asking rows, not re-raised" \
+   "$(tr '\n' ' ' < "$QA" | grep -c 'Read the PR body.s *`### Decided without asking` rows beside those three: a declared row is reviewed on *its merits and not re-raised' | tr -d ' ')" 1
+ok "…a declared row departing from a D<n> is flagged" \
+   "$(tr '\n' ' ' < "$QA" | grep -c 'unless it departs from a `D<n>` — then it gets the line *with `(departs from D<n>)`' | tr -d ' ')" 1
+ok "…and a choice under a none section is raised (declared none)" \
+   "$(tr '\n' ' ' < "$QA" | grep -c 'a qualifying choice the diff shows under a section that *declared `none` gets the line with `(declared none)`' | tr -d ' ')" 1
+for AG in software-engineer devops-engineer; do
+  ok "$AG writes Decided without asking last, a row per D<n> departure" \
+     "$(tr '\n' ' ' < "$REPO/plugin/agents/$AG.md" | grep -c 'Last, before you post: write `### Decided without asking`.* a row for any choice *that departs from a project `D<n>`' | tr -d ' ')" 1
+done
 ok "…and an overturned entry approves the answer, not the original" \
    "$(tr '\n' ' ' < "$QA" | grep -c 'the owner.s answer is the approved *choice and a PR that implements the original one gets the line' | tr -d ' ')" 1
 ok "the QA brief carries the project.md path" \
