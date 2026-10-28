@@ -1639,6 +1639,7 @@ DELIV_PATH = re.compile(
 # filesystem path (project_created). Stated as a reuse rather than a second literal:
 # two spellings of "what a slug may be" is two things to drift.
 SLUG_SEG = re.compile(DELIV_SEG)
+REPO_NWO = re.compile(r"[A-Za-z0-9._-]+/[A-Za-z0-9._-]+")
 # A date, and only a date. `timestamp:` is an ISO 8601 stamp, and anything after the
 # day — the time, a `Z`, a trailing YAML comment, a second value somebody hand-edited
 # in — is not rendered and cannot be. See project_created().
@@ -1672,6 +1673,16 @@ def bundle_deliverable(path, slug):
     if not DELIV_PATH.fullmatch(probe):
         return None
     return value if value.startswith("/projects/%s/deliverables/" % slug) else None
+
+
+def design_url(p):
+    """A github.com link to the project's design.md, or "". Built only from a repo and a
+    path that each pass a whole-value shape check, so a snapshot can name no other file."""
+    slug, repo = str(p.get("slug") or ""), str(p.get("_repo") or "")
+    if not (SLUG_SEG.fullmatch(slug) and REPO_NWO.fullmatch(repo) and ".." not in repo
+            and p.get("design") == "projects/%s/design.md" % slug):
+        return ""
+    return href("https://github.com/%s/blob/HEAD/projects/%s/design.md" % (repo, slug))
 
 
 def project_created(d, slug):
@@ -2273,7 +2284,8 @@ def render_table():
                 mine.append((g, p, {"awaiting": "close", "title": "all tasks terminal",
                                     "id": ""}, "/close-project " + str(p.get("slug") or "")))
             asks += mine
-            rows.append((g, p, done_proj, project_created(d, p.get("slug")), mine))
+            rows.append((g, dict(p, _repo=s.get("repo")), done_proj,
+                         project_created(d, p.get("slug")), mine))
 
     # Finished projects sink to the bottom, and WITHIN each half a project that wants
     # you rises above one that does not — the third channel of the awaiting weighting
@@ -2671,6 +2683,10 @@ def render_table():
                 o.append('<li><button class="dlv" data-copy="%s" data-what="Deliverable path" '
                          'title="%s">%s</button></li>' % (e(dp), e(dp), e(fname)))
             o.append("</ul></div>")
+        du = design_url(p)
+        if du:
+            o.append('<p class="design"><a href="%s" target="_blank" rel="noopener noreferrer">'
+                     'Design diagram (design.md)</a></p>' % e(du))
         o.append("</div></details></div>")
 
     # ---- the closed projects, one collapsed block, from `closed` ------------

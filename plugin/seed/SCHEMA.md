@@ -222,6 +222,9 @@ dispatches them to role agents (see the lifecycle note).
 pushed). **`deliverables/local/` is ignored, never pushed** (`/projects/*/deliverables/local/`
 in the seed `.gitignore`): customer data, ticket exports, anything PII-adjacent that must
 not reach GitHub. `CONVENTIONS.md` → "Where files go" says which file goes where.
+A **build** project may also hold **`design.md`** — optional, written by the PM at refine
+(`step-2-refine-drafts.md`), never on a research project. Its frontmatter is `type: Design`,
+`timestamp:` and `tasks:`; the shape is under `## type: Design` below.
 
 **Retention (`retain: true`) is research-shaped, for a structural reason.** A build
 project's real output is merged PRs, which live in the *product repo's* history and
@@ -417,6 +420,29 @@ text from it, `more` prints the next depth, counted per clone in the ignored
 one line in the ignored `.loopd/.answer-later`. `validate-bundle.sh` **warns** — never errors — on a `Q<n>:`
 question with no block, a block with no options, or one with fewer than three depths; an unlabelled or
 `advisor:` question is exempt. The published snapshot never carries any of it.
+
+## type: Design  (`projects/<slug>/design.md`) — optional, build projects only
+
+One Mermaid picture of what a build project will build, written by the PM at refine once
+the project's last draft is refined; its presence is the once-only receipt.
+
+```yaml
+---
+type: Design
+title: <project title> — design
+timestamp: <ISO 8601>
+tasks: [ "<component or edge> → task-NNN", ... ]   # every refined task appears
+---
+```
+
+The body is one fenced `mermaid` block (`flowchart` or `graph`) — components as nodes,
+integrations as edges, trust boundaries as `subgraph`s — then one paragraph reading it.
+**Redrawn** when a task is refined (non-empty `acceptance_criteria`, not `cancelled`) whose
+id `tasks:` lacks; `tick-delta.sh check` reports that as a `DELTA` naming the project.
+`validate-bundle.sh` errors on a mapped `task-NNN` with no file under the project's
+`tasks/`. `AWAITING.md` links it once per project, on its first promote row; the snapshot
+carries its presence and path, never its body. **No internal hostnames, no secrets, no
+customer PII** — the board links it.
 
 ## type: Agent  (`agents/index.md` lists the roster)
 

@@ -216,11 +216,12 @@ lookup() { # <path> <"trailer"|"merge">  -> prints the value, or nothing
 # greps the `* ` literally.
 row() { printf '* %s **%s** — [%s](%s) · %s\n' "$1" "$2" "$3" "$4" "$5"; }
 
-row_txt=(); row_node=(); row_sev=()
+row_txt=(); row_node=(); row_sev=(); row_design=(); cur_design=""
 node_lines=""; node=0
 sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; do) echo 2 ;; answer) echo 3 ;; review) echo 4 ;;
                         approve) echo 5 ;; merge) echo 6 ;; close) echo 7 ;; continue) echo 8 ;; *) echo 9 ;; esac; }
-add() { row_txt+=("$(row "$@")"); row_node+=("$node"); row_sev+=("$(sev_of "$2")"); }
+add() { row_txt+=("$(row "$@")"); row_node+=("$node"); row_sev+=("$(sev_of "$2")")
+        [ "$2" = approve ] && row_design+=("$cur_design") || row_design+=(""); }
 # A live task becomes a sort node whether or not it renders a row, so an edge through an
 # in-progress or other-owner task still orders what it separates.
 add_node() { # <file> <rel> <slug>
@@ -256,6 +257,7 @@ for pm in "$inst"/projects/*/project.md; do
   slug="$(basename "$(dirname "$pm")")"
   ntask=0; nterm=0; owed=0
   held=0; paused "$pm" && held=1
+  cur_design=""; [ -f "$(dirname "$pm")/design.md" ] && cur_design="${pm%project.md}design.md" && cur_design="${cur_design#"$inst"}"
 
   for f in "$(dirname "$pm")"/tasks/*.md; do
     [ -f "$f" ] || continue
@@ -421,9 +423,18 @@ if [ "$(printf '%s\n' "$ord" | grep -cE '^[0-9]+$')" != "$nrow" ] \
   ord="$(seq 0 $((nrow - 1)) 2>/dev/null)"
 fi
 [ "$nrow" -gt 0 ] || ord=""
+linked=" "
 while IFS= read -r i; do
-  [ -n "$i" ] && rows="$rows${row_txt[$i]}
+  [ -n "$i" ] || continue
+  dz="${row_design[$i]}"
+  # One design link per project: its first promote row in render order, never again.
+  if [ -n "$dz" ] && [ "${linked#* "$dz" }" = "$linked" ]; then
+    rows="$rows${row_txt[$i]} · [design]($dz)
+"; linked="$linked$dz "
+  else
+    rows="$rows${row_txt[$i]}
 "
+  fi
 done <<EOF
 $ord
 EOF
