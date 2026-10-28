@@ -17,7 +17,7 @@
 #     count then name and summing to `tools`, `-` for none; a name outside the grammar is
 #     UNKNOWN. Every reader of the old line (`total`, `series`) still reads the new one.
 #   * THE MOD'S STORE IS READ FIRST, AND ANY DOUBT ABOUT IT FALLS BACK TO THE TRANSCRIPT:
-#     a record from `loopd-mod-usage` prints the same six-key line; a corrupt file, two
+#     a record from the usage mod (core's own store file) prints the same six-key line; a corrupt file, two
 #     records, a non-number, a name outside the grammar or only the `.ended` flag is "not
 #     there" — never a figure, and never UNKNOWN while a transcript can still answer.
 #   * TOKENS, NEVER MONEY.
@@ -132,7 +132,7 @@ echo "== the mod's store is read FIRST, and the transcript is the fallback =="
 # measured on the built-in diff mod's store file. A record that AGREES with the transcript
 # above (14+100+10 = 124, cache reads 3000, 10 s, Bash×3 Edit Read, 2 errors), so the two
 # sources are compared on the same session.
-ST="$S/loopd-mod-usage_loopd-0123456789ab.json"
+ST="$S/loopd_loopd-0123456789ab.json"
 rec() { # <input> <cacheWrite> <output> <cacheRead> <ms> <toolErrors> <tools-json>
   printf '{"input":%s,"cacheWrite":%s,"output":%s,"cacheRead":%s,"ms":%s,"toolErrors":%s,"model":"m","requests":2,"turns":1,"tools":%s}' "$@"
 }
@@ -168,9 +168,9 @@ ok "a tool count that is not a number -> the transcript"       "$(run "$SID")" "
 printf '{"loopd.usage.%s":%s}\n' "$SID" "$(rec 14 100 10 3000 10000 2 '{"a tool,with:junk":1}')" > "$ST"
 ok "a tool name outside the grammar -> the transcript"         "$(run "$SID")" "$LINE"
 printf '{"loopd.usage.%s":%s}\n' "$SID" "$AGREE" > "$ST"
-printf '{"loopd.usage.%s":%s}\n' "$SID" "$(rec 1 1 1 1 1 0 '{}')" > "$S/loopd-mod-usage_loopd-ffffffffffff.json"
+printf '{"loopd.usage.%s":%s}\n' "$SID" "$(rec 1 1 1 1 1 0 '{}')" > "$S/loopd_loopd-ffffffffffff.json"
 ok "two store files carrying the id -> the transcript"         "$(run "$SID")" "$LINE"
-rm -f "$S/loopd-mod-usage_loopd-ffffffffffff.json"
+rm -f "$S/loopd_loopd-ffffffffffff.json"
 printf '{"loopd.usage.%s.ended":true}\n' "$O" > "$ST"
 ok "only the .ended flag, no transcript -> UNKNOWN"            "$(run "$O")" "usage UNKNOWN"
 printf '{"loopd.usage.%s":%s}\n' "$O" "$(rec 5 0 2 0 7 1 '{"Bash":3}')" > "$S/some-other-mod_loopd-0123456789ab.json"

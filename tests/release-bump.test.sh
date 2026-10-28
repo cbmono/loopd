@@ -236,8 +236,7 @@ bad = [i for i, l in enumerate(lines[:-1])
 print(len(bad))' "$TMP/major")" 0
 # A companion tracks core's MAJOR (plugin/README.md), so the five are not the whole set on
 # a major bump — and template-version.test.sh section 3b is what goes red if they are missed.
-# Every non-./plugin entry counts, the ai-bridge alias included: its major bump is what
-# offers the stub to an install still on ai-bridge@ai-bridge (loopd/task-007).
+# Every non-./plugin entry counts (one today, loopd-yolo; the retired alias counted too).
 NC="$(python3 -c 'import json,sys; print(sum(p.get("source") != "./plugin" for p in json.load(open(sys.argv[1]))["plugins"]))' "$REPO/.claude-plugin/marketplace.json")"
 each() { local i out=""; for i in $(seq "$NC"); do out="${out:+$out }$1"; done; printf '%s' "$out"; }
 ok "…and every companion moved to 2.0.0 in BOTH its manifests" \
@@ -282,42 +281,60 @@ for rel in (".claude-plugin/marketplace.json", src + "/.claude-plugin/plugin.jso
     io.open(root + "/" + rel, "w", encoding="utf-8").write(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
 ' "$1" "$2" "$3"
 }
+# The live marketplace carries ONE companion (loopd-yolo, since 2026-10-28), and the cases
+# below need five that differ only in what changed after the version commit, so four are
+# PLANTED as fixture companions — a manifest, a shipped file and a test, registered in the
+# fixture's marketplace — before plant_companions sets every version.
+add_companion() { # <dir> <source dir> <name> — a fixture companion, committed
+  mkdir -p "$1/$2/.claude-plugin" "$1/$2/companion" "$1/$2/tests"
+  printf '{\n  "name": "%s",\n  "version": "0.0.0",\n  "description": "fixture"\n}\n' "$3" > "$1/$2/.claude-plugin/plugin.json"
+  printf '# fixture\n' > "$1/$2/companion/x.md"
+  printf '// fixture\n' > "$1/$2/tests/x.test.ts"
+  python3 -c '
+import io, json, sys
+root, src, name = sys.argv[1], sys.argv[2], sys.argv[3]
+p = root + "/.claude-plugin/marketplace.json"
+mkt = json.load(io.open(p, encoding="utf-8"))
+mkt["plugins"].append({"name": name, "source": "./" + src, "version": "0.0.0"})
+io.open(p, "w", encoding="utf-8").write(json.dumps(mkt, indent=2, ensure_ascii=False) + "\n")
+' "$1" "$2" "$3"
+  GIT -C "$1" add -A >/dev/null; GIT -C "$1" commit -q -m "fixture: companion $3"
+}
 fixture "$TMP/comp"
 plant_five "$TMP/comp" 2.4.7
+for c in a b c d; do add_companion "$TMP/comp" "plugin-fx-$c" "loopd-fx-$c"; done
 plant_companions "$TMP/comp" 2.0.0
-printf '\n// a shipped change\n' >> "$TMP/comp/plugin-mod-pane/hooks/register.ts"
-GIT -C "$TMP/comp" commit -q -am "feat: pane change after its bump"
-printf '\n// a test change\n' >> "$TMP/comp/plugin-mod-usage/tests/usage.test.ts"
-printf '// ships nothing\n' > "$TMP/comp/plugin-mod-usage/hooks/extra.test.ts"
-GIT -C "$TMP/comp" add -A >/dev/null; GIT -C "$TMP/comp" commit -q -m "test: usage tests only"
-printf '\n// squashed with its bump\n' >> "$TMP/comp/plugin-mod-signal/hooks/register.ts"
-set_comp "$TMP/comp" plugin-mod-signal 2.0.5
-GIT -C "$TMP/comp" commit -q -am "feat: signal change and its bump in one squash"
-sed -i.bak 's/"description": "/"description": "Edited. /' "$TMP/comp/plugin-all/.claude-plugin/plugin.json"
-rm -f "$TMP/comp/plugin-all/.claude-plugin/plugin.json.bak"
-GIT -C "$TMP/comp" commit -q -am "docs: plugin-all description only"
-mkdir -p "$TMP/comp/plugin-llm/tests"; GIT -C "$TMP/comp" mv plugin-llm/companion/llm.md plugin-llm/tests/llm.md
-GIT -C "$TMP/comp" commit -q -m "refactor: a shipped llm file moves into tests/"
+printf '\n# a shipped change\n' >> "$TMP/comp/plugin-yolo/companion/AUTONOMY.md"
+GIT -C "$TMP/comp" commit -q -am "feat: yolo change after its bump"
+printf '\n// a test change\n' >> "$TMP/comp/plugin-fx-a/tests/x.test.ts"
+printf '// ships nothing\n' > "$TMP/comp/plugin-fx-a/companion/extra.test.ts"
+GIT -C "$TMP/comp" add -A >/dev/null; GIT -C "$TMP/comp" commit -q -m "test: fx-a tests only"
+printf '\n# squashed with its bump\n' >> "$TMP/comp/plugin-fx-b/companion/x.md"
+set_comp "$TMP/comp" plugin-fx-b 2.0.5
+GIT -C "$TMP/comp" commit -q -am "feat: fx-b change and its bump in one squash"
+sed -i.bak 's/"description": "/"description": "Edited. /' "$TMP/comp/plugin-fx-c/.claude-plugin/plugin.json"
+rm -f "$TMP/comp/plugin-fx-c/.claude-plugin/plugin.json.bak"
+GIT -C "$TMP/comp" commit -q -am "docs: fx-c description only"
+GIT -C "$TMP/comp" mv plugin-fx-d/companion/x.md plugin-fx-d/tests/x.md
+GIT -C "$TMP/comp" commit -q -m "refactor: a shipped fx-d file moves into tests/"
 GIT -C "$TMP/comp" update-ref refs/remotes/origin/main "$(GIT -C "$TMP/comp" rev-parse HEAD)"
 ok "--dry-run names the moved companion" \
-  "$("$BUMP" minor --dry-run --repo "$TMP/comp" | grep -c '^companion loopd-mod-pane 2.0.0 -> 2.1.0$')" 1
+  "$("$BUMP" minor --dry-run --repo "$TMP/comp" | grep -c '^companion loopd-yolo 2.0.0 -> 2.1.0$')" 1
 ok "minor on a changed companion is accepted" "$(run minor --repo "$TMP/comp")" 0
-ok "…and moves it by the same field, in BOTH manifests" "$(comp "$TMP/comp" plugin-mod-pane)" 2.1.0/2.1.0
-ok "…and a description edit after the version commit is a change" "$(comp "$TMP/comp" plugin-all)" 2.1.0/2.1.0
-ok "…and so is a shipped file renamed INTO tests/" "$(comp "$TMP/comp" plugin-llm)" 2.1.0/2.1.0
-ok "…while a tests-only change moves nothing" "$(comp "$TMP/comp" plugin-mod-usage)" 2.0.0/2.0.0
-ok "…nor does a squash that changed content AND set the version" "$(comp "$TMP/comp" plugin-mod-signal)" 2.0.5/2.0.5
-ok "…nor an untouched companion (the alias included)" \
-  "$(comp "$TMP/comp" plugin-yolo) $(comp "$TMP/comp" plugin-alias)" "2.0.0/2.0.0 2.0.0/2.0.0"
+ok "…and moves it by the same field, in BOTH manifests" "$(comp "$TMP/comp" plugin-yolo)" 2.1.0/2.1.0
+ok "…and a description edit after the version commit is a change" "$(comp "$TMP/comp" plugin-fx-c)" 2.1.0/2.1.0
+ok "…and so is a shipped file renamed INTO tests/" "$(comp "$TMP/comp" plugin-fx-d)" 2.1.0/2.1.0
+ok "…while a tests-only change moves nothing" "$(comp "$TMP/comp" plugin-fx-a)" 2.0.0/2.0.0
+ok "…nor does a squash that changed content AND set the version" "$(comp "$TMP/comp" plugin-fx-b)" 2.0.5/2.0.5
 ok "…and the commit message names each moved companion" \
-  "$(GIT -C "$TMP/comp" log -1 --format=%b | grep -cE '^companion (loopd-mod-pane|loopd-all) 2\.0\.0 -> 2\.1\.0$')" 2
+  "$(GIT -C "$TMP/comp" log -1 --format=%b | grep -cE '^companion (loopd-yolo|loopd-fx-c|loopd-fx-d) 2\.0\.0 -> 2\.1\.0$')" 3
 ok "…and template-version.test.sh passes on it" "$(harness "$TMP/comp" template-version.test.sh)" "fail=0 rc=0"
 ok "a patch right after moves nothing more" \
-  "$(run patch --repo "$TMP/comp" >/dev/null; comp "$TMP/comp" plugin-mod-pane)" 2.1.0/2.1.0
-printf '\n// another\n' >> "$TMP/comp/plugin-mod-pane/hooks/register.ts"
-GIT -C "$TMP/comp" commit -q -am "fix: pane again"
+  "$(run patch --repo "$TMP/comp" >/dev/null; comp "$TMP/comp" plugin-yolo)" 2.1.0/2.1.0
+printf '\n# another\n' >> "$TMP/comp/plugin-yolo/companion/AUTONOMY.md"
+GIT -C "$TMP/comp" commit -q -am "fix: yolo again"
 ok "…until the companion changes again, then patch moves its PATCH" \
-  "$(run patch --repo "$TMP/comp" >/dev/null; comp "$TMP/comp" plugin-mod-pane)" 2.1.1/2.1.1
+  "$(run patch --repo "$TMP/comp" >/dev/null; comp "$TMP/comp" plugin-yolo)" 2.1.1/2.1.1
 
 # No version commit to compare against must refuse, never guess: a shallow clone's
 # boundary commit LOOKS like the one that set every version.
@@ -332,10 +349,10 @@ ok "…having written nothing" "$(GIT -C "$TMP/shallow" status --porcelain | wc 
 for f in minor major; do
   fixture "$TMP/verify-$f"
   plant_companions "$TMP/verify-$f" 2.0.0
-  sed -i.bak 's|"source": "./plugin-mod-pane",|"source": "./plugin-mod-pane", "x": {"version": "0.0.0"},|' \
+  sed -i.bak 's|"source": "./plugin-yolo",|"source": "./plugin-yolo", "x": {"version": "0.0.0"},|' \
     "$TMP/verify-$f/.claude-plugin/marketplace.json"
   rm -f "$TMP/verify-$f/.claude-plugin/marketplace.json.bak"
-  printf '\n// a shipped change\n' >> "$TMP/verify-$f/plugin-mod-pane/hooks/register.ts"
+  printf '\n# a shipped change\n' >> "$TMP/verify-$f/plugin-yolo/companion/AUTONOMY.md"
   GIT -C "$TMP/verify-$f" commit -q -am "plant a disagreement"
   ok "$f: a moved companion whose manifests disagree is refused" "$(run "$f" --repo "$TMP/verify-$f")" 1
 done
