@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# session-usage.sh — what ONE detached session cost: the `loopd-mod-usage` companion's
-# plugin-store record when that mod was loaded in the session, else the session's own
-# transcript — the numbers `agent-usage.sh dispatch` records as `usage UNKNOWN` at spawn.
+# session-usage.sh — what ONE detached session cost: the usage mod's plugin-store record
+# (hooks/register.ts, the `usage` switch in /config) when it was on in the session, else
+# the session's own transcript — the numbers `agent-usage.sh dispatch` records as `usage UNKNOWN` at spawn.
 #
 #   session-usage.sh <session-id> [--store-dir <dir>] [--projects-dir <dir>] [--settle <task-doc>]
 #
@@ -72,7 +72,7 @@ emit() { # <tokens> <tools> <ms> <cached> <errors> <by> — print, settle if ask
 # not one) whose figures are all numbers — or the store said nothing.
 from_store() {
   local f hits=""
-  for f in "$store"/loopd-mod-usage_*.json; do
+  for f in "$store"/loopd_*.json; do
     hits="$hits$(jq -r --arg id "$id" '
       [to_entries[] | select(.key | startswith("loopd.usage." + $id) and (endswith(".ended") | not)) | .value]
       | select(length == 1) | .[0] | select(type == "object")

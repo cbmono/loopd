@@ -2,7 +2,37 @@
   "name": "loopd",
   "displayName": "loopd",
   "version": "3.16.1",
-  "description": "The OKF control panel as a Claude Code plugin: brief yourself (/brief-me), capture decisions (/capture), work a task in-session (/work), run the gated loop (/dispatch), hand projects over (/handoff).",
+  "description": "The OKF control panel as a Claude Code plugin: brief yourself (/brief-me), capture decisions (/capture), work a task in-session (/work), run the gated loop (/dispatch), hand projects over (/handoff) — plus three mods (usage, pane, signal), each a /config switch.",
+  "userConfig": {
+    "usage": {
+      "type": "boolean",
+      "title": "Usage mod",
+      "description": "Record each session's tokens, requests, tool calls, tool errors, wall time and model in the plugin store under loopd.usage.<session id>; session-usage.sh reads it before the transcript. Off = the transcript is read as before.",
+      "default": true
+    },
+    "pane": {
+      "type": "boolean",
+      "title": "Pane mod",
+      "description": "Register /pane, which draws this bundle's board (or, in simple mode, an inbox of questions, stuck tasks and progress) in a pane beside the session. Off = the three core renderers are all there is.",
+      "default": true
+    },
+    "paneMode": {
+      "type": "string",
+      "title": "Pane mode",
+      "description": "operator draws the full board from the snapshot; simple draws only projects, open questions and blocked tasks, from the task documents.",
+      "default": "operator",
+      "options": [
+        "operator",
+        "simple"
+      ]
+    },
+    "signal": {
+      "type": "boolean",
+      "title": "Signal mod",
+      "description": "A role agent's session tells the project-manager's session that its turn is over, the moment it is over, with one loopd-signal: line; step 4 settles that session first. Off = step 4 reads sessions exactly as before.",
+      "default": true
+    }
+  },
   "author": {
     "name": "cbmono"
   },

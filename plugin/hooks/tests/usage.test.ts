@@ -1,8 +1,10 @@
 import { expect, test } from 'claude-code/testing'
 
-// Run from this directory: `claude plugin test`. No session, no sign-in, no network.
-// Each test starts with the module freshly loaded, so the accumulator is zero.
+// Run from the plugin root: `claude plugin test`. No session, no sign-in, no network.
+// Each test starts with the module freshly loaded, so the accumulator is zero. The pane and
+// signal switches are OFF here (ONLY), so the stubs below are every hook the usage mod reaches.
 
+const ONLY = { options: { pane: false, signal: false } }
 const SID = '0a1b2c3d-1111-2222-3333-444455556666'
 const KEY = 'loopd.usage.' + SID
 const STEP_USAGE = {
@@ -35,7 +37,7 @@ async function step($: any, turnId: string, index: number) {
   return s.value
 }
 
-test('a turn\'s requests, tools, errors and wall time land in the store under the session id', async ($, on) => {
+test('a turn\'s requests, tools, errors and wall time land in the store under the session id', ONLY, async ($, on) => {
   const saved = new Map<string, unknown>()
   const logged: string[] = []
   stubs(on, saved, logged)
@@ -58,7 +60,7 @@ test('a turn\'s requests, tools, errors and wall time land in the store under th
   expect(logged.length).toBe(1)
 })
 
-test('a non-interactive session logs nothing and falls back to the turn\'s own totals', async ($, on) => {
+test('a non-interactive session logs nothing and falls back to the turn\'s own totals', ONLY, async ($, on) => {
   const saved = new Map<string, unknown>()
   const logged: string[] = []
   stubs(on, saved, logged)
@@ -74,7 +76,7 @@ test('a non-interactive session logs nothing and falls back to the turn\'s own t
   expect(saved.get(KEY)).toMatchObject({ input: 7, output: 3, cacheRead: 40, cacheWrite: 0, requests: 1, turns: 1, ms: 500 })
 })
 
-test('turn totals are never added on top of the requests already counted', async ($, on) => {
+test('turn totals are never added on top of the requests already counted', ONLY, async ($, on) => {
   const saved = new Map<string, unknown>()
   stubs(on, saved, [])
 
@@ -87,7 +89,7 @@ test('turn totals are never added on top of the requests already counted', async
   expect(saved.get(KEY)).toMatchObject({ input: 10, output: 5, requests: 1 })
 })
 
-test('the second turn accumulates onto the first', async ($, on) => {
+test('the second turn accumulates onto the first', ONLY, async ($, on) => {
   const saved = new Map<string, unknown>()
   stubs(on, saved, [])
 
@@ -99,7 +101,7 @@ test('the second turn accumulates onto the first', async ($, on) => {
   expect(saved.get(KEY)).toMatchObject({ input: 20, requests: 2, turns: 2, ms: 150 })
 })
 
-test('session.end marks the record ended and leaves the numbers', async ($, on) => {
+test('session.end marks the record ended and leaves the numbers', ONLY, async ($, on) => {
   const saved = new Map<string, unknown>()
   stubs(on, saved, [])
 
@@ -111,7 +113,7 @@ test('session.end marks the record ended and leaves the numbers', async ($, on) 
   expect(saved.get(KEY)).toMatchObject({ input: 10, requests: 1 })
 })
 
-test('without a session id nothing is written', async ($, on) => {
+test('without a session id nothing is written', ONLY, async ($, on) => {
   const saved = new Map<string, unknown>()
   // An empty id is 'no id': the mod must not invent a key for it.
   stubs(on, saved, [], '')

@@ -1,9 +1,12 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-// Run from this directory: `claude plugin test`. No session, no sign-in, no network, no
-// file: the two files the mod reads are answered by stubs on fs.exists / fs.stat / fs.read.
-// Each test starts with the module freshly loaded, so `kind` is 'unread'.
+// Run from the plugin root: `claude plugin test`. No session, no sign-in, no network, no
+// file: the files the mod reads are answered by stubs on fs.exists / fs.stat / fs.read / fs.list.
+// Each test starts with the module freshly loaded, so `kind` is 'unread'. The usage and
+// signal switches are OFF here (ONLY / SIMPLE), so the stubs below are every hook the pane
+// mod reaches; switches.test.ts is where all three run together.
 
+const ONLY = { options: { usage: false, signal: false } }
 const CWD = '/work/_loopd-example'
 const CONFIG = CWD + '/instance.config.json'
 const SNAPSHOT = CWD + '/.loopd/SNAPSHOT.json'
@@ -11,7 +14,7 @@ const PANE_ID = 'loopd-board'
 
 // What Claude Code passes a ui.render hook for this pane, apart from the surface.
 const PANE = {
-  plugin: 'loopd-mod-pane',
+  plugin: 'loopd',
   component: 'Pane',
   requestId: PANE_ID,
   viewport: { columns: 140, rows: 40, isFullscreen: true },
@@ -133,7 +136,7 @@ async function shown(ui: any): Promise<string> {
   return all.map((el: any) => el.text).join('\n')
 }
 
-test('/pane opens the pane and draws the counts, the rail, in-flight tasks and projects', async ($, on) => {
+test('/pane opens the pane and draws the counts, the rail, in-flight tasks and projects', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w)
   mock.clock(on)
@@ -168,7 +171,7 @@ test('/pane opens the pane and draws the counts, the rail, in-flight tasks and p
   await ui.unmount()
 })
 
-test('outside a loopd bundle the pane says so and draws nothing else', async ($, on) => {
+test('outside a loopd bundle the pane says so and draws nothing else', ONLY, async ($, on) => {
   const w = world(SNAP, false)   // a snapshot, but no instance.config.json: not a bundle
   stubs(on, w)
   mock.clock(on)
@@ -183,7 +186,7 @@ test('outside a loopd bundle the pane says so and draws nothing else', async ($,
   await ui.unmount()
 })
 
-test('no snapshot: the one off-switch line, with the touch that turns it on', async ($, on) => {
+test('no snapshot: the one off-switch line, with the touch that turns it on', ONLY, async ($, on) => {
   const w = world(null)
   stubs(on, w)
   mock.clock(on)
@@ -197,7 +200,7 @@ test('no snapshot: the one off-switch line, with the touch that turns it on', as
   await ui.unmount()
 })
 
-test('malformed JSON is one error line and no throw; wrong types draw as 0', async ($, on) => {
+test('malformed JSON is one error line and no throw; wrong types draw as 0', ONLY, async ($, on) => {
   const w = world('{ this is not json')
   stubs(on, w)
   mock.clock(on)
@@ -216,7 +219,7 @@ test('malformed JSON is one error line and no throw; wrong types draw as 0', asy
   await ui.unmount()
 })
 
-test('a title carrying a newline, a tab, ESC and a bidi override is drawn without them, and a number is never clipped', async ($, on) => {
+test('a title carrying a newline, a tab, ESC and a bidi override is drawn without them, and a number is never clipped', ONLY, async ($, on) => {
   const snap = JSON.parse(JSON.stringify(SNAP))
   snap.projects[0].tasks[0].title = 'Ship\nthe\u001b[2Jwidget\u202e now\tplease'
   snap.projects[0].title = 'Alpha\u0000project'
@@ -241,7 +244,7 @@ test('a title carrying a newline, a tab, ESC and a bidi override is drawn withou
   await ui.unmount()
 })
 
-test('Tick runs exactly /loopd:dispatch, once per press, never as a prompt', async ($, on) => {
+test('Tick runs exactly /loopd:dispatch, once per press, never as a prompt', ONLY, async ($, on) => {
   const w = world(SNAP)
   const clock = mock.clock(on)
   // The real engine queues a plugin's command run until the session is idle; the stub
@@ -267,7 +270,7 @@ test('Tick runs exactly /loopd:dispatch, once per press, never as a prompt', asy
   await ui.unmount()
 })
 
-test('the poll re-reads only when the mtime moved, and Refresh re-reads regardless', async ($, on) => {
+test('the poll re-reads only when the mtime moved, and Refresh re-reads regardless', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w)
   const clock = mock.clock(on)
@@ -294,7 +297,7 @@ test('the poll re-reads only when the mtime moved, and Refresh re-reads regardle
   await ui.unmount()
 })
 
-test('where no surface places the pane, one transcript line carries the summary', async ($, on) => {
+test('where no surface places the pane, one transcript line carries the summary', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w, false)   // a narrow terminal: the pane is open but waits undrawn
   mock.clock(on)
@@ -302,7 +305,7 @@ test('where no surface places the pane, one transcript line carries the summary'
   expect(w.logged).toEqual(['loopd board: 2 project(s) · 4 task(s) · 3 awaiting you'])
 })
 
-test('a non-interactive session registers the command and says nothing', async ($, on) => {
+test('a non-interactive session registers the command and says nothing', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w)
   mock.clock(on)
@@ -338,14 +341,14 @@ function bundle(snapshot: unknown | null = SNAP): World {
   for (const [path, text] of Object.entries(DOCS)) w.files.set(path, { text, mtimeMs: 1000 })
   return w
 }
-const SIMPLE = { options: { mode: 'simple' } }
+const SIMPLE = { options: { usage: false, signal: false, paneMode: 'simple' } }
 // Everything the pane shows: Text, and the labels of its Buttons and Inputs.
 async function everything(ui: any): Promise<string> {
   const els = [...await ui.findAll({ type: 'Text' }), ...await ui.findAll({ type: 'Button' }), ...await ui.findAll({ type: 'Input' })]
   return els.map((el: any) => [el.text, el.props.label, el.props.placeholder].filter(Boolean).join(' ')).join('\n')
 }
 
-test('ONE SWITCH: with no option stored, the manifest default draws the operator board', async ($, on) => {
+test('ONE SWITCH: with no paneMode stored, the manifest default draws the operator board', ONLY, async ($, on) => {
   const w = bundle()
   stubs(on, w)
   mock.clock(on)
@@ -357,9 +360,9 @@ test('ONE SWITCH: with no option stored, the manifest default draws the operator
   await ui.unmount()
 })
 
-test('ONE SWITCH: instance.config.json saying simple does not switch the mode — only the option does', async ($, on) => {
+test('ONE SWITCH: instance.config.json saying simple does not switch the mode — only the option does', ONLY, async ($, on) => {
   const w = bundle()
-  w.files.set(CONFIG, { text: '{"mode":"simple","pane":{"mode":"simple"}}', mtimeMs: 1 })
+  w.files.set(CONFIG, { text: '{"paneMode":"simple","pane":{"mode":"simple"}}', mtimeMs: 1 })
   stubs(on, w)
   mock.clock(on)
   await open($)

@@ -1140,9 +1140,8 @@ fi
 add s owner "$ov" "$os"
 
 # Which Claude login the session is on — docs/operations.md, "The session banner".
-# CLAUDE_CONFIG_DIR BEFORE $HOME: the accounts companion switches accounts by pointing it at
-# ~/.claude-accounts/<name>, so a reader "simplified" to $HOME prints the account the
-# session is NOT on.
+# CLAUDE_CONFIG_DIR BEFORE $HOME: a session started under another config dir is on THAT
+# login, so a reader "simplified" to $HOME prints the account the session is NOT on.
 cc_dir="${CLAUDE_CONFIG_DIR:-${HOME:-}}"
 # `-n "$dump"` though this value is in neither config file: §6 withholds the WHOLE settings
 # block when the resolver is missing, and one row under its header reads as a table that
@@ -1236,38 +1235,11 @@ if [ "$FULL" -eq 1 ]; then
 fi
 
 # ---------------------------------------------------------------------------------------
-# 4b. ACCOUNT — three renderings, because two states that print nothing are one state.
+# 4b. BACKEND — read from THIS PROCESS'S ENVIRONMENT, never from anything installed.
 # ---------------------------------------------------------------------------------------
-# Speak (on the declared account), speak differently (wrong account, or none), stay silent
-# (no accounts companion, or nothing declared). resolve-account.sh decides; the
-# banner never reads a credential and never runs the companion's launcher.
-if [ -n "$bin" ] && [ -f "$bin/resolve-account.sh" ]; then
-  acct_line="$(bash "$bin/resolve-account.sh" --bundle "$root" 2>/dev/null)"; acct_rc=$?
-  acct_declared="$(cell "$(printf '%s' "$acct_line" | cut -f1)")"
-  acct_active="$(cell "$(printf '%s' "$acct_line" | cut -f2)")"
-  acct_launcher="$(printf '%s' "$acct_line" | cut -f3)"
-  case "$acct_rc" in
-    0) echo
-       echo "Account ${acct_declared} — active"
-       ;;
-    3) echo
-       say "$C_PINK" "⚠️  WRONG CLAUDE ACCOUNT — this bundle is ${acct_declared}, the session is ${acct_active}"
-       echo "    Everything you run here bills and reads as the wrong organisation. Restart:"
-       printf '        %s\n' "$acct_launcher"
-       ;;
-    4) echo
-       say "$C_PINK" "⚠️  NO CLAUDE ACCOUNT SELECTED — this bundle declares ${acct_declared}"
-       echo "    The session was not started by the account launcher. Restart:"
-       printf '        %s\n' "$acct_launcher"
-       ;;
-  esac
-fi
-
-# ---------------------------------------------------------------------------------------
-# 4c. BACKEND — read from THIS PROCESS'S ENVIRONMENT, not from an installed companion.
-# ---------------------------------------------------------------------------------------
-# Gating it on the llm companion would stay silent for a hand-exported
-# substitution, which is exactly the accident it exists for.
+# Gating it on an installed launcher would stay silent for a hand-exported substitution,
+# which is exactly the accident it exists for. (An account row used to sit here, read
+# through resolve-account.sh from the accounts companion; both retired 2026-10-28.)
 if [ -n "${ANTHROPIC_BASE_URL:-}" ]; then
   backend="$(cell "$(printf '%s' "$ANTHROPIC_BASE_URL" | sed -e 's#^[A-Za-z][A-Za-z0-9+.-]*://##' -e 's#[/?].*##')")"
   echo
