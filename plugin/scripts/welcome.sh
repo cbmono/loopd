@@ -123,6 +123,7 @@ config-uncommitted|ambiguous|yes
 config-layers|ambiguous|no
 config-unknown-keys|ambiguous|yes
 review-config|ambiguous|yes
+output-style|ambiguous|no
 tick-lock|human|yes
 orphan-processes|human|yes'
 
@@ -902,7 +903,7 @@ boardArtifactUrl"
     while IFS= read -r k; do
       [ -n "$k" ] || continue
       case "$k" in \$*) continue ;; esac
-      if ! printf '%s\n' "$fknown" | grep -qFx -- "$k"; then
+      if ! grep -qFx -- "$k" <<<"$fknown"; then
         unknown="${unknown:+$unknown }$f:$k"
       fi
     done <<EOF
@@ -923,7 +924,7 @@ EOF
       [ -n "$e" ] || continue
       lv=""; for l in $EFFORT_LEVELS; do [ "$v" = "$l" ] && lv=1; done
       [ -n "$lv" ] || { effort="${effort:+$effort }$f:roleEffort.$e=$v"; continue; }
-      printf '%s\n' "$tiers" | grep -qFx -- "$e" && continue
+      grep -qFx -- "$e" <<<"$tiers" && continue
       case "$agents " in *" $e.md "*) continue ;; esac
       effort="${effort:+$effort }$f:roleEffort.$e(no roleTiers twin)"
     done <<EOF
@@ -992,6 +993,55 @@ check_review_config() {
   if [ -n "$keys" ]; then warn "review-round config not an integer >= 0: $keys"
   else warn "review-round config could not be read"; fi
   return "$_warned"
+}
+
+# =========================================================================================
+# CHECK 6b — output-style (AMBIGUOUS — never repaired)
+# =========================================================================================
+# THE FACT: whether this bundle's own `.claude/settings.json` selects the Brief output
+# style the seed ships at `.claude/output-styles/brief.md` — the `Needs you:` contract every
+# report in a bundle is written to. Two files, two owners: the style FILE is seed content, so a
+# stamp delivers it to a bundle that lacks it (seeds only what is absent); the settings KEY
+# is config, copied once and never merged, so a bundle stamped before 2026-10-28 never
+# receives it — and without it the style is a file nothing selects. This row says which of
+# the two is missing and prints the one-line fix. It writes neither: config files are the
+# human's (CHECK 4), and a style selection is a per-bundle choice this script must not make.
+# A DIFFERENT style selected on purpose is a choice, not a problem — reported as ✓ with the
+# name, never as ⚠. OFF THE BANNER PATH (`no`): a one-time nudge belongs in `check` and in the
+# init pass that follows every plugin update, not on every session's first screen. Measured 2026-10-28 on Claude Code 2.1.312: a project-level
+# `.claude/output-styles/<name>.md` is loaded; the same file inside a plugin is not.
+check_output_style() {
+  _warned=0
+  local style_file="$ROOT/.claude/output-styles/brief.md" settings="$ROOT/.claude/settings.json" sel=""
+  if [ -f "$settings" ] && command -v python3 >/dev/null 2>&1; then
+    sel="$(python3 - "$settings" <<'PY' 2>/dev/null
+import json,sys
+try:
+    d=json.load(open(sys.argv[1]))
+    v=d.get("outputStyle","")
+    print(v if isinstance(v,str) else "")
+except Exception:
+    print("")
+PY
+)"
+  fi
+  if [ ! -f "$style_file" ]; then
+    warn "output style: the seed's .claude/output-styles/brief.md is not in this bundle"
+    hint "/${PLUGIN_NAME}:init $ROOT   (a stamp seeds what is absent)"
+    return "$_warned"
+  fi
+  case "$sel" in
+    Brief)
+      good "output style: Brief — .claude/settings.json selects the seed's brief.md"
+      return 0 ;;
+    "")
+      warn "output style: .claude/output-styles/brief.md is here but .claude/settings.json selects no outputStyle"
+      hint "add \"outputStyle\": \"Brief\" to $ROOT/.claude/settings.json (a bundle stamped before 2026-10-28 never received the key)"
+      return "$_warned" ;;
+    *)
+      good "output style: $sel — a choice of this bundle's own (the seed's Brief is at .claude/output-styles/brief.md)"
+      return 0 ;;
+  esac
 }
 
 # =========================================================================================
