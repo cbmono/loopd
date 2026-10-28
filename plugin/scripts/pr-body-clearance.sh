@@ -399,29 +399,29 @@ authored_half() { # <src> <dst>
 # own criteria table's criterion cells. ONE unit for both terms, chosen once — bytes off
 # code points would over-subtract every multibyte glyph, which fails open.
 counted_chars() { # <raw-body> -> "<counted> <criteria-exempt> <decisions-exempt>"; leaves $TMPD/authored
-  local n c d
+  local n c d unit=bytes
   authored_half "$1" "$TMPD/authored"
   render_body "$TMPD/authored" "$TMPD/authored.rendered"
   table_scan "$TMPD/authored.rendered" \
     | awk '/^criterion\t/ { sub(/^criterion\t/, ""); print }' > "$TMPD/criteria"
   decided_scan "$TMPD/authored.rendered" \
     | awk '/^decision\t/ { sub(/^decision\t/, ""); print }' > "$TMPD/decisions"
-  n="$(char_count "$TMPD/authored")"
-  c="$(capped_sum "$TMPD/criteria")"; d="$(capped_sum "$TMPD/decisions")"
+  command -v jq >/dev/null 2>&1 && jq -n 1 >/dev/null 2>&1 && unit=cp
+  if [ "$unit" = cp ]; then n="$(jq -Rs 'length' < "$TMPD/authored" 2>/dev/null)"
+  else n="$(LC_ALL=C wc -c < "$TMPD/authored" | tr -d ' ')"; fi
+  c="$(capped_sum "$unit" "$TMPD/criteria")"; d="$(capped_sum "$unit" "$TMPD/decisions")"
   case "$n$c$d" in ''|*[!0-9]*) return 2 ;; esac
   printf '%s %s %s\n' "$(( n - c - d ))" "$c" "$d"
 }
 
-capped_sum() { # <one-exempt-text-per-line> -> its length, each line capped at the allowance
-  local s
-  if command -v jq >/dev/null 2>&1 \
-     && s="$(jq -Rn --argjson cap "$CRITERION_ALLOWANCE" \
-               '[inputs | length | if . > $cap then $cap else . end] | add // 0' \
-               < "$1" 2>/dev/null)" && [ -n "$s" ]; then
-    printf '%s' "$s"; return 0
+capped_sum() { # <cp|bytes> <one-exempt-text-per-line> -> its length, each line capped
+  if [ "$1" = cp ]; then
+    jq -Rn --argjson cap "$CRITERION_ALLOWANCE" \
+      '[inputs | length | if . > $cap then $cap else . end] | add // 0' < "$2" 2>/dev/null
+  else
+    LC_ALL=C awk -v cap="$CRITERION_ALLOWANCE" \
+      '{ l = length($0); s += (l > cap ? cap : l) } END { print s + 0 }' "$2"
   fi
-  LC_ALL=C awk -v cap="$CRITERION_ALLOWANCE" \
-    '{ l = length($0); s += (l > cap ? cap : l) } END { print s + 0 }' "$1"
 }
 
 # What the caller is measured on, said before the verdict. The second line only appears
