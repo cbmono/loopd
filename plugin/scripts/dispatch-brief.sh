@@ -4,7 +4,7 @@
 # one line telling the agent to draft the missing doc); `## Effort`, the files/LOC/turns
 # budget; `## Commit attribution` and `## PR title`, the resolved `commitAttribution` and
 # `ticketPrefix`; `## Scratch`, a directory this task alone owns; `## Deliverables`, the
-# project's non-code paths; `## Signature`, the role-signature.sh call with this bundle;
+# project's non-code paths and its `project.md`; `## Signature`, the role-signature.sh call with this bundle;
 # and `## Knowledge`, kb-select.sh's 1-5 Finding rows.
 # Usage: dispatch-brief.sh <task-doc> [--instance <bundle>]. Exit: 0 printed, 2 cannot
 # answer (no task doc, unreadable frontmatter). Never fails a dispatch — an absent config
@@ -212,6 +212,7 @@ printf '\n%s\n\n' "$DELIVERABLES_HEADING"
 printf 'A file a human or a later task consumes (sheet, instructions, export, report): %s/deliverables/ — and list it in this task'"'"'s `artifacts:`.\n' "$PROJ"
 printf 'Customer data, ticket exports, anything PII-adjacent: %s/deliverables/local/ (gitignored, never pushed). Inputs you gather: %s/sources/.\n' "$PROJ" "$PROJ"
 printf 'Never `~`, `/`, another repo or the bundle root — ask in `open_questions`. Hand a file over by this project path (CONVENTIONS.md → "Where files go").\n'
+printf 'Project decisions: %s/project.md — a choice that departs from one of its `D<n>` rows is a row under your PR body'"'"'s `### Decided without asking`.\n' "$PROJ"
 
 # An agent runs in a target-repo worktree, where the helper cannot find ownerGithubUser
 # unless it is handed the bundle.

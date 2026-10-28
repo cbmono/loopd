@@ -250,6 +250,8 @@ assert "the Deliverables heading is emitted"         "$(has "/projects/demo/deli
 assert "…with the gitignored local/ subfolder"       "$(has "/projects/demo/deliverables/local/ (gitignored" "$D1")"
 assert "…and the project's sources/"                 "$(has "/projects/demo/sources/" "$D1")"
 assert "…and it rules out ~ and the bundle root"     "$(has 'Never `~`, `/`, another repo or the bundle root' "$D1")"
+assert "…and names the project.md a D<n> departure is checked against" \
+  "$(has "/projects/demo/project.md — a choice that departs from one of its \`D<n>\` rows is a row under your PR body's \`### Decided without asking\`." "$D1")"
 cp "$TMP/projects/demo/tasks/task-101-alpha.md" "$TMP/loose.md"
 D2="$(dlv "$(run "$TMP/loose.md")")"
 assert "a task outside projects/<slug>/tasks/ gets the placeholder" \

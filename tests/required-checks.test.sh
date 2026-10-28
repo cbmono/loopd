@@ -185,7 +185,11 @@ Verified: `a.test.sh` 3/0 on [run 1](https://example.invalid/actions/runs/1).
 
 | Criterion | ✓ | Verified by |
 |---|---|---|
-| it works | ✓ | `a.test.sh` 3/0 |'
+| it works | ✓ | `a.test.sh` 3/0 |
+
+### Decided without asking
+
+none — every choice is named by a criterion.'
 
 pr_body() { # <body text> — at <head>, defaulting to whatever pr_meta says
   [ "$HAVE_JQ" = 1 ] || return 0
