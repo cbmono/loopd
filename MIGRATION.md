@@ -1,4 +1,37 @@
-# Migrating from ai-bridge to loopd
+# Migrating
+
+## 2026-10-28 — two plugins: the mods are core, seven entries retired
+
+The marketplace now lists exactly two plugins, `loopd` and `loopd-yolo`. The three mods live
+**in core** as `plugin/hooks/register.ts`, each a switch in `/config` (the plugin's
+`userConfig`: `usage`, `pane` + `paneMode`, `signal` — all on by default, off registers
+nothing). Everything else is retired, so on **each machine**:
+
+```text
+/plugin update loopd@loopd
+/plugin uninstall loopd-mod-usage@loopd
+/plugin uninstall loopd-mod-pane@loopd
+/plugin uninstall loopd-mod-signal@loopd
+/plugin uninstall loopd-all@loopd
+/plugin uninstall ai-bridge@loopd
+/plugin uninstall loopd-accounts@loopd
+/plugin uninstall loopd-llm@loopd
+```
+
+Restart Claude Code. A name you never installed errors harmlessly; `/plugin` → Installed
+shows what is there.
+
+| Retired | Why | What replaces it |
+|---|---|---|
+| `loopd-mod-usage`, `loopd-mod-pane`, `loopd-mod-signal` | a mod observes, records or draws and removes no gate, so the companion shape bought nothing a switch does not | core — `/config` → `usage`, `pane` (`paneMode`), `signal`; `plugin/hooks/MODS.md`. The store keys are unchanged (`loopd.usage.*`, `loopd.pm.*`, `loopd.signal.*`); the store **file** is now core's own, `loopd_loopd-….json`, so a session still running the old mod is read from its transcript — the same fallback as before |
+| `loopd-all` | with the mods in core it would bundle only core and `yolo`, and a one-command install that includes `yolo` makes delegated autonomy a default instead of a choice — the reason `yolo` is separate | `/plugin install loopd@loopd`, and `loopd-yolo@loopd` only where you mean it |
+| `ai-bridge` (the rename alias) | kept for one release since 3.0.0 (2026-10-01) | the section below, if you still run `/ai-bridge:*` |
+| `loopd-accounts`, `loopd-llm` | verified 2026-10-28: installed nowhere, no bundle sets `account`, no `~/.claude-accounts`, no launcher on any PATH | nothing — core already behaved as if they were absent. `resolve-account.sh`, the banner's account row, the seed's `account` key and SCHEMA's `allowSubstituteBackend` row are gone; an `account: null` left in an older bundle's `instance.config.json` is inert. The banner's `NOT ANTHROPIC` warning still reads `ANTHROPIC_BASE_URL` from its own environment |
+
+Nothing in a bundle changes. Re-pin a `permissions.allow` rule or a shell alias that named
+`cache/*/loopd-accounts/*` or `cache/*/loopd-llm/*` by deleting it.
+
+## 2026-10-01 — from ai-bridge to loopd
 
 The plugin, its marketplace, its companions and this repository are renamed `loopd`
 (loopd/task-007) and released as 3.0.0 (task-008). Until that release reaches your

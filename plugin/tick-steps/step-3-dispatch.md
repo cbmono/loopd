@@ -225,7 +225,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    told.** A detached session sends you no notification at all, so every dispatch made
    here is checked by a LATER tick —
    `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>`, per step 4. (The
-   optional `loopd-mod-signal` companion can deliver one `loopd-signal:` line sooner;
+   signal mod — a `/config` switch, on by default — can deliver one `loopd-signal:` line sooner;
    step 4 says what it is worth — the order of its sweep, never a verdict.) Note it now: waiting for
    a report is the coupling this whole step exists to remove, and the report was never
    trustworthy anyway (`docs/pm-design.md#step-3`).

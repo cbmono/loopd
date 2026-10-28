@@ -481,8 +481,8 @@ launcher's release point are untouched.
    **Closed since:** the numbers were never gone, only unreported. A top-level session
    writes its own transcript, one file per session id, with a usage block on every
    assistant message; `session-usage.sh` reads that one file after the session ends —
-   or, where the optional `loopd-mod-usage` companion was loaded in the session, its
-   plugin-store record first ([`plugin-mod-usage/README.md`](../plugin-mod-usage/README.md))
+   or, where the usage mod was on in the session (a `/config` switch, default on), its
+   plugin-store record first ([`plugin/hooks/MODS.md`](../plugin/hooks/MODS.md))
    — and `agent-usage.sh settle` fills the line (step 4). Two things it must hold: **one
    message, one count** — a transcript repeats a message's usage on each content block's
    line, measured at 2.2 lines per message, so a per-line sum doubles the figure — and
@@ -650,8 +650,8 @@ never re-earned — re-reviewing an unchanged head reaches the same verdict by
 construction and costs a full reviewer session, the same economics as the role agents'
 "one review per PR" rule.
 
-**Why a `loopd-signal:` line orders the sweep and decides nothing.** The optional
-`loopd-mod-signal` companion (`plugin-mod-signal/`) lets a role agent's session send the
+**Why a `loopd-signal:` line orders the sweep and decides nothing.** The signal mod
+(`plugin/hooks/register.ts`, a `/config` switch, default on) lets a role agent's session send the
 PM session one line the moment its `turn.complete` fires — a detached `--bg` session stays
 alive and idle after its brief is answered and never fires `session.end`, measured
 2026-10-09 on 2.1.293 (`docs/spikes/mods-in-background-sessions.md`), so that is the
@@ -663,7 +663,7 @@ a turn while their work sat uncommitted. The mod itself reads no task document, 
 no status, submits no prompt and consumes no message; delivery is best-effort
 (`isDelivered: false` is normal for a session that holds or refuses inbound messages, and
 the mod stops sending after two) and the store record `loopd.signal.<session id>` is
-written before the message so the durable half never depends on it. Absent the companion,
+written before the message so the durable half never depends on it. With the mod off,
 no line arrives and step 4 runs exactly as before.
 
 **Why HOLD is the default and the ASK fires only on the spend, measured 2026-08-31 on

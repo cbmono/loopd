@@ -1,20 +1,150 @@
-// loopd-mod-pane — the bundle's board, drawn in a pane of the session that opens it.
+// loopd — the three mods, in one hooks module Claude Code runs IN-PROCESS in every session
+// that loads the plugin. Each is an on/off switch in `/config` (the plugin's `userConfig`,
+// read off register's `options` and from nowhere else), default ON:
 //
-// TWO MODES, decided by the `mode` userConfig field alone (register's `options`):
+//   · usage  — what this session spent, written to the plugin store after every turn under
+//              `loopd.usage.<session id>`, and `loopd.usage.<session id>.ended` at session end.
+//              Core's plugin/scripts/session-usage.sh reads that record before the transcript.
+//   · pane   — `/pane`, a pane beside the transcript drawing this bundle's board from
+//              `.loopd/SNAPSHOT.json` (operator mode, with Tick and Refresh), or — `paneMode:
+//              simple` — an inbox of open questions, stuck tasks and progress read from the
+//              task documents, every button one slash command.
+//   · signal — a role agent's session tells the project-manager's session that its turn is
+//              over, the moment it is over, instead of step 4 finding out at the next tick.
+//
+// Observe only: every hook hands the event on unchanged. None of the three calls a model,
+// decides a permission, starts a process, reaches the network or the environment, writes a
+// file, or walks up from the cwd — tests/mods.test.sh in cbmono/loopd asserts each absence on
+// this source, so none of those is spelled here even as a call. What it reads, exactly, is
+// hooks/MODS.md → "What it reads", and that harness asserts every path literal below is in it.
+//
+// Until 2026-10-28 these were three companion plugins (loopd-mod-usage, loopd-mod-pane,
+// loopd-mod-signal); MIGRATION.md says how to uninstall those. Their kit tests ship beside
+// this file under hooks/tests/ — `claude plugin test plugin` runs them.
+
+// ======================================================================== shared helpers
+const CONFIG = 'instance.config.json'
+
+function num(v: unknown): number {
+  return typeof v === 'number' && isFinite(v) && v >= 0 ? Math.floor(v) : 0
+}
+async function cwdOf($: any): Promise<string> {
+  let cwd: unknown = null
+  try { cwd = await $.session.cwd() } catch { cwd = null }
+  const s = raw(cwd).replace(/\/+$/, '')
+  return s.startsWith('/') ? s : ''
+}
+async function exists($: any, path: string): Promise<boolean> {
+  try { return (await $.fs.exists(path)) === true } catch { return false }
+}
+async function sessionId($: any): Promise<string> {
+  let id: unknown = null
+  try { id = await $.session.id() } catch { id = null }
+  return raw(id)
+}
+// A string as given, or ''. The pane's `str` below cleans for the terminal; this one does not.
+function raw(v: unknown): string { return typeof v === 'string' ? v : '' }
+
+// ======================================================================== usage
+// Request-level usage (turn.step results) is the primary source; the turn's own totals on
+// turn.complete are the fallback for a turn whose steps carried none, never a second count.
+type Usage = {
+  input_tokens?: unknown
+  output_tokens?: unknown
+  cache_read_input_tokens?: unknown
+  cache_creation_input_tokens?: unknown
+  model?: unknown
+}
+
+type UsageRecord = {
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+  requests: number
+  turns: number
+  ms: number
+  model: string | null
+  tools: { [name: string]: number }
+  toolErrors: number
+}
+
+const acc: UsageRecord = {
+  input: 0, output: 0, cacheRead: 0, cacheWrite: 0,
+  requests: 0, turns: 0, ms: 0, model: null, tools: {}, toolErrors: 0,
+}
+let stepUsageThisTurn = false
+
+function add(u: unknown): boolean {
+  if (!u || typeof u !== 'object') return false
+  const usage = u as Usage
+  acc.input += num(usage.input_tokens)
+  acc.output += num(usage.output_tokens)
+  acc.cacheRead += num(usage.cache_read_input_tokens)
+  acc.cacheWrite += num(usage.cache_creation_input_tokens)
+  acc.requests += 1
+  if (typeof usage.model === 'string' && usage.model) acc.model = usage.model
+  return true
+}
+
+// Without a session id there is no key, and a record under a made-up key would be a
+// number nothing can attribute — so nothing is written.
+async function save($: any, ended: boolean, knownId?: unknown): Promise<void> {
+  let id: unknown = typeof knownId === 'string' && knownId ? knownId : null
+  if (!id) { try { id = await $.session.id() } catch { id = null } }
+  if (typeof id !== 'string' || !id) return
+  await $.store.set('loopd.usage.' + id, { ...acc, tools: { ...acc.tools } })
+  if (ended) await $.store.set('loopd.usage.' + id + '.ended', true)
+}
+
+// session.start: one line, and only where somebody can see it: a `claude -p` or `--bg`
+// session has no surface, and a line there would reach the transcript instead.
+function usageStart($: any, e: any): void {
+  if (e && e.isInteractive === true) {
+    $.ui.log('recording this session\'s usage in the plugin store as loopd.usage.<session id>')
+  }
+}
+// turn.complete: count the turn, then write the record.
+async function usageTurn($: any, e: any): Promise<void> {
+  acc.turns += 1
+  acc.ms += num(e ? e.durationMs : 0)
+  if (!stepUsageThisTurn) add(e ? e.usage : null)
+  stepUsageThisTurn = false
+  await save($, false)
+}
+
+function registerUsage(on: any) {
+  on('turn.step', async function* ($: any, e: any, next: any) {
+    const result = yield* next(e)
+    if (result && add(result.usage)) stepUsageThisTurn = true
+    return result
+  })
+
+  // A gating hook: if this one throws, the call still goes through (fail open).
+  on('tool.call', async ($: any, e: any, next: any) => {
+    const result = await next(e)
+    const name = e && typeof e.tool === 'string' && e.tool ? e.tool : 'unknown'
+    acc.tools[name] = (acc.tools[name] || 0) + 1
+    if (result && result.isError === true) acc.toolErrors += 1
+    return result
+  }).catch(($: any, e: any, next: any) => next(e))
+
+  // session.end carries the ending session's id itself (measured 2026-10-09, 2.1.293).
+  on('session.end', async ($: any, e: any, next: any) => {
+    await save($, true, e ? e.sessionId : null)
+    return next(e)
+  })
+}
+
+// ======================================================================== pane
+// TWO MODES, decided by the `paneMode` userConfig field alone (register's `options`):
 // operator — the fourth renderer over `.loopd/SNAPSHOT.json` (docs/conventions.md §11), with
 // Tick and Refresh; simple — an inbox of open questions, stuck tasks and progress, read from
-// the task documents, every button one slash command. What each mode reads is README.md → "What it
-// reads", asserted by tests/mods.test.sh. Untrusted text and types: every string through
-// clean(), every number through toint(), none truncated (conventions 11d, 11e).
-//
-// NEVER: a model call, a hook on the permission event, a process, the network, the
-// environment, a file write, a walk up from the cwd — tests/mods.test.sh asserts each
-// absence on this source, so none of those is spelled here even as a comment.
-
+// the task documents, every button one slash command. Untrusted text and types: every string
+// through clean(), every number through toint(), none truncated (conventions 11d, 11e).
 const PANE = 'loopd-board'
 const COMMAND = 'pane'
 const TITLE = 'loopd board'
-const CONFIG = 'instance.config.json'
 const SNAPSHOT = '.loopd/SNAPSHOT.json'
 const POLL_MS = 5000
 const DISPATCH = 'loopd:dispatch'   // the command, without its slash, as $.command.run names it
@@ -23,7 +153,7 @@ const VERBS = ['approve', 'answer', 'merge', 'unblock', 'close'] as const
 const ANSWER = 'loopd:answer'
 const NEW_PROJECT = 'loopd:new-project'
 // The simple mode's whole walk. The list and read calls below are derived from these two
-// globs, so the README's declaration of them is the declaration of the walk.
+// globs, so MODS.md's declaration of them is the declaration of the walk.
 const TASK_DOCS = 'projects/*/tasks/*.md'
 const PROJECT_DOC = 'projects/*/project.md'
 const [PROJECTS_DIR, , TASKS_DIR, TASK_GLOB] = TASK_DOCS.split('/')
@@ -334,9 +464,9 @@ function quoted(s: string, i: number): [string, number] | null {
   }
   return null
 }
-function scalar(raw: string | undefined): string {
-  if (raw === undefined) return ''
-  const v = raw.trim()
+function scalar(field: string | undefined): string {
+  if (field === undefined) return ''
+  const v = field.trim()
   if (v[0] === '"' || v[0] === "'") { const r = quoted(v, 0); return r ? r[0] : '' }
   return v.split(/[ \t]#/)[0].trim()
 }
@@ -748,26 +878,27 @@ function summarySimple(): string {
   return 'loopd: ' + simple.length + ' project(s) · ' + inbox().length + ' question(s) for you · ' + tasks(helps).length + ' blocked'
 }
 
-// ---------------------------------------------------------------- hooks
 // true when what the pane draws may have changed.
 async function reread($: any, force: boolean): Promise<boolean> {
   if (MODE === 'simple') return refreshSimple($)
   const before = reads; await refresh($, force); return reads !== before
 }
 
-export function register(on: any, options?: any) {
-  MODE = options && options.mode === 'simple' ? 'simple' : 'operator'
-  on('session.start', async ($: any, e: any, next: any) => {
-    // `immediate` so /pane opens while a turn is streaming. A taken name throws and
-    // would skip the rest of this hook, so it is caught and said once, where someone can see it.
-    try {
-      await $.command.register({ name: COMMAND, description: 'Draw this bundle\'s loopd board in a pane', immediate: true })
-    } catch (err: any) {
-      if (e && e.isInteractive === true) $.ui.log('/' + COMMAND + ' not registered: ' + clean(err && err.message ? err.message : String(err)))
-    }
-    return next(e)
-  })
+// session.start: `immediate` so /pane opens while a turn is streaming. A taken name throws
+// and would skip the rest of the hook, so it is caught and said once, where someone can see it.
+async function paneStart($: any, e: any): Promise<void> {
+  try {
+    await $.command.register({ name: COMMAND, description: 'Draw this bundle\'s loopd board in a pane', immediate: true })
+  } catch (err: any) {
+    if (e && e.isInteractive === true) $.ui.log('/' + COMMAND + ' not registered: ' + clean(err && err.message ? err.message : String(err)))
+  }
+}
+// turn.complete: release a held answer whose own turn ended with its document unmoved.
+async function paneTurn($: any, e: any): Promise<void> {
+  try { await settle($, e) } catch { /* the next poll reads again */ }
+}
 
+function registerPane(on: any) {
   on('command.run', { command: COMMAND }, async ($: any) => {
     await reread($, true)
     let placed = false
@@ -782,11 +913,6 @@ export function register(on: any, options?: any) {
     return {}
   }).catch(async (_$: any, e: any, next: any) => next(e))   // fail OPEN: a broken pane never eats the command
 
-  on('turn.complete', async ($: any, e: any, next: any) => {
-    try { await settle($, e) } catch { /* the next poll reads again */ }
-    return next(e)
-  })
-
   on('ui.close', { id: PANE }, async (_$: any, e: any, next: any) => {
     if (timer) { try { timer.cancel() } catch { /* already gone */ } timer = null }
     return next(e)
@@ -799,4 +925,190 @@ export function register(on: any, options?: any) {
     }
     return MODE === 'simple' ? drawSimple($, e) : draw($, e)
   })
+}
+
+// ======================================================================== signal
+// ONE SIDE OR THE OTHER, told apart by the working directory and nothing else:
+//
+//   · the PM side runs in a bundle root (`<cwd>/instance.config.json` exists). At
+//     session.start it writes `loopd.pm.<bundle root>` = { sessionId, at } to the plugin
+//     store, so a role agent of that bundle can find the session to tell. Newest wins;
+//     a stale entry costs nothing, because a send to a gone session is `isDelivered: false`.
+//   · the role side runs in a linked worktree of a repo `link-repos.sh` marked. At every
+//     turn.complete of the MAIN loop it resolves the bundle the way the plugin's
+//     deny-destructive.sh guard does — `<cwd>/.git` is a FILE naming the gitdir, the gitdir's
+//     `commondir` names the common dir, `<common>/loopd-bundle` names the bundle, and the
+//     bundle must hold `instance.config.json` — writes `loopd.signal.<session id>` to the
+//     store (the durable half, readable whether or not any message lands), and sends the PM
+//     session ONE line. Every step that fails ends the hook silently: a main clone (`.git` a
+//     directory), a repo with no marker, a marker naming nothing — each is "not a role
+//     agent", the same absence-is-silence rule the deny hook keeps (docs/conventions.md §19).
+//
+// `turn.complete` is the end-of-work moment, not `session.end`: a `claude --bg` session stays
+// alive and idle after its brief is answered and never fires session.end (measured
+// 2026-10-09 on 2.1.293, docs/spikes/mods-in-background-sessions.md). A subagent's turn
+// fires turn.complete too, with `agentId` set — an Explore child of a role agent is not the
+// role agent finishing, so those are skipped.
+//
+// THE LINE ORDERS STEP 4 AND DECIDES NOTHING. Nothing here reads a task document, decides a
+// status, submits a prompt or consumes a message: `check-dispatch.sh` is report-only because
+// a checker that acted on its own reading would automate the loop's most expensive failure
+// (plugin/seed/CONVENTIONS.md), and a signal that advanced a task would be that checker. The
+// `session.receive` hook below passes every message through unchanged; it exists so the
+// pass-through is stated and tested, not implied.
+const GIT = '.git'
+const COMMONDIR = 'commondir'
+const MARKER = 'loopd-bundle'
+const PM_KEY = 'loopd.pm.'
+const SIGNAL_KEY = 'loopd.signal.'
+const PREFIX = 'loopd-signal:'
+// After this many undelivered sends in one session the role side stops sending and keeps
+// writing the store: a session that refuses or holds inbound messages is not spammed, and
+// step 4 still has the record.
+const MAX_FAILED_SENDS = 2
+
+// Module state. A reload starts it over; the store is the durable copy.
+let turns = 0
+let failedSends = 0
+
+// The one line the PM reads must stay one line: a path is a filename, and a filename may
+// carry a newline or an ESC on this platform (docs/conventions.md §12). Control characters
+// become one space; nothing else is touched.
+function oneLine(s: string): string { return s.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim() }
+// The first line of a small file, trimmed — what `IFS= read -r` gives the deny hook.
+function firstLine(v: unknown): string { return raw(v).split('\n')[0].replace(/\r$/, '').trim() }
+
+// Lexical join + normalise: `base/rel` with `.` and `..` folded, no symlink resolved, so a
+// relative `gitdir:` or `commondir` (git writes `../..`) lands on the path git means.
+function join(base: string, rel: string): string {
+  const p = rel.startsWith('/') ? rel : base.replace(/\/+$/, '') + '/' + rel
+  const out: string[] = []
+  for (const part of p.split('/')) {
+    if (part === '' || part === '.') continue
+    if (part === '..') { out.pop(); continue }
+    out.push(part)
+  }
+  return '/' + out.join('/')
+}
+
+async function read($: any, path: string): Promise<string> {
+  try { return firstLine(await $.fs.read(path)) } catch { return '' }
+}
+
+// The bundle a role agent's worktree belongs to, or '' — the deny hook's walk, read for read.
+async function bundleOf($: any, cwd: string): Promise<string> {
+  let st: any = null
+  try { st = await $.fs.stat(cwd + '/' + GIT) } catch { st = null }
+  if (!st || st.kind !== 'file') return ''          // a main clone, or no repo: not a role agent
+  let gitdir = read_gitdir(await read($, cwd + '/' + GIT))
+  if (!gitdir) return ''
+  gitdir = join(cwd, gitdir)
+  const common = await read($, gitdir + '/' + COMMONDIR)
+  const commonDir = common ? join(gitdir, common) : gitdir
+  const bundle = await read($, commonDir + '/' + MARKER)
+  if (!bundle || !bundle.startsWith('/')) return ''
+  const root = join('/', bundle)
+  if (!(await exists($, root + '/' + CONFIG))) return ''   // a marker naming nothing: silence
+  return root
+}
+function read_gitdir(line: string): string {
+  if (!line.startsWith('gitdir:')) return ''
+  return line.slice('gitdir:'.length).trim()
+}
+
+// PM side, session.start: a session that starts in a bundle root is that bundle's PM for as
+// long as it is the newest one written. Anywhere else this does nothing. Fails open: a
+// throw here is caught by the one session.start hook below and the event still goes on.
+async function signalStart($: any): Promise<void> {
+  try {
+    const cwd = await cwdOf($)
+    if (cwd && await exists($, cwd + '/' + CONFIG)) {
+      const sid = await sessionId($)
+      if (sid) await $.store.set(PM_KEY + cwd, { sessionId: sid, at: new Date().toISOString() })
+    }
+  } catch { /* fail open: the event goes on, nothing is recorded */ }
+}
+
+// Role side, turn.complete: the main loop's turn ended in a marked worktree ⇒ record it,
+// then say so once. Every early return is "not a role agent" or "nothing to attribute".
+async function signalTurn($: any, e: any): Promise<void> {
+  try {
+    if (e && typeof e.agentId === 'string' && e.agentId) return   // a subagent's turn
+    turns += 1
+    const cwd = await cwdOf($)
+    if (!cwd || await exists($, cwd + '/' + CONFIG)) return      // the PM, or no cwd
+    const bundle = await bundleOf($, cwd)
+    if (!bundle) return
+    const sid = await sessionId($)
+    if (!sid) return        // no id ⇒ no key ⇒ nothing anyone could attribute
+
+    const reason = raw(e ? e.reason : '') || 'unknown'
+    const record = {
+      bundle, cwd, at: new Date().toISOString(), turns,
+      durationMs: num(e ? e.durationMs : 0), reason,
+      isAborted: !!(e && e.isAborted === true),
+      delivered: null as boolean | null,
+    }
+    await $.store.set(SIGNAL_KEY + sid, record)       // the durable half, before any message
+
+    if (failedSends >= MAX_FAILED_SENDS) return
+    let pm: any = null
+    try { pm = await $.store.get(PM_KEY + bundle) } catch { pm = null }
+    const to = pm && typeof pm === 'object' ? raw(pm.sessionId) : ''
+    if (!to || to === sid) return
+
+    const text = oneLine(PREFIX + ' role session ' + sid + ' finished a turn in ' + cwd
+      + ' (reason ' + reason + ', ' + record.durationMs + ' ms) — settle it first at step 4 of a /loopd:dispatch tick; this line orders the sweep and decides nothing')
+    let delivered = false
+    try {
+      const sent = await $.session.send({ to: { sessionId: to }, text })
+      delivered = !!(sent && sent.isDelivered === true)
+    } catch { delivered = false }
+    if (!delivered) failedSends += 1
+    await $.store.set(SIGNAL_KEY + sid, { ...record, delivered })
+  } catch { /* fail open: the event goes on; the store may hold the pre-send record */ }
+}
+
+function registerSignal(on: any) {
+  // PM side, receive: a `loopd-signal:` line — and every other message — goes through to
+  // Claude unchanged. Not consumed, no prompt submitted, no file touched: the tick decides.
+  on('session.receive', async (_$: any, e: any, next: any) => {
+    return next(e)
+  }).catch(($: any, e: any, next: any) => next(e))
+}
+
+// ======================================================================== the switches
+// Each mod is one boolean in the plugin's userConfig, read here and nowhere else — not a
+// file, not the environment. Absent (an older /config, or a kit test passing none) is ON;
+// only an explicit `false` turns one off, and an off mod registers no hook at all.
+// An event may be hooked ONCE without a matcher, so the two events more than one mod wants —
+// session.start and turn.complete — are hooked here and handed to each mod that is on, in a
+// fixed order: usage (counts), pane (settles its held answers), signal (sends, last).
+let USAGE = true
+let PANE_ON = true
+let SIGNAL = true
+
+export function register(on: any, options?: any) {
+  const o = options && typeof options === 'object' ? options : {}
+  USAGE = o.usage !== false
+  PANE_ON = o.pane !== false
+  SIGNAL = o.signal !== false
+  MODE = o.paneMode === 'simple' ? 'simple' : 'operator'
+  if (!USAGE && !PANE_ON && !SIGNAL) return   // the shell hooks alone: no module hook at all
+
+  on('session.start', async ($: any, e: any, next: any) => {
+    if (USAGE) usageStart($, e)
+    if (PANE_ON) await paneStart($, e)
+    if (SIGNAL) await signalStart($)
+    return next(e)
+  })
+  on('turn.complete', async ($: any, e: any, next: any) => {
+    if (USAGE) await usageTurn($, e)
+    if (PANE_ON) await paneTurn($, e)
+    if (SIGNAL) await signalTurn($, e)
+    return next(e)
+  })
+  if (USAGE) registerUsage(on)
+  if (PANE_ON) registerPane(on)
+  if (SIGNAL) registerSignal(on)
 }

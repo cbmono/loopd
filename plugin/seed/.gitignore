@@ -53,9 +53,9 @@ node_modules/
 # the first line already — /loopd:init appends this one separately for that reason.
 /.loopd/.tick-lock.claim
 
-# API keys — for a substituted model backend (the loopd-llm companion) or anything
-# else. NEVER tracked: a key in a tracked file is a published key, and that launcher
-# refuses to read a .env git already knows about rather than trusting this line alone.
+# API keys — for a substituted model backend or anything else. NEVER tracked: a key in
+# a tracked file is a published key, and /loopd:init appends this line to an older
+# bundle rather than trusting that it is already there.
 .env
 
 # Per-machine identity overrides (authorEmail, ownerGithubUser). instance.config.json

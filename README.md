@@ -78,31 +78,27 @@ This repo is its own marketplace. In any Claude Code session:
 /plugin install loopd@loopd
 ```
 
-That is the minimal install — core alone. For core plus the autonomy companion and the
-mods in **one** command, install the bundle instead: `/plugin install loopd-all@loopd`
-([`plugin-all/README.md`](plugin-all/README.md) — it ships nothing of its own, so turning
-a mod off later never touches `loopd`).
+That is the whole install: core, gated, with three **mods** — hooks modules Claude Code runs
+inside every session, each doing one thing and nothing else, each a switch in `/config`
+(on by default; off registers nothing) — [`plugin/hooks/MODS.md`](plugin/hooks/MODS.md):
 
-Or add a **mod** on its own — a hooks module Claude Code runs inside every session that
-loads it, each doing one thing and nothing else, each off by uninstalling it:
+| Mod | What it does | Switch |
+|---|---|---|
+| usage | records what a session spent, so `session-usage.sh` can read it back | `usage` |
+| pane | adds `/pane`: opens the board in a pane beside the transcript, or a simple view of projects, questions and blocks, with a form to start a project | `pane`, `paneMode` |
+| signal | lets a role agent's session tell the PM's session its turn is over, the moment it is | `signal` |
 
-| Mod | What it does |
-|---|---|
-| `loopd-mod-usage` | records what a session spent, so `session-usage.sh` can read it back [→](plugin-mod-usage/README.md) |
-| `loopd-mod-pane` | adds `/pane`: opens the board in a pane beside the transcript, or a simple view of projects, questions and blocks, with a form to start a project [→](plugin-mod-pane/README.md) |
-| `loopd-mod-signal` | lets a role agent's session tell the PM's session its turn is over, the moment it is [→](plugin-mod-signal/README.md) |
-
-```text
-/plugin install loopd-mod-usage@loopd
-```
+The one companion plugin, [`loopd-yolo`](plugin-yolo/README.md), is a separate install on
+purpose: delegated autonomy is a choice, never a default. The marketplace is exactly those
+two plugins; what it used to list besides is in [`MIGRATION.md`](MIGRATION.md).
 
 Every command is namespaced: `/loopd:dispatch`, `/loopd:new-project`, and
 the rest of the table [below](#commands); so is every role agent —
 `loopd:software-engineer` and the rest — because a bare agent name does not resolve.
 See [`plugin/README.md`](plugin/README.md).
 
-**Installed as `ai-bridge@ai-bridge` before the rename?** [`MIGRATION.md`](MIGRATION.md)
-moves the machine and each bundle over, in order.
+**Installed under the old `ai-bridge` name, or carrying one of the plugins retired on
+2026-10-28?** [`MIGRATION.md`](MIGRATION.md) moves the machine and each bundle over, in order.
 
 **Already on `ai-bridge-v2`?** That name is gone in 1.0.0 — [the swap](docs/migrating.md).
 
@@ -636,7 +632,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `tick-lock.sh` | `acquire [--as launcher\|tick]`/`release`/`status` — the per-clone PM dispatch lock; exit 0 is the only clearance to dispatch or to run a tick | `acquire`/`release` only, `.tick-lock` + `.tick-lock.claim` (gitignored) |
 | `tick-delta.sh` | `check [--gap <interval>]`/`record`/`digest` — the idle-tick fast-path probe and the tick's one-command orientation: a full tick records a fingerprint (bundle HEAD, task statuses, open-PR heads/states/decisions), the next tick compares — only a byte-for-byte match (exit 0) permits skipping the full walk, and every doubt is the full tick. The `IDLE:` line is ONE line and IS the quiet tick's whole report, so `--gap` makes it name the next check; `digest` prints the same walk enriched (project/task fields + PR facts) so step 1 is one read instead of N. `record --close "<summary>" [--tick ISO] [--tokens N --tools N --duration-ms N]` is the ledger half: it appends the `close:` line **beside** the tick's own `open:` line (never over it, so the pair carries the tick's wall duration), copying that line's timestamp and `by <login>`, with the three notification numbers in the one fixed form `agent-usage.sh fmt` owns — offline, and refused if the entry is already closed. `--tick` names which open entry to close, matched exactly; without it a close is taken only when exactly one entry is open, never guessed between two | `record` only, `.tick-state` (gitignored) and `log.md` on `--close` |
 | `agent-usage.sh` | `fmt`/`dispatch`/`total`/`settle`/`series` — what the harness handed back, **in tokens and never in money**: `fmt` is the one fixed `usage tokens=N tools=N ms=N` form every other writer calls, `dispatch <task-doc> --role R --model M` appends one `# Notes` line per role dispatch from that agent's notification (a re-dispatch appends a second), `total <task-doc> --pr <url>` sums those lines against the merged PR at reflect time (no dispatch lines ⇒ `usage UNKNOWN`, never zero), and `series` prints the month-by-month figures from `log.md`'s `TICK` pairs and those dispatch lines — file reads only, no `gh` and no transcript | `dispatch`/`total` only, that task document |
-| `session-usage.sh` | `<session-id> [--settle <task-doc>]` — what ONE detached role-agent session cost: from the `loopd-mod-usage` companion's plugin-store record when that mod was loaded in the session, else from the session's own transcript, counted **once per message** (a transcript repeats a message's usage on every content block's line): prints `usage tokens=N tools=N ms=N cached=N`, or `usage UNKNOWN` on any doubt — no transcript, two candidates, no usage record, no `jq`. `--settle` hands the numbers to `agent-usage.sh settle`, which fills that task's last UNKNOWN dispatch line. The one file that knows where a transcript lives | only with `--settle` |
+| `session-usage.sh` | `<session-id> [--settle <task-doc>]` — what ONE detached role-agent session cost: from the usage mod's plugin-store record when that mod was on in the session, else from the session's own transcript, counted **once per message** (a transcript repeats a message's usage on every content block's line): prints `usage tokens=N tools=N ms=N cached=N`, or `usage UNKNOWN` on any doubt — no transcript, two candidates, no usage record, no `jq`. `--settle` hands the numbers to `agent-usage.sh settle`, which fills that task's last UNKNOWN dispatch line. The one file that knows where a transcript lives | only with `--settle` |
 | `task-owner.sh` | resolves and compares a task's owner | no |
 | `stall-counter.sh` | `record`/`escalate`/`status`/`reset` — the per-task stall memory: `record <task-doc> --blocker <text>` after each round (`--progress` when the PR moved) counts consecutive rounds on the same blocker and **exits 1 at or past `maxStallRounds`** (absent ⇒ **2**); `escalate` then sets `status: blocked`, notes the blocker and prints the one `⛔ **unblock**` line for `AWAITING.md`; `reset` zeroes `stall_count` and keeps `last_blocker` (`unblock.sh`) | `record`/`escalate`/`reset` only, that task document |
 | `do-not-repeat.sh` | `append`/`brief` — the per-task memory of DEAD ENDS: `append <task-doc> --line <text>` records one approach an ended round already tried and the evidence it failed on (folded to one line, 200 chars, deduped, **capped at 10** — exit 1 past it, fold the oldest into `# Notes`); `brief` prints those lines verbatim under a fixed heading for the next dispatch's brief, and nothing at all when there are none | `append` only, that task document |
@@ -691,7 +687,6 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | `resolve-max-agents.sh` | prints the concurrency cap **this machine** should honour, from the same two files | no |
 | `spawn-preflight.sh` | step 3's read before a wave: what permission mode is **this session** in? Reads the mode `hooks/permission-mode.sh` recorded for this call, matched by its `--token` — no probe, no spawn. Exit 1 `auto`, 0 `not-auto`, 2 `could-not-read`, never folded into either. It reports the mode and predicts no launch outcome: the classifier judges the brief, not the command | no |
 | `agent-sessions.sh` | the one reader of a dispatched role agent's **background** session — `state <id>` prints `working`/`blocked`/`done`/`gone`, `row <id>` prints its one `claude agents` row as JSON, `in-flight <bundle>` counts the recorded `session:` ids that still hold a `maxAgentsInFlight` slot, `view <bundle>` lists this bundle's sessions by task (joined on `worktree:`), state and whether a live process is behind each, `worker <id>` reads its live pid off the daemon roster, `resume-id <uuid> <stdout>` says whether a resume kept the id or forked a copy. Exit 2 is unknown, never a free slot or zero agents | no |
-| `resolve-account.sh` | the one reader of *which Claude account is this bundle on* — prints `declared`/`active`/launcher path, exit 0 match, 3 mismatch, 4 no account on this session, 1 inert (no `loopd-accounts` companion, or nothing declared). Reads no credential | no |
 | `resolve-autonomy.sh` | the one reader of *does delegated autonomy exist here* — prints the `AUTONOMY.md` in force (bundle root first, else an installed companion plugin from core's own marketplace), exit 1 when there is none, which is `gated` | no |
 | `merge-permit.sh` | the policy half of the deny baseline's `subagent_merge` rule — 0 only where the owning project's mode delegates the merge, the caller is exactly `<plugin>:project-manager` and all four clearances are recorded at the head being merged; 1 refuses, printing why | no |
 | `clearance-receipt.sh` | `record`/`verify`/`path` for those clearance records — one file per repo, PR and head under `.tick-receipts/`, written by the four clearance scripts and read offline by the hook | `record` only, `.tick-receipts/` (gitignored) |
@@ -700,7 +695,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `/loopd:dispatch` reports "Unknown command" | the **plugin** is not installed on this machine (or Claude Code has not restarted since) — never the stamp, which delivers no commands at all now | `/plugin marketplace add cbmono/loopd`, `/plugin install loopd@loopd` (or `loopd-all@loopd` for core plus every companion), then `/exit` and relaunch |
+| `/loopd:dispatch` reports "Unknown command" | the **plugin** is not installed on this machine (or Claude Code has not restarted since) — never the stamp, which delivers no commands at all now | `/plugin marketplace add cbmono/loopd`, `/plugin install loopd@loopd`, then `/exit` and relaunch |
 | A command or agent is missing after a pull | it is a **new** `plugin/` file, so no symlink exists yet | `/loopd:init <bundle>` |
 | A seed change from a pull never arrived | seed is copied only when absent, by design | `/loopd:init` and port what it reports |
 | Commands and hooks vanished later, having worked | the installer was run from a git **worktree** | re-run `/loopd:init` from the main working tree |

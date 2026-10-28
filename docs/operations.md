@@ -11,7 +11,7 @@ board. Procedures here; the reasoning behind each one is linked.
 
 | Half | What it carries | Scope | Installed / refreshed by |
 |---|---|---|---|
-| the **plugin** (`loopd`) | every slash command — `/loopd:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:board`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd` — or `/plugin install loopd-all@loopd`, the component-free bundle that installs core, `loopd-yolo` and the three mods in one command ([`plugin-all/README.md`](../plugin-all/README.md)); `/plugin` to update it later |
+| the **plugin** (`loopd`) | every slash command — `/loopd:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:board`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd` — core with its three mods; `loopd-yolo` is a separate, deliberate install; `/plugin` to update it later |
 | the **bundle** (`plugin/seed/` content + your data) | `projects/`, `knowledge/`, `objectives/`, `instance.config*.json`, the seed docs (`CLAUDE.md`, `README.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, `.claude/settings.json`), the managed `.gitignore` lines, and the `repos/` links | **per bundle** | `/loopd:init <dir>` |
 
 **THE SECOND HALF NO LONGER CARRIES MACHINERY, AND THAT IS THE CHANGE.** A bundle used to
@@ -202,8 +202,7 @@ deliberately.
 # 1. per MACHINE, in any Claude Code session
 /plugin marketplace add cbmono/loopd
 /plugin install loopd@loopd
-#    or `/plugin install loopd-all@loopd` — core plus loopd-yolo and the three mods,
-#    one command; the core-only line above stays the minimal install.
+#    (`/plugin install loopd-yolo@loopd` as well, only where a project may delegate its gates)
 #    on ai-bridge-v2 already? uninstall it from /plugin -> Manage. Its stub was
 #    removed in 1.0.0, so the old name no longer resolves from the marketplace.
 
@@ -676,7 +675,7 @@ the **snapshot** (already in `write-snapshot.sh`'s allowlist, never filled), the
 | question `context` (3 depths) | fill: the same block's `Depth 1`–`3` |
 | question `askedAt` | dropped: no file records a per-question ask time; the order rule below stands in |
 | stuck `id`, `project` | snapshot: task `id`, project `slug` |
-| stuck `sentence`, `action`, `buttonLabel` | snapshot: task `title` and `awaiting` verb, composed by the renderer — the blocker text is never served (`plugin-mod-pane/README.md`, Stuck — you can help row) |
+| stuck `sentence`, `action`, `buttonLabel` | snapshot: task `title` and `awaiting` verb, composed by the renderer — the blocker text is never served (`plugin/hooks/MODS.md`, Stuck — you can help row) |
 | stuck `state` | snapshot: task `status` and `in_flight` |
 | project `title`, `what` | snapshot: `title`, `description` |
 | project `who` | fill: `project.md` `need` |
@@ -781,23 +780,24 @@ SKIP without Chrome or node 22+) hold it.
 One hard rule holds regardless of `maxAgentsInFlight`: never two package installs against
 the **same repo's store** at once (the PM staggers deps-touching tasks across ticks).
 
-### Mods (optional companions)
+### Mods (three switches in `/config`)
 
-A mod is a companion plugin Claude Code runs **inside** each session that loads it. Each is
-installed only if you choose to (`/plugin install <name>@loopd`, or all three with
-`loopd-all`), changes no gate, and is deletable; core runs exactly as before without it.
-Each README owns its detail.
+A mod is a hooks module Claude Code runs **inside** each session that loads the plugin.
+loopd ships three in one module, `plugin/hooks/register.ts`, each on by default and each a
+switch in `/config` (the plugin's `userConfig`); off registers nothing, changes no gate, and
+core runs exactly as it did before the mod existed. [`plugin/hooks/MODS.md`](../plugin/hooks/MODS.md)
+owns the detail. (Until 2026-10-28 they were three companion plugins — `MIGRATION.md`.)
 
-| Mod | One line | Detail |
+| Mod | Switch | One line |
 |---|---|---|
-| `loopd-mod-usage` | records a session's usage in the plugin store after every turn; `session-usage.sh` reads the store first and the transcript second | [`plugin-mod-usage/README.md`](../plugin-mod-usage/README.md) |
-| `loopd-mod-pane` | `/pane` opens a pane drawing `SNAPSHOT.json`, with **Tick** and **Refresh** buttons; `mode: simple` in `/config` shows an inbox — one open question, stuck tasks, progress — and a form to start a project | [`plugin-mod-pane/README.md`](../plugin-mod-pane/README.md) |
-| `loopd-mod-signal` | a role agent's session tells the PM's session its turn is over; step 4 settles that session first | [`plugin-mod-signal/README.md`](../plugin-mod-signal/README.md) |
+| usage | `usage` | records a session's usage in the plugin store after every turn; `session-usage.sh` reads the store first and the transcript second |
+| pane | `pane`, `paneMode` | `/pane` opens a pane drawing `SNAPSHOT.json`, with **Tick** and **Refresh** buttons; `paneMode: simple` shows an inbox — one open question, stuck tasks, progress — and a form to start a project |
+| signal | `signal` | a role agent's session tells the PM's session its turn is over; step 4 settles that session first |
 
 **What a mod may do here** is the same short list for all three — no model call, no
 permission decision, no process, network or environment, no file write, and file reads
-only for the paths a README's "What it reads" declares — enforced by `tests/mods.test.sh`
-and stated in each README's "What it never does".
+only for the paths `MODS.md` → "What it reads" declares — enforced by `tests/mods.test.sh`
+and stated under its "What it never does".
 
 ### Local code intelligence (codegraph, optional)
 
@@ -1415,7 +1415,7 @@ the same file `/status` reads — which Anthropic login is *authorising* the ses
 machine carrying more than one login those two addresses routinely differ, and answering the
 second one used to mean leaving the banner for `/status`. Its `FROM` cell reads `session`
 rather than `tracked`/`local`, because the value is in neither config file. `CLAUDE_CONFIG_DIR`
-is consulted before `$HOME` so a `loopd-accounts` switch is reflected rather than hidden;
+is consulted before `$HOME` so a session started under another config dir is reflected rather than hidden;
 no file, no key or no `python3` prints no row at all. Nothing else from that object — the
 account and organisation UUIDs beside the address — ever reaches the banner.
 

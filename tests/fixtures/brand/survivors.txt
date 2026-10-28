@@ -54,7 +54,6 @@ prov	plugin/scripts/rebase-pr.sh
 instdir,alias	plugin/scripts/refresh-seeds.sh
 prov	plugin/scripts/release-bump.sh
 prov	plugin/scripts/required-checks.sh
-prov,alias	plugin/scripts/resolve-account.sh
 prov	plugin/scripts/resolve-autonomy.sh
 prov	plugin/scripts/review-clearance.sh
 prov	plugin/scripts/stall-counter.sh
@@ -87,8 +86,6 @@ prov	tests/cite-check.test.sh
 prov	tests/close-project-launcher.test.sh
 prov,instdir	tests/commit-as-identity.test.sh
 prov	tests/commit-attribution.test.sh
-fname,alias	tests/companion-account-switch.test.sh
-fname,alias	tests/companion-alternative-llm.test.sh
 prov	tests/companion-plugins.test.sh
 prov,fname	tests/concision-contract.test.sh
 prov,instdir,frozen	tests/config-override.test.sh
@@ -159,6 +156,7 @@ prov,fname,frozen	tests/template-version.test.sh
 prov	tests/test-runner.test.sh
 prov	tests/tick-delta.test.sh
 prov,instdir	tests/tick-lock.test.sh
+frozen,harness	tests/two-plugins.test.sh
 prov	tests/tools/fd-cliff.sh
 prov,instdir,fname,frozen	tests/upgrade.test.sh
 prov	tests/worktree-suite-parity.test.sh
