@@ -37,7 +37,7 @@ move it here intact instead.
 | 12 | [Three behaviours against a silent wrong answer](#12-three-loopd-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) | `push-state.sh`, `answered_questions`, `maxPrLoc` |
 | 13 | [A shared instance is three no-ops and one gate](sharing.md) | `task-owner.sh`, config split, derived indexes |
 | 14 | [`knowledge/references/` is the fifth knowledge kind](#14-knowledgereferences-is-the-fifth-knowledge-kind) | `validate-bundle.sh`, `SCHEMA.md` |
-| 15 | [The config layer is one tier, and the arrow stays one-way](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way) | `init-bundle.sh --config`, `config/` |
+| 15 | [The config layer is one tier, and the arrow stays one-way](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way) — **retired 2026-10-28**; the note says why | `plugin/agents/{code-architect,deep-bug-scan,plan-architect}.md`, `init-bundle.sh` step 1h |
 | 16 | [The kill switch is one hook, and it fails open](#16-the-kill-switch-is-one-hook-and-it-fails-open) | `plugin/hooks/agent-control.sh`, `control.sh` |
 | 17 | [An instruction is executable only if the agent *holds* the tool](#17-an-instruction-addressed-to-an-agent-is-executable-only-if-that-agent-holds-the-tool) | every agent body, `plugin/seed/CONVENTIONS.md`, `plugin/seed/CLAUDE.md` |
 | 18 | [The allowlist check is pinned from both sides](#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure) | `agent-tool-allowlist.test.sh` |
@@ -50,7 +50,7 @@ move it here intact instead.
 ## Layout
 
 - **This repo** — a **reusable OKF control-panel template**. `plugin/` holds generic machinery (SCHEMA, `CONVENTIONS.md` — the shared role-agent conventions, read on dispatch because they govern the target repos, which no `paths:` glob can reach, role agents, `/loopd:dispatch`, `/new-project`, `/close-project`, `/pr-review-request`, `/answer`, `/fanout`, `/audit`, `commit-as.sh`, `required-checks.sh`, `task-owner.sh`, `prune-worktrees.sh`, `close-project-folder.sh`, `validate-bundle.sh`, `migrate-bundle.sh`, `write-snapshot.sh`, `build-board.sh`, `print-board.sh`, `watch-board.sh`, `index-kb.sh`, `link-repos.sh`, a `SessionStart` hook for tasks-awaiting-you, a `UserPromptSubmit` hook pushing current instance state) shipping in the `loopd` plugin, installed once per machine and never copied into a per-group **instance**; `plugin/seed/` holds starting content copied once; `/loopd:init` stamps out / refreshes an instance and manages its gitignore; `RETIRED` declares seed paths the template has stopped shipping, which are reported and never deleted. Each instance is its own repo under `~/workspace/<group>/_loopd-<group>/` (leading underscore, named distinctly from this template dir). `AUTONOMY.md` is deliberately NOT in that list: it is neither machinery nor seed, and ships from the `loopd-yolo` COMPANION plugin, `plugin-yolo/` (ai-bridge-v2/task-018). Keep machinery generic — org/repo/path/team/channel literals live in an instance's `instance.config.json` / `CLAUDE.md`, never in `plugin/`. <!-- This bullet was duplicated three times by conflict resolutions; it is now ONE line carrying the union of all three. If you resolve a conflict here, merge into this line — never append a second copy. -->
-- **Not part of the `~/.claude` config layer.** loopd used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root installer is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery ships from *this* repo as the `loopd` plugin, and `ai-setup`'s installer has nothing to do with it. **`ai-setup` no longer carries that subtree at all** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69) removed it, and its last state is in git history only (`git -C ai-setup show f8b09a4:ai-bridge/`), so a path under `ai-setup/ai-bridge/` does not exist rather than being stale. This sentence used to say the subtree was still there and frozen — which contradicted `README.md` and pointed maintainers at a checkout path that is gone. That is the same "documentation describes a deleted thing as live" defect that removing the subtree was meant to end, and the third instance of it corrected in this PR. `ai-setup`'s *config* layer briefly lived here too — forked wholesale under `config/` behind a second install target (`init-bundle.sh --config`) — but that fork is what caused 24 colliding `~/.claude` paths with 14 diverged, so it has since been handed back: `config/` now ships only the three agents loopd itself probes for, and `~/.claude` is `ai-setup`'s alone again — see [15](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way). The two halves share the worktree guard and nothing else.
+- **Not part of the `~/.claude` config layer.** loopd used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root installer is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery ships from *this* repo as the `loopd` plugin, and `ai-setup`'s installer has nothing to do with it. **`ai-setup` no longer carries that subtree at all** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69) removed it, and its last state is in git history only (`git -C ai-setup show f8b09a4:ai-bridge/`), so a path under `ai-setup/ai-bridge/` does not exist rather than being stale. This sentence used to say the subtree was still there and frozen — which contradicted `README.md` and pointed maintainers at a checkout path that is gone. That is the same "documentation describes a deleted thing as live" defect that removing the subtree was meant to end, and the third instance of it corrected in this PR. `ai-setup`'s *config* layer briefly lived here too — forked wholesale under `config/` behind a second install target (`init-bundle.sh --config`) — but that fork is what caused 24 colliding `~/.claude` paths with 14 diverged, so it was handed back, shrunk to the three agents loopd itself probed for, and on 2026-10-28 retired outright: those three ship in the plugin, and `~/.claude` is `ai-setup`'s alone — see [15](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way).
 
 ---
 
@@ -204,125 +204,50 @@ The gate is on the wrong verb if you get it backwards. The full reasoning — ow
 
 ## 15. The config layer is one tier, and the arrow stays one-way
 
-**loopd depended on a separate repo for four things, and all four failed silently.**
-The measurement that forced this: **nine** top-level entries of the live `~/.claude` were
-symlinks into that other checkout, so "it will never be used again" was false on the very
-machine running loopd — it was the parent config layer of every session, instances
-included. Four of those entries were load-bearing here: the `@~/.claude/claude-defaults.md`
-import in `plugin/seed/CLAUDE.md` (the hard one — every new instance inherited it), and probed
-lookups for `code-architect`, `deep-bug-scan` and `plan-architect`. A missing `@import` is
-a **no-op** and a failed `test -f` merely skips a fan-out, so on a machine that never ran
-that installer an instance lost its session defaults, `qa-reviewer` lost its second opinion
-and the PM lost its plan critic — and nobody could tell. **Silent degradation is the worst
-shape a failure can take**, which is the whole argument for folding the layer in.
+**Retired on 2026-10-28; the number stays so the anchors above still resolve.** The layer
+this section described — `config/required/`, three advisory agents (`code-architect`,
+`deep-bug-scan`, `plan-architect`) that `init-bundle.sh --config` linked one file at a time
+from a clone of this repo into `${CLAUDE_CONFIG_DIR:-~/.claude}/agents/`, with a sweep, an
+uninstall, a worktree guard and a refusal to write through a symlinked parent — is gone,
+and so are `config/`, `docs/claude-config-ownership.md`, `tests/config-ownership.test.sh`,
+`tests/config-layer.test.sh` and `tests/installer-worktree-guard.test.sh`.
 
-**The import is INLINED, not re-pointed.** An `@import` is loaded at launch anyway, so a
-separate file bought organisation rather than context — and it bought one more thing that
-could dangle. The section now lives in `plugin/seed/CLAUDE.md` itself. Seed content is copied only
-when absent, though, so an instance stamped earlier keeps the dead import forever:
-`/loopd:init` reports it with the exact replacement and **never edits `CLAUDE.md`**, which
-is instance data the human owns and has very likely edited around. Report-only, the same
-contract as `RETIRED`.
+**Why it existed.** loopd depended on a separate repo for four things that all failed
+silently: the `@~/.claude/claude-defaults.md` import (inlined into `plugin/seed/CLAUDE.md`,
+still the right fix) and three `test -f ~/.claude/agents/<name>.md` probes, whose failure
+merely skipped a fan-out — so on a machine that never ran that installer the `qa-reviewer`
+lost its escalation and the PM its plan critic, and nobody could tell. Folding a whole
+fork of `ai-setup`'s tree in bought 24 colliding paths under two installers (14 diverged,
+two secret-exposure fixes stranded in the private copy), so it was cut to the three files
+loopd itself probed for, with the arrow one-way: `plugin/` never *required* `config/`.
 
-**One tier now, and it ships only what loopd itself needs.** `config/required/` — the
-three agents (`code-architect`, `deep-bug-scan`, `plan-architect`) loopd's own role
-agents probe for with `test -f` — is the entire config layer. `config/opinionated/`, the
-second tier this section used to describe (one person's commands, output style, hooks and
-scripts, the only place in this repo a company's internal tool could be named — `/dave`),
-is **gone**: it was a fork of `ai-setup`'s `.claude/` tree, 24 of its 26 installable
-entries collided with ai-setup's own, 14 had diverged in both directions, and ownership was
-decided by whichever installer ran last. `ai-setup` now owns
-`${CLAUDE_CONFIG_DIR:-~/.claude}` outright and received every fix the fork had made that it
-lacked; see [`docs/claude-config-ownership.md`](claude-config-ownership.md) for the full
-accounting. **Deleting the tier is still safe** — the `AUTONOMY.md` pattern applied to the
-one directory that is left, with `--config` linking whatever files remain and erroring
-nowhere. (Deleting `config/` *itself* is a different thing and exits 2: a refusal to do
-nothing, not a breakage.)
+**Why it is gone.** The cost was the dependency itself. The three files were byte-identical
+to ai-setup's, yet reaching them took a **clone of this repo** — the one thing left on a
+machine that the plugin install did not cover — and an installer that wrote absolute
+symlinks into `~/.claude` (hence the worktree guard, the sweep, the `provided by` case for
+a symlinked parent). Claude Code resolves a plugin agent as `<plugin>:<name>` (measured
+2026-09-02), so the three agents can ship under `plugin/agents/` beside the role agents and
+exist wherever the plugin does. They do now: dispatched **only** as `loopd:code-architect`,
+`loopd:deep-bug-scan`, `loopd:plan-architect`; **no `tools:` allowlist**, deliberately —
+rung 2 of the skills Finding, so a dispatched one reaches skill-shaped capability without
+widening any restricted agent (`tests/agent-tool-allowlist.test.sh` §3 pins it); never a
+task assignee, never in `roles`; the `roleTiers`/`roleEffort` key stays the bare
+`plan-architect`, because the resolvers key on the row name and only the dispatch string
+carries the namespace. The probes went with the layer: a `test -f` on a path that no
+longer exists would read as "absent" everywhere and silently retire the escalation — the
+exact failure the probe was written against — so the qa-reviewer and the PM dispatch the
+namespaced agent and probe nothing (`tests/plugin-agents.test.sh` §5 sweeps `plugin/` for a
+bare name in a dispatch position).
 
-**"Deleting the tier" means removing the DIRECTORY, and the distinction is now load-bearing
-rather than pedantic.** `--config` retires a link by asking whether its target is still in
-the discovered source set, so an *empty* set reads as "retire everything" — and a source
-directory that cannot be listed produces exactly the same empty set as one that is gone.
-Measured on a real upgrade fixture, three permission modes, all identical: **exit 0, every
-link retired including the ones this layer still ships, none left, no warning**, and the
-quietest mode printed nothing on stderr at all. Keeping `find`'s exit status does not close
-that: `find . -type f` in a directory that is unreadable but executable exits **0** with no
-output. So the guard is stated over the two sets instead — *discovery returned nothing while
-links into `config/` still exist* ⇒ **refuse, name it, exit non-zero, retire nothing** — and
-a tier directory that is **absent** is what distinguishes the legitimate `rm -rf
-config/required` from a tier we merely could not read. A tier emptied but left in place
-therefore lands on the refusing side, and says so: remove the directory, or run
-`--config --uninstall`, if that is what you meant. A second refusal covers the case the set
-statement structurally cannot see — one unreadable subdirectory among several readable ones
-still yields files, so the set is not empty while the links beneath it read as dangling.
-
-**The arrow stays one-way, and that is what makes this modular rather than merely
-bundled.** `plugin/` must never *require* `config/`: the role agents keep probing with
-`test -f`, so an instance stamped on a machine that never ran `--config` still works — it
-loses `qa-reviewer`'s Opus **escalation** below the apex tier (at apex it adjudicates itself; the cheap `/code-review low` second opinion needs
-nothing installed) and the PM's plan critic, not a feature. The bare `/loopd:init <dir>` interface is unchanged
-for the same reason: three live instances and `/loopd:welcome fix` call it that way, so
-`--instance` is only its explicit spelling and never a new requirement.
-
-**No drop-in directory is ever linked as a directory.** `agents/`, `commands/` and
-`skills/` receive new subdirectories from skill and plugin installers at any time, so a
-whole-directory symlink aims them at this checkout and every drop-in lands inside a public
-git repo. Not hypothetical: it is how four uninvited skills got committed to `ai-setup` on
-2026-08-22, three of them symlinks to a path that existed under `~/.claude` but not in the
-repo — dead links its installer would then have pushed into every consumer's config dir.
-Two fixes were available: carry that repo's `.gitignore` allow-list (`.claude/skills/*`
-denied, one `!` per shipped skill) plus its test, or link per **file**. **Per-file linking
-was chosen because it removes the hazard instead of policing it** — nothing this installer
-creates is a directory link, so a drop-in cannot reach *this* checkout at all and no
-allow-list has to be maintained as skills come and go. It does not make every directory in
-the config dir real: `ai-setup` links `~/.claude/agents` as a unit, so on a machine that ran
-its installer the parent of our three agents is a symlink, which is why (a) below is a
-conditional refusal rather than a flat one. It also
-gives back the slot the allow-list approach costs: a personal global command can live in
-`~/.claude/commands/` beside the linked ones, which a whole-dir link makes impossible.
-
-**A conditional refusal, a retired guard, and an abstention complete it.** (a) `--config`
-never writes *through* a symlinked directory — if `~/.claude/agents` is a link into another
-checkout, writing `agents/x.md` would create a file **inside that other repo**, silently,
-and leave the config dir with nothing of its own. The answer depends on whether the entry
-already resolves through that link, and both halves matter: `ai-setup` links
-`~/.claude/agents` as a whole directory, so a symlinked parent is **the normal
-configuration** on any machine that ran its installer, not an error. When the path resolves,
-that provider is shipping it — the required tier's contract is that the file EXISTS on this
-machine, not that our copy is the one used — so it is **reported and nothing is written**,
-exit 0. When it does not resolve, nobody ships it and we cannot write it: refuse, name the
-directory, print the `mv` that fixes it, exit non-zero. Refusing in *both* cases would make
-`--config` fail on the normal setup and make the two installers order-dependent, which is
-the whole thing this split removes. (b) The old refusal for two tiers declaring the same
-relative path — whichever ran second would move the first aside as a `.bak` and shadow
-it — is **gone**, not because the risk went away but because it cannot fire any more: there
-is one tier. What holds the invariant now is `tests/config-ownership.test.sh`, which derives
-the whole shippable set from the `test -f` probes in `plugin/` and cannot name the tier
-directories it scans, with the tier names pinned separately against `/loopd:init`'s own
-`CONFIG_TIERS` in both directions — so a second tier could not reappear here unnoticed, under
-its old name or a new one. (c) **`settings.json` is not this layer's file at all.** It is not
-shipped, not linked, not backed up, not merged, and not reported on; `tests/config-layer.test.sh`
-asserts a real one is left untouched and **not even mentioned**. It is the one path in the
-config dir that can already hold permissions, env vars and plugin choices somebody tuned by
-hand — the only place where writing a value could widen what Claude is allowed to *do* rather
-than how it reports — so two installers writing it is exactly the collision the ownership
-split removes. `ai-setup` owns it, including the display-only merge into an established real
-one, and — from [`ai-setup#71`](https://github.com/cbmono/ai-setup/pull/71), which lands
-before this change for exactly this reason — it **adopts a `settings.json` that is a symlink
-into some other checkout**: a symlink holds a path rather than a file, so there is nothing
-of the human's there to protect, and declining left the path installed by nobody once this
-layer retired its own link. Stated with the source because the tense matters: *before* that
-change ai-setup declined, and this is the sentence a reader would otherwise use to conclude
-the loss cannot happen. `tests/config-ownership.test.sh`'s cross-repo group runs ai-setup's
-own installer from that starting state and fails if it declines, so the claim is checked
-against the code rather than asserted here. `--config` therefore stays purely additive — every write it makes is a symlink it
-created itself — and the paths it retires are not left unexplained: it names `cbmono/ai-setup`
-as where they went.
-
-The worktree guard covers both halves, because it runs before the flags are parsed — a
-config install from a worktree fails identically, every link pointing into a checkout that
-is about to be deleted. Covered by `tests/config-layer.test.sh`.
-
+**What survives, and why it is report-only.** A clone that pulls this change leaves the
+three links an older `--config` wrote **dangling**. `init-bundle.sh` step 1h names one —
+and only one whose target was `…/config/required/agents/<name>.md` and is gone — with the
+`rm` to run, and removes nothing: the `RETIRED` contract, because a stamp that deletes
+outside its bundle is a stamp nobody can run blindly, and a live link, a real file or a
+link elsewhere is somebody's. `--config` itself refuses **by name** (exit 2, where the
+agents went), never as an unknown flag, so a bookmarked command learns the new fact. The
+four harnesses that used to need the main checkout to run (`.claude/rules/tests.md`) run
+from a worktree now; `tests/worktree-suite-parity.test.sh` keeps the positive half.
 
 ## 16. The kill switch is one hook, and it fails open
 
@@ -948,7 +873,7 @@ governs every other row: **empty output is a reported answer**, never silence.
 
 - **Test harnesses live in `tests/`, never under `plugin/`.** Everything under `plugin/` ships into every instance, and a fixture harness is not machinery an instance needs.
 - **CI runs the whole suite as one required check named `harness suite`, through the same script you run locally.** [`.github/workflows/tests.yml`](../.github/workflows/tests.yml) calls [`tests/run.sh --ci`](../tests/run.sh) — the selection and the runner live there, the workflow carries no copy of either (`tests/ci-workflow.test.sh` fails if it grows one), and `tests/run.sh --changed` takes the identical selection on your machine. It runs every `tests/*.test.sh` on each PR against `main` and each push that lands on it, on **`ubuntu-latest`** since 2026-10-09. It was `macos-latest` for its first six weeks — the platform the suite's baseline had been measured on, after a first Linux run failed four harnesses for what looked like environment-specific reasons. Measured both ways on 2026-10-09 (draft PR #366, the instrument) the same tree took **16m 37s and 2,494 harness-seconds on 3 macOS cores against 6m 32s and 1,285 on 4 Linux cores**, and the recurring "Linux failures", once classified, were **two shipped bugs** (GNU `stat -f` is `--file-system`, so every file `migrate-bundle.sh` repaired on Linux came out `0600`; `push-state.sh`'s `while … [ -r ] && …` under `set -e` died silently when `find` emitted an unreadable file last — ext4 did, APFS happened not to) and one harness idiom, all fixed in #367. A gate that ran only where those bugs were invisible was the wrong gate. **macOS is not dropped**: bash 3.2 and the BSD tools are what operators actually run, so the whole gate tier still runs on `macos-latest` nightly — the advisory `macOS suite (nightly)` job in [`.github/workflows/tests-deep.yml`](../.github/workflows/tests-deep.yml) — and `tests/ci-workflow.test.sh` fails if either half is lost. The full history, with run ids, is on the job's `runs-on` in the workflow. **The job name is a merge-gate contract**: `main`'s branch protection requires that exact check and is **strict** (a branch must be up to date with `main` before it merges, so expect a rebase when a sibling PR lands first), and [`.github/required-checks.txt`](../.github/required-checks.txt) declares the same name for the fallback `required-checks.sh` uses only when the platform reports no required set at all ([invariant 6](#6-the-delegated-merge-gate-resolves-its-required-checks-in-required-checkssh-and-exit-0-is-the-only-clearance)). Renaming the job means editing that file and the branch-protection rule in the same commit. The workflow does not trust the suite's own tally either: a harness with a broken `TMPDIR` guard can delete its own checkout and still print `fail=0`, so it re-verifies the checkout after every harness and stops at the first that damages it.
-- **A harness must give the same answer from a linked git worktree.** Every role agent works in one, and the installer used to refuse to run from one — so harnesses that handed it the checkout's own copy stamped nothing and then failed downstream for reasons unrelated to the change under test (six of them, across `ai-bridge-v4` tasks 029-031). **The refusal narrowed to `--config` in ai-bridge-v2/task-013**, because a bundle stamp no longer writes any symlink into this checkout and so has no hazard left to guard; `--config` still links into `${CLAUDE_CONFIG_DIR:-~/.claude}` by absolute path, so there it stands. `tests/worktree-suite-parity.test.sh` pins **both halves at once**: those harnesses cope from a fresh linked worktree, a bundle stamp from that same worktree is allowed and leaves no symlink behind, **and** `--config` still refuses there — so neither half can be quietly traded for the other. Since 2026-10-05 the first half is no longer seven re-runs (229 s, 5.6% of a 23-minute suite): every listed harness is checked to stamp only through its routing block, that harness's own block is executed against the worktree, one harness still runs there end to end, and mutants prove each check can fail — the file's header says what that trade gives up.
+- **A harness must give the same answer from a linked git worktree.** Every role agent works in one, and the installer used to refuse to run from one — so harnesses that handed it the checkout's own copy stamped nothing and then failed downstream for reasons unrelated to the change under test (six of them, across `ai-bridge-v4` tasks 029-031). **The refusal narrowed to `--config` in ai-bridge-v2/task-013**, because a bundle stamp no longer writes any symlink into this checkout and so has no hazard left to guard, **and went entirely on 2026-10-28 with `--config` itself** ([15](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way)). `tests/worktree-suite-parity.test.sh` pins what is left: those harnesses cope from a fresh linked worktree, and a bundle stamp from that same worktree is allowed, leaves no symlink behind and writes nothing into the config dir. Since 2026-10-05 the first half is no longer seven re-runs (229 s, 5.6% of a 23-minute suite): every listed harness is checked to stamp only through its routing block, that harness's own block is executed against the worktree, one harness still runs there end to end, and mutants prove each check can fail — the file's header says what that trade gives up.
 - **Harness growth is a threshold you measure against your own diff, not a test.** `git diff --numstat origin/main -- 'plugin/**/*.sh' | awk '{a+=$1} END{print a+0}'` — at or above ~150 added lines, name the figure in the PR body as one `⚠️` line and let the owner decide ([`plugin/seed/CONVENTIONS.md`](../plugin/seed/CONVENTIONS.md) carries the rule and the scale behind the number). This replaced `tests/machinery-ceiling.test.sh` (944 lines, retired in [#45](https://github.com/cbmono/loopd/pull/45)): pinning integers on `main` made every PR touching `plugin/` re-measure and collide with PRs it had nothing to do with, while a threshold checked against your own diff cannot collide with anyone else's. Same measurement, none of the coupling.
 - **`paths:` globs are only root-anchored with a leading slash.** Write `/plugin/**`, not `plugin/**`: a bare pattern matches that basename in *any* directory, and a trailing `/**` is not anchored either. Measured against Claude Code v2.1.239 with an `InstructionsLoaded` hook — and the official docs table says the opposite, which is why `tests/rule-globs-anchored.test.sh` asserts it rather than leaving it a convention the next reader "corrects".
 - **Placeholders in tracked files must be verified unclaimed.** This repo is public. `example-user-007` / `example-user-008` are 404 on github.com and `example.com` is RFC 2606 reserved. `alice`, `bob` and `jane-doe` are all real accounts, so a plausible-looking example names a stranger — and an example is the thing people copy verbatim. `tests/commit-as-identity.test.sh` asserts the seed carries no live-account name and no address outside `example.com`.

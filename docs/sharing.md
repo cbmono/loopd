@@ -277,4 +277,4 @@ cannot silently switch the prompt off.
 
 Covered by `tests/team-setup.test.sh` (94 assertions, most of them refusals: a non-TTY
 stamp, a refresh, an existing value, a real `SIGINT` delivered mid-answer, EOF, a
-declined confirmation, unreadable input, and `--config`).
+declined confirmation, unreadable input, and the retired `--config`).
