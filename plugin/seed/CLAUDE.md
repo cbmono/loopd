@@ -40,7 +40,7 @@ ls -d ~/.claude/plugins/cache/*/loopd/*/scripts | sort -V | tail -1
 
 | To… | Run |
 |---|---|
-| See state & advance work (refine drafts, dispatch `ready` tasks, reflect merges) | **`/loopd:dispatch`** — one safe, idempotent tick. Add `10m` to loop on an interval; say "DRY RUN" to preview without spawning agents. |
+| See state & advance work (refine drafts, dispatch `ready` tasks, reflect merges) | **`/loopd:dispatch`** — the serial loop, a tick every 10m; `once` = one tick, `stop` ends it; "DRY RUN" previews, no agents spawned. |
 | Start a new project | **`/loopd:new-project <description>`** — a build project (code → PRs), or add `kind=research` for docs/decks/assets (no repo). |
 | Close a finished project | **`/loopd:close-project <slug>`** — when its tasks are all done/cancelled. Removes the folder (git history + KB are the record; no archive) unless `project.md` says `retain: true`, which keeps it frozen and pruned. The PM flags candidates; you run it. |
 | Request grouped PR reviews | **`/loopd:pr-review-request <filter>`** |

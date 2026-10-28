@@ -155,10 +155,12 @@ machine (`/plugin marketplace add cbmono/loopd`, then `/plugin install
 loopd@loopd`):
 
 ```text
-/loopd:dispatch 10m
+/loopd:dispatch
 ```
 
-A SERIAL, completion-gated loop — exactly one tick at a time. Preview safely with
+A SERIAL, completion-gated loop — exactly one tick at a time, every ten minutes, driven
+by one session cron job the skill creates itself (`/loopd:dispatch 30m` for another gap,
+`once` for a single tick, `stop` to end it). Preview safely with
 a **DRY RUN**: *"run the project-manager in DRY RUN — refine and report the
 dispatch you would do, without spawning agents."*
 

@@ -62,7 +62,7 @@ first week**; the rest wait until you meet the problem they solve.
 | `/loopd:welcome [check\|fix]` | the banner scrolled past, or something looks off. `check` reports, `fix` repairs the idempotent tier |
 | `/loopd:new-project <description>` | you have work. It scaffolds phases and `draft` tasks and asks for what it cannot infer |
 | `/loopd:answer` | the PM left you numbered `open_questions` and you would rather answer in chat than in the file |
-| `/loopd:dispatch [gap]` | you promoted something. One serial tick — `/loopd:dispatch 10m` keeps ticking every ten minutes |
+| `/loopd:dispatch [gap\|once\|stop]` | you promoted something. The serial loop — bare, it ticks every ten minutes on its own; `once` is a single tick, `stop` ends it |
 | `/loopd:work <task>` | you want to do this one yourself, in this session, instead of dispatching an agent |
 | `/loopd:brief-me [project]` | you were away, or you are walking into a meeting |
 | `/loopd:close-project <slug>` | its tasks are all `done` or `cancelled` |

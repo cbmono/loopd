@@ -112,7 +112,7 @@ readers_granted() { # <file> -> count of grants that are NOT on the approved lis
     | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
     | grep -v '^$' \
     | grep -v -x -e 'Bash(pwd)' -e 'Bash(ls:\*)' -e 'Agent' \
-                 -e 'ScheduleWakeup' -e 'CronList' -e 'CronDelete' \
+                 -e 'ScheduleWakeup' -e 'CronCreate' -e 'CronList' -e 'CronDelete' \
                  -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' \
                  -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:\*)' \
     | wc -l | tr -d ' '
@@ -158,16 +158,20 @@ in_section() { grep -qF -- "$1" <<<"$(section "$LAUNCHER")" && echo yes || echo 
 # was closed, and it rotted anyway, because the next day's expensive reads were a
 # category it had never named. An inversion with no check that FAILS WHEN THE LIST GROWS
 # is that same fix again — so the count is pinned here, and "just a quick orient" coming
-# back as a further allowed operation is exactly what it catches. Op 3 is the cron cleanup:
-# admitted on 2026-09-09 because precondition 2 always ran it, so the prose and the
-# frontmatter's `CronList, CronDelete` grant now agree instead of contradicting each other.
+# back as a further allowed operation is exactly what it catches. Op 3 is the cron step:
+# admitted on 2026-09-09 as the cleanup because precondition 2 always ran it, so the prose
+# and the frontmatter's `CronList, CronDelete` grant agree instead of contradicting each
+# other; since 2026-10-28 the same step CREATES the one session job that is the cadence
+# (`CronCreate`), which reads and writes the scheduler and still nothing of the bundle.
 count_allowed_ops() { section "$1" | grep -c -E '^[0-9]+\. ' | tr -d ' '; }
 ok "the allowlist is exactly three operations" "$(count_allowed_ops "$LAUNCHER")" 3
 ok "…op 1 is the cwd precondition"    "$(in_section 'The cwd precondition')" yes
 ok "…and says nothing wider"           "$(in_section 'precondition 1 above and nothing wider')" yes
 ok "…op 2 is the lock, by script name" "$(in_section 'scripts/tick-lock.sh acquire')" yes
-ok "…op 3 is the cron cleanup, by tool name" "$(in_section 'The cron cleanup')" yes
-ok "…naming both cron tools"          "$(in_section '`CronList`, then `CronDelete`')" yes
+ok "…op 3 is the cron step, by tool name" "$(in_section 'The cron step')" yes
+ok "…naming all three cron tools"     "$(in_section '`CronList`, then `CronDelete`')" yes
+ok "…including the one that creates"  "$(in_section '`CronCreate` when no job of ours is listed')" yes
+ok "…and the create is in allowed-tools" "$(granted "$LAUNCHER" 'CronCreate')" yes
 # NON-VACUITY, and it IS the property: a FOURTH allowed operation must fail this check.
 printf -- '### The launcher reads nothing else — an ALLOWLIST of three\n\n1. cwd\n2. lock\n3. cron\n4. just a quick orient\n\n## Next\n' > "$TMP/fourth.md"
 ok "…and a FOURTH allowed operation fails it" \

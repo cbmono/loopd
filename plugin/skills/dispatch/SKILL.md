@@ -1,9 +1,9 @@
 ---
 name: dispatch
 disable-model-invocation: true
-description: Start the Project Manager loop as a SERIAL, completion-driven loop (one tick at a time) in this control-panel instance repo
-argument-hint: "[gap]  pause between ticks, default 10m  (e.g. 0m for back-to-back, 30m)"
-allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Agent, ScheduleWakeup, CronList, CronDelete
+description: Start the Project Manager loop as a SERIAL, completion-driven loop (one tick at a time) in this control-panel instance repo — bare, it owns its own cadence
+argument-hint: "[gap|once|stop]  cadence between passes, default 10m (e.g. 30m); once = a single tick, no cadence; stop = end the loop"
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Agent, ScheduleWakeup, CronCreate, CronList, CronDelete
 ---
 
 Start the **Project Manager loop** — but as a **SERIAL, completion-driven** loop:
@@ -54,9 +54,15 @@ reads nothing else"; anything not on it is a tick or a subagent. Both checks bel
    — if it fails, tell the user to `cd` into the instance and stop. (Never hardcode a
    path. The role agents ship in the plugin, so a bundle has no `.claude/agents` and the
    check must not look for one.)
-2. **Kill any fixed-interval PM cron** from an older approach: `CronList`, and if a
-   job's prompt is `run the project-manager agent for one LIVE tick`, `CronDelete` it.
-   Do **not** create a cron here.
+2. **Own the cadence — one session cron, created once.** `CronList`. If a job's prompt
+   is `run the project-manager agent for one LIVE tick` (an older approach), `CronDelete`
+   it. Then, **unless** the argument is `once` or `stop`, or a `/loop` with no interval is
+   driving this pass (its instructions are in your context): if **no** listed job's prompt
+   names `/loopd:dispatch`, `CronCreate` one — `cron` = `*/<gap in minutes> * * * *`,
+   `prompt` = `/loopd:dispatch <gap>`, recurring — and print the actual next-run time the
+   result gives. A job that already names `/loopd:dispatch` — this skill's own from an
+   earlier pass, or one a human's `/loop 10m /loopd:dispatch` created — means the cadence
+   is owned: create nothing, say nothing. **Never two jobs.**
 
 ### The launcher reads nothing else — an ALLOWLIST of three, and everything else is a tick
 
@@ -67,10 +73,11 @@ the machine — is exactly these operations:**
    resolved schema path, which is precondition 1 above and nothing wider.
 2. **`${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire`** — a **write** only the launcher can
    make, which returns an exit code rather than content and prints nothing on the normal path.
-3. **The cron cleanup** — `CronList`, then `CronDelete` on a job whose prompt matches:
-   precondition 2 above, and the two tools the frontmatter's `allowed-tools` already grants.
-   It reads the **scheduler**, never this bundle's state, so it is inside the category the
-   list closes over rather than an exception to it.
+3. **The cron step** — `CronList`, then `CronDelete` on the old job whose prompt matches
+   and `CronCreate` when no job of ours is listed: precondition 2 above, and the three
+   tools the frontmatter's `allowed-tools` grants for it. It reads and writes the
+   **scheduler**, never this bundle's state, so it is inside the category the list closes
+   over rather than an exception to it.
 
 **Anything that is not one of those is a TICK or a SUBAGENT.** That is the whole
 rule, and it is a **category**, so there is no list to keep current and nothing to add
@@ -121,14 +128,17 @@ reasons: it is account-scoped, so one URL can never be written by two humans
 artifact tool at all — measured 2026-09-05 on Claude Code 2.1.261, inventory and tool
 search both. So the tick prints `run /loopd:board publish to refresh` and stops there.
 
-## Running it on a cadence: `/loop`, and nothing else
+## Running it on a cadence: the skill owns one session cron
 
-**`/loop 10m /loopd:dispatch` is the standard way to run this loop in a session.**
-`/loop [interval] <prompt>` is first-party (Claude Code 2.1.261, `/loop 5m /foo`); it
-re-fires a slash command on a clock in the session you are already in. Nothing else is
-installed, started or supervised — **there is no watcher, no `sleep` loop, no cron and no
-script for cadence**, and precondition 2 above deletes the fixed-interval cron an older
-approach left behind.
+**`/loopd:dispatch` is the standard way to run this loop in a session — bare.** It is a
+loop, not a tick: precondition 2 creates **one session-scoped cron job** whose prompt is
+`/loopd:dispatch <gap>`, and from then on the job re-fires this skill on the clock. That job
+is the same first-party primitive `/loop [interval] <prompt>` creates (Claude Code
+2.1.261 — `/loop 5m /foo` is a `CronCreate` job), so **`/loop 10m /loopd:dispatch` still
+works and is the same loop**: precondition 2 sees that job and creates none. Nothing else is
+installed, started or supervised — **there is no watcher, no `sleep` loop and no script for
+cadence**; the one cron job is session-only, written to no file, and gone when the session
+ends. Precondition 2 also deletes the fixed-interval cron an older approach left behind.
 
 **10m, and here is the number it comes from.** The gap is not tuned to tick length — a tick
 that dispatches role agents runs as long as it runs, and the lock is what keeps that safe.
@@ -136,22 +146,35 @@ It is tuned to **the slowest thing a tick waits on**, which is an external revie
 round-trip: a CodeRabbit review plus the required checks lands in **minutes, not seconds**,
 so a pass every 10 minutes meets a merged PR or a finished review roughly one pass after it
 happens, and a shorter interval buys nothing but passes that find the same state. Longer
-than ~30m and the loop stops being the thing that notices.
+than ~30m and the loop stops being the thing that notices. **The clock is approximate**:
+the scheduler shifts a recurring job by a fixed per-job offset of up to half its period, so
+a 10m job fires 10–15 minutes apart, and it fires only while the session is idle. Report
+the next-run time `CronCreate`/`CronList` gives, never the cron expression.
 
-**A quiet bundle wants the self-paced form: `/loop /loopd:dispatch`, with no
-interval.** Omitting the interval is `/loop`'s dynamic mode — the model paces its own
-iterations instead of a clock doing it — which is the right shape when most passes would
-find nothing to do. Reach for it on a bundle with one or two active projects; reach for the
-interval form when work is landing and you want a fixed heartbeat.
+**The job expires after seven days** — recurring session jobs do; it fires one last time
+and is deleted. A pass that finds no job of ours listed re-creates it (precondition 2), so
+the loop survives the expiry by being run; a session left untouched for a week stops, and
+the next bare `/loopd:dispatch` starts it again.
 
-**Under `/loop`, two of the steps below change, and only two:**
+**Two other forms, both still the same skill:**
+
+| | |
+|---|---|
+| **`/loopd:dispatch once`** | one tick, no cadence. Nothing is created, nothing scheduled. |
+| **`/loopd:dispatch stop`** | end the loop: `CronDelete` every listed job whose prompt names `/loopd:dispatch` — this skill's own or a human's `/loop` — and cancel any pending wakeup; then step 5. |
+| **`/loop /loopd:dispatch`** | no interval ⇒ `/loop`'s dynamic mode — the model paces its own iterations instead of a clock doing it. The right shape for a quiet bundle whose passes would mostly find nothing. Precondition 2 creates no cron under it; step 3 is the cadence. |
+
+**Under the cron, or a `/loop` with an interval, two of the steps below change, and only
+two:**
 
 1. **Step 1 takes the lock with `--as loop`** — `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh
    acquire --as loop --agent project-manager --claimant <id>`. Every decision is the
    launcher's — the id included — and the only
    difference is that a held lock is reported in **one line** instead of a block, because
-   at a fixed interval most firings land while an earlier tick is still running.
-2. **Skip step 3.** `/loop` *is* the cadence, so scheduling a wakeup as well gives the
+   at a fixed interval most firings land while an earlier tick is still running. `once`
+   keeps `--as launcher`: a human typed it and expected a dispatch, so a held lock is the
+   loud block.
+2. **Skip step 3.** The cron job *is* the cadence, so scheduling a wakeup as well gives the
    session two schedulers and double the passes. Dispatch, wait for the notification,
    release the lock, and end the pass.
 
@@ -162,14 +185,16 @@ and nothing retried. A loop that reports a fault six times an hour for working c
 one an operator stops reading. The other codes are unchanged and still stop the loop: 2
 and 3 go to the human exactly as step 1 says.
 
-**A `/loop` can never spawn a second orchestrator, and the lock is the proof — not this
-paragraph.** `/loop` fires on a clock, so it will fire into a running tick; `acquire`
+**A clock can never spawn a second orchestrator, and the lock is the proof — not this
+paragraph.** The cron fires on a clock, so it will fire into a running tick; `acquire`
 refuses with exit 1 in that firing, before anything is spawned, and the check and the write
 are one `O_EXCL` create with nothing to interleave. So the "one orchestrator" guarantee
-holds under `/loop` for the same reason it holds when you type the command yourself — the
-guarantee never rested on the cadence, and adding a clock does not touch it. **One `/loop`
-per clone**, exactly as before: the lock bounds ticks, not loops, so two loops against one
-working tree is still the bug it always was — the lock catches it rather than blessing it.
+holds under the cron for the same reason it holds for `once` — the guarantee never rested
+on the cadence, and adding a clock does not touch it. **One loop per clone**, exactly as
+before: the lock bounds ticks, not loops, so two sessions looping one working tree is still
+the bug it always was — the lock catches it rather than blessing it. Inside one session,
+precondition 2's "never two jobs" is what keeps a second `/loopd:dispatch`, or a `/loop`
+typed on top of a running loop, from doubling the passes.
 
 **Not a cloud routine.** `/schedule` (alias `/routines`) creates *remote* agents; a bundle
 is a local checkout whose every operating input is gitignored, so a routine cannot run this
@@ -177,7 +202,10 @@ loop at all. The measurement is in `docs/operations.md` → "Running the loop on
 
 ## How the serial loop works
 
-Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
+Parse `$ARGUMENTS`: `stop` ⇒ the stop form above, then step 5, and nothing else; `once`
+⇒ a single tick (no cron, no wakeup, `--as launcher`); anything else is the inter-tick
+**gap** (default **10m**, whole minutes — a 5-field cron has no finer unit, so there is no
+`0m`). Then:
 
 1. **Take the lock, then dispatch — in that order, with nothing in between.**
    Resolve the tick's model first (below), **mint this tick's id** — one fresh literal per
@@ -190,7 +218,8 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
        ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire --agent project-manager --claimant <id>
 
-   (add `--as loop` when a `/loop` is driving — see "Running it on a cadence" above)
+   (add `--as loop` when the cron job or a `/loop` is driving — every form but `once`;
+   see "Running it on a cadence" above)
 
    and act on its exit code. **The check and the write are that one call** (`O_EXCL` —
    no read-then-write to interleave with): it closes a window of seconds to minutes —
@@ -208,9 +237,10 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
    - **0** — the lock is yours, and it printed nothing. **Spawn the tick now**, as the
      very next thing you do.
-   - **1** — HELD: a tick is in flight. Do **not** dispatch. Schedule the gap (step 3,
-     `noop: true`) and skip, exactly as step 4 does. Under `/loop` there is no gap to
-     schedule: print the one line and end the pass clean.
+   - **1** — HELD: a tick is in flight. Do **not** dispatch. Under the cron or a `/loop`
+     with an interval there is no gap to schedule: print the one line and end the pass
+     clean. Under `/loop`'s dynamic mode, schedule the gap (step 3, `noop: true`) and
+     skip, exactly as step 4 does. Under `once`, report the block and stop.
    - **2** — stale, future-dated, or unreadable; the script printed the details. Do
      **not** dispatch and do **not** delete it: put what it printed in front of the
      human and stop until they answer. `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` is the human's answer, not yours.
@@ -298,9 +328,11 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    `docs/pm-design.md#launcher-advisor`). An `"advisor"` entry a bundle still carries in
    `roles` or `roleTiers` is inert — `/loopd:welcome check` names it; nothing dispatches it.
 
-3. **On completion**, schedule the next tick after the gap: `ScheduleWakeup` with
-   `delaySeconds` = the gap and `prompt` = `/dispatch <gap>`. (Gap `0m` ⇒ dispatch the
-   next tick immediately instead.)
+3. **On completion**, end the pass. Under the cron, or a `/loop` with an interval, the
+   clock re-fires `/loopd:dispatch <gap>` on its own and you schedule **nothing** — two
+   schedulers is double the passes. Under `once` there is no next tick. **Only under
+   `/loop`'s dynamic mode** (no interval) schedule the next tick after the gap yourself:
+   `ScheduleWakeup` with `delaySeconds` = the gap and `prompt` = `/dispatch <gap>`.
    **Always pass `noop` and `reason`.** `noop: true` when the tick changed nothing —
    no dispatch, no status change, no task-document edit (a refined draft or a folded
    answer is real work, not idle), no `AWAITING.md` edit; `noop: false` when it did.
@@ -310,15 +342,17 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    sentence about what this tick is waiting on ("holding for qa-reviewer on #214"),
    not "waiting".
 
-4. **When `/dispatch` re-fires from that wakeup:** if this session's own history says a
-   tick is still in flight (dispatched, no notification yet), reschedule the gap and
-   skip — never overlap. Otherwise go to step 1, whose `acquire` refuses the dispatch
+4. **When `/dispatch` re-fires — from the cron job, a `/loop`, or that wakeup:** if this
+   session's own history says a tick is still in flight (dispatched, no notification
+   yet), skip — never overlap (dynamic mode reschedules the gap; a clock needs nothing).
+   Otherwise go to step 1, whose `acquire` refuses the dispatch
    by itself if a live tick holds the lock; the lock, not memory, is what actually
    decides. Query nothing else here.
 
-5. **Stop** when the user says so: dispatch no further ticks and cancel any pending
-   wakeup. **Release the lock only if THIS session took it and its tick has since
-   finished** — otherwise leave it exactly where it is: `release` is unconditional and
+5. **Stop** on `/loopd:dispatch stop`, or when the user says so: `CronList`, `CronDelete`
+   every job whose prompt names `/loopd:dispatch`, cancel any pending wakeup, and
+   dispatch no further ticks. **Release the lock only if THIS session took it and its tick
+   has since finished** — otherwise leave it exactly where it is: `release` is unconditional and
    cannot tell your lock from a sibling's, so releasing on the way out would delete a
    live holder's lock and re-open the double-dispatch. If you dispatched but are stopping before
    the notification arrives, say so and leave the lock — it ages out into step 1's
@@ -404,8 +438,8 @@ ticks, regardless of how long a tick runs.
 
 - One serial loop per session — and **one active loop per clone**: don't start a
   second session looping the same working tree. Two humans on one bundle from two
-  clones is supported (see the standing facts). To change the gap: stop, then
-  `/dispatch <gap>`.
+  clones is supported (see the standing facts). To change the gap: `/loopd:dispatch stop`,
+  then `/loopd:dispatch <gap>` — precondition 2 never replaces a job that is already there.
 - **The dispatch lock is `.tick-lock` at the instance root** — gitignored, per clone,
   written by step 1 and released in step 2 by the session that took it. The tick claims
   it (step 0.5, `--as tick`, recorded in `.tick-lock.claim`) and releases nothing.
@@ -413,7 +447,9 @@ ticks, regardless of how long a tick runs.
   launcher); `TICK_LOCK_STALE_MINUTES` (default 120) sets when step 1 stops waiting
   and asks. A missing lock is never an error.
 - **Starting the loop prints a handful of lines, not a screen**: a failed
-  precondition, one line naming the gap, and that the tick is dispatched. If a start
+  precondition, one line naming the gap and the job's actual next run (first pass only —
+  a re-fire that finds the job already there says nothing about it), and that the tick is
+  dispatched. If a start
   scrolls the terminal, the launcher did work that belonged in the tick — move it
   there; do not quiet it in place.
 - A tick with nothing to do is a fast no-op — the gap keeps idle cycles cheap — and

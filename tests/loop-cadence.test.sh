@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 #
-# loop-cadence.test.sh — the tick cadence runs on the first-party `/loop`, and a firing
-# that lands mid-tick is a clean skip rather than a fault.
+# loop-cadence.test.sh — the tick cadence runs on a first-party session cron (the same
+# job `/loop` creates), the dispatch skill owns that job itself, and a firing that lands
+# mid-tick is a clean skip rather than a fault.
 #
 # WHY THIS EXISTS. `/loop [interval] <prompt>` and `/schedule` (remote routines) both ship
 # with Claude Code, and until now loopd documented neither: the cadence was the owner
-# re-running `/<plugin>:dispatch` by hand, or a session babysitting it. Naming `/loop` in
+# re-running `/<plugin>:dispatch` by hand, or a session babysitting it. Then it was
+# `/loop 10m /<plugin>:dispatch`, which worked and which nobody remembered to type — so
+# since 2026-10-28 the bare skill creates the same job. Naming a cadence in
 # a document is cheap and unenforced — the control panel's
 # knowledge/findings/a-rule-with-no-reader-is-not-a-rule.md counts six rules in one month
 # that were prose and therefore were not rules — so the half that is BEHAVIOUR is driven
@@ -128,13 +131,31 @@ ok "an unknown --as value is exit 3"      "$brc" 3
 ok "…and the message lists loop"          "$(grep -q 'launcher, loop or tick' "$TMP/e5" && echo yes || echo no)" yes
 
 # =======================================================================================
-echo "== 2. CONTRACT: the dispatch skill names /loop as the way to run the cadence =="
+echo "== 2. CONTRACT: the dispatch skill owns the cadence — one session cron, never two =="
 # =======================================================================================
 D="$(flatten "$DISPATCH")"
 
-ok "the standard form is named"           "$(saw "$D" '`/loop 10m /'"${PN}:"'dispatch` is the standard way to run this loop in a session')" yes
-ok "…the self-paced form, for a quiet bundle" "$(saw "$D" '`/loop /'"${PN}:"'dispatch`, with no interval')" yes
+# SINCE 2026-10-28 THE BARE COMMAND IS THE LOOP. `/loop 10m /<plugin>:dispatch` was the
+# documented form, and it is a `CronCreate` over the prompt — so the skill creates that
+# same job itself on its first pass, and a human typing the `/loop` form gets the same loop
+# rather than a second one. The three properties that make it one loop and not two are the
+# guard (create only when NO job names the skill), the grant (`CronCreate` in the
+# frontmatter, or the skill prompts on every firing), and the stop (delete every job that
+# names it, the skill's own or a `/loop`'s).
+ok "the standard form is named, bare"     "$(saw "$D" '`/'"${PN}:"'dispatch` is the standard way to run this loop in a session — bare')" yes
+ok "…it is a loop, not a tick"            "$(saw "$D" 'It is a loop, not a tick')" yes
+ok "…the job's prompt is the skill, with its gap" "$(saw "$D" '`prompt` = `/'"${PN}:"'dispatch <gap>`')" yes
+ok "…created only when no job names it"   "$(saw "$D" 'if **no** listed job'"'"'s prompt names `/'"${PN}:"'dispatch`, `CronCreate` one')" yes
+ok "…never two jobs"                      "$(saw "$D" '**Never two jobs.**')" yes
+ok "…a human's /loop job is honoured, not doubled" "$(saw "$D" 'one a human'"'"'s `/loop 10m /'"${PN}:"'dispatch` created — means the cadence is owned: create nothing')" yes
+ok "…CronCreate is granted"               "$(awk '/^---$/{d++; next} d==1 && /^allowed-tools:/' "$DISPATCH" | grep -q 'CronCreate' && echo yes || echo no)" yes
+ok "…once is a single tick"               "$(saw "$D" '**`/'"${PN}:"'dispatch once`** | one tick, no cadence')" yes
+ok "…stop deletes every job naming the skill" "$(saw "$D" '`CronDelete` every listed job whose prompt names `/'"${PN}:"'dispatch`')" yes
+ok "…the seven-day expiry is stated"      "$(saw "$D" 'The job expires after seven days')" yes
+ok "…and the scheduler's offset"          "$(saw "$D" 'a 10m job fires 10–15 minutes apart')" yes
+ok "…the self-paced form, for a quiet bundle" "$(saw "$D" '**`/loop /'"${PN}:"'dispatch`** | no interval')" yes
 ok "…and that omitting it is dynamic mode" "$(saw "$D" 'dynamic mode — the model paces its own iterations')" yes
+ok "…under which no cron is created"      "$(saw "$D" 'Precondition 2 creates no cron under it; step 3 is the cadence')" yes
 
 # THE REASON FOR THE NUMBER, not just the number. An interval with no stated basis is one
 # the next reader changes by taste; the criterion asks for tick length vs review
@@ -152,15 +173,18 @@ ok "…and step 3's wakeup is skipped"      "$(saw "$D" '**Skip step 3.**')" yes
 
 # THE ONE-ORCHESTRATOR STORY, said out loud and attributed to the lock rather than to the
 # paragraph — the criterion asks for the doc to say so, and for the lock to be the proof.
-ok "a /loop never spawns a second orchestrator" "$(saw "$D" 'A `/loop` can never spawn a second orchestrator, and the lock is the proof')" yes
+ok "a clock never spawns a second orchestrator" "$(saw "$D" 'A clock can never spawn a second orchestrator, and the lock is the proof')" yes
 ok "…the refusal happens before any spawn" "$(saw "$D" 'refuses with exit 1 in that firing, before anything is spawned')" yes
-ok "…one /loop per clone still holds"     "$(saw "$D" 'per clone**, exactly as before')" yes
+ok "…one loop per clone still holds"      "$(saw "$D" 'per clone**, exactly as before')" yes
 
 # NO NEW MACHINERY FOR CADENCE. The criterion is a prohibition, so it is asserted as one.
-ok "no watcher, no sleep loop, no cron, no script" \
-  "$(saw "$D" 'no watcher, no `sleep` loop, no cron and no script for cadence')" yes
+# The session cron is not machinery: it is written to no file and dies with the session,
+# and the doc says so beside the prohibition.
+ok "no watcher, no sleep loop, no script" \
+  "$(saw "$D" 'no watcher, no `sleep` loop and no script for cadence')" yes
+ok "…the one cron job is session-only"    "$(saw "$D" 'the one cron job is session-only, written to no file, and gone when the session ends')" yes
 ok "…and precondition 2 still deletes the old cron" \
-  "$(saw "$D" 'precondition 2 above deletes the fixed-interval cron an older approach left behind')" yes
+  "$(saw "$D" 'deletes the fixed-interval cron an older approach left behind')" yes
 
 # THE RECONCILIATION, IN BOTH DIRECTIONS. "Serial, gated on completion, NEVER ON A CLOCK"
 # was true when it was written and is the exact sentence a /loop cadence contradicts. It
@@ -172,7 +196,8 @@ ok "…the old 'never on a clock' absolute is gone" "$(saw "$D" 'never on a cloc
 ok "…(control: the phrase is findable)"   "$(saw 'Serial, gated on completion, never on a clock.' 'never on a clock')" yes
 ok "…a clock may ASK, not overlap"        "$(saw "$D" 'A clock is allowed to ASK — it is not allowed to overlap')" yes
 ok "…and pm-design.md agrees"             "$(saw "$(flatten "$REPO/docs/pm-design.md")" 'A clock is allowed to *ask*; it is not allowed to *overlap*')" yes
-ok "…README shows the /loop form"         "$(saw "$(flatten "$REPO/README.md")" '/loop 10m /'"${PN}:"'dispatch')" yes
+ok "…README shows the bare form"          "$(saw "$(flatten "$REPO/README.md")" '```text /'"${PN}:"'dispatch ```')" yes
+ok "…and still names the /loop form as the same loop" "$(saw "$(flatten "$REPO/README.md")" '`/loop 10m /'"${PN}:"'dispatch` creates, which still works and is the same loop')" yes
 
 # =======================================================================================
 echo "== 3. MEASURED: a remote routine's clone has none of a bundle's operating inputs =="
@@ -197,13 +222,17 @@ ok "…and SCHEMA.md is tracked"            \
   "$( ( cd "$CLONE" && git check-ignore -q "$AB_SCHEMA" ) && echo no || echo yes)" yes
 
 O="$(flatten "$OPS")"
-ok "operations.md names the standard form" "$(saw "$O" '**`/loop 10m /'"${PN}:"'dispatch`.** That is the whole answer')" yes
+ok "operations.md names the standard form" "$(saw "$O" '**`/'"${PN}:"'dispatch`.** That is the whole answer')" yes
+ok "…as one session cron the skill creates" "$(saw "$O" 'the skill creates **one session-scoped cron job**')" yes
+ok "…the same job /loop creates"          "$(saw "$O" '`/loop 10m /'"${PN}:"'dispatch` still works and is the same loop')" yes
 ok "…and the self-paced form"             "$(saw "$O" "no interval ⇒ \`/loop\`'s dynamic mode")" yes
 ok "…the measured Claude Code build"      "$(saw "$O" 'measured on **2.1.261**')" yes
-ok "…that nothing is installed for cadence" "$(saw "$O" 'no watcher process, no `sleep` loop, no cron entry, and no script in this repo')" yes
+ok "…that nothing is installed for cadence" "$(saw "$O" 'no watcher process, no `sleep` loop and no script in this repo')" yes
+ok "…the seven-day expiry"                "$(saw "$O" 'it expires after seven days')" yes
 ok "…the interval's basis"                "$(saw "$O" 'What the interval *is* tuned to is the slowest thing a tick waits on')" yes
 ok "…the one-orchestrator claim, with the lock as proof" \
-  "$(saw "$O" 'A `/loop` never spawns a second orchestrator, and the lock is the proof')" yes
+  "$(saw "$O" 'A clock never spawns a second orchestrator, and the lock is the proof')" yes
+ok "…and the in-session never-two-jobs rule" "$(saw "$O" '**never two jobs** rule')" yes
 ok "…and that the exit code does not move" "$(saw "$O" '**The exit code deliberately does not move.**')" yes
 
 ok "…/schedule is quoted as REMOTE"       "$(saw "$O" 'scheduled **remote** Claude Code agents (routines)')" yes
@@ -225,7 +254,7 @@ echo
 # nine of them and the file still reported fail=0. Pin the count so a block that stops
 # executing shows up here rather than as silence.
 total=$((pass + fail))
-ok "exactly 62 assertions ran"            "$total" 62
+ok "exactly 79 assertions ran"            "$total" 79
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

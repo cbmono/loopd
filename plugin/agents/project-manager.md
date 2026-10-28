@@ -246,7 +246,7 @@ state, and act only on deltas.
    re-dispatching a finished task sequence — the most expensive failure this loop has,
    costing a full set of agent runs and opening duplicate PRs. `/loopd:dispatch` deliberately reads none of this
    before spawning you — its **allowlist of three** holds a cwd probe, the tick lock and a
-   cron cleanup that reads the scheduler and not this bundle, and everything else is yours
+   cron step that reads and writes the scheduler and not this bundle, and everything else is yours
    by category (see its "The launcher reads nothing else") — so if you skip it, nobody did
    it.
 
