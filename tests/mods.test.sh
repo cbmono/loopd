@@ -178,7 +178,7 @@ ok "plugin/hooks/MODS.md exists"           "$(yn test -f "$DOC")" yes
 ok "…names the Claude Code version it was tested with" \
    "$([ "$(count 'Claude Code \*{0,2}v?[0-9]+\.[0-9]+\.[0-9]+' "$DOC")" -ge 1 ] && echo yes || echo no)" yes
 ok "…says what it never does"              "$([ "$(grep -ci 'never' "$DOC" 2>/dev/null | tr -d ' ')" -ge 1 ] && echo yes || echo no)" yes
-ok "…names every switch"                   "$(grep -cE '^\| `(usage|pane|paneMode|signal)` \|' "$DOC")" 4
+ok "…names every switch in its switch table" "$(grep -cE '^\| `(usage|pane|paneMode|signal)` \| (on|`operator`) \|' "$DOC")" 4
 ok "the marketplace's core entry is this plugin" \
    "$(jq -r '[.plugins[] | select(.name == "loopd" and .source == "./plugin")] | length' "$MJ")" 1
 

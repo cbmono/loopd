@@ -53,13 +53,13 @@ LOCAL_ORDER = ["$schema", "ownerGithubUser", "authorEmail", "reposRoot", "worktr
                "boardInstances", "boardArtifactUrl", "boardPort", "models", "roleTiers",
                "roleEffort",
                "maxAgentsInFlight", "maxRepeatedToolCalls", "maxAgentMinutes", "roleMinutes",
-               "allowSubstituteBackend", "commitAttribution", "reclaimIgnoreOk"]
+               "commitAttribution", "reclaimIgnoreOk"]
 
 # The overridable keys whose TRACKED copy is NOT a documented fallback. That column is the
 # whole test: SCHEMA names the tracked value as the answer for authorEmail, models,
 # roleTiers, maxAgentsInFlight and commitAttribution, and names no tracked answer for these.
 PER_MACHINE_ONLY = ["ownerGithubUser", "reposRoot", "worktreeRoot", "boardInstances",
-                    "boardArtifactUrl", "boardPort", "allowSubstituteBackend"]
+                    "boardArtifactUrl", "boardPort"]
 
 
 def load(path, what):

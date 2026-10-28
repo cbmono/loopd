@@ -1238,8 +1238,8 @@ fi
 # 4b. BACKEND — read from THIS PROCESS'S ENVIRONMENT, never from anything installed.
 # ---------------------------------------------------------------------------------------
 # Gating it on an installed launcher would stay silent for a hand-exported substitution,
-# which is exactly the accident it exists for. (An account row used to sit here, read
-# through resolve-account.sh from the accounts companion; both retired 2026-10-28.)
+# which is exactly the accident it exists for. (An account row used to sit here, fed by
+# the accounts companion's resolver; both retired 2026-10-28.)
 if [ -n "${ANTHROPIC_BASE_URL:-}" ]; then
   backend="$(cell "$(printf '%s' "$ANTHROPIC_BASE_URL" | sed -e 's#^[A-Za-z][A-Za-z0-9+.-]*://##' -e 's#[/?].*##')")"
   echo
