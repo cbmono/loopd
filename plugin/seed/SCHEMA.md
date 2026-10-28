@@ -241,7 +241,13 @@ goal that outlives this project, and a project may carry both. `/audit` grounds 
 the **objective's** criteria where there is an `objective:`, against the **project's own**
 where there is not, and reports **"no criteria"** for a project carrying neither — never a
 silent pass, because a project with no anchor cannot be honestly audited. Same bar for the
-lines either way: **measurable — name the command and today's number.**
+lines either way: **measurable — name the command and today's number.** A line whose purpose
+is to move a measured number also names a guard metric — the number that must not get worse
+— as a second criterion with its own command and today's value: tail latency, loss or error
+rate, memory under load, cost. A line that merely reports a count is not one. When the guard
+metric cannot be measured yet, the line is `a measurement exists for <X>`, with one
+project body line saying so, instead of a placeholder value. A docs or behaviour criterion
+needs no guard metric, and a guard metric is not `/audit`'s counter-metric.
 
 ## type: Phase  (`projects/<slug>/phases/<n>-<slug>.md`)
 

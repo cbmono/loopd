@@ -110,6 +110,13 @@ never an option.
    **measurable** lines for `success_criteria:` (name the command and today's number),
    and get the user's OK — unless `success_criteria=` was given, which is used as written.
    That is the project's anchor and `/audit` grounds against it.
+   A line whose purpose is to move a measured number also names a guard metric — the
+   number that must not get worse — as a second criterion with its own command and today's
+   value: tail latency, loss or error rate, memory under load, cost. A line that merely
+   reports a count is not one. When the guard metric cannot be measured yet, write
+   `a measurement exists for <X>` with one project body line saying so, instead of a
+   placeholder value. A docs or behaviour criterion needs no guard metric, and a guard
+   metric is not `/audit`'s counter-metric.
    **`objectives/` is an OPTIONAL layer** (`SCHEMA.md` → type: Objective): if the
    directory is absent, do not create it and do not ask — the criteria are enough. If
    `objective=` was given, use it. Otherwise, where `objectives/*.md` exists, offer the
