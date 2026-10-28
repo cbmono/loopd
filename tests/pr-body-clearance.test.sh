@@ -298,7 +298,7 @@ echo "== the BODY ceiling: the two bodies the owner measured, and one that fits 
 # here rather than quietly clearing the evidence it was set on.
 sized_body() { # <chars> [<decision row>] -> a complete body padded to COUNT exactly that many
   local want="$1" row="${2:-}" f ex=0; f="$TMP/sized.$want.${#row}.md"
-  [ -z "$row" ] || ex="$(printf '%s' "${row#- }" | "$REAL_JQ" -Rs length)"
+  [ -z "$row" ] || ex="$(printf '%s' "$row" | "$REAL_JQ" -Rs length)"
   { printf '%s\n' '## Description' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" ''
     printf '%s\n' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' "$DECIDED_HEAD" "${row:-$DECIDED_NONE}"
     printf '\n'
@@ -1034,9 +1034,17 @@ says   "  ...naming the section"     "CONTRADICTED: the 'Decided without asking'
 expect "a bare none -> REFUSE"       1 --body-file "$(dw_body "$DECIDED_HEAD" 'none')"
 says   "  ...naming the section"     "INCOMPLETE: the 'Decided without asking' section"
 expect "none with an empty why -> REFUSE" 1 --body-file "$(dw_body "$DECIDED_HEAD" '- none —')"
+expect "two none lines -> REFUSE"    1 --body-file "$(dw_body "$DECIDED_HEAD" "$DECIDED_NONE" "$DECIDED_NONE")"
+says   "  ...naming the section"     "holds more than one"
+expect "a row without its shape -> REFUSE" 1 --body-file "$(dw_body "$DECIDED_HEAD" '- done')"
+says   "  ...naming the shape"       "1 'Decided without asking' row(s) lack the shape"
+expect "…a shaped row beside it still refuses" 1 \
+       --body-file "$(dw_body "$DECIDED_HEAD" "$DROW" '- done')"
+expect "a row whose fields wrap onto an indented line -> CLEAR" 0 \
+       --body-file "$(dw_body "$DECIDED_HEAD" '- Kept awk — alternatives: jq; why: no new' '  dependency; reversible: yes')"
 
 # The allowance: a body AT the ceiling plus one row still clears, and the row is reported.
-DROW_CHARS="$(printf '%s' "${DROW#- }" | "$REAL_JQ" -Rs length)"
+DROW_CHARS="$(printf '%s' "$DROW" | "$REAL_JQ" -Rs length)"   # its `- ` marker included
 expect "the ceiling plus one decision row -> CLEAR" 0 --body-file "$(sized_body "$BODY_CEILING" "$DROW")"
 says   "  ...at the ceiling"       "is $BODY_CEILING characters (ceiling $BODY_CEILING)"
 says   "  ...not charging the row" "nor $DROW_CHARS characters of Decided without asking rows"

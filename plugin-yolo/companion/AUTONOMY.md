@@ -194,7 +194,7 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    with the same number of cells, at least one data row, and at least one `✓`/`✗` among
    them — **under a heading whose `N ✓ / M ✗` tally matches those rows** and, when `M >
    0`, carries a reason after it, with every bullet of a `## Notes` section — at whatever
-   heading depth — **leading with bold**, and a `### Decided without asking` section holding
+   heading depth — **leading with bold**, and a `### Decided without asking` section holding shaped
    rows or one `none — <why>` line (absent is told, not refused, for one release). All of
    it is read from a rendering with fenced code blocks removed so a body that merely
    *quotes* the convention's example does not clear on the example. It refuses at **exit

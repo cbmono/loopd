@@ -190,7 +190,8 @@
 #
 #   8. `### Decided without asking` — the author's answer to "what did you decide that
 #      nobody told you to?". Matched by heading text at any depth, as Notes is. It holds
-#      bullet rows or ONE `none — <why>` line; empty, both, or a `none` with no why is
+#      bullet rows carrying `alternatives:`, `why:` and `reversible:`, or ONE `none — <why>`
+#      line; empty, both, two none lines, an unshaped row or a `none` with no why is
 #      refused at 1. ABSENT IS TOLD, NOT REFUSED, FOR ONE RELEASE — the precedent of the
 #      retired TL;DR spelling above: open PRs and un-restamped instances predate the rule.
 #      Its rows are not charged against the ceiling, up to `CRITERION_ALLOWANCE` each.
@@ -662,12 +663,20 @@ notes_scan() { # <rendered-body>
 }
 
 # --- element 8: `### Decided without asking` ----------------------------------
-# One `decided<TAB><state>` line — absent | rows | none | empty | both | bare — then one
-# `decision<TAB><text>` per row, its indented continuation lines joined, for the ceiling.
-# A bullet or line opening with the word `none` is a none-line, never a row.
+# One `decided<TAB><state>` line — absent | rows | none | empty | both | many | bare |
+# unshaped<TAB><n> — then one `decision<TAB><text>` per shaped row, marker kept and its
+# indented continuation lines joined, for the ceiling. A row is shaped when it carries
+# `alternatives:`, `why:` and `reversible:`. A bullet or line opening with the word `none`
+# is a none-line, never a row, and the section holds at most one.
 decided_scan() { # <rendered-body>
   LC_ALL=C awk '
-    function flush() { if (cur != "") printf "decision\t%s\n", cur; cur = "" }
+    function flush(   l) {
+      if (cur == "") return
+      l = tolower(cur)
+      if (l ~ /alternatives?:/ && l ~ /why:/ && l ~ /reversible:/) printf "decision\t%s\n", cur
+      else unshaped++
+      cur = ""
+    }
     function none_line(t,   r) {
       r = t; sub(/^(\*\*|__|\*|_)/, "", r)
       if (tolower(r) !~ /^none([^a-z0-9]|$)/) return 0
@@ -691,7 +700,7 @@ decided_scan() { # <rendered-body>
       if (line ~ /^[[:space:]]*$/) { flush(); next }
       if (line ~ /^[-*+][[:space:]]+/) {
         flush(); t = line; sub(/^[-*+][[:space:]]+/, "", t)
-        if (!none_line(t)) { rows++; cur = t }
+        if (!none_line(t)) { rows++; cur = line }
         next
       }
       if (line ~ /^[[:space:]]/ && cur != "") {
@@ -703,7 +712,9 @@ decided_scan() { # <rendered-body>
       flush()
       if (!seen)                    st = "absent"
       else if (rows && (why || bare)) st = "both"
+      else if (why + bare > 1)      st = "many"
       else if (bare)                st = "bare"
+      else if (unshaped)            st = "unshaped\t" unshaped
       else if (rows)                st = "rows"
       else if (why)                 st = "none"
       else                          st = "empty"
@@ -1081,7 +1092,7 @@ EOF
 # draft) answer identically. <label> only names the subject in the messages.
 decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too long
   local raw="$1" rendered="$2" label="$3" tldr verified scan tstate tally tkind rc
-  local nscan nstate bare_n bare_txt dstate
+  local nscan nstate bare_n bare_txt dstate dunshaped
   local tab; tab="$(printf '\t')"
   has_tldr "$rendered"; tldr=$?
   [ "$tldr" -eq 2 ] && return 2
@@ -1103,8 +1114,9 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
   nscan="$(notes_scan "$rendered")"
   nstate="$(printf '%s\n' "$nscan" | awk -F'\t' '$1 == "notes" { print $2; exit }')"
   case "$nstate" in ok|absent|bare) : ;; *) return 2 ;; esac
-  dstate="$(decided_scan "$rendered" | awk -F'\t' '$1 == "decided" { print $2; exit }')"
-  case "$dstate" in absent|rows|none|empty|both|bare) : ;; *) return 2 ;; esac
+  dstate="$(decided_scan "$rendered" | awk -F'\t' '$1 == "decided" { print $2; n = $3; exit } END { if (n != "") print n }')"
+  dunshaped="$(printf '%s\n' "$dstate" | sed -n 2p)"; dstate="$(printf '%s\n' "$dstate" | sed -n 1p)"
+  case "$dstate" in absent|rows|none|empty|both|many|bare|unshaped) : ;; *) return 2 ;; esac
   # A notice, never a verdict, for one release — element 8.
   [ "$dstate" = absent ] \
     && echo "note: no '### Decided without asking' section — add one ('none — <why>' when there is nothing to declare); it is required from the next release." >&2
@@ -1203,6 +1215,11 @@ EOF
            echo "        the one none line." >&2 ;;
     both)  echo "        CONTRADICTED: the 'Decided without asking' section holds rows AND a" >&2
            echo "        'none' line. Keep the rows, or the none line — not both." >&2 ;;
+    many)  echo "        CONTRADICTED: the 'Decided without asking' section holds more than one" >&2
+           echo "        'none' line. Keep exactly one 'none — <why>'." >&2 ;;
+    unshaped)
+           echo "        INCOMPLETE: $dunshaped 'Decided without asking' row(s) lack the shape" >&2
+           echo "        '<decision> — alternatives: …; why: …; reversible: …'." >&2 ;;
     bare)  echo "        INCOMPLETE: the 'Decided without asking' section says 'none' with no" >&2
            echo "        why. Write 'none — <why>', e.g. 'none — every choice is named by a" >&2
            echo "        criterion or an answered question'." >&2 ;;
@@ -1404,6 +1421,8 @@ if [ "${1:-}" = "--self-test" ]; then
   st_raw 1 "…an empty section" "${ST_BODY[@]}" '### Decided without asking'
   st_raw 1 "…rows and a none line" "${ST_BODY[@]}" '### Decided without asking' "$ST_ROW" "$ST_DECIDED"
   st_raw 1 "…a bare none" "${ST_BODY[@]}" '### Decided without asking' 'none'
+  st_raw 1 "…two none lines" "${ST_BODY[@]}" '### Decided without asking' "$ST_DECIDED" "$ST_DECIDED"
+  st_raw 1 "…a row without its shape" "${ST_BODY[@]}" '### Decided without asking' '- done'
 
   printf '%s\n' "$SELFTEST_OK"
   exit 0

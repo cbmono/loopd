@@ -238,8 +238,8 @@ above it so none may grow its share.
      `<decision> — alternatives: …; why: …; reversible: …` — the shape of a project's `D<n>`
      rows, so the two lists compare directly. A choice that departs from a `D<n>` is always
      a row. Nothing to declare is the single line `none — <why>`, never a bare `none`.
-     `pr-body-clearance.sh` refuses an empty section, rows beside a none line, and a bare
-     `none`; a body without the section is told, not refused, for one release. Its rows
+     `pr-body-clearance.sh` refuses an empty section, rows beside a none line, a second
+     none line, a row missing one of the three keys, and a bare `none`; a body without the section is told, not refused, for one release. Its rows
      are not charged against the 2,500, up to 800 characters each.
   5. **A short flagged line per threshold question** the owner must answer — harness
      growth, PR size, a wide change you could not split. One line each, `⚠️`-prefixed,
