@@ -26,8 +26,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    is to move a measured number — faster, more, smaller, cheaper — also names a guard
    metric — the number that must not get worse — as a second criterion with its own command
    and today's value. Default candidates: tail latency, loss or error rate, memory under
-   load, cost. A criterion that merely reports a count (`N harnesses green`, `0 validator
-   errors`) is not one. When the guard metric cannot be measured yet, write the criterion
+   load, cost. A criterion that merely reports a count (`N harnesses green`,
+   `0 validator errors`) is not one. When the guard metric cannot be measured yet, write the criterion
    as `a measurement exists for <X>` with one `# Notes` line saying so, instead of a
    placeholder value. A docs or behaviour criterion needs no guard metric, and a guard
    metric is not `/audit`'s counter-metric.
