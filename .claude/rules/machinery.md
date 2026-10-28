@@ -2,23 +2,18 @@
 paths:
   - "/plugin/**"
   - "/plugin-yolo/**"
-  - "/plugin-accounts/**"
-  - "/plugin-llm/**"
-  - "/plugin-mod-usage/**"
-  - "/plugin-mod-pane/**"
-  - "/plugin-mod-signal/**"
-  - "/plugin-all/**"
-  - "/plugin-alias/**"
 ---
 
 # Machinery under `plugin/` (and under any companion plugin)
 
 Loads when you read anything under `plugin/` or under a **companion** plugin's directory
-(`plugin-yolo/`, `plugin-accounts/`, `plugin-llm/`, `plugin-mod-usage/`, `plugin-mod-pane/`, `plugin-mod-signal/` and `plugin-all/` today; the contract is in [`plugin/README.md`](../../plugin/README.md) →
-"Companion plugins"). `plugin-all/` is the **bundle** — a manifest with a `dependencies` list and
-no component at all, so that disabling one dependency can disable only the empty bundle and
-never `loopd`; a hook, skill, agent or command added there would be the first thing lost when a
-human turns a mod off, so it stays component-free. **Everything here ships to every machine
+(`plugin-yolo/` alone today — the marketplace is exactly `loopd` and `loopd-yolo` since
+2026-10-28; the contract is in [`plugin/README.md`](../../plugin/README.md) → "Companion
+plugins"). The three **mods** — usage, pane, signal — are core, one hooks module at
+`plugin/hooks/register.ts` with a `/config` switch each ([`plugin/hooks/MODS.md`](../../plugin/hooks/MODS.md)),
+held to the observe-only rule by `tests/mods.test.sh`: no model call, no permission decision,
+no process, network or environment, no file write, and a file read only for a path `MODS.md`
+→ "What it reads" names. **Everything here ships to every machine
 that installs the plugin** — one install per machine, not one stamp per bundle, so a
 change reaches every bundle on that machine at the next `claude plugin update` with no
 per-bundle step at all. There is no staging and no per-bundle review.
@@ -56,4 +51,4 @@ rule only fires on a **read** and a brand-new file matches nothing.
 - **The two enforcement hooks are PLUGIN files now, not machinery — `plugin/hooks/deny-destructive.sh` and `plugin/hooks/agent-control.sh`.** They are named here because `plugin/seed/.claude/settings.json` no longer registers them and a reader editing that file needs to know where they went: registration is `plugin/hooks/hooks.json`, delivery is `/plugin install loopd@loopd`, and neither is stamped by `/loopd:init`. Both open with the **instance-root guard** — resolve `CLAUDE_PROJECT_DIR` (never the payload `cwd`), exit 0 in complete silence unless `instance.config.json` is there — because a plugin hook fires in every session on the machine. `permissions.deny` stays in `settings.json`: a plugin manifest has no field to carry it. ([conventions 19](../../docs/conventions.md#19-the-destructive-action-baseline-is-a-hook-and-it-is-narrow-on-purpose), [16](../../docs/conventions.md#16-the-kill-switch-is-one-hook-and-it-fails-open))
 - **`plugin/hooks/deny-destructive.sh` is the destructive-action baseline, and its rules stay NARROW.** Each rule must be one no instance wants to remove — the escape hatch is a human running the command in their own terminal, which is what makes narrowness affordable. Add a rule as `rule_<name>()` + a word in `RULES` + **both directions** in `tests/deny-baseline.test.sh`; the allow half is the load-bearing one, since a rule that catches legitimate work gets the whole baseline switched off. Keep `permissions.deny` to unconditional shapes only, each duplicated by a hook rule, and never as a wildcard. Fail open on plumbing (no `jq`, bad payload), never on a match; a refusal is JSON on stdout and the exit status is always 0. ([conventions 19](../../docs/conventions.md#19-the-destructive-action-baseline-is-a-hook-and-it-is-narrow-on-purpose))
 - **A change here carries NO version bump — the merger moves the number on `main` afterwards.** This directory is `core`, and it now CONTAINS `seed/`, `RETIRED` and the shipped `VERSION` (with `/config/`, `/loopd:init`, `/loopd:welcome fix`), and core is what a version exists to track: a **new** file here reaches an already-stamped instance only when `/loopd:init` runs again, which is the drift the number makes visible. **Leave `VERSION`, `plugin/VERSION`, both manifests and the banner sample alone** — they are five files a second open PR also wants, which is what used to force core PRs to merge one at a time. After the merge the human runs `plugin/scripts/release-bump.sh <major|minor|patch>` on `main`, the only writer of the five, and pushes that commit. One source: a doc that *displays* the number is asserted against `VERSION` by `tests/template-version.test.sh`. No changelog, no tags, no packaging — there is no release process here and adding one is out of scope. ([conventions 20](../../docs/conventions.md#20-the-version-is-a-number-the-merge-moves-and-the-drift-check-speaks-only-when-behind))
-- **Test harnesses never live here.** They go in `/tests/` — a fixture harness is not machinery an instance needs.
+- **Test harnesses never live here.** They go in `/tests/` — a fixture harness is not machinery an instance needs. The mods' kit tests (`hooks/tests/*.test.ts`) are the one exception: `claude plugin test` runs only what sits under the plugin directory.

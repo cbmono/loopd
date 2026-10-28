@@ -7,7 +7,7 @@
     {
       "name": "loopd",
       "source": "./plugin",
-      "description": "The OKF control panel as a Claude Code plugin — /brief-me, /capture, /work, /dispatch, /handoff, /welcome, /new-project, /close-project, /answer, /audit, /board, /fanout, /pr-review-request, plus the two PreToolUse enforcement hooks and the eight role agents.",
+      "description": "The OKF control panel as a Claude Code plugin — /brief-me, /capture, /work, /dispatch, /handoff, /welcome, /new-project, /close-project, /answer, /audit, /board, /fanout, /pr-review-request, plus the two PreToolUse enforcement hooks, the eight role agents and three mods (usage, pane, signal) that are each a /config switch.",
       "version": "3.16.1",
       "author": {
         "name": "cbmono"
@@ -18,21 +18,6 @@
         "project-management",
         "okf",
         "agents"
-      ]
-    },
-    {
-      "name": "ai-bridge",
-      "source": "./plugin-alias",
-      "description": "ALIAS of loopd, kept for one release. The plugin is renamed loopd; this entry installs a stub (no hooks, no agents) whose one skill, /ai-bridge:renamed, prints the move. See MIGRATION.md: /plugin install loopd@loopd, then /loopd:init in each bundle.",
-      "version": "3.0.0",
-      "author": {
-        "name": "cbmono"
-      },
-      "license": "MIT",
-      "category": "productivity",
-      "keywords": [
-        "deprecated",
-        "alias"
       ]
     },
     {
@@ -49,101 +34,6 @@
         "loopd-companion",
         "autonomy",
         "okf"
-      ]
-    },
-    {
-      "name": "loopd-accounts",
-      "source": "./plugin-accounts",
-      "description": "COMPANION to loopd. Ships companion/accounts.md and bin/loopd-claude — a bundle names its Claude account in instance.config.json, the launcher starts claude on it, and core's welcome banner says which account is active. Not installed = core prints no account line and switches nothing. A companion ADDS behaviour and never removes a core gate.",
-      "version": "3.0.1",
-      "author": {
-        "name": "cbmono"
-      },
-      "license": "MIT",
-      "category": "productivity",
-      "keywords": [
-        "loopd-companion",
-        "accounts",
-        "okf"
-      ]
-    },
-    {
-      "name": "loopd-llm",
-      "source": "./plugin-llm",
-      "description": "COMPANION to loopd. Ships companion/llm.md and bin/loopd-deepseek — run one Claude Code session against DeepSeek instead of Anthropic. A BACKEND SUBSTITUTION: the whole session leaves for the third party, so it is opt-in per machine via allowSubstituteBackend in the gitignored instance.config.local.json and refuses without it. Not installed = no launcher. A companion ADDS behaviour and never removes a core gate.",
-      "version": "3.0.1",
-      "author": {
-        "name": "cbmono"
-      },
-      "license": "MIT",
-      "category": "productivity",
-      "keywords": [
-        "loopd-companion",
-        "deepseek",
-        "llm"
-      ]
-    },
-    {
-      "name": "loopd-mod-usage",
-      "source": "./plugin-mod-usage",
-      "description": "COMPANION to loopd, a mod. Records each session's token usage, request count, tool calls by name, tool errors, wall time and model in the plugin store under loopd.usage.<session id>; core's session-usage.sh reads that record before the transcript. Observes only: no model call, no permission decision, no process, no network, no file. Not installed = the transcript is read as before. A companion ADDS behaviour and never removes a core gate.",
-      "version": "3.1.0",
-      "author": {
-        "name": "cbmono"
-      },
-      "license": "MIT",
-      "category": "productivity",
-      "keywords": [
-        "loopd-companion",
-        "mod",
-        "usage"
-      ]
-    },
-    {
-      "name": "loopd-mod-pane",
-      "source": "./plugin-mod-pane",
-      "description": "COMPANION to loopd, a mod. /pane opens a pane that draws this bundle's board — in-flight tasks, the need-you rail, per-project counts, the last snapshot time — from .loopd/SNAPSHOT.json in the session's cwd, a fourth renderer over the snapshot writer's contract. Two buttons: Tick runs /loopd:dispatch in THIS session, Refresh re-reads. Its simple mode (a /config choice) draws only project bars, open questions and blocked tasks from the task documents; every answer runs /loopd:answer. No model call, no permission decision, no process, no network, no write. Not installed = the three core renderers are all there is. A companion ADDS behaviour and never removes a core gate.",
-      "version": "3.1.0",
-      "author": {
-        "name": "cbmono"
-      },
-      "license": "MIT",
-      "category": "productivity",
-      "keywords": [
-        "loopd-companion",
-        "mod",
-        "board"
-      ]
-    },
-    {
-      "name": "loopd-mod-signal",
-      "source": "./plugin-mod-signal",
-      "description": "COMPANION to loopd, a mod. A role agent's session tells the project-manager's session that its turn is over, the moment it is over: in a bundle root it records the PM session under loopd.pm.<bundle root>; in a marked worktree it writes loopd.signal.<session id> on every turn.complete and sends the PM ONE `loopd-signal:` line, the same delivery as SendMessage. The line orders step 4's sweep and decides nothing — no task document read, no status written, no prompt submitted. No model call, no permission decision, no process, no network, no file write. Not installed = step 4 reads sessions exactly as before. A companion ADDS behaviour and never removes a core gate.",
-      "version": "3.0.0",
-      "author": {
-        "name": "cbmono"
-      },
-      "license": "MIT",
-      "category": "productivity",
-      "keywords": [
-        "loopd-companion",
-        "mod",
-        "signal"
-      ]
-    },
-    {
-      "name": "loopd-all",
-      "source": "./plugin-all",
-      "description": "BUNDLE of loopd. Everything loopd ships, in one install: the control panel, the autonomy companion and the mods — loopd, loopd-yolo, loopd-mod-usage, loopd-mod-pane and loopd-mod-signal, as dependencies. Ships no component of its own (no hooks, skills, agents or commands), so disabling one dependency disables only this empty bundle and never loopd itself. loopd-accounts and loopd-llm are deliberately NOT in it: both are per-machine decisions their READMEs make the human take by hand.",
-      "version": "3.1.0",
-      "author": {
-        "name": "cbmono"
-      },
-      "license": "MIT",
-      "category": "productivity",
-      "keywords": [
-        "loopd-companion",
-        "bundle"
       ]
     }
   ]

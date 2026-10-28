@@ -1,10 +1,12 @@
 import { expect, test } from 'claude-code/testing'
 
-// Run from this directory: `claude plugin test`. No session, no sign-in, no network, no
+// Run from the plugin root: `claude plugin test`. No session, no sign-in, no network, no
 // file: every path the mod reads is answered by stubs on fs.exists / fs.stat / fs.read over a
 // Map, and the store is a Map too. Each test starts with the module freshly loaded, so the
-// turn counter and the failed-send counter are zero.
+// turn counter and the failed-send counter are zero. The usage and pane switches are OFF
+// here (ONLY), so the stubs below are every hook the signal mod reaches.
 
+const ONLY = { options: { usage: false, pane: false } }
 const BUNDLE = '/work/_loopd-example'
 const PM_SID = 'aaaaaaaa-1111-2222-3333-444444444444'
 const ROLE_SID = 'bbbbbbbb-1111-2222-3333-444444444444'
@@ -71,7 +73,7 @@ async function turn($: any, id = 't1', durationMs = 4321) {
 const EXPECTED_TEXT = 'loopd-signal: role session ' + ROLE_SID + ' finished a turn in ' + WT
   + ' (reason answer, 4321 ms) — settle it first at step 4 of a /loopd:dispatch tick; this line orders the sweep and decides nothing'
 
-test('PM side: a session that starts in a bundle root records itself under loopd.pm.<root>, and its own turns signal nothing', async ($, on) => {
+test('PM side: a session that starts in a bundle root records itself under loopd.pm.<root>, and its own turns signal nothing', ONLY, async ($, on) => {
   const w = world()
   w.files.set(BUNDLE + '/instance.config.json', '{}')
   stubs(on, w, BUNDLE, PM_SID)
@@ -88,7 +90,7 @@ test('PM side: a session that starts in a bundle root records itself under loopd
   expect(w.reads).toEqual([])        // a bundle root never reads .git, commondir or the marker
 })
 
-test('role side: a turn in a marked worktree writes loopd.signal.<sid> and sends the PM exactly one line', async ($, on) => {
+test('role side: a turn in a marked worktree writes loopd.signal.<sid> and sends the PM exactly one line', ONLY, async ($, on) => {
   const w = world()
   worktree(w); pmRecorded(w)
   stubs(on, w, WT, ROLE_SID)
@@ -111,7 +113,7 @@ test('role side: a turn in a marked worktree writes loopd.signal.<sid> and sends
   expect(w.sends.length).toBe(2)
 })
 
-test('a worktree whose repo carries no marker writes nothing and sends nothing', async ($, on) => {
+test('a worktree whose repo carries no marker writes nothing and sends nothing', ONLY, async ($, on) => {
   const w = world()
   worktree(w, null); pmRecorded(w)
   stubs(on, w, WT, ROLE_SID)
@@ -120,7 +122,7 @@ test('a worktree whose repo carries no marker writes nothing and sends nothing',
   expect(w.sends).toEqual([])
 })
 
-test('a marker naming a directory with no instance.config.json is ignored (absence is silence)', async ($, on) => {
+test('a marker naming a directory with no instance.config.json is ignored (absence is silence)', ONLY, async ($, on) => {
   const w = world()
   worktree(w, '/work/not-a-bundle'); pmRecorded(w)
   stubs(on, w, WT, ROLE_SID)
@@ -129,7 +131,7 @@ test('a marker naming a directory with no instance.config.json is ignored (absen
   expect(w.sends).toEqual([])
 })
 
-test('a main clone — .git is a directory — does nothing', async ($, on) => {
+test('a main clone — .git is a directory — does nothing', ONLY, async ($, on) => {
   const w = world()
   w.dirs.add(REPO + '/.git')
   w.files.set(REPO + '/.git/loopd-bundle', BUNDLE + '\n')   // even marked: a main clone is never a role agent
@@ -142,7 +144,7 @@ test('a main clone — .git is a directory — does nothing', async ($, on) => {
   expect(w.reads).toEqual([])        // stat said dir, so nothing was read
 })
 
-test('no PM recorded for the bundle: the store record is written, no message is sent', async ($, on) => {
+test('no PM recorded for the bundle: the store record is written, no message is sent', ONLY, async ($, on) => {
   const w = world()
   worktree(w)                        // no pmRecorded
   stubs(on, w, WT, ROLE_SID)
@@ -151,7 +153,7 @@ test('no PM recorded for the bundle: the store record is written, no message is 
   expect(w.sends).toEqual([])
 })
 
-test('two undelivered sends: the third turn still writes the record and sends nothing more', async ($, on) => {
+test('two undelivered sends: the third turn still writes the record and sends nothing more', ONLY, async ($, on) => {
   const w = world()
   worktree(w); pmRecorded(w)
   stubs(on, w, WT, ROLE_SID, false)
@@ -164,7 +166,7 @@ test('two undelivered sends: the third turn still writes the record and sends no
   expect(w.store.get('loopd.signal.' + ROLE_SID)).toMatchObject({ turns: 3, durationMs: 99, delivered: null })
 })
 
-test('a subagent\'s turn (agentId set) is not the role agent finishing: nothing is written or sent', async ($, on) => {
+test('a subagent\'s turn (agentId set) is not the role agent finishing: nothing is written or sent', ONLY, async ($, on) => {
   const w = world()
   worktree(w); pmRecorded(w)
   stubs(on, w, WT, ROLE_SID)
@@ -173,7 +175,7 @@ test('a subagent\'s turn (agentId set) is not the role agent finishing: nothing 
   expect(w.sends).toEqual([])
 })
 
-test('without a session id nothing is written and nothing is sent', async ($, on) => {
+test('without a session id nothing is written and nothing is sent', ONLY, async ($, on) => {
   const w = world()
   worktree(w); pmRecorded(w)
   stubs(on, w, WT, '')
@@ -182,7 +184,7 @@ test('without a session id nothing is written and nothing is sent', async ($, on
   expect(w.sends).toEqual([])
 })
 
-test('session.receive: a loopd-signal: line passes through to Claude unconsumed, and so does any other text', async ($, on) => {
+test('session.receive: a loopd-signal: line passes through to Claude unconsumed, and so does any other text', ONLY, async ($, on) => {
   const w = world()
   w.files.set(BUNDLE + '/instance.config.json', '{}')
   stubs(on, w, BUNDLE, PM_SID)

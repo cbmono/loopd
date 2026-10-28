@@ -76,21 +76,10 @@ ok "…over at least the two entries that are left (the sweep is not vacuous)" \
 ok "…and that same scanner flags the source the stub entry used to carry" \
    "$(printf './plugin-deprecated\n' | unresolved)" 1
 
-echo "== the ai-bridge alias is a stub for one release, never a second core =="
-# loopd/task-007. The old name stays listed so `ai-bridge@ai-bridge` still resolves, but
-# from its OWN source: a second ./plugin entry would register every hook twice on a machine
-# mid-migration, and release-bump.sh refuses a marketplace with two ./plugin entries.
-ASRC="$(jq -r '.plugins[] | select(.name=="ai-bridge") | .source' "$MJ")"
-ADESC="$(jq -r '.plugins[] | select(.name=="ai-bridge") | .description' "$MJ")"
-ok "the marketplace lists an ai-bridge entry"   "$([ -n "$ASRC" ] && echo yes || echo no)" yes
-ok "…from its own source, not ./plugin"         "$([ -n "$ASRC" ] && [ "$ASRC" != ./plugin ] && echo yes || echo no)" yes
-ok "…whose manifest is named ai-bridge" \
-   "$(jq -r .name "$REPO/${ASRC#./}/.claude-plugin/plugin.json" 2>/dev/null)" ai-bridge
-ok "…and ships no hooks and no agents" \
-   "$([ -e "$REPO/${ASRC#./}/hooks" ] || [ -e "$REPO/${ASRC#./}/agents" ] && echo no || echo yes)" yes
-ok "…its description says it is an alias"       "$(printf '%s' "$ADESC" | grep -c 'ALIAS')" 1
-ok "…and points at MIGRATION.md, which exists" \
-   "$(grep -q 'MIGRATION.md' <<<"$ADESC" && [ -f "$REPO/MIGRATION.md" ] && echo yes || echo no)" yes
+echo "== one core, never a second ./plugin entry (the alias stub was retired 2026-10-28) =="
+# A second ./plugin entry would register every hook twice on a machine mid-migration, and
+# release-bump.sh refuses a marketplace with two. The marketplace's whole shape — exactly
+# loopd and loopd-yolo — is tests/two-plugins.test.sh's.
 ok "exactly one entry is sourced from ./plugin" \
    "$(jq '[.plugins[] | select(.source=="./plugin")] | length' "$MJ")" 1
 

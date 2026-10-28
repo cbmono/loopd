@@ -1,4 +1,8 @@
 {
+  "description": "loopd — the shell hooks (settings hooks, below) and the three mods in one hooks module (usage, pane, signal — each a /config switch; hooks/MODS.md)",
+  "modules": [
+    "./register.ts"
+  ],
   "hooks": {
     "PreToolUse": [
       {
