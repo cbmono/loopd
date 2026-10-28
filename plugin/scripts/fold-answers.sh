@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# fold-answers.sh — move every ` --- `-answered `open_questions` entry into
-# `answered_questions`, stamped `<ISO 8601> by <login> · <entry verbatim>`.
+# fold-answers.sh — move every ` --- `-answered `open_questions` entry (`--keys`: SRC) into
+# `answered_questions` (DST, created if absent), stamped `<ISO 8601> by <login> · <entry verbatim>`.
 #
-#   Usage: fold-answers.sh [--instance DIR] [--answer <entry> <text>] <task-doc>
+#   Usage: fold-answers.sh [--instance DIR] [--keys SRC DST] [--answer <entry> <text>] <doc>
 #          fold-answers.sh --list <task-doc> <frontmatter-key>   # read-only
 #          fold-answers.sh --block Q<n> <task-doc>   # read-only: the ### Q<n> block as JSON, exit 1 if absent
-#          fold-answers.sh --add <task-doc> <entry>...  # append entries, skipping any already open or answered
+#          fold-answers.sh [--keys SRC DST] --add <doc> <entry>...  # append, skipping any open or answered
 # `--answer` appends ` --- <text>` to that one open entry first (answer.sh's in-session answer).
 # Exit: 0 done (nothing to move is also 0) · 2 usage · 3 a list it could not round-trip,
 # nothing written · 4 the move would leave one entry in BOTH lists, nothing written.
@@ -19,11 +19,13 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() { sed -n '6,10p' "$0" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "fold-answers: python3 is required" >&2; exit 2; }
 
-inst="."; doc=""; list_key=""; ans_entry=""; ans_text=""; block_label=""; add_json=""
+inst="."; doc=""; src_key="open_questions"; dst_key="answered_questions"; list_key=""; ans_entry=""; ans_text=""; block_label=""; add_json=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) [ $# -ge 2 ] || usage; inst="$2"; shift 2 ;;
     --list)     [ $# -ge 3 ] || usage; doc="$2"; list_key="$3"; shift 3 ;;
+    --keys)     [ $# -ge 3 ] && [[ "$2" =~ ^[a-z_]+$ && "$3" =~ ^[a-z_]+$ && "$2" != "$3" ]] || usage
+                src_key="$2"; dst_key="$3"; shift 3 ;;
     --answer)   [ $# -ge 3 ] || usage; ans_entry="$2"; ans_text="$3"; shift 3 ;;
     --block)    [ $# -ge 3 ] && [[ "$2" =~ ^Q[0-9]+$ ]] || usage; block_label="$2"; doc="$3"; shift 3 ;;
     # The ONE writer of a new entry, so it goes through the parser that round-trips.
@@ -60,7 +62,7 @@ if [ -z "$list_key$block_label$add_json" ] && [ -x "$HERE/decision-stamp.sh" ]; 
   if git -C "$(dirname "$doc")" show "HEAD:./$(basename "$doc")" > "$head_doc" 2>/dev/null; then
     # Read through this script's own `--list`, so the committed copy is scanned by the one
     # parser. A list it refuses leaves every entry unattributable rather than mis-attributed.
-    if bash "$HERE/$(basename "$0")" --list "$head_doc" open_questions > "$committed_file" 2>/dev/null; then
+    if bash "$HERE/$(basename "$0")" --list "$head_doc" "$src_key" > "$committed_file" 2>/dev/null; then
       committed_state="read"
       login_author="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --author "$doc" 2>/dev/null || true)"
       [ -n "$login_author" ] || login_author="<unknown>"
@@ -71,13 +73,13 @@ if [ -z "$list_key$block_label$add_json" ] && [ -x "$HERE/decision-stamp.sh" ]; 
 fi
 
 python3 - "$doc" "$list_key" "$login_self" "$login_author" "$committed_state" \
-         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ans_entry" "$ans_text" "$block_label" "$add_json" <<'PY'
+         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ans_entry" "$ans_text" "$block_label" "$add_json" "$src_key" "$dst_key" <<'PY'
 import json, os, re, sys, tempfile
 
 ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "/": "/"}
 
 path, list_key = sys.argv[1], sys.argv[2]
-login_self, login_author, committed_state, committed_file, stamp, ans_entry, ans_text, block_label, add_json = sys.argv[3:12]
+login_self, login_author, committed_state, committed_file, stamp, ans_entry, ans_text, block_label, add_json, SRC, DST = sys.argv[3:14]
 src = open(path, encoding="utf-8").read()
 
 
@@ -290,9 +292,9 @@ if add_json:
     for e in adds:
         if not e.strip() or "\n" in e or " --- " in e:
             die(3, "an entry to add must be one non-empty line without ` --- `")
-    open_q, o_at, o_end, o_cmt = read("open_questions")
+    open_q, o_at, o_end, o_cmt = read(SRC)
     have = list(open_q or [])
-    ans_q = read("answered_questions")[0] or []
+    ans_q = read(DST)[0] or []
     seen = {e.split(" --- ", 1)[0] for e in have} | {
         re.sub(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z by [^\n]*? · ", "", a, count=1).split(" --- ", 1)[0]
         for a in ans_q}
@@ -301,20 +303,20 @@ if add_json:
         print("added: 0 entries")
         sys.exit(0)
     if o_at is None:
-        out = src[:FM_END] + "open_questions:" + emit(new_q) + "\n" + src[FM_END:]
+        out = src[:FM_END] + SRC + ":" + emit(new_q) + "\n" + src[FM_END:]
     else:
         out = src[:o_at] + emit(new_q, o_cmt) + src[o_end:]
     src = out
     FM_START, FM_END = frontmatter(out)
-    if find_key("answered_questions") is None:
-        out = out[:FM_END] + "answered_questions: [ ]\n" + out[FM_END:]
+    if find_key(DST) is None:
+        out = out[:FM_END] + DST + ": [ ]\n" + out[FM_END:]
         src = out
         FM_START, FM_END = frontmatter(out)
-    back, _, _, _ = read("open_questions")
+    back, _, _, _ = read(SRC)
     if back != new_q:
         die(3, "the re-parse does not match; nothing written")
     write_out(out)
-    print("added: %d entr%s -> open_questions" % (len(new_q) - len(have), "y" if len(new_q) - len(have) == 1 else "ies"))
+    print("added: %d entr%s -> %s" % (len(new_q) - len(have), "y" if len(new_q) - len(have) == 1 else "ies", SRC))
     sys.exit(0)
 
 if block_label:
@@ -371,8 +373,8 @@ if list_key:
         print(e)
     sys.exit(0)
 
-open_q, o_at, o_end, o_cmt = read("open_questions")
-ans_q, a_at, a_end, a_cmt = read("answered_questions")
+open_q, o_at, o_end, o_cmt = read(SRC)
+ans_q, a_at, a_end, a_cmt = read(DST)
 if open_q is None:
     sys.exit(0)
 if ans_q is None:
@@ -380,7 +382,7 @@ if ans_q is None:
 if ans_entry:
     hits = [i for i, e in enumerate(open_q) if e == ans_entry]
     if len(hits) != 1:
-        die(3, "the entry to answer is not in open_questions exactly once")
+        die(3, "the entry to answer is not in %s exactly once" % SRC)
     if not ans_text.strip() or "\n" in ans_text:
         die(3, "an answer must be one non-empty line")
     open_q = list(open_q)
@@ -445,24 +447,28 @@ if len(keep) + len(answered) != len(open_q):
 new = emit(keep, o_cmt)
 new_a = emit(new_ans, a_cmt)
 
-if a_at is None:
+# A non-default pair creates its destination: `decisions:` is written by refine, alone.
+if a_at is None and DST == "answered_questions":
     die(3, "no answered_questions: key to fold into")
 
 # Highest offset first, so the earlier span's indices stay valid.
-edits = sorted([(o_at, o_end, new), (a_at, a_end, new_a)], reverse=True)
+edits = sorted([(o_at, o_end, new)] + ([(a_at, a_end, new_a)] if a_at is not None else []), reverse=True)
 out = src
 for at, end, text in edits:
     out = out[:at] + text + out[end:]
+if a_at is None:
+    end = frontmatter(out)[1]
+    out = out[:end] + DST + ":" + new_a + "\n" + out[end:]
 
 # THE ROUND TRIP IS THE GUARD: re-read what we are about to write and refuse unless both
 # lists parse back to exactly what we meant.
 src = out
 FM_START, FM_END = frontmatter(out)
-back_o, _, _, _ = read("open_questions")
-back_a, _, _, _ = read("answered_questions")
+back_o, _, _, _ = read(SRC)
+back_a, _, _, _ = read(DST)
 if back_o != keep or back_a != new_ans:
     die(3, "the re-parse does not match; nothing written")
 
 write_out(out)
-print("folded: %d entr%s -> answered_questions" % (len(moved), "y" if len(moved) == 1 else "ies"))
+print("folded: %d entr%s -> %s" % (len(moved), "y" if len(moved) == 1 else "ies", DST))
 PY

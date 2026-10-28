@@ -55,6 +55,10 @@
 #   web queue               not a line: an unconsumed web-board entry (web-queue.sh pending)
 #                           is an immediate DELTA, because the queue is gitignored and moves
 #                           nothing above — and the tick's step 0.95 is what consumes it.
+#   decision answered <project.md>
+#                           a ` --- `-answered `decisions:` entry, an immediate DELTA: step 2
+#                           owes its fold, and a tick whose tasks are all promoted has no draft
+#                           to name step 2 otherwise.
 #   queue/snapshot <present|absent>
 #                           the two artifacts' presence — a stamp that recreates
 #                           AWAITING.md needs one full tick to populate it.
@@ -281,10 +285,10 @@ step2=0 step3=0 step4=0 step5=0 step6=0
 FOLD="$(dirname "${BASH_SOURCE[0]}")/fold-answers.sh"
 CKPT="$(dirname "${BASH_SOURCE[0]}")/continue-checkpoint.sh"
 SESS="$(dirname "${BASH_SOURCE[0]}")/agent-sessions.sh"
-answered_open() { # <file>
-  fmlist "$1" open_questions text 2>/dev/null | grep -qF -- ' --- ' && return 0
-  local parsed
-  parsed="$(bash "$FOLD" --list "$1" open_questions 2>/dev/null)" || return 2
+answered_open() { # <file> [key]
+  local key="${2:-open_questions}" parsed
+  fmlist "$1" "$key" text 2>/dev/null | grep -qF -- ' --- ' && return 0
+  parsed="$(bash "$FOLD" --list "$1" "$key" 2>/dev/null)" || return 2
   printf '%s\n' "$parsed" | grep -qF -- ' --- '
 }
 
@@ -346,6 +350,13 @@ fingerprint() { # <probe|digest>
     # tick and write-snapshot.sh already apply: nothing in a done project can need a
     # tick, and the point is the read that never happens.
     [ "$pst" = "done" ] && continue
+    # An answered `D<n>` is owed step 2's fold whatever the tasks' statuses.
+    if grep -q '^decisions:' "$p"; then
+      answered_open "$p" decisions; case $? in
+        0) printf 'decision answered %s\n' "${p#"$inst"/}"; step2=1 ;;
+        2) return 1 ;;
+      esac
+    fi
 
     ntask=0; nterm=0
     for f in "$d"tasks/*.md; do
@@ -515,6 +526,10 @@ case "$cmd" in
     fi
     if [ "${wq:-0}" != 0 ]; then
       echo "DELTA: $wq web board entr$([ "$wq" = 1 ] && echo y || echo ies) waiting in the queue — step 0.95 consumes them."
+      exit 1
+    fi
+    if printf '%s\n' "$FP" | grep -q '^decision answered '; then
+      echo "DELTA: a project's \`decisions:\` carries an answered entry — step 2 owes its fold."
       exit 1
     fi
     if printf '%s\n' "$FP" | grep -q '^reclaim owed '; then

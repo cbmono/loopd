@@ -24,7 +24,7 @@
 #
 # ROW ORDER IS AN EXECUTION ORDER, read top to bottom, so it is sorted after the walk rather
 # than left in glob order: (1) a task's blocker above it, via `depends_on`, transitively
-# through tasks that have no row; (2) then grant, unblock, do, answer, approve, merge, close, continue;
+# through tasks that have no row; (2) then grant, unblock, do, answer, review, approve, merge, close, continue;
 # (3) then glob order, so an unchanged bundle renders the same page. A cycle or a reference
 # to no live task drops only that edge. The sort reorders `row()`'s output and never
 # composes or drops a row: a failed sort renders glob order.
@@ -40,6 +40,8 @@
 # FAILS CLOSED: an `owner:` on a clone with no ownerGithubUser (task-owner.sh 1), or a
 # malformed one (2), shows no close row. Nor does a project whose terminal task still shows a
 # `👉 do` row: closing it would set `status: done` and drop that row from the page.
+# A `👀 review` row — one per unanswered `D<n>` in project.md's `decisions:` — passes the
+# same two gates, and sorts before `approve` without withholding it.
 #
 # GENERIC PLUGIN FILE — no org, repo or path literals.
 set -uo pipefail
@@ -216,8 +218,8 @@ row() { printf '* %s **%s** — [%s](%s) · %s\n' "$1" "$2" "$3" "$4" "$5"; }
 
 row_txt=(); row_node=(); row_sev=()
 node_lines=""; node=0
-sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; do) echo 2 ;; answer) echo 3 ;;
-                        approve) echo 4 ;; merge) echo 5 ;; close) echo 6 ;; continue) echo 7 ;; *) echo 8 ;; esac; }
+sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; do) echo 2 ;; answer) echo 3 ;; review) echo 4 ;;
+                        approve) echo 5 ;; merge) echo 6 ;; close) echo 7 ;; continue) echo 8 ;; *) echo 9 ;; esac; }
 add() { row_txt+=("$(row "$@")"); row_node+=("$node"); row_sev+=("$(sev_of "$2")"); }
 # A live task becomes a sort node whether or not it renders a row, so an edge through an
 # in-progress or other-owner task still orders what it separates.
@@ -313,6 +315,16 @@ EOF
         add "⛔" unblock "$t" "$rel" "${trail:-$DEF_UNBLOCK}" ;;
     esac
   done
+
+  if [ "$held" = 0 ] && grep -q '^decisions:' "$pm" && mine "$pm"; then
+    dlist="$(entries "$pm" decisions)" || fail3 "cannot read decisions in ${pm#"$inst"}"
+    add_node "$pm" "${pm#"$inst"}" "$slug"
+    while IFS= read -r e; do
+      case "$e" in D[0-9]*:*) case "$e" in *' --- '*) ;; *) add "👀" review "$(title_of "$pm")" "${pm#"$inst"}" "$e" ;; esac ;; esac
+    done <<EOF
+$dlist
+EOF
+  fi
 
   if [ "$held" = 0 ] && [ "$owed" = 0 ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && mine "$pm"; then
     add_node "$pm" "${pm#"$inst"}" "$slug"

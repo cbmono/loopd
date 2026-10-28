@@ -67,8 +67,8 @@ answered. A document no row names has no owner, so add the row before the docume
 # Schema
 
 **Frontmatter lists — the one rule.** A NON-EMPTY `acceptance_criteria`, `open_questions`,
-`answered_questions`, `depends_on`, `deliverable_paths`, `open_caveats` or `advisor_notes`
-is a YAML block sequence: one quoted entry per line, indented two spaces under its key. An
+`answered_questions`, `decisions`, `acknowledged_decisions`, `depends_on`, `deliverable_paths`,
+`open_caveats` or `advisor_notes` is a YAML block sequence: one quoted entry per line, indented two spaces under its key. An
 EMPTY one stays `[ ]` on the key's own line, because a block sequence cannot express empty.
 Flow form (`key: [ "a", "b" ]`) still reads correctly forever; it is just no longer written.
 
@@ -116,6 +116,8 @@ no_owner: <who is allowed to say no>                                  # NOT the 
 timebox: <N>d | <N>w                  # optional, and absent on almost every project. PERMISSION TO STOP: this project is an experiment, and ending it when the box runs out is the plan, not an admission. A duration measured from this file's `timestamp:`. Inert until something reads it — see "Time-boxed projects" below
 continued: <YYYY-MM-DD> <n>           # optional, WRITTEN BY THE HUMAN as the answer to the continue checkpoint: the date they said "continue" and how many tasks were `done` then. Copied from the `AWAITING.md` row, which prints it. Re-arms the question from that point — see "The continue checkpoint" below
 non_goals: [ "<what this project deliberately does not do>", ... ]   # optional, PROJECT ONLY — there is no such key on a Task. Short strings, so a role agent does not gold-plate and a reviewer can say "that was ruled out". Not validated, and `/new-project` never asks for it. A decision that recurs across projects belongs in a `Finding` (`knowledge/`) instead, because a project's frontmatter leaves with the project.
+decisions: [ "D<n>: <decision> — alternatives: …; why: …; reversible: …", ... ]   # optional, written by refine (step 2): one entry per technical choice `original_request` did not state — technology, topology, data model, consistency or caching, security model, external dependency. Naming a file or a function is not one. ONLY UNANSWERED entries: each renders one `👀 review` row in AWAITING.md, and the owner answers by appending ` --- <answer>` on the same line — ` --- ok` or ` --- ack` acknowledges, any other answer overturns it. Never hand-edited: `fold-answers.sh --keys decisions acknowledged_decisions` moves and appends. No validator checks the entry text, as with every free-text list. **No customer PII.**
+acknowledged_decisions: [ "<ISO 8601> by <login> · <entry verbatim>", ... ]   # flat, not machine-read history, the `answered_questions` of `decisions:`: EVERY answered entry moves here, acknowledged or overturned, with its answer verbatim, so nothing re-folds and nothing is deleted. An overturn is folded into the affected tasks by the same tick and recorded as a fresh `D<n>`. Created on the first move. Read by `qa-reviewer` beside `answered_questions`.
 target_repo: <org>/<repo>             # BUILD only: default repo for this project's tasks (<org> from instance.config.json). Omit for research.
 deliverables: [ "<artifact>", ... ]   # RESEARCH only: what this project produces, e.g. "tech landscape per domain (md)", "exec summary deck (marp)"
 autonomy: gated | <mode>              # optional (default gated). gated = the human promotes `ready` AND merges — both gates absolute. Any other value names a delegated-authority mode defined in `AUTONOMY.md`, and is INERT unless that file exists (absent ⇒ gated). See "Delegated authority" below.
@@ -994,7 +996,7 @@ Everything between `ready` and `done` is the PM's to drive autonomously.
 GitHub login — never an address** (`people` maps the two, and an email in a task document
 is the no-PII rule broken). Git history knows who authored the bundle commit; the document
 a reader opens has to say it too, or a shared bundle's audit trail is a `git log`
-archaeology exercise. The four stamps: an `answered_questions` entry reads
+archaeology exercise. The four stamps: an `answered_questions` (or `acknowledged_decisions`) entry reads
 `<ISO 8601> by <login> · <the entry verbatim>`; a promotion `draft → ready` is stamped by
 the **next tick** as one `# Notes` line, `promoted <ISO 8601> by <login>`; a preview
 approval is `preview approved <ISO 8601> by <login>` on the same list; and a project

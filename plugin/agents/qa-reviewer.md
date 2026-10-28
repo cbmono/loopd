@@ -356,8 +356,9 @@ signature". Never on a PR body.
 
    **Advisory, and never a trailer `caveats:` entry (clause 6 would refuse the pass):** a
    new dependency, a schema or migration change, or a new public interface that neither
-   `acceptance_criteria` nor `answered_questions` names gets one "Unapproved decision:"
-   line in the comment. Style or design preference never qualifies — "grade against the criteria, not against your own taste" (`CONVENTIONS.md`).
+   `acceptance_criteria`, `answered_questions` nor the project's `acknowledged_decisions:`
+   (in the `project.md` your brief names) records gets one "Unapproved decision:" line in
+   the comment. Style or design preference never qualifies — "grade against the criteria, not against your own taste" (`CONVENTIONS.md`).
 
    **`pass` is only ever `pass`: a non-empty `unverified_criteria` or `caveats` forces
    `changes-requested` or `inconclusive`, whichever fits.** `SCHEMA.md`'s clearance
