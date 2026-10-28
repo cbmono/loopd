@@ -123,7 +123,7 @@ config-uncommitted|ambiguous|yes
 config-layers|ambiguous|no
 config-unknown-keys|ambiguous|yes
 review-config|ambiguous|yes
-output-style|ambiguous|yes
+output-style|ambiguous|no
 tick-lock|human|yes
 orphan-processes|human|yes'
 
@@ -1007,7 +1007,8 @@ check_review_config() {
 # the two is missing and prints the one-line fix. It writes neither: config files are the
 # human's (CHECK 4), and a style selection is a per-bundle choice this script must not make.
 # A DIFFERENT style selected on purpose is a choice, not a problem — reported as ✓ with the
-# name, never as ⚠. Measured 2026-10-28 on Claude Code 2.1.312: a project-level
+# name, never as ⚠. OFF THE BANNER PATH (`no`): a one-time nudge belongs in `check` and in the
+# init pass that follows every plugin update, not on every session's first screen. Measured 2026-10-28 on Claude Code 2.1.312: a project-level
 # `.claude/output-styles/<name>.md` is loaded; the same file inside a plugin is not.
 check_output_style() {
   _warned=0
