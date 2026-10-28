@@ -903,7 +903,7 @@ boardArtifactUrl"
     while IFS= read -r k; do
       [ -n "$k" ] || continue
       case "$k" in \$*) continue ;; esac
-      if ! printf '%s\n' "$fknown" | grep -qFx -- "$k"; then
+      if ! grep -qFx -- "$k" <<<"$fknown"; then
         unknown="${unknown:+$unknown }$f:$k"
       fi
     done <<EOF
@@ -924,7 +924,7 @@ EOF
       [ -n "$e" ] || continue
       lv=""; for l in $EFFORT_LEVELS; do [ "$v" = "$l" ] && lv=1; done
       [ -n "$lv" ] || { effort="${effort:+$effort }$f:roleEffort.$e=$v"; continue; }
-      printf '%s\n' "$tiers" | grep -qFx -- "$e" && continue
+      grep -qFx -- "$e" <<<"$tiers" && continue
       case "$agents " in *" $e.md "*) continue ;; esac
       effort="${effort:+$effort }$f:roleEffort.$e(no roleTiers twin)"
     done <<EOF
