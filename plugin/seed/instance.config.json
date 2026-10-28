@@ -63,7 +63,7 @@
     "cataloguer",
     "auditor"
   ],
-  "$roles": "Agents the PM may dispatch as TASK ASSIGNEES. Not every configured agent belongs here \u2014 `plan-architect` is deliberately absent: `/plan` and the PM's approach critique dispatch it directly, and no task is ever assigned to it. See `$roleTiers` and SCHEMA.md 'type: Agent'.",
+  "$roles": "Agents the PM may dispatch as TASK ASSIGNEES. Not every configured agent belongs here \u2014 `plan-architect` is deliberately absent: `/plan` and the PM's approach critique dispatch it directly (as `loopd:plan-architect`, a plugin agent), and no task is ever assigned to it. See `$roleTiers` and SCHEMA.md 'type: Agent'.",
   "$models": "Which model alias each TIER costs. PER-MACHINE SPEND, and /loopd:init seeds this key into instance.config.local.json on any stamp that finds it missing there -- so on a stamped instance the LOCAL copy is the one in force and the session banner's FROM column reads `local`. This tracked copy stays as the fallback and as the seed source: removing it would let an unseeded instance resolve to nothing, and an agent that resolves to nothing inherits the session model with no error. Edit the LOCAL file to change what this machine pays; a partial local map overrides entry by entry, and the installer never tops it up. See SCHEMA.md, 'Per-machine config overrides'.",
   "models": {
     "light": "haiku",

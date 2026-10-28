@@ -126,11 +126,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    - **The namespace is not optional** — the role agents ship in the `loopd` plugin
      and a bare agent name does NOT resolve (measured 2026-09-02); it fails with "no
      such agent", never with "you forgot the namespace". **It applies to every one of
-     the seven** — `loopd:cataloguer`, `loopd:auditor`, `loopd:qa-reviewer`
-     and the rest, wherever this document tells you to dispatch one. The three
-     USER-level agents `init-bundle.sh --config` puts in `~/.claude/agents/` —
-     `code-architect`, `deep-bug-scan`, `plan-architect` — are not plugin agents, stay
-     BARE, and are still `Agent`-tool dispatches because they are advisory and short.
+     the ten** — `loopd:cataloguer`, `loopd:auditor`, `loopd:qa-reviewer`
+     and the rest, wherever this document tells you to dispatch one. The three advisory
+     review agents ship in the same plugin since 2026-10-28 — `loopd:code-architect`,
+     `loopd:deep-bug-scan`, `loopd:plan-architect` — so they take the namespace too
+     (their bare names used to resolve only because `init-bundle.sh --config` linked them
+     into `~/.claude/agents/`; that layer is gone), and they are still `Agent`-tool
+     dispatches because they are advisory and short.
    - **`< /dev/null`**, so the spawn cannot inherit and hold your stdin.
 
    **The cap counts SESSIONS, and you read it rather than remember it.** The ceiling is

@@ -411,9 +411,12 @@ ticks, regardless of how long a tick runs.
 - A LIVE tick may also dispatch the **`cataloguer`** (`loopd:cataloguer`) after
   reflecting merges — read-only on product repos, writes only to `knowledge/`,
   **counts toward the cap**, **throttled to one per tick**, never promotes or merges.
-- **Every role-agent dispatch is namespaced `loopd:<role>`** — all eight of them.
-  The three USER-level agents `init-bundle.sh --config` installs (`code-architect`, `deep-bug-scan`,
-  `plan-architect`) are not plugin agents and stay bare.
+- **Every agent dispatch is namespaced `loopd:<name>`** — the seven role agents and the
+  three advisory review agents (`loopd:code-architect`, `loopd:deep-bug-scan`,
+  `loopd:plan-architect`), which ship in the plugin since 2026-10-28 and no longer come
+  from `~/.claude/agents/`. A bare name resolves for none of the ten. The `roleTiers` /
+  `roleEffort` KEY stays bare (`plan-architect`); only the dispatch string carries the
+  namespace.
 - Commit hygiene in this repo: commit only your own changed files, by explicit path
   (never `git add -A`), via
   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "<msg>" --stage -- <path>...`

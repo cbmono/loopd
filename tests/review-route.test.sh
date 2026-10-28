@@ -57,6 +57,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"   # PN: the plugin namespace a dispatch string carries
 pass=0; fail=0
 ok() { # <name> <actual> <expected>
   if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
@@ -181,11 +182,16 @@ ok "both escalation agents are still named"   "$([ "$(first_line_or0 "$QA" 'code
 # CodeRabbit after choosing a route is how a PR gets reviewed twice over one diff.
 ok "the external reviewer is resolved first"  "$(yn before "$QA" '.coderabbit.yaml' 'default opening move')" yes
 
-# The probes are what make a config-less machine work, and tests/config-layer.test.sh:103-104
-# derives its "every probed agent ships" check from these exact strings. Escalation that
-# stopped probing would take that check down with it, in another file.
-ok "still probes for code-architect"          "$(yn grep -qF -- 'test -f ~/.claude/agents/code-architect.md' "$QA")" yes
-ok "still probes for deep-bug-scan"           "$(yn grep -qF -- 'test -f ~/.claude/agents/deep-bug-scan.md' "$QA")" yes
+# The pair ships in the PLUGIN since 2026-10-28 (it used to be linked into ~/.claude/agents
+# by `init-bundle.sh --config`, which qa-reviewer probed with `test -f`). A plugin agent
+# exists wherever the plugin does and resolves ONLY namespaced, so the escalation names
+# `loopd:code-architect` / `loopd:deep-bug-scan` and probes nothing: a probe of a path
+# that no longer exists would read as "absent" on every machine and silently retire the
+# escalation — the exact silent degradation the old probe was written to avoid.
+ok "the pair is dispatched namespaced"        "$(yn near "$QA" 'Escalate when' "${PN}:code-architect" 14)" yes
+ok "…both halves of it"                       "$(yn grep -qF -- "${PN}:deep-bug-scan" "$QA")" yes
+ok "…and nothing probes ~/.claude/agents"     "$(yn grep -qF -- 'test -f ~/.claude/agents/' "$QA")" no
+ok "…nor names the pair bare in a dispatch"   "$(yn grep -qE -- '(dispatch|Dispatch|Brief) \`(code-architect|deep-bug-scan)\`' "$QA")" no
 
 # ============================================================== 4. absent ⇒ unchanged
 echo "== the degrade path =="
@@ -218,8 +224,8 @@ echo "== the prices the gate is arbitrating =="
 # is guarding nothing. Fail here and reconsider the design rather than keeping the gate as
 # cargo. Pinned to exactly `opus`, so a rename or a variant also fails — deliberately.
 for a in code-architect deep-bug-scan; do
-  f="$REPO/config/required/agents/$a.md"
-  ok "$a ships"                               "$(yn test -f "$f")" yes
+  f="$REPO/plugin/agents/$a.md"
+  ok "$a ships, in the plugin"                "$(yn test -f "$f")" yes
   ok "…and declares model: opus"              "$(awk 'NR==1&&$0=="---"{fm=1;next} fm==1&&$0=="---"{exit} fm==1&&/^model:/{sub(/^model:[[:space:]]*/,"");print}' "$f")" opus
 done
 # THE CHEAP SIDE, which is half the design and had no test at all until an independent

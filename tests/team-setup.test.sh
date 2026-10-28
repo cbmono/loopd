@@ -19,14 +19,15 @@
 #      and an unreadable line all leave the config byte-identical — a map that resolves
 #      for one human and silently falls through for the other is the failure this whole
 #      design exists to avoid.
-#   5. --config NEVER PROMPTS. It writes into ~/.claude and has no instance at all.
+#   5. --config NEVER PROMPTS. It is retired (2026-10-28) and refused before the parser
+#      finishes; it has no instance at all.
 #
 # …and then the positive path, because a test that only asserts the refusal would pass a
-# script that refuses everything (this directory's rule, and the reason
-# installer-worktree-guard.test.sh asserts both directions).
+# script that refuses everything (this directory's rule: a test that only asserts the
+# refusal is vacuous — assert both directions).
 #
-# ok() compares actual to expected, in that argument order — the convention in
-# config-layer.test.sh, which tests the same script. Inverting it is the mistake this
+# ok() compares actual to expected, in that argument order — this directory's
+# convention. Inverting it is the mistake this
 # codebase keeps making: a command that fails for the WRONG reason becomes a pass through
 # a negated helper.
 #
@@ -344,13 +345,13 @@ ok "…it says a write could not be verified" "$(said 'could not be verified')" 
 ok "…and the config is byte-identical"    "$(same_as_seed "$I")" yes
 
 # =========================================================================== #
-echo "-- 6. --config never prompts (it has no instance at all)"
+echo "-- 6. --config never prompts (it is retired, and has no instance at all)"
 # The negative is paired with the positive above deliberately: the same piped answer and
 # the same TEAM_SETUP_STDIN=1 that DO produce a prompt in instance mode (section 2) must
 # produce none here, so this cannot pass by the prompt being broken everywhere.
 D="$TMP/cfgdest"; mkdir -p "$D"
 printf '%s' "$ANSWER" | CLAUDE_CONFIG_DIR="$D" TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" --config >"$TMP/out" 2>&1
-ok "--config exits 0"                     "$?" 0
+ok "--config is refused (retired)"        "$?" 2
 ok "…asks nothing"                        "$(asked)" no
 ok "…and writes no instance config"       "$(yn test -e "$D/instance.config.json")" no
 printf '%s' "$ANSWER" | CLAUDE_CONFIG_DIR="$D" TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" --config --uninstall >"$TMP/out" 2>&1
@@ -358,12 +359,11 @@ ok "--config --uninstall asks nothing"    "$(asked)" no
 
 # =========================================================================== #
 echo "-- 7. the guards that were already here still hold"
-# THE WORKTREE GUARD IS `--config`'s ALONE NOW (task-013). It existed because a bundle
-# stamp wrote absolute symlinks into the source checkout — delete the worktree and every
-# one of them dangled. A stamp writes no such link any more, so refusing here would refuse
-# a stamp that is perfectly safe, and it was the reason every fixture in this suite had to
-# copy the template out of the checkout first. `--config` still links into
-# ${CLAUDE_CONFIG_DIR:-~/.claude} by absolute path, so for that half nothing changed.
+# THE WORKTREE GUARD IS GONE (task-013 narrowed it to `--config`; `--config` retired on
+# 2026-10-28). It existed because a bundle stamp wrote absolute symlinks into the source
+# checkout — delete the worktree and every one of them dangled. A stamp writes no such link
+# any more, so refusing here would refuse a stamp that is perfectly safe, and it was the
+# reason every fixture in this suite had to copy the template out of the checkout first.
 WM="$TMP/wtmain"; make_tpl "$WM"
 ( cd "$WM" && git init -q . && git add -A && git -c user.name=t -c user.email=t@t commit -qm init ) >/dev/null 2>&1
 git -C "$WM" worktree add -q "$TMP/wtlinked" -b wt >/dev/null 2>&1
@@ -373,10 +373,6 @@ ok "from a worktree: a bundle stamp is allowed" "$?" 0
 ok "…and it asked, like any other stamp"  "$(asked)" yes
 ok "…and it stamped"                      "$(yn test -e "$I/instance.config.json")" yes
 ok "…leaving no symlink behind"           "$([ -z "$(find "$I" -type l 2>/dev/null)" ] && echo yes || echo no)" yes
-D_WT="$TMP/dest-wt"; mkdir -p "$D_WT"
-CLAUDE_CONFIG_DIR="$D_WT" bash "$TMP/wtlinked/plugin/scripts/init-bundle.sh" --config >"$TMP/out" 2>&1
-ok "…while --config from that same worktree still exits 2" "$?" 2
-ok "…saying why"                          "$(said 'refusing to link the config layer from a git worktree')" yes
 # The bare-TARGET interface: three live instances and upgrade.sh call it that way.
 I="$(newinst 17)"
 printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1

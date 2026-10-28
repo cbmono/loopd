@@ -26,8 +26,9 @@ stamped by this script: it removes the machinery symlinks into a template checko
 and leaves your data untouched. You no longer need a clone of cbmono/loopd on
 this machine at all.
 
-  · the ~/.claude config layer (was `install.sh --config`):
-       bash <clone>/plugin/scripts/init-bundle.sh --config
+  · the ~/.claude config layer (was `install.sh --config`): RETIRED — the three agents
+       it linked ship in the plugin now (loopd:code-architect, loopd:deep-bug-scan,
+       loopd:plan-architect); nothing to install
   · the seed 3-way merge (was `upgrade.sh`):
        /loopd:welcome fix
 

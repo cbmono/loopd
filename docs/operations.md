@@ -29,13 +29,12 @@ fixture shaped like the REPO, never against an installed plugin. `seed/`, `RETIR
 mirror of `VERSION` ship inside `plugin/` now, and the root is derived one directory above
 `scripts/` — the plugin root in both layouts.
 
-**Exactly one thing still needs a clone, and it is not the stamp: `init-bundle.sh
---config`.** It links three agent files into `${CLAUDE_CONFIG_DIR:-~/.claude}` by absolute
-path, so `config/` stays out of the plugin on purpose — where `~/.claude` points is a
-per-machine decision, and `plugin/` must never *require* `config/`. A bundle never needs
-that layer (the role agents probe for those agents with `test -f`), and from an installed
-plugin `--config` refuses by name with the clone command rather than reporting a directory
-it never mentioned.
+**Nothing needs a clone any more.** Until 2026-10-28 `init-bundle.sh --config` did: it
+linked three advisory agent files into `${CLAUDE_CONFIG_DIR:-~/.claude}` by absolute path
+from a clone's `config/`. Those agents (`code-architect`, `deep-bug-scan`, `plan-architect`)
+ship in the plugin now, dispatched `loopd:<name>`, so the flag refuses by name and a stamp
+only reports a dangling link an older run left ([README § The config
+layer](../README.md#the-config-layer)).
 
 **Install is therefore the plugin first, the stamp second.** A machine with the plugin and
 no bundle has commands and nothing for them to read; a bundle with no plugin has the data
@@ -337,21 +336,17 @@ was moved with a plain `mv`. Every symlink was absolute, so everything broke at 
 | where | dangling symlinks |
 |---|---|
 | three instances | 39 + 64 + 58 |
-| `~/.claude` (the `--config` layer) | 24 |
+| `~/.claude` (the `--config` layer, retired 2026-10-28) | 24 |
 
 **185 broken links, and all three instances looked fine from the outside.** A dangling
 symlink is invisible until something executes it — which for a `/loopd:dispatch` tick
 means mid-dispatch, with agents already briefed.
 
-**The bundle half of that cannot happen again**, because a stamped bundle holds no link
-into any checkout. Moving this repo now costs exactly one thing: the `--config` layer's 24
-links into `~/.claude`, repaired by
-
-```
-bash <plugin>/scripts/init-bundle.sh --config
-```
-
-from the checkout's new location.
+**None of that can happen again**: a stamped bundle holds no link into any checkout, and
+since 2026-10-28 neither does `~/.claude` — the `--config` layer that put links there is
+retired, its three agents ship in the plugin. Moving this repo costs nothing on a machine
+that installed the plugin; a link an older `--config` left is reported by `/loopd:init`
+with the `rm`.
 
 **A bundle that has not been converted yet is still in the old state**, and that is what
 the detection below is for.

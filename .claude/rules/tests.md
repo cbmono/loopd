@@ -118,7 +118,7 @@ guard and leave its harness behind, with the required check green.
 
 - **`ok()` compares actual to expected, in that argument order**, and every harness prints its own `pass=/fail=` (or `N passed, N failed`) line and exits non-zero on any failure. Keep both.
 - **Harnesses live here, never under `/plugin/`.** Everything under `plugin/` ships into every instance, and a fixture harness is not machinery an instance needs.
-- **A test that only asserts the refusal is vacuous.** Assert **both directions** — that the guard fires *and* that the normal path still works. `installer-worktree-guard.test.sh` says so in its header: "It refuses in a worktree" alone would pass a script that refuses everywhere.
+- **A test that only asserts the refusal is vacuous.** Assert **both directions** — that the guard fires *and* that the normal path still works. "It refuses in a worktree" alone would pass a script that refuses everywhere (the retired `installer-worktree-guard` harness's header said so; `team-setup.test.sh` §7 keeps the positive half).
 - **Assert the property, not the implementation text.** `derived-indexes.test.sh` checks `git check-ignore --no-index` rather than the pattern string; `snapshot.test.sh` asserts no key outside the documented allowlist is emitted.
 - **Every capability that can be turned off needs a test proving it is off when the file is gone** — `commit-as-guard.test.sh` for `AUTONOMY.md`, `awaiting-queue.test.sh` for `AWAITING.md`. ([conventions 4](../../docs/conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file))
 - **A path that can emit a *false zero* or a false success is the highest-value thing to test here.** `push-state.test.sh` guards an authoritative `in-flight 0` produced by an unreadable file; `migrate-bundle.test.sh` guards a `FIXED` printed for a write that never landed.
@@ -128,19 +128,16 @@ guard and leave its harness behind, with the required check green.
 - **An operator-facing "run this" notice emits through `ab_say_run <lead> <script> [arg...]`** (`plugin/scripts/bundle-paths.sh`), so `printed-commands.test.sh` can execute what it prints; a `<slot>` or variable in it needs a stated dummy in that harness, or it goes red. A command welded into a sentence is invisible to it, and the sentence is what shipped `migrate-bundle.sh --layout --apply` against a parser that accepts only `--apply`.
 - **Fixtures must not touch the user's real `~/.claude` or a real instance.** Build a throwaway repo under `mktemp -d` and copy the script under test into it.
 
-## Run the suite from the MAIN checkout, never a worktree
+## The suite runs from a worktree
 
-Four harnesses — `derived-indexes`, `link-repos`, `snapshot` and `board-renderers` —
-invoke this repo's own `init-bundle.sh --config`, which **refuses to run from a git worktree**
-by design (it would create symlinks into a directory that `git worktree remove` later
-deletes). So running the suite inside a worktree fails those four, well over a hundred
-assertions, for a reason that has nothing to do with the code under test.
-
-That is the guard working, not a bug — but it reads exactly like a regression, so: run the
-suite from the main working tree, or from a fresh clone. None of the four needs `# serial`:
-from a real checkout all 111 pass in the pool (measured 2026-09-13, 8,581 assertions, 0
-failed). If you are working in a worktree,
-clone to a temp directory to verify.
+It did not always: until 2026-10-28 four harnesses — `derived-indexes`, `link-repos`,
+`snapshot` and `board-renderers` — invoked `init-bundle.sh --config`, which refused to run
+from a linked git worktree by design, so a run inside one failed well over a hundred
+assertions for a reason unrelated to the code under test. `--config` is retired (the three
+agents it linked ship in the plugin) and the guard went with it; `tests/worktree-suite-parity.test.sh`
+asserts a stamp from a worktree. Role agents work in worktrees, so this is the shape that
+matters. From a real checkout all harnesses pass in the pool (measured 2026-09-13, 8,581
+assertions, 0 failed, 111 harnesses).
 
 ## The 256-descriptor cliff — why `harness-read-paths` hangs, and how to re-measure it
 

@@ -110,7 +110,7 @@ ok "init-bundle.sh's default roleEffort == the seed's" "$DEF" "$(python3 -c 'imp
 fm() { awk -v k="$2" 'NR==1 && $0=="---" {f=1; next} f && $0=="---" {exit} f && index($0, k ": ")==1 {print substr($0, length(k)+3); exit}' "$1"; }
 for a in "$REPO"/plugin/agents/*.md; do
   n="$(basename "$a" .md)"; want="$(jval "$SEED" roleEffort "$n")"
-  [ "$want" = - ] && want=high   # failure-analyst: no roleTiers entry, diagnosis is adjudication
+  [ "$want" = - ] && want=high   # failure-analyst, code-architect, deep-bug-scan: no roleTiers entry; diagnosis and review are adjudication
   ok "$n frontmatter effort == its seed entry"   "$(fm "$a" effort)" "$want"
 done
 

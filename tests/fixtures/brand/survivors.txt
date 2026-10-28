@@ -88,7 +88,6 @@ prov,instdir	tests/commit-as-identity.test.sh
 prov	tests/commit-attribution.test.sh
 prov	tests/companion-plugins.test.sh
 prov,fname	tests/concision-contract.test.sh
-frozen	tests/config-layer.test.sh
 prov,instdir,frozen	tests/config-override.test.sh
 prov	tests/decision-stamp.test.sh
 instdir,frozen	tests/deliverable-paths-vs-yaml.test.sh
@@ -110,7 +109,6 @@ prov,alias	tests/index-ignore-restamp.test.sh
 prov	tests/init-local-config.test.sh
 prov,instdir	tests/init-org-bundle.test.sh
 prov,instdir	tests/install-era-wording.test.sh
-prov,frozen	tests/installer-worktree-guard.test.sh
 prov	tests/kb-index-integrity.test.sh
 prov	tests/kb-mount.test.sh
 prov,frozen	tests/kb-sync-write.test.sh

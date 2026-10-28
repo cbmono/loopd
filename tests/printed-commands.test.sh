@@ -25,9 +25,9 @@
 # CLAUDE_CONFIG_DIR (knowledge/findings/a-printed-command-is-only-probe-safe-where-the-
 # bundle-guard-precedes-the-first-write.md in the control panel). Two scripts have no such
 # guard in their own context, so each gets a stated CONTEXT that reaches a refusal after
-# the parser: init-bundle.sh runs as an installed plugin (no config/ beside it) with
-# --config, and tick-lock.sh gets an --instance that does not exist. Section 3 proves no
-# probe wrote. `--help` is never passed: it exits before the later arguments are read.
+# the parser: init-bundle.sh gets a TARGET that exists and is not a directory (refused
+# after the parser, before the first write), and tick-lock.sh gets an --instance that does
+# not exist. Section 3 proves no probe wrote. `--help` is never passed: it exits before the later arguments are read.
 #
 # Exit codes: 0 clean, 1 an assertion failed, 2 the tree is not readable.
 # Reasoning: seed-gaps-and-worktree-cleanup/task-003, task-005.
@@ -59,7 +59,6 @@ plugin/scripts/init-bundle.sh|init-bundle.sh '--owner <github-login>'
 plugin/scripts/init-bundle.sh|init-bundle.sh '--repos-root <absolute path>'
 plugin/scripts/init-bundle.sh|kb-sync.sh commit --message '\"<message>\"' -- '<path>...'
 plugin/scripts/init-bundle.sh|kb-sync.sh pull
-plugin/scripts/init-bundle.sh|loopd/plugin/scripts/init-bundle.sh --config
 plugin/scripts/init-bundle.sh|migrate-bundle.sh --layout-only
 plugin/scripts/init-bundle.sh|migrate-bundle.sh --layout-only --apply
 plugin/scripts/kb-sweep-due.sh|build-kb-index.sh --check
@@ -83,10 +82,13 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/printedcmd.XXXXXX")" || {
   echo "printed-commands.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 OUTSIDE="$TMP/outside"; HOME_T="$TMP/home"; CFG_T="$TMP/cfg"; BUNDLE="$TMP/bundle"; CAP="$TMP/cap"
-INSTALLED="$TMP/installed"; ABSENT="$TMP/absent"
+INSTALLED="$TMP/installed"; ABSENT="$TMP/absent"; NOTDIR="$TMP/notdir"
 mkdir -p "$OUTSIDE" "$HOME_T" "$CFG_T" "$BUNDLE/.loopd" "$CAP" "$INSTALLED"
+# init-bundle.sh's refusal context: a TARGET that exists and is not a directory is refused
+# right after the parser ("exists and is not a directory", exit 2) and before any write.
+: > "$NOTDIR"
 : > "$BUNDLE/instance.config.json"; : > "$BUNDLE/SCHEMA.md"   # a fake un-migrated bundle
-# An installed plugin: the real scripts with no marketplace (so no config/) above them.
+# An installed plugin: the real scripts with no marketplace above them.
 ln -s "$SCRIPTS" "$INSTALLED/scripts"; ln -s "$REPO/plugin/VERSION" "$INSTALLED/VERSION"
 ln -s "$REPO/plugin/seed" "$INSTALLED/seed"
 
@@ -145,7 +147,7 @@ SLOTS="<agent-id>=probe-agent-0001
 <absolute path>=$OUTSIDE"
 printf '%s\n' "$VARS"  | sed 's/^/  dummy  $/'
 printf '%s\n' "$SLOTS" | sed 's/^/  dummy  /'
-echo "  context  init-bundle.sh: run as an installed plugin ($INSTALLED) with --config appended"
+echo "  context  init-bundle.sh: run as an installed plugin ($INSTALLED) with a non-directory TARGET appended"
 echo "  context  tick-lock.sh:   --instance $ABSENT appended (a directory that does not exist)"
 
 render() { # <cmd source> — the line ab_say_run prints with every variable a dummy
@@ -190,7 +192,7 @@ while IFS='|' read -r f cmd; do
   if [ ! -r "$SCRIPTS/$s" ]; then ok "$f: '$line' names a script that exists" no yes; continue; fi
   run="$SCRIPTS/$s"; args=("${argv[@]:1}")
   case "$s" in
-    init-bundle.sh) run="$INSTALLED/scripts/$s"; args+=(--config) ;;
+    init-bundle.sh) run="$INSTALLED/scripts/$s"; args+=("$NOTDIR") ;;
     tick-lock.sh)   args+=(--instance "$ABSENT") ;;
   esac
   printf '  probe  %s  ->  %s' "$f" "$s"; [ "${#args[@]}" -eq 0 ] || printf ' %q' "${args[@]}"; echo

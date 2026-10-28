@@ -27,11 +27,10 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$(
 FIX="$TMP/repo"
 mkdir -p "$FIX/tests" "$FIX/plugin/scripts"
 
-# Half 1 of the parity harness stamps a bundle and re-checks the --config guard; this
-# stands in for both so the only stderr the run produces comes from half 2.
+# Half 1 of the parity harness stamps a bundle from the worktree; this stands in for the
+# installer so the only stderr the run produces comes from half 2.
 cat >"$FIX/plugin/scripts/init-bundle.sh" <<'EOS'
 #!/usr/bin/env bash
-[ "${1:-}" = "--config" ] && { echo "refusing to link the config layer from a git worktree" >&2; exit 2; }
 mkdir -p "$1" && printf '{}\n' >"$1/instance.config.json"
 EOS
 

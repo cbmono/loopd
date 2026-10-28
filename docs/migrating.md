@@ -329,8 +329,9 @@ can look at what remains and confirm every last file of it is yours.
 
 **The plugin is not part of any of this.** It is per machine and every instance on that
 machine uses it, so do not uninstall `loopd`. Uninstall `ai-bridge-v2` if it is still
-listed. The optional `~/.claude` config layer is its own separate thing:
-`init-bundle.sh --config --uninstall` ([README § Uninstall](../README.md#uninstall)).
+listed. The optional `~/.claude` config layer is retired (2026-10-28): a link it left in
+`~/.claude/agents/` is reported by `/loopd:init` with the `rm`
+([README § The config layer](../README.md#the-config-layer)).
 
 ## The Brief output style (3.17.0 onward)
 

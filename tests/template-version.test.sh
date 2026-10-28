@@ -275,16 +275,17 @@ globs="$(printf '%s\n' "$raw_globs" | awk '
   }' | LC_ALL=C sort -u | tr '\n' ' ')"
 # `plugin` alone now, and that is the shape of the fix: `seed/` and `RETIRED` moved INSIDE
 # the plugin (task-022), so their globs are `/plugin/seed/**` and `/plugin/RETIRED` and the
-# collapse above folds both under the directory glob that already covered them.
+# collapse above folds both under the directory glob that already covered them. `config`
+# left the list on 2026-10-28: the layer is retired and its three agents are under `plugin/`.
 ok "the two rule files cover exactly the core paths" \
-  "$globs" "config install.sh plugin plugin-yolo upgrade.sh "
+  "$globs" "install.sh plugin plugin-yolo upgrade.sh "
 
 # Each of those names must appear in the core sentence the agent reads. Anchored on the
 # CLAUDE.md bullet rather than the whole file, so an unrelated mention elsewhere cannot
 # answer for it.
 core_bullet="$(grep -F 'A change to `core` carries NO version bump' "$TPL/CLAUDE.md" || true)"
 missing=0
-for p in plugin plugin-yolo config install.sh upgrade.sh; do
+for p in plugin plugin-yolo install.sh upgrade.sh; do
   grep -qF "\`$p" <<<"$core_bullet" || { missing=$((missing+1)); printf '        NOT NAMED IN CLAUDE.md: %s\n' "$p" >&2; }
 done
 ok "…and CLAUDE.md's core bullet names every one of them" "$missing" 0
@@ -304,7 +305,7 @@ ok "…and carves out a repo that bumps at MERGE time" \
   "$(grep -qF 'THE BUMP HAPPENS ON THE DEFAULT BRANCH AT MERGE TIME' "$TPL/plugin/seed/CONVENTIONS.md" && echo yes || echo no)" yes
 ok "machinery.md carries it (loads on a /symlink/** read)" \
   "$(grep -qF 'carries NO version bump' "$TPL/.claude/rules/machinery.md" && echo yes || echo no)" yes
-ok "installer.md carries it (loads on install.sh, seed/, config/)" \
+ok "installer.md carries it (loads on install.sh, seed/, RETIRED)" \
   "$(grep -qF 'carries NO version bump' "$TPL/.claude/rules/installer.md" && echo yes || echo no)" yes
 ok "the reasoning is in docs/conventions.md, once" \
   "$(grep -c '^## 20\. The version is a number' "$TPL/docs/conventions.md")" 1

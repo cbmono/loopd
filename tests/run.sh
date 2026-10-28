@@ -235,9 +235,8 @@ narrowed=0    # 1 once a selection replaced the full list: the budget judges ful
 thaw=""       # the harnesses a changed path names — an `# iced` one among them still runs
 thaw_all=0    # 1 when the diff could not be read: fail toward running them
 
-# `.git` is a FILE in a linked worktree. init-bundle.sh --config refuses to run from one
-# by design, so four harnesses fail there for reasons unrelated to the code under test.
-[ -f "$workspace/.git" ] && echo "run.sh: this is a git WORKTREE — derived-indexes, link-repos, snapshot and board-renderers fail here by design (.claude/rules/tests.md). Verify from the main checkout or a fresh clone." >&2
+# A linked worktree (`.git` is a FILE there) is fine since 2026-10-28: the installer's
+# worktree guard went with the retired `--config`, so no harness fails here by design.
 
 case "$mode" in
   all|deep|iced) ;;
