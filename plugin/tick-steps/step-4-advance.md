@@ -345,6 +345,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      not the task document, not a PR comment, not the tick summary. The same record is what
      makes the next tick answer `hold` instead of dispatching a second QA at that head, and
      what lets a verdict under the PR author's own login count (`SCHEMA.md` clause 8).
+     The brief also names the task's `project.md` path, whose `acknowledged_decisions:` the
+     reviewer reads beside `answered_questions`.
      Say in the tick summary that you dispatched it and why.
    - **Fallback when none is configured — a SETUP decision, made once, not this.** If the
      repo runs **no** external reviewer at all, `qa-reviewer` is simply the independent

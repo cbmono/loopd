@@ -55,6 +55,10 @@
 #   web queue               not a line: an unconsumed web-board entry (web-queue.sh pending)
 #                           is an immediate DELTA, because the queue is gitignored and moves
 #                           nothing above — and the tick's step 0.95 is what consumes it.
+#   decision answered <project.md>
+#                           a ` --- `-answered `decisions:` entry, an immediate DELTA: step 2
+#                           owes its fold, and a tick whose tasks are all promoted has no draft
+#                           to name step 2 otherwise.
 #   queue/snapshot <present|absent>
 #                           the two artifacts' presence — a stamp that recreates
 #                           AWAITING.md needs one full tick to populate it.
@@ -329,7 +333,7 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs inflight=0 urls="" ntask nterm wtp sid sids=""
+  local p d pst f st prs inflight=0 urls="" ntask nterm wtp sid sids="" dl
   for d in "$inst"/projects/*/; do
     [ -d "$d" ] || continue
     p="$d/project.md"
@@ -346,6 +350,13 @@ fingerprint() { # <probe|digest>
     # tick and write-snapshot.sh already apply: nothing in a done project can need a
     # tick, and the point is the read that never happens.
     [ "$pst" = "done" ] && continue
+    if grep -q '^decisions:' "$p"; then
+      dl="$(bash "$FOLD" --list "$p" decisions 2>/dev/null)" || return 1
+      # The text after the FINAL ` --- ` must have content, as fold-answers.sh decides.
+      if printf '%s\n' "$dl" | awk -F' --- ' 'NF > 1 && $NF ~ /[^[:space:]]/ { f = 1 } END { exit !f }'; then
+        printf 'decision answered %s\n' "${p#"$inst"/}"; step2=1
+      fi
+    fi
 
     ntask=0; nterm=0
     for f in "$d"tasks/*.md; do
@@ -515,6 +526,10 @@ case "$cmd" in
     fi
     if [ "${wq:-0}" != 0 ]; then
       echo "DELTA: $wq web board entr$([ "$wq" = 1 ] && echo y || echo ies) waiting in the queue — step 0.95 consumes them."
+      exit 1
+    fi
+    if printf '%s\n' "$FP" | grep -q '^decision answered '; then
+      echo "DELTA: a project's \`decisions:\` carries an answered entry — step 2 owes its fold."
       exit 1
     fi
     if printf '%s\n' "$FP" | grep -q '^reclaim owed '; then

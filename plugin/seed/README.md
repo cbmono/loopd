@@ -190,6 +190,7 @@ its verb and a real link:
 
 * ✅ **approve** — a refined `draft`, promote it `draft → ready`
 * ❓ **answer** — a `draft` with open questions
+* 👀 **review** — a technical decision refine made on your behalf (`decisions:` in `project.md`); append ` --- ok` to keep it, or your choice to overturn it
 * 🔀 **merge** — a PR in review
 * ⛔ **unblock** — a blocked task
 * 🏁 **close** — a project whose tasks are all terminal

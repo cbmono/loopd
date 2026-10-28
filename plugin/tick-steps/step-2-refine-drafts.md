@@ -55,6 +55,32 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    mis-reading (2026-09-12). **No customer PII in `answered_questions`** — it persists for
    the life of the repo, and that is the one clause the script cannot check for you.
 
+   **Record what you decided on the owner's behalf.** For every technology, topology,
+   data-model, consistency or caching, security-model or external-dependency choice a
+   refined draft relies on that `original_request` did not state, append one `D<n>` to the
+   project's `decisions:` (`SCHEMA.md`), numbered after the highest in `decisions:` and
+   `acknowledged_decisions:` — the tick lock makes you its only writer:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/fold-answers.sh --keys decisions acknowledged_decisions \
+     --add <project.md> "D<n>: <decision> — alternatives: …; why: …; reversible: …"
+   ```
+
+   **Naming a file or a function is not one.** Each renders one `👀 review` row; none
+   withholds the `approve` row.
+
+   **The decision fold is this step's whatever the project's task statuses** —
+   `tick-delta.sh digest` names step 2 for any ` --- `-answered `D<n>`, even with every task
+   promoted. ` --- ok` or ` --- ack` acknowledges. Any other answer is an **overturn**: fold
+   it into each affected task first, the same way as an answer, and `--add` the new choice
+   as a fresh `D<n>`. **A `done` or `in-review` task already built the old choice**: the
+   change it now needs is a new `draft` task, never a rewrite of that one — and the new
+   draft keeps the project from closing until it lands. Then
+   `${CLAUDE_PLUGIN_ROOT}/scripts/fold-answers.sh --keys decisions acknowledged_decisions <project.md>`
+   moves every answered entry, acknowledged or overturned, to `acknowledged_decisions:` with
+   its answer verbatim, so `decisions:` holds only unanswered entries, nothing re-folds and
+   nothing is deleted.
+
    **Propose a split when the expected diff will exceed `maxPrFiles`.** Read it with
    `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-config.sh` (**absent, 100**), beside `maxPrLoc`
    (**absent, 500**).
