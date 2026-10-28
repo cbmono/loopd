@@ -1000,7 +1000,7 @@ check_review_config() {
 # =========================================================================================
 # THE FACT: whether this bundle's own `.claude/settings.json` selects the Brief output
 # style the seed ships at `.claude/output-styles/brief.md` — the `Needs you:` contract every
-# loopd report is written to. Two files, two owners: the style FILE is seed content, so a
+# report in a bundle is written to. Two files, two owners: the style FILE is seed content, so a
 # stamp delivers it to a bundle that lacks it (seeds only what is absent); the settings KEY
 # is config, copied once and never merged, so a bundle stamped before 2026-10-28 never
 # receives it — and without it the style is a file nothing selects. This row says which of

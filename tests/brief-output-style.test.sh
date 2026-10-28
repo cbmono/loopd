@@ -73,6 +73,7 @@ ok "…and the settings' own note says a pre-2026-10-28 bundle adds the key by h
   "$(has "$SETTINGS" 'a bundle stamped before 2026-10-28 adds the key by hand')" yes
 # NOT in the plugin: the measured non-loading location. A copy there would be a second
 # source the next reader keeps in sync by hand.
+# path-scan: absent plugin/output-styles — the measured non-loading location; its absence IS the assertion
 ok "no copy under plugin/output-styles/" "$([ -e "$REPO/plugin/output-styles" ] && echo yes || echo no)" no
 
 # =======================================================================================
