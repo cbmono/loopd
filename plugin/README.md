@@ -60,6 +60,11 @@ setup and nothing on a machine needs a clone. A stale link an older `--config` l
 | `/init <dir>` | Create a bundle, refresh one, or convert one stamped by the retired `install.sh` — data only, and the only symlinks it leaves are under `repos/`. |
 
 Both also answer to their namespaced forms (`/loopd:brief-me`, `/loopd:capture`).
+**One skill is reference, not a command:** `skills/modern-web/` — a condensed derivative of
+Google Chrome's `modern-web-guidance` (Apache-2.0; provenance and the pinned commit in its
+`NOTICE.md`), one guide per category, that the model opens on its own for browser-facing
+work and the `software-engineer` and `qa-reviewer` are pointed at. `user-invocable: false`,
+so it is not in the `/` menu; `tests/modern-web-skill.test.sh` keeps it whole and under 120 KB.
 **`ai-bridge-v2` was the transition name** — its one-version deprecation stub was
 removed in 1.0.0; the swap is in [`docs/migrating.md`](../docs/migrating.md).
 Run them from a bundle root (where `SCHEMA.md` and `instance.config.json` live).

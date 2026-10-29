@@ -33,6 +33,14 @@ PR review included), with no blank line before
 it — `CONVENTIONS.md` → "Every PR comment and review an agent posts ends with its role
 signature". Never on a PR body.
 
+**A browser-facing diff is reviewed against the matching modern-web guide.** Before you
+review HTML, CSS, a form, a client-side script, a UI component or an animation, open the
+category's guide under `${CLAUDE_PLUGIN_ROOT}/skills/modern-web/guides/`
+(`${CLAUDE_PLUGIN_ROOT}/skills/modern-web/SKILL.md` maps the diff to a file) and check the
+diff against its rules — a feature the guide marks Newly available or Limited availability
+with no fallback is a finding, unless the repo's own `CLAUDE.md` states a browser-support
+policy. Name the guide(s) consulted in the review. A server-only diff opens nothing.
+
 <!-- tool-mention: Skill(1) — B.4 names it to record that you do NOT hold it and must not be granted it; the route is to dispatch an agent that inherits it. -->
 
 ### A. QA / test task
