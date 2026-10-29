@@ -62,7 +62,7 @@ ok "…and keeps the coding instructions"  "$(has "$STYLE" 'keep-coding-instruct
 # executable steps, each with its URL or path. Pinned by phrase so the style cannot drift
 # into a different shape under the same name.
 ok "…it defines the Needs-you heading"   "$(has "$STYLE" 'ℹ️ **Needs you:**')" yes
-ok "…every item executable, with the URL inline" "$(has "$STYLE" 'with the URL or exact path inline')" yes
+ok "…every item executable, with the URL inline" "$(has "$STYLE" 'with the URL inline, or a local file as a markdown link whose target is its absolute path')" yes
 ok "…and the Done-so-far heading"        "$(has "$STYLE" '🚀 **Done so far:**')" yes
 ok "…and never invents state"            "$(has "$STYLE" 'Report only what you verified')" yes
 

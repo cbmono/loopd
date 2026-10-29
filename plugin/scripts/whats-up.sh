@@ -65,6 +65,21 @@ case "$rc" in
   *) tick="Whether a tick is in flight is unknown: tick-lock.sh status could not answer (exit $rc): $(printf '%s\n' "$lock" | head -1)" ;;
 esac
 
+# AWAITING.md links documents bundle-root-relative (`[title](/projects/…)`, SCHEMA.md), which a
+# terminal renders as file:///projects/… and opens nothing. Printed here, every such target
+# that names a file under this instance becomes its ABSOLUTE path, so the link opens the
+# local file the owner edits; URLs and targets that resolve to nothing are left as they are.
+inst="$(pwd -P)"
+items="$(printf '%s\n' "$items" | awk -v inst="$inst" '
+  { line = $0; out = ""
+    while (match(line, /\]\(\/[^)]*\)/)) {
+      pre = substr(line, 1, RSTART + 1); tgt = substr(line, RSTART + 2, RLENGTH - 3); line = substr(line, RSTART + RLENGTH)
+      path = inst tgt
+      if ((getline _ < path) >= 0) { close(path); tgt = path }
+      out = out pre tgt ")"
+    }
+    print out line }')"
+
 echo "ℹ️ **Needs you:**"
 printf '%s\n' "$items" | awk '{ printf "%d. %s\n", NR, $0 }'
 echo

@@ -75,7 +75,11 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # none of its text (a row can read "merge terraform#866", and the main thread reads replies
 # from this file only). Trimmed from 4 added lines first. Measured, not rounded; flagged in
 # the PR body.
-CEILING=16402
+# 16402 -> 16783 (local-doc-links, 2026-10-29). +381 bytes on "Reporting progress": a local
+# file is a markdown link whose target is its ABSOLUTE path, never a bare path, a GitHub URL
+# or AWAITING.md's bundle-relative target — the owner had three unopenable or unreadable
+# Needs-you lists in a row before the rule was written down. Measured, not rounded.
+CEILING=16783
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

@@ -10,7 +10,7 @@ Report like a briefing. The reader scans for two things: what changed, and what 
 
 - **Lead with the outcome.** First line says what happened or what the answer is. No preamble, no restating the question.
 - **`Needs you` last, and only when true.** When a human decision, credential, approval, or manual step is the blocker, end with a section headed `ℹ️ **Needs you:**` — always bold, always prefixed with the information glyph and one space. Nothing blocking → omit the section entirely rather than padding it.
-- **Every `Needs you` item is executable**: a numbered step, one action, in the imperative, with the URL or exact path inline. "Merge [monorepo#2725](url)" — not "the PR needs attention".
+- **Every `Needs you` item is executable**: a numbered step, one action, in the imperative, with the URL inline, or a local file as a markdown link whose target is its absolute path. "Merge [monorepo#2725](url)", "Approve [task-001](/Users/…/task-001.md)" — not "the PR needs attention".
 - **`Done so far` is optional, and marked the same way when used.** A reply that heads its recap `Done so far:` writes it as `🚀 **Done so far:**` — bold, rocket glyph, one space. Never add the heading only to carry the glyph.
 - **Number multi-item output** so the reader can reply "re: 2". Bullets only for unordered sub-points.
 

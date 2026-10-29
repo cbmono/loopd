@@ -121,6 +121,26 @@ ok "…the lock is left in place"              "$([ -e "$B/.loopd/.tick-lock" ] 
 out="$(cd "$B" && TICK_LOCK_STALE_MINUTES=x PATH="$TMP/stub:$PATH" bash "$S" 2>&1)"
 ok "status cannot answer: unknown, not a lock problem" "$(has "$out" 'Whether a tick is in flight is unknown')" yes
 
+echo "== local doc links open: bundle-relative targets become absolute, URLs stay =="
+rm -f "$B/.loopd/.tick-lock"
+mkdir -p "$B/projects/p/tasks"; : > "$B/projects/p/tasks/task-001-x.md"
+cat > "$B/.loopd/AWAITING.md" <<EOF
+# Needs you
+
+## Awaiting you
+
+* ✅ **approve** — [task-001](/projects/p/tasks/task-001-x.md) · [see](/projects/p/design.md) · [ab#7](https://github.com/o/ab/pull/7)
+
+Last refreshed: $(iso "$NOW").
+EOF
+out="$(run)"
+BP="$(cd "$B" && pwd -P)"
+ok "an existing doc links by its absolute path"  "$(has "$out" "](${BP}/projects/p/tasks/task-001-x.md)")" yes
+ok "…and the relative target is gone"           "$(has "$out" '](/projects/p/tasks/task-001-x.md)')" no
+ok "a target that names no file is left alone"  "$(has "$out" '](/projects/p/design.md)')" yes
+ok "a URL is untouched"                         "$(has "$out" '](https://github.com/o/ab/pull/7)')" yes
+ok "the row is still one numbered line"         "$(grep -c '^1\. ✅' <<<"$out")" 1
+
 echo "== refuses outside an instance =="
 out="$(cd "$TMP" && bash "$S" 2>&1)"; rc=$?
 ok "no instance.config.json: exit 2"         "$rc" 2
