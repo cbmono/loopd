@@ -10,7 +10,7 @@ ledger lines alone, and prints Needs-you from `AWAITING.md`.
 
 Three rules this spawn adds, each because the launcher reads nothing but your ledger:
 
-- **Pass the tick id verbatim** to step 0.5: `tick-lock.sh acquire --as tick --agent project-manager --claimant {{TICK_ID}}`.
+- **Pass the tick id verbatim** to the lock acquire: `tick-lock.sh acquire --as tick --agent project-manager --claimant {{TICK_ID}}`.
 - **Write it into your ledger line.** Step 0.9's open line is
   `* TICK <ISO-8601 timestamp> by <login> open: {{TICK_ID}} · <what you are about to do>`;
   the idle line ends ` · {{TICK_ID}}`. That id on a **committed** line is the only way the

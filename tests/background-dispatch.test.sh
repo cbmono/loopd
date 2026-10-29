@@ -162,7 +162,7 @@ ok "the core points at step 3 rather than restating it" \
   "$(has "$CORE" 'tick-steps/step-3-dispatch.md')" yes
 ok "…and at step 4"                       "$(has "$CORE" 'tick-steps/step-4-advance.md')"  yes
 ok "the launcher says the notification is the tick's own exit" \
-  "$(has "$SKILL" "That notification now means the tick's OWN exit")" yes
+  "$(has "$SKILL" "never an \`Agent\`-tool")" yes
 ok "SCHEMA.md documents session:"         "$(has "$SCHEMA" 'session: <id>')"                yes
 ok "…including why it cannot be pre-written" "$(has "$SCHEMA" '`--session-id` is')"         yes
 ok "the probe is executable"              "$([ -x "$PROBE" ] && echo yes || echo no)"       yes

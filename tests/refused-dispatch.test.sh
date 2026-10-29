@@ -115,7 +115,7 @@ echo "== the wave, the stall counter and the remedy are settled in the shipped s
 ok "the wave stops at the first refusal"             "$(has "$S3" 'then **stop dispatching this tick.**')" yes
 ok "…and the rest are not touched"                   "$(has "$S3" 'no status write, no worktree, no')" yes
 ok "no stall round, on this task or any other"       "$(has "$S3" 'Do not run `stall-counter.sh` for it, on this task or any other.')" yes
-ok "the SKILL guardrail carves the refusal out"      "$(has "$SKILL" 'refused is not a round and is never recorded')" yes
+ok "the tick brief's guardrail carves the refusal out" "$(has "$REPO/plugin/skills/dispatch/tick-brief.md" 'refused is not a round and is never recorded')" yes
 ok "one condition, one row"                          "$(has "$S3" 'already sits')" yes
 ok "…keyed on <which>, so a new cause REPLACES"      "$(has "$S3" '⇒ **replace that entry in place** with the new one rather than skipping.')" yes
 ok "the verbatim text is sanitised first"            "$(has "$S3" 'is copied onto ONE line, with every `"` replaced by')" yes

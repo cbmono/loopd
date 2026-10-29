@@ -912,7 +912,7 @@ agent_readers="$(grep -rlF 'tick-lock' "$TPL/plugin/agents" 2>/dev/null \
 ok "exactly one agent may name the lock — the tick" "$agent_readers" "project-manager.md"
 ok "the launcher does"                   "$(has "$LAUNCHER" 'scripts/tick-lock.sh')" yes
 ok "…and says which limit this is"       "$(has "$LAUNCHER" 'bounds **PM')" yes
-ok "…while the cap stays resolve-max-agents.sh" "$(has "$LAUNCHER" 'resolve-max-agents.sh')" yes
+ok "…while the cap stays resolve-max-agents.sh" "$(has "$TPL/plugin/skills/dispatch/tick-brief.md" 'resolve-max-agents.sh')" yes
 ok "the script says it reads no config"  "$(has "$LOCKSH" 'IT READS NO CONFIG')" yes
 
 echo
@@ -1173,12 +1173,13 @@ echo "== the wiring: the launcher runs the acquire, and holds exactly the grant 
 grants() { awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/,""); print}' "$1" \
   | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$'; }
 ok "allowed-tools grants the script"     "$(grep -qx 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' <<<"$(grants "$LAUNCHER")" && echo yes || echo no)" yes
-# 9: the eighth is bundle-paths.sh, which prints a layout constant for precondition 1; the
-# ninth is CronCreate, the one session job precondition 2 creates (2026-10-28).
-ok "…and grants nothing else new"        "$(grants "$LAUNCHER" | wc -l | tr -d ' ')" 9
+# 10: the eighth is bundle-paths.sh, which prints a layout constant for precondition 1; the
+# ninth is CronCreate, the one session job precondition 2 creates (2026-10-28); and since
+# tick-as-bg-session/task-002 `Agent` is gone and tick-reap.sh + tick-spawn.sh replace it.
+ok "…and grants nothing else new"        "$(grants "$LAUNCHER" | wc -l | tr -d ' ')" 10
 ok "step 1 runs the acquire"             "$(has "$LAUNCHER" 'scripts/tick-lock.sh acquire --agent project-manager')" yes
-ok "…and step 2 releases on the notification" "$(has "$LAUNCHER" 'scripts/tick-lock.sh release')" yes
-ok "…only on the notification, nothing weaker" "$(has "$LAUNCHER" 'before you schedule the gap')" yes
+ok "…and names release only as the human's answer" "$(has "$LAUNCHER" 'scripts/tick-lock.sh release')" yes
+ok "…releasing only on a committed close, nothing weaker" "$(has "$LAUNCHER" 'committed ledger close for that tick')" yes
 # Every exit code the script can return has a documented branch in the launcher, or the
 # launcher would be improvising on the one that mattered.
 step1() { awk '/^1\. \*\*Take the lock/{p=1;next} p&&/^2\. /{p=0} p' "$LAUNCHER"; }
@@ -1224,12 +1225,14 @@ ok "…refusing to delete a stale lock itself" \
 # then released on its way out, would delete a LIVE holder's lock and re-open exactly the
 # double-dispatch this file closes. Raised by review on ai-bridge#62.
 step5() { awk '/^5\. \*\*Stop\*\*/{p=1;next} p&&/^[A-Za-z]/{p=0} p' "$LAUNCHER"; }
-ok "step 5 releases only a lock this session took" \
-  "$(grep -qF 'only if THIS session took it' <<<"$(step5)" && echo yes || echo no)" yes
+# Since tick-as-bg-session/task-002 stop releases NOTHING: the next fire's reaper does, on
+# the tick's committed close, so stop cannot delete a live tick's lock at all.
+ok "step 5 releases nothing" \
+  "$(grep -qF 'Release nothing' <<<"$(step5)" && echo yes || echo no)" yes
 ok "…naming the sibling it would otherwise delete" \
   "$(grep -qF 'live' <<<"$(step5)" && echo yes || echo no)" yes
-ok "…and leaves a dispatched tick's lock to age out" \
-  "$(grep -qF 'ages out' <<<"$(step5)" && echo yes || echo no)" yes
+ok "…and leaves the tick to the next fire's reaper" \
+  "$(grep -qF "next fire's step 0" <<<"$(step5)" && echo yes || echo no)" yes
 # And clearance to dispatch is the lock being CREATED, not merely missing: an unwritable
 # root refuses rather than dispatching unguarded, which is the other way "absence is never
 # an error" gets read backwards.
@@ -1247,8 +1250,8 @@ section() { awk '/^### The launcher reads nothing else/{p=1;next} p&&/^#/{p=0} p
 ok "the lock is an allowed operation"    "$(grep -qF 'scripts/tick-lock.sh acquire' <<<"$(section)" && echo yes || echo no)" yes
 ok "…and the list is closed against analogy" "$(grep -qF 'No other reader may be added by analogy' <<<"$(section)" && echo yes || echo no)" yes
 ok "…keeping the economy justification"  "$(grep -qF "main session's context" <<<"$(section)" && echo yes || echo no)" yes
-ok "…and it is an allowlist of exactly three" \
-  "$(section | grep -c -E '^[0-9]+\. ' | tr -d ' ')" 3
+ok "…and it is an allowlist of exactly four" \
+  "$(section | grep -c -E '^[0-9]+\. ' | tr -d ' ')" 4
 
 echo
 echo "== the lock is gitignored on a freshly stamped instance =="

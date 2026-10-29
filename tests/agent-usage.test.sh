@@ -276,7 +276,7 @@ ok "…and converts nothing to money"             "$(has "$REPO/plugin/agents/au
 # when the launcher forgets to print it. Said plainly rather than pretended otherwise.
 LA="$REPO/plugin/skills/dispatch/SKILL.md"
 ok "the launcher ends a tick report with the one form" "$(has "$LA" 'agent-usage.sh fmt')" yes
-ok "…from this tick's notification numbers"          "$(has "$LA" '--tokens <subagent_tokens> --tools <tool_uses> --duration-ms <duration_ms>')" yes
+ok "…from the ended tick session's transcript"      "$(has "$LA" 'the numbers `session-usage.sh` reads from the ended tick')" yes
 ok "…with no model name, which has no producer"      "$(has "$LA" 'There is no model name in it')" yes
 ok "…and no footer at all when it is UNKNOWN"        "$(has "$LA" '`usage UNKNOWN` ⇒ print no footer at all')" yes
 ok "…on the TICK report only, never a role result"   "$(has "$LA" 'The tick report ONLY')" yes

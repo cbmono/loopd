@@ -401,7 +401,7 @@ assert "…and never from the local one" \
 # A resolver nothing calls does not make an override real: the cap's only consumers are
 # the PM's prose, so they must name the script rather than the tracked file alone.
 # The tick's dispatch step is its own file since ai-bridge-v3/task-024.
-for f in "$TPL/plugin/skills/dispatch/SKILL.md" "$TPL/plugin/tick-steps/step-3-dispatch.md"; do
+for f in "$TPL/plugin/skills/dispatch/tick-brief.md" "$TPL/plugin/tick-steps/step-3-dispatch.md"; do
   assert "$(basename "$f") resolves the cap with resolve-max-agents.sh" \
     "$(grep -q 'resolve-max-agents\.sh' "$f" && echo 0 || echo 1)"
 done

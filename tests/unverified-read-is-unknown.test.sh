@@ -214,10 +214,10 @@ ok "mutant: the launcher's ownership is gone" "$(saw "$C_FLAT" "$NOADJ")" no
 
 echo
 echo "== 9. MUTATION D: drop the launcher's reference — the context that made all four =="
-strip_range "$SKILL" '**And what the three you DO have establish is bounded' 'Why: every byte read here lands' > "$TMP/skill-no-ref.md"
+strip_range "$SKILL" '**And what the four you DO have establish is bounded' 'Why: every byte read here lands' > "$TMP/skill-no-ref.md"
 D_FLAT="$(flatten "$TMP/skill-no-ref.md")"
 ok "the mutation removed something"         "$([ "$(wc -c < "$TMP/skill-no-ref.md")" -lt "$(wc -c < "$SKILL")" ] && echo yes || echo no)" yes
-ok "CONTROL: the allowlist of three survives" "$(saw "$D_FLAT" 'an ALLOWLIST of three')" yes
+ok "CONTROL: the allowlist of four survives" "$(saw "$D_FLAT" 'an ALLOWLIST of four')" yes
 ok "CONTROL: its other CONVENTIONS reference survives" "$(saw "$D_FLAT" '`CONVENTIONS.md` → "A subagent works ONE task"')" yes
 ok "mutant: the launcher no longer names the rule" "$(saw "$D_FLAT" "\"$NAME\"")" no
 

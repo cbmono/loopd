@@ -178,7 +178,7 @@ with `O_EXCL`, so there is no read-then-write for anything to interleave with.
 **The release discipline**: since tick-as-bg-session/task-002 the tick is a detached
 `claude --bg` session, so no notification exists, and the one release signal is a
 **committed** ledger close for the lock's minted id, read by `scripts/tick-reap.sh` at
-the next fire's step 0. A notification was never a sound one anyway — the agent resumes
+the next fire's reap. A notification was never a sound one anyway — the agent resumes
 and the same task-id notifies again (2026-09-09: a mid-flight notification released a
 live tick's lock and two ticks overlapped for 26 minutes). A session state alone is not
 one either: `blocked` is a finished turn or a live prompt, and `done` with the entry open
@@ -342,7 +342,7 @@ beside it is exactly that missing signal.
 
 **What the open entry proves, precisely.** It proves a tick started and did not finish.
 It does **not** prove the agents it dispatched are still alive — nothing on disk can,
-which is why `/loopd:dispatch` step 0 releases only on a committed `close:` for the
+which is why `/loopd:dispatch`'s reaper releases only on a committed `close:` for the
 tick's minted id, and closes a dead tick's entry itself. Orient-then-report-then-hold is what turns "there is an open entry" into "these
 three tasks claim in-flight, none has a worktree on disk, one has an open PR" — the
 difference between a report a human can act on and one that only says something is

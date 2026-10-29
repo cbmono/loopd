@@ -182,9 +182,9 @@ two:**
    at a fixed interval most firings land while an earlier tick is still running. `once`
    keeps `--as launcher`: a human typed it and expected a dispatch, so a held lock is the
    loud block.
-2. **Skip steps 2 and 3.** The cron job *is* the cadence, so scheduling a wakeup as well
-   gives the session two schedulers and double the passes. Reap, acquire, spawn, and end
-   the pass — the next fire's step 0 reaps what this one spawned.
+2. **Skip step 3.** The cron job *is* the cadence, so scheduling a wakeup as well gives the
+   session two schedulers and double the passes. Skip step 2's wait too: reap, acquire,
+   spawn, and end the pass — the next fire's step 0 reaps what this one spawned.
 
 **Exit 1 from that acquire is a CLEAN SKIP, not an error.** It is the expected outcome of a
 firing that landed mid-tick. Print the one line it gave you, **end the pass successfully**,
@@ -238,7 +238,7 @@ spawned with `--dry-run`; anything else is the inter-tick
    `docs/pm-design.md#launcher-reaper`.
 
 1. **Take the lock, then dispatch — in that order, with nothing in between.**
-   **Mint this tick's id** — one fresh literal per tick, never reused, printed by
+   First **mint this tick's id** — one fresh literal per tick, never reused, printed by
 
        ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh mint
 
@@ -260,8 +260,8 @@ spawned with `--dry-run`; anything else is the inter-tick
    `.tick-lock` as `claimant:` — the only place it lives, and you write no file yourself —
    and `tick-spawn.sh` puts the id you minted at step 1, verbatim, into the tick's brief and
    its ledger line, because that tick's own acquire passes the same id and step 0 finds its
-   entry by it. Mis-copy it and the tick still runs: adopting an unclaimed lock never
-   matches the id, and the script reports the mismatch instead of refusing.
+   entry by it. Mis-copy it and the tick still runs: adopting an unclaimed lock
+   never matches the id, and the script reports the mismatch instead of refusing.
 
    - **0** — the lock is yours, and it printed nothing. **Spawn the tick now**, as the
      very next thing you do.
@@ -294,9 +294,9 @@ spawned with `--dry-run`; anything else is the inter-tick
    (none printed ⇒ no flag), the brief built from `skills/dispatch/tick-brief.md` — the gap,
    the id and the standing guardrails, and **not state**: the tick reads the bundle, `git`
    and `gh` itself. It records the session on `.tick-lock` (`agent-sessions.sh full`) for
-   step 0, and prints one `spawned:` line; print it, and any `resolve-model:` line it
-   passed through, so an unchosen model is visible rather than assumed. **Fresh every
-   time — never wake a completed tick with a message**; step 0.5 refuses such a tick
+   step 0, and prints one `spawned:` line; print it. A `resolve-model:` line it passed
+   through means no model was chosen — report that line, so an unchosen model is visible
+   rather than assumed. **Fresh every time — never wake a completed tick with a message**; step 0.5 refuses such a tick
    anyway. Exit **1** means the spawn did not start and the script already released the
    lock (`${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` — a lock with no tick behind
    it is the stale case, arriving hours early); report it. Exit **3** is a refusal; report it.
@@ -319,8 +319,8 @@ spawned with `--dry-run`; anything else is the inter-tick
    session's transcript — never reformatted and never composed by you: `agent-usage.sh`
    owns the one usage form. **There is no model name in it**: the transcript's numbers carry
    none here, so there is nothing to print that would not be a guess.
-   **`usage UNKNOWN` ⇒ print no footer at all** — the reaper prints none. **The tick
-   report ONLY.** A role agent's numbers are already on its task document as a `* DISPATCH`
+   **`usage UNKNOWN` ⇒ print no footer at all** — the reaper prints none.
+   **The tick report ONLY.** A role agent's numbers are already on its task document as a `* DISPATCH`
    line (`project-manager.md` step 3).
 
    **After a compaction, the in-flight memory is gone — and the answer is still not
