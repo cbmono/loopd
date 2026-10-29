@@ -98,7 +98,11 @@ this file so product-repo sessions aren't told they are a control panel. -->
 ## Reporting progress
 Always link to the real artifacts; don't just name them. **PRs render as
 `[<repo>#<n>](<url>)`** — bare repo name as text, never a bare number or URL.
-Commits, CI runs, branches, files: include the URL or path.
+Commits, CI runs, branches: include the URL. **A local file is a markdown link whose target
+is its ABSOLUTE path** — `[task-001](/Users/…/projects/<slug>/tasks/task-001.md)`: never a
+bare path in prose, never a GitHub URL for a file the human edits locally, and never the
+bundle-relative `/projects/…` target `AWAITING.md` carries (a terminal renders it as
+`file:///projects/…`, which opens nothing) — rewrite it when you quote a row.
 
 **And keep it short — same discipline as a PR body (`CONVENTIONS.md`):**
 - **Lead with the outcome**, in one sentence.
