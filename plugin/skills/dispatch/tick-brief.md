@@ -4,7 +4,7 @@ Nobody reads your final message. The launcher's next fire learns you finished fr
 ledger lines alone, and prints Needs-you from `AWAITING.md`.
 
 - Tick id: `{{TICK_ID}}` — the one `tick-lock.sh mint` printed for you.
-- Gap: `{{GAP}}` — pass it to `tick-delta.sh check --gap`.
+- Gap: `{{GAP}}` — pass it to `tick-delta.sh check --gap` (`once`: pass no `--gap`).
 - Mode: {{MODE_LINE}}
 - `${CLAUDE_PLUGIN_ROOT}` in this brief and in your agent prompt is `{{PLUGIN_ROOT}}`.
 
