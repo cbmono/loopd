@@ -319,7 +319,7 @@ state, and act only on deltas.
    never rewritten, so the pair is what makes a tick's wall duration readable from the
    ledger alone. It must be the first thing the full walk does, not part of curation: an
    open `TICK` line with no close is the only signal that a died tick ever dispatched, and
-   the id on it is how `/loopd:dispatch`'s reaper finds your entry (`scripts/tick-reap.sh`).
+   the id on it is how `/loopd:dispatch`'s reaper finds your entry (`${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh`).
    Here rather than in step 0.5 because
    **the probe reads a tree that append would have dirtied**, and by now the answer is
    already `DELTA`.
@@ -696,7 +696,7 @@ state, and act only on deltas.
 
    The only lock you can be running under is the launcher's, printed `adopted:` at
    step 0.5, and the launcher's reaper releases it on its next fire, once your close line
-   is committed (`scripts/tick-reap.sh`). A tick that held (exit 1), one handed a claim it could not
+   is committed (`${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh`). A tick that held (exit 1), one handed a claim it could not
    attribute (exit 2), and one refused as a resume (exit 4) all release nothing too.
    `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` is **the human's override**; it is not yours to run at
    the end of a tick (`docs/pm-design.md#step-8`).
