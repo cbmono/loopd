@@ -111,10 +111,12 @@ readers_granted() { # <file> -> count of grants that are NOT on the approved lis
     | tr ',' '\n' \
     | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
     | grep -v '^$' \
-    | grep -v -x -e 'Bash(pwd)' -e 'Bash(ls:\*)' -e 'Agent' \
+    | grep -v -x -e 'Bash(pwd)' -e 'Bash(ls:\*)' \
                  -e 'ScheduleWakeup' -e 'CronCreate' -e 'CronList' -e 'CronDelete' \
                  -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' \
                  -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:\*)' \
+                 -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh:\*)' \
+                 -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh:\*)' \
     | wc -l | tr -d ' '
 }
 
@@ -135,7 +137,7 @@ for probe in 'Bash(curl:*)' 'Bash(python:*)' 'Bash(node:*)' 'Read' 'Bash'; do
 done
 # …while the real launcher's exact grant list still passes, so the allowlist is not
 # simply rejecting everything.
-printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Agent, ScheduleWakeup, CronList, CronDelete\n---\nbody\n' \
+printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh:*), ScheduleWakeup, CronList, CronDelete\n---\nbody\n' \
   > "$TMP/probe.md"
 ok "…and PASSES on the approved set alone" "$(readers_granted "$TMP/probe.md")" 0
 # The approved set is EXACTLY those seven. A near-miss — another script under the same
@@ -145,6 +147,14 @@ printf -- '---\nallowed-tools: Bash(pwd), Bash(scripts/write-snapshot.sh:*), Age
   > "$TMP/probe.md"
 ok "…and FAILS on a different script grant" \
   "$( [ "$(readers_granted "$TMP/probe.md")" -ge 1 ] && echo yes || echo no )" yes
+# THE TICK IS A DETACHED SESSION SINCE tick-as-bg-session/task-002, so the `Agent` grant
+# that spawned it is gone and coming back is a failure here; `tick-reap.sh` is the one reader
+# added, `tick-spawn.sh` the spawn that replaced `Agent`.
+printf -- '---\nallowed-tools: Bash(pwd), Agent\n---\nbody\n' > "$TMP/probe.md"
+ok "…and FAILS on an Agent grant, the old tick spawn" "$(readers_granted "$TMP/probe.md")" 1
+ok "the launcher grants the reaper"     "$(granted "$LAUNCHER" 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh:\*)')" yes
+ok "…and the spawn script"              "$(granted "$LAUNCHER" 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh:\*)')" yes
+ok "…and no Agent tool"                 "$(granted "$LAUNCHER" 'Agent')" no
 
 # --- the launcher says, in the file, that it reads nothing else -------------------
 # `The launcher reads nothing else` is an anchor both files cite, so it is grepped
@@ -164,20 +174,21 @@ in_section() { grep -qF -- "$1" <<<"$(section "$LAUNCHER")" && echo yes || echo 
 # other; since 2026-10-28 the same step CREATES the one session job that is the cadence
 # (`CronCreate`), which reads and writes the scheduler and still nothing of the bundle.
 count_allowed_ops() { section "$1" | grep -c -E '^[0-9]+\. ' | tr -d ' '; }
-ok "the allowlist is exactly three operations" "$(count_allowed_ops "$LAUNCHER")" 3
+ok "the allowlist is exactly four operations" "$(count_allowed_ops "$LAUNCHER")" 4
 ok "…op 1 is the cwd precondition"    "$(in_section 'The cwd precondition')" yes
 ok "…and says nothing wider"           "$(in_section 'precondition 1 above and nothing wider')" yes
 ok "…op 2 is the lock, by script name" "$(in_section 'scripts/tick-lock.sh acquire')" yes
-ok "…op 3 is the cron step, by tool name" "$(in_section 'The cron step')" yes
+ok "…op 3 is the reaper, by script name" "$(in_section 'scripts/tick-reap.sh')" yes
+ok "…op 4 is the cron step, by tool name" "$(in_section 'The cron step')" yes
 ok "…naming all three cron tools"     "$(in_section '`CronList`, then `CronDelete`')" yes
 ok "…including the one that creates"  "$(in_section '`CronCreate` when no job of ours is listed')" yes
 ok "…and the create is in allowed-tools" "$(granted "$LAUNCHER" 'CronCreate')" yes
 # NON-VACUITY, and it IS the property: a FOURTH allowed operation must fail this check.
-printf -- '### The launcher reads nothing else — an ALLOWLIST of three\n\n1. cwd\n2. lock\n3. cron\n4. just a quick orient\n\n## Next\n' > "$TMP/fourth.md"
-ok "…and a FOURTH allowed operation fails it" \
-  "$( [ "$(count_allowed_ops "$TMP/fourth.md")" -ne 3 ] && echo yes || echo no )" yes
-printf -- '### The launcher reads nothing else — an ALLOWLIST of three\n\n1. cwd\n2. lock\n3. cron\n\n## Next\n' > "$TMP/three.md"
-ok "…while exactly three still passes" "$(count_allowed_ops "$TMP/three.md")" 3
+printf -- '### The launcher reads nothing else — an ALLOWLIST of four\n\n1. cwd\n2. lock\n3. reap\n4. cron\n5. just a quick orient\n\n## Next\n' > "$TMP/fifth.md"
+ok "…and a FIFTH allowed operation fails it" \
+  "$( [ "$(count_allowed_ops "$TMP/fifth.md")" -ne 4 ] && echo yes || echo no )" yes
+printf -- '### The launcher reads nothing else — an ALLOWLIST of four\n\n1. cwd\n2. lock\n3. reap\n4. cron\n\n## Next\n' > "$TMP/four.md"
+ok "…while exactly four still passes" "$(count_allowed_ops "$TMP/four.md")" 4
 
 # THE ENUMERATION OF FORBIDDEN NOUNS IS DELETED, NOT KEPT BESIDE THE ALLOWLIST. Keeping
 # both is how the list nobody can complete survives the inversion that replaced it.
@@ -203,7 +214,7 @@ ok "…keeping the cost argument"       "$(in_section "main session's context")"
 # cross-reference were rewritten, or half the file still teaches the old polarity.
 ok "the Preconditions pointer is inverted too" \
   "$(grep -c -F 'Two checks, and the list is closed' "$LAUNCHER" | tr -d ' ')" 0
-ok "…and names the allowlist instead" "$(has "$LAUNCHER" 'is an ALLOWLIST of three')" yes
+ok "…and names the allowlist instead" "$(has "$LAUNCHER" 'is an ALLOWLIST of four')" yes
 # The launcher must never look before it takes it: a `status` then `acquire` would rebuild
 # the check-then-write window the lock exists to close.
 ok "…and forbids reading it separately" "$(in_section 'never call `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status` before `acquire`')" yes
@@ -217,7 +228,7 @@ ok "tick points back at the launcher rule" "$(has "$TICK" 'The launcher reads no
 # …and it must point back at the ALLOWLIST. A cross-reference that still describes the
 # launcher as a set of refusals is half the pair teaching the polarity the other half
 # just deleted, and both files would still read correctly on their own.
-ok "…as an allowlist, not a set of refusals" "$(has "$TICK" 'allowlist of three')" yes
+ok "…as an allowlist, not a set of refusals" "$(has "$TICK" 'allowlist of four')" yes
 
 # --- precondition 1 runs, and finds SCHEMA.md where the layout puts it ----------
 # It read `SCHEMA.md` in the cwd, so every migrated bundle was "not an instance root".
@@ -385,7 +396,7 @@ trap 'rm -rf "$tmp"' EXIT
 {
   printf -- '---\n'
   printf 'description: fixture\n'
-  printf 'allowed-tools: Bash(pwd), Bash(ls:*), Read, Bash(gh:*), Agent\n'
+  printf 'allowed-tools: Bash(pwd), Bash(ls:*), Read, Bash(gh:*)\n'
   printf -- '---\n\n'
   printf '## Preconditions\n\n1. one\n2. two\n3. three\n4. read every task doc\n\n'
   printf '## Next\n\n5. not a precondition\n'
@@ -393,10 +404,10 @@ trap 'rm -rf "$tmp"' EXIT
 ok "checker counts the fixture's preconditions" "$(count_preconditions "$tmp/bad.md")" 4
 ok "checker flags the fixture's readers"        "$(readers_granted "$tmp/bad.md")" 2
 # A bare `Bash` grants every one of those readers at once, so it counts too.
-printf -- '---\nallowed-tools: Agent, Bash\n---\n' > "$tmp/bare.md"
+printf -- '---\nallowed-tools: Bash(pwd), Bash\n---\n' > "$tmp/bare.md"
 ok "checker flags a bare Bash grant"           "$(readers_granted "$tmp/bare.md")" 1
 # ...and the good line stays clean, or the check would flag everything.
-printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Agent\n---\n' > "$tmp/good.md"
+printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*)\n---\n' > "$tmp/good.md"
 ok "checker passes pwd/ls-only grants"         "$(readers_granted "$tmp/good.md")" 0
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"

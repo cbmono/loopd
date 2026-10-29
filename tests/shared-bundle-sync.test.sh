@@ -64,7 +64,7 @@ guardrail_of() { # <file> -> the launcher's standing-guardrail bullet only
 
 S0="$(step0_of "$TICK")"
 PUSH="$(push_para_of "$TICK")"
-G="$(guardrail_of "$LAUNCHER")"
+G="$(guardrail_of "$REPO/plugin/skills/dispatch/tick-brief.md")"  # the guardrails moved there
 ok "tick has a step 0 sync section"       "$([ -n "$S0" ]   && echo yes || echo no)" yes
 ok "tick has a step 8 sync paragraph"     "$([ -n "$PUSH" ] && echo yes || echo no)" yes
 ok "launcher has the sync guardrail bullet" "$([ -n "$G" ]  && echo yes || echo no)" yes

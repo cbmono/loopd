@@ -37,7 +37,7 @@ SEED_README="$REPO/plugin/seed/README.md"
 PM="$REPO/plugin/agents/project-manager.md"
 ANSWER="$REPO/plugin/skills/answer/SKILL.md"
 CLOSE="$REPO/plugin/skills/close-project/SKILL.md"
-DISPATCH="$REPO/plugin/skills/dispatch/SKILL.md"
+DISPATCH="$REPO/plugin/skills/dispatch/tick-brief.md"  # the guardrails, since tick-as-bg-session/task-002
 SHARING="$REPO/docs/sharing.md"
 README="$REPO/README.md"
 
