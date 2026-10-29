@@ -42,3 +42,23 @@ drop what upstream removed, update the sha on line 2 of every guide and the `Pin
 row above to `$NEW`, keep each guide under 250 lines and the directory under 120 KB, and run
 `tests/modern-web-skill.test.sh`, which checks that every guide carries the sha this file
 names.
+
+## Condensation record (2026-10-29, upstream 4f2b13e2)
+
+| Category | Guides | Upstream bytes | Condensed | Lines | Bytes |
+|---|---|---|---|---|---|
+| accessibility | 4 | 67,311 | accessibility.md | 85 | 8,832 |
+| css | 18 | 113,660 | css.md | 96 | 10,991 |
+| forms | 19 | 146,642 | forms.md | 99 | 11,058 |
+| html | 8 | 60,115 | html.md | 89 | 8,890 |
+| js | 5 | 35,061 | js.md | 67 | 6,662 |
+| performance | 26 | 149,257 | performance.md | 102 | 11,464 |
+| privacy | 1 | 11,213 | privacy.md | 67 | 3,874 |
+| security | 17 | 199,977 | security.md | 98 | 17,491 |
+| ui-components + ui-atoms | 14 + 12 | 164,341 + 86,519 | ui-components.md | 103 | 19,838 |
+| ui-behaviors | 37 | 262,950 | ui-behaviors.md | 68 | 11,882 |
+| visual-design | 22 | 171,030 | visual-design.md | 66 | 10,062 |
+| dropped: built-in-ai, wasm, pwa, webmcp | 10 | 90,260 | — | — | 0 |
+| SKILL.md + NOTICE.md + LICENSE | — | — | — | — | ~3.5 KB + ~2.9 KB + 11,358 |
+| **total** | 193 | 1,558,336 | 11 guides | 940 | ceiling 131,072 on loadable bytes; measured 128,436 |
+
