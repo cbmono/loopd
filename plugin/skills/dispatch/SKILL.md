@@ -2,8 +2,8 @@
 name: dispatch
 disable-model-invocation: true
 description: Start the Project Manager loop as a SERIAL, completion-driven loop (one tick at a time) in this control-panel instance repo — bare, it owns its own cadence
-argument-hint: "[gap|once|stop]  cadence between passes, default 10m (e.g. 30m); once = a single tick, no cadence; stop = end the loop"
-allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Agent, ScheduleWakeup, CronCreate, CronList, CronDelete
+argument-hint: "[gap|once|dry-run|stop]  cadence between passes, default 10m (e.g. 30m); once = a single tick, no cadence; dry-run = once, reporting only; stop = end the loop"
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh:*), ScheduleWakeup, CronCreate, CronList, CronDelete
 ---
 
 Start the **Project Manager loop** — but as a **SERIAL, completion-driven** loop:
@@ -16,8 +16,8 @@ Start the **Project Manager loop** — but as a **SERIAL, completion-driven** lo
 
 Three standing facts the steps below rest on:
 
-- **Serial, gated on completion.** A tick runs to its notification before the next one is
-  dispatched: overlapping ticks double-dispatch a task, corrupt a shared package store and
+- **Serial, gated on completion.** A tick runs to its committed ledger close before the
+  next one is dispatched: overlapping ticks double-dispatch a task, corrupt a shared package store and
   race each other's pushes. **A clock is allowed to ASK — it is not allowed to overlap.**
   That distinction is what makes `/loop` safe here and it is younger than this rule: before
   `.tick-lock`, a fixed-interval loop shorter than a tick genuinely did overlap, so the
@@ -25,8 +25,9 @@ Three standing facts the steps below rest on:
   before anything is spawned, so the interval decides only how often the loop LOOKS.
 - **The guarantee is backed by `.tick-lock`, not by session memory** — memory does not
   survive a compaction. The tick runs its own acquire too (`--as tick`, its step 0.5),
-  because a resume never passes through this launcher. You mint a per-tick id and hand it
-  to the tick you spawn, so that tick's own re-entry is provable (exit **0**); a bundle
+  because a resume never passes through this launcher. The tick is a detached `claude --bg`
+  session, so nothing notifies you: step 0's reaper reads its ledger close on the next
+  fire. You mint a per-tick id and hand it to the tick you spawn, so that tick's own re-entry is provable (exit **0**); a bundle
   that declares none falls back to the session's id, where a mere match is exit **2** and
   the human's. **Never wake a completed tick with a
   message — dispatch a fresh one, every time.** The rule for every other agent is
@@ -44,7 +45,7 @@ Three standing facts the steps below rest on:
 
 ## Preconditions
 
-**Two checks. What the launcher may look at is an ALLOWLIST of three** — see "The launcher
+**Two checks. What the launcher may look at is an ALLOWLIST of four** — see "The launcher
 reads nothing else"; anything not on it is a tick or a subagent. Both checks below are on it.
 
 1. Must run from a **control-panel instance root**: confirm `instance.config.json` in the
@@ -64,7 +65,7 @@ reads nothing else"; anything not on it is a tick or a subagent. Both checks bel
    earlier pass, or one a human's `/loop 10m /loopd:dispatch` created — means the cadence
    is owned: create nothing, say nothing. **Never two jobs.**
 
-### The launcher reads nothing else — an ALLOWLIST of three, and everything else is a tick
+### The launcher reads nothing else — an ALLOWLIST of four, and everything else is a tick
 
 **Everything the launcher may look at — this bundle, git, the GitHub API, the network,
 the machine — is exactly these operations:**
@@ -73,7 +74,11 @@ the machine — is exactly these operations:**
    resolved schema path, which is precondition 1 above and nothing wider.
 2. **`${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire`** — a **write** only the launcher can
    make, which returns an exit code rather than content and prints nothing on the normal path.
-3. **The cron step** — `CronList`, then `CronDelete` on the old job whose prompt matches
+3. **`${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh`** — step 0's reaper: one script that
+   answers whether the tick the lock records has finished, releases the lock when it has,
+   and prints what the human needs from it. It is here because a detached tick notifies
+   nobody, and the question is bounded to that one tick; the script owns every read.
+4. **The cron step** — `CronList`, then `CronDelete` on the old job whose prompt matches
    and `CronCreate` when no job of ours is listed: precondition 2 above, and the three
    tools the frontmatter's `allowed-tools` grants for it. It reads and writes the
    **scheduler**, never this bundle's state, so it is inside the category the list closes
@@ -89,8 +94,8 @@ subagent** and let that context pay. Never here, and never before a tick or inst
 one: not the whole thing, not a summary, not "just to orient".
 
 **The one write follows from the same category, and so does the one it forbids.** Item 2 is
-the launcher's only write because it needs no view of this bundle's state — an exit code, not
-content. **So the launcher may not clear a caveat it did not raise:** a task's
+the launcher's own write because it needs no view of this bundle's state — an exit code, not
+content; item 3's writes are the script's, never yours. **So the launcher may not clear a caveat it did not raise:** a task's
 `open_caveats:` (`SCHEMA.md`) comes out only on evidence, and evidence about this bundle's
 state is precisely what the category above puts out of the launcher's reach. Not a further
 entry, and not something to weigh against being able to dispatch — the tick or a subagent
@@ -101,10 +106,12 @@ raised it, and the same actor clears it.
 **No other reader may be added by analogy** — what stood here was an enumeration of
 forbidden sources that said it was closed, and it was, and it rotted anyway the day the
 expensive reads were a category it had never named.
+Item 3 is the one entry added since, by decision and not by analogy: a detached tick
+notifies nobody, so the question "has it finished?" moved into one script.
 The launcher's own harness under `tests/` counts these operations and fails when the
 list grows.
 
-**And what the three you DO have establish is bounded — say UNKNOWN when they did not
+**And what the four you DO have establish is bounded — say UNKNOWN when they did not
 answer.** `CONVENTIONS.md` → "A read that could not have established the answer returns
 UNKNOWN" is a launcher rule before it is anyone else's: the four failures it carries were
 all made here, in this context, from reads that returned something. A cwd probe and an
@@ -160,7 +167,8 @@ the next bare `/loopd:dispatch` starts it again.
 
 | | |
 |---|---|
-| **`/loopd:dispatch once`** | one tick, no cadence. Nothing is created, nothing scheduled. |
+| **`/loopd:dispatch once`** | one tick, no cadence. Nothing is created, nothing scheduled; step 2 waits for its close. |
+| **`/loopd:dispatch dry-run`** | `once`, with the tick briefed DRY RUN: steps 1–2 and a report, no role agent spawned, no target repo written. |
 | **`/loopd:dispatch stop`** | end the loop: `CronDelete` every listed job whose prompt names `/loopd:dispatch` — this skill's own or a human's `/loop` — and cancel any pending wakeup; then step 5. |
 | **`/loop /loopd:dispatch`** | no interval ⇒ `/loop`'s dynamic mode — the model paces its own iterations instead of a clock doing it. The right shape for a quiet bundle whose passes would mostly find nothing. Precondition 2 creates no cron under it; step 3 is the cadence. |
 
@@ -174,9 +182,9 @@ two:**
    at a fixed interval most firings land while an earlier tick is still running. `once`
    keeps `--as launcher`: a human typed it and expected a dispatch, so a held lock is the
    loud block.
-2. **Skip step 3.** The cron job *is* the cadence, so scheduling a wakeup as well gives the
-   session two schedulers and double the passes. Dispatch, wait for the notification,
-   release the lock, and end the pass.
+2. **Skip steps 2 and 3.** The cron job *is* the cadence, so scheduling a wakeup as well
+   gives the session two schedulers and double the passes. Reap, acquire, spawn, and end
+   the pass — the next fire's step 0 reaps what this one spawned.
 
 **Exit 1 from that acquire is a CLEAN SKIP, not an error.** It is the expected outcome of a
 firing that landed mid-tick. Print the one line it gave you, **end the pass successfully**,
@@ -203,13 +211,34 @@ loop at all. The measurement is in `docs/operations.md` → "Running the loop on
 ## How the serial loop works
 
 Parse `$ARGUMENTS`: `stop` ⇒ the stop form above, then step 5, and nothing else; `once`
-⇒ a single tick (no cron, no wakeup, `--as launcher`); anything else is the inter-tick
+⇒ a single tick (no cron, no wakeup, `--as launcher`); `dry-run` ⇒ the same single tick,
+spawned with `--dry-run`; anything else is the inter-tick
 **gap** (default **10m**, whole minutes — a 5-field cron has no finer unit, so there is no
 `0m`). Then:
 
+0. **Reap the last tick first — every pass, including the first after `stop`:**
+
+       bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh
+
+   It reads the one bg tick `.tick-lock` records and releases the lock **only** on a
+   committed ledger close for that tick's minted id — or after writing the close itself
+   when the tick's session ended or vanished with its entry open (a dead tick). Never on a
+   notification, never on a session state alone. Act on its exit code:
+   - **0** — nothing held, or it reaped one: print what it printed (the tick's close line,
+     `Needs you:` from `AWAITING.md`, a `COST:` line) verbatim, then go to step 1.
+   - **1** — the tick is still running. Print its one line and **end the pass**: the fire
+     is dropped, never queued.
+   - **4** — `BLOCKED`: the tick's session waits on a prompt before a committed close. Put
+     its line in front of the human and end the pass; it is neither idle nor done.
+   - **2** — it cannot tell. Report the line and stop; the lock stays.
+
+   It never prints the tick's transcript, and neither do you: the tick's own report goes
+   nowhere, because **the ledger and `AWAITING.md` are the result**.
+   The decision table and why this is the one reader added:
+   `docs/pm-design.md#launcher-reaper`.
+
 1. **Take the lock, then dispatch — in that order, with nothing in between.**
-   Resolve the tick's model first (below), **mint this tick's id** — one fresh literal per
-   tick, never reused, printed by
+   **Mint this tick's id** — one fresh literal per tick, never reused, printed by
 
        ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh mint
 
@@ -218,8 +247,8 @@ Parse `$ARGUMENTS`: `stop` ⇒ the stop form above, then step 5, and nothing els
 
        ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire --agent project-manager --claimant <id>
 
-   (add `--as loop` when the cron job or a `/loop` is driving — every form but `once`;
-   see "Running it on a cadence" above)
+   (add `--as loop` when the cron job or a `/loop` is driving — every form but `once` and
+   `dry-run`; see "Running it on a cadence" above)
 
    and act on its exit code. **The check and the write are that one call** (`O_EXCL` —
    no read-then-write to interleave with): it closes a window of seconds to minutes —
@@ -229,18 +258,17 @@ Parse `$ARGUMENTS`: `stop` ⇒ the stop form above, then step 5, and nothing els
 
    **That literal is the tick's identity, and you hand it on.** `acquire` records it in
    `.tick-lock` as `claimant:` — the only place it lives, and you write no file yourself —
-   and the brief you spawn the tick with carries it verbatim, because that tick's own
-   acquire passes the same id. It is what makes a second acquire *by that tick* a proved
-   re-entry (exit **0**) rather than exit **2** and a human's call. Mis-copy it and the tick
-   still runs: adopting an unclaimed lock never matches the id, and the script reports the
-   mismatch instead of refusing.
+   and `tick-spawn.sh` puts the id you minted at step 1, verbatim, into the tick's brief and
+   its ledger line, because that tick's own acquire passes the same id and step 0 finds its
+   entry by it. Mis-copy it and the tick still runs: adopting an unclaimed lock never
+   matches the id, and the script reports the mismatch instead of refusing.
 
    - **0** — the lock is yours, and it printed nothing. **Spawn the tick now**, as the
      very next thing you do.
-   - **1** — HELD: a tick is in flight. Do **not** dispatch. Under the cron or a `/loop`
-     with an interval there is no gap to schedule: print the one line and end the pass
-     clean. Under `/loop`'s dynamic mode, schedule the gap (step 3, `noop: true`) and
-     skip, exactly as step 4 does. Under `once`, report the block and stop.
+   - **1** — HELD: a tick is in flight that step 0 could not see (an older launcher's).
+     Do **not** dispatch. Under the cron or a `/loop` with an interval, print the one line
+     and end the pass clean. Under `/loop`'s dynamic mode, schedule the gap (step 3,
+     `noop: true`) and skip. Under `once`, report the block and stop.
    - **2** — stale, future-dated, or unreadable; the script printed the details. Do
      **not** dispatch and do **not** delete it: put what it printed in front of the
      human and stop until they answer. `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` is the human's answer, not yours.
@@ -250,77 +278,56 @@ Parse `$ARGUMENTS`: `stop` ⇒ the stop form above, then step 5, and nothing els
    **Exit 4 cannot reach you** — it is the tick's refusal for finding no lock, and
    taking a lock where there is none is what you are for.
 
-   If the spawn itself fails to start, run `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` before you
-   report — a lock with no tick behind it is the stale case, arriving hours early.
+   The tick itself — a **fresh** detached `claude --bg` session, **never an `Agent`-tool
+   child** (a background subagent's whole transcript is re-sent every ~30 s for a status
+   line, 14.3% of a busy tick's input measured in tick-as-bg-session/task-001, and its
+   result lands in this context):
 
-   The tick itself: spawn a **fresh** `project-manager` agent
-   (`subagent_type: loopd:project-manager` — **namespaced**, because the role agents
-   ship in the `loopd` plugin and a BARE agent name does not resolve, measured
-   2026-09-02) for ONE LIVE tick (background), with the standing guardrails below. **Fresh every time — never wake a completed tick with a message**;
-   step 0.5 refuses such a tick anyway. **Brief it with the gap, the guardrails and the tick
-   id you minted at step 1, verbatim — and not with state** — it reads the bundle, `git` and `gh` itself. **Run the tick on the
-   orchestrator's configured model:** resolve it with
-   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager` (`roleTiers`, default `deep` → an alias
-   via `models`, default `deep` → `opus`) and pass that as the tick's model, and pass
-   `effort:` what `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh project-manager` prints
-   (nothing printed ⇒ no `effort:`, and the agent's frontmatter `medium` applies). If
-   `models`/`roleTiers` are absent the script says so on stderr — **report that line in
-   the tick summary** and then inherit the session model, so an unchosen model is
-   visible rather than assumed. (The `apex` tier is for the `plan-architect` critique
-   and the `qa-reviewer`, not the routine tick.) A LIVE tick refines drafts, dispatches `ready`
-   tasks, advances/reflects PRs, reports finished worktrees, proposes closing completed
-   projects, and — after reflecting merges — may dispatch the `cataloguer` (throttled
-   to one per tick; skipped on idle/trivial ticks).
+       bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh --tick <id> --gap <gap>
 
-2. **Wait for it to finish.** Do **not** start another tick while one is in flight.
-   **That tick's `<task-notification>` is the only valid "finished" signal** — no tool
-   listing and no amount of elapsed time substitutes for it; a tick that has looked
-   done for *hours* is not done until its notification arrives. Don't poll; a quiet
-   repo proves nothing.
+   (`once` passes `--gap once`; `dry-run` adds `--dry-run`, so
+   `tick-spawn.sh --tick <id> --gap <gap> --dry-run` — the tick does steps 1–2 and
+   reports, spawns no role agent and writes no target repo.)
+   It spawns `claude --bg --agent loopd:project-manager --permission-mode auto` (namespaced
+   — a bare agent name does not resolve), with `--model` from
+   `resolve-model.sh project-manager` and `--effort` from `resolve-effort.sh project-manager`
+   (none printed ⇒ no flag), the brief built from `skills/dispatch/tick-brief.md` — the gap,
+   the id and the standing guardrails, and **not state**: the tick reads the bundle, `git`
+   and `gh` itself. It records the session on `.tick-lock` (`agent-sessions.sh full`) for
+   step 0, and prints one `spawned:` line; print it, and any `resolve-model:` line it
+   passed through, so an unchosen model is visible rather than assumed. **Fresh every
+   time — never wake a completed tick with a message**; step 0.5 refuses such a tick
+   anyway. Exit **1** means the spawn did not start and the script already released the
+   lock (`${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` — a lock with no tick behind
+   it is the stale case, arriving hours early); report it. Exit **3** is a refusal; report it.
 
-   **That notification now means the tick's OWN exit, and a tick is minutes.** The
-   harness withholds a parent's notification until every background child has stopped,
-   so while role agents were `Agent`-tool children of the tick, this step waited for the
-   slowest one and the lock below was held for the whole wave — measured 2026-09-13,
-   ticks of 49, 75, 84 and 125 minutes that had each finished dispatching inside ~5. Role
-   agents are detached `claude --bg` sessions now (`project-manager.md` step 3) and are
-   nobody's children, so nothing here changed except the number. **A tick still running
-   after an hour is a tick to look at, not a wave to wait out.**
+2. **Wait for it to finish — only under `once` and `dry-run`.** Under the cron or a
+   `/loop` the pass ends at the spawn, and the next fire's step 0 is the wait. A human who
+   typed `once` expected a result, so run
 
-   **When that notification arrives, release the lock** — run
-   `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` before you schedule the gap. That is the only place
-   it is released in the normal path; releasing on anything weaker hands the next tick
-   a dispatch the running one has not finished. A loop that dies before it releases
-   leaves the lock to age out into step 1's case 2, where a human sees it — the
-   intended failure, not a leak.
+       bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh --wait
 
-   **And end the report you relay with ONE metadata footer, printed by a script.** Its last
-   line is the output of
+   with the Bash tool's longest timeout. It polls the same way step 0 reads, returns when
+   the tick's committed close (or its death) releases the lock — printing the close line,
+   `Needs you:` and `COST:` — and is bounded by the tick's wall-clock budget
+   (`roleMinutes.project-manager`, else `maxAgentMinutes`, absent ⇒ 45). Exit **5** means
+   its slice ran out first: run it again. Exit **1** is the budget spent: say the tick is
+   still running and that the next `/loopd:dispatch` reaps it. **4** and **2** are step 0's.
 
-   ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/agent-usage.sh fmt \
-     --tokens <subagent_tokens> --tools <tool_uses> --duration-ms <duration_ms>
-   ```
-
-   — the three numbers straight off **this tick's** notification, never reformatted and
-   never composed by you: `agent-usage.sh` owns the one usage form, and a second spelling of
-   the same numbers is what makes two reports impossible to compare.
-   **There is no model name in it**: the notification carries none, so there is nothing to
-   print that would not be a guess.
-   **`usage UNKNOWN` ⇒ print no footer at all.** A notification without the fields is a tick
-   nobody measured, and a zero is a claim nothing supports.
-   **The tick report ONLY.** A role agent's result is consumed by the tick, not by you, and
-   its numbers are already on the task document as a `* DISPATCH` line
-   (`project-manager.md` step 3) — a footer there would be the same figure twice.
+   **The `COST:` line is the ONE metadata footer, printed by a script:**
+   `agent-usage.sh fmt` over the numbers `session-usage.sh` reads from the ended tick
+   session's transcript — never reformatted and never composed by you: `agent-usage.sh`
+   owns the one usage form. **There is no model name in it**: the transcript's numbers carry
+   none here, so there is nothing to print that would not be a guess.
+   **`usage UNKNOWN` ⇒ print no footer at all** — the reaper prints none. **The tick
+   report ONLY.** A role agent's numbers are already on its task document as a `* DISPATCH`
+   line (`project-manager.md` step 3).
 
    **After a compaction, the in-flight memory is gone — and the answer is still not
-   yours to look up.** That is what `.tick-lock` is for, and you consult it in exactly
-   one way: by taking it in step 1. **Do not read the disk here to reconstruct
-   anything else** — re-deriving the in-flight set is one of the tick's opening steps
-   (see `project-manager.md` step 0.5: ledger, then task `status:`, then
-   `git log`/`gh pr list`), and a tick that finds an
-   open ledger entry **reports it and holds**. Such a tick is a finished tick: schedule
-   the gap as usual (step 3) and surface what it says.
+   yours to look up.** Step 0 and `.tick-lock` answer it; re-deriving the in-flight set is
+   one of the tick's opening steps (`project-manager.md` step 0.5: ledger, then task
+   `status:`, then `git log`/`gh pr list`), and a tick that finds an open ledger entry
+   **reports it and holds**.
 
    There is no step 2b. It was the per-tick `advisor` observer, retired 2026-10-08: no
    bundle had enabled it, and it read the same inputs as the tick to produce a second
@@ -333,109 +340,33 @@ Parse `$ARGUMENTS`: `stop` ⇒ the stop form above, then step 5, and nothing els
    schedulers is double the passes. Under `once` there is no next tick. **Only under
    `/loop`'s dynamic mode** (no interval) schedule the next tick after the gap yourself:
    `ScheduleWakeup` with `delaySeconds` = the gap and `prompt` = `/dispatch <gap>`.
-   **Always pass `noop` and `reason`.** `noop: true` when the tick changed nothing —
-   no dispatch, no status change, no task-document edit (a refined draft or a folded
-   answer is real work, not idle), no `AWAITING.md` edit; `noop: false` when it did.
+   **Always pass `noop` and `reason`.** `noop: true` when step 0 reaped nothing or a tick
+   whose close line reports no change; `noop: false` when it did.
    **A board refresh or a render is not a change** — every tick refreshes the board, so
    counting it would pin `noop` to `false` forever and hand the human back the
    scrolling idle loop the streak collapse exists to prevent. `reason` is one specific
    sentence about what this tick is waiting on ("holding for qa-reviewer on #214"),
    not "waiting".
 
-4. **When `/dispatch` re-fires — from the cron job, a `/loop`, or that wakeup:** if this
-   session's own history says a tick is still in flight (dispatched, no notification
-   yet), skip — never overlap (dynamic mode reschedules the gap; a clock needs nothing).
-   Otherwise go to step 1, whose `acquire` refuses the dispatch
-   by itself if a live tick holds the lock; the lock, not memory, is what actually
-   decides. Query nothing else here.
+4. **When `/dispatch` re-fires — from the cron job, a `/loop`, or that wakeup:** go to
+   step 0. Its reaper and step 1's `acquire`, not this session's memory, decide whether a
+   tick is in flight. Query nothing else here.
 
 5. **Stop** on `/loopd:dispatch stop`, or when the user says so: `CronList`, `CronDelete`
    every job whose prompt names `/loopd:dispatch`, cancel any pending wakeup, and
-   dispatch no further ticks. **Release the lock only if THIS session took it and its tick
-   has since finished** — otherwise leave it exactly where it is: `release` is unconditional and
-   cannot tell your lock from a sibling's, so releasing on the way out would delete a
-   live holder's lock and re-open the double-dispatch. If you dispatched but are stopping before
-   the notification arrives, say so and leave the lock — it ages out into step 1's
-   case 2, the intended failure.
+   dispatch no further ticks. **Release nothing.** A tick still running closes its own
+   entry, and the next fire's step 0 — whenever a `/loopd:dispatch` next runs — reaps it
+   and releases its lock; a tick that dies meanwhile is closed as dead there. A live
+   sibling's lock is never this session's to delete.
 
 This guarantees **at most one PM tick at any moment**, with a `gap` pause between
 ticks, regardless of how long a tick runs.
 
 ## Standing guardrails for each tick dispatch
 
-- Honor the human gates **per the owning project's `autonomy`** (default `gated`):
-  never promote `draft → ready` and never merge. A project may delegate a gate **only**
-  where `AUTONOMY.md` exists and defines the mode — resolved by
-  `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-autonomy.sh --bundle <bundle>`, which reads the
-  **bundle root first** and then an installed **companion plugin**
-  (`loopd-yolo@loopd`); exit 1 is absent. Then follow that
-  file exactly, including its preflight. **No `AUTONOMY.md` ⇒ every project is
-  `gated`** and the field is inert. When `autonomy` is unset, act as `gated`.
-- Reconcile doc `status:` against live `gh`/`git` before acting; act only on deltas.
-- **Dispatch only this clone's human's work.** On a shared instance,
-  `${CLAUDE_PLUGIN_ROOT}/scripts/task-owner.sh <task-path>` decides, and **exit 0 is the only clearance** —
-  exit 1 (someone else's) and exit 2 (cannot answer) both refuse. Resolution: task
-  `owner:` → project `owner:` → tracked `defaultOwner` → unowned; then compare against
-  this clone's `ownerGithubUser` (local file first). `defaultOwner` is **not** locally
-  overridable. **With none of them set, every task is this clone's.** It gates
-  **dispatch only** — never promotion, never a commit, never the KB — and it is not a
-  lock. `AWAITING.md` is the one artifact that narrows to this human's decisions; the
-  tick report still names the other human's work.
-- **The tick syncs the bundle around its own work — when there is a remote.** It pulls
-  `--rebase` (never `--autostash`, which can exit 0 with a conflicted tree)
-  before it re-derives anything from disk, defers the pull to step 8 when the tracked
-  tree is dirty, and pushes right after it commits; a bundle with no `origin`
-  does neither, silently. A pull conflict **stops the tick**: it aborts the rebase, writes nothing,
-  and reports the contested paths — a tick never resolves contested state between two
-  humans on its own. And nothing here ever force-pushes a shared bundle.
-- **The same blocker twice ESCALATES — it is never re-dispatched.** After each round run
-  `${CLAUDE_PLUGIN_ROOT}/scripts/stall-counter.sh record <task-doc> --blocker "<blocker>"`
-  (add `--progress` when the PR moved — a new commit or a new review thread — which resets
-  the counter); its **exit 1** means the cap is reached, so run `… escalate <task-doc>`
-  instead of dispatching and put the line it prints in `AWAITING.md`. The cap is
-  `maxStallRounds` in `instance.config.json` (**absent ⇒ 2**). **A spawn the host
-  refused is not a round and is never recorded** — no agent ran (step 3).
-- **An answered question is MOVED, never deleted** — from `open_questions` into
-  `answered_questions`, one flat line `<ISO 8601> by <login> · <the entry verbatim>`,
-  the login from `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh` (`SCHEMA.md` →
-  "Decisions name the human"; an `advisor:` entry the loop wrote carries no `by`). `open_questions` must still empty — that is the promotion signal; an
-  entry left in both lists blocks the draft forever.
-- Concurrency cap: **at most `maxAgentsInFlight` role agents in flight**, a still-running
-  `plan-architect` critique counting as one (`tick-steps/step-2-refine-drafts.md`) — resolve
-  with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-max-agents.sh` (local file first, tracked second; prints
-  nothing and exits 1 when neither sets it — fall back to 4 then, the seeded, measured
-  default per SCHEMA.md). Each agent uses its own worktree under `worktreeRoot`
-  (absent, `<reposRoot>/_wt`) + the target repo's **own package manager** (its `CLAUDE.md` says which)
-  with a **private store** inside the worktree where that manager has one, and **pushes early** — never two installs
-  against the shared store at once.
-- A LIVE tick may also dispatch the **`cataloguer`** (`loopd:cataloguer`) after
-  reflecting merges — read-only on product repos, writes only to `knowledge/`,
-  **counts toward the cap**, **throttled to one per tick**, never promotes or merges.
-- **Every agent dispatch is namespaced `loopd:<name>`** — the seven role agents and the
-  three advisory review agents (`loopd:code-architect`, `loopd:deep-bug-scan`,
-  `loopd:plan-architect`), which ship in the plugin since 2026-10-28 and no longer come
-  from `~/.claude/agents/`. A bare name resolves for none of the ten. The `roleTiers` /
-  `roleEffort` KEY stays bare (`plan-architect`); only the dispatch string carries the
-  namespace.
-- Commit hygiene in this repo: commit only your own changed files, by explicit path
-  (never `git add -A`), via
-  `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "<msg>" --stage -- <path>...`
-  — `--stage` stages exactly those paths first; never `--no-verify` in target repos.
-- **Worktree hygiene, two scripts.** `${CLAUDE_PLUGIN_ROOT}/scripts/reclaim-worktree.sh <task-path>`
-  removes the ONE worktree a `done` task recorded, and only when every URL in its `pr:` has
-  MERGED — step 5 runs it per task; exit 1 is a refusal to record, never to retry around,
-  and exit 4 (only the task's own stopped session still live in it) is a retry next tick.
-  `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh` (≤ once per tick) **reports only —
-  it never deletes anything**; surface its `REMOVABLE`/`RECLAIMABLE` sets as a human
-  job. **Run it only when your in-flight count is zero** — the `PRUNE_ACTIVE_MINUTES`
-  mtime veto (default 120) is a backstop, not the guard, and does not apply to reclaim.
-- **Project close is human-gated.** The PM only *proposes* closing (all tasks
-  terminal); the human confirms (or runs `/close-project`). The folder step is always
-  `${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug> --apply`, never a hand-written `rm`;
-  `retain: true` keeps the folder as the record (`SCHEMA.md`). Never close
-  autonomously.
-- Return a tight summary: live-vs-docs deltas, dispatched/reflected, in-flight count,
-  and what awaits the human.
+They are the tick's brief, so they live in **`skills/dispatch/tick-brief.md`**, the
+template `tick-spawn.sh` fills — never retyped here, and never composed by you.
+`tests/tick-bg-session.test.sh` asserts each line reaches the spawned session verbatim.
 
 ## Notes
 
@@ -444,7 +375,8 @@ ticks, regardless of how long a tick runs.
   clones is supported (see the standing facts). To change the gap: `/loopd:dispatch stop`,
   then `/loopd:dispatch <gap>` — precondition 2 never replaces a job that is already there.
 - **The dispatch lock is `.tick-lock` at the instance root** — gitignored, per clone,
-  written by step 1 and released in step 2 by the session that took it. The tick claims
+  written by step 1 (and `tick-spawn.sh` adds the tick's `session:`), released by step 0's
+  reaper on the tick's committed close. The tick claims
   it (step 0.5, `--as tick`, recorded in `.tick-lock.claim`) and releases nothing.
   `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status` reads it without touching it (for a human, never this
   launcher); `TICK_LOCK_STALE_MINUTES` (default 120) sets when step 1 stops waiting

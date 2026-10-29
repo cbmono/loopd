@@ -16,8 +16,8 @@ Three rules this spawn adds, each because the launcher reads nothing but your le
   the idle line ends ` · {{TICK_ID}}`. That id on a **committed** line is the only way the
   launcher learns you finished: an entry still open when your session ends is closed as
   dead by `tick-reap.sh`, and nothing else releases the lock.
-- **Close at step 8 without usage flags** — no notification hands you numbers now; the
-  launcher prints them from your transcript once your session has ended. Release nothing.
+- **Your own usage is not yours to report.** The launcher prints it from your transcript
+  once your session has ended; step 8's usage flags stay what they were. Release nothing.
 
 ## Standing guardrails for each tick dispatch
 

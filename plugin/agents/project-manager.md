@@ -204,8 +204,8 @@ state, and act only on deltas.
    ```
 
    - **0** — the lock is yours; carry on. It printed `adopted:`: that lock is the
-     launcher's dispatch lock and **the launcher** releases it when you report — you
-     never do (step 8). A preceding `re-entered:` line means a second acquire in this
+     launcher's dispatch lock and **the launcher's reaper** releases it once your close
+     line is committed — you never do (step 8). A preceding `re-entered:` line means a second acquire in this
      tick and changes nothing. A `note:` line means the id in your brief does not match the
      one the lock was minted for — you still ran; report that in one line.
    - **1** — the claim on that lock is **not yours** as far as disk can show; read it as
@@ -245,8 +245,8 @@ state, and act only on deltas.
    If the ledger and a task's `status:` disagree, **the task document wins**. It prevents
    re-dispatching a finished task sequence — the most expensive failure this loop has,
    costing a full set of agent runs and opening duplicate PRs. `/loopd:dispatch` deliberately reads none of this
-   before spawning you — its **allowlist of three** holds a cwd probe, the tick lock and a
-   cron step that reads and writes the scheduler and not this bundle, and everything else is yours
+   before spawning you — its **allowlist of four** holds a cwd probe, the tick lock, the reaper
+   (`tick-reap.sh`, which reads only the tick it spawned) and a cron step that reads and writes the scheduler and not this bundle, and everything else is yours
    by category (see its "The launcher reads nothing else") — so if you skip it, nobody did
    it.
 
@@ -290,7 +290,7 @@ state, and act only on deltas.
      no `ready` task `dispatchable-ready.sh` clears while in-flight is under the `maxAgentsInFlight` cap (absent ⇒ 4),
      and no `draft` whose newest `advisor_notes` concern postdates its newest
      `* <ISO 8601> triage:` line (either one is a `DELTA:` naming the task). **Skip steps 1–7.** Append ONE already-closed line to the root `log.md` —
-     `* TICK <ISO-8601> by <login> idle — fingerprint unchanged (tick-delta)` — then go to step 8
+     `* TICK <ISO-8601> by <login> idle — fingerprint unchanged (tick-delta) · <the tick id from your brief>` — then go to step 8
      to commit and sync it as usual, reporting `noop: true`.
      **Then stop — your entire report is that one line, the probe's own, verbatim:**
      no sections, no counts, no "nothing to report" preamble, and nothing from the
@@ -313,11 +313,13 @@ state, and act only on deltas.
 
    **On every path but IDLE, open your tick ledger entry NOW — this is where step 0.5
    used to do it.** Append one line to the root `log.md`:
-   `* TICK <ISO-8601 timestamp> by <login> open: <what you are about to do>`. Step 8
+   `* TICK <ISO-8601 timestamp> by <login> open: <the tick id from your brief> · <what you are about to do>`
+   (no id in your brief — an older launcher — ⇒ drop the id and the `·`). Step 8
    appends its `close:` line **beside** this one, at the same timestamp; the open half is
    never rewritten, so the pair is what makes a tick's wall duration readable from the
    ledger alone. It must be the first thing the full walk does, not part of curation: an
-   open `TICK` line with no close is the only signal that a died tick ever dispatched.
+   open `TICK` line with no close is the only signal that a died tick ever dispatched, and
+   the id on it is how `/loopd:dispatch`'s reaper finds your entry (`scripts/tick-reap.sh`).
    Here rather than in step 0.5 because
    **the probe reads a tree that append would have dirtied**, and by now the answer is
    already `DELTA`.
@@ -693,8 +695,8 @@ state, and act only on deltas.
    ```
 
    The only lock you can be running under is the launcher's, printed `adopted:` at
-   step 0.5, and the launcher releases it when your completion notification arrives — a
-   signal you cannot see. A tick that held (exit 1), one handed a claim it could not
+   step 0.5, and the launcher's reaper releases it on its next fire, once your close line
+   is committed (`scripts/tick-reap.sh`). A tick that held (exit 1), one handed a claim it could not
    attribute (exit 2), and one refused as a resume (exit 4) all release nothing too.
    `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` is **the human's override**; it is not yours to run at
    the end of a tick (`docs/pm-design.md#step-8`).

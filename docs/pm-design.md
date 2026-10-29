@@ -175,12 +175,41 @@ truthfully reports nothing running. A second tick dispatched anywhere in that wi
 exactly the 34-minute overlap of 2026-08-29. `acquire` closes it by creating the file
 with `O_EXCL`, so there is no read-then-write for anything to interleave with.
 
-**Step 2's release discipline**: the `<task-notification>` is the only valid finished
-signal because the agent resumes and the same task-id notifies again — a tick that
-reads as complete or idle in a status listing may still be running, and one that has
-looked done for hours is not done until its notification arrives. Releasing the lock on
-anything weaker (a status listing, elapsed time, a quiet repo) hands the next tick a
-dispatch the running one has not finished.
+**The release discipline**: since tick-as-bg-session/task-002 the tick is a detached
+`claude --bg` session, so no notification exists, and the one release signal is a
+**committed** ledger close for the lock's minted id, read by `scripts/tick-reap.sh` at
+the next fire's step 0. A notification was never a sound one anyway — the agent resumes
+and the same task-id notifies again (2026-09-09: a mid-flight notification released a
+live tick's lock and two ticks overlapped for 26 minutes). A session state alone is not
+one either: `blocked` is a finished turn or a live prompt, and `done` with the entry open
+is a death. Releasing on anything weaker hands the next tick a dispatch the running one
+has not finished.
+
+<a id="launcher-reaper"></a>
+### Step 0 — the reaper, and why it is the one reader added
+
+Measured in tick-as-bg-session/task-001: an `Agent`-tool tick drew four `agent_summary`
+side-queries in a two-minute busy tick, each re-reading its whole transcript — 14.3% of
+the tick's input tokens — and its result landed in the human's session. A detached
+session draws neither, but it also notifies nobody, so "has it finished?" had to be asked
+from the launcher. That question is answered by one script over the one tick the lock
+records (its `session:` and minted `claimant:`), never by the launcher reading the
+ledger, `AWAITING.md` or the transcript itself. The decisions it carries:
+
+| Ledger, for the minted id | Session | Reaper |
+|---|---|---|
+| close committed | not `working` | release; print the close line, Needs-you, `COST:` |
+| close committed | `working` | hold — the tick is still pushing and rendering |
+| open, or none | `working` | hold; the fire is dropped, never queued |
+| open, or none | `blocked` | `BLOCKED`, lock kept — neither idle nor done |
+| open | ended or gone | write the `close: dead …` line beside it, then release |
+| none | ended or gone | append a `close: … ended with no ledger entry` line, then release |
+| any | unreadable | `UNKNOWN`, lock kept |
+
+The dead tick's close is written by the launcher's script and not by a hook in the tick,
+because a killed session runs no hook. `once` and `dry-run` wait through the same
+script (`--wait`), bounded by the tick's wall-clock budget, so a human who typed them
+still gets the result — from the ledger and `AWAITING.md`, never the transcript.
 
 <a id="launcher-step-2"></a>
 ### Step 2 — after a compaction
@@ -313,9 +342,8 @@ beside it is exactly that missing signal.
 
 **What the open entry proves, precisely.** It proves a tick started and did not finish.
 It does **not** prove the agents it dispatched are still alive — nothing on disk can,
-which is why `/loopd:dispatch` step 2 makes the `<task-notification>` the only valid
-finished
-signal. Orient-then-report-then-hold is what turns "there is an open entry" into "these
+which is why `/loopd:dispatch` step 0 releases only on a committed `close:` for the
+tick's minted id, and closes a dead tick's entry itself. Orient-then-report-then-hold is what turns "there is an open entry" into "these
 three tasks claim in-flight, none has a worktree on disk, one has an open PR" — the
 difference between a report a human can act on and one that only says something is
 wrong. A stale open entry adopted silently miscounts the `maxAgentsInFlight` cap in
@@ -819,10 +847,9 @@ is only as fresh as the tick that wrote it, and its masthead timestamp is what s
 stale.
 
 **Why a tick releases no lock, in every case.** The only lock a tick can be running
-under is the launcher's, printed `adopted:` at Step 0.5, and the launcher releases it
-when the tick's completion notification arrives — a signal the tick cannot see;
-releasing earlier would free the lock while the loop still counts the tick as in
-flight. A tick that held (exit 1), one handed a claim it could not attribute (exit 2),
+under is the launcher's, printed `adopted:` at Step 0.5, and the launcher's reaper
+releases it on the next fire once the tick's close is committed; releasing earlier would
+free the lock while the tick is still pushing. A tick that held (exit 1), one handed a claim it could not attribute (exit 2),
 and one refused as a resume (exit 4) all release nothing too: that lock belongs to the
 tick still running, or to the human the script handed the decision to, and deleting it
 re-opens the double-dispatch the lock exists to close. There is no longer a case where
