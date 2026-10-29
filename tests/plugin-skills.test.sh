@@ -10,6 +10,11 @@
 # on its own. The read-only skills (`brief-me`, `welcome`, `whats-up`) stay model-invocable. Both
 # directions are asserted, because a `true` added to `brief-me` silently deletes a
 # capability and a `true` dropped from `dispatch` silently hands the model the loop.
+# A THIRD CLASS since 2026-10-29: REFERENCE skills — knowledge the model opens on its own
+# when the work matches the description and a human never types (`modern-web`). They carry
+# `user-invocable: false` and NO `disable-model-invocation`; both halves are asserted, since
+# a `disable-model-invocation: true` added there would make the guides unreachable by the
+# only reader they have. tests/modern-web-skill.test.sh owns that skill's contents.
 #
 # The per-skill pins assert the PROPERTY each contract exists for (read-only-ness,
 # verbatim relay, provenance, the two non-actions), not the prose around it — the wording
@@ -56,7 +61,8 @@ body() { # <skill> — everything after the closing `---`
 
 STATE_CHANGING="capture work dispatch handoff audit answer fanout pr-review-request new-project close-project board init kb-apply prune-wt unblock"
 READ_ONLY="brief-me welcome whats-up"
-ALL="$STATE_CHANGING $READ_ONLY"
+REFERENCE="modern-web"
+ALL="$STATE_CHANGING $READ_ONLY $REFERENCE"
 
 # =======================================================================================
 echo "== 1. every skill ships, well-formed, and no further skill appears unasserted =="
@@ -81,6 +87,10 @@ for s in $STATE_CHANGING; do
 done
 for s in $READ_ONLY; do
   ok "$s stays model-invocable (no disable-model-invocation)"  "$(fm "$s" disable-model-invocation)" ""
+done
+for s in $REFERENCE; do
+  ok "$s stays model-invocable (no disable-model-invocation)"  "$(fm "$s" disable-model-invocation)" ""
+  ok "…and is hidden from the / menu (user-invocable: false)"  "$(fm "$s" user-invocable)" false
 done
 
 # =======================================================================================

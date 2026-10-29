@@ -55,6 +55,14 @@ browser** becomes a `✗` row in the PR's criteria table naming what it would ta
 blocked session. This is for background sessions only: interactive ones keep the seeded
 `CLAUDE.md` rule — connect to every open browser and let the human pick.
 
+**Browser-facing work opens the matching modern-web guide before you write.** HTML, CSS, a
+form, a client-side script, a UI component, an animation — anything that runs in a browser —
+is built to the category's guide under `${CLAUDE_PLUGIN_ROOT}/skills/modern-web/guides/`
+(`${CLAUDE_PLUGIN_ROOT}/skills/modern-web/SKILL.md` maps the work to a file): Baseline
+Widely available features without fallbacks, the guide's fallback for anything newer, unless
+the repo's own `CLAUDE.md` states a browser-support policy. Name the guide(s) consulted on
+the PR's `Verified:` line (`· modern-web: forms.md`). Server-only work opens nothing.
+
 ## Procedure
 
 1. **Read the task** (frontmatter + `# Context` + `acceptance_criteria`). Set its

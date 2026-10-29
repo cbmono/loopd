@@ -300,6 +300,12 @@ Flags `/loopd:new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="�
 `browser=off|claude-for-chrome` (default `off`), `/yolo`, `/cli …`, `/claudeforchrome`,
 `--no-commit`.
 
+Not a command, but shipped beside them: **`modern-web`**, a reference skill the model opens on
+its own for browser-facing work (HTML, CSS, forms, accessibility, performance, client-side
+security, UI components, animation) — a condensed derivative of Google Chrome's
+`modern-web-guidance`, one guide per category, that the `software-engineer` builds to and the
+`qa-reviewer` reviews against. [→](plugin/skills/modern-web/SKILL.md)
+
 ## The team
 
 | Role | Does |
