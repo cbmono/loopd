@@ -187,5 +187,23 @@ ok "…and never an approve row"  "$(grep -c 'approve' "$H/$AB_AWAITING" | tr -d
 ok "…leaving the page as it was" \
    "$(cmp -s "$H/$AB_AWAITING" "$TMP/unparsable.before" && echo yes || echo no)" yes
 
+# =====================================================================================
+# A MERGE ROW WITH A TRAILER KEEPS ITS PR LINK. The row used to be "trailer, else the
+# link", so a tick that added "7/7 checks green" REPLACED the only thing the human needed
+# to act — measured 2026-10-28 on a live bundle: a merge row naming a commit and no PR.
+# The link is the row; the trailer is appended after it.
+# =====================================================================================
+echo "== a merge row carries its PR link AND its trailer =="
+M="$TMP/mergetrail"; inst "$M"; : > "$M/$AB_AWAITING"
+task "$M" task-004-d "Green" in-review '"x"' ''
+bash "$SH" --instance "$M" \
+  --merge "$M/projects/demo/tasks/task-004-d.md=[ai-bridge#7](https://github.com/cbmono/ai-bridge/pull/7)" \
+  --trailer "$M/projects/demo/tasks/task-004-d.md=7/7 checks green at a069721" >/dev/null 2>&1
+mrow="$(grep '^\* 🔀' "$M/$AB_AWAITING")"
+saw() { case "$1" in *"$2"*) echo yes ;; *) echo no ;; esac; }
+ok "the merge row still links the PR"   "$(saw "$mrow" '[ai-bridge#7](https://github.com/cbmono/ai-bridge/pull/7)')" yes
+ok "…and carries the trailer after it"  "$(saw "$mrow" '/pull/7) · 7/7 checks green at a069721')" yes
+ok "…as one row"                        "$(grep -c '^\* 🔀' "$M/$AB_AWAITING" | tr -d ' ')" 1
+
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

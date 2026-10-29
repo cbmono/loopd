@@ -13,7 +13,7 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-62s (%s)\n' "$1" "$2"; pass=$(
 
 SENT=(
   'Every queue, buffer, cache, connection pool, retry budget or in-memory map the project adds or changes the load on gets one `D<n>` stating its bound and what happens at it — dropped, refused, delayed, or unbounded on purpose — recorded per draft at refine whatever its reversibility. `unbounded` is a legal answer; an unstated one is not.'
-  '**Label each queue, buffer, cache or connection pool that is a node with its overload `D<n>` id, not the bound'"'"'s text**, so an overturn needs no redraw; retry budgets and in-memory maps need no node.'
+  '**Label each queue, buffer, cache or connection pool that is a node with its overload `D<n>` id, not the bound'"'"'s text**, so an overturn needs no redraw of the label — the diagram itself still redraws under the redraw rule below; retry budgets and in-memory maps need no node.'
   '**Before you stop, check each such node against the project'"'"'s overload `D<n>` rows and add any missing row.**'
 )
 # where each sentence must sit: after <from>, before <to>

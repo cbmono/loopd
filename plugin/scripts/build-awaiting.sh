@@ -97,7 +97,7 @@ entries() { # <file> <key>
 
 # The hand-off row's sentence. Agent text is ESCAPED, so it cannot make a link or format
 # of its own; the links are ours: `owner/repo#N`, `<known repo>#N` (a `repos/` entry or the
-# task's `target_repo`), `PR #N` on the task's repo, and a run id on the repo its own `-R`
+# task's `target_repo`), `PR #N` and a bare `#N` on the task's repo, and a run id on the repo its own `-R`
 # names, else the task's. Nothing inside a URL is linked. No text file ⇒ the entry's own.
 handoff_text() { # <entry> <task-file>
   local id tr known
@@ -128,6 +128,7 @@ esc = lambda x: re.sub(r"([\\`*_\[\]()<>|~!#])", r"\\\1", x)
 TOK = re.compile(r"(?P<url>https?://[^\s<>]+)"
                  r"|(?<![\w./#@-])(?:(?P<own>[A-Za-z0-9][\w.-]*)/)?(?P<repo>[A-Za-z][\w.-]*)#(?P<n>\d+)\b"
                  r"|\bPR #?(?P<pr>\d+)\b"
+                 r"|(?<![\w./#@-])#(?P<bare>\d+)\b"
                  r"|\b(?P<verb>run(?: rerun| view| watch)?) (?P<run>\d{6,})\b")
 out, pos = [], 0
 for m in TOK.finditer(text):
@@ -137,6 +138,10 @@ for m in TOK.finditer(text):
         out.append("[%s#%s](https://github.com/%s/%s/pull/%s)" % (g("repo"), g("n"), o, g("repo"), g("n")))
     elif g("pr") and tr:
         out.append("PR [%s#%s](https://github.com/%s/pull/%s)" % (tr.split("/")[1], g("pr"), tr, g("pr")))
+    elif g("bare") and tr:
+        # A bare `#N` ("merge #556 once CI is green") is the task's own repo's PR — the one
+        # shape an agent writes most and the one the row could not link until 2026-10-28.
+        out.append("[%s#%s](https://github.com/%s/pull/%s)" % (tr.split("/")[1], g("bare"), tr, g("bare")))
     elif g("run"):
         # Its OWN command's `-R` only: the rest of this command, up to the next `gh `,
         # `;` or `then` — never a later command's.
@@ -295,7 +300,7 @@ for pm in "$inst"/projects/*/project.md; do
     trail="$(lookup "$f" trailer)"; [ -n "$trail" ] || trail="$(lookup "$rel" trailer)"
     mlink="$(lookup "$f" merge)"; [ -n "$mlink" ] || mlink="$(lookup "$rel" merge)"
     if [ "$held" = 1 ]; then
-      [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${trail:-$mlink}"
+      [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${mlink}${trail:+ · $trail}"
       continue
     fi
 
@@ -318,7 +323,7 @@ $qlist
 EOF
     [ -n "$qs" ] && add "❓" answer "$t" "$rel" "${trail:-$qs}"
 
-    [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${trail:-$mlink}"
+    [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${mlink}${trail:+ · $trail}"
 
     case "$st" in
       draft)

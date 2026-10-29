@@ -79,7 +79,7 @@ J="$TMP/jobs"
 job() { mkdir -p "$J/${1%%-*}"; python3 -c 'import json, sys; print(json.dumps({"state": "blocked", "sessionId": sys.argv[1], "needs": sys.argv[2]}))' "$1" "$2" > "$J/${1%%-*}/state.json"; }
 NEEDS1='review, apply and merge terraform#866; re-login SSO and run sim/simulate.sh, then gh run rerun 39260575390 -R example-user-007/labs'
 job "$U1" "$NEEDS1"
-job "$U2" 'Decide A --- --- B? See https://docs.example.com/guide.html#12 (attempt#2), [labs#3](https://evil.example.com) and PR #7;
+job "$U2" 'Decide A --- --- B? See https://docs.example.com/guide.html#12 (attempt#2), [labs#3](https://evil.example.com) and PR #7; merge #560 once CI is green (not attempt#9);
   gh run rerun 11111111 -R example-user-007/labs, then gh run rerun 22222222 -R example-user-008/other'
 mkdir -p "$J/${U3%%-*}"; printf '{"state":"blocked","suggestedReply":"x"}\n' > "$J/${U3%%-*}/state.json"
 job "$U4" 'Merge PR #559 (labs). Then run the marketing backfill from 2025-10-20'
@@ -134,6 +134,11 @@ ok "…the second -R is the second run's" "$(cnt "$AWF" '[22222222](https://gith
 ok "…and the first stays the first's" "$(cnt "$AWF" '[11111111](https://github.com/example-user-007/labs/actions/runs/11111111)')" 1
 ok "…PR #N on the task's repo (target_repo comment stripped)" "$(cnt "$AWF" 'PR [labs#7](https://github.com/example-user-007/labs/pull/7)')" 1
 ok "…no link from a URL fragment" "$(cnt "$AWF" '/pull/12')" 0
+# A BARE `#N` IS THE SHAPE AGENTS WRITE MOST ("merge #556 once CI is green") and the one the
+# row could not link until 2026-10-28 — measured on a live bundle whose three do rows all
+# carried unlinked numbers. It resolves against the task's repo; `attempt#3` still does not.
+ok "…a bare #N links on the task's repo" "$(cnt "$AWF" '[labs#560](https://github.com/example-user-007/labs/pull/560)')" 1
+ok "…while attempt#9 still does not" "$(cnt "$AWF" '/pull/9)')" 0
 ok "…nor from attempt#2" "$(cnt "$AWF" '/pull/2)')" 0
 ok "…an agent-written link is escaped" "$(cnt "$AWF" '\]\(https://evil.example.com\)')" 1
 ok "…so it links nowhere" "$(cnt "$AWF" '](https://evil')" 0
