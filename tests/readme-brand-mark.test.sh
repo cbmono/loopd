@@ -91,7 +91,15 @@ echo "== 3. every command is documented, and only under /${PN}: =="
 # The baseline is EXPLICIT, never derived from plugin/skills/: a derived list would let a
 # deleted skill take its README line with it and stay green. The first check keeps it honest.
 COMMANDS="answer audit board brief-me capture close-project dispatch fanout handoff init kb-apply new-project pr-review-request prune-wt unblock welcome whats-up work"
-ok "the baseline is exactly plugin/skills/" "$(ls "$REPO/plugin/skills" | tr '\n' ' ' | sed 's/ $//')" "$COMMANDS"
+# A REFERENCE skill (`user-invocable: false` — the model opens it, nobody types it) is not a
+# command and has no /$PN: line to document; it is listed here by name so a new one is a
+# decision, not a silent widening of the baseline.
+REFERENCE="modern-web"
+commands_on_disk() { # every plugin/skills/ entry that is not a named reference skill
+  local d; for d in "$REPO"/plugin/skills/*/; do d="$(basename "$d")"
+    case " $REFERENCE " in *" $d "*) grep -q '^user-invocable: false' "$REPO/plugin/skills/$d/SKILL.md" && continue ;; esac
+    printf '%s ' "$d"; done | sed 's/ $//'; }
+ok "the baseline is exactly plugin/skills/ minus the reference skills" "$(commands_on_disk)" "$COMMANDS"
 undocumented() { # <file> -> each baseline command it never names as /$PN:<cmd>, or none
   local c miss=""
   for c in $COMMANDS; do grep -qE "/${PN}:${c}([^a-z-]|\$)" "$1" || miss="${miss:+$miss }$c"; done
