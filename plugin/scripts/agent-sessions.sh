@@ -28,6 +28,10 @@
 #                                             -> this bundle's background sessions, one
 #                                                row each: task, state, process, age, id;
 #                                                `--summary` prints `<running> <no-process>`
+#   agent-sessions.sh dead-ids <bundle-root>  -> `<uuid> <short> <age>` per session the tick
+#                                                may stop: no live pid (row or roster), no
+#                                                task records it, cwd under the root or a
+#                                                task's worktree, past 10m (blocked: 24h)
 #   agent-sessions.sh worker <session-id> [--roster <file>]
 #                                             -> `worker <short> <pid>`: the daemon's live
 #                                                process for it (roster.json); exit 1 none
@@ -42,7 +46,7 @@
 # tests/resume-full-id.test.sh and tests/blocked-recorded.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,36p' "$0" >&2; exit 2; }
+usage() { sed -n '3,40p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 command -v python3 >/dev/null 2>&1 || {
@@ -291,17 +295,24 @@ PY
     printf '%s\n' "$live"
     ;;
 
-  view)
-    [ $# -ge 2 ] && [ $# -le 3 ] || usage
-    root="$2"; summary=0
+  view|dead-ids)
+    mode="$1"; root="${2:-}"; summary=0
+    if [ "$mode" = view ]; then [ $# -ge 2 ] && [ $# -le 3 ] || usage; else [ $# -eq 2 ] || usage; summary=dead; fi
     if [ $# -eq 3 ]; then [ "$3" = "--summary" ] || usage; summary=1; fi
     [ -d "$root" ] || { echo "agent-sessions: no such bundle root: $root" >&2; exit 2; }
     json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
     here="$(dirname "${BASH_SOURCE[0]:-$0}")"
-    wtroot="$(bash "$here/resolve-config.sh" --instance "$root" worktreeRoot 2>/dev/null)" || wtroot=""
-    if [ -z "$wtroot" ]; then
-      rr="$(bash "$here/resolve-config.sh" --instance "$root" reposRoot 2>/dev/null)" || rr=""
-      [ -n "$rr" ] && wtroot="$rr/_wt"
+    # dead-ids leaves worktreeRoot out of scope: it is shared by every bundle on the machine.
+    wtroot=""; skip=""
+    if [ "$mode" = view ]; then
+      wtroot="$(bash "$here/resolve-config.sh" --instance "$root" worktreeRoot 2>/dev/null)" || wtroot=""
+      if [ -z "$wtroot" ]; then
+        rr="$(bash "$here/resolve-config.sh" --instance "$root" reposRoot 2>/dev/null)" || rr=""
+        [ -n "$rr" ] && wtroot="$rr/_wt"
+      fi
+    else
+      . "$here/bundle-paths.sh" || exit 2
+      skip="${CLAUDE_CODE_SESSION_ID:-} $(sed -n 's/^session:[[:space:]]*//p' "$root/$AB_LOCK" 2>/dev/null)"
     fi
     # `<worktree> TAB <task file>` per task that recorded one, terminal tasks included: a
     # merged task's lingering session is still THAT task's session.
@@ -315,14 +326,26 @@ PY
         sub(/^worktree:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v); gsub(/["\047]/, "", v)
         if (v != "") print v "\t" FILENAME
       }' "$@" 2>/dev/null)"
-    python3 - "$json" "$root" "$wtroot" "$TERMINAL" "$summary" "$tasks" <<'PY' || {
+    # A session a task records is that task's to stop (session-handoff.sh), wherever its cwd.
+    [ "$mode" = dead-ids ] && [ -e "$1" ] && skip="$skip $(awk '
+      FNR == 1 { fm = ($0 == "---"); next }
+      fm && $0 == "---" { fm = 0; next }
+      fm && /^session:/ { v = $0; sub(/^session:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v); gsub(/["\047\r]/, "", v); print v }
+      ' "$@" 2>/dev/null)"
+    classify() {
+    python3 - "$json" "$root" "$wtroot" "$TERMINAL" "$summary" "$tasks" "$skip" <<'PY'
 import json, os, re, sys, time, unicodedata
-raw, root, wtroot, terminal, summary, tasks = sys.argv[1:7]
+raw, root, wtroot, terminal, summary, tasks, skip = sys.argv[1:8]
 try:
     rows = json.loads(raw)
 except Exception:
     sys.exit(2)
 if not isinstance(rows, list):
+    sys.exit(2)
+dead, skip = summary == "dead", set(skip.split())
+# With no pid anywhere, every row would read dead — a CLI that stopped emitting it.
+if dead and not any(isinstance(r, dict) and "pid" in r for r in rows):
+    print("agent-sessions: no row carries a pid — liveness unknown", file=sys.stderr)
     sys.exit(2)
 terminal = set(terminal.split())
 def canon(p):
@@ -358,16 +381,21 @@ def alive(pid):
 def clean(v):
     return "".join(ch for ch in str(v) if unicodedata.category(ch)[0] != "C")
 
-def age(ms):
+def secs(ms):
     if not isinstance(ms, (int, float)) or isinstance(ms, bool):
+        return None
+    return max(0, int(time.time() - ms / 1000))
+
+def age(ms):
+    s = secs(ms)
+    if s is None:
         return "?"
-    s = max(0, int(time.time() - ms / 1000))
     for unit, n in (("d", 86400), ("h", 3600), ("m", 60)):
         if s >= n:
             return "%d%s" % (s // n, unit)
     return "%ds" % s
 
-out, running, ghost, ended = [], 0, 0, 0
+out, running, ghost, ended, cands = [], 0, 0, 0, []
 for r in rows:
     if not isinstance(r, dict) or r.get("kind", "background") != "background":
         continue
@@ -390,10 +418,22 @@ for r in rows:
     else:
         proc, rank = "none", 1
         ghost += 1
+    if dead:
+        sid, s = str(r.get("sessionId") or ""), secs(r.get("startedAt"))
+        if (proc == "none" and not labels and c and s is not None
+                and s >= (86400 if state == "blocked" else 600)
+                and re.fullmatch(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", sid)
+                and not skip & {sid, sid.split("-")[0]}):
+            cands.append((-s, sid, age(r.get("startedAt"))))
+        continue
     sid = clean(r.get("id") or str(r.get("sessionId") or "?").split("-")[0])
     where = "" if labels else "  " + clean(cwd or "(no cwd)")
     out.append((rank, task, clean(state), proc, age(r.get("startedAt")), sid + where))
 
+if dead:
+    for _, sid, a in sorted(cands):
+        print(sid, sid.split("-")[0], a)
+    sys.exit(0)
 if summary == "1":
     print(running, ghost)
     sys.exit(0)
@@ -404,7 +444,17 @@ for o in sorted(out):
     print(fmt % o[1:])
 print("%d running · %d no process · %d ended, not listed" % (running, ghost, ended))
 PY
-      echo "agent-sessions: could not read the session list" >&2; exit 2; }
+    }
+    out="$(classify)" || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
+    if [ "$mode" = view ]; then printf '%s\n' "$out"; exit 0; fi
+    # The daemon's roster is the second liveness witness; an unreadable entry keeps the row.
+    printf '%s\n' "$out" | while read -r sid short a; do
+      [ -n "$sid" ] || continue
+      w="$(bash "$0" worker "$sid" 2>/dev/null)"; rc=$?
+      if [ $rc -eq 0 ]; then ps -p "${w##* }" >/dev/null 2>&1 && continue
+      elif [ $rc -ne 1 ]; then continue; fi
+      echo "$sid $short $a"
+    done
     ;;
 
   worker)
@@ -455,6 +505,6 @@ PY
     echo "copy $uuid"
     ;;
 
-  -h|--help) sed -n '3,33p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,40p' "$0"; exit 0 ;;
   *) usage ;;
 esac
