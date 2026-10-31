@@ -43,7 +43,7 @@
 # never a zero, because "nothing is running" is what a broken read and an idle loop both
 # look like. Reasoning: docs/pm-design.md#step-3-background.
 # Verified by tests/background-dispatch.test.sh, tests/agent-view.test.sh,
-# tests/resume-full-id.test.sh and tests/blocked-recorded.test.sh.
+# tests/resume-full-id.test.sh, tests/blocked-recorded.test.sh and tests/dead-session-sweep.test.sh.
 set -uo pipefail
 
 usage() { sed -n '3,40p' "$0" >&2; exit 2; }

@@ -57,6 +57,15 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    and an exit 2, on the task as one `# Notes` line, `worktree retained: <reason>`, and
    never retry around it. Exit 3 is nothing to do.
 
+   **Then stop the dead sessions no task owns — once, every tick that reads this step.**
+   `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` runs `claude stop` on what
+   `agent-sessions.sh dead-ids` selects: no live pid on the row or in the daemon roster, no
+   task records it, a `cwd` under this bundle's root or a task's `worktree:` (never the shared
+   worktree root, never a row with no `cwd`), older than 10 minutes — 24 hours when `blocked`
+   — and at most 20 a tick. Carry every `stopped <short> (<age>)` and `stop-failed <short>`
+   line it prints onto your `log.md` close summary; a `stop-failed` is not retried this tick
+   and never stopped by hand. Exit 2 stopped nothing: one line in the tick report.
+
    **The retry is the one time step 5 revisits a `done` task.** A `done` task whose
    recorded `worktree:` is still on disk and whose `# Notes` hold no `worktree retained:`
    line gets the same stop-then-reclaim on every tick — `tick-delta.sh` names this step
