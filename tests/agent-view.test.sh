@@ -7,7 +7,7 @@
 #   * IT READS `claude agents --json`, NEVER THE BARE FORM. The stub refuses the bare form
 #     the way the real CLI does without a TTY, so a view that dropped `--json` goes unknown.
 #   * A FAILING READ IS UNKNOWN, NEVER ZERO — a failing `claude`, malformed JSON, no
-#     `claude` at all: exit 2 and no count from the reader, `agents ?` on the status line.
+#     `claude` at all: exit 2 and no count from the reader, `? background agents` on the status line.
 #   * A SESSION IS ATTRIBUTED BY A JOIN ON THE RECORDED `worktree:`, and a cwd in this
 #     bundle that matches no task is rendered `unattributed`, never dropped or guessed.
 #   * PROCESS, NOT REGISTRY. A `blocked` row with no live pid is `none` — the registry
@@ -134,15 +134,15 @@ ok "…while an EMPTY list is a real zero" "$(FIXTURE="$TMP/empty.json" view --s
 
 echo "== 5. the status line's agents segment =="
 sl() { rm -rf "$XDG_CACHE_HOME"; PATH="$P" bash "$SL" --instance "$B" --color "${C:-never}" </dev/null 2>/dev/null; }
-seg() { awk -F ' · ' '{print $3}'; }
-ok "running and no-process, side by side" "$(sl | seg)" "agents 2 running, 3 no process"
-ok "a failing read renders ?, never 0"    "$(FAIL=1 sl | seg)" "agents ?"
-ok "…and so does malformed JSON"          "$(FIXTURE="$TMP/bad.json" sl | seg)" "agents ?"
-ok "an empty list is 0 running"           "$(FIXTURE="$TMP/empty.json" sl | seg)" "agents 0 running"
+seg() { awk -F ' · ' '{ s = $3; if ($4 ~ / dead$/) s = s " · " $4; print s }'; }
+ok "running and no-process, side by side" "$(sl | seg)" "2 background agents · 3 dead"
+ok "a failing read renders ?, never 0"    "$(FAIL=1 sl | seg)" "? background agents"
+ok "…and so does malformed JSON"          "$(FIXTURE="$TMP/bad.json" sl | seg)" "? background agents"
+ok "an empty list is 0 running"           "$(FIXTURE="$TMP/empty.json" sl | seg)" "0 background agents"
 ok "the line is still one line"           "$(sl | wc -l | tr -d ' ')" 1
 sgr() { head -n1 <<<"$(printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p')"; }
-ok "unknown is a warning, so pink"        "$(sgr "$(C=always FAIL=1 sl)" 'agents ?')" 95
-ok "a session with no process is pink"    "$(sgr "$(C=always sl)" 'agents 2')" 95
+ok "unknown is a warning, so pink"        "$(sgr "$(C=always FAIL=1 sl)" '? background agents')" 95
+ok "a session with no process is pink"    "$(sgr "$(C=always sl)" '3 dead')" 95
 
 echo "== 6. the read is cached and shared, so N sessions do not each pay for it =="
 rm -rf "$XDG_CACHE_HOME"; : > "$CALLS"
@@ -151,13 +151,13 @@ ok "three renders inside the TTL ⇒ one claude call" "$(wc -l < "$CALLS" | tr -
 CF="$(head -1 <<<"$(ls "$XDG_CACHE_HOME"/loopd/agents-* 2>/dev/null)")"
 printf '1 9 9\n' > "$CF"; : > "$CALLS"
 ok "a stale cache is re-read, not shown" \
-   "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "agents 2 running, 3 no process"
+   "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "2 background agents · 3 dead"
 printf '%s garbage\n' "$(date +%s)" > "$CF"
 ok "a fresh but malformed cache is unknown, not a number" \
-   "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "agents ?"
+   "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "? background agents"
 ok "an unwritable cache still renders" \
    "$(XDG_CACHE_HOME=/dev/null/x PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" \
-   "agents 2 running, 3 no process"
+   "2 background agents · 3 dead"
 
 echo "== 7. the mutants: the assertions above discriminate =="
 # A copy of the whole scripts dir, so a mutant still finds its siblings.
