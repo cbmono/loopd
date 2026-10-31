@@ -43,7 +43,8 @@ SID="1234abcd-0000-4000-8000-00000000000a"
 state() { # <state|none|garbage>
   case "$1" in
     none) echo '[]' ;; garbage) echo 'not json' ;;
-    *) printf '[{"id":"1234abcd","sessionId":"%s","state":"%s"}]\n' "$SID" "$1" ;;
+    *) printf '[{"id":"1234abcd","sessionId":"%s","state":"%s"%s}]\n' "$SID" "$1" \
+         "${STATUS:+,\"status\":\"$STATUS\"}" ;;
   esac > "$ST/agents.json"
 }
 
@@ -147,6 +148,17 @@ spawned; printf '* TICK %s by me open: %s · x\n* TICK %s by me close: y\n' "$TS
 ok "an uncommitted close while the session works ⇒ held" "$RC:$(locked)" "1:yes"
 commit "$B"; reap
 ok "a committed close while the session works ⇒ held, still finishing" "$RC:$(has "$OUT" 'still finishing')" "1:yes"
+STATUS=busy state working; reap
+ok "…and while its turn is still running ⇒ held" "$RC:$(locked)" "1:yes"
+rm -f "$ST/stopped"; STATUS=idle state working; reap
+ok "a committed close, turn over (status idle) ⇒ reaped" "$RC:$(locked)" "0:no"
+ok "…and the idle session is stopped, not left an hour" "$(cat "$ST/stopped" 2>/dev/null)" 1234abcd
+ok "…and the report says why" "$(has "$OUT" "session 1234abcd idle-after-close")" yes
+spawned; printf '* TICK %s by me open: %s · x\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"
+STATUS=idle state working; reap
+ok "an OPEN entry, turn idle ⇒ held: only a committed close frees it" "$RC:$(locked):$(cat "$ST/stopped" 2>/dev/null)" "1:yes:"
+# Back to a committed close with the session working, for the section below.
+spawned; printf '* TICK %s by me open: %s · x\n* TICK %s by me close: y\n' "$TS" "$ID" "$TS" >> "$B/.loopd/log.md"; commit "$B"
 
 echo "== criterion 4 + 9: a committed close is reaped, Needs-you and COST printed =="
 state done; reap

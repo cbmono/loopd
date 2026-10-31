@@ -199,12 +199,20 @@ ledger, `AWAITING.md` or the transcript itself. The decisions it carries:
 | Ledger, for the minted id | Session | Reaper |
 |---|---|---|
 | close committed | not `working` | release; print the close line, Needs-you, `COST:` |
-| close committed | `working` | hold — the tick is still pushing and rendering |
+| close committed | `working`, turn running | hold — the tick is still pushing and rendering |
+| close committed | `working`, `status: idle` | `claude stop` it, then release — the turn is over |
 | open, or none | `working` | hold; the fire is dropped, never queued |
 | open, or none | `blocked` | `BLOCKED`, lock kept — neither idle nor done |
 | open | ended or gone | write the `close: dead …` line beside it, then release |
 | none | ended or gone | append a `close: … ended with no ledger entry` line, then release |
 | any | unreadable | `UNKNOWN`, lock kept |
+
+**A `working` session can be finished.** A `claude --bg` session does not exit after its
+turn; the daemon retires it after about 60 minutes idle, and its row reads `state: working`,
+`status: idle` that whole time. Measured 2026-10-31: a tick that committed its close at
+18:34 held the lock for three fires (40 minutes) until it was stopped by hand. So a
+committed close plus `status: idle` is stopped and reaped; an open entry never is, whatever
+the status, because only a committed close says the tick's writes landed.
 
 The dead tick's close is written by the launcher's script and not by a hook in the tick,
 because a killed session runs no hook. `once` and `dry-run` wait through the same

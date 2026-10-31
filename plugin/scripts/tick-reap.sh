@@ -63,12 +63,18 @@ cost() {
 
 release() { # <verdict> <close line>
   bash "$HERE/tick-lock.sh" release --instance "$inst" || { echo "tick-reap: could not release $LOCK" >&2; exit 2; }
-  [ "$state" = blocked ] && claude stop "$short" >/dev/null 2>&1 </dev/null
+  case "$state" in blocked|idle-after-close) claude stop "$short" >/dev/null 2>&1 </dev/null ;; esac
   echo "reaped: $tick · $1 · session $short $state"
   printf '%s\n' "$2"
   needs_you
   cost
   exit 0
+}
+
+# <- the row's `status` ("idle" once the session's turn is over); empty when unreadable
+turn_status() {
+  bash "$HERE/agent-sessions.sh" row "$session" 2>/dev/null \
+    | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
 }
 
 # -> exits on every outcome but "live" (returns 1) and "finishing" (returns 2)
@@ -83,7 +89,14 @@ assess() {
   head="$(git -C "$inst" show "HEAD:$AB_LEDGER" 2>/dev/null | scan)" || head=none
   case "$head" in
     closed\ *)
-      [ "$state" = working ] && return 2
+      # A bg session does not exit after its turn: the daemon retires it after ~60m idle,
+      # and `state` reads `working` all that while (measured 2026-10-31: 40m past a
+      # committed close, three fires dropped). `status: idle` is the turn over, so stop it
+      # as for `blocked` rather than hold the lock an hour. Anything else is still finishing.
+      if [ "$state" = working ]; then
+        [ "$(turn_status)" = idle ] || return 2
+        state=idle-after-close
+      fi
       release closed "${head#closed }" ;;
   esac
   case "$state" in
