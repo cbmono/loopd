@@ -754,6 +754,14 @@ the roster entry. **Since 2026-10-21 the stop does not wait for a roster process
 task's session that was `blocked` with no live worker (task-009 of one bundle, six PRs
 merged) stayed `blocked` and became a human `claude stop` item, so step 5 now stops any
 done or cancelled task's session that has not ended, through `session-handoff.sh`.
+**A dead session no task owns is swept too (2026-10-31).** `view` showed them as
+`unattributed` and the status line as `N dead`, and nothing stopped them. `session-sweep.sh`
+stops what `agent-sessions.sh dead-ids` selects, and the selection carries the risk: no live
+pid on the row **or** in the roster, no task records the session or its `cwd` (a session in a
+task's `worktree:` is that task's), a `cwd` under the bundle root — never the shared worktree root, which another bundle's
+sessions sit under, and never a row with no `cwd` — older than 10 minutes (the spawn race,
+before a row has a pid) or 24 hours when `blocked` (a day to `claude attach`), and no stop at
+all when no row carries a `pid`. At most 20 a tick. It runs only on ticks that read step 5.
 Reclaim's allowlist gained ONE path the same day, `.husky/_/` — husky's generated,
 self-ignoring hook shim, the one entry holding that tree back (the other 27 ignored paths
 were `node_modules`). A path, not the `.husky` component: the rest of `.husky/` is the
