@@ -125,6 +125,9 @@ FAIL=1 sweep >/dev/null; rc=$?
 ok "a listing view cannot read: exit 2, zero stops" "$rc:$(stops)" "2:"
 sed 's/ [0-9][0-9]* \([0-9-]*\)$/ - \1/' "$TMP/main.spec" > "$TMP/nopid.spec"; mk "$TMP/nopid.spec"
 ok "no row carries a pid: exit 2, zero stops" "$(sweep >/dev/null; echo $?):$(stops)" "2:"
+printf '[]\n' > "$FIXTURE"
+ok "an empty listing is an answer: dead-ids exit 0, no output" "$(dead_ids; echo "rc=$?")" "rc=0"
+ok "…and the sweep exits 0, prints nothing, stops nothing" "$(sweep; echo "rc=$?"):$(stops)" "rc=0:"
 mk "$TMP/main.spec"
 python3 - "$FIXTURE" <<'PY'
 import json, sys

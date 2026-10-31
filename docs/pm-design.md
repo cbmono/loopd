@@ -757,8 +757,8 @@ done or cancelled task's session that has not ended, through `session-handoff.sh
 **A dead session no task owns is swept too (2026-10-31).** `view` showed them as
 `unattributed` and the status line as `N dead`, and nothing stopped them. `session-sweep.sh`
 stops what `agent-sessions.sh dead-ids` selects, and the selection carries the risk: no live
-pid on the row **or** in the roster, no task records the session, a `cwd` under the bundle
-root or a task's `worktree:` — never the shared worktree root, which another bundle's
+pid on the row **or** in the roster, no task records the session or its `cwd` (a session in a
+task's `worktree:` is that task's), a `cwd` under the bundle root — never the shared worktree root, which another bundle's
 sessions sit under, and never a row with no `cwd` — older than 10 minutes (the spawn race,
 before a row has a pid) or 24 hours when `blocked` (a day to `claude attach`), and no stop at
 all when no row carries a `pid`. At most 20 a tick. It runs only on ticks that read step 5.

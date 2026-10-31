@@ -60,8 +60,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **Then stop the dead sessions no task owns — once, every tick that reads this step.**
    `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` runs `claude stop` on what
    `agent-sessions.sh dead-ids` selects: no live pid on the row or in the daemon roster, no
-   task records it, a `cwd` under this bundle's root or a task's `worktree:` (never the shared
-   worktree root, never a row with no `cwd`), older than 10 minutes — 24 hours when `blocked`
+   task records it or holds its `cwd` as its `worktree:` (that session is the task's), a `cwd`
+   under this bundle's root (never the shared worktree root, never a row with no `cwd`), older than 10 minutes — 24 hours when `blocked`
    — and at most 20 a tick. Carry every `stopped <short> (<age>)` and `stop-failed <short>`
    line it prints onto your `log.md` close summary; a `stop-failed` is not retried this tick
    and never stopped by hand. Exit 2 stopped nothing: one line in the tick report.

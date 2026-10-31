@@ -30,8 +30,8 @@
 #                                                `--summary` prints `<running> <no-process>`
 #   agent-sessions.sh dead-ids <bundle-root>  -> `<uuid> <short> <age>` per session the tick
 #                                                may stop: no live pid (row or roster), no
-#                                                task records it, cwd under the root or a
-#                                                task's worktree, past 10m (blocked: 24h)
+#                                                task records it or its cwd, cwd under the
+#                                                bundle root, past 10m (blocked: 24h)
 #   agent-sessions.sh worker <session-id> [--roster <file>]
 #                                             -> `worker <short> <pid>`: the daemon's live
 #                                                process for it (roster.json); exit 1 none
@@ -344,7 +344,7 @@ if not isinstance(rows, list):
     sys.exit(2)
 dead, skip = summary == "dead", set(skip.split())
 # With no pid anywhere, every row would read dead — a CLI that stopped emitting it.
-if dead and not any(isinstance(r, dict) and "pid" in r for r in rows):
+if dead and rows and not any(isinstance(r, dict) and "pid" in r for r in rows):
     print("agent-sessions: no row carries a pid — liveness unknown", file=sys.stderr)
     sys.exit(2)
 terminal = set(terminal.split())
