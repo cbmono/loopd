@@ -106,10 +106,10 @@ else                  HM="$(date -d 2026-09-13T16:41:05Z '+%H:%M' 2>/dev/null)";
 echo
 echo "== 1. the whole line, character for character =="
 ok "the healthy bundle" "$(plain "$INST")" \
-   "loopd · 2 in flight · agents 0 running · 3 need you · lock free · last tick $HM"
+   "loopd · 2 in progress · 0 background agents · 3 need you · last tick $HM"
 : > "$INST/$AB_LOCK"
 ok "…and with a tick holding the lock" "$(plain "$INST")" \
-   "loopd · 2 in flight · agents 0 running · 3 need you · lock held · last tick $HM"
+   "loopd · 2 in progress · 0 background agents · 3 need you · lock held · last tick $HM"
 rm -f "$INST/$AB_LOCK"
 ok "exactly one line of output" "$(plain "$INST" | wc -l | tr -d ' ')" 1
 
@@ -120,7 +120,7 @@ ok 'an `open:` TICK is still the last tick (it is the newest)' \
 printf '{"counts":{"awaiting":99}}\n' > "$INST/$AB_SNAPSHOT"
 printf 'recorded: 2001-01-01T00:00:00Z\n'    > "$INST/$AB_STATE_DIR"
 ok "SNAPSHOT.json and .tick-state change nothing" "$(plain "$INST")" \
-   "loopd · 2 in flight · agents 0 running · 3 need you · lock free · last tick $HM"
+   "loopd · 2 in progress · 0 background agents · 3 need you · last tick $HM"
 ok "…and neither is named in the source" \
    "$(grep -c 'SNAPSHOT\.json\|\.tick-state' "$SL" | tr -d ' ')" 2
 ok "…which is twice, in comments saying why not" \
@@ -133,32 +133,32 @@ D="$TMP/d1"; mk "$D"; rm -f "$D/$AB_AWAITING"
 ok "no AWAITING.md ⇒ the queue is off, so the segment is GONE" \
    "$(plain "$D" | grep -c 'need you\|AWAITING' | tr -d ' ')" 0
 ok "…and the rest of the line is untouched" "$(plain "$D")" \
-   "loopd · 2 in flight · agents 0 running · lock free · last tick $HM"
+   "loopd · 2 in progress · 0 background agents · last tick $HM"
 D="$TMP/d1b"; mk "$D"; printf '{ "org": "acme", "awaiting":\n false }\n' > "$D/instance.config.json"
 ok "awaiting: false ⇒ the segment is GONE, as for an absent file" "$(plain "$D")" \
-   "loopd · 2 in flight · agents 0 running · lock free · last tick $HM"
+   "loopd · 2 in progress · 0 background agents · last tick $HM"
 D="$TMP/d2"; mk "$D"; rm -f "$D/$AB_LEDGER"
 ok "no log.md ⇒ the time is unknown"       "$(plain "$D" | sed 's/.*· //')" "last tick ?"
 D="$TMP/d3"; mk "$D"; printf '# Log\n\nnothing yet\n' > "$D/$AB_LEDGER"
 ok "a log with no TICK line ⇒ unknown"     "$(plain "$D" | sed 's/.*· //')" "last tick ?"
 D="$TMP/d4"; mk "$D"; rm -rf "$D/projects"
-ok "no projects/ ⇒ in-flight is unknown"   "$(plain "$D" | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "? in flight"
+ok "no projects/ ⇒ in-flight is unknown"   "$(plain "$D" | sed 's/.*loopd · \([^·]*in progress\) ·.*/\1/')" "? in progress"
 
 echo
 echo "== 4. …and zero is still printed when zero is what the files SAY =="
 D="$TMP/d5"; mk "$D"
 for f in "$D"/projects/proj-a/tasks/*.md; do printf -- '---\nstatus: ready\n---\n' > "$f"; done
-ok "no task in progress ⇒ 0, not ?" "$(plain "$D" | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
+ok "no task in progress ⇒ 0, not ?" "$(plain "$D" | sed 's/.*loopd · \([^·]*in progress\) ·.*/\1/')" "0 in progress"
 D="$TMP/d6"; mk "$D"
 printf '# Awaiting you\n\n## 🔴 Awaiting you (0)\n\n*nothing waits*\n' > "$D/$AB_AWAITING"
 ok "an empty queue ⇒ 0, not ?"      "$(plain "$D" | sed 's/.*· \([^·]*need you\) ·.*/\1/')" "0 need you"
 D="$TMP/d7"; mk "$D"; rm -f "$D"/projects/proj-a/tasks/*.md
-ok "a project with no tasks ⇒ 0"    "$(plain "$D" | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
+ok "a project with no tasks ⇒ 0"    "$(plain "$D" | sed 's/.*loopd · \([^·]*in progress\) ·.*/\1/')" "0 in progress"
 
 D="$TMP/d9"; mk "$D"
 if unreadable "$D/projects/proj-a/tasks/task-001.md"; then
   ok "an UNREADABLE task doc ⇒ ?, never a quiet undercount" \
-     "$(plain "$D" | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "? in flight"
+     "$(plain "$D" | sed 's/.*loopd · \([^·]*in progress\) ·.*/\1/')" "? in progress"
 else
   no_fixture "an UNREADABLE task doc ⇒ ?, never a quiet undercount" 1
 fi
@@ -186,7 +186,7 @@ D="$TMP/d8"; mk "$D"
 printf -- '---\nstatus: done\n---\n\nstatus: in-progress\n' > "$D/projects/proj-a/tasks/task-001.md"
 printf -- '---\nstatus: done\n---\n'                        > "$D/projects/proj-a/tasks/task-002.md"
 ok "only the first frontmatter block counts" \
-   "$(plain "$D" | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
+   "$(plain "$D" | sed 's/.*loopd · \([^·]*in progress\) ·.*/\1/')" "0 in progress"
 
 echo
 echo "== 6. outside a bundle it prints NOTHING, and it is not an error =="
@@ -218,9 +218,9 @@ sgr_of() { # <output> <segment text> -> the code that opens it
   head -n1 <<<"$(printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p')"
 }
 C="$(run --instance "$INST" --color always)"
-ok "work in flight is the machine's blue"  "$(sgr_of "$C" '2 in flight')" 94
+ok "work in progress is the machine's blue"  "$(sgr_of "$C" '2 in progress')" 94
 ok "a queue that needs you is the human's pink" "$(sgr_of "$C" '3 need you')" 95
-ok "a free lock is dim, not shouting"       "$(sgr_of "$C" 'lock free')" 2
+ok "a free lock says nothing: it is the resting state" "$(printf '%s' "$C" | grep -c 'lock' | tr -d ' ')" 0
 : > "$INST/$AB_LOCK"
 ok "…and a held one is the machine's blue"  "$(sgr_of "$(run --instance "$INST" --color always)" 'lock held')" 94
 rm -f "$INST/$AB_LOCK"
@@ -228,9 +228,9 @@ ok "the last tick is a timestamp, so dim italic" "$(sgr_of "$C" 'last tick')" '3
 ok "no other hue: every code emitted is blue, pink, bold, dim, dim italic or the green" \
    "$(printf '%s' "$C" | tr '\033' '\n' | grep -oE '^\[[0-9;]+m' | sort -u | grep -vcE '^\[(94|95|1|2|3;2|0|38;2;118;214;164)m$' | tr -d ' ')" 0
 Z="$(run --instance "$TMP/d5" --color always)"
-ok "zero in flight goes dim, not blue"      "$(sgr_of "$Z" '0 in flight')" 2
+ok "zero in progress goes dim, not blue"      "$(sgr_of "$Z" '0 in progress')" 2
 U="$(run --instance "$TMP/d4" --color always)"
-ok "an unknown number is a warning, so pink" "$(sgr_of "$U" '? in flight')" 95
+ok "an unknown number is a warning, so pink" "$(sgr_of "$U" '? in progress')" 95
 if unreadable "$TMP/d10/$AB_AWAITING"; then
   ok "…and so is an unreadable queue, which is a fault" \
      "$(sgr_of "$(run --instance "$TMP/d10" --color always)" 'unreadable')" 95
@@ -248,19 +248,23 @@ seed_agents() { # <bundle> <cache line after the epoch>
   local f; f="$XDG_CACHE_HOME/loopd/agents-$(printf '%s' "$1" | cksum | cut -d' ' -f1)"
   mkdir -p "${f%/*}"; printf '%s %s\n' "$(date +%s)" "$2" > "$f"
 }
-agents_sgr() { sgr_of "$(run --instance "$1" --color always)" 'agents '; }
+agents_sgr() { sgr_of "$(run --instance "$1" --color always)" 'background agents'; }
 D="$TMP/g1"; mk "$D"
 seed_agents "$D" "2 0";       ok "running agents are the brand's green"       "$(agents_sgr "$D")" "$GREEN"
 ok "…and that is the only segment wearing it" \
    "$(run --instance "$D" --color always | grep -oF "$GREEN" | wc -l | tr -d ' ')" 1
 seed_agents "$D" "0 0";       ok "zero running stays dim, not green"           "$(agents_sgr "$D")" 2
-seed_agents "$D" "2 3";       ok "a session with no process stays pink"        "$(agents_sgr "$D")" 95
+seed_agents "$D" "2 3";       ok "live agents stay green beside dead ones"    "$(agents_sgr "$D")" "$GREEN"
+ok "…and a session with no process is its own pink \`dead\`" \
+   "$(sgr_of "$(run --instance "$D" --color always)" '3 dead')" 95
+seed_agents "$D" "2 0";       ok "no dead session, no \`dead\` segment" \
+   "$(run --instance "$D" --color never | grep -c 'dead' | tr -d ' ')" 0
 seed_agents "$D" "garbage";   ok "an unknown count stays pink"                 "$(agents_sgr "$D")" 95
 NG="$TMP/no-green"; cp -R "$REPO/plugin/scripts" "$NG"
-sed 's/"\$C_GREEN")" "agents/"$C_BLUE")" "agents/' "$SL" > "$NG/status-line.sh"
+sed 's/"\$C_GREEN")" "\$a_run background/"$C_BLUE")" "$a_run background/' "$SL" > "$NG/status-line.sh"
 seed_agents "$D" "2 0"
 ok "…mutant: painting it blue again is caught" \
-   "$(sgr_of "$(SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NG/status-line.sh" --instance "$D" --color always </dev/null 2>/dev/null)" 'agents ')" 94
+   "$(sgr_of "$(SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NG/status-line.sh" --instance "$D" --color always </dev/null 2>/dev/null)" 'background agents')" 94
 
 echo
 echo "== 8. 3/4-bit but the green, all codes from cli-theme.sh, no terminfo probe =="
@@ -273,7 +277,7 @@ cp "$SL" "$REPO/plugin/scripts/bundle-paths.sh" "$NT/"
 # Its own cache: this copy has no agent-sessions.sh, so it caches `agents ?` for $INST.
 ok "an unsourceable theme means no colour, never no line" \
    "$(XDG_CACHE_HOME="$TMP/nt-cache" SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NT/status-line.sh" --instance "$INST" --color always </dev/null 2>/dev/null)" \
-   "$(plain "$INST" | sed 's/agents 0 running/agents ?/')"
+   "$(plain "$INST" | sed 's/0 background agents/? background agents/')"
 ok "no \`38;5;\` (256-colour) anywhere"  "$(grep -c '38;5;' "$SL" | tr -d ' ')" 0
 ok "no \`38;2;\` (truecolor) anywhere"   "$(grep -c '38;2;' "$SL" | tr -d ' ')" 0
 ok "COLORTERM is never asked"            "$(grep -v '^[[:space:]]*#' "$SL" | grep -c 'COLORTERM' | tr -d ' ')" 0
@@ -291,10 +295,10 @@ echo "== 10. the session JSON on stdin: drained, and read only for a directory =
 SJ="$(printf '{"session_id":"x","workspace":{"current_dir":"%s"},"cost":{"total_cost_usd":1.5}}' "$INST")"
 ok "\`current_dir\` locates the bundle" \
    "$(printf '%s' "$SJ" | SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" --color never 2>/dev/null)" \
-   "loopd · 2 in flight · agents 0 running · 3 need you · lock free · last tick $HM"
+   "loopd · 2 in progress · 0 background agents · 3 need you · last tick $HM"
 ok "…and --instance wins over it" \
    "$(printf '%s' "$SJ" | SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" --instance "$TMP/d5" --color never 2>/dev/null \
-      | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
+      | sed 's/.*loopd · \([^·]*in progress\) ·.*/\1/')" "0 in progress"
 ok "no dollar figure is ever echoed back" \
    "$(printf '%s' "$SJ" | SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" --color never 2>/dev/null | grep -c '1\.5\|usd' | tr -d ' ')" 0
 
@@ -316,7 +320,7 @@ echo
 echo "== 12. the mutants — these assertions discriminate =="
 D="$TMP/m1"; mk "$D"; printf -- '---\nstatus: in-progress\n---\n' > "$D/projects/proj-a/tasks/task-003.md"
 ok "a third in-progress task moves the number" \
-   "$(plain "$D" | sed 's/.*loopd · \([^·]*in flight\) ·.*/\1/')" "3 in flight"
+   "$(plain "$D" | sed 's/.*loopd · \([^·]*in progress\) ·.*/\1/')" "3 in progress"
 D="$TMP/m2"; mk "$D"
 printf '%s\n' '* ❓ **answer** — [d](/projects/proj-a/tasks/task-002.md)' >> "$D/$AB_AWAITING"
 ok "…and an item outside the block does NOT" \

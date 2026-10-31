@@ -576,7 +576,7 @@ same haiku effect, measured with the cheapest model.
 
 **The in-session view, and why it asks the process rather than the registry.** Detaching
 emptied the in-session agent panel; `agent-sessions.sh view <bundle>` and the status line's
-`agents N running, M no process` segment replace it with a reader, and change nothing about
+`N background agents · M dead` segments replace it with a reader, and change nothing about
 the spawn. The status line won over the board because it is the only one of the two inside
 the session; the board is a browser page, and live rows would put a worktree path — on
 `write-snapshot.sh`'s never-publish list — into a publishable snapshot. Its cost is one

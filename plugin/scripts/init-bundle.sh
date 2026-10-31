@@ -798,7 +798,7 @@ else
   ' "$SL_SETTINGS" > "$sl_tmp" 2>/dev/null
   if [ -s "$sl_tmp" ] && grep -q '"statusLine"' "$sl_tmp"; then
     mv "$sl_tmp" "$SL_SETTINGS"
-    echo "  wrote statusLine into .claude/settings.json (loopd · in flight · agents · need you · lock · last tick)"
+    echo "  wrote statusLine into .claude/settings.json (loopd · in progress · background agents · dead · need you · lock held · last tick)"
     sl_user="$CONFIG_DEST/settings.json"
     if [ -f "$sl_user" ] && grep -q '"statusLine"' "$sl_user"; then
       echo "  note  PROJECT settings win, so this shadows the statusLine in $sl_user"

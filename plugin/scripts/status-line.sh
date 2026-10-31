@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# status-line.sh — one line for Claude Code's `statusLine`: what is in flight, which agent
-# sessions have a process, what waits on the human, the lock, when the last tick was.
+# status-line.sh — one line for Claude Code's `statusLine`: what is in progress, which
+# background agents have a process (and which are dead), what waits on the human, a held
+# lock, when the last tick was.
 #
 #   status-line.sh [--instance DIR] [--color auto|always|never]
 #
@@ -173,21 +174,23 @@ n_colour() { case "$1" in "$UNKNOWN") printf '%s' "$C_PINK" ;; 0) printf '%s' "$
 SEP="$(paint "$C_DIM" ' · ')"
 
 printf '%s' "$(paint "$C_B" 'loopd')"
-printf '%s%s' "$SEP" "$(paint "$(n_colour "$inflight" "$C_BLUE")" "$inflight in flight")"
+printf '%s%s' "$SEP" "$(paint "$(n_colour "$inflight" "$C_BLUE")" "$inflight in progress")"
+# `background agents` counts a live PROCESS, not work: a finished session idling at its
+# prompt is one, and so is the bg tick's own. `dead` is a registry row with no process
+# behind it — what `claude stop` clears — so it speaks only when there is one.
 if [ "$agents" = "$UNKNOWN" ]; then
-  printf '%s%s' "$SEP" "$(paint "$C_PINK" "agents $UNKNOWN")"
-elif [ "$a_none" -gt 0 ]; then
-  printf '%s%s' "$SEP" "$(paint "$C_PINK" "agents $a_run running, $a_none no process")"
+  printf '%s%s' "$SEP" "$(paint "$C_PINK" "$UNKNOWN background agents")"
 else
-  printf '%s%s' "$SEP" "$(paint "$(n_colour "$a_run" "$C_GREEN")" "agents $a_run running")"
+  printf '%s%s' "$SEP" "$(paint "$(n_colour "$a_run" "$C_GREEN")" "$a_run background agents")"
+  [ "$a_none" -gt 0 ] && printf '%s%s' "$SEP" "$(paint "$C_PINK" "$a_none dead")"
 fi
 case "$queue" in
   on)         printf '%s%s' "$SEP" "$(paint "$(n_colour "$awaiting" "$C_PINK")" "$awaiting need you")" ;;
   unreadable) printf '%s%s' "$SEP" \
                 "$(paint "$C_PINK" "${AB_AWAITING##*/} unreadable — chmod +r $AB_AWAITING")" ;;
 esac
-if [ "$lock" = held ]; then printf '%s%s' "$SEP" "$(paint "$C_BLUE" 'lock held')"
-else                        printf '%s%s' "$SEP" "$(paint "$C_DIM" 'lock free')"; fi
+# A free lock is the resting state, so it says nothing; only a held one is news.
+[ "$lock" = held ] && printf '%s%s' "$SEP" "$(paint "$C_BLUE" 'lock held')"
 if [ "$last" = "$UNKNOWN" ]; then printf '%s%s\n' "$SEP" "$(paint "$C_PINK" "last tick $UNKNOWN")"
 else                              printf '%s%s\n' "$SEP" "$(paint "$C_DIMI" "last tick $last")"; fi
 exit 0
