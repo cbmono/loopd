@@ -387,8 +387,9 @@ short-circuits on it — never as a fingerprint line, which `record` would captu
 2026-10-25: a task promoted to `ready` and a critique left for "next tick" sat through three
 IDLE ticks until an unrelated merge moved HEAD. So a `ready` task `dispatchable-ready.sh`
 clears (the banner's reader; a pause or owner gate that cannot answer counts) while
-in-flight is under the cap, and a `draft` whose newest `advisor_notes` concern postdates its
-newest `* <ISO 8601> triage:` line, are each a DELTA. The file gates run first, so a
+in-flight is under the cap, a `draft` whose newest `advisor_notes` concern postdates its
+newest `* <ISO 8601> triage:` line, and one whose newest entry is its only `not run`
+receipt, are each a DELTA. The file gates run first, so a
 dependency-blocked task forks nothing.
 
 What the probe deliberately does not see, stated rather than discovered: a PR body edit
@@ -455,9 +456,25 @@ cases where it meant a whole class took THREE rounds of external review to conve
 what one adversarial read would have caught before any code existed.
 
 The receipt mechanism (an `advisor_notes` entry, or an `advisor: approach critique — no
-concerns` line in `answered_questions`) exists because refinement alone is a weak
+concerns` line, also in `advisor_notes`) exists because refinement alone is a weak
 guard: a mandatory dispatch with no marker turns every tick into a fresh apex-tier
 session on the same draft.
+
+Three rules come from Google's Elephant-Goldfish Model
+([google/elephant-goldfish-model](https://github.com/google/elephant-goldfish-model)),
+adopted 2026-11-02:
+
+- **Paraphrase first, then the Zero-Decision Rule** (its `comprehension.md` and
+  implementation-readiness standard). A critic that cannot restate the document has not
+  read it, and its findings are noise; a design choice left to the engineer is exactly
+  the six-cases-for-a-class criterion above, caught before the rounds instead of by them.
+- **RESOLVE needs evidence the critic could have read** (`egm-resolve`). A PM that
+  resolves on context only it holds is overruling the critic with what the critic never
+  saw; that is a human's call. Context added only to quiet a reviewer grows the doc and
+  informs nobody who acts on it.
+- **`not run` is not zero findings** (its synthesizer's failed reviewers). Without a
+  receipt of its own, a critique that errored was either re-dispatched every tick or read
+  as a concern; one re-dispatch, then a named report, bounds both.
 
 <a id="step-3"></a>
 ### Step 3 — dispatch discipline, priced

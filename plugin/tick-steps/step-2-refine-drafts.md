@@ -159,7 +159,11 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    exactly one `* <ISO 8601> triage: …` line under `# Notes`**, and that line is what
    `tick-delta.sh check` reads: a `draft` whose newest concern is dated after it, or that
    has none, is a `DELTA`, so a critique left for "next tick" gets one. Not a gate, a
-   receipt. The critique sets no status, gates no `draft → ready`, and
+   receipt. **RESOLVE a concern only on evidence the critic could have read** — a file and
+   symbol, or a decision recorded in the task or project doc; evidence outside that reach
+   ESCALATES it to `open_questions` prefixed `advisor:`, never resolves it, and so does a
+   paraphrase BLOCKER, always. Never add context to a task doc only to satisfy a reviewer —
+   only when a human or the implementing agent needs it. The critique sets no status, gates no `draft → ready`, and
    leaves the human's promotion gate exactly where it was — an aid, not a new authority.
 
    **Once per task, and a tick can tell that it already ran.** Refinement is itself
@@ -169,6 +173,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    one `advisor_notes` entry each; none raised ⇒ one `advisor_notes` line,
    `<ISO 8601> · advisor: approach critique — no concerns`. **Either marker means the
    critique has run: do not dispatch it again.** Neither is a gate — they are a receipt.
+   **A critique launched this tick that errored or had returned nothing gets, from you at
+   step 8, `<ISO 8601> · advisor: approach critique — not run (<reason>)`**, `<reason>`
+   `error` or `no result by step 8`; one never launched for want of a slot gets none, and
+   a result arriving after the receipt is not read. **`not run` never counts as ran**: the
+   first allows one re-dispatch on a later tick (`tick-delta.sh check` reports it owed); a
+   second leaves the critique not run, named in that tick's report and in one `# Notes`
+   triage line.
    **The no-concerns receipt goes in `advisor_notes`, not `answered_questions`**, which
    only `fold-answers.sh` writes and only from an answered `open_questions` entry — a
    critique that raised nothing has no such entry, so the receipt had nowhere it was

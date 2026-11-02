@@ -459,16 +459,27 @@ $prs"
 # `record` must not capture them. Cheapest first; every doubt is a DELTA.
 # A draft is untriaged when a concern in `advisor_notes` postdates its newest
 # `* <ISO 8601> triage: …` line under `# Notes` (step-2-refine-drafts.md writes it).
+RCPT='^[^ ]+ · advisor: approach critique — '
 untriaged() { # <file> -> 0 untriaged, 1 not, 2 unreadable
   [ "$(fmcount "$1" advisor_notes)" -gt 0 ] || return 1
   local notes con tri
   notes="$(bash "$FOLD" --list "$1" advisor_notes 2>/dev/null)" || return 2
-  con="$(printf '%s\n' "$notes" | grep . | grep -vE '^[^ ]+ · advisor: approach critique — no concerns[[:space:]]*$' || true)"
+  con="$(printf '%s\n' "$notes" | grep . | grep -vE "$RCPT"'(no concerns[[:space:]]*$|not run \()' || true)"
   [ -n "$con" ] || return 1
   con="$(printf '%s\n' "$con" | sed 's/[[:space:]].*//' | sort | tail -n1)"
   tri="$(awk '/^# /{n = ($0 ~ /^# Notes[[:space:]]*$/); next}
               n && /^\* [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[^ ]* triage:/ {print $2}' "$1" | sort | tail -n1)"
   [ -z "$tri" ] || [[ "$con" > "$tri" ]]
+}
+# Owed while the only `not run` receipt is the newest entry; a second one ends the retries.
+rerun_owed() { # <file> -> 0 owed, 1 not, 2 unreadable
+  [ "$(fmcount "$1" advisor_notes)" -gt 0 ] || return 1
+  local notes nr rest
+  notes="$(bash "$FOLD" --list "$1" advisor_notes 2>/dev/null)" || return 2
+  nr="$(printf '%s\n' "$notes" | grep -E "$RCPT"'not run \(' || true)"
+  [ -n "$nr" ] && [ "$(printf '%s\n' "$nr" | wc -l)" -eq 1 ] || return 1
+  rest="$(printf '%s\n' "$notes" | grep . | grep -vE "$RCPT"'not run \(' | sed 's/[[:space:]].*//' | sort | tail -n1)"
+  [ -z "$rest" ] || [[ "$rest" < "${nr%% *}" ]]
 }
 owed_work() {
   local t p cap crc n
@@ -476,6 +487,10 @@ owed_work() {
     [ -n "$t" ] || continue
     untriaged "$inst/$t"; case $? in
       0) echo "DELTA: $t has an untriaged approach critique — step 2 owes it a triage."; exit 1 ;;
+      2) fail2 "could not read advisor_notes on $t" ;;
+    esac
+    rerun_owed "$inst/$t"; case $? in
+      0) echo "DELTA: $t critique not run — re-dispatch owed"; exit 1 ;;
       2) fail2 "could not read advisor_notes on $t" ;;
     esac
   done <<EOF
