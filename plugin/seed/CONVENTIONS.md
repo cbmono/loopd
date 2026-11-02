@@ -943,6 +943,14 @@ above it so none may grow its share.
   non-empty). It is not a promotion gate and never blocks your round.
 - Write the PR URL and a `# Result` summary back into the task document, and set
   the task `status: in-review` (or `blocked`, with why, if you can't proceed).
+- **Commit your task-doc edit immediately after each write — never at the round's end.**
+  `cd <bundle>`, then `scripts/commit-as.sh <role> "<msg>" --stage -- <task-doc>`. An
+  uncommitted doc is a dirty bundle tree, and every tick that sees one defers its pull:
+  one session edited its doc at 15:13 and was still working two hours later. `commit-as.sh`
+  refuses outside the bundle (exit 2), so a call from your worktree cannot commit into the
+  target repo as your role, and refuses while a rebase is in progress (exit 2): **retry once
+  on your next write, or before your final message if there is none, then leave it.**
+  Nothing else commits it for you.
 - **A round's final message is a report, not an ask** — `software-engineer`,
   `devops-engineer` and `qa-reviewer`, the roles a tick runs as `claude --bg` sessions.
   It says what exists — the PRs, the criteria tally, the task note you wrote — and ends
