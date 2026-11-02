@@ -100,10 +100,11 @@ jq -r "$filter" "$GHDIR/$n"
 EOS
 chmod +x "$BIN/gh"
 NOREV='{"totalCount":0,"nodes":[]}'; NOCOM='{"nodes":[]}'
-prj() { # <n> <state> <head> <decision|NONE> [reviews-json] [status-json] [comments-json]
-  local dec=null; [ "$4" = NONE ] || dec="\"$4\""
-  printf '{"data":{"repository":{"pullRequest":{"state":"%s","headRefOid":"%s","reviewDecision":%s,"reviews":%s,"comments":%s,"commits":{"nodes":[{"commit":{"status":%s}}]}}}}}\n' \
-    "$2" "$3" "$dec" "${5:-$NOREV}" "${7:-$NOCOM}" "${6:-null}" > "$GHDIR/$1"
+prj() { # <n> <state> <head> <decision|NONE> [reviews-json] [rollup-nodes-json] [comments-json] [mergeStateStatus]
+  local dec=null roll=null; [ "$4" = NONE ] || dec="\"$4\""
+  [ -n "${6:-}" ] && roll="{\"contexts\":{\"totalCount\":$(jq length <<<"$6"),\"nodes\":$6}}"
+  printf '{"data":{"repository":{"pullRequest":{"state":"%s","headRefOid":"%s","reviewDecision":%s,"mergeable":"MERGEABLE","mergeStateStatus":"%s","reviews":%s,"comments":%s,"commits":{"nodes":[{"commit":{"statusCheckRollup":%s}}]}}}}}\n' \
+    "$2" "$3" "$dec" "${8:-CLEAN}" "${5:-$NOREV}" "${7:-$NOCOM}" "$roll" > "$GHDIR/$1"
 }
 prj 7 OPEN abc1234 NONE
 WITH() { PATH="$BIN:$PATH" GHDIR="$GHDIR" "$SH" "$@" --instance "$INST"; }
@@ -147,7 +148,13 @@ rm -rf "$INST/$(dirname "$AB_QUEUE")"
 task "$INST/projects/proj-a/tasks/t1.md" in-progress
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm dispatch
 WITH record
-ok "an in-progress task is a DELTA even against its own record" "$(run check)" "rc:1 DELTA: task("
+ok "an in-progress task with no session: is a DELTA against its own record" "$(run check)" "rc:1 DELTA: proje"
+S9=99999999-aaaa-bbbb-cccc-000000000009
+printf '#!/usr/bin/env bash\necho %s\n' "'[{\"id\":\"x\",\"sessionId\":\"$S9\",\"state\":\"working\",\"status\":\"busy\",\"pid\":1}]'" > "$BIN/claude"
+chmod +x "$BIN/claude"; printf 'session: %s\n' "$S9" >> "$INST/projects/proj-a/tasks/t1.md"
+GIT -C "$INST" add -A && GIT -C "$INST" commit -qm session; WITH record
+ok "an in-progress task with an unchanged busy session is IDLE" "$(run check)" "rc:0 IDLE: finger"
+rm -f "$BIN/claude"
 task "$INST/projects/proj-a/tasks/t1.md" ready "" "$T1DEP"
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm undo
 WITH record; ok "…and clears when nothing is in flight"        "$(run check)" "rc:0 IDLE: finger"
@@ -179,7 +186,7 @@ ok "…and the original PR facts restore IDLE"    "$(run check)" "rc:0 IDLE: fin
 echo "== review activity the decision never shows: a COMMENTED review, a reviewer's status =="
 REV1='{"totalCount":1,"nodes":[{"id":"PRR_one","state":"COMMENTED"}]}'
 REV2='{"totalCount":2,"nodes":[{"id":"PRR_two","state":"COMMENTED"}]}'
-st() { printf '{"contexts":[{"context":"CodeRabbit","state":"%s","description":"%s"}]}' "$1" "$2"; }
+st() { printf '[{"__typename":"StatusContext","context":"CodeRabbit","state":"%s","description":"%s"}]' "$1" "$2"; }
 DONE_ST="$(st SUCCESS 'Review completed')"
 prj 7 OPEN abc1234 NONE "$REV1" "$DONE_ST"; WITH record
 ok "a recorded review and status are IDLE"      "$(run check)" "rc:0 IDLE: finger"
@@ -221,7 +228,7 @@ printf '%s\n' "$*" >> "$CLDIR/calls"
 [ -e "$CLDIR/junk" ] && { echo 'not json'; exit 0; }
 [ -e "$CLDIR/raw" ] && { cat "$CLDIR/raw"; exit 0; }
 [ -e "$CLDIR/hang" ] && exec sleep 30
-awk 'BEGIN{printf "["} {printf "%s{\"id\":\"x%d\",\"sessionId\":\"%s\",\"state\":\"%s\"}", (NR>1?",":""), NR, $1, $2} END{print "]"}' "$CLDIR/states"
+awk 'BEGIN{printf "["} {printf "%s{\"id\":\"x%d\",\"sessionId\":\"%s\",\"state\":\"%s\",\"pid\":1}", (NR>1?",":""), NR, $1, $2} END{print "]"}' "$CLDIR/states"
 EOS
 chmod +x "$BIN/claude"
 S1=11111111-aaaa-bbbb-cccc-000000000001; S2=22222222-aaaa-bbbb-cccc-000000000002; S0=00000000-aaaa-bbbb-cccc-000000000000
@@ -263,7 +270,7 @@ ok "a claude agents listing past its bound is exit 2" \
    "$(PATH="$BIN:$PATH" CLDIR="$CLDIR" bash "$INST/scripts/agent-sessions.sh" states --timeout 1 "$S1" >/dev/null 2>&1; echo $?)" 2
 rm -f "$CLDIR/hang"
 NOCL="$TMP/nocl"; mkdir -p "$NOCL"
-for t in bash sh git sed grep sort date mv rm diff head cut env tr awk cat dirname basename jq wc gh; do
+for t in bash sh git sed grep sort date mv rm diff head cut env tr awk cat dirname basename jq wc gh mktemp; do
   tp="$(PATH="$BIN:$PATH" command -v "$t" 2>/dev/null)" && ln -s "$tp" "$NOCL/$t"
 done
 PATH="$NOCL" GHDIR="$GHDIR" "$SH" record --instance "$INST"
@@ -279,11 +286,11 @@ before="$(cat "$INST/$AB_STATE_DIR")"
 for bad in 'reviews missing|null|'"$DONE_ST" \
            'a counted review with no node|{"totalCount":1,"nodes":[]}|'"$DONE_ST" \
            'a review with no state|{"totalCount":1,"nodes":[{"id":"PRR_one"}]}|'"$DONE_ST" \
-           'a status context with no state|'"$REV1"'|{"contexts":[{"context":"CodeRabbit","description":"x"}]}' \
+           'a status context with no state|'"$REV1"'|[{"__typename":"StatusContext","context":"CodeRabbit","description":"x"}]' \
            'a head with no commit object|'"$REV1"'|null'; do
   IFS='|' read -r what revs stat <<<"$bad"
   prj 7 OPEN abc1234 NONE "$revs" "$stat"
-  [ "$what" = 'a head with no commit object' ] && sed -i.bak 's/{"commit":{"status":null}}/{}/' "$GHDIR/7"
+  [ "$what" = 'a head with no commit object' ] && sed -i.bak 's/{"commit":{"statusCheckRollup":[^}]*}}}*/{}/' "$GHDIR/7"
   ok "$what makes check exit 2"                 "$(run check)" "rc:2 CANNOT ANSWE"
   WITH record 2>/dev/null; ok "…and record refuses, record untouched" "$?:$([ "$(cat "$INST/$AB_STATE_DIR")" = "$before" ] && echo same)" "2:same"
 done
@@ -363,14 +370,14 @@ printf -- '---\ntype: Task\nkind: build\nstatus: in-progress\nsession: s-1\npr: 
 task "$INST/projects/held/tasks/rev.md" in-review "https://github.com/example-org/example-repo/pull/8"
 prj 8 OPEN fed4321 NONE
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm held
-D="$(WITH digest)"
+D="$(CLW digest)"
 ok "the paused project is enumerated"            "$(printf '%s\n' "$D" | grep -c '^project held status=paused')" 1
 ok "…its in-progress task, status unchanged"     "$(printf '%s\n' "$D" | grep -c 'held/tasks/run.md status=in-progress')" 1
 ok "…its in-review task, status unchanged"       "$(printf '%s\n' "$D" | grep -c 'held/tasks/rev.md status=in-review')" 1
-ok "…and the digest says inflight yes"           "$(printf '%s\n' "$D" | grep -cx 'inflight yes')" 1
+ok "…and the digest calls its gone session unmonitored" "$(printf '%s\n' "$D" | grep -cx 'unmonitored projects/held/tasks/run.md gone')" 1
 ok "…and its PR is still read from the host"     "$(printf '%s\n' "$D" | grep -c 'pr https://github.com/example-org/example-repo/pull/8 OPEN fed4321 NONE')" 1
-WITH record
-ok "check is DELTA, never IDLE, while an agent runs in a paused project" "$(run check)" "rc:1 DELTA: task("
+CLW record
+ok "check is DELTA, never IDLE, while an agent runs in a paused project" "$(crun check)" "rc:1 DELTA: proje"
 rm -rf "$INST/projects/held" "$GHDIR/8"; GIT -C "$INST" add -A && GIT -C "$INST" commit -qm unheld
 WITH record
 
@@ -475,7 +482,7 @@ ok "…and one whose bare-id depends_on is done" "$(crun1)" "$DREADY_MSG"
 sed -i.bak 's/^status: done/status: cancelled/' "$INST/projects/proj-d/tasks/d0.md"; rm -f "$INST/projects/proj-d/tasks/d0.md.bak"; cr cancelled-dep
 ok "…or cancelled (terminal, as step 3 reads it)" "$(crun1)" "$DREADY_MSG"
 ok "…while record wrote no owed-work line: every line is a fingerprint key" \
-   "$(grep -v '^#' "$INST/$AB_STATE_DIR" | grep -cvE '^(recorded:|head|queue|snapshot|task|inflight|pr|session|sessions|checkpoint|reclaim) ')" 0
+   "$(grep -v '^#' "$INST/$AB_STATE_DIR" | grep -cvE '^(recorded:|head|queue|snapshot|task|unmonitored|pr|session|sessions|due|checkpoint|reclaim) ')" 0
 
 : > "$GATELOG"; : > "$CLDIR/calls"
 for c in "unmet depends_on|depends_on: [ /projects/proj-a/tasks/t2.md ]\n" \

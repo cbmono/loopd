@@ -284,9 +284,11 @@ state, and act only on deltas.
    "on the next tick", which is still a whole report.
 
    - **0 (IDLE)** — the recorded fingerprint matches: bundle HEAD unchanged, tree
-     clean, nothing untracked under `projects/`, no task `in-progress`, and every
-     open PR's head, state, review decision, latest review and commit statuses exactly
-     as the last full tick recorded them — and nothing the last tick queued for this one:
+     clean, nothing untracked under `projects/`, every `in-progress` task's session
+     `working` or `blocked` with its state and status unchanged (one with no `session:`,
+     or gone, done or stopped, is a `DELTA:`), the `agent-sessions.sh stop-ids` due set
+     unchanged, and every open PR's head, state, review decision, mergeability, latest
+     review and check runs exactly as the last full tick recorded them — and nothing the last tick queued for this one:
      no `ready` task `dispatchable-ready.sh` clears while in-flight is under the `maxAgentsInFlight` cap (absent ⇒ 4),
      and no `draft` whose newest `advisor_notes` concern postdates its newest
      `* <ISO 8601> triage:` line (either one is a `DELTA:` naming the task). **Skip steps 1–7.**
