@@ -371,16 +371,24 @@ of a world that did not move.
 
 The safety argument has one load-bearing direction: a false DELTA costs one full tick
 (the price that was always paid); a false IDLE would skip owed work. So every doubt —
-no record, no `gh`, a probe error, any `in-progress` task, any dirty tracked file, any
+no record, no `gh`, a probe error, an `in-progress` task with no `session:` or one that
+is not `working`/`blocked`, any dirty tracked file, any
 untracked file under `projects/` — resolves to the full tick, and the fingerprint holds
 exactly the facts whose movement creates tick work: bundle HEAD, per-task status, each
-open PR's head SHA, state, review decision, review count with the latest review's id and
+PR on an `in-progress` or `in-review` task's head SHA, state, review decision,
+`mergeable`/`mergeStateStatus` (UNKNOWN as-is: a push costs one extra full tick while the
+host computes it), review count with the latest review's id and
 state (a COMMENTED review moves no decision), the latest issue comment's id and author
 (a reviewer's rate-limit reply is one; a review-thread reply already mints a review),
-every commit status's state and description (a rate-limited reviewer still reports
-SUCCESS), the state of each role session recorded on an `in-review` or `blocked` task
-(one `claude agents` listing; `sessions unavailable` where `claude` is not on PATH), and
+every `statusCheckRollup` check run and status context (a status's description too: a
+rate-limited reviewer still reports SUCCESS), the state and status of each role session
+recorded on an `in-progress`, `in-review` or `blocked` task and the `stop-ids` due set as
+`<uuid> <class>` (both from one `claude agents` listing; `sessions unavailable` where
+`claude` is not on PATH), and
 the presence of the two derived artifacts (a stamp that recreates `AWAITING.md` needs one full tick to populate the queue).
+Until 2026-11-02 any `in-progress` task was a DELTA, and 12 tick closes that day only
+reported agents still working; the due set is what keeps a time-based stop (a session
+busy or idle past its bound, step 5) visible once those ticks go IDLE.
 
 Work a tick queues for the next one sits unchanged in both fingerprints, so `check` also
 short-circuits on it — never as a fingerprint line, which `record` would capture. Measured

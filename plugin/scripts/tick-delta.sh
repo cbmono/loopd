@@ -39,19 +39,21 @@
 #                           is an immediate DELTA before fingerprinting — a human
 #                           mid-edit (an appended answer is exactly this) or a sibling
 #                           mid-write is never an idle tick.
-#   task <path> <status>    every task's status — a move to/from any status is a delta,
-#                           and any `in-progress` task is an immediate DELTA whatever
-#                           the record says: a live dispatch is owed its monitoring.
-#   pr <url> <state> <head> <decision> reviews=<n>:<id>:<state> comments=<id>:<login> status=<json>
-#                           every PR on an `in-review` task, from the host: a pushed
-#                           head, a merge, a close, a review decision, a new review (a
-#                           COMMENTED one moves no decision), a new issue comment (a
-#                           reviewer's rate-limit reply is one) or a commit status's state or
-#                           description (a rate-limited reviewer still says SUCCESS) each
-#                           require tick work (re-verify, reflect, re-request, send back).
-#   session <id> <state>    each `session:` on an `in-review`/`blocked` task, from ONE
-#                           `claude agents` listing; `sessions unavailable` when `claude`
-#                           is not on PATH, so a clone without the CLI keeps its fast path.
+#   task <path> <status>    every task's status — a move to/from any status is a delta.
+#   unmonitored <path> <why>  an `in-progress` task with no `session:`, or one not
+#                           `working`/`blocked`: an immediate DELTA, step 4 owes its recovery.
+#   pr <url> <state> <head> <decision> merge=<mergeable>/<mss> reviews=<n>:<id>:<state> comments=<id>:<login> status=<json>
+#                           every PR on an `in-progress`/`in-review` task, from the host: a
+#                           pushed head, a merge, a close, a review decision, mergeability
+#                           (UNKNOWN as-is), a new review (a COMMENTED one moves no decision), a
+#                           new issue comment (a reviewer's rate-limit reply is one), or a
+#                           check run's or status context's state (a status's description too:
+#                           a rate-limited reviewer still says SUCCESS).
+#   session <id> <state> [<status>]  each `session:` on an `in-progress`/`in-review`/`blocked`
+#                           task, from ONE `claude agents` listing; `sessions unavailable` when
+#                           `claude` is not on PATH, so a clone without the CLI keeps its fast path.
+#   due <uuid> <class>      `agent-sessions.sh stop-ids` over that same listing, minus its moving
+#                           age: a stop coming due with time alone is a DELTA once per crossing.
 #   web queue               not a line: an unconsumed web-board entry (web-queue.sh pending)
 #                           is an immediate DELTA, because the queue is gitignored and moves
 #                           nothing above — and the tick's step 0.95 is what consumes it.
@@ -307,23 +309,29 @@ steps_line() {
 }
 
 PR_QUERY='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
-  state headRefOid reviewDecision reviews(last:1){totalCount nodes{id state}}
+  state headRefOid reviewDecision mergeable mergeStateStatus reviews(last:1){totalCount nodes{id state}}
   comments(last:1){nodes{id author{login}}}
-  commits(last:1){nodes{commit{status{contexts{context state description}}}}}}}}'
+  commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){totalCount nodes{__typename
+    ... on CheckRun{name status conclusion} ... on StatusContext{context state description}}}}}}}}}}'
 PR_JQ='.data.repository.pullRequest as $p
 | ($p.reviews.nodes // [] | last) as $r
 | ($p.commits.nodes // [] | last) as $c
 | ($p.comments.nodes // [] | last) as $k
-| ($c.commit.status.contexts // []) as $s
+| ($c.commit.statusCheckRollup.contexts // {totalCount: 0, nodes: []}) as $x
+| ($x.nodes // []) as $s
 | if ($p | type) != "object" or ($p.reviews.totalCount | type) != "number" or ($c.commit | type) != "object"
      or ($p.reviews.totalCount > 0 and (($r.id // "") == "" or ($r.state // "") == ""))
-     or ($s | type) != "array" or any($s[]; (.state | type) != "string")
+     or ($p.mergeable | type) != "string" or ($p.mergeStateStatus | type) != "string"
+     or ($s | type) != "array" or ($x.totalCount | type) != "number" or $x.totalCount > ($s | length)
+     or any($s[]; if .__typename == "CheckRun" then (.name | type) != "string" or (.status | type) != "string"
+                  elif .__typename == "StatusContext" then (.state | type) != "string" else true end)
      or ($p.comments.nodes | type) != "array" or ($k != null and ($k.id // "") == "")
   then "UNREADABLE"
-  else [$p.state, $p.headRefOid, ($p.reviewDecision // "NONE"),
+  else [$p.state, $p.headRefOid, ($p.reviewDecision // "NONE"), "merge=\($p.mergeable)/\($p.mergeStateStatus)",
         "reviews=\($p.reviews.totalCount):\($r.id // "-"):\($r.state // "-")",
         "comments=\($k.id // "-"):\($k.author.login // "-")",
-        "status=\([$s[] | [.context, .state, .description]] | sort | tojson)"] | join(" ")
+        "status=\([$s[] | if .__typename == "CheckRun" then [.name, .status, (.conclusion // "-")]
+                          else [.context, .state, .description] end] | sort | tojson)"] | join(" ")
   end'
 
 fingerprint() { # <probe|digest>
@@ -333,7 +341,7 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs inflight=0 urls="" ntask nterm wtp sid sids="" dl redraw mapped b
+  local p d pst f st prs urls="" ntask nterm wtp sid sids="" ipsids="" dl redraw mapped b
   for d in "$inst"/projects/*/; do
     [ -d "$d" ] || continue
     p="$d/project.md"
@@ -371,7 +379,6 @@ fingerprint() { # <probe|digest>
       else
         printf 'task %s %s\n' "${f#"$inst"/}" "${st:-unset}"
       fi
-      [ "$st" = "in-progress" ] && inflight=1
       if [ -n "$mapped" ] && [ "$st" != cancelled ] && b="$(basename "$f" | grep -oE '^task-[0-9]+')" \
          && [ "${mapped#* "$b" }" = "$mapped" ] && [ "$(fmcount "$f" acceptance_criteria)" -gt 0 ]; then
         redraw=1
@@ -396,11 +403,14 @@ fingerprint() { # <probe|digest>
           2) return 1 ;;
         esac
       fi
-      case "$st" in in-review|blocked)
+      case "$st" in in-progress|in-review|blocked)
         sid="$(fmfirst "$f" session | sed 's/#.*$//' | tr -d "\"' \r")"
-        case "$sid" in '') ;; *[!A-Za-z0-9-]*) return 1 ;; *) sids="$sids $sid" ;; esac ;;
+        case "$sid" in '') ;; *[!A-Za-z0-9-]*) return 1 ;; *) sids="$sids $sid" ;; esac
+        if [ "$st" = in-progress ]; then
+          [ -n "$sid" ] && ipsids="$ipsids $sid=${f#"$inst"/}" || printf 'unmonitored %s no-session\n' "${f#"$inst"/}"
+        fi ;;
       esac
-      if [ "$st" = "in-review" ]; then
+      if [ "$st" = "in-review" ] || [ "$st" = "in-progress" ]; then
         prs="$(grep -m1 '^pr:' "$f" 2>/dev/null | grep -oE 'https://[^"[:space:]]+/pull/[0-9]+' || true)"
         [ -n "$prs" ] && urls="$urls
 $prs"
@@ -409,10 +419,6 @@ $prs"
     [ "$mode" = digest ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && step6=1
     [ "$redraw" = 1 ] && { printf 'redraw owed %s\n' "${d#"$inst"/}design.md"; step2=1; }
   done
-
-  # A live dispatch is owed its monitoring whatever the record says. Signalled as a
-  # fingerprint line so `record` captures it too, and short-circuited in `check` below.
-  [ "$inflight" = 1 ] && printf 'inflight yes\n' || printf 'inflight no\n'
 
   # The one wall-clock fact: a stalled project's fingerprint never moves, and it is the
   # project the continue checkpoint exists for. Only the DUE SET is printed, so it moves
@@ -424,11 +430,20 @@ $prs"
 
   if [ -n "$sids" ]; then
     if command -v claude >/dev/null 2>&1; then
+      local states e ss
+      bash "$SESS" listing > "$LISTING" 2>/dev/null || return 1
       # shellcheck disable=SC2086
-      bash "$SESS" states $sids 2>/dev/null | sed 's/^/session /'
+      states="$(AB_SESSIONS_LISTING="$LISTING" bash "$SESS" states $sids 2>/dev/null)" || return 1
+      printf '%s\n' "$states" | sed 's/^/session /'
+      for e in $ipsids; do
+        ss="$(printf '%s\n' "$states" | awk -v s="${e%%=*}" '$1 == s { print $2; exit }')"
+        case "$ss" in working|blocked) ;; *) printf 'unmonitored %s %s\n' "${e#*=}" "${ss:-gone}" ;; esac
+      done
+      AB_SESSIONS_LISTING="$LISTING" bash "$SESS" stop-ids "$inst" 2>/dev/null | awk '{ print "due", $1, $4 }' | sort
       [ "${PIPESTATUS[0]}" = 0 ] || return 1
     else
       printf 'sessions unavailable\n'
+      for e in $ipsids; do printf 'unmonitored %s sessions-unavailable\n' "${e#*=}"; done
     fi
   fi
 
@@ -445,7 +460,7 @@ $prs"
     line="$(gh api graphql --hostname "$host" -f o="$owner" -f r="$repo" -F n="$num" \
             -f query="$PR_QUERY" --jq "$PR_JQ" 2>/dev/null)" || return 1
     case "$line" in *$'\n'*) return 1 ;; esac
-    printf '%s\n' "$line" | grep -Eqx '[A-Z]+ [0-9a-f]+ [A-Z_]+ reviews=[0-9]+:[^ ]+:([A-Z_]+|-) comments=[^ :]+:[^ :]+ status=\[.*\]' || return 1
+    printf '%s\n' "$line" | grep -Eqx '[A-Z]+ [0-9a-f]+ [A-Z_]+ merge=[A-Z_]+/[A-Z_]+ reviews=[0-9]+:[^ ]+:([A-Z_]+|-) comments=[^ :]+:[^ :]+ status=\[.*\]' || return 1
     printf 'pr %s %s\n' "$u" "$line"
   done
   # Emitted from INSIDE the walk: the caller reads this function through a command
@@ -455,7 +470,7 @@ $prs"
 }
 
 # WORK THE LAST TICK QUEUED FOR THIS ONE sits in both fingerprints, so it never reads as a
-# change. These are `check` short-circuits like `inflight yes`, NEVER fingerprint lines:
+# change. These are `check` short-circuits, NEVER fingerprint lines:
 # `record` must not capture them. Cheapest first; every doubt is a DELTA.
 # A draft is untriaged when a concern in `advisor_notes` postdates its newest
 # `* <ISO 8601> triage: …` line under `# Notes` (step-2-refine-drafts.md writes it).
@@ -512,6 +527,8 @@ DREADY="$(dirname "${BASH_SOURCE[0]}")/dispatchable-ready.sh"
 MAXA="$(dirname "${BASH_SOURCE[0]}")/resolve-max-agents.sh"
 
 mode=probe; [ "$cmd" = digest ] && mode=digest
+LISTING="$(mktemp "${TMPDIR:-/tmp}/tick-delta-sessions.XXXXXX")" || fail2 "mktemp failed"
+trap 'rm -f "$LISTING"' EXIT
 FP="$(fingerprint "$mode")" || fail2 "could not complete the fingerprint (an unreadable task file, gh missing or offline, a bad PR URL, or \`claude agents\` failing)"
 
 case "$cmd" in
@@ -536,8 +553,9 @@ case "$cmd" in
     exit 0
     ;;
   check)
-    if printf '%s\n' "$FP" | grep -qx 'inflight yes'; then
-      echo "DELTA: task(s) in-progress — a live dispatch is owed its monitoring."
+    um="$(printf '%s\n' "$FP" | sed -n 's/^unmonitored //p' | head -n1)"
+    if [ -n "$um" ]; then
+      echo "DELTA: ${um% *} is in-progress with no live session to watch (${um##* }) — step 4 owes it."
       exit 1
     fi
     wq=0
