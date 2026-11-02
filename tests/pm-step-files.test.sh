@@ -37,8 +37,10 @@ ok "every one ends with its own sentinel" \
 
 echo
 echo "== refine writes target_repo as <org>/<repo>, and the core points there =="
-ok "step 2 says write it as <org>/<repo>" \
-   "$(has "$STEPS/step-2-refine-drafts.md" 'write it as `<org>/<repo>`')" yes
+ok "step 2 says write target_repo as <org>/<repo>" \
+   "$(has "$STEPS/step-2-refine-drafts.md" 'write `target_repo` as `<org>/<repo>`')" yes
+ok "…and keeps an explicit owner" \
+   "$(has "$STEPS/step-2-refine-drafts.md" 'an explicit `<owner>/<repo>` stays as given')" yes
 ok "the core's instance-config line points at step 2" \
    "$(has "$CORE" 'written `<org>/<repo>` per')" yes
 

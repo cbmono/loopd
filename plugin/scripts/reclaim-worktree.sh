@@ -214,6 +214,14 @@ if [ ! -e "$REPO_DIR/.git" ]; then
 fi
 [ -e "$REPO_DIR/.git" ] || refuse "expected repo '$REPO_REC' is not cloned at $REPO_DIR."
 REPO_CANON="$(canon "$REPO_DIR")"
+# The clone's own identity, not its directory name. `config --get`, not `remote get-url`:
+# the latter expands `insteadOf`, so a mirror rewrite would hide which repo this is.
+ORIGIN_URL="$(git -C "$REPO_DIR" config --get remote.origin.url 2>/dev/null)"
+u="${ORIGIN_URL%/}"; u="${u%.git}"; o="${u%/*}"; o="${o##*/}"; o="${o##*:}"
+ORIGIN_NWO=""; [ -n "$o" ] && [ "$o" != "$u" ] && ORIGIN_NWO="$(kb_repo_norm "$o/${u##*/}")"
+[ "$ORIGIN_NWO" = "$REPO_REC" ] || refuse "$REPO_DIR has origin '${ORIGIN_URL:-<none>}', which is not
+        $REPO_REC. A directory name is not a repo's identity, and a PR merged in
+        $REPO_REC is no evidence about another repo's worktree."
 
 # --- G6/G7/G8: what git says about that exact path ---------------------------
 # The porcelain reports `detached` explicitly, where `rev-parse --abbrev-ref HEAD`
