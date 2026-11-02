@@ -793,7 +793,7 @@ counted 10 rows `state: done` with a live process (6 reaped ticks, ~5 GB) and a 
 session idle a day after its PR merged; neither reaper reached them. `stop-ids` adds three
 classes: `finished` (terminal, live pid, unrecorded, `cwd` under the bundle root and not
 the worktree root — a done task's own row is `session-handoff.sh`'s), `idle` past
-`maxIdleMinutes` (absent ⇒ 120) and `busy` past `maxBgRoundMinutes` (absent ⇒ 1440; `0`
+`maxIdleMinutes` (absent ⇒ 120) and `busy` past `maxBgRoundMinutes` (absent ⇒ 240; `0`
 turns either off), both clocked from the transcript
 (`startedAt` counts idle days; a `tool_result` is not a new round) and both only for a
 session an open task records. A row with no `kind` or no `state` is never selected — the

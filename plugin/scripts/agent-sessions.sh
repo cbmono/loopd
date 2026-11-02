@@ -38,7 +38,7 @@
 #                                                first: `dead` as above; `finished` terminal, live
 #                                                pid, cwd under the bundle root, unrecorded;
 #                                                `idle`/`busy` an open task's live session past
-#                                                maxIdleMinutes (120) / maxBgRoundMinutes (1440)
+#                                                maxIdleMinutes (120) / maxBgRoundMinutes (240)
 #   agent-sessions.sh worker <session-id> [--roster <file>]
 #                                             -> `worker <short> <pid>`: the daemon's live
 #                                                process for it (roster.json); exit 1 none
@@ -327,7 +327,7 @@ PY
       . "$here/bundle-paths.sh" || exit 2
       self="${CLAUDE_CODE_SESSION_ID:-} $(sed -n 's/^session:[[:space:]]*//p' "$root/$AB_LOCK" 2>/dev/null)"
       skip="$self"
-      for k in maxIdleMinutes:120 maxBgRoundMinutes:1440; do
+      for k in maxIdleMinutes:120 maxBgRoundMinutes:240; do
         v="$(bash "$here/resolve-config.sh" --instance "$root" "${k%%:*}" 2>/dev/null)" || v=""
         bounds="$bounds ${v:-${k#*:}}"
       done

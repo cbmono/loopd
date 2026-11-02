@@ -67,7 +67,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    unrecorded, its `cwd` under this bundle's root and not under the worktree root (a reaped
    tick); **idle** — an open task's live, not-`blocked` session whose last assistant turn
    is older than `maxIdleMinutes` (absent ⇒ 120); **busy** — one whose last text user turn
-   is older than `maxBgRoundMinutes` (absent ⇒ 1440), stopped through
+   is older than `maxBgRoundMinutes` (absent ⇒ 240), stopped through
    `session-handoff.sh --busy`, which files a `👉 do` hand-off. `0` turns either bound off.
    At most 20 a run, oldest first; the rest print `deferred` and are next run's. Carry every
    `stopped`, `handed-off`, `stop-failed` and `deferred` line onto your `log.md` close
