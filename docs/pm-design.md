@@ -769,7 +769,17 @@ pid on the row **or** in the roster, no task records the session or its `cwd` (a
 task's `worktree:` is that task's), a `cwd` under the bundle root — never the shared worktree root, which another bundle's
 sessions sit under, and never a row with no `cwd` — older than 10 minutes (the spawn race,
 before a row has a pid) or 24 hours when `blocked` (a day to `claude attach`), and no stop at
-all when no row carries a `pid`. At most 20 a tick. It runs only on ticks that read step 5.
+all when no row carries a `pid`. At most 20 a tick.
+**Since 2026-11-02 it also stops what is resident, and runs on every tick.** One bundle
+counted 10 rows `state: done` with a live process (6 reaped ticks, ~5 GB) and a role
+session idle a day after its PR merged; neither reaper reached them. `stop-ids` adds three
+classes: `finished` (terminal, live pid, unrecorded, `cwd` under the bundle root and not
+the worktree root — a done task's own row is `session-handoff.sh`'s), `idle` past
+`maxIdleMinutes` and `busy` past `maxBgRoundMinutes`, both clocked from the transcript
+(`startedAt` counts idle days; a `tool_result` is not a new round) and both only for a
+session an open task records. A row with no `kind` or no `state` is never selected — the
+human's interactive session carries no `state`. The IDLE fast path runs it too, and
+`tick-reap.sh` never does: the launcher's reaper answers only for its own tick.
 Reclaim's allowlist gained ONE path the same day, `.husky/_/` — husky's generated,
 self-ignoring hook shim, the one entry holding that tree back (the other 27 ignored paths
 were `node_modules`). A path, not the `.husky` component: the rest of `.husky/` is the
