@@ -7,11 +7,11 @@
 #   session-handoff.sh <task-doc> [--jobs-dir <dir>]
 #     task `done`/`cancelled` -> `stopped <short> <status>` (a pending `needs` is filed
 #                                first), or `ended <short> <state>` when terminal with no live pid
+#     any other task, its session `blocked` with a `needs` and no live prompt
+#                             -> `handed-off <short> <id> Q<n>`, then `claude stop <short>`
 #   session-handoff.sh --busy <task-doc>
 #                             -> as a hand-off, for a round past maxBgRoundMinutes: its `needs`,
 #                                or `busy past maxBgRoundMinutes — stopped` when it has none
-#     any other task, its session `blocked` with a `needs` and no live prompt
-#                             -> `handed-off <short> <id> Q<n>`, then `claude stop <short>`
 #   session-handoff.sh --owed <task-doc>
 #                             -> `owed <uuid> <id>` then `answer: <text>`: the human answered
 #                                the latest hand-off of the task's current session, nothing

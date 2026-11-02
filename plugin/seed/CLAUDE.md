@@ -80,11 +80,9 @@ this file so product-repo sessions aren't told they are a control panel. -->
   deletes) and **proposes** closing finished projects — never closes them itself.
 - **Two human authorities** (`SCHEMA.md`): only the human promotes `draft → ready`,
   and only the human merges. The PM never sets `ready` and never merges.
-- **Standing grant: the tick runs `claude stop`, never `rm`, on a role session whose
-  round is recorded** (`agent-sessions.sh recorded`), whose `needs` it filed as a `👉 do`
-  hand-off, or whose task is done; its sweep also stops this bundle's finished sessions that
-  still hold a process and a role session idle past `maxIdleMinutes` (120) or busy past
-  `maxBgRoundMinutes` (1440); any other stays yours.
+- **Standing grant: the tick runs `claude stop`, never `rm`, on a session whose round
+  is recorded**, whose `needs` it filed as a `👉 do` hand-off, whose task is done, or
+  that `session-sweep.sh` selects; any other stays yours.
 - **One active `/loopd:dispatch` loop per clone**, run from a session **in this
   repo**. The one-tick-at-a-time guarantee is backed by `.tick-lock` (per clone, gitignored) —
   the launcher takes it before dispatching and the tick checks it on entry — but the
