@@ -34,7 +34,7 @@ HEREDOC="$(awk '/gi_add <<.GI.$/ { on=1; next } on && /^GI$/ { on=0 } on && NF &
   | sed -E 's/__(AB_[A-Z_]+)__/$\1/g' | grep -vxF '/board.html')"
 MANAGED="$(sed -n 's/^ *gi_managed="\(.*\)"$/\1/p' "$INIT_SRC" | tr ' ' '\n' | grep -vxF '$gi_managed' | grep .)"
 ok "the heredocs were read (not an empty set)" "$([ "$(printf '%s\n' "$HEREDOC" | grep -c .)" -ge 12 ] && echo yes || echo no)" yes
-MISSING="$(printf '%s\n' "$HEREDOC" | while IFS= read -r p; do printf '%s\n' "$MANAGED" | grep -qxF "$p" || printf '%s ' "$p"; done)"
+MISSING="$(printf '%s\n' "$HEREDOC" | while IFS= read -r p; do grep -qxF "$p" <<<"$MANAGED" || printf '%s ' "$p"; done)"
 ok "no guarded pattern is missing from gi_managed" "${MISSING:-none}" none
 ok "/board.html stays out (its trailing copy outranks !/board.html)" \
   "$(printf '%s\n' "$MANAGED" | grep -cxF '/board.html' | tr -d ' ')" 0
