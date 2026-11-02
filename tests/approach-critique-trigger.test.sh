@@ -166,6 +166,9 @@ ok "…and the receipt is NOT sent to answered_questions" \
 ok "…and the check is stated as an instruction" \
    "$(in_block 'means the critique has run: do not dispatch it again')" yes
 ok "…while the receipt is not made a gate" "$(in_block 'they are a receipt')" yes
+ok "a not-run receipt is defined"           "$(in_block 'advisor: approach critique — not run (<reason>)')" yes
+ok "…and never counts as ran"              "$(in_block '`not run` never counts as ran')" yes
+ok "RESOLVE needs evidence the critic could have read" "$(in_block 'evidence the critic could have read')" yes
 
 echo
 echo "== 5. mandatory-on-trigger is not mandatory-to-EXIST =="
