@@ -27,7 +27,9 @@
 #   agent-sessions.sh view <bundle-root> [--summary]
 #                                             -> this bundle's background sessions, one
 #                                                row each: task, state, process, age, id;
-#                                                `--summary` prints `<running> <no-process>`
+#                                                `--summary` prints `<working> <idle> <dead>`
+#   agent-sessions.sh working <bundle-root>   -> `<short> <task-stem|unrecorded>` per session
+#                                                `view` counts as working
 #   agent-sessions.sh dead-ids <bundle-root>  -> `<uuid> <short> <age>` per session the tick
 #                                                may stop: no live pid (row or roster), no
 #                                                task records it or its cwd, cwd under the
@@ -51,7 +53,7 @@
 # tests/resume-full-id.test.sh, tests/blocked-recorded.test.sh and tests/dead-session-sweep.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,40p' "$0" >&2; exit 2; }
+usage() { sed -n '3,47p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 command -v python3 >/dev/null 2>&1 || {
@@ -300,9 +302,13 @@ PY
     printf '%s\n' "$live"
     ;;
 
-  view|dead-ids|stop-ids)
+  view|working|dead-ids|stop-ids)
     mode="$1"; root="${2:-}"; summary=0
-    if [ "$mode" = view ]; then [ $# -ge 2 ] && [ $# -le 3 ] || usage; else [ $# -eq 2 ] || usage; summary=dead; fi
+    case "$mode" in
+      view) [ $# -ge 2 ] && [ $# -le 3 ] || usage ;;
+      working) [ $# -eq 2 ] || usage; summary=working ;;
+      *) [ $# -eq 2 ] || usage; summary=dead ;;
+    esac
     [ "$mode" = stop-ids ] && summary=stop
     if [ $# -eq 3 ]; then [ "$3" = "--summary" ] || usage; summary=1; fi
     [ -d "$root" ] || { echo "agent-sessions: no such bundle root: $root" >&2; exit 2; }
@@ -310,14 +316,14 @@ PY
     here="$(dirname "${BASH_SOURCE[0]:-$0}")"
     # dead-ids leaves worktreeRoot out of scope: it is shared by every bundle on the machine.
     wtroot=""; skip=""; bounds=""; self=""
-    if [ "$mode" = view ] || [ "$mode" = stop-ids ]; then
+    if [ "$mode" != dead-ids ]; then
       wtroot="$(bash "$here/resolve-config.sh" --instance "$root" worktreeRoot 2>/dev/null)" || wtroot=""
       if [ -z "$wtroot" ]; then
         rr="$(bash "$here/resolve-config.sh" --instance "$root" reposRoot 2>/dev/null)" || rr=""
         [ -n "$rr" ] && wtroot="$rr/_wt"
       fi
     fi
-    if [ "$mode" != view ]; then
+    if [ "$mode" = dead-ids ] || [ "$mode" = stop-ids ]; then
       . "$here/bundle-paths.sh" || exit 2
       self="${CLAUDE_CODE_SESSION_ID:-} $(sed -n 's/^session:[[:space:]]*//p' "$root/$AB_LOCK" 2>/dev/null)"
       skip="$self"
@@ -447,7 +453,7 @@ def age(ms):
             return "%d%s" % (s // n, unit)
     return "%ds" % s
 
-out, running, ghost, ended, cands = [], 0, 0, 0, []
+out, working, idle, ghost, ended, cands, busy = [], 0, 0, 0, 0, [], []
 for r in rows:
     if not isinstance(r, dict) or r.get("kind", "background" if not dead else None) != "background":
         continue
@@ -488,7 +494,12 @@ for r in rows:
     pid = r.get("pid")
     if alive(pid):
         proc, rank = "pid %d" % pid, 0
-        running += 1
+        st = r.get("status")
+        if st == "busy" or (st is None and state == "working"):
+            working += 1
+            busy.append(str(r.get("sessionId") or ""))
+        else:
+            idle += 1
     elif state in terminal:
         ended += 1
         continue
@@ -512,18 +523,28 @@ if dead:
         print(sid, sid.split("-")[0], a, *((cls, task) if stop else ()))
     sys.exit(0)
 if summary == "1":
-    print(running, ghost)
+    print(working, idle, ghost)
+    sys.exit(0)
+if summary == "working":
+    open_rec = {}
+    for line in recs.splitlines():
+        s_, st_, p_ = (line.split("\t") + ["", ""])[:3]
+        if s_ and p_ and st_ not in ("done", "cancelled"):
+            open_rec.setdefault(s_, os.path.basename(p_)[:-3])
+    for sid in busy:
+        short = sid.split("-")[0]
+        print(clean(short or "?"), clean(open_rec.get(sid) or open_rec.get(short) or "unrecorded"))
     sys.exit(0)
 w = max([len("TASK")] + [len(o[1]) for o in out])
 fmt = "%-" + str(w) + "s  %-9s %-10s %-5s %s"
 print(fmt % ("TASK", "STATE", "PROCESS", "AGE", "SESSION"))
 for o in sorted(out):
     print(fmt % o[1:])
-print("%d running · %d no process · %d ended, not listed" % (running, ghost, ended))
+print("%d working · %d idle · %d dead · %d ended, not listed" % (working, idle, ghost, ended))
 PY
     }
     out="$(classify)" || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
-    if [ "$mode" = view ]; then printf '%s\n' "$out"; exit 0; fi
+    case "$mode" in view|working) printf '%s\n' "$out"; exit 0 ;; esac
     # The daemon's roster is the second liveness witness; an unreadable entry keeps the row.
     printf '%s\n' "$out" | while read -r sid short a cls task; do
       [ -n "$sid" ] || continue
@@ -584,6 +605,6 @@ PY
     echo "copy $uuid"
     ;;
 
-  -h|--help) sed -n '3,40p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,47p' "$0"; exit 0 ;;
   *) usage ;;
 esac

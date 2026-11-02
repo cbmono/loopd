@@ -1,6 +1,6 @@
 ---
 name: whats-up
-description: What's next, and what do you need from me? Reprints the Needs-you queue from AWAITING.md, numbered, with when it was last refreshed. Read-only.
+description: What's next, and what do you need from me? Reprints the Needs-you queue from AWAITING.md, numbered, with when it was last refreshed, and ends with the working agents and their tasks. Read-only.
 allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/whats-up.sh)
 ---
 
@@ -17,5 +17,7 @@ The numbers are the ones the human's next reply addresses. The reply vocabulary 
 promote/merge carve-out live in the instance `CLAUDE.md` → "Reporting progress"; follow
 them there, not from a copy here.
 
-In-flight work and progress are out of scope; the script's last line points at the
-command that has them.
+Its last line is always `working:` — each working background agent's short id and the
+open task recording it (`unrecorded` when none does), `none`, or `unknown — <why>`. It widens the
+skill's scope at the owner's ask (2026-11-02); everything else about in-flight work and
+progress stays out of scope, and a printed queue's footer points at the command that has it.

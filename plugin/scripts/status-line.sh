@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# status-line.sh — one line for Claude Code's `statusLine`: what is in progress, which
-# background agents have a process (and which are dead), what waits on the human, a held
-# lock, when the last tick was.
+# status-line.sh — one line for Claude Code's `statusLine`: what is in progress, how many
+# bg sessions are working, idle or dead, what waits on the human, a held lock, when the last
+# tick was.
 #
 #   status-line.sh [--instance DIR] [--color auto|always|never]
 #
@@ -60,7 +60,7 @@ done
 # `NO_COLOR` and `--color never` are the opt-outs, exactly as everywhere else here.
 # 3/4-bit, so `cli-theme.sh`'s `basic` tier is ASKED FOR BY NAME and nothing is probed:
 # `COLORTERM` and `tput colors` are not reliably inherited by a process Claude Code spawns.
-# One exception: running agents take the TRUECOLOR green, because basic 92 is whatever green
+# One exception: working agents take the TRUECOLOR green, because basic 92 is whatever green
 # the terminal's palette holds and the owner chose the brand's (cli-theme.sh's header).
 use_color=0
 case "$COLOR" in
@@ -102,29 +102,31 @@ fi
 # --- agents: PROCESSES behind this bundle's background sessions, not the registry's word ---
 # The one segment that is not a file read: `agent-sessions.sh view --summary` runs
 # `claude agents --json` (~150 ms), so its answer is cached per bundle for AGENTS_TTL
-# seconds and every open session shares it. A failed read caches `?`, never `0 running`.
+# seconds and every open session shares it. A failed read caches `?`, never `0 working`.
+# The `v2` tag is the cache format: a fresh line in any other (an older version's two counts,
+# sharing this file) is unknown, never re-read as three.
 AGENTS_TTL=10
 agents="$UNKNOWN"
 a_cache="${XDG_CACHE_HOME:-$HOME/.cache}/loopd/agents-$(printf '%s' "$root" | cksum | cut -d' ' -f1)"
 now="$(date +%s)"
-a_ep=""; a_run=""; a_none=""
-[ -r "$a_cache" ] && read -r a_ep a_run a_none < "$a_cache" 2>/dev/null
+a_ep=""; a_rest=""
+[ -r "$a_cache" ] && read -r a_ep a_rest < "$a_cache" 2>/dev/null
 case "$a_ep" in ''|*[!0-9]*) a_ep=0 ;; esac
 if [ $((now - a_ep)) -ge 0 ] && [ $((now - a_ep)) -lt "$AGENTS_TTL" ]; then
-  agents="$a_run $a_none"
+  case "$a_rest" in "v2 "*) agents="${a_rest#v2 }" ;; esac
 else
   agents="$(bash "$(dirname "${BASH_SOURCE[0]:-$0}")/agent-sessions.sh" view "$root" --summary \
             </dev/null 2>/dev/null)" || agents="$UNKNOWN"
   if mkdir -p "${a_cache%/*}" 2>/dev/null; then
-    printf '%s %s\n' "$now" "$agents" > "$a_cache.$$" 2>/dev/null && mv -f "$a_cache.$$" "$a_cache" 2>/dev/null
+    printf '%s v2 %s\n' "$now" "$agents" > "$a_cache.$$" 2>/dev/null && mv -f "$a_cache.$$" "$a_cache" 2>/dev/null
     rm -f "$a_cache.$$" 2>/dev/null
   fi
 fi
-# Anything but two counts — a stale format, a truncated write — is unknown.
-case "$agents" in
-  [0-9]*' '[0-9]*) a_run="${agents%% *}"; a_none="${agents#* }"
-                   case "$a_run$a_none" in *[!0-9]*) agents="$UNKNOWN" ;; esac ;;
-  *) agents="$UNKNOWN" ;;
+# Anything but three counts — a stale format, a truncated write — is unknown.
+a_work=""; a_idle=""; a_dead=""; a_more=""
+read -r a_work a_idle a_dead a_more <<<"$agents"
+case "$a_work:$a_idle:$a_dead:$a_more" in
+  *[!0-9:]*|:*|*::*|*[0-9]) agents="$UNKNOWN" ;;
 esac
 
 # --- need you: AWAITING.md's own items, counted the way the banner counts them -----------
@@ -175,14 +177,12 @@ SEP="$(paint "$C_DIM" ' · ')"
 
 printf '%s' "$(paint "$C_B" 'loopd')"
 printf '%s%s' "$SEP" "$(paint "$(n_colour "$inflight" "$C_BLUE")" "$inflight in progress")"
-# `background agents` counts a live PROCESS, not work: a finished session idling at its
-# prompt is one, and so is the bg tick's own. `dead` is a registry row with no process
-# behind it — what `claude stop` clears — so it speaks only when there is one.
 if [ "$agents" = "$UNKNOWN" ]; then
-  printf '%s%s' "$SEP" "$(paint "$C_PINK" "$UNKNOWN background agents")"
+  printf '%s%s' "$SEP" "$(paint "$C_PINK" "$UNKNOWN working · $UNKNOWN idle · $UNKNOWN dead")"
 else
-  printf '%s%s' "$SEP" "$(paint "$(n_colour "$a_run" "$C_GREEN")" "$a_run background agents")"
-  [ "$a_none" -gt 0 ] && printf '%s%s' "$SEP" "$(paint "$C_PINK" "$a_none dead")"
+  printf '%s%s' "$SEP" "$(paint "$(n_colour "$a_work" "$C_GREEN")" "$a_work working")"
+  printf '%s%s' "$SEP" "$(paint "$(n_colour "$a_idle" "")" "$a_idle idle")"
+  printf '%s%s' "$SEP" "$(paint "$(n_colour "$a_dead" "$C_PINK")" "$a_dead dead")"
 fi
 case "$queue" in
   on)         printf '%s%s' "$SEP" "$(paint "$(n_colour "$awaiting" "$C_PINK")" "$awaiting need you")" ;;
