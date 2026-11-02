@@ -84,9 +84,9 @@ inflight() { bash "$SESS" in-flight "$B" 2>/dev/null; }
 cat > "$TMP/main.spec" <<EOF
 1d1e0001 $WT/task-001-i working idle background 30 121 125
 1d1e0002 $WT/task-002-i working idle background 30 119 125
-b0590001 $WT/task-003-b working busy background 30 1 1441
+b0590001 $WT/task-003-b working busy background 30 1 241
 b0590002 $WT/task-004-b working busy background 72 1 60
-b0590003 $WT/task-006-b working busy background 30 1 1380
+b0590003 $WT/task-006-b working busy background 30 1 239
 f1f10001 $B done idle background 5
 f1f10002 $WT/x done idle background 5
 f1f10003 $OTHER done idle background 5
@@ -102,7 +102,7 @@ echo "== FINISHED / IDLE / BUSY: one fixture run stops exactly the three classes
 before="$(inflight)"
 rep="$(sweep)"; rc=$?
 ok "the sweep exits 0" "$rc" 0
-ok "claude stop: the finished tick, the 121m idle row, the 24h+ busy row" "$(stops)" "1d1e0001 b0590001 f1f10001"
+ok "claude stop: the finished tick, the 121m idle row, the 241m busy row (key absent)" "$(stops)" "1d1e0001 b0590001 f1f10001"
 ok "a reaped done tick reports 'stopped … finished'" "$(grep -c '^stopped f1f10001 (5h) finished$' <<<"$rep")" 1
 ok "the idle row reports 'stopped … idle'" "$(grep -c '^stopped 1d1e0001 (1d) idle$' <<<"$rep")" 1
 ok "the busy row is handed off with Q1" "$(grep -cE '^handed-off b0590001 b0590001-[0-9a-f]{8} Q1$' <<<"$rep")" 1
@@ -119,7 +119,7 @@ ok "a stop that leaves the pid live is stop-failed, never stopped" \
 
 echo "== GUARD: never stopped =="
 mk "$TMP/main.spec"; sweep >/dev/null
-for g in "1d1e0002|an idle row at 119 minutes" "b0590003|a busy row under the bound (23h)" \
+for g in "1d1e0002|an idle row at 119 minutes" "b0590003|a busy row at 239m, key absent" \
          "b0590002|a busy row with an old startedAt and a fresh round" \
          "f1f10002|a finished row under worktreeRoot" "f1f10003|another bundle's finished row" \
          "0be00001|another bundle's idle row no task records" "f1f10004|a row with no kind" \
@@ -138,6 +138,10 @@ ok "maxIdleMinutes 100 stops the 119m row; maxBgRoundMinutes 0 stops no busy row
 printf '{ "maxIdleMinutes": 0 }\n' > "$B/instance.config.local.json"
 mk "$TMP/main.spec"; rm -f "$T/task-003-b.md"; task task-003-b in-review b0590001; sweep >/dev/null
 ok "maxIdleMinutes 0 stops no idle row" "$(stops)" "b0590001 f1f10001"
+printf '{ "maxBgRoundMinutes": 238 }\n' > "$B/instance.config.local.json"
+mk "$TMP/main.spec"; for t in task-003-b:in-review:b0590001 task-006-b:in-progress:b0590003; do
+  IFS=: read -r a b c <<<"$t"; rm -f "$T/$a.md"; task "$a" "$b" "$c"; done; sweep >/dev/null
+ok "a local maxBgRoundMinutes 238 wins: the 239m row is stopped too" "$(stops)" "1d1e0001 b0590001 b0590003 f1f10001"
 ok "normalise-config reads both keys as per-machine" \
    "$(bash "$S/normalise-config.sh" "$B" 2>&1 | grep -c 'MISPLACED.*max\(Idle\|BgRound\)Minutes')" 0
 rm -f "$B/instance.config.local.json"
