@@ -151,6 +151,7 @@ stop_it() { # -> 0 the stop landed, 3 it did not
     after="$(bash "$HERE/agent-sessions.sh" row "$sid" 2>/dev/null | python3 -c 'import json, os, sys
 p = json.load(sys.stdin).get("pid")
 try:
+    assert isinstance(p, int) and not isinstance(p, bool) and p > 0
     os.kill(p, 0); print("done-live")
 except PermissionError:
     print("done-live")

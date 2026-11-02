@@ -37,9 +37,11 @@ cat > "$TMP/bin/claude" <<'STUB'
 case "${1:-}" in
   agents) cat "$FIXTURE" ;;
   stop) printf '%s\n' "$2" >> "$STOPS"
-        python3 -c 'import json,sys; p,w=sys.argv[1:]; rows=json.load(open(p))
+        python3 -c 'import json,os,sys; p,w=sys.argv[1:]; k=os.environ.get("KEEP_PID"); rows=json.load(open(p))
 for r in rows:
-    if r.get("sessionId","").split("-")[0]==w: r["state"]="stopped"; r.pop("pid",None)
+    if r.get("sessionId","").split("-")[0]==w:
+        r["state"]="stopped"
+        if not k: r.pop("pid",None)
 json.dump(rows,open(p,"w"))' "$FIXTURE" "$2" ;;
   *) exit 1 ;;
 esac
@@ -110,6 +112,10 @@ ok "…filing the fixed text, the record carrying no needs" "$(cat "$B/.loopd/.h
 ok "the idle-stopped task stays open" "$(sed -n 's/^status: //p' "$T/task-001-i.md")" in-progress
 ok "…and its stopped session frees its slot" "${before}→$(inflight)" "5→3"
 ok "a second sweep stops nothing and exits 0" "$(sweep; echo "rc=$?"):$(stops)" "rc=0:"
+
+mk "$TMP/main.spec"; rep="$(KEEP_PID=1 sweep)"
+ok "a stop that leaves the pid live is stop-failed, never stopped" \
+   "$(grep -c '^stop-failed 1d1e0001$' <<<"$rep"):$(grep -c '^stopped 1d1e0001' <<<"$rep")" "1:0"
 
 echo "== GUARD: never stopped =="
 mk "$TMP/main.spec"; sweep >/dev/null
