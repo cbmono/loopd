@@ -180,7 +180,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    a result arriving after the receipt is not read. **`not run` never counts as ran**: the
    first allows one re-dispatch on a later tick (`tick-delta.sh check` reports it owed); a
    second leaves the critique not run, named in that tick's report and in one `# Notes`
-   triage line.
+   triage line. **A retry that returns replaces the receipt** — delete it as you record
+   the result — or triaging its concerns leaves the receipt newest and owes a retry
+   again. Promotion ends the retry: the critique informs a promotion already made.
    **The no-concerns receipt goes in `advisor_notes`, not `answered_questions`**, which
    only `fold-answers.sh` writes and only from an answered `open_questions` entry — a
    critique that raised nothing has no such entry, so the receipt had nowhere it was

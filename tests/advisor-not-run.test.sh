@@ -58,6 +58,14 @@ ok "a concern quoting the receipt is still a concern" \
    "$(check)" "rc:1 DELTA: $T has an untriaged approach critique — step 2 owes it a triage."
 draft "2026-11-01T10:00:00Z $NC"
 ok "no concerns stays IDLE"                                "$(check | cut -c1-10)" "rc:0 IDLE:"
+raw() { printf -- '---\ntype: Task\n%b---\n' "$1" > "$INST/$T"
+        GIT -C "$INST" add -A && GIT -C "$INST" commit -qm fx && "$INST/scripts/tick-delta.sh" record --instance "$INST"; }
+raw 'status: draft\nadvisor_notes: [ ]\n'
+ok "a returned retry, receipt deleted and concerns triaged, is IDLE" "$(check | cut -c1-10)" "rc:0 IDLE:"
+printf -- '---\ntype: Task\nstatus: in-review\npr: []\n---\n' > "$INST/projects/p/tasks/dep.md"
+raw "status: ready\ndepends_on: [ /projects/p/tasks/dep.md ]\nadvisor_notes:\n  - \"2026-11-01T10:00:00Z $NR (error)\"\n"
+ok "promotion ends the retry: a ready task's lone receipt owes none" "$(check | cut -c1-10)" "rc:0 IDLE:"
+rm -f "$INST/projects/p/tasks/dep.md"
 
 echo "== write-snapshot.sh counts neither receipt =="
 : > "$INST/$AB_SNAPSHOT"; mkdir -p "$INST/$AB_DIR"; : > "$INST/$AB_SCHEMA"
