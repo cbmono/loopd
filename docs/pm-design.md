@@ -833,6 +833,18 @@ answer a single exit code, and `tests/kb-sweep-trigger.test.sh` drives it agains
 in all four directions. The alternative shape — the PM running `--check` itself and judging
 — is the one this repo has already paid for under "a rule with no reader is not a rule".
 
+**A clean check is cached, because the walk outgrew the tool.** `build-kb-index.sh --check`
+forks per file; on 2026-11-02 it took 31–35 s over 379 docs on an idle machine and about
+128–155 s with three role agents running, past the Bash tool's 120 s, so the tool
+backgrounded it and the tick closed UNKNOWN on a sweep that was due. Only a clean verdict
+is cached — one stamp file, `.loopd/.kb-check-stamp`, its time cut before the walk so a
+doc edited mid-walk is newer than it. Any file or directory under `knowledge/` newer than
+the stamp (a deletion moves its directory's mtime) or a newer `build-kb-index.sh`,
+`bundle-paths.sh` or `plugin-name.sh` re-walks;
+a future-dated stamp is discarded. A file restored with an old mtime (`cp -p`, `rsync -a`)
+is not seen and is out of scope. The step also gives the call a 300000 ms Bash timeout: the
+PM holds no Monitor, so a backgrounded probe is one it cannot wait for.
+
 **Warnings are deliberately outside the trigger.** The same measurement found 285 warnings
 against 35 errors; most are bundle-relative links that resolve to nothing, and chasing them
 is a task with its own scope. Errors mean the index and the documents disagree, which is a
