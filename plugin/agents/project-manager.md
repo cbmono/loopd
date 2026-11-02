@@ -592,7 +592,13 @@ state, and act only on deltas.
    has no row. `pass` checks only the plugin side; the drafts are your duty.
 
 5. **Reflect merges** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-5-reflect-merges.md`. Gate 2
-   above binds whether or not you read it.
+   above binds whether or not you read it. **So does the session sweep: every full tick
+   runs `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` once, here, whether
+   or not it reads that file — unless step 0.9 already ran it this tick and handed off.**
+   Carry every `stopped`, `handed-off`, `stop-failed` and `deferred` line, from whichever
+   run, onto your `log.md` close summary; a `stop-failed` is not retried this tick and never
+   stopped by hand. Exit 2 stopped nothing: one line in the tick report. What it selects is
+   in that file.
 
 6. **Close completed projects (propose only — human-gated)** —
    `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-6-close-projects.md`.

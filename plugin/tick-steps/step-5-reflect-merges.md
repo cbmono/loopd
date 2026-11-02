@@ -57,7 +57,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    and an exit 2, on the task as one `# Notes` line, `worktree retained: <reason>`, and
    never retry around it. Exit 3 is nothing to do.
 
-   **Then sweep this bundle's sessions — once, every tick (the IDLE path of step 0.9 too).**
+   **The session sweep — once, every tick, triggered from the core prompt (its step 5 on a
+   full tick, step 0.9 on an IDLE one), never only from this file.**
    `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` runs `claude stop` on what
    `agent-sessions.sh stop-ids` selects, `background` rows with a `state` only, never the
    running tick's or the lock's session: **dead** — no live pid on the row or in the daemon
@@ -69,10 +70,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    is older than `maxIdleMinutes` (absent ⇒ 120); **busy** — one whose last text user turn
    is older than `maxBgRoundMinutes` (absent ⇒ 240), stopped through
    `session-handoff.sh --busy`, which files a `👉 do` hand-off. `0` turns either bound off.
-   At most 20 a run, oldest first; the rest print `deferred` and are next run's. Carry every
-   `stopped`, `handed-off`, `stop-failed` and `deferred` line onto your `log.md` close
-   summary; a `stop-failed` is not retried this tick and never stopped by hand. Exit 2
-   stopped nothing: one line in the tick report.
+   At most 20 a run, oldest first; the rest print `deferred` and are next run's. What the
+   tick does with each line it prints is the core prompt's step 5.
 
    **The retry is the one time step 5 revisits a `done` task.** A `done` task whose
    recorded `worktree:` is still on disk and whose `# Notes` hold no `worktree retained:`
