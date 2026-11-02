@@ -160,7 +160,21 @@ if [ "$stage" -eq 1 ] && [ "${#paths[@]}" -eq 0 ]; then
   usage
 fi
 
-repo_root="$(git rev-parse --show-toplevel)"
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+
+# From a worktree this would commit into the TARGET repo under the role's name.
+if [ -z "$repo_root" ] || [ ! -f "$repo_root/instance.config.json" ]; then
+  echo "error: ${repo_root:-$PWD} is not a bundle (no instance.config.json at its toplevel)." >&2
+  echo "       cd into the bundle first; commit-as.sh commits there and nowhere else." >&2
+  exit 2
+fi
+for rb in rebase-merge rebase-apply; do
+  if [ -d "$(git rev-parse --git-path "$rb")" ]; then
+    echo "error: a rebase is in progress in $repo_root — not committing into it." >&2
+    echo "       Retry once on your next write; if that refuses too, leave it." >&2
+    exit 2
+  fi
+done
 
 # Resolve the author email (see header for the order and the reasoning).
 TRACKED_CONFIG="$repo_root/instance.config.json"
