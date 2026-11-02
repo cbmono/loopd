@@ -589,7 +589,9 @@ state, and act only on deltas.
    has no row. `pass` checks only the plugin side; the drafts are your duty.
 
 5. **Reflect merges** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-5-reflect-merges.md`. Gate 2
-   above binds whether or not you read it.
+   above binds whether or not you read it. **So does the session sweep: every full tick
+   runs `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` once, here, whether
+   or not it reads that file** — which says what each line it prints means and where it goes.
 
 6. **Close completed projects (propose only — human-gated)** —
    `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-6-close-projects.md`.

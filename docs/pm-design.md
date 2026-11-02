@@ -798,7 +798,9 @@ turns either off), both clocked from the transcript
 (`startedAt` counts idle days; a `tool_result` is not a new round) and both only for a
 session an open task records. A row with no `kind` or no `state` is never selected — the
 human's interactive session carries no `state`. The IDLE fast path runs it too, and
-`tick-reap.sh` never does: the launcher's reaper answers only for its own tick.
+`tick-reap.sh` never does: the launcher's reaper answers only for its own tick. **The core
+prompt's step-5 pointer names it, not only the step file** — the first 4.3.0 tick reflected
+no merge, never opened `step-5-reflect-merges.md`, and left a reaped tick live (2026-11-02).
 Reclaim's allowlist gained ONE path the same day, `.husky/_/` — husky's generated,
 self-ignoring hook shim, the one entry holding that tree back (the other 27 ignored paths
 were `node_modules`). A path, not the `.husky` component: the rest of `.husky/` is the

@@ -128,6 +128,15 @@ ok "the core carries step 7's own trigger instead" "$(has "$CORE" 'kb-sweep-due.
 ok "…naming the reflect outcome as the other one"  "$(has "$CORE" 'step 5 reflected a merge')" yes
 
 echo
+echo "== a rule every full tick runs sits in the core, not only in a step file =="
+ptr5() { awk '/^5\. \*\*Reflect merges\*\* —/{f=1} /^6\. /{f=0} f' "$CORE"; }
+ok "the core has exactly one step-5 pointer" \
+   "$(grep -c '^5\. \*\*Reflect merges\*\* —' "$CORE" | tr -d ' ')" 1
+ok "…and it names session-sweep.sh" \
+   "$(ptr5 | grep -c 'scripts/session-sweep.sh' | tr -d ' ')" 1
+ok "…for every full tick, read or not" "$(ptr5 | grep -c 'whether' | tr -d ' ')" 2
+
+echo
 echo "== the core tells a tick what to do when the digest cannot answer =="
 ok "any exit but 0 reads ALL of them" "$(has "$CORE" 'read ALL of them')" yes
 ok "…and an empty line means none"    "$(has "$CORE" 'this tick has work for none of them')" yes

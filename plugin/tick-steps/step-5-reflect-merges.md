@@ -57,7 +57,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    and an exit 2, on the task as one `# Notes` line, `worktree retained: <reason>`, and
    never retry around it. Exit 3 is nothing to do.
 
-   **Then sweep this bundle's sessions — once, every tick (the IDLE path of step 0.9 too).**
+   **The session sweep — once, every tick, triggered from the core prompt (its step 5 on a
+   full tick, step 0.9 on an IDLE one), never only from this file.**
    `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` runs `claude stop` on what
    `agent-sessions.sh stop-ids` selects, `background` rows with a `state` only, never the
    running tick's or the lock's session: **dead** — no live pid on the row or in the daemon
