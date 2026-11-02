@@ -32,14 +32,14 @@ ok "CONVENTIONS.md states the rule" "$(has "$REPO/plugin/seed/CONVENTIONS.md" "$
 ok "CONVENTIONS.md names the bundle-side command" \
    "$(has "$REPO/plugin/seed/CONVENTIONS.md" 'scripts/commit-as.sh <role> "<msg>" --stage -- <task-doc>')" yes
 ok "CONVENTIONS.md: retry once, then leave it" \
-   "$(has "$REPO/plugin/seed/CONVENTIONS.md" 'on your next write, then leave it.')" yes
+   "$(has "$REPO/plugin/seed/CONVENTIONS.md" 'or before your final message if there is none, then leave it.')" yes
 for role in software-engineer devops-engineer qa-reviewer; do
   f="$REPO/plugin/agents/$role.md"
   ok "$role.md states the rule" "$(has "$f" "$RULE")" yes
   ok "$role.md: cd <bundle> then commit-as.sh $role" \
      "$(has "$f" "\`cd <bundle>\`, then \`\${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh $role \"<msg>\" --stage -- <task-doc>\`")" yes
   ok "$role.md: retry once on the next write, then leave it" \
-     "$(has "$f" 'retry once on your next write, then leave it.')" yes
+     "$(has "$f" 'retry once on your next write, or before your final message if there is none, then leave it.')" yes
 done
 
 # A bundle: tracked config, a task doc, a remote to rebase against.

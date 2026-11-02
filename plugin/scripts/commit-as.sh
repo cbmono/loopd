@@ -171,7 +171,7 @@ fi
 for rb in rebase-merge rebase-apply; do
   if [ -d "$(git rev-parse --git-path "$rb")" ]; then
     echo "error: a rebase is in progress in $repo_root — not committing into it." >&2
-    echo "       Retry once on your next write; if that refuses too, leave it." >&2
+    echo "       Retry once on your next write, or before your final message; then leave it." >&2
     exit 2
   fi
 done

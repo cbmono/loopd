@@ -949,7 +949,8 @@ above it so none may grow its share.
   one session edited its doc at 15:13 and was still working two hours later. `commit-as.sh`
   refuses outside the bundle (exit 2), so a call from your worktree cannot commit into the
   target repo as your role, and refuses while a rebase is in progress (exit 2): **retry once
-  on your next write, then leave it.** Nothing else commits it for you.
+  on your next write, or before your final message if there is none, then leave it.**
+  Nothing else commits it for you.
 - **A round's final message is a report, not an ask** — `software-engineer`,
   `devops-engineer` and `qa-reviewer`, the roles a tick runs as `claude --bg` sessions.
   It says what exists — the PRs, the criteria tally, the task note you wrote — and ends
