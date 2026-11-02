@@ -106,8 +106,8 @@ echo "== STOP + REPORTED: the sweep stops exactly those, through full, one line 
 rep="$(sweep)"; rc=$?
 ok "the sweep exits 0" "$rc" 0
 ok "claude stop received exactly the ids dead-ids printed" "$(stops)" "$WANT"
-ok "one 'stopped <short> (<age>)' line per stop" "$(grep -cE '^stopped [0-9a-f]{8} \([0-9]+[dhms]\)$' <<<"$rep")" 4
-ok "…naming the age dead-ids gave" "$(grep -c '^stopped 00000d02 (1d)$' <<<"$rep")" 1
+ok "one 'stopped <short> (<age>) dead' line per stop" "$(grep -cE '^stopped [0-9a-f]{8} \([0-9]+[dhms]\) dead$' <<<"$rep")" 4
+ok "…naming the age dead-ids gave" "$(grep -c '^stopped 00000d02 (1d) dead$' <<<"$rep")" 1
 ok "a second sweep finds nothing left to stop" "$(sweep; stops)" ""
 
 echo "== GUARD: what is never stopped =="
