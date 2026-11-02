@@ -329,14 +329,65 @@ done
 # between BSD and GNU, and whether it can allocate a terminal at all depends on how this
 # harness was launched — which made the assertion COUNT drift between runs. python3 is
 # already a hard requirement of the board, so this costs nothing and always runs.
-tty_out() { # <cmd...> -> the command's output, with its stdout on a real terminal
-  ( cd "$ALPHA" && python3 -c 'import pty,sys; sys.exit(pty.spawn(sys.argv[1:]))' "$@" 2>/dev/null )
+# Not pty.spawn: before Python 3.10 (bpo-26228, macOS's /usr/bin/python3 is 3.9) it
+# select()s on an empty fd list once the child and stdin reach EOF, and never returns.
+# This loop stops when the child has exited and the pty is drained, or kills it at the bound.
+TTY_OUT_BOUND="${TTY_OUT_BOUND:-30}"
+tty_out() { # <cmd...> -> the command's output on a real terminal; exit 124 at the bound
+  ( cd "$ALPHA" && python3 -c '
+import os, pty, select, signal, sys, time
+end = time.monotonic() + float(sys.argv[1])
+pid, fd = pty.fork()
+if pid == 0:
+    try:
+        os.execvp(sys.argv[2], sys.argv[2:])
+    finally:
+        os._exit(127)
+out, status, eof = bytearray(), None, False
+while not (eof and status is not None):
+    if status is None:
+        p, st = os.waitpid(pid, os.WNOHANG)
+        status = st if p else None
+    if time.monotonic() > end:
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except OSError:
+            if status is None:
+                os.kill(pid, signal.SIGKILL)  # killpg can land before setsid() in the child
+        if status is None:
+            os.waitpid(pid, 0)
+        sys.exit(124)
+    if eof:
+        time.sleep(0.05)
+    elif select.select([fd], [], [], 0.1)[0]:
+        try:
+            data = os.read(fd, 65536)
+        except OSError:
+            data = b""
+        out += data
+        eof = not data
+    elif status is not None:
+        break
+sys.stdout.buffer.write(out)
+' "$TTY_OUT_BOUND" "$@" 2>/dev/null )
 }
-assert "on a TTY, colour is on by default" "$(has "$ESC" "$(tty_out bash "$PRINT" --width 100)")"
-assert "…and NO_COLOR turns it off"        "$(hasnt "$ESC" "$(NO_COLOR=1 tty_out bash "$PRINT" --width 100)")"
-assert "…while NO_COLOR= (empty) does not" "$(has "$ESC" "$(NO_COLOR= tty_out bash "$PRINT" --width 100)")"
-assert "…and --color always beats NO_COLOR, as documented" \
-  "$(has "$ESC" "$(NO_COLOR=1 tty_out bash "$PRINT" --color always --width 100)")"
+tty_assert() { # <label> <has|hasnt> <cmd...> — a timeout FAILS, naming the bound
+  local label="$1" check="$2" out rc=0; shift 2
+  out="$(tty_out "$@")" || rc=$?
+  if [[ "$rc" == 124 ]]; then assert "$label — tty_out timed out after ${TTY_OUT_BOUND}s" 1
+  else assert "$label" "$("$check" "$ESC" "$out")"; fi
+}
+tty_assert "on a TTY, colour is on by default" has bash "$PRINT" --width 100
+NO_COLOR=1 tty_assert "…and NO_COLOR turns it off" hasnt bash "$PRINT" --width 100
+NO_COLOR= tty_assert "…while NO_COLOR= (empty) does not" has bash "$PRINT" --width 100
+NO_COLOR=1 tty_assert "…and --color always beats NO_COLOR, as documented" has bash "$PRINT" --color always --width 100
+BOUNDED="$( TTY_OUT_BOUND=1; s=$SECONDS; tty_assert "sleeper" has sleep 20; echo "took=$((SECONDS-s))" )"
+assert "a tty_out past its bound FAILS, naming the timeout" "$(has 'FAIL  sleeper — tty_out timed out after 1s' "$BOUNDED")"
+assert "…and returns at the bound, not when the command does" "$(yes_if grep -qE '^took=[0-3]$' <<<"$BOUNDED")"
+TTY_OUT_BOUND=1 tty_out bash -c 'trap "" HUP; sleep 20 & echo $! >"$1"; wait' _ "$TMP/tty-desc.pid" >/dev/null || true
+desc_gone() { local i; for i in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$1" 2>/dev/null || return 0; sleep 0.1; done; return 1; }
+assert "…and kills the command's descendants too, not only the command" \
+  "$(yes_if desc_gone "$(cat "$TMP/tty-desc.pid")")"
 
 echo
 echo "== print-board: a narrow terminal degrades, and no NUMBER is ever clipped =="
