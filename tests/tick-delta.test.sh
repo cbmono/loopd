@@ -150,7 +150,7 @@ GIT -C "$INST" add -A && GIT -C "$INST" commit -qm dispatch
 WITH record
 ok "an in-progress task with no session: is a DELTA against its own record" "$(run check)" "rc:1 DELTA: proje"
 S9=99999999-aaaa-bbbb-cccc-000000000009
-printf '#!/usr/bin/env bash\necho %s\n' "'[{\"id\":\"x\",\"sessionId\":\"$S9\",\"state\":\"working\",\"status\":\"busy\",\"pid\":1}]'" > "$BIN/claude"
+printf '#!/usr/bin/env bash\necho %s\n' "'[{\"id\":\"x\",\"sessionId\":\"$S9\",\"state\":\"working\",\"status\":\"busy\",\"pid\":$$}]'" > "$BIN/claude"
 chmod +x "$BIN/claude"; printf 'session: %s\n' "$S9" >> "$INST/projects/proj-a/tasks/t1.md"
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm session; WITH record
 ok "an in-progress task with an unchanged busy session is IDLE" "$(run check)" "rc:0 IDLE: finger"
@@ -220,7 +220,7 @@ prj 7 OPEN abc1234 NONE; WITH record
 echo "== a recorded role session's state, from ONE claude agents listing =="
 # The `claude` stub answers from $CLDIR/states (`<sessionId> <state>` lines); `fail` makes it
 # exit 1, `junk` print non-JSON, `raw` print its own contents, `hang` outlive the bound. Each call is logged to $CLDIR/calls.
-CLDIR="$TMP/claude"; mkdir -p "$CLDIR"
+CLDIR="$TMP/claude"; mkdir -p "$CLDIR"; export LIVEPID=$$
 cat > "$BIN/claude" <<'EOS'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$CLDIR/calls"
@@ -228,7 +228,7 @@ printf '%s\n' "$*" >> "$CLDIR/calls"
 [ -e "$CLDIR/junk" ] && { echo 'not json'; exit 0; }
 [ -e "$CLDIR/raw" ] && { cat "$CLDIR/raw"; exit 0; }
 [ -e "$CLDIR/hang" ] && exec sleep 30
-awk 'BEGIN{printf "["} {printf "%s{\"id\":\"x%d\",\"sessionId\":\"%s\",\"state\":\"%s\",\"pid\":1}", (NR>1?",":""), NR, $1, $2} END{print "]"}' "$CLDIR/states"
+awk 'BEGIN{printf "["} {printf "%s{\"id\":\"x%d\",\"sessionId\":\"%s\",\"state\":\"%s\",\"pid\":%d}", (NR>1?",":""), NR, $1, $2, ENVIRON["LIVEPID"]} END{print "]"}' "$CLDIR/states"
 EOS
 chmod +x "$BIN/claude"
 S1=11111111-aaaa-bbbb-cccc-000000000001; S2=22222222-aaaa-bbbb-cccc-000000000002; S0=00000000-aaaa-bbbb-cccc-000000000000

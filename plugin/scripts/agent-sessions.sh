@@ -6,7 +6,8 @@
 #                                                (working|blocked|done|gone, …) on stdout
 #   agent-sessions.sh states [--timeout <s>] <session-id>...
 #                                             -> `<id> <state> [<status>]` per id from ONE listing,
-#                                                bounded (20s); exit 2 on a timeout or unreadable rows
+#                                                bounded (20s), `dead` for a working/blocked row with no
+#                                                live pid (row or roster); exit 2 on a timeout or unreadable rows
 #   agent-sessions.sh listing [--timeout <s>] -> that listing's JSON, validated as `states` does;
 #                                                `AB_SESSIONS_LISTING=<file>` makes every mode read
 #                                                one saved listing instead of calling the CLI
@@ -56,7 +57,7 @@
 # tests/resume-full-id.test.sh, tests/blocked-recorded.test.sh and tests/dead-session-sweep.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,50p' "$0" >&2; exit 2; }
+usage() { sed -n '3,51p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 command -v python3 >/dev/null 2>&1 || {
@@ -167,12 +168,31 @@ if sys.argv[1] == "listing":
     sys.stdout.buffer.write(raw)
     sys.exit(0)
 word = lambda v: re.sub(r"[^A-Za-z0-9_-]", "", str(v)) or "unknown"
+def alive(pid):
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 1:
+        return False
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+try:
+    roster = json.load(open(os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"),
+                                         "daemon", "roster.json"))).get("workers") or {}
+    roster = {str(w.get("sessionId")): w.get("pid") for w in roster.values() if isinstance(w, dict)}
+except Exception:
+    roster = {}
 for want in sys.argv[3:]:
     out = ["gone"]
     for r in rows:
         sid = r["sessionId"]
         if want == r.get("id") or want == sid or sid.split("-")[0] == want:
             out = [word(r.get("state") or r.get("status"))] + ([word(r["status"])] if r.get("state") and r.get("status") else [])
+            # The registry keeps saying `working` after its process dies; only a pid says otherwise.
+            if out[0] in ("working", "blocked") and not (alive(r.get("pid")) or alive(roster.get(sid))):
+                out[0] = "dead"
             break
     print(want, *out)
 PY
@@ -616,6 +636,6 @@ PY
     echo "copy $uuid"
     ;;
 
-  -h|--help) sed -n '3,50p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,51p' "$0"; exit 0 ;;
   *) usage ;;
 esac

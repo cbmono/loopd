@@ -130,6 +130,8 @@ nosess "an in-progress task with no session:" 'task task-001-run in-progress - 1
 nosess "an in-progress task whose session is gone" 'BASE="$(grep -v a1a10001 <<<"$BASE")"; rows'
 nosess "an in-progress task whose session is done" 'BASE="${BASE/working busy/done busy}"; rows'
 nosess "an in-progress task whose session is stopped" 'BASE="${BASE/working busy/stopped busy}"; rows'
+nosess "an in-progress task whose session's process died" \
+  'rows; python3 -c "import json,sys; p=sys.argv[1]; r=json.load(open(p)); [x.pop(\"pid\") for x in r if x[\"id\"]==\"a1a10001\"]; json.dump(r,open(p,\"w\"))" "$FIXTURE"'
 
 echo "== UNKNOWN MERGE STATE is fingerprinted as-is =="
 base; prj 1 abc1234 SUCCESS UNKNOWN UNKNOWN; rec
