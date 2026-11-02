@@ -48,8 +48,11 @@ cap="$(bash "$here/resolve-max-agents.sh" --instance "$inst" 2>/dev/null)" || ca
 [ "$inflight" -lt "$cap" ] || not_due "$inflight agent(s) in flight at the cap of $cap"
 
 stamp="$inst/$AB_KB_STAMP"; ref=""
+# A bundle whose .gitignore predates the stamp gets no cache: an untracked stamp is a dirty tree.
+ignored() { ! git -C "$inst" rev-parse --git-dir >/dev/null 2>&1 \
+  || { git -C "$inst" check-ignore -q "$AB_KB_STAMP" && git -C "$inst" check-ignore -q "$AB_KB_STAMP.$$"; }; }
 # The reference is cut BEFORE the walk, so a doc edited while it runs is newer than the stamp.
-if [ -d "$inst/knowledge" ] && mkdir -p "$inst/$AB_DIR" 2>/dev/null \
+if [ -d "$inst/knowledge" ] && ignored && mkdir -p "$inst/$AB_DIR" 2>/dev/null \
    && date -u +%Y-%m-%dT%H:%M:%SZ > "$stamp.$$" 2>/dev/null; then
   ref="$stamp.$$"; trap 'rm -f "$ref"' EXIT
   [ -f "$stamp" ] && [ "$stamp" -nt "$ref" ] && rm -f "$stamp"

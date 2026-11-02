@@ -201,6 +201,11 @@ ok "a clean check wrote the stamp" "$([ -f "$GI/.loopd/.kb-check-stamp" ] && ech
 ok "  and git status --porcelain is empty" "$(cd "$GI" && git status --porcelain | wc -l | tr -d ' ')" 0
 ok "  because the seed ignores it (not because it is absent)" \
   "$(cd "$GI" && git check-ignore -q .loopd/.kb-check-stamp && git check-ignore -q .loopd/.kb-check-stamp.123 && echo yes || echo no)" yes
+OLD="$TMP/oldignore"; mkbundle "$OLD" 4; printf '.env\n' > "$OLD/.gitignore"
+( cd "$OLD" && git init -q . && git add -A && git -c user.name=t -c user.email=t@example.com commit -qm init )
+due "$OLD" --dispatched 0
+ok "a .gitignore without the line => no cache, still answers" "$RC" 1
+ok "  and no stamp dirties the tree" "$(cd "$OLD" && git status --porcelain | wc -l | tr -d ' ')" 0
 # A copy of the probe beside a stand-in build-kb-index.sh, so the walk can edit a doc mid-flight.
 RACE="$TMP/race"; mkdir -p "$RACE"; cp "$DUE" "$RACE/kb-sweep-due.sh"
 for s in resolve-max-agents.sh resolve-config.sh bundle-paths.sh plugin-name.sh; do
