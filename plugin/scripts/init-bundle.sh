@@ -2594,10 +2594,12 @@ if [ "$FIRST_STAMP" = no ] && [ -z "${LOOPD_INIT_PASS:-}${AI_BRIDGE_INIT_PASS:-}
   #
   # SPACE-SEPARATED, NOT NEWLINE. `awk -v` refuses a value containing a newline
   # ("newline in string") and the whole tidy then silently did nothing. Every path here is
-  # a resolver constant, so none can contain a space.
+  # a resolver constant or a literal, so none can contain a space. `/board.html` stays out:
+  # its trailing copy must outrank an older `!/board.html`, so dropping it would un-ignore.
   if [ -f "$gi" ]; then
     gi_managed="/$AB_LOCK /$AB_LOCK_CLAIM /$AB_STATE_DIR /$AB_ANSWER_LATER /$AB_BOARD_OTHERS"
     gi_managed="$gi_managed /$AB_BOARD_DIR/ /$AB_AWAITING /$AB_SNAPSHOT /$AB_DIR/kb.git/ /$AB_DIR/kb-src/"
+    gi_managed="$gi_managed /$AB_KB_STAMP* /$AB_RECEIPTS/ /$AB_DIR/refresh/ /repos/ .env instance.config.local.json"
     tmp="$gi.tmp.$$"
     if awk -v managed="$gi_managed" '
          BEGIN { n = split(managed, m, " "); for (i = 1; i <= n; i++) if (m[i] != "") mine[m[i]] = 1 }
