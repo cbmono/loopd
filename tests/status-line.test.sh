@@ -106,10 +106,10 @@ else                  HM="$(date -d 2026-09-13T16:41:05Z '+%H:%M' 2>/dev/null)";
 echo
 echo "== 1. the whole line, character for character =="
 ok "the healthy bundle" "$(plain "$INST")" \
-   "loopd · 2 in progress · 0 background agents · 3 need you · last tick $HM"
+   "loopd · 2 in progress · 0 working · 0 idle · 0 dead · 3 need you · last tick $HM"
 : > "$INST/$AB_LOCK"
 ok "…and with a tick holding the lock" "$(plain "$INST")" \
-   "loopd · 2 in progress · 0 background agents · 3 need you · lock held · last tick $HM"
+   "loopd · 2 in progress · 0 working · 0 idle · 0 dead · 3 need you · lock held · last tick $HM"
 rm -f "$INST/$AB_LOCK"
 ok "exactly one line of output" "$(plain "$INST" | wc -l | tr -d ' ')" 1
 
@@ -120,7 +120,7 @@ ok 'an `open:` TICK is still the last tick (it is the newest)' \
 printf '{"counts":{"awaiting":99}}\n' > "$INST/$AB_SNAPSHOT"
 printf 'recorded: 2001-01-01T00:00:00Z\n'    > "$INST/$AB_STATE_DIR"
 ok "SNAPSHOT.json and .tick-state change nothing" "$(plain "$INST")" \
-   "loopd · 2 in progress · 0 background agents · 3 need you · last tick $HM"
+   "loopd · 2 in progress · 0 working · 0 idle · 0 dead · 3 need you · last tick $HM"
 ok "…and neither is named in the source" \
    "$(grep -c 'SNAPSHOT\.json\|\.tick-state' "$SL" | tr -d ' ')" 2
 ok "…which is twice, in comments saying why not" \
@@ -133,10 +133,10 @@ D="$TMP/d1"; mk "$D"; rm -f "$D/$AB_AWAITING"
 ok "no AWAITING.md ⇒ the queue is off, so the segment is GONE" \
    "$(plain "$D" | grep -c 'need you\|AWAITING' | tr -d ' ')" 0
 ok "…and the rest of the line is untouched" "$(plain "$D")" \
-   "loopd · 2 in progress · 0 background agents · last tick $HM"
+   "loopd · 2 in progress · 0 working · 0 idle · 0 dead · last tick $HM"
 D="$TMP/d1b"; mk "$D"; printf '{ "org": "acme", "awaiting":\n false }\n' > "$D/instance.config.json"
 ok "awaiting: false ⇒ the segment is GONE, as for an absent file" "$(plain "$D")" \
-   "loopd · 2 in progress · 0 background agents · last tick $HM"
+   "loopd · 2 in progress · 0 working · 0 idle · 0 dead · last tick $HM"
 D="$TMP/d2"; mk "$D"; rm -f "$D/$AB_LEDGER"
 ok "no log.md ⇒ the time is unknown"       "$(plain "$D" | sed 's/.*· //')" "last tick ?"
 D="$TMP/d3"; mk "$D"; printf '# Log\n\nnothing yet\n' > "$D/$AB_LEDGER"
@@ -165,7 +165,7 @@ fi
 chmod 644 "$D/projects/proj-a/tasks/task-001.md"
 D="$TMP/d10"; mk "$D"
 if unreadable "$D/$AB_AWAITING"; then
-  UNREAD="$(plain "$D" | awk -F ' · ' '{ print $4 }')"
+  UNREAD="$(plain "$D" | awk -F ' · ' '{ print $6 }')"
   ok "an unreadable AWAITING.md SPEAKS — it is arrived at, not chosen" \
      "$UNREAD" "${AB_AWAITING##*/} unreadable — chmod +r $AB_AWAITING"
   ok "…and the repair is in the LINE, not in a doc the operator must go find" \
@@ -242,29 +242,32 @@ ok "an off queue paints nothing, because it is not a fault" \
    "$(printf '%s' "$(run --instance "$TMP/d1" --color always)" | grep -c 'need you\|unreadable' | tr -d ' ')" 0
 
 # RUNNING AGENTS ARE THE BRAND'S GREEN, 24-bit whatever tier (owner, 2026-10-18). The agents
-# cache is seeded directly: `<epoch> <running> <no process>`, keyed as status-line.sh keys it.
+# cache is seeded directly: `<epoch> v2 <working> <idle> <dead>`, keyed as status-line.sh keys it.
 GREEN='38;2;118;214;164'
 seed_agents() { # <bundle> <cache line after the epoch>
   local f; f="$XDG_CACHE_HOME/loopd/agents-$(printf '%s' "$1" | cksum | cut -d' ' -f1)"
   mkdir -p "${f%/*}"; printf '%s %s\n' "$(date +%s)" "$2" > "$f"
 }
-agents_sgr() { sgr_of "$(run --instance "$1" --color always)" 'background agents'; }
+agents_sgr() { sgr_of "$(run --instance "$1" --color always)" "${2:-working}"; }
 D="$TMP/g1"; mk "$D"
-seed_agents "$D" "2 0";       ok "running agents are the brand's green"       "$(agents_sgr "$D")" "$GREEN"
+seed_agents "$D" "v2 2 0 0";  ok "working agents are the brand's green"       "$(agents_sgr "$D")" "$GREEN"
 ok "…and that is the only segment wearing it" \
    "$(run --instance "$D" --color always | grep -oF "$GREEN" | wc -l | tr -d ' ')" 1
-seed_agents "$D" "0 0";       ok "zero running stays dim, not green"           "$(agents_sgr "$D")" 2
-seed_agents "$D" "2 3";       ok "live agents stay green beside dead ones"    "$(agents_sgr "$D")" "$GREEN"
+seed_agents "$D" "v2 0 0 0";  ok "zero working stays dim, not green"           "$(agents_sgr "$D")" 2
+ok "…and so do zero idle and zero dead" "$(agents_sgr "$D" '0 idle')/$(agents_sgr "$D" '0 dead')" 2/2
+seed_agents "$D" "v2 2 1 3";  ok "working agents stay green beside dead ones" "$(agents_sgr "$D")" "$GREEN"
 ok "…and a session with no process is its own pink \`dead\`" \
    "$(sgr_of "$(run --instance "$D" --color always)" '3 dead')" 95
-seed_agents "$D" "2 0";       ok "no dead session, no \`dead\` segment" \
-   "$(run --instance "$D" --color never | grep -c 'dead' | tr -d ' ')" 0
-seed_agents "$D" "garbage";   ok "an unknown count stays pink"                 "$(agents_sgr "$D")" 95
+ok "the counts are working · idle · dead, in that order" \
+   "$(run --instance "$D" --color never | awk -F ' · ' '{print $3 " · " $4 " · " $5}')" "2 working · 1 idle · 3 dead"
+seed_agents "$D" "garbage";   ok "an unknown count stays pink"                 "$(agents_sgr "$D" '? working')" 95
+seed_agents "$D" "2 3";       ok "an older version's two counts read ?, never three" \
+   "$(run --instance "$D" --color never | awk -F ' · ' '{print $3}')" "? working"
 NG="$TMP/no-green"; cp -R "$REPO/plugin/scripts" "$NG"
-sed 's/"\$C_GREEN")" "\$a_run background/"$C_BLUE")" "$a_run background/' "$SL" > "$NG/status-line.sh"
-seed_agents "$D" "2 0"
+sed 's/"\$C_GREEN")" "\$a_work working/"$C_BLUE")" "$a_work working/' "$SL" > "$NG/status-line.sh"
+seed_agents "$D" "v2 2 0 0"
 ok "…mutant: painting it blue again is caught" \
-   "$(sgr_of "$(SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NG/status-line.sh" --instance "$D" --color always </dev/null 2>/dev/null)" 'background agents')" 94
+   "$(sgr_of "$(SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NG/status-line.sh" --instance "$D" --color always </dev/null 2>/dev/null)" 'working')" 94
 
 echo
 echo "== 8. 3/4-bit but the green, all codes from cli-theme.sh, no terminfo probe =="
@@ -277,7 +280,7 @@ cp "$SL" "$REPO/plugin/scripts/bundle-paths.sh" "$NT/"
 # Its own cache: this copy has no agent-sessions.sh, so it caches `agents ?` for $INST.
 ok "an unsourceable theme means no colour, never no line" \
    "$(XDG_CACHE_HOME="$TMP/nt-cache" SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NT/status-line.sh" --instance "$INST" --color always </dev/null 2>/dev/null)" \
-   "$(plain "$INST" | sed 's/0 background agents/? background agents/')"
+   "$(plain "$INST" | sed 's/0 working · 0 idle · 0 dead/? working · ? idle · ? dead/')"
 ok "no \`38;5;\` (256-colour) anywhere"  "$(grep -c '38;5;' "$SL" | tr -d ' ')" 0
 ok "no \`38;2;\` (truecolor) anywhere"   "$(grep -c '38;2;' "$SL" | tr -d ' ')" 0
 ok "COLORTERM is never asked"            "$(grep -v '^[[:space:]]*#' "$SL" | grep -c 'COLORTERM' | tr -d ' ')" 0
@@ -295,7 +298,7 @@ echo "== 10. the session JSON on stdin: drained, and read only for a directory =
 SJ="$(printf '{"session_id":"x","workspace":{"current_dir":"%s"},"cost":{"total_cost_usd":1.5}}' "$INST")"
 ok "\`current_dir\` locates the bundle" \
    "$(printf '%s' "$SJ" | SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" --color never 2>/dev/null)" \
-   "loopd · 2 in progress · 0 background agents · 3 need you · last tick $HM"
+   "loopd · 2 in progress · 0 working · 0 idle · 0 dead · 3 need you · last tick $HM"
 ok "…and --instance wins over it" \
    "$(printf '%s' "$SJ" | SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" --instance "$TMP/d5" --color never 2>/dev/null \
       | sed 's/.*loopd · \([^·]*in progress\) ·.*/\1/')" "0 in progress"

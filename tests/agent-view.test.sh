@@ -7,11 +7,13 @@
 #   * IT READS `claude agents --json`, NEVER THE BARE FORM. The stub refuses the bare form
 #     the way the real CLI does without a TTY, so a view that dropped `--json` goes unknown.
 #   * A FAILING READ IS UNKNOWN, NEVER ZERO — a failing `claude`, malformed JSON, no
-#     `claude` at all: exit 2 and no count from the reader, `? background agents` on the status line.
+#     `claude` at all: exit 2 and no count from the reader, `? working` on the status line.
 #   * A SESSION IS ATTRIBUTED BY A JOIN ON THE RECORDED `worktree:`, and a cwd in this
 #     bundle that matches no task is rendered `unattributed`, never dropped or guessed.
 #   * PROCESS, NOT REGISTRY. A `blocked` row with no live pid is `none` — the registry
 #     claims it, nothing runs it — and is counted apart from the ones that do run.
+#   * ONE BUCKET PER ROW: no live pid ⇒ dead, else `status: busy` ⇒ working, `idle` ⇒ idle,
+#     else the `state` fallback (`working` ⇒ working). `working` names each busy one's task.
 # Every `claude` here is a PATH stub; no real session is read. Exit 0 pass, 1 fail, 2 setup.
 set -uo pipefail
 
@@ -98,8 +100,8 @@ ok "a terminal state with no process is not listed" "$(row dddd0004 | wc -l | tr
 ok "…a terminal state WITH a live process is" "$(row abab0007 | awk '{print $2, $3}')" "done pid"
 ok "running rows sort above the ones with no process" \
    "$(view | sed -n '2p' | grep -c "pid $LIVE" | tr -d ' ')" 1
-ok "the tally" "$(view | tail -1)" "2 running · 3 no process · 1 ended, not listed"
-ok "--summary is the same two counts" "$(view --summary)" "2 3"
+ok "the tally" "$(view | tail -1)" "1 working · 1 idle · 3 dead · 1 ended, not listed"
+ok "--summary is the same three counts" "$(view --summary)" "1 1 3"
 
 cat > "$TMP/hostile.json" <<JSON
 [ {"id":"\u001b]0;x\u0007ab","kind":"background","cwd":"$WT/\u001b[2Jesc","state":"blocked\u001b[31m"},
@@ -114,7 +116,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 printf '[{"id":"zw000001","kind":"background","cwd":"%s/t2","state":"done\\u200b"}]' "$WT" > "$TMP/zw.json"
 ok "a state that only LOOKS terminal is classified raw, as in-flight does" \
-   "$(FIXTURE="$TMP/zw.json" view --summary)" "0 1"
+   "$(FIXTURE="$TMP/zw.json" view --summary)" "0 0 1"
 
 echo "== 4. a failing read is UNKNOWN, never zero =="
 OUT="$(FAIL=1 view)"; RC=$?
@@ -130,18 +132,66 @@ ok "a JSON object, not a list ⇒ exit 2" "$(FIXTURE="$TMP/obj.json" view --summ
 OUT="$(PATH="/usr/bin:/bin" bash "$SESS" view "$B" --summary 2>/dev/null)"; RC=$?
 ok "no claude on PATH ⇒ exit 2, no count" "$RC:${OUT:-<empty>}" "2:<empty>"
 printf '[]' > "$TMP/empty.json"
-ok "…while an EMPTY list is a real zero" "$(FIXTURE="$TMP/empty.json" view --summary)" "0 0"
+ok "…while an EMPTY list is a real zero" "$(FIXTURE="$TMP/empty.json" view --summary)" "0 0 0"
+
+echo "== 4b. precedence: one bucket per row, dead before status before state =="
+cat > "$TMP/prec.json" <<JSON
+[ {"id":"b0000001","sessionId":"b0000001-x","kind":"background","cwd":"$WT/t1","pid":$LIVE,"status":"busy","state":"done"},
+  {"id":"b0000002","sessionId":"b0000002-x","kind":"background","cwd":"$WT/t1","pid":$LIVE,"status":"idle","state":"working"},
+  {"id":"b0000003","sessionId":"b0000003-x","kind":"background","cwd":"$WT/t1","status":"busy","state":"working"},
+  {"id":"b0000004","sessionId":"b0000004-x","kind":"background","cwd":"$WT/t1","pid":$LIVE,"state":"working"},
+  {"id":"b0000005","sessionId":"b0000005-x","kind":"background","cwd":"$WT/t1","pid":$LIVE,"state":"blocked"},
+  {"id":"b0000006","sessionId":"b0000006-x","kind":"background","cwd":"$WT/t1","status":"busy","state":"done"},
+  {"id":"b0000007","sessionId":"b0000007-x","cwd":"$WT/t1","pid":$LIVE,"status":"busy"} ]
+JSON
+one() { printf '[%s]' "$(grep "\"$1\"" "$TMP/prec.json" | sed 's/^\[ *//; s/,$//; s/ *\]$//')" > "$TMP/one.json"
+        FIXTURE="$TMP/one.json" view --summary; }
+ok "live pid, status busy (state done) ⇒ working"    "$(one b0000001)" "1 0 0"
+ok "live pid, status idle (state working) ⇒ idle"    "$(one b0000002)" "0 1 0"
+ok "status busy, NO pid ⇒ dead"                      "$(one b0000003)" "0 0 1"
+ok "no status, state working ⇒ working (fallback)"   "$(one b0000004)" "1 0 0"
+ok "no status, state blocked ⇒ idle (fallback)"      "$(one b0000005)" "0 1 0"
+ok "busy but terminal with no pid stays dropped"     "$(one b0000006)" "0 0 0"
+ok "a row with no kind is counted, as today"         "$(one b0000007)" "1 0 0"
+ok "all seven: each row in exactly one bucket"       "$(FIXTURE="$TMP/prec.json" view --summary)" "3 2 1"
+cat > "$B/projects/p/tasks/task-004-open.md" <<EOF
+---
+type: Task
+status: in-review
+session: b0000004
+---
+EOF
+cat > "$B/projects/p/tasks/task-005-closed.md" <<EOF
+---
+type: Task
+status: done
+session: b0000001-x
+---
+EOF
+cat > "$B/projects/p/tasks/task-006-full.md" <<EOF
+---
+type: Task
+status: in-progress
+session: b0000007-x
+---
+EOF
+W="$(FIXTURE="$TMP/prec.json" PATH="$P" bash "$SESS" working "$B" 2>/dev/null | sort | tr '\n' ';')"
+ok "working: short id ⇒ its open task, full uuid too, done task ⇒ unrecorded" "$W" \
+   "b0000001 unrecorded;b0000004 task-004-open;b0000007 task-006-full;"
+OUT="$(FAIL=1 PATH="$P" bash "$SESS" working "$B" 2>/dev/null)"; RC=$?
+ok "working: a failing read ⇒ exit 2, no line" "$RC:${OUT:-<empty>}" "2:<empty>"
+rm -f "$B/projects/p/tasks/task-00[456]-"*.md
 
 echo "== 5. the status line's agents segment =="
 sl() { rm -rf "$XDG_CACHE_HOME"; PATH="$P" bash "$SL" --instance "$B" --color "${C:-never}" </dev/null 2>/dev/null; }
-seg() { awk -F ' · ' '{ s = $3; if ($4 ~ / dead$/) s = s " · " $4; print s }'; }
-ok "running and no-process, side by side" "$(sl | seg)" "2 background agents · 3 dead"
-ok "a failing read renders ?, never 0"    "$(FAIL=1 sl | seg)" "? background agents"
-ok "…and so does malformed JSON"          "$(FIXTURE="$TMP/bad.json" sl | seg)" "? background agents"
-ok "an empty list is 0 running"           "$(FIXTURE="$TMP/empty.json" sl | seg)" "0 background agents"
+seg() { awk -F ' · ' '{ print $3 " · " $4 " · " $5 }'; }
+ok "working, idle and dead, side by side" "$(sl | seg)" "1 working · 1 idle · 3 dead"
+ok "a failing read renders ?, never 0"    "$(FAIL=1 sl | seg)" "? working · ? idle · ? dead"
+ok "…and so does malformed JSON"          "$(FIXTURE="$TMP/bad.json" sl | seg)" "? working · ? idle · ? dead"
+ok "an empty list is three zeros"         "$(FIXTURE="$TMP/empty.json" sl | seg)" "0 working · 0 idle · 0 dead"
 ok "the line is still one line"           "$(sl | wc -l | tr -d ' ')" 1
 sgr() { head -n1 <<<"$(printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p')"; }
-ok "unknown is a warning, so pink"        "$(sgr "$(C=always FAIL=1 sl)" '? background agents')" 95
+ok "unknown is a warning, so pink"        "$(sgr "$(C=always FAIL=1 sl)" '? working')" 95
 ok "a session with no process is pink"    "$(sgr "$(C=always sl)" '3 dead')" 95
 
 echo "== 6. the read is cached and shared, so N sessions do not each pay for it =="
@@ -149,15 +199,25 @@ rm -rf "$XDG_CACHE_HOME"; : > "$CALLS"
 for _ in 1 2 3; do PATH="$P" bash "$SL" --instance "$B" --color never </dev/null >/dev/null 2>&1; done
 ok "three renders inside the TTL ⇒ one claude call" "$(wc -l < "$CALLS" | tr -d ' ')" 1
 CF="$(head -1 <<<"$(ls "$XDG_CACHE_HOME"/loopd/agents-* 2>/dev/null)")"
-printf '1 9 9\n' > "$CF"; : > "$CALLS"
+ok "the cache line is tagged v2" "$(awk '{print $2, NF}' "$CF")" "v2 5"
+printf '1 v2 9 9 9\n' > "$CF"; : > "$CALLS"
 ok "a stale cache is re-read, not shown" \
-   "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "2 background agents · 3 dead"
+   "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "1 working · 1 idle · 3 dead"
+printf '%s 2 3\n' "$(date +%s)" > "$CF"
+ok "a fresh two-count line from an older version is unknown" \
+   "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "? working · ? idle · ? dead"
+printf '%s 2 3 4\n' "$(date +%s)" > "$CF"
+ok "…and three untagged counts are not read as v2" \
+   "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "? working · ? idle · ? dead"
 printf '%s garbage\n' "$(date +%s)" > "$CF"
 ok "a fresh but malformed cache is unknown, not a number" \
-   "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "? background agents"
+   "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "? working · ? idle · ? dead"
+printf '%s v2 1 2 3 4\n' "$(date +%s)" > "$CF"
+ok "a v2 line with four counts is unknown" \
+   "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "? working · ? idle · ? dead"
 ok "an unwritable cache still renders" \
    "$(XDG_CACHE_HOME=/dev/null/x PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" \
-   "2 background agents · 3 dead"
+   "1 working · 1 idle · 3 dead"
 
 echo "== 7. the mutants: the assertions above discriminate =="
 # A copy of the whole scripts dir, so a mutant still finds its siblings.
@@ -166,7 +226,10 @@ sed 's/claude agents --json --all/claude agents --all/' "$SESS" > "$M"
 ok "dropping --json makes the read unknown" "$(PATH="$P" bash "$M" view "$B" --summary >/dev/null 2>&1; echo $?)" 2
 sed 's/^    if alive(pid):$/    if pid or alive(pid):/' "$SESS" > "$M"
 ok "keying on pid PRESENCE counts the dead pid as running" \
-   "$(PATH="$P" bash "$M" view "$B" --summary 2>/dev/null)" "3 2"
+   "$(PATH="$P" bash "$M" view "$B" --summary 2>/dev/null)" "1 2 2"
+sed 's/if st == "busy" or (st != "idle" and state == "working"):/if state == "working":/' "$SESS" > "$M"
+ok "reading state before status makes the idle row working" \
+   "$(PATH="$P" FIXTURE="$TMP/prec.json" bash "$M" view "$B" --summary 2>/dev/null)" "2 3 1"
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

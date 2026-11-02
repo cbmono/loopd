@@ -584,8 +584,9 @@ same haiku effect, measured with the cheapest model.
 
 **The in-session view, and why it asks the process rather than the registry.** Detaching
 emptied the in-session agent panel; `agent-sessions.sh view <bundle>` and the status line's
-`N background agents · M dead` segments replace it with a reader, and change nothing about
-the spawn. The status line won over the board because it is the only one of the two inside
+`N working · M idle · K dead` segments replace it with a reader, and change nothing about
+the spawn. A row with no live pid is dead whatever its `status`; a live one is working on
+`status: busy`, idle on `idle`, and falls back to `state` only when `status` is absent. The status line won over the board because it is the only one of the two inside
 the session; the board is a browser page, and live rows would put a worktree path — on
 `write-snapshot.sh`'s never-publish list — into a publishable snapshot. Its cost is one
 `claude agents --json` (~150 ms), so the answer is cached per bundle for 10 seconds and

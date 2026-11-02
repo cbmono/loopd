@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 #
 # whats-up.sh — reprint AWAITING.md's rows as a numbered `Needs you:` block, from the
-# instance root. Reads that file and `tick-lock.sh status`, nothing else: no task document,
-# no `gh`, no `git`, so it never becomes a second status view (docs/conventions.md #3).
+# instance root, and end every output with one `working:` line. Reads that file,
+# `tick-lock.sh status` and `agent-sessions.sh working` (the owner's ask, 2026-11-02: which
+# agents are working, on which task), nothing else: no task document of its own, no `gh`, no
+# `git`, so it never becomes a second status view (docs/conventions.md #3).
 #
 # Exit: 0 printed (`awaiting: false` or an absent file is off; never created here) · 2 not an
 # instance root · 3 AWAITING.md unreadable or not a file. Backs /<plugin>:whats-up; verified by
@@ -11,7 +13,20 @@ set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$here/bundle-paths.sh" || exit 2
 
+# On EXIT, so no path that prints can end without it. Unknown is never `none`.
+working_line() {
+  local w
+  if [ -z "${bundle:-}" ]; then echo "working: unknown — not an instance root"; return; fi
+  w="$(bash "$here/agent-sessions.sh" working . </dev/null 2>/dev/null)" \
+    || { echo "working: unknown — the session list could not be read"; return; }
+  if [ -z "$w" ]; then echo "working: none"
+  else echo "working: $(printf '%s\n' "$w" | awk '{ printf "%s%s", (NR > 1 ? ", " : ""), $0 }')"; fi
+}
+trap working_line EXIT
+
+bundle=""
 ab_is_bundle . || { echo "whats-up: run from a control-panel instance root (instance.config.json)."; exit 2; }
+bundle=1
 f="$AB_AWAITING"
 
 if ! ab_awaiting_on .; then
