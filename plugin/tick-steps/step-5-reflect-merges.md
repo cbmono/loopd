@@ -70,10 +70,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    is older than `maxIdleMinutes` (absent ⇒ 120); **busy** — one whose last text user turn
    is older than `maxBgRoundMinutes` (absent ⇒ 1440), stopped through
    `session-handoff.sh --busy`, which files a `👉 do` hand-off. `0` turns either bound off.
-   At most 20 a run, oldest first; the rest print `deferred` and are next run's. Carry every
-   `stopped`, `handed-off`, `stop-failed` and `deferred` line onto your `log.md` close
-   summary; a `stop-failed` is not retried this tick and never stopped by hand. Exit 2
-   stopped nothing: one line in the tick report.
+   At most 20 a run, oldest first; the rest print `deferred` and are next run's. What the
+   tick does with each line it prints is the core prompt's step 5.
 
    **The retry is the one time step 5 revisits a `done` task.** A `done` task whose
    recorded `worktree:` is still on disk and whose `# Notes` hold no `worktree retained:`

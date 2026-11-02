@@ -166,7 +166,8 @@ rm -f "$TMP/refuse"
 
 echo "== the tick runs it from step 5 and carries the lines to its close =="
 ok "step 5 names session-sweep.sh" "$(grep -c 'scripts/session-sweep.sh' "$STEP5" | tr -d ' ')" 1
-ok "…and its close summary on log.md" "$(grep -A12 'session-sweep.sh' "$STEP5" | grep -c 'log.md')" 1
+ok "…and the core carries its lines to log.md" \
+   "$(awk '/^5\. \*\*Reflect merges\*\* —/{f=1} /^6\. /{f=0} f' "$REPO/plugin/agents/project-manager.md" | grep -c 'log.md')" 1
 
 echo "== the mutants: the guards above discriminate =="
 cp -R "$REPO/plugin/scripts" "$TMP/scripts"; M="$TMP/scripts/agent-sessions.sh"
