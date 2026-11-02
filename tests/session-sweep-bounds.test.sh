@@ -105,7 +105,7 @@ ok "a reaped done tick reports 'stopped … finished'" "$(grep -c '^stopped f1f1
 ok "the idle row reports 'stopped … idle'" "$(grep -c '^stopped 1d1e0001 (1d) idle$' <<<"$rep")" 1
 ok "the busy row is handed off with Q1" "$(grep -cE '^handed-off b0590001 b0590001-[0-9a-f]{8} Q1$' <<<"$rep")" 1
 ok "…one Q1: do: entry on its task" "$(grep -c 'Q1: do: finish the agent' "$T/task-003-b.md")" 1
-hid="$(grep -oE 'b0590001-[0-9a-f]{8}' <<<"$rep" | head -1)"
+hid="$(grep -oE 'b0590001-[0-9a-f]{8}' <<<"$rep")"
 ok "…filing the fixed text, the record carrying no needs" "$(cat "$B/.loopd/.handoffs/$hid.txt" 2>/dev/null)" "busy past maxBgRoundMinutes — stopped"
 ok "the idle-stopped task stays open" "$(sed -n 's/^status: //p' "$T/task-001-i.md")" in-progress
 ok "…and its stopped session frees its slot" "${before}→$(inflight)" "5→3"
