@@ -24,6 +24,8 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
 export GIT_CONFIG_GLOBAL="$TMP/gitconfig" GIT_CONFIG_NOSYSTEM=1
 printf '[user]\n\temail = t@example.com\n\tname = Test\n[commit]\n\tgpgsign = false\n[core]\n\thooksPath = /dev/null\n[init]\n\tdefaultBranch = main\n' > "$GIT_CONFIG_GLOBAL"
 BIN="$TMP/bin"; mkdir -p "$BIN"; printf '#!/bin/sh\nexit 1\n' > "$BIN/gh"; chmod +x "$BIN/gh"
+# CI puts a refusing `claude` on PATH; this one refuses too, so no verdict below can rest on it.
+printf '#!/bin/sh\nexit 99\n' > "$BIN/claude"; chmod +x "$BIN/claude"
 export PATH="$BIN:$PATH"
 
 echo "== 1. the rule is in the prose of every role that edits its task doc =="
@@ -87,8 +89,7 @@ ok "the retry after the rebase ends commits" "$rc" 0
 
 echo
 echo "== 4. OUTCOME: the 15:13 state, committed per the rule, is no dirty-tree DELTA =="
-bash "$TICK_DELTA" record --instance "$BUNDLE" >/dev/null 2>&1
-printf -- '---\ntype: Task\nkind: build\nstatus: in-progress\npr: ["https://github.com/example-org/example-repo/pull/7"]\n---\n# Notes\n* 15:13 still working\n' > "$BUNDLE/$TASK"
+printf -- '---\ntype: Task\nkind: build\nstatus: in-progress\npr: []\n---\n# Notes\n* 15:13 still working\n' > "$BUNDLE/$TASK"
 out="$(bash "$TICK_DELTA" check --instance "$BUNDLE" 2>&1)"
 ok "control: the uncommitted edit IS the dirty-tree DELTA" "$(grep -cF 'tracked files are dirty' <<<"$out" | tr -d ' ')" 1
 (cd "$WT" && bash "$COMMIT_AS" software-engineer "docs: task-001 pr" --stage -- "$BUNDLE/$TASK" >/dev/null 2>&1)
@@ -98,8 +99,11 @@ ok "…committing it from the worktree does not clean it" \
 ok "cd <bundle> then commit-as.sh: the tree is clean" \
    "$(git -C "$BUNDLE" status --porcelain --untracked-files=no | wc -l | tr -d ' ')" 0
 ok "…authored as the role" "$(git -C "$BUNDLE" log -1 --format=%an)" software-engineer
+bash "$TICK_DELTA" record --instance "$BUNDLE" >/dev/null 2>&1
 out="$(bash "$TICK_DELTA" check --instance "$BUNDLE" 2>&1)"; rc=$?
-ok "tick-delta.sh check ran past the tree gate (rc 1, not 2)" "$rc:$(grep -cF 'untracked file' <<<"$out" | tr -d ' ')" "1:0"
+verdict="rc=$rc ${out%%$'\n'*}"
+[ "$rc" = 0 ] || [ "$rc" = 1 ] && verdict="$(grep -cE 'untracked file|cannot be judged' <<<"$out" | tr -d ' ')"
+ok "tick-delta.sh check reaches a verdict past the tree gate (rc 0/1)" "$verdict" 0
 ok "tick-delta.sh check: no dirty-tree DELTA" "$(grep -cF 'tracked files are dirty' <<<"$out" | tr -d ' ')" 0
 
 echo
