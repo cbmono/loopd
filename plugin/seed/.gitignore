@@ -53,6 +53,10 @@ node_modules/
 # the first line already — /loopd:init appends this one separately for that reason.
 /.loopd/.tick-lock.claim
 
+# The time of the last clean `build-kb-index.sh --check` (scripts/kb-sweep-due.sh), and the
+# reference it is cut from while a walk runs. Per clone; delete freely (absence = one walk).
+/.loopd/.kb-check-stamp*
+
 # API keys — for a substituted model backend or anything else. NEVER tracked: a key in
 # a tracked file is a published key, and /loopd:init appends this line to an older
 # bundle rather than trusting that it is already there.

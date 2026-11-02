@@ -146,6 +146,78 @@ due "$ERR" --dispatched 0 --sweep-anyway
 ok "an unknown flag => usage" "$RC" 2
 due "$TMP/no-such-bundle" --dispatched 0
 ok "a missing instance directory => unknown" "$RC" 2
+BARE="$(bash "$DUE" 2>&1 >/dev/null)"; RC=$?
+ok "a bare call => usage" "$RC" 2
+ok "  its stderr names the required flag" "$(saw "$BARE" "--dispatched <n> wants a non-negative integer")" yes
+ok "  and prints the usage line" "$(saw "$BARE" "usage: kb-sweep-due.sh --dispatched <n> [--in-flight <n>]")" yes
+
+echo
+echo "== a clean check is cached until something under knowledge/ is newer =="
+C="$TMP/cache"; mkbundle "$C" 4; ST="$C/.loopd/.kb-check-stamp"
+ok "the fixture has no .loopd/ dir" "$([ -e "$C/.loopd" ] && echo yes || echo no)" no
+due "$C" --dispatched 0
+ok "the first clean check walks" "$(saw "$OUT" "the index and the documents agree")" yes
+ok "  and writes the stamp, making .loopd/ itself" "$([ -f "$ST" ] && echo yes || echo no)" yes
+ok "  and leaves no reference file behind" "$(ls -A "$C/.loopd" | tr '\n' ' ')" ".kb-check-stamp "
+due "$C" --dispatched 0
+ok "an unchanged KB is not due" "$RC" 1
+ok "  and says it answered from the stamp" "$(saw "$OUT" "not due — cached, stamp 20")" yes
+ok "  instead of the walk line" "$(saw "$OUT" "the index and the documents agree")" no
+printf '\nEdited.\n' >> "$C/knowledge/findings/a-first-thing.md"
+due "$C" --dispatched 0
+ok "an edited doc walks again" "$(saw "$OUT" "the index and the documents agree")" yes
+rm "$C/knowledge/findings/a-second-thing.md"
+due "$C" --dispatched 0
+ok "a deleted doc walks again, and is due" "$RC" 0
+ok "  on the dangling index row" "$(saw "$OUT" "index row points at no file")" yes
+( cd "$C" && bash "$BUILD" >/dev/null 2>&1 ); due "$C" --dispatched 0; due "$C" --dispatched 0
+ok "clean again => cached again" "$(saw "$OUT" "cached, stamp")" yes
+touch -t 203001010000 "$ST"
+due "$C" --dispatched 0
+ok "a future-dated stamp is discarded and the KB walked" "$(saw "$OUT" "the index and the documents agree")" yes
+touch "$TMP/now"
+ok "  and the stamp rewritten to a time not after now" "$([ "$ST" -nt "$TMP/now" ] && echo yes || echo no)" no
+
+echo
+echo "== a failing check writes no stamp, and the verdict is the walk's =="
+F="$TMP/failing"; mkbundle "$F" 4; finding "$F" an-unindexed-thing "An unindexed thing has no row."
+due "$F" --dispatched 0
+ok "errors with no stamp => due" "$RC" 0
+ok "  and no stamp, no reference written" "$(ls -A "$F/.loopd" 2>/dev/null | wc -l | tr -d ' ')" 0
+NOCACHE="$(printf '%s\n' "$OUT" | grep '^KB SWEEP DUE')"
+G="$TMP/guard"; mkbundle "$G" 4; due "$G" --dispatched 0
+ok "a clean KB leaves a stamp" "$([ -f "$G/.loopd/.kb-check-stamp" ] && echo yes || echo no)" yes
+finding "$G" an-unindexed-thing "An unindexed thing has no row."
+due "$G" --dispatched 0
+ok "the same errors with a stamp present => still due" "$RC" 0
+ok "  with the same trigger line and error count" "$(printf '%s\n' "$OUT" | grep '^KB SWEEP DUE')" "$NOCACHE"
+
+echo
+echo "== the stamp is ignored, and cut before the walk =="
+GI="$TMP/git"; mkbundle "$GI" 4; cp "$REPO/plugin/seed/.gitignore" "$GI/.gitignore"
+( cd "$GI" && git init -q . && git add -A && git -c user.name=t -c user.email=t@example.com commit -qm init )
+due "$GI" --dispatched 0
+ok "a clean check wrote the stamp" "$([ -f "$GI/.loopd/.kb-check-stamp" ] && echo yes || echo no)" yes
+ok "  and git status --porcelain is empty" "$(cd "$GI" && git status --porcelain | wc -l | tr -d ' ')" 0
+ok "  because the seed ignores it (not because it is absent)" \
+  "$(cd "$GI" && git check-ignore -q .loopd/.kb-check-stamp && git check-ignore -q .loopd/.kb-check-stamp.123 && echo yes || echo no)" yes
+# A copy of the probe beside a stand-in build-kb-index.sh, so the walk can edit a doc mid-flight.
+RACE="$TMP/race"; mkdir -p "$RACE"; cp "$DUE" "$RACE/kb-sweep-due.sh"
+for s in resolve-max-agents.sh resolve-config.sh bundle-paths.sh plugin-name.sh; do
+  [ -e "$REPO/plugin/scripts/$s" ] && ln -s "$REPO/plugin/scripts/$s" "$RACE/$s"
+done
+printf '#!/usr/bin/env bash\n[ -z "${EDIT_MID_WALK:-}" ] || printf "\\nMid-walk.\\n" >> "$EDIT_MID_WALK"\nexec bash "%s" "$@"\n' "$BUILD" \
+  > "$RACE/build-kb-index.sh"
+W="$TMP/midwalk"; mkbundle "$W" 4
+OUT="$(EDIT_MID_WALK="$W/knowledge/findings/a-first-thing.md" bash "$RACE/kb-sweep-due.sh" --instance "$W" --dispatched 0 2>&1)"
+ok "the mid-walk run was clean and stamped" "$([ -f "$W/.loopd/.kb-check-stamp" ] && saw "$OUT" "documents agree")" yes
+OUT="$(bash "$RACE/kb-sweep-due.sh" --instance "$W" --dispatched 0 2>&1)"
+ok "a doc edited mid-walk invalidates the stamp" "$(saw "$OUT" "the index and the documents agree")" yes
+OUT="$(bash "$RACE/kb-sweep-due.sh" --instance "$W" --dispatched 0 2>&1)"
+ok "  and the next probe is cached" "$(saw "$OUT" "cached, stamp")" yes
+touch "$RACE/build-kb-index.sh"
+OUT="$(bash "$RACE/kb-sweep-due.sh" --instance "$W" --dispatched 0 2>&1)"
+ok "a build-kb-index.sh newer than the stamp walks again" "$(saw "$OUT" "the index and the documents agree")" yes
 
 echo
 echo "== MUTATION: a trigger that ignored idleness would be caught =="
@@ -166,6 +238,13 @@ MUTANT=""
 echo
 echo "== project-manager.md acts on the script, and only on the script =="
 ok "step 7 names the script" "$(hasf "$PM" "scripts/kb-sweep-due.sh --dispatched")" yes
+ok "the core prompt names the full call" \
+  "$(hasf "$REPO/plugin/agents/project-manager.md" 'kb-sweep-due.sh --dispatched <n> --in-flight <n>` says')" yes
+ok "  and what each number is" "$(hasf "$REPO/plugin/agents/project-manager.md" '`--dispatched` is the role agents this tick spawned, `--in-flight` the ones still')" yes
+for doc in "$REPO/plugin/agents/project-manager.md" "$PM"; do
+  ok "$(basename "$doc"): the probe gets a 300000 ms Bash timeout" "$(hasf "$doc" 'call a Bash `timeout` of 300000 so the tool never backgrounds it')" yes
+  ok "$(basename "$doc"): an unanswered probe closes UNKNOWN" "$(hasf "$doc" "not answer closes the sweep UNKNOWN")" yes
+done
 ok "it passes the in-flight count" "$(hasf "$PM" "--in-flight <still running>")" yes
 ok "it passes the cataloguer-in-flight flag" "$(hasf "$PM" "[--cataloguer-in-flight]")" yes
 ok "exit 0 dispatches the cataloguer, namespaced" "$(hasf "$PM" 'dispatch `'"${PN}:"'cataloguer`')" yes

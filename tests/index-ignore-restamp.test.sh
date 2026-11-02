@@ -74,6 +74,7 @@ assert "…and the END marker"                        "$(yes_if grep -qxF '# <<<
 assert "…and the derived index is actually ignored" "$(yes_if git_check_ignore "$INST" "$AB_INDEX")"
 assert "…and a project's index.md is ignored too"   "$(yes_if git_check_ignore "$INST" projects/demo/index.md)"
 assert "…and the KB mount's gitdir, from the seed"   "$(yes_if git_check_ignore "$INST" "$AB_DIR/kb.git/HEAD")"
+assert "…and the KB clean-check stamp, from the seed" "$(yes_if git_check_ignore "$INST" "$AB_KB_STAMP")"
 
 # ---------------------------------------------------------------------------------
 # 2. THE BUG'S OWN SHAPE: an instance stamped by the OLD, unmarked, guard-based
@@ -117,6 +118,8 @@ assert "…while an ordinary project is still ignored"          "$(yes_if git_ch
 assert "…the derived index is still ignored"                  "$(yes_if git_check_ignore "$LEGACY" "$AB_INDEX")"
 assert "…and a bundle stamped before the KB mount ignores its gitdirs" \
   "$(yes_if sh -c 'cd "$1" && git check-ignore -q "$2/kb.git/HEAD" && git check-ignore -q "$2/kb-src/x.git/HEAD"' _ "$LEGACY" "$AB_DIR")"
+assert "…and a bundle stamped before the KB stamp ignores it and its reference" \
+  "$(yes_if sh -c 'cd "$1" && git check-ignore -q "$2" && git check-ignore -q "$2.123"' _ "$LEGACY" "$AB_KB_STAMP")"
 # Order is the mechanism: the negation line must still appear strictly AFTER the two
 # blanket rule lines (i.e. after the block's END marker), not before or inside it.
 neg_line="$(head -1 <<<"$(grep -nxF '!projects/retained-example/index.md' "$LEGACY/.gitignore")" | cut -d: -f1)"

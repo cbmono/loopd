@@ -50,6 +50,11 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      --in-flight <still running> [--cataloguer-in-flight]   # exit 0 = due
    ```
 
+   Give that call a Bash `timeout` of 300000 so the tool never backgrounds it: you hold no
+   Monitor and foreground sleep is blocked, so a backgrounded probe is one you cannot wait
+   for. A probe that still did not answer closes the sweep UNKNOWN. An unchanged
+   `knowledge/` answers from the last clean check's stamp (`cached, stamp <time>`).
+
    Exit 0 ⇒ it prints the trigger line and the ERROR list; dispatch `loopd:cataloguer`
    with **that output pasted into the brief verbatim**, inside the same one-dispatch
    throttle. Exit 1 is silence: no line in the report, no dispatch. Exit 2 could not answer

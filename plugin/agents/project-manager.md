@@ -596,9 +596,13 @@ state, and act only on deltas.
 
 7. **Refresh the knowledge base** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-7-knowledge-base.md`,
    on its own trigger and never on the digest's: read it when step 5 reflected a merge or
-   moved a task to `done`, or when `${CLAUDE_PLUGIN_ROOT}/scripts/kb-sweep-due.sh` or
-   `${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh due` says DUE. Ask both probes on every full
-   tick — the sweep exists for the tick that dispatched nothing.
+   moved a task to `done`, or when `${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh due` or
+   `${CLAUDE_PLUGIN_ROOT}/scripts/kb-sweep-due.sh --dispatched <n> --in-flight <n>` says
+   DUE — `--dispatched` is the role agents this tick spawned, `--in-flight` the ones still
+   running (add `--cataloguer-in-flight` when a cataloguer is among them). Give the probe
+   call a Bash `timeout` of 300000 so the tool never backgrounds it; a probe that still did
+   not answer closes the sweep UNKNOWN. Ask both probes on every full tick — the sweep
+   exists for the tick that dispatched nothing.
 
 8. **Curate.** Keep `projects/<p>/project.md`, each project's `index.md`, and the
    `log.md` files current — **for the projects you actually read this tick**; a done
