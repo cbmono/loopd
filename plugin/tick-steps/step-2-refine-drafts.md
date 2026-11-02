@@ -163,8 +163,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    symbol, or a decision recorded in the task or project doc; evidence outside that reach
    ESCALATES it to `open_questions` prefixed `advisor:`, never resolves it, and so does a
    paraphrase BLOCKER, always. Never add context to a task doc only to satisfy a reviewer —
-   only when a human or the implementing agent needs it. The critique sets no status, gates no `draft → ready`, and
-   leaves the human's promotion gate exactly where it was — an aid, not a new authority.
+   only when a human or the implementing agent needs it. The critique sets no status,
+   gates no `draft → ready`, and leaves the human's promotion gate exactly where it was —
+   an aid, not a new authority.
 
    **Once per task, and a tick can tell that it already ran.** Refinement is itself
    once-only, but do not lean on that alone: a mandatory dispatch with no marker turns

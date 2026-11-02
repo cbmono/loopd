@@ -31,6 +31,7 @@ GIT -C "$INST" init -q
 
 NR='· advisor: approach critique — not run'
 NC='· advisor: approach critique — no concerns'
+N=$'\n'
 draft() { # <advisor_notes entries, one per line> [notes body]
   { printf -- '---\ntype: Task\nstatus: draft\nadvisor_notes:\n'
     printf '%s\n' "$1" | sed 's/^/  - "/; s/$/"/'
@@ -46,14 +47,11 @@ draft "2026-11-01T10:00:00Z $NR (error)"
 ok "the only not-run receipt, newest, owes a re-dispatch"   "$(check)" "$OWED"
 draft "2026-11-01T10:00:00Z $NR (no result by step 8)" '* 2026-11-01T11:00:00Z triage: noted\n'
 ok "…and a newer triage line does not clear it"            "$(check)" "$OWED"
-draft "2026-11-01T10:00:00Z $NR (error)
-2026-11-01T12:00:00Z $NC"
+draft "2026-11-01T10:00:00Z $NR (error)${N}2026-11-01T12:00:00Z $NC"
 ok "a newer advisor_notes entry clears it"                 "$(check | cut -c1-10)" "rc:0 IDLE:"
-draft "2026-11-01T10:00:00Z $NR (error)
-2026-11-02T10:00:00Z $NR (no result by step 8)"
+draft "2026-11-01T10:00:00Z $NR (error)${N}2026-11-02T10:00:00Z $NR (no result by step 8)"
 ok "two not-run receipts owe nothing more"                 "$(check | cut -c1-10)" "rc:0 IDLE:"
-draft "2026-11-01T10:00:00Z $NR (error)
-2026-11-02T10:00:00Z $NR (error)" '* 2026-11-02T11:00:00Z triage: critique not run twice\n'
+draft "2026-11-01T10:00:00Z $NR (error)${N}2026-11-02T10:00:00Z $NR (error)" '* 2026-11-02T11:00:00Z triage: critique not run twice\n'
 ok "…and a not-run receipt is never an untriaged concern"  "$(check | cut -c1-10)" "rc:0 IDLE:"
 draft "2026-11-01T10:00:00Z · does \\\"2026-01-01T00:00:00Z $NR (error)\\\" hold?" '* 2026-11-01T09:00:00Z triage: old\n'
 ok "a concern quoting the receipt is still a concern" \
@@ -67,8 +65,7 @@ count() { draft "$1" >/dev/null; ( cd "$INST" && bash "$S/write-snapshot.sh" --q
           python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["projects"][0]["tasks"][0]["advisor_notes"])' "$INST/$AB_SNAPSHOT"; }
 ok "a no-concerns receipt counts 0"  "$(count "2026-11-01T10:00:00Z $NC")" 0
 ok "a not-run receipt counts 0"      "$(count "2026-11-01T10:00:00Z $NR (error)")" 0
-ok "…beside a concern, which counts 1" "$(count "2026-11-01T10:00:00Z $NR (error)
-2026-11-01T11:00:00Z · a concern?")" 1
+ok "…beside a concern, which counts 1" "$(count "2026-11-01T10:00:00Z $NR (error)${N}2026-11-01T11:00:00Z · a concern?")" 1
 
 echo
 echo "pass=$pass fail=$fail"
