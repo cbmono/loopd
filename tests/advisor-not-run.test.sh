@@ -24,6 +24,7 @@ for f in tick-delta.sh bundle-paths.sh fold-answers.sh web-queue.sh agent-sessio
          dispatchable-ready.sh resolve-max-agents.sh resolve-config.sh task-owner.sh project-paused.sh; do
   cp "$S/$f" "$INST/scripts/$f"
 done
+cp "$S"/*.py "$INST/scripts/"; cp -R "$S/lib" "$INST/scripts/lib"
 cp -R "$REPO/plugin/tick-steps" "$INST/tick-steps"
 printf -- '---\ntype: Project\nstatus: active\n---\n' > "$INST/projects/p/project.md"
 printf '/%s\n' "$AB_STATE_DIR" > "$INST/.gitignore"; printf '{}\n' > "$INST/instance.config.json"

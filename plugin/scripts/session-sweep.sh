@@ -32,15 +32,7 @@ done <<<"$ids"
 [ ${#tried[@]} -gt 0 ] || exit 0
 
 # A stop landed when the row no longer qualifies and holds no live pid.
-holds_pid() { bash "$SESS" row "$1" 2>/dev/null | python3 -c 'import json, os, sys
-try:
-    p = json.load(sys.stdin).get("pid")
-    assert isinstance(p, int) and not isinstance(p, bool) and p > 0
-    os.kill(p, 0)
-except PermissionError:
-    pass
-except Exception:
-    sys.exit(1)'; }
+holds_pid() { bash "$SESS" row "$1" 2>/dev/null | bash "$SESS" alive -; }
 after="$(bash "$SESS" stop-ids "$1" 2>/dev/null)"; rc=$?
 for t in "${tried[@]}"; do
   read -r sid short age cls <<<"$t"

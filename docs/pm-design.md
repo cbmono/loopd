@@ -398,7 +398,8 @@ clears (the banner's reader; a pause or owner gate that cannot answer counts) wh
 in-flight is under the cap, a `draft` whose newest `advisor_notes` concern postdates its
 newest `* <ISO 8601> triage:` line, and one whose newest entry is its only `not run`
 receipt, are each a DELTA. The file gates run first, so a
-dependency-blocked task forks nothing.
+dependency-blocked task forks nothing. Promotion ends that retry: the critique would only
+inform a promotion already made.
 
 What the probe deliberately does not see, stated rather than discovered: a PR body edit
 at an unchanged head (an unticked criteria box, an edited description) and an edit to a

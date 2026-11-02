@@ -44,7 +44,7 @@ cp "$SRC" "$INST/scripts/tick-delta.sh"; chmod +x "$INST/scripts/tick-delta.sh"
 cp "$(dirname "$SRC")/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"
 cp "$(dirname "$SRC")/fold-answers.sh" "$INST/scripts/fold-answers.sh"
 cp "$(dirname "$SRC")/web-queue.sh" "$INST/scripts/web-queue.sh"
-cp "$(dirname "$SRC")/agent-sessions.sh" "$INST/scripts/agent-sessions.sh"
+cp "$(dirname "$SRC")/agent-sessions.sh" "$(dirname "$SRC")"/*.py "$INST/scripts/"; cp -R "$(dirname "$SRC")/lib" "$INST/scripts/lib"
 for f in dispatchable-ready.sh resolve-max-agents.sh resolve-config.sh; do cp "$(dirname "$SRC")/$f" "$INST/scripts/$f"; done
 # The two gates log each call to $GATELOG, so the cost order can be asserted.
 GATELOG="$TMP/gates"; export GATELOG; : > "$GATELOG"

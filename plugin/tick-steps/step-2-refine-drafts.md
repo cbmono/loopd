@@ -176,15 +176,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    one `advisor_notes` entry each; none raised ⇒ one `advisor_notes` line,
    `<ISO 8601> · advisor: approach critique — no concerns`. **Either marker means the
    critique has run: do not dispatch it again.** Neither is a gate — they are a receipt.
-   **A critique launched this tick that errored or had returned nothing gets, from you at
-   step 8, `<ISO 8601> · advisor: approach critique — not run (<reason>)`**, `<reason>`
-   `error` or `no result by step 8`; one never launched for want of a slot gets none, and
-   a result arriving after the receipt is not read. **`not run` never counts as ran**: the
-   first allows one re-dispatch on a later tick (`tick-delta.sh check` reports it owed); a
-   second leaves the critique not run, named in that tick's report and in one `# Notes`
-   triage line. **A retry that returns replaces the receipt** — delete it as you record
-   the result — or triaging its concerns leaves the receipt newest and owes a retry
-   again. Promotion ends the retry: the critique informs a promotion already made.
+   **A critique launched this tick that errored or returned nothing gets, at step 8,
+   `<ISO 8601> · advisor: approach critique — not run (<reason>)`** (`error` or `no result
+   by step 8`); one never launched for want of a slot gets none; a later result is unread.
+   **`not run` never counts as ran**: the first owes one re-dispatch on a later tick
+   (`tick-delta.sh check`); a second ends it, named in that tick's report and one `# Notes`
+   triage line. **A retry that returns replaces the receipt** (delete it as you record the
+   result), or the receipt stays newest and owes a retry. Promotion ends the retry.
    **The no-concerns receipt goes in `advisor_notes`, not `answered_questions`**, which
    only `fold-answers.sh` writes and only from an answered `open_questions` entry — a
    critique that raised nothing has no such entry, so the receipt had nowhere it was
