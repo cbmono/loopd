@@ -6,7 +6,7 @@
 # Due only when the tick dispatched nothing this round, no cataloguer is in flight, a slot
 # is free under maxAgentsInFlight, and `build-kb-index.sh --check` reports >=1 ERROR.
 # On 0 it prints the trigger line and the error list — the cataloguer's brief. A clean check
-# is cached in $AB_KB_STAMP until anything under knowledge/ or build-kb-index.sh is newer.
+# is cached in $AB_KB_STAMP until anything under knowledge/ or the checker's scripts is newer.
 # Exit: 0 due · 1 not due (reason on stderr) · 2 unknown (usage, no knowledge/ here).
 # Why: project-manager.md step 7, docs/pm-design.md#step-7.
 set -uo pipefail
@@ -56,8 +56,9 @@ if [ -d "$inst/knowledge" ] && ignored && mkdir -p "$inst/$AB_DIR" 2>/dev/null \
    && date -u +%Y-%m-%dT%H:%M:%SZ > "$stamp.$$" 2>/dev/null; then
   ref="$stamp.$$"; trap 'rm -f "$ref"' EXIT
   [ -f "$stamp" ] && [ "$stamp" -nt "$ref" ] && rm -f "$stamp"
-  if [ -f "$stamp" ] && [ ! "$here/build-kb-index.sh" -nt "$stamp" ] \
-     && newer="$(find -H "$inst/knowledge" -newer "$stamp" -print -quit 2>/dev/null)" && [ -z "$newer" ]; then
+  # find, not `-nt`: bash 3.2's `-nt` compares whole seconds. The scripts are the checker's own.
+  if [ -f "$stamp" ] && newer="$(find -H "$inst/knowledge" "$here/build-kb-index.sh" "$here/bundle-paths.sh" \
+       "$here/plugin-name.sh" -newer "$stamp" -print -quit 2>/dev/null)" && [ -z "$newer" ]; then
     not_due "cached, stamp $(head -c 20 "$stamp") — nothing under knowledge/ changed since that clean check"
   fi
 fi

@@ -208,9 +208,8 @@ ok "a .gitignore without the line => no cache, still answers" "$RC" 1
 ok "  and no stamp dirties the tree" "$(cd "$OLD" && git status --porcelain | wc -l | tr -d ' ')" 0
 # A copy of the probe beside a stand-in build-kb-index.sh, so the walk can edit a doc mid-flight.
 RACE="$TMP/race"; mkdir -p "$RACE"; cp "$DUE" "$RACE/kb-sweep-due.sh"
-for s in resolve-max-agents.sh resolve-config.sh bundle-paths.sh plugin-name.sh; do
-  [ -e "$REPO/plugin/scripts/$s" ] && ln -s "$REPO/plugin/scripts/$s" "$RACE/$s"
-done
+for s in resolve-max-agents.sh resolve-config.sh; do ln -s "$REPO/plugin/scripts/$s" "$RACE/$s"; done
+cp "$REPO/plugin/scripts/bundle-paths.sh" "$REPO/plugin/scripts/plugin-name.sh" "$RACE/"
 printf '#!/usr/bin/env bash\n[ -z "${EDIT_MID_WALK:-}" ] || printf "\\nMid-walk.\\n" >> "$EDIT_MID_WALK"\nexec bash "%s" "$@"\n' "$BUILD" \
   > "$RACE/build-kb-index.sh"
 W="$TMP/midwalk"; mkbundle "$W" 4
@@ -223,6 +222,13 @@ ok "  and the next probe is cached" "$(saw "$OUT" "cached, stamp")" yes
 touch "$RACE/build-kb-index.sh"
 OUT="$(bash "$RACE/kb-sweep-due.sh" --instance "$W" --dispatched 0 2>&1)"
 ok "a build-kb-index.sh newer than the stamp walks again" "$(saw "$OUT" "the index and the documents agree")" yes
+for s in bundle-paths.sh plugin-name.sh; do
+  OUT="$(bash "$RACE/kb-sweep-due.sh" --instance "$W" --dispatched 0 2>&1)"
+  ok "  (cached again before touching $s)" "$(saw "$OUT" "cached, stamp")" yes
+  touch "$RACE/$s"
+  OUT="$(bash "$RACE/kb-sweep-due.sh" --instance "$W" --dispatched 0 2>&1)"
+  ok "a $s newer than the stamp walks again" "$(saw "$OUT" "the index and the documents agree")" yes
+done
 
 echo
 echo "== MUTATION: a trigger that ignored idleness would be caught =="
