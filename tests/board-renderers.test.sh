@@ -352,7 +352,8 @@ while not (eof and status is not None):
         try:
             os.killpg(pid, signal.SIGKILL)
         except OSError:
-            pass
+            if status is None:
+                os.kill(pid, signal.SIGKILL)  # killpg can land before setsid() in the child
         if status is None:
             os.waitpid(pid, 0)
         sys.exit(124)
@@ -383,6 +384,10 @@ NO_COLOR=1 tty_assert "…and --color always beats NO_COLOR, as documented" has 
 BOUNDED="$( TTY_OUT_BOUND=1; s=$SECONDS; tty_assert "sleeper" has sleep 20; echo "took=$((SECONDS-s))" )"
 assert "a tty_out past its bound FAILS, naming the timeout" "$(has 'FAIL  sleeper — tty_out timed out after 1s' "$BOUNDED")"
 assert "…and returns at the bound, not when the command does" "$(yes_if grep -qE '^took=[0-3]$' <<<"$BOUNDED")"
+TTY_OUT_BOUND=1 tty_out bash -c 'trap "" HUP; sleep 20 & echo $! >"$1"; wait' _ "$TMP/tty-desc.pid" >/dev/null || true
+desc_gone() { local i; for i in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$1" 2>/dev/null || return 0; sleep 0.1; done; return 1; }
+assert "…and kills the command's descendants too, not only the command" \
+  "$(yes_if desc_gone "$(cat "$TMP/tty-desc.pid")")"
 
 echo
 echo "== print-board: a narrow terminal degrades, and no NUMBER is ever clipped =="
