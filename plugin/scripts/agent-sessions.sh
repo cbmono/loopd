@@ -495,7 +495,7 @@ for r in rows:
     if alive(pid):
         proc, rank = "pid %d" % pid, 0
         st = r.get("status")
-        if st == "busy" or (st != "idle" and state == "working"):
+        if st == "busy" or (st is None and state == "working"):
             working += 1
             busy.append(str(r.get("sessionId") or ""))
         else:

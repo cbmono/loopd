@@ -142,7 +142,8 @@ cat > "$TMP/prec.json" <<JSON
   {"id":"b0000004","sessionId":"b0000004-x","kind":"background","cwd":"$WT/t1","pid":$LIVE,"state":"working"},
   {"id":"b0000005","sessionId":"b0000005-x","kind":"background","cwd":"$WT/t1","pid":$LIVE,"state":"blocked"},
   {"id":"b0000006","sessionId":"b0000006-x","kind":"background","cwd":"$WT/t1","status":"busy","state":"done"},
-  {"id":"b0000007","sessionId":"b0000007-x","cwd":"$WT/t1","pid":$LIVE,"status":"busy"} ]
+  {"id":"b0000007","sessionId":"b0000007-x","cwd":"$WT/t1","pid":$LIVE,"status":"busy"},
+  {"id":"b0000008","sessionId":"b0000008-x","kind":"background","cwd":"$WT/t1","pid":$LIVE,"status":"waiting","state":"working"} ]
 JSON
 one() { printf '[%s]' "$(grep "\"$1\"" "$TMP/prec.json" | sed 's/^\[ *//; s/,$//; s/ *\]$//')" > "$TMP/one.json"
         FIXTURE="$TMP/one.json" view --summary; }
@@ -153,7 +154,8 @@ ok "no status, state working ⇒ working (fallback)"   "$(one b0000004)" "1 0 0"
 ok "no status, state blocked ⇒ idle (fallback)"      "$(one b0000005)" "0 1 0"
 ok "busy but terminal with no pid stays dropped"     "$(one b0000006)" "0 0 0"
 ok "a row with no kind is counted, as today"         "$(one b0000007)" "1 0 0"
-ok "all seven: each row in exactly one bucket"       "$(FIXTURE="$TMP/prec.json" view --summary)" "3 2 1"
+ok "an unknown status is not absent: no fallback ⇒ idle" "$(one b0000008)" "0 1 0"
+ok "all eight: each row in exactly one bucket"       "$(FIXTURE="$TMP/prec.json" view --summary)" "3 3 1"
 cat > "$B/projects/p/tasks/task-004-open.md" <<EOF
 ---
 type: Task
@@ -227,9 +229,11 @@ ok "dropping --json makes the read unknown" "$(PATH="$P" bash "$M" view "$B" --s
 sed 's/^    if alive(pid):$/    if pid or alive(pid):/' "$SESS" > "$M"
 ok "keying on pid PRESENCE counts the dead pid as running" \
    "$(PATH="$P" bash "$M" view "$B" --summary 2>/dev/null)" "1 2 2"
-sed 's/if st == "busy" or (st != "idle" and state == "working"):/if state == "working":/' "$SESS" > "$M"
-ok "reading state before status makes the idle row working" \
-   "$(PATH="$P" FIXTURE="$TMP/prec.json" bash "$M" view "$B" --summary 2>/dev/null)" "2 3 1"
+mone() { one "$1" >/dev/null; PATH="$P" FIXTURE="$TMP/one.json" bash "$M" view "$B" --summary 2>/dev/null; }
+sed 's/if st == "busy" or (st is None and state == "working"):/if state == "working":/' "$SESS" > "$M"
+ok "reading state before status makes the idle row working" "$(mone b0000002)" "1 0 0"
+sed 's/(st is None and state == "working")/(st != "idle" and state == "working")/' "$SESS" > "$M"
+ok "falling back on any non-idle status makes the unknown one working" "$(mone b0000008)" "1 0 0"
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
