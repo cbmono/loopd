@@ -447,15 +447,12 @@ if len(keep) + len(answered) != len(open_q):
 new = emit(keep, o_cmt)
 new_a = emit(new_ans, a_cmt)
 
-# A non-default pair creates its destination: `decisions:` is written by refine, alone.
-if a_at is None and DST == "answered_questions":
-    die(3, "no answered_questions: key to fold into")
-
 # Highest offset first, so the earlier span's indices stay valid.
 edits = sorted([(o_at, o_end, new)] + ([(a_at, a_end, new_a)] if a_at is not None else []), reverse=True)
 out = src
 for at, end, text in edits:
     out = out[:at] + text + out[end:]
+# Every pair creates its destination on the first move; the round trip below still guards it.
 if a_at is None:
     end = frontmatter(out)[1]
     out = out[:end] + DST + ":" + new_a + "\n" + out[end:]

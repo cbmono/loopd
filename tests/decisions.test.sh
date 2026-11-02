@@ -40,8 +40,8 @@ ok "no-delete: every D<n> is still in the document" \
    "$(for d in D1: D2: D3: D4:; do grep -c "$d" "$P"; done | awk '$1 > 0' | n)" 4
 ok "--add of an acknowledged D<n> adds nothing" \
    "$(FOLD --add "$P" "$D1" 2>/dev/null)" "added: 0 entries"
-ok "the default pair still refuses a missing answered_questions:" \
-   "$(printf -- '---\nopen_questions: [ "Q1: a --- b" ]\n---\n' > "$TMP/t.md"; bash "$S/fold-answers.sh" "$TMP/t.md" >/dev/null 2>&1; echo $?)" 3
+ok "the default pair creates a missing answered_questions: too" \
+   "$(printf -- '---\nopen_questions: [ "Q1: a --- b" ]\n---\n' > "$TMP/t.md"; bash "$S/fold-answers.sh" "$TMP/t.md" >/dev/null 2>&1; echo "$?:$(grep -c '^answered_questions:' "$TMP/t.md")")" "0:1"
 
 echo
 echo "== the 👀 review row: one per unanswered D<n>, before approve, mine/held gated =="
