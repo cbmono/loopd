@@ -528,9 +528,10 @@ deliverable_path_entries() { # <frontmatter>
 # the board shows it as information, not as something demanding attention. It gets no
 # awaiting verb for exactly that reason.
 advisor_note_count() { # <frontmatter>
-  local n
-  n="$(yaml_list_entries "$1" advisor_notes | grep -c . || true)"
-  if [[ "${n:-0}" -gt 0 ]]; then printf '%s' "$n"
+  local e n
+  e="$(yaml_list_entries "$1" advisor_notes | grep . || true)"
+  n="$(printf '%s\n' "$e" | grep . | grep -cvE '^[^ ]+ · advisor: approach critique — (no concerns[[:space:]]*$|not run \()' || true)"
+  if [[ -n "$e" ]]; then printf '%s' "${n:-0}"
   # Non-empty but nothing parsed: report 1 rather than 0. The board only ever says
   # "there is something here", so an honest floor beats a silent zero.
   elif list_filled "$1" advisor_notes; then printf '1'
