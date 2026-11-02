@@ -126,7 +126,7 @@ ok "git never called"                        "$([ -e "$TMP/git.called" ] && echo
 ok "prints the Last refreshed value"         "$(has "$out" "$(iso $((NOW - 600)))")" yes
 ok "…its age in minutes"                     "$(grep -qE '\((9|10|11) min ago\)' <<<"$out" && echo yes || echo no)" yes
 ok "…labelled as the last changing tick"     "$(has "$out" 'the last tick that changed something')" yes
-ok "points at /${PN}:brief-me"              "$(tail -2 <<<"$out" | head -1)" "In-flight work and progress: /${PN}:brief-me"
+ok "points at /${PN}:brief-me"              "$(sed -n '$!h; $!d; x; p' <<<"$out")" "In-flight work and progress: /${PN}:brief-me"
 ok "…and ends with working"                  "$(tail -1 <<<"$out")" "$WN"
 
 echo "== the tick line is tick-lock.sh status's =="
