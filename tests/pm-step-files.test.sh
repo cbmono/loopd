@@ -36,6 +36,14 @@ ok "every one ends with its own sentinel" \
    "$(for f in "$STEPS"/*.md; do tail -n1 "$f"; done | grep -c '^<!-- end of step [0-9]* -->$' | tr -d ' ')" 7
 
 echo
+echo "== refine writes target_repo as <org>/<repo>, and the core points there =="
+ok "step 2 says write target_repo as <org>/<repo>" \
+   "$(has "$STEPS/step-2-refine-drafts.md" 'write `target_repo` as `<org>/<repo>`')" yes
+ok "…and keeps an explicit owner" \
+   "$(has "$STEPS/step-2-refine-drafts.md" 'an explicit `<owner>/<repo>` stays as given')" yes
+ok "the core's instance-config line points at step 2" \
+   "$(has "$CORE" 'written `<org>/<repo>` per')" yes
+
 echo "== 1. NO GATE MOVED. A tick that read no step file still cannot cross one =="
 # The exact prose, not a paraphrase: these three are the whole authority boundary.
 ok "gate 1: never set a task to ready"   "$(has "$CORE" '**Never set a task to `ready`.**')" yes

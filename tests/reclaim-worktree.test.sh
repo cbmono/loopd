@@ -72,7 +72,13 @@ printf 'one\n' > "$REPO/tracked.txt"
 printf '.env\n.env.local\nnode_modules/\ntmp/\ndist/\ntarget/\n' > "$REPO/.gitignore"
 g add tracked.txt .gitignore; g commit -qm 'c1'
 git init -q --bare -b main "$ORIGIN"
-g remote add origin "$ORIGIN"
+# origin carries the GitHub identity G5 compares; insteadOf routes it to the local bare repo.
+gh_origin() { # <clone> <owner/name>
+  git -C "$1" remote set-url origin "https://github.com/$2.git" 2>/dev/null \
+    || git -C "$1" remote add origin "https://github.com/$2.git"
+  git -C "$1" config "url.$ORIGIN.insteadOf" "https://github.com/$2.git"
+}
+gh_origin "$REPO" fixture-org/proj
 g push -q -u origin main
 g remote set-head origin -a >/dev/null
 
@@ -382,6 +388,81 @@ assert "G11 no gh available: exits 1"  "$(eq "$RC" 1)"
 assert "G11 no gh available: says why" "$(has 'refuse: gh is not available')"
 assert "G11 no gh available: survives" "$(yes_if test -d "$WT_PR")"
 
+echo "== G5/G11: a bare, shaped or inherited target_repo resolves to <org>/<repo> =="
+WT_SHAPE="$WTROOT/proj-demo-shape"
+wt_pushed "$WT_SHAPE" okf/demo-shape
+PR_OTHER_ORG="https://github.com/other-org/proj/pull/5"
+echo "$PR_OTHER_ORG MERGED" >> "$FIXTURES"
+for shape in proj fixture-org/proj https://github.com/fixture-org/proj proj.git PrOj; do
+  write_task task-shape done "$WT_SHAPE" okf/demo-shape "$shape" "$PR1"
+  run --dry-run "projects/demo/tasks/task-shape.md"
+  assert "target_repo '$shape' with a MERGED fixture-org/proj PR: exits 0" "$(eq "$RC" 0)"
+done
+
+write_task task-other-org done "$WT_SHAPE" okf/demo-shape proj "$PR_OTHER_ORG"
+refusal "bare name: a merged PR in ANOTHER org with the same repo name" task-other-org \
+  'refuse:.*belongs to' "$WT_SHAPE"
+
+# Defensive: worktree-create.sh aborts a dispatch whose task has no target_repo, so only a
+# hand-edited or older document reaches this.
+INH="$INSTANCE/projects/inherit"; mkdir -p "$INH/tasks"
+printf -- '---\ntype: Project\ntitle: fixture\ntarget_repo: proj\n---\n' > "$INH/project.md"
+write_task task-inherit done "$WT_SHAPE" okf/demo-shape - "$PR1"
+mv "$TASKS/task-inherit.md" "$INH/tasks/"
+run --dry-run "projects/inherit/tasks/task-inherit.md"
+assert "no target_repo on the task, the project's inherited: exits 0" "$(eq "$RC" 0)"
+printf -- '---\ntype: Project\ntitle: fixture\n---\n' > "$INH/project.md"
+run "projects/inherit/tasks/task-inherit.md"
+assert "neither task nor project names a repo: exits 1" "$(eq "$RC" 1)"
+assert "…with the existing message" "$(has 'refuse:.*no .target_repo:')"
+
+cp "$INSTANCE/instance.config.json" "$TMP/config.saved"
+cat > "$INSTANCE/instance.config.json" <<JSON
+{ "reposRoot": "$REPOS", "worktreeRoot": "$WTROOT" }
+JSON
+write_task task-no-org done "$WT_SHAPE" okf/demo-shape proj "$PR1"
+run "projects/demo/tasks/task-no-org.md"
+assert "bare name with no org configured: exits 2"     "$(eq "$RC" 2)"
+assert "…naming the missing 'org' key"                 "$(has "error: .*'org' is not set")"
+assert "…and the worktree survives"                    "$(yes_if test -d "$WT_SHAPE")"
+cp "$TMP/config.saved" "$INSTANCE/instance.config.json"
+
+# The compare is case-insensitive; a clone directory on a case-sensitive disk is not.
+git clone -q "$ORIGIN" "$REPOS/MixedCase"
+gh_origin "$REPOS/MixedCase" fixture-org/MixedCase
+WT_MIXED="$WTROOT/mixed-demo"
+git -C "$REPOS/MixedCase" worktree add -q "$WT_MIXED" -b okf/demo-mixed origin/main >/dev/null
+git -C "$WT_MIXED" push -q -u origin okf/demo-mixed
+PR_MIXED="https://github.com/fixture-org/MixedCase/pull/7"
+echo "$PR_MIXED MERGED" >> "$FIXTURES"
+write_task task-mixed done "$WT_MIXED" okf/demo-mixed mixedcase "$PR_MIXED"
+run --dry-run "projects/demo/tasks/task-mixed.md"
+assert "a lower-case bare name finds the MixedCase clone: exits 0" "$(eq "$RC" 0)"
+
+# A directory name is not an identity: `widget` resolves to fixture-org/widget, but the clone
+# there belongs to other-org, so a merged fixture-org PR is no evidence about it.
+git clone -q "$ORIGIN" "$REPOS/widget"
+gh_origin "$REPOS/widget" other-org/widget
+WT_WIDGET="$WTROOT/widget-demo"
+git -C "$REPOS/widget" worktree add -q "$WT_WIDGET" -b okf/demo-widget origin/main >/dev/null
+git -C "$WT_WIDGET" push -q -u origin okf/demo-widget
+PR_WIDGET="https://github.com/fixture-org/widget/pull/11"
+echo "$PR_WIDGET MERGED" >> "$FIXTURES"
+write_task task-widget done "$WT_WIDGET" okf/demo-widget widget "$PR_WIDGET"
+refusal "the clone's origin is another org's repo" task-widget \
+  "refuse:.*origin 'https://github.com/other-org/widget.git', which is not" -
+assert "the clone's origin is another org's repo: worktree survives" "$(yes_if test -d "$WT_WIDGET")"
+
+git init -q -b main "$REPOS/noorigin"
+git -C "$REPOS/noorigin" -c user.email=f@example.com -c user.name=F commit -q --allow-empty -m c1
+WT_NOORIGIN="$WTROOT/noorigin-demo"
+git -C "$REPOS/noorigin" worktree add -q "$WT_NOORIGIN" -b okf/demo-noorigin main >/dev/null
+echo "https://github.com/fixture-org/noorigin/pull/12 MERGED" >> "$FIXTURES"
+write_task task-noorigin done "$WT_NOORIGIN" okf/demo-noorigin noorigin \
+  "https://github.com/fixture-org/noorigin/pull/12"
+refusal "a clone with no origin has no identity" task-noorigin "refuse:.*origin '<none>'" -
+assert "a clone with no origin has no identity: worktree survives" "$(yes_if test -d "$WT_NOORIGIN")"
+
 echo "== G12: ignored content that is not a known cache =="
 # `git worktree remove` does NOT refuse a tree whose only content is ignored. Asserted
 # on this very git, so the guard is justified by measurement and not by a claim.
@@ -417,7 +498,7 @@ assert "G12 …and the .env survives"   "$(yes_if test -f "$WT_ENV/.env")"
 # it does not, the assertion above proves nothing about the guard.
 MUTANT="$TMP/reclaim-no-g12.sh"
 awk '/^# --- G12:/ { skip=1 } /^# --- G13:/ { skip=0 } !skip' "$RECLAIM" > "$MUTANT"
-ln -sf "$(dirname "$RECLAIM")/bundle-paths.sh" "$TMP/bundle-paths.sh"
+for f in bundle-paths.sh kb-words.sh service-doc.sh; do ln -sf "$(dirname "$RECLAIM")/$f" "$TMP/$f"; done
 ln -sf "$(dirname "$RECLAIM")/plugin-name.sh"  "$TMP/plugin-name.sh"
 assert "the mutant really dropped G12"  \
   "$(no_if grep -q 'IGNORED content' "$MUTANT")"
@@ -589,7 +670,8 @@ assert "every fixture worktree is still registered" \
 assert "no fixture directory was deleted by any refusal" \
   "$(yes_if test -d "$WT_STATUS" -a -d "$WT_LOCKED" -a -d "$WT_DETACHED" -a -d "$WT_DIRTY" \
        -a -d "$WT_UNPUSHED" -a -d "$WT_PR" -a -d "$WT_SCAFF" -a -d "$WT_RECYCLED" \
-       -a -d "$WT_OUT" -a -d "$WT_CACHE" -a -d "$WT_LIVE")"
+       -a -d "$WT_OUT" -a -d "$WT_CACHE" -a -d "$WT_LIVE" -a -d "$WT_SHAPE" \
+       -a -d "$WT_MIXED" -a -d "$WT_WIDGET" -a -d "$WT_NOORIGIN")"
 assert "no output mentions a synced path" \
   "$(grep -Eq 'Dropbox|iCloud|OneDrive' <<<"$OUT" && echo 1 || echo 0)"
 

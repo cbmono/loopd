@@ -3,7 +3,7 @@
 # on. KB_WORDS_AWK defines the awk function `words(s, set)` (kb-compare.sh, kb-select.sh);
 # kb_task_text <task-doc> prints the task's title, description and acceptance_criteria on one
 # line (kb-select.sh, service-doc.sh); kb_repo_norm <repo> prints a repo's canonical
-# <org>/<repo> spelling (service-doc.sh, validate-bundle.sh). Reasoning:
+# <org>/<repo> spelling (service-doc.sh, validate-bundle.sh, reclaim-worktree.sh). Reasoning:
 # kb-retrieval-and-papercut-fixes/task-003, interactive-board/task-019.
 
 # Wording is normalised away (case, punctuation, order, articles, plurals); every other word is

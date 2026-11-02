@@ -14,7 +14,9 @@
 # `prune-worktrees.sh` stays report-only and this never calls it. Guards G1-G13, why
 # each exists, and why forced removal is never passed: docs/conventions.md invariant 7.
 set -uo pipefail
-. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
+HERE="$(dirname "${BASH_SOURCE[0]:-$0}")"
+. "$HERE/bundle-paths.sh" || exit 2
+. "$HERE/kb-words.sh" || exit 2
 
 CONFIG="instance.config.json"
 LOCAL_CONFIG="instance.config.local.json"
@@ -128,7 +130,6 @@ fm="$(fm_block "$rel")" || rc=$?
 STATUS="$(fm_scalar "$fm" status)"
 WT_REC="$(fm_scalar "$fm" worktree)"
 BR_REC="$(fm_scalar "$fm" branch)"
-REPO_REC="$(fm_scalar "$fm" target_repo)"
 SESSION_REC="$(fm_scalar "$fm" session)"
 
 # --- G2: the task must be done -----------------------------------------------
@@ -190,13 +191,37 @@ EOF
         absent). A path out of a text document is checked against config, never
         trusted."
 
-# --- G5: the expected repo comes from the task -------------------------------
+# --- G5: the expected repo comes from the task, else its project --------------
 
+REPO_REC="$(bash "$HERE/service-doc.sh" --repo "$rel" 2>/dev/null)" || REPO_REC=""
 [ -n "$REPO_REC" ] || refuse "$rel records no 'target_repo:', so the repo this worktree
         should belong to cannot be established from the task."
+case "$REPO_REC" in
+  */*) ;;
+  *) ORG="$(config_path org)"
+     [ -n "$ORG" ] || fatal "target_repo '$REPO_REC' names no org and 'org' is not set — check $LOCAL_CONFIG / $CONFIG."
+     REPO_REC="$(kb_repo_norm "$ORG/$REPO_REC")" ;;
+esac
+# The compare is case-insensitive, the clone directory may not be: an exact name first, else
+# the one directory that matches ignoring case.
 REPO_DIR="$REPOS_ROOT/${REPO_REC##*/}"
+if [ ! -e "$REPO_DIR/.git" ]; then
+  n=0
+  for d in "$REPOS_ROOT"/*; do
+    [ -e "$d/.git" ] && [ "$(kb_repo_norm "${d##*/}")" = "${REPO_REC##*/}" ] && { hit="$d"; n=$((n + 1)); }
+  done
+  [ "$n" -eq 1 ] && REPO_DIR="$hit"
+fi
 [ -e "$REPO_DIR/.git" ] || refuse "expected repo '$REPO_REC' is not cloned at $REPO_DIR."
 REPO_CANON="$(canon "$REPO_DIR")"
+# The clone's own identity, not its directory name. `config --get`, not `remote get-url`:
+# the latter expands `insteadOf`, so a mirror rewrite would hide which repo this is.
+ORIGIN_URL="$(git -C "$REPO_DIR" config --get remote.origin.url 2>/dev/null)"
+u="${ORIGIN_URL%/}"; u="${u%.git}"; o="${u%/*}"; o="${o##*/}"; o="${o##*:}"
+ORIGIN_NWO=""; [ -n "$o" ] && [ "$o" != "$u" ] && ORIGIN_NWO="$(kb_repo_norm "$o/${u##*/}")"
+[ "$ORIGIN_NWO" = "$REPO_REC" ] || refuse "$REPO_DIR has origin '${ORIGIN_URL:-<none>}', which is not
+        $REPO_REC. A directory name is not a repo's identity, and a PR merged in
+        $REPO_REC is no evidence about another repo's worktree."
 
 # --- G6/G7/G8: what git says about that exact path ---------------------------
 # The porcelain reports `detached` explicitly, where `rev-parse --abbrev-ref HEAD`
@@ -278,7 +303,7 @@ while IFS= read -r url; do
   [ -n "$url" ] || continue
   pr_count=$((pr_count + 1))
   slug="$(printf '%s' "$url" | sed -n 's#^https\{0,1\}://[^/]*/\([^/]*\)/\([^/]*\)/pull/[0-9]*.*#\1/\2#p')"
-  [ "$slug" = "$REPO_REC" ] && own_repo=0
+  [ "$(kb_repo_norm "$slug")" = "$REPO_REC" ] && own_repo=0
   state="$( gh pr view "$url" --json state --jq '.state' 2>/dev/null )" \
     || refuse "gh could not read $url (auth, network, or a deleted PR). Refusing
         rather than assuming it merged."
@@ -311,7 +336,7 @@ IGNORE_OK=" node_modules .pnpm-store .pnpm-store-task .bun-cache .venv venv __py
 dist build out coverage "
 
 # No python3 or no key leaves the list as above: absence only ever refuses more.
-extra="$(bash "$(dirname "${BASH_SOURCE[0]:-$0}")/resolve-config.sh" --json reclaimIgnoreOk 2>/dev/null)" || extra=""
+extra="$(bash "$HERE/resolve-config.sh" --json reclaimIgnoreOk 2>/dev/null)" || extra=""
 while IFS= read -r name; do
   [ -n "$name" ] || continue
   case "$name" in
@@ -435,7 +460,7 @@ EOF
 
 live="$(live_processes_in "$WT")"
 if [ -n "$live" ] && [ -n "$SESSION_REC" ] \
-   && worker="$(bash "$(dirname "${BASH_SOURCE[0]:-$0}")/agent-sessions.sh" worker "$SESSION_REC" 2>/dev/null)" \
+   && worker="$(bash "$HERE/agent-sessions.sh" worker "$SESSION_REC" 2>/dev/null)" \
    && own_session_only "$live" "${worker##* }"; then
   short="$(printf '%s' "$worker" | cut -d' ' -f2)"
   printf "refuse: own session %s (pid %s) is the only live process in %s — the task's

@@ -41,7 +41,8 @@ review an agent posts ends with its role signature". **Exempt:** a PR body, and 
 > you never need it to *run* a tick.
 
 **Instance config.** Read `instance.config.json` at the bundle root for this
-instance's `org` (GitHub org for `target_repo` values) and `reposRoot` (where
+instance's `org` (GitHub org for `target_repo` values, written `<org>/<repo>` per
+`${CLAUDE_PLUGIN_ROOT}/tick-steps/step-2-refine-drafts.md`) and `reposRoot` (where
 target repos are cloned locally). Never hardcode these — they differ per instance.
 Honor this instance's `CLAUDE.md` for data-handling, units, and team-routing rules.
 An `instance.config.local.json` beside it (gitignored, per-machine) overrides the
