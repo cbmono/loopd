@@ -57,14 +57,22 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    and an exit 2, on the task as one `# Notes` line, `worktree retained: <reason>`, and
    never retry around it. Exit 3 is nothing to do.
 
-   **Then stop the dead sessions no task owns — once, every tick that reads this step.**
+   **Then sweep this bundle's sessions — once, every tick (the IDLE path of step 0.9 too).**
    `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` runs `claude stop` on what
-   `agent-sessions.sh dead-ids` selects: no live pid on the row or in the daemon roster, no
-   task records it or holds its `cwd` as its `worktree:` (that session is the task's), a `cwd`
-   under this bundle's root (never the shared worktree root, never a row with no `cwd`), older than 10 minutes — 24 hours when `blocked`
-   — and at most 20 a tick. Carry every `stopped <short> (<age>)` and `stop-failed <short>`
-   line it prints onto your `log.md` close summary; a `stop-failed` is not retried this tick
-   and never stopped by hand. Exit 2 stopped nothing: one line in the tick report.
+   `agent-sessions.sh stop-ids` selects, `background` rows with a `state` only, never the
+   running tick's or the lock's session: **dead** — no live pid on the row or in the daemon
+   roster, no task records it or holds its `cwd` as its `worktree:`, a `cwd` under this
+   bundle's root (never the shared worktree root, never a row with no `cwd`), older than
+   10 minutes, 24 hours when `blocked`; **finished** — a terminal `state` with a live pid,
+   unrecorded, its `cwd` under this bundle's root and not under the worktree root (a reaped
+   tick); **idle** — an open task's live, not-`blocked` session whose last assistant turn
+   is older than `maxIdleMinutes` (absent ⇒ 120); **busy** — one whose last text user turn
+   is older than `maxBgRoundMinutes` (absent ⇒ 1440), stopped through
+   `session-handoff.sh --busy`, which files a `👉 do` hand-off. `0` turns either bound off.
+   At most 20 a run, oldest first; the rest print `deferred` and are next run's. Carry every
+   `stopped`, `handed-off`, `stop-failed` and `deferred` line onto your `log.md` close
+   summary; a `stop-failed` is not retried this tick and never stopped by hand. Exit 2
+   stopped nothing: one line in the tick report.
 
    **The retry is the one time step 5 revisits a `done` task.** A `done` task whose
    recorded `worktree:` is still on disk and whose `# Notes` hold no `worktree retained:`

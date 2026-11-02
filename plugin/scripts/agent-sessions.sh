@@ -32,6 +32,11 @@
 #                                                may stop: no live pid (row or roster), no
 #                                                task records it or its cwd, cwd under the
 #                                                bundle root, past 10m (blocked: 24h)
+#   agent-sessions.sh stop-ids <bundle-root>  -> `<uuid> <short> <age> <class> <task|->`, oldest
+#                                                first: `dead` as above; `finished` terminal, live
+#                                                pid, cwd under the bundle root, unrecorded;
+#                                                `idle`/`busy` an open task's live session past
+#                                                maxIdleMinutes (120) / maxBgRoundMinutes (1440)
 #   agent-sessions.sh worker <session-id> [--roster <file>]
 #                                             -> `worker <short> <pid>`: the daemon's live
 #                                                process for it (roster.json); exit 1 none
@@ -295,24 +300,31 @@ PY
     printf '%s\n' "$live"
     ;;
 
-  view|dead-ids)
+  view|dead-ids|stop-ids)
     mode="$1"; root="${2:-}"; summary=0
     if [ "$mode" = view ]; then [ $# -ge 2 ] && [ $# -le 3 ] || usage; else [ $# -eq 2 ] || usage; summary=dead; fi
+    [ "$mode" = stop-ids ] && summary=stop
     if [ $# -eq 3 ]; then [ "$3" = "--summary" ] || usage; summary=1; fi
     [ -d "$root" ] || { echo "agent-sessions: no such bundle root: $root" >&2; exit 2; }
     json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
     here="$(dirname "${BASH_SOURCE[0]:-$0}")"
     # dead-ids leaves worktreeRoot out of scope: it is shared by every bundle on the machine.
-    wtroot=""; skip=""
-    if [ "$mode" = view ]; then
+    wtroot=""; skip=""; bounds=""; self=""
+    if [ "$mode" = view ] || [ "$mode" = stop-ids ]; then
       wtroot="$(bash "$here/resolve-config.sh" --instance "$root" worktreeRoot 2>/dev/null)" || wtroot=""
       if [ -z "$wtroot" ]; then
         rr="$(bash "$here/resolve-config.sh" --instance "$root" reposRoot 2>/dev/null)" || rr=""
         [ -n "$rr" ] && wtroot="$rr/_wt"
       fi
-    else
+    fi
+    if [ "$mode" != view ]; then
       . "$here/bundle-paths.sh" || exit 2
-      skip="${CLAUDE_CODE_SESSION_ID:-} $(sed -n 's/^session:[[:space:]]*//p' "$root/$AB_LOCK" 2>/dev/null)"
+      self="${CLAUDE_CODE_SESSION_ID:-} $(sed -n 's/^session:[[:space:]]*//p' "$root/$AB_LOCK" 2>/dev/null)"
+      skip="$self"
+      for k in maxIdleMinutes:120 maxBgRoundMinutes:1440; do
+        v="$(bash "$here/resolve-config.sh" --instance "$root" "${k%%:*}" 2>/dev/null)" || v=""
+        bounds="$bounds ${v:-${k#*:}}"
+      done
     fi
     # `<worktree> TAB <task file>` per task that recorded one, terminal tasks included: a
     # merged task's lingering session is still THAT task's session.
@@ -327,22 +339,28 @@ PY
         if (v != "") print v "\t" FILENAME
       }' "$@" 2>/dev/null)"
     # A session a task records is that task's to stop (session-handoff.sh), wherever its cwd.
-    [ "$mode" = dead-ids ] && [ -e "$1" ] && skip="$skip $(awk '
-      FNR == 1 { fm = ($0 == "---"); next }
-      fm && $0 == "---" { fm = 0; next }
-      fm && /^session:/ { v = $0; sub(/^session:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v); gsub(/["\047\r]/, "", v); print v }
+    # `<session> TAB <status> TAB <task file>` per task that records a session.
+    recs=""
+    [ "$mode" != view ] && [ -e "$1" ] && recs="$(awk '
+      FNR == 1 { fm = ($0 == "---"); st = ""; v = ""; next }
+      fm && $0 == "---" { fm = 0; if (v != "") print v "\t" st "\t" FILENAME; next }
+      fm && /^status:/ { st = $0; sub(/^status:[[:space:]]*/, "", st); sub(/[[:space:]]+#.*$/, "", st); gsub(/["\047\r]/, "", st) }
+      fm && /^session:/ { v = $0; sub(/^session:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v); gsub(/["\047\r]/, "", v) }
       ' "$@" 2>/dev/null)"
+    skip="$skip $(printf '%s\n' "$recs" | cut -f1)"
     classify() {
-    python3 - "$json" "$root" "$wtroot" "$TERMINAL" "$summary" "$tasks" "$skip" <<'PY'
-import json, os, re, sys, time, unicodedata
-raw, root, wtroot, terminal, summary, tasks, skip = sys.argv[1:8]
+    python3 - "$json" "$root" "$wtroot" "$TERMINAL" "$summary" "$tasks" "$skip" "$recs" "$self" "$bounds" \
+      "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" <<'PY'
+import glob, json, os, re, sys, time, unicodedata
+from datetime import datetime
+raw, root, wtroot, terminal, summary, tasks, skip, recs, self_ids, bounds, projects = sys.argv[1:12]
 try:
     rows = json.loads(raw)
 except Exception:
     sys.exit(2)
 if not isinstance(rows, list):
     sys.exit(2)
-dead, skip = summary == "dead", set(skip.split())
+dead, stop, skip, self_ids = summary in ("dead", "stop"), summary == "stop", set(skip.split()), set(self_ids.split())
 # With no pid anywhere, every row would read dead — a CLI that stopped emitting it.
 if dead and rows and not any(isinstance(r, dict) and "pid" in r for r in rows):
     print("agent-sessions: no row carries a pid — liveness unknown", file=sys.stderr)
@@ -360,7 +378,41 @@ for line in tasks.splitlines():
         m = re.match(r"(task-[0-9]+)-", stem)
         label = os.path.basename(os.path.dirname(os.path.dirname(path))) + "/" + (m.group(1) if m else stem)
         by_wt.append((canon(wt), label))
-scope = [canon(root), canon(wtroot)] + [w for w, _ in by_wt]
+scope = [canon(root), canon(wtroot) if not dead else ""] + [w for w, _ in by_wt]
+rec = {}
+for line in recs.splitlines():
+    s_, st_, path = (line.split("\t") + ["", ""])[:3]
+    if s_ and path:
+        rec[s_] = (st_, path)
+
+def bound(v):
+    return int(v) * 60 if re.fullmatch(r"[0-9]+", v) and int(v) > 0 else None
+idle_s, busy_s = (bound(v) for v in (bounds.split() + ["", ""])[:2])
+
+def user_text(e):
+    c = (e.get("message") or {}).get("content") if isinstance(e.get("message"), dict) else None
+    if isinstance(c, str):
+        return True
+    return (isinstance(c, list) and any(isinstance(b, dict) and b.get("type") == "text" for b in c)
+            and not any(isinstance(b, dict) and b.get("type") == "tool_result" for b in c))
+
+# The transcript is the only clock for a turn (D7): `startedAt` counts idle days as busy ones.
+def last_entry(sid, want):
+    found = glob.glob(os.path.join(glob.escape(projects), "*", sid + ".jsonl"))
+    if len(found) != 1:
+        return None
+    t = None
+    try:
+        for line in open(found[0], encoding="utf-8"):
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(e, dict) and e.get("type") == want and (want != "user" or user_text(e)):
+                t = e.get("timestamp")
+        return datetime.fromisoformat(str(t).replace("Z", "+00:00")).timestamp() if t else None
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
 
 # A PROCESS, not the registry's word for one: a session the registry still lists as
 # `blocked` after its agent died carries no live pid, and `state` cannot tell the two apart.
@@ -397,8 +449,33 @@ def age(ms):
 
 out, running, ghost, ended, cands = [], 0, 0, 0, []
 for r in rows:
-    if not isinstance(r, dict) or r.get("kind", "background") != "background":
+    if not isinstance(r, dict) or r.get("kind", "background" if not dead else None) != "background":
         continue
+    if dead and not r.get("state"):
+        continue
+    if stop:
+        sid, state, s = str(r.get("sessionId") or ""), str(r.get("state")), secs(r.get("startedAt"))
+        hit = rec.get(sid) or rec.get(sid.split("-")[0])
+        cls = None
+        if (not re.fullmatch(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", sid)
+                or self_ids & {sid, sid.split("-")[0]} or not alive(r.get("pid"))):
+            pass
+        elif hit is None and state in terminal:
+            c = canon(r.get("cwd") if isinstance(r.get("cwd"), str) else "")
+            if (under(c, canon(root)) and not under(c, canon(wtroot))
+                    and not any(under(c, w) for w, _ in by_wt)):
+                cls = "finished"
+        elif hit and hit[0] not in ("done", "cancelled") and state not in terminal and state != "blocked":
+            st, now = r.get("status"), time.time()
+            if st == "idle" and idle_s:
+                t = last_entry(sid, "assistant")
+                cls = "idle" if t is not None and now - t >= idle_s else None
+            elif st == "busy" and busy_s:
+                t = last_entry(sid, "user")
+                cls = "busy" if t is not None and now - t >= busy_s else None
+        if cls:
+            cands.append((-(s or 0), sid, age(r.get("startedAt")), cls, hit[1] if hit else "-"))
+            continue
     cwd = r.get("cwd") if isinstance(r.get("cwd"), str) else ""
     c = canon(cwd)
     # Another bundle's session is out of scope; a row with no cwd cannot be placed, so it
@@ -424,15 +501,15 @@ for r in rows:
                 and s >= (86400 if state == "blocked" else 600)
                 and re.fullmatch(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", sid)
                 and not skip & {sid, sid.split("-")[0]}):
-            cands.append((-s, sid, age(r.get("startedAt"))))
+            cands.append((-s, sid, age(r.get("startedAt")), "dead", "-"))
         continue
     sid = clean(r.get("id") or str(r.get("sessionId") or "?").split("-")[0])
     where = "" if labels else "  " + clean(cwd or "(no cwd)")
     out.append((rank, task, clean(state), proc, age(r.get("startedAt")), sid + where))
 
 if dead:
-    for _, sid, a in sorted(cands):
-        print(sid, sid.split("-")[0], a)
+    for _, sid, a, cls, task in sorted(cands):
+        print(sid, sid.split("-")[0], a, *((cls, task) if stop else ()))
     sys.exit(0)
 if summary == "1":
     print(running, ghost)
@@ -448,12 +525,14 @@ PY
     out="$(classify)" || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
     if [ "$mode" = view ]; then printf '%s\n' "$out"; exit 0; fi
     # The daemon's roster is the second liveness witness; an unreadable entry keeps the row.
-    printf '%s\n' "$out" | while read -r sid short a; do
+    printf '%s\n' "$out" | while read -r sid short a cls task; do
       [ -n "$sid" ] || continue
-      w="$(bash "$0" worker "$sid" 2>/dev/null)"; rc=$?
-      if [ $rc -eq 0 ]; then ps -p "${w##* }" >/dev/null 2>&1 && continue
-      elif [ $rc -ne 1 ]; then continue; fi
-      echo "$sid $short $a"
+      if [ "${cls:-dead}" = dead ]; then
+        w="$(bash "$0" worker "$sid" 2>/dev/null)"; rc=$?
+        if [ $rc -eq 0 ]; then ps -p "${w##* }" >/dev/null 2>&1 && continue
+        elif [ $rc -ne 1 ]; then continue; fi
+      fi
+      echo "$sid $short $a${cls:+ $cls $task}"
     done
     ;;
 

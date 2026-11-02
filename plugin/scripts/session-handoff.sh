@@ -6,9 +6,12 @@
 #
 #   session-handoff.sh <task-doc> [--jobs-dir <dir>]
 #     task `done`/`cancelled` -> `stopped <short> <status>` (a pending `needs` is filed
-#                                first), or `ended <short> <state>` when nothing was running
+#                                first), or `ended <short> <state>` when terminal with no live pid
 #     any other task, its session `blocked` with a `needs` and no live prompt
 #                             -> `handed-off <short> <id> Q<n>`, then `claude stop <short>`
+#   session-handoff.sh --busy <task-doc>
+#                             -> as a hand-off, for a round past maxBgRoundMinutes: its `needs`,
+#                                or `busy past maxBgRoundMinutes — stopped` when it has none
 #   session-handoff.sh --owed <task-doc>
 #                             -> `owed <uuid> <id>` then `answer: <text>`: the human answered
 #                                the latest hand-off of the task's current session, nothing
@@ -23,7 +26,7 @@
 #
 # Exit 0 done · 1 not this script's case (`not-handed-off <why>`, `not-owed <why>`) · 2
 # unknown (no `claude`, an unreadable record or task) · 3 the stop did not land (the record
-# is written; the next tick stops again). Never `claude rm`.
+# is written; the next tick stops again). Never removes a session.
 #
 # Why (measured 2026-10-21, CLI 2.1.301-2.1.304): a round that ends listing jobs for the
 # human sits `blocked` with that list in `needs`, and `claude attach` showed nothing the
@@ -32,15 +35,16 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
-usage() { sed -n '7,15p' "$0" >&2; exit 2; }
+usage() { sed -n '7,18p' "$0" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "session-handoff: python3 is required" >&2; exit 2; }
 
-task=""; jobs="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/jobs"; owed=0
+task=""; jobs="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/jobs"; owed=0; busy=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --jobs-dir) [ $# -ge 2 ] || usage; jobs="$2"; shift 2 ;;
     --owed)     owed=1; shift ;;
-    -h|--help)  sed -n '3,30p' "$0"; exit 0 ;;
+    --busy)     busy=1; shift ;;
+    -h|--help)  sed -n '3,33p' "$0"; exit 0 ;;
     -*) usage ;;
     *) [ -z "$task" ] || usage; task="$1"; shift ;;
   esac
@@ -99,10 +103,17 @@ row="$(bash "$HERE/agent-sessions.sh" row "$sid" 2>/dev/null)"; rc=$?
 case $rc in 0) ;; 3) row='{"state":"gone"}' ;; *) echo "session-handoff: cannot read session $sid" >&2; exit 2 ;; esac
 rec="$jobs/$short/state.json"; [ -f "$rec" ] || rec="$jobs/$sid/state.json"
 # -> `<state> <id|-> <uuid>` then the folded needs text; exit 2 unreadable.
-read_needs() { # <row> <record> <session>
+read_needs() { # <row> <record> <session> <busy>
   python3 - "$@" <<'PY'
 import hashlib, json, os, re, sys
 row, rec, sid = json.loads(sys.argv[1]), sys.argv[2], sys.argv[3]
+pid = row.get("pid")
+try:
+    live = isinstance(pid, int) and not isinstance(pid, bool) and pid > 0 and os.kill(pid, 0) is None
+except PermissionError:
+    live = True
+except OSError:
+    live = False
 state = str(row.get("state") or row.get("status") or "working")
 d = {}
 if os.path.exists(rec):
@@ -114,18 +125,20 @@ if os.path.exists(rec):
 uuid = row.get("sessionId") or d.get("sessionId") or sid
 needs = d.get("needs") if isinstance(d.get("needs"), str) else ""
 needs = re.sub(r"\s+", " ", "".join(c if c.isprintable() else " " for c in needs)).strip()
+if not needs and sys.argv[4] == "1":
+    needs = "busy past maxBgRoundMinutes — stopped"
 # A live prompt is answered in the session, never filed: a fresh round would park on it.
 if not needs or row.get("waitingFor") or d.get("waitingFor"):
     hid = "-"
 else:
     h = hashlib.sha256("\n".join([uuid, str(row.get("startedAt")), needs]).encode()).hexdigest()[:8]
     hid = "%s-%s" % (uuid.split("-")[0], h)
-print(state, hid, uuid, "waiting" if (row.get("waitingFor") or d.get("waitingFor")) else "-")
+print(state, hid, uuid, "waiting" if (row.get("waitingFor") or d.get("waitingFor")) else "-", "live" if live else "-")
 print(needs)
 PY
 }
-info="$(read_needs "$row" "$rec" "$sid")" || { echo "session-handoff: unreadable job record $rec" >&2; exit 2; }
-read -r state hid uuid waiting <<EOF
+info="$(read_needs "$row" "$rec" "$sid" "$busy")" || { echo "session-handoff: unreadable job record $rec" >&2; exit 2; }
+read -r state hid uuid waiting live <<EOF
 $info
 EOF
 needs="$(printf '%s\n' "$info" | sed -n '2,$p')"
@@ -133,6 +146,18 @@ needs="$(printf '%s\n' "$info" | sed -n '2,$p')"
 stop_it() { # -> 0 the stop landed, 3 it did not
   claude stop "$short" >/dev/null 2>&1 </dev/null
   local after; after="$(bash "$HERE/agent-sessions.sh" state "$sid" 2>/dev/null)" || after=unknown
+  # A `done` row that still holds its pid has not stopped, whatever it says.
+  if [ "$live" = live ] && [ "$after" = done ]; then
+    after="$(bash "$HERE/agent-sessions.sh" row "$sid" 2>/dev/null | python3 -c 'import json, os, sys
+p = json.load(sys.stdin).get("pid")
+try:
+    assert isinstance(p, int) and not isinstance(p, bool) and p > 0
+    os.kill(p, 0); print("done-live")
+except PermissionError:
+    print("done-live")
+except Exception:
+    print("done")')" || after=unknown
+  fi
   case "$after" in stopped|done|gone) return 0 ;; esac
   echo "session-handoff: claude stop $short did not land (state: $after)" >&2
   return 3
@@ -153,9 +178,11 @@ file_it() { # -> prints Q<n>
   entry="$n: do: finish the agent's hand-off $hid — its jobs are in AWAITING.md; answer done, or with what its next round should know"
   cp -p "$task" "$tmp" || return 2
   bash "$HERE/fold-answers.sh" --add "$tmp" "$entry" >/dev/null || { rm -f "$tmp"; return 2; }
-  python3 - "$tmp" "$n" "$hid" "$uuid" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$AB_HANDOFFS" <<'PY' || { rm -f "$tmp"; return 2; }
+  local why="A role session ended its round with jobs only you can do"
+  [ "$busy" = 1 ] && why="A role session's round ran past maxBgRoundMinutes"
+  python3 - "$tmp" "$n" "$hid" "$uuid" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$AB_HANDOFFS" "$why" <<'PY' || { rm -f "$tmp"; return 2; }
 import re, sys
-path, q, hid, uuid, now, store = sys.argv[1:7]
+path, q, hid, uuid, now, store, why = sys.argv[1:8]
 src = open(path, encoding="utf-8").read()
 end = src.find("\n---", 3) + 4
 head, lines = src[:end], src[end:].split("\n")
@@ -181,7 +208,7 @@ append_to("## Question details", ["", "### " + q,
     "Options:",
     "1. done",
     "Context:",
-    "- Depth 1: A role session ended its round (hand-off %s) with jobs only you can do, and the tick stopped it." % hid,
+    "- Depth 1: %s (hand-off %s), and the tick stopped it." % (why, hid),
     "- Depth 2: The jobs are in AWAITING.md; the full text is `%s/%s.txt` on the clone that filed it, and `claude logs %s` shows the session." % (store, hid, uuid.split("-")[0]),
     "- Depth 3: Your answer is the resumed session's next message — `done`, or anything it should know first."])
 append_to("# Notes", ["* %s needs handed off %s · hand-off %s · %s · session stopped by the tick" % (now, uuid, hid, q)])
@@ -204,12 +231,13 @@ case "$status" in
   done|cancelled)
     # Jobs left for after the merge are filed first: the done path never discards them.
     if [ "$state" = blocked ] && [ "$hid" != - ]; then handoff || exit 2; fi
-    case "$TERMINAL" in *" $state "*) echo "ended $short $state"; exit 0 ;; esac
+    case "$TERMINAL" in *" $state "*) [ "$live" = live ] || { echo "ended $short $state"; exit 0; } ;; esac
     stop_it || exit 3
     echo "stopped $short $status"; exit 0 ;;
 esac
 
-[ "$state" = blocked ] || { echo "not-handed-off not-blocked $state"; exit 1; }
+case "$TERMINAL" in *" $state "*) echo "not-handed-off ended $state"; exit 1 ;; esac
+[ "$state" = blocked ] || [ "$busy" = 1 ] || { echo "not-handed-off not-blocked $state"; exit 1; }
 [ "$waiting" = - ] || { echo "not-handed-off waiting-for"; exit 1; }
 [ "$hid" != - ] || { echo "not-handed-off no-needs"; exit 1; }
 handoff || exit 2

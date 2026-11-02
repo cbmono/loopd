@@ -89,9 +89,8 @@ assess() {
   head="$(git -C "$inst" show "HEAD:$AB_LEDGER" 2>/dev/null | scan)" || head=none
   case "$head" in
     closed\ *)
-      # A bg session does not exit after its turn: the daemon retires it after ~60m idle,
-      # and `state` reads `working` all that while (measured 2026-10-31: 40m past a
-      # committed close, three fires dropped). `status: idle` is the turn over, so stop it
+      # A bg session does not exit after its turn, and `state` reads `working` while it
+      # stays resident (measured 2026-10-31: 40m past a committed close, three fires dropped). `status: idle` is the turn over, so stop it
       # as for `blocked` rather than hold the lock an hour. Anything else is still finishing.
       if [ "$state" = working ]; then
         [ "$(turn_status)" = idle ] || return 2
