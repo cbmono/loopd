@@ -82,18 +82,22 @@ ok "…where a naive comma split would say two" \
    "$(sed -n 's/^acceptance_criteria: //p' "$C" | tr ',' '\n' | grep -c . | tr -d ' ')" 2
 
 echo
-echo "== the refusals: it would rather write NOTHING =="
-D="$TMP/d.md"; doc "$D" '"c1"' '"Q1: a --- b"' ''
-python3 - "$D" <<'PY'
-import sys
-p = sys.argv[1]
-s = open(p).read().replace("answered_questions: [  ]\n", "")
-open(p, "w").write(s)
-PY
-cp "$D" "$TMP/d.before"
+echo "== no answered_questions: key: the first move creates it =="
+keyless() { doc "$1" '"c1"' "$2" ''; sed -i.bak '/^answered_questions: /d' "$1" && rm -f "$1.bak"; }
+D="$TMP/d.md"; keyless "$D" '"Q1: a --- b"'
 bash "$SH" "$D" >/dev/null 2>&1; RC=$?
-ok "no answered_questions: key ⇒ exit 3" "$RC" 3
-ok "…and the file is untouched"          "$(cmp -s "$D" "$TMP/d.before" && echo yes || echo no)" yes
+ok "a plain fold exits 0"                "$RC" 0
+ok "…open_questions is empty"            "$(bash "$SH" --list "$D" open_questions | grep -c . | tr -d ' ')" 0
+ok "…answered_questions holds the stamped entry" \
+   "$(bash "$SH" --list "$D" answered_questions | grep -cE '^[0-9T:Z-]+ by .+ · Q1: a --- b$' | tr -d ' ')" 1
+ok "…inside the frontmatter"             "$(awk '/^---$/{n++} n==1 && /^answered_questions:/' "$D" | grep -c . | tr -d ' ')" 1
+D2="$TMP/d2.md"; keyless "$D2" '"Q1: which?"'
+bash "$SH" --answer "Q1: which?" "this" "$D2" >/dev/null 2>&1; RC=$?
+ok "--answer exits 0"                    "$RC" 0
+ok "…and moves the answered entry"       "$(bash "$SH" --list "$D2" open_questions | grep -c . | tr -d ' '),$(bash "$SH" --list "$D2" answered_questions | sed 's/^.*· //')" "0,Q1: which? --- this"
+
+echo
+echo "== the refusals: it would rather write NOTHING =="
 
 E="$TMP/e.md"; printf 'no frontmatter here\n' > "$E"; cp "$E" "$TMP/e.before"
 bash "$SH" "$E" >/dev/null 2>&1

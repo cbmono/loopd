@@ -197,6 +197,16 @@ OUT="$(run "$B" 1 2>&1)"; RC=$?
 ok "no upstream: committed, not pushed, exit 0" "$RC,$(git -C "$B" log -1 --format=%s)" "0,docs: answer Q1 on task-001-x"
 
 echo
+echo "== NO answered_questions: KEY: the first answer creates it =="
+B="$(fixture keyless)"
+sed -i.bak '/^answered_questions: /d' "$B/$TASK_REL" && rm -f "$B/$TASK_REL.bak"
+git -C "$B" commit -qam "drop the key" && git -C "$B" push -q origin main
+OUT="$(run "$B" Q1 1 2>&1)"; RC=$?
+ok "it exits 0"                              "$RC" 0
+ok "answered_questions holds option 1"       "$(lastans "$B" | sed 's/^.*· //')" "Q1: which region? --- eu-central-1"
+ok "…and the answer is committed"            "$(git -C "$B" log -1 --format=%s),$(git -C "$B" status --porcelain | wc -l | tr -d ' ')" "docs: answer Q1 on task-001-x,0"
+
+echo
 echo "== THE SKILL routes arguments to the script =="
 ok "the skill may run answer.sh"             "$(grep -c 'scripts/answer.sh' "$SKILL" | awk '{print ($1>0)?"yes":"no"}')" yes
 ok "…and stays human-invoked only"           "$(grep -c '^disable-model-invocation: true' "$SKILL" | tr -d ' ')" 1
