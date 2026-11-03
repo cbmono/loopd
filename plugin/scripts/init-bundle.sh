@@ -2590,7 +2590,8 @@ if [ "$FIRST_STAMP" = no ] && [ -z "${LOOPD_INIT_PASS:-}${AI_BRIDGE_INIT_PASS:-}
   # line had been deleted they append it — and then the seed-drift resolver restores the
   # seed's own copy, because a seed-managed line is exactly what it takes the seed side
   # for. Two identical lines, harmless to git and a defect to anyone reading the file.
-  # Keeps the FIRST occurrence, so the seed's placement wins over the appended one.
+  # Keeps the FIRST occurrence, so the seed's placement wins over the appended one — unless
+  # a negation of it (or any glob negation) sits between, where the repeat is what wins.
   #
   # SPACE-SEPARATED, NOT NEWLINE. `awk -v` refuses a value containing a newline
   # ("newline in string") and the whole tidy then silently did nothing. Every path here is
@@ -2602,8 +2603,14 @@ if [ "$FIRST_STAMP" = no ] && [ -z "${LOOPD_INIT_PASS:-}${AI_BRIDGE_INIT_PASS:-}
     gi_managed="$gi_managed /$AB_KB_STAMP* /$AB_RECEIPTS/ /$AB_DIR/refresh/ /repos/ .env instance.config.local.json"
     tmp="$gi.tmp.$$"
     if awk -v managed="$gi_managed" '
+         function key(s) { sub(/^!/, "", s); sub(/^\//, "", s); sub(/\/$/, "", s); return s }
          BEGIN { n = split(managed, m, " "); for (i = 1; i <= n; i++) if (m[i] != "") mine[m[i]] = 1 }
-         ($0 in mine) && seen[$0]++ { next }
+         /^!/ { k = key($0); if (k ~ /[*?[]/) glob++; else neg[k]++ }
+         ($0 in mine) {
+           k = key($0)
+           if (($0 in at) && neg[k] + 0 == at[$0] && glob + 0 == gat[$0]) next
+           at[$0] = neg[k] + 0; gat[$0] = glob + 0
+         }
          { print }
        ' "$gi" > "$tmp" && ! cmp -s "$tmp" "$gi"; then
       mv "$tmp" "$gi"

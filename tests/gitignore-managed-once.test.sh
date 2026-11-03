@@ -83,6 +83,18 @@ ok "a second stamp leaves one KB-stamp line" "$(count "$OLD" "$KB")" 1
 ok "  and one refresh/ line" "$(count "$OLD" "$REF")" 1
 
 echo
+echo "== a negation between two copies keeps the repeat (git's last match wins) =="
+NEG="$TMP/neg"; mkdir -p "$NEG"; stamp "$TPL" "$NEG"
+printf '!/.env\n.env\n%s\n' "$KB" >> "$NEG/.gitignore"; commit "$NEG"; stamp "$TPL" "$NEG"
+ok "both .env lines stay" "$(count "$NEG" .env)" 2
+ok "  and .env is still ignored" "$(cd "$NEG" && git check-ignore -q .env && echo yes || echo no)" yes
+ok "  while the un-negated KB-stamp repeat is still dropped" "$(count "$NEG" "$KB")" 1
+GLOB="$TMP/glob"; mkdir -p "$GLOB"; stamp "$TPL" "$GLOB"
+printf '!*.json\n/%s\n' "$AB_SNAPSHOT" >> "$GLOB/.gitignore"; commit "$GLOB"; stamp "$TPL" "$GLOB"
+ok "a glob negation between keeps the repeat too" "$(count "$GLOB" "/$AB_SNAPSHOT")" 2
+ok "  and the snapshot is still ignored" "$(cd "$GLOB" && git check-ignore -q "$AB_SNAPSHOT" && echo yes || echo no)" yes
+
+echo
 echo "== MUTATION: gi_managed without the KB stamp writes it twice =="
 M="$TMP/mutant"; old_bundle "$M"; stamp "$MUT" "$M"
 ok "the mutant leaves two KB-stamp lines" "$(count "$M" "$KB")" 2
