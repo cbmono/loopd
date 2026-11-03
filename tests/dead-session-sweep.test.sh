@@ -173,11 +173,12 @@ echo "== the mutants: the guards above discriminate =="
 cp -R "$REPO/plugin/scripts" "$TMP/scripts"; M="$TMP/scripts/agent-sessions.sh"
 mk "$TMP/main.spec"
 mut() { PATH="$P" bash "$M" dead-ids "$B" 2>/dev/null | awk '{print $2}' | grep -c "^$1$"; }
-sed 's/and not skip & {sid, sid.split("-")\[0\]}/and True/' "$SESS" > "$M"
+C="$TMP/scripts/agent-sessions-classify.py"; CSRC="$REPO/plugin/scripts/agent-sessions-classify.py"
+sed 's/and not skip & {sid, sid.split("-")\[0\]}/and True/' "$CSRC" > "$C"
 ok "dropping the skip set selects the lock's session" "$(mut 0000c0c0)" 1
-sed 's/86400 if state == "blocked" else 600/0/' "$SESS" > "$M"
+sed 's/86400 if state == "blocked" else 600/0/' "$CSRC" > "$C"
 ok "dropping the floors selects a 9m-old row" "$(mut 0000b202)" 1
-sed 's/ps -p /false /' "$SESS" > "$M"
+cp "$CSRC" "$C"; sed 's/ps -p /false /' "$SESS" > "$M"
 ok "dropping the roster check selects a roster-live row" "$(mut 0000f102)" 1
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"

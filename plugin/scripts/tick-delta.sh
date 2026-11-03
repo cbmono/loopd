@@ -100,6 +100,7 @@
 # Verified by tests/tick-delta.test.sh.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/lib/critique-receipt.sh" || exit 2
 
 STATE_NAME="$AB_STATE_DIR"
 
@@ -474,12 +475,11 @@ $prs"
 # `record` must not capture them. Cheapest first; every doubt is a DELTA.
 # A draft is untriaged when a concern in `advisor_notes` postdates its newest
 # `* <ISO 8601> triage: …` line under `# Notes` (step-2-refine-drafts.md writes it).
-RCPT='^[^ ]+ · advisor: approach critique — '
 untriaged() { # <file> -> 0 untriaged, 1 not, 2 unreadable
   [ "$(fmcount "$1" advisor_notes)" -gt 0 ] || return 1
   local notes con tri
   notes="$(bash "$FOLD" --list "$1" advisor_notes 2>/dev/null)" || return 2
-  con="$(printf '%s\n' "$notes" | grep . | grep -vE "$RCPT"'(no concerns[[:space:]]*$|not run \()' || true)"
+  con="$(printf '%s\n' "$notes" | grep . | grep -vE "$CRITIQUE_RECEIPT" || true)"
   [ -n "$con" ] || return 1
   con="$(printf '%s\n' "$con" | sed 's/[[:space:]].*//' | sort | tail -n1)"
   tri="$(awk '/^# /{n = ($0 ~ /^# Notes[[:space:]]*$/); next}
@@ -491,9 +491,9 @@ rerun_owed() { # <file> -> 0 owed, 1 not, 2 unreadable
   [ "$(fmcount "$1" advisor_notes)" -gt 0 ] || return 1
   local notes nr rest
   notes="$(bash "$FOLD" --list "$1" advisor_notes 2>/dev/null)" || return 2
-  nr="$(printf '%s\n' "$notes" | grep -E "$RCPT"'not run \(' || true)"
+  nr="$(printf '%s\n' "$notes" | grep -E "$CRITIQUE_NOT_RUN" || true)"
   [ -n "$nr" ] && [ "$(printf '%s\n' "$nr" | wc -l)" -eq 1 ] || return 1
-  rest="$(printf '%s\n' "$notes" | grep . | grep -vE "$RCPT"'not run \(' | sed 's/[[:space:]].*//' | sort | tail -n1)"
+  rest="$(printf '%s\n' "$notes" | grep . | grep -vE "$CRITIQUE_NOT_RUN" | sed 's/[[:space:]].*//' | sort | tail -n1)"
   [ -z "$rest" ] || [[ "$rest" < "${nr%% *}" ]]
 }
 owed_work() {

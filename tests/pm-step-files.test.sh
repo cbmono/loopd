@@ -170,7 +170,7 @@ ok "the probe prints no steps: line, ever" \
 # first — the core's "any exit but 0 reads ALL of them" is what then applies.
 NOSTEPS="$TMP/nosteps"; mkdir -p "$NOSTEPS/scripts"
 cp "$REPO/plugin/scripts/tick-delta.sh" "$REPO/plugin/scripts/bundle-paths.sh" \
-   "$REPO/plugin/scripts/fold-answers.sh" "$NOSTEPS/scripts/"
+   "$REPO/plugin/scripts/fold-answers.sh" "$NOSTEPS/scripts/"; cp -R "$REPO/plugin/scripts/lib" "$NOSTEPS/scripts/lib"
 ok "no tick-steps directory is exit 2, not an empty steps: line" \
    "$(bash "$NOSTEPS/scripts/tick-delta.sh" digest --instance "$T" >/dev/null 2>&1; echo $?)" 2
 ok "…and no steps: line is printed at all" \

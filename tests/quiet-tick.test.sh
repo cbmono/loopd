@@ -44,7 +44,7 @@ mkdir -p "$INST/projects/quiet-proj/tasks" "$INST/scripts" "$INST/$AB_DIR"
 cp "$SRC" "$INST/scripts/tick-delta.sh"; chmod +x "$INST/scripts/tick-delta.sh"
 # The mutants and copies run from a staged directory, and the script sources its sibling
 # resolver (ai-bridge-v3/task-031) — without it they exit 2 before reaching their subject.
-cp "$REPO/plugin/scripts/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"
+cp "$REPO/plugin/scripts/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"; cp -R "$REPO/plugin/scripts/lib" "$INST/scripts/lib"
 SH="$INST/scripts/tick-delta.sh"
 
 task() { printf 'type: Task\nkind: build\nstatus: %s\npr: []\n' "$2" > "$1"; }

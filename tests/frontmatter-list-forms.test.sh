@@ -76,7 +76,7 @@ build() { # <dir> <flow|block>
     list acceptance_criteria "$f" "one"
     list open_questions "$f" 'Q1: still open, `x`?'
     printf 'pr: [ ]\ntimestamp: 2026-10-01T00:00:00Z\n---\n'; } > "$t/task-005-asking.md"
-  mkdir -p "$d/scripts"; cp "$P"/scripts/*.sh "$d/scripts/"; cp -R "$P/tick-steps" "$d/tick-steps"
+  mkdir -p "$d/scripts"; cp -R "$P"/scripts/. "$d/scripts/"; cp -R "$P/tick-steps" "$d/tick-steps"
   printf '/%s\n' "$AB_STATE_DIR" > "$d/.gitignore"
   GIT -C "$d" init -q && GIT -C "$d" add -A && GIT -C "$d" commit -qm init
 }

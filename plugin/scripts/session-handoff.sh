@@ -104,16 +104,11 @@ case $rc in 0) ;; 3) row='{"state":"gone"}' ;; *) echo "session-handoff: cannot 
 rec="$jobs/$short/state.json"; [ -f "$rec" ] || rec="$jobs/$sid/state.json"
 # -> `<state> <id|-> <uuid>` then the folded needs text; exit 2 unreadable.
 read_needs() { # <row> <record> <session> <busy>
-  python3 - "$@" <<'PY'
+  PYTHONPATH="$HERE" python3 - "$@" <<'PY'
 import hashlib, json, os, re, sys
+from pid_alive import alive
 row, rec, sid = json.loads(sys.argv[1]), sys.argv[2], sys.argv[3]
-pid = row.get("pid")
-try:
-    live = isinstance(pid, int) and not isinstance(pid, bool) and pid > 0 and os.kill(pid, 0) is None
-except PermissionError:
-    live = True
-except OSError:
-    live = False
+live = alive(row.get("pid"))
 state = str(row.get("state") or row.get("status") or "working")
 d = {}
 if os.path.exists(rec):
@@ -148,15 +143,8 @@ stop_it() { # -> 0 the stop landed, 3 it did not
   local after; after="$(bash "$HERE/agent-sessions.sh" state "$sid" 2>/dev/null)" || after=unknown
   # A `done` row that still holds its pid has not stopped, whatever it says.
   if [ "$live" = live ] && [ "$after" = done ]; then
-    after="$(bash "$HERE/agent-sessions.sh" row "$sid" 2>/dev/null | python3 -c 'import json, os, sys
-p = json.load(sys.stdin).get("pid")
-try:
-    assert isinstance(p, int) and not isinstance(p, bool) and p > 0
-    os.kill(p, 0); print("done-live")
-except PermissionError:
-    print("done-live")
-except Exception:
-    print("done")')" || after=unknown
+    after="$(bash "$HERE/agent-sessions.sh" row "$sid" 2>/dev/null \
+      | { bash "$HERE/agent-sessions.sh" alive - && echo done-live || echo done; })" || after=unknown
   fi
   case "$after" in stopped|done|gone) return 0 ;; esac
   echo "session-handoff: claude stop $short did not land (state: $after)" >&2

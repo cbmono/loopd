@@ -226,13 +226,14 @@ echo "== 7. the mutants: the assertions above discriminate =="
 cp -R "$REPO/plugin/scripts" "$TMP/scripts"; M="$TMP/scripts/agent-sessions.sh"
 sed 's/claude agents --json --all/claude agents --all/' "$SESS" > "$M"
 ok "dropping --json makes the read unknown" "$(PATH="$P" bash "$M" view "$B" --summary >/dev/null 2>&1; echo $?)" 2
-sed 's/^    if alive(pid):$/    if pid or alive(pid):/' "$SESS" > "$M"
+cp "$SESS" "$M"; C="$TMP/scripts/agent-sessions-classify.py"; CSRC="$REPO/plugin/scripts/agent-sessions-classify.py"
+sed 's/^    if alive(pid):$/    if pid or alive(pid):/' "$CSRC" > "$C"
 ok "keying on pid PRESENCE counts the dead pid as running" \
    "$(PATH="$P" bash "$M" view "$B" --summary 2>/dev/null)" "1 2 2"
 mone() { one "$1" >/dev/null; PATH="$P" FIXTURE="$TMP/one.json" bash "$M" view "$B" --summary 2>/dev/null; }
-sed 's/if st == "busy" or (st is None and state == "working"):/if state == "working":/' "$SESS" > "$M"
+sed 's/if st == "busy" or (st is None and state == "working"):/if state == "working":/' "$CSRC" > "$C"
 ok "reading state before status makes the idle row working" "$(mone b0000002)" "1 0 0"
-sed 's/(st is None and state == "working")/(st != "idle" and state == "working")/' "$SESS" > "$M"
+sed 's/(st is None and state == "working")/(st != "idle" and state == "working")/' "$CSRC" > "$C"
 ok "falling back on any non-idle status makes the unknown one working" "$(mone b0000008)" "1 0 0"
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"

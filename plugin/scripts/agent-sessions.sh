@@ -46,6 +46,8 @@
 #   agent-sessions.sh worker <session-id> [--roster <file>]
 #                                             -> `worker <short> <pid>`: the daemon's live
 #                                                process for it (roster.json); exit 1 none
+#   agent-sessions.sh alive <pid|->           -> exit 0 a live process (EPERM included), 1 not;
+#                                                `-` reads the pid off a `row` JSON on stdin
 #   agent-sessions.sh resume-id <full-id> <resume stdout|->
 #                                             -> `same <uuid>` or `copy <new uuid>`; exit 1
 #                                                `unresolved <short>`, a copy `full` misses
@@ -57,9 +59,10 @@
 # tests/resume-full-id.test.sh, tests/blocked-recorded.test.sh and tests/dead-session-sweep.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,51p' "$0" >&2; exit 2; }
+usage() { sed -n '3,53p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
+here="$(dirname "${BASH_SOURCE[0]:-$0}")"
 command -v python3 >/dev/null 2>&1 || {
   echo "agent-sessions: python3 is required to read \`claude agents --json\`" >&2; exit 2; }
 
@@ -149,8 +152,9 @@ case "$1" in
     if [ "$mode" = states ]; then [ $# -ge 1 ] || usage; else [ $# -eq 0 ] || usage; fi
     [ -n "${AB_SESSIONS_LISTING:-}" ] || command -v claude >/dev/null 2>&1 \
       || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
-    python3 - "$mode" "$secs" "$@" <<'PY' || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
+    PYTHONPATH="$here" python3 - "$mode" "$secs" "$@" <<'PY' || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
 import json, os, re, subprocess, sys
+from pid_alive import alive
 try:
     saved = os.environ.get("AB_SESSIONS_LISTING")
     raw = open(saved, "rb").read() if saved else subprocess.run(["claude", "agents", "--json", "--all"],
@@ -168,16 +172,6 @@ if sys.argv[1] == "listing":
     sys.stdout.buffer.write(raw)
     sys.exit(0)
 word = lambda v: re.sub(r"[^A-Za-z0-9_-]", "", str(v)) or "unknown"
-def alive(pid):
-    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 1:
-        return False
-    try:
-        os.kill(pid, 0)
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
 try:
     roster = json.load(open(os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"),
                                          "daemon", "roster.json"))).get("workers") or {}
@@ -344,7 +338,6 @@ PY
     if [ $# -eq 3 ]; then [ "$3" = "--summary" ] || usage; summary=1; fi
     [ -d "$root" ] || { echo "agent-sessions: no such bundle root: $root" >&2; exit 2; }
     json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
-    here="$(dirname "${BASH_SOURCE[0]:-$0}")"
     # dead-ids leaves worktreeRoot out of scope: it is shared by every bundle on the machine.
     wtroot=""; skip=""; bounds=""; self=""
     if [ "$mode" != dead-ids ]; then
@@ -385,196 +378,9 @@ PY
       fm && /^session:/ { v = $0; sub(/^session:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v); gsub(/["\047\r]/, "", v) }
       ' "$@" 2>/dev/null)"
     skip="$skip $(printf '%s\n' "$recs" | cut -f1)"
-    classify() {
-    python3 - "$json" "$root" "$wtroot" "$TERMINAL" "$summary" "$tasks" "$skip" "$recs" "$self" "$bounds" \
-      "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" <<'PY'
-import glob, json, os, re, sys, time, unicodedata
-from datetime import datetime
-raw, root, wtroot, terminal, summary, tasks, skip, recs, self_ids, bounds, projects = sys.argv[1:12]
-try:
-    rows = json.loads(raw)
-except Exception:
-    sys.exit(2)
-if not isinstance(rows, list):
-    sys.exit(2)
-dead, stop, skip, self_ids = summary in ("dead", "stop"), summary == "stop", set(skip.split()), set(self_ids.split())
-# With no pid anywhere, every row would read dead — a CLI that stopped emitting it.
-if dead and rows and not any(isinstance(r, dict) and "pid" in r for r in rows):
-    print("agent-sessions: no row carries a pid — liveness unknown", file=sys.stderr)
-    sys.exit(2)
-terminal = set(terminal.split())
-def canon(p):
-    return os.path.realpath(os.path.expanduser(p)) if p else ""
-def under(p, d):
-    return bool(p and d) and (p == d or p.startswith(d.rstrip("/") + "/"))
-by_wt = []
-for line in tasks.splitlines():
-    wt, _, path = line.partition("\t")
-    if wt and path:
-        stem = os.path.basename(path)[:-3]
-        m = re.match(r"(task-[0-9]+)-", stem)
-        label = os.path.basename(os.path.dirname(os.path.dirname(path))) + "/" + (m.group(1) if m else stem)
-        by_wt.append((canon(wt), label))
-scope = [canon(root), canon(wtroot) if not dead else ""] + [w for w, _ in by_wt]
-rec = {}
-for line in recs.splitlines():
-    s_, st_, path = (line.split("\t") + ["", ""])[:3]
-    if s_ and path:
-        rec[s_] = (st_, path)
-
-def bound(v):
-    return int(v) * 60 if re.fullmatch(r"[0-9]+", v) and int(v) > 0 else None
-idle_s, busy_s = (bound(v) for v in (bounds.split() + ["", ""])[:2])
-
-def user_text(e):
-    c = (e.get("message") or {}).get("content") if isinstance(e.get("message"), dict) else None
-    if isinstance(c, str):
-        return True
-    return (isinstance(c, list) and any(isinstance(b, dict) and b.get("type") == "text" for b in c)
-            and not any(isinstance(b, dict) and b.get("type") == "tool_result" for b in c))
-
-# The transcript is the only clock for a turn (D7): `startedAt` counts idle days as busy ones.
-def last_entry(sid, want):
-    found = glob.glob(os.path.join(glob.escape(projects), "*", sid + ".jsonl"))
-    if len(found) != 1:
-        return None
-    t = None
-    try:
-        for line in open(found[0], encoding="utf-8"):
-            try:
-                e = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(e, dict) and e.get("type") == want and (want != "user" or user_text(e)):
-                t = e.get("timestamp")
-        return datetime.fromisoformat(str(t).replace("Z", "+00:00")).timestamp() if t else None
-    except (OSError, UnicodeDecodeError, ValueError):
-        return None
-
-# A PROCESS, not the registry's word for one: a session the registry still lists as
-# `blocked` after its agent died carries no live pid, and `state` cannot tell the two apart.
-# EPERM means the process EXISTS; only ESRCH may be rendered as "no process".
-def alive(pid):
-    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
-
-# Display only — classification above reads the raw value, as `in-flight` does.
-# Every printed field comes from JSON or a file name, so no control character reaches a terminal.
-def clean(v):
-    return "".join(ch for ch in str(v) if unicodedata.category(ch)[0] != "C")
-
-def secs(ms):
-    if not isinstance(ms, (int, float)) or isinstance(ms, bool):
-        return None
-    return max(0, int(time.time() - ms / 1000))
-
-def age(ms):
-    s = secs(ms)
-    if s is None:
-        return "?"
-    for unit, n in (("d", 86400), ("h", 3600), ("m", 60)):
-        if s >= n:
-            return "%d%s" % (s // n, unit)
-    return "%ds" % s
-
-out, working, idle, ghost, ended, cands, busy = [], 0, 0, 0, 0, [], []
-for r in rows:
-    if not isinstance(r, dict) or r.get("kind", "background" if not dead else None) != "background":
-        continue
-    if dead and not r.get("state"):
-        continue
-    if stop:
-        sid, state, s = str(r.get("sessionId") or ""), str(r.get("state")), secs(r.get("startedAt"))
-        hit = rec.get(sid) or rec.get(sid.split("-")[0])
-        cls = None
-        if (not re.fullmatch(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", sid)
-                or self_ids & {sid, sid.split("-")[0]} or not alive(r.get("pid"))):
-            pass
-        elif hit is None and state in terminal:
-            c = canon(r.get("cwd") if isinstance(r.get("cwd"), str) else "")
-            if (under(c, canon(root)) and not under(c, canon(wtroot))
-                    and not any(under(c, w) for w, _ in by_wt)):
-                cls = "finished"
-        elif hit and hit[0] not in ("done", "cancelled") and state not in terminal and state != "blocked":
-            st, now = r.get("status"), time.time()
-            if st == "idle" and idle_s:
-                t = last_entry(sid, "assistant")
-                cls = "idle" if t is not None and now - t >= idle_s else None
-            elif st == "busy" and busy_s:
-                t = last_entry(sid, "user")
-                cls = "busy" if t is not None and now - t >= busy_s else None
-        if cls:
-            cands.append((-(s or 0), sid, age(r.get("startedAt")), cls, hit[1] if hit else "-"))
-            continue
-    cwd = r.get("cwd") if isinstance(r.get("cwd"), str) else ""
-    c = canon(cwd)
-    # Another bundle's session is out of scope; a row with no cwd cannot be placed, so it
-    # is shown as unattributed rather than assumed to be someone else's.
-    if c and not any(under(c, d) for d in scope):
-        continue
-    labels = sorted({l for w, l in by_wt if under(c, w)})
-    task = clean(",".join(labels) if labels else "unattributed")
-    state = str(r.get("state") or r.get("status") or "?")
-    pid = r.get("pid")
-    if alive(pid):
-        proc, rank = "pid %d" % pid, 0
-        st = r.get("status")
-        if st == "busy" or (st is None and state == "working"):
-            working += 1
-            busy.append(str(r.get("sessionId") or ""))
-        else:
-            idle += 1
-    elif state in terminal:
-        ended += 1
-        continue
-    else:
-        proc, rank = "none", 1
-        ghost += 1
-    if dead:
-        sid, s = str(r.get("sessionId") or ""), secs(r.get("startedAt"))
-        if (proc == "none" and not labels and c and s is not None
-                and s >= (86400 if state == "blocked" else 600)
-                and re.fullmatch(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", sid)
-                and not skip & {sid, sid.split("-")[0]}):
-            cands.append((-s, sid, age(r.get("startedAt")), "dead", "-"))
-        continue
-    sid = clean(r.get("id") or str(r.get("sessionId") or "?").split("-")[0])
-    where = "" if labels else "  " + clean(cwd or "(no cwd)")
-    out.append((rank, task, clean(state), proc, age(r.get("startedAt")), sid + where))
-
-if dead:
-    for _, sid, a, cls, task in sorted(cands):
-        print(sid, sid.split("-")[0], a, *((cls, task) if stop else ()))
-    sys.exit(0)
-if summary == "1":
-    print(working, idle, ghost)
-    sys.exit(0)
-if summary == "working":
-    open_rec = {}
-    for line in recs.splitlines():
-        s_, st_, p_ = (line.split("\t") + ["", ""])[:3]
-        if s_ and p_ and st_ not in ("done", "cancelled"):
-            open_rec.setdefault(s_, os.path.basename(p_)[:-3])
-    for sid in busy:
-        short = sid.split("-")[0]
-        print(clean(short or "?"), clean(open_rec.get(sid) or open_rec.get(short) or "unrecorded"))
-    sys.exit(0)
-w = max([len("TASK")] + [len(o[1]) for o in out])
-fmt = "%-" + str(w) + "s  %-9s %-10s %-5s %s"
-print(fmt % ("TASK", "STATE", "PROCESS", "AGE", "SESSION"))
-for o in sorted(out):
-    print(fmt % o[1:])
-print("%d working · %d idle · %d dead · %d ended, not listed" % (working, idle, ghost, ended))
-PY
-    }
-    out="$(classify)" || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
+    out="$(python3 "$here/agent-sessions-classify.py" "$json" "$root" "$wtroot" "$TERMINAL" "$summary" "$tasks" \
+      "$skip" "$recs" "$self" "$bounds" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects")" \
+      || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
     case "$mode" in view|working) printf '%s\n' "$out"; exit 0 ;; esac
     # The daemon's roster is the second liveness witness; an unreadable entry keeps the row.
     printf '%s\n' "$out" | while read -r sid short a cls task; do
@@ -615,6 +421,8 @@ print("worker", str(hits[0]["sessionId"]).split("-")[0], pid)
 PY
     ;;
 
+  alive) [ $# -eq 2 ] || usage; exec python3 "$here/pid_alive.py" "$2" ;;
+
   resume-id)
     [ $# -eq 3 ] || usage
     out="$3"; [ "$out" = - ] && out="$(cat)"
@@ -636,6 +444,6 @@ PY
     echo "copy $uuid"
     ;;
 
-  -h|--help) sed -n '3,51p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,53p' "$0"; exit 0 ;;
   *) usage ;;
 esac

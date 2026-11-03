@@ -137,6 +137,7 @@
 # Verified by tests/snapshot.test.sh.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/lib/critique-receipt.sh" || exit 2
 
 QUIET=0
 while [[ $# -gt 0 ]]; do
@@ -530,7 +531,7 @@ deliverable_path_entries() { # <frontmatter>
 advisor_note_count() { # <frontmatter>
   local e n
   e="$(yaml_list_entries "$1" advisor_notes | grep . || true)"
-  n="$(printf '%s\n' "$e" | grep . | grep -cvE '^[^ ]+ · advisor: approach critique — (no concerns[[:space:]]*$|not run \()' || true)"
+  n="$(printf '%s\n' "$e" | grep . | grep -cvE "$CRITIQUE_RECEIPT" || true)"
   if [[ -n "$e" ]]; then printf '%s' "${n:-0}"
   # Non-empty but nothing parsed: report 1 rather than 0. The board only ever says
   # "there is something here", so an honest floor beats a silent zero.
