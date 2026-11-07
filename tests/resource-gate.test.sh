@@ -83,6 +83,13 @@ has "mem UNKNOWN names key and floor" "$OUT" "mem: UNKNOWN (vm_stat gave no free
 UNAME=Plan9 run
 has "an OS with no probe is UNKNOWN" "$OUT" "mem: UNKNOWN (no memory probe for Plan9)"
 
+mkdir -p "$TMP/nopy"; printf '#!/bin/sh\nexit 3\n' > "$TMP/nopy/python3"; chmod +x "$TMP/nopy/python3"
+config '"minFreeDiskGb": 60, "minFreeMemGb": 9'; : > "$CALLS"
+OUT="$(PATH="$TMP/nopy:$BIN:$PATH" CALLS="$CALLS" bash "$SCRIPT" --instance "$INST" 2>&1)"; RC=$?
+ok "a config that cannot be read: exit 0" "$RC" 0
+has "…disk is UNKNOWN, not off" "$OUT" "disk: UNKNOWN (could not read minFreeDiskGb: resolve-config.sh exit 3) — dispatch allowed"
+has "…and memory is still evaluated" "$OUT" "mem: UNKNOWN (could not read minFreeMemGb: resolve-config.sh exit 3) — dispatch allowed"
+
 echo "== per-machine: the local file wins, and a bad value is no gate =="
 config '"minFreeDiskGb": 1'
 printf '{ "minFreeDiskGb": 60 }\n' > "$INST/instance.config.local.json"; run
@@ -94,7 +101,15 @@ has "…and says why" "$OUT" 'disk: off — minFreeDiskGb is not a positive numb
 echo "== the real probes parse on this machine (no shims) =="
 config "\"worktreeRoot\": \"$TMP\", \"minFreeDiskGb\": 0.001, \"minFreeMemGb\": 0.001"
 OUT="$(bash "$SCRIPT" --instance "$INST")"; RC=$?
-ok "real run: exit 0, both ok" "$RC:$(grep -c ' — ok$' <<<"$OUT")" "0:2"
+ok "real run: exit 0" "$RC" 0
+ok "real df parses" "$(grep -c '^disk: .* — ok$' <<<"$OUT")" 1
+case "$(uname -s)" in
+  Darwin) probe=$(command -v vm_stat >/dev/null && echo yes) ;;
+  Linux)  probe=$([ -r /proc/meminfo ] && echo yes) ;;
+  *)      probe="" ;;
+esac
+if [ -n "$probe" ]; then ok "real memory probe parses" "$(grep -c '^mem: .* — ok$' <<<"$OUT")" 1
+else printf '  SKIP  real memory probe: none on %s\n' "$(uname -s)"; fi
 
 echo "== step 3 runs the gate before the wave =="
 ok "step-3-dispatch.md names resource-gate.sh" \

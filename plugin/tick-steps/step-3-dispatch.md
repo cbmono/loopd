@@ -63,7 +63,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    It measures free disk on the filesystem holding `worktreeRoot` (absent,
    `<reposRoot>/_wt`) and this machine's available memory against **`minFreeDiskGb`** and
    **`minFreeMemGb`** (decimal GB, per-machine — `SCHEMA.md` → "Per-machine config
-   overrides"). **Either key absent ⇒ no gate for that resource**, today's behaviour.
+   overrides"). **Either key absent, or not a positive number ⇒ no gate for that
+   resource**, today's behaviour.
    - **exit 1** — below a floor: **spawn nothing this tick and write nothing on any task**
      — no status, no `worktree:`, no `open_questions` entry. Close the tick report with
      the refused line(s) verbatim (they carry the measured value, the floor and the key)
