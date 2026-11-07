@@ -54,6 +54,29 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    Tier `human`: nothing in the plugin changes the session's mode or writes a grant, and the
    preflight writes no `open_questions` entry — there is no refusal yet to report.
 
+   **Then the resource gate, once per tick, also before the wave's first status write:**
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/resource-gate.sh --instance <bundle root>
+   ```
+
+   It measures free disk on the filesystem holding `worktreeRoot` (absent,
+   `<reposRoot>/_wt`) and this machine's available memory against **`minFreeDiskGb`** and
+   **`minFreeMemGb`** (decimal GB, per-machine — `SCHEMA.md` → "Per-machine config
+   overrides"). **Either key absent, or not a positive number ⇒ no gate for that
+   resource**, today's behaviour.
+   - **exit 1** — below a floor: **spawn nothing this tick and write nothing on any task**
+     — no status, no `worktree:`, no `open_questions` entry. Close the tick report with
+     the refused line(s) verbatim (they carry the measured value, the floor and the key)
+     and `<k> ready left unattempted`. The next full tick re-attempts; nothing has to be
+     cleared.
+   - **exit 0** — dispatch as below. Quote any `UNKNOWN` line in the report: a measurement
+     that failed allows the dispatch.
+   - **any other exit** — the gate could not run; dispatch, and say so in the report.
+
+   It gates this step's wave only; a resume or a reviewer spawned at step 4 or 7 is not
+   gated.
+
    For each **build** `ready` task whose `depends_on` are all terminal (`done` or `cancelled`), that clears the
    ownership check, and that is not already in-progress: set `assignee` +
    `status: in-progress`, **and record `worktree:` (absolute) and `branch:` on the

@@ -53,7 +53,8 @@ LOCAL_ORDER = ["$schema", "ownerGithubUser", "authorEmail", "reposRoot", "worktr
                "boardInstances", "boardArtifactUrl", "boardPort", "models", "roleTiers",
                "roleEffort",
                "maxAgentsInFlight", "maxRepeatedToolCalls", "maxAgentMinutes", "roleMinutes",
-               "maxIdleMinutes", "maxBgRoundMinutes", "commitAttribution", "reclaimIgnoreOk"]
+               "maxIdleMinutes", "maxBgRoundMinutes", "minFreeDiskGb", "minFreeMemGb",
+               "commitAttribution", "reclaimIgnoreOk"]
 
 # The overridable keys whose TRACKED copy is NOT a documented fallback. That column is the
 # whole test: SCHEMA names the tracked value as the answer for authorEmail, models,
