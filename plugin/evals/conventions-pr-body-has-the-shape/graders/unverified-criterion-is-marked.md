@@ -6,4 +6,4 @@ flags: m
 weight: 1
 ---
 
-^\|[^|]*works with two host accounts[^|]*\|[ \t]*✗[ \t]*\|
+^\|[^|\n]*works with two host accounts[^|\n]*\|[ \t]*✗[ \t]*\|[^|\n]*account

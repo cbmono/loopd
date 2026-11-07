@@ -5,7 +5,7 @@ timeout_seconds: 180
 allowed_tools: [Read, Glob, Grep]
 ---
 
-You are the software engineer who just finished a task in a target repository, working under the conventions quoted in full below. Write the pull-request body for the change described after them and hand the body back in your answer — don't write any files.
+You are the software engineer who just finished a task in a target repository, working under the conventions quoted in full below. Write the pull-request body for the change described after them and hand back the body alone — nothing before or after it, and no files written.
 
 <!-- inline: plugin/seed/CONVENTIONS.md -->
 `````md
