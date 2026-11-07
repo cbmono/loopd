@@ -439,18 +439,27 @@ title: <project title> — design
 timestamp: <ISO 8601>
 tasks: [ "<component or edge> → task-NNN", ... ]   # every refined task appears
 pre_mortem: "the most likely reason this project fails as designed is …"   # optional: one sentence naming a component or edge on the diagram
+inputs_hash: <16 hex>   # what scripts/design-inputs.sh printed at the last write or redraw
 ---
 ```
 
 The body is one fenced `mermaid` block (`flowchart` or `graph`) — components as nodes,
-integrations as edges, trust boundaries as `subgraph`s — then one paragraph reading it.
+integrations as edges, trust boundaries as `subgraph`s — then the sections reading it:
+`## In one line` (with `pre_mortem:` repeated as a callout), `## Components` (diagram and
+legend), `## Happy path` (a sequence diagram, for a flow across three or more parties),
+`## Scope` (new, changed, reused, not built), `## Build order` (more than two tasks or
+slices), `## Decisions referenced` and an optional `## Open points`. A node label is 24
+characters or fewer; the layout rules are in `step-2-refine-drafts.md`.
 **Redrawn** when a task is refined (non-empty `acceptance_criteria`, not `cancelled`) whose
 id `tasks:` lacks; `tick-delta.sh check` reports that as a `DELTA` naming the project.
+**Redrawn** too when `inputs_hash:` differs from what `design-inputs.sh` prints now — a
+decision, a refined task's criteria or an answered question changed (a fold alone does
+not); `tick-delta.sh check` reports a `redraw stale` `DELTA`. Absent, never stale.
 `validate-bundle.sh` errors on a mapped `task-NNN` with no file under the project's
 `tasks/`. `AWAITING.md` links it once per project, on its first promote row; the snapshot
 carries its presence and path, never its body. **`pre_mortem:`** is written in the same
 refine pass from the diagram and the project's `decisions:`, and rewritten by every redraw —
-an unmapped task or an overturned `D<n>` — and by nothing else. `AWAITING.md` appends it to
+an unmapped task, a stale `inputs_hash:` or an overturned `D<n>` — and by nothing else. `AWAITING.md` appends it to
 the row carrying the link, unquoted, escaped and capped at 200 characters; the board does
 not render it. **No internal hostnames, no secrets, no
 customer PII** — the board links it.

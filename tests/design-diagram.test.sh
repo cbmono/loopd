@@ -23,7 +23,10 @@ STEP="$REPO/plugin/tick-steps/step-2-refine-drafts.md"
 for s in 'you write `projects/<slug>/design.md` yourself, once per' 'after its last draft is refined' \
          "The file's presence is the" 'once-only receipt' 'Never on a `kind: research` project' \
          'frontmatter `type: Design`' '`"<component or edge> → task-NNN"`' 'one fenced `mermaid` block' \
-         'trust boundaries as `subgraph`s' 'one paragraph reading it' \
+         'trust boundaries as `subgraph`s' 'the sections below reading it' \
+         '**Readable at a glance' 'fewer** (common renderers clip longer ones mid-word)' \
+         '`## Decisions referenced`' '`scripts/design-inputs.sh projects/<slug>`' \
+         '**A stale `inputs_hash:` redraws it too**' 'A design.md with no `inputs_hash:` is never stale.' \
          'No internal hostnames, no secrets and no customer PII' '**Redraw rule:**' \
          '`tick-delta.sh check` reports that state as a `DELTA` naming the project'; do
   ok "step 2 says: $s" "$(has "$STEP" "$s")" yes
@@ -34,8 +37,8 @@ for s in '**Pre-mortem — in the same pass, write `pre_mortem:`**' \
    diagram and the project's \`decisions:\`" 'naming a component or an edge the diagram draws' \
          'Any
    overturned `D<n>` of the project redraws it too' \
-         '**Every redraw of design.md — the unmapped-task redraw or an overturned `D<n>` —
-   rewrites `pre_mortem:`, and nothing else does.**'; do
+         '**Every redraw of design.md — the unmapped-task redraw, a stale `inputs_hash:` or an
+   overturned `D<n>` — rewrites `pre_mortem:` and `inputs_hash:`, and nothing else does.**'; do
   ok "step 2 says: ${s%%$'\n'*}…" "$(python3 -c 'import sys; print("yes" if sys.argv[2] in open(sys.argv[1]).read() else "no")' "$STEP" "$s")" yes
 done
 ok "SCHEMA.md's type: Design documents pre_mortem:" \
@@ -88,6 +91,58 @@ ok "redrawn ⇒ IDLE again" "$(TD check >/dev/null; echo $?)" 0
 cp "$P/design.md" "$TMP/design.keep"; rm "$P/design.md"; task p1 task-004-d "D" '"z"'; settle no-design
 ok "no design.md ⇒ no redraw DELTA" "$(TD check >/dev/null; echo $?)" 0
 rm "$P/tasks/task-004-d.md"; cp "$TMP/design.keep" "$P/design.md"; settle restore
+
+echo; echo "== design-inputs.sh: what the fingerprint sees, and what it ignores =="
+DI() { bash "$S/design-inputs.sh" "$P"; }
+qtask() { # <open_questions entries> <answered_questions entries> [status]
+  printf -- '---\ntype: Task\ntitle: "A"\nkind: build\nstatus: %s\nacceptance_criteria: [ "x" ]\nopen_questions: [ %s ]\nanswered_questions: [ %s ]\ntimestamp: 2026-10-28T00:00:00Z\n---\n' \
+    "${3:-draft}" "$1" "$2" > "$P/tasks/task-001-a.md"; }
+qtask '"Q1: which store?"' ''; h0="$(DI)"
+ok "prints 16 hex characters" "$(printf '%s' "$h0" | grep -cE '^[0-9a-f]{16}$')" 1
+qtask '"Q1: which store?", "Q2: raised, unanswered"' ''
+ok "an unanswered question changes nothing" "$(DI)" "$h0"
+qtask '"Q1: which store? --- local disk"' ''; h1="$(DI)"
+ok "an answer changes it" "$([ "$h1" != "$h0" ] && echo yes)" yes
+qtask '' '"2026-11-07T13:43:09Z by example-user-007 · Q1: which store? --- local disk"'
+ok "the fold that moves and stamps the answer does not" "$(DI)" "$h1"
+qtask '"Q1: which store? --- local disk"' '' cancelled
+ok "a cancelled task is left out" "$([ "$(DI)" != "$h1" ] && echo yes)" yes
+qtask '"Q1: which store? --- local disk"' ''
+dec() { sed -i.bak '/^decisions:/d; /^acknowledged_decisions:/d' "$I/projects/p1/project.md"; sed -i.bak "s/^status: active\$/status: active\\
+$1/" "$I/projects/p1/project.md"; rm -f "$I/projects/p1/project.md.bak"; }
+dec 'decisions: [ "D1: bound uploads at 10 photos" ]'; hd="$(DI)"
+ok "a new decision changes it" "$([ "$hd" != "$h1" ] && echo yes)" yes
+dec 'decisions: [ "D1: bound uploads at 10 photos --- ok" ]'
+ok "…a reply on it does not" "$(DI)" "$hd"
+dec 'acknowledged_decisions: [ "2026-11-07T13:52:44Z by example-user-007 · D1: bound uploads at 10 photos" ]'
+ok "…nor its acknowledgement" "$(DI)" "$hd"
+dec 'acknowledged_decisions: [ "2026-11-07T13:52:44Z by example-user-007 · D1: bound uploads at 20 photos" ]'
+ok "…but an overturned text does" "$([ "$(DI)" != "$hd" ] && echo yes)" yes
+cp "$P/tasks/task-001-a.md" "$TMP/a.keep"
+printf -- '---\ntype: Task\nstatus: draft\nacceptance_criteria: [ "x" ]\nopen_questions: [ "unterminated\n---\n' > "$P/tasks/task-001-a.md"
+out="$(DI 2>/dev/null)"; rc=$?
+ok "an unreadable list exits 1" "$rc" 1
+ok "…and prints no hash" "${out:-none}" none
+cp "$TMP/a.keep" "$P/tasks/task-001-a.md"
+
+echo; echo "== tick-delta.sh: the stale-inputs DELTA =="
+withhash() { design "$MAP2, \"api → task-003\""; sed -i.bak "s/^tasks: /inputs_hash: $1\\
+tasks: /" "$P/design.md"; rm -f "$P/design.md.bak"; }
+withhash "$(DI)"; settle stamped
+ok "inputs_hash: current ⇒ IDLE" "$(TD check >/dev/null; echo $?)" 0
+qtask '"Q1: which store? --- an S3 bucket"' ''; settle answered
+out="$(TD check)"; rc=$?
+ok "an answer after the draw ⇒ DELTA, exit 1" "$rc" 1
+ok "…naming the project and why" "$(printf '%s\n' "$out" | grep -c '^DELTA: projects/p1 changed what its projects/p1/design.md was drawn from')" 1
+ok "…and the digest names step 2" "$(TD digest | grep '^steps:' | grep -c step-2-refine-drafts.md)" 1
+withhash "$(DI)"; settle restamped
+ok "restamped ⇒ IDLE again" "$(TD check >/dev/null; echo $?)" 0
+design "$MAP2, \"api → task-003\""; qtask '"Q1: which store? --- a third answer"' ''; settle legacy
+ok "no inputs_hash: ⇒ never stale" "$(TD check >/dev/null; echo $?)" 0
+withhash "0000000000000000"
+printf -- '---\ntype: Task\nstatus: draft\nacceptance_criteria: [ "x" ]\nopen_questions: [ "unterminated\n---\n' > "$P/tasks/task-001-a.md"; settle broken
+ok "an unreadable input ⇒ exit 2, the full tick runs" "$(TD check >/dev/null; echo $?)" 2
+cp "$TMP/a.keep" "$P/tasks/task-001-a.md"; cp "$TMP/design.keep" "$P/design.md"; settle restore-2
 
 echo; echo "== build-awaiting.sh: one link per project, on its first promote row =="
 aw() { : > "$I/$AB_AWAITING"; bash "$S/build-awaiting.sh" --instance "$I" "$@" >/dev/null 2>&1; grep '^\* ' "$I/$AB_AWAITING"; }
