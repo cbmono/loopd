@@ -42,7 +42,7 @@ task() { # <id> <extra frontmatter> <body after # Context>
   printf -- '---\ntype: Task\ntitle: "%s"\nstatus: draft\n%bacceptance_criteria: [ "x" ]\nopen_questions: [ ]\n---\n\n# Context\n\nWhy.\n\n%s\n# Notes\n' \
     "$1" "$2" "$3" > "$P/tasks/$1.md"
 }
-facts() { printf '## Verified facts (as of %s@%s)\n\n%s\n' "$1" "$2" "$3"; }
+facts() { printf '## Verified facts (as of %s@%s)\n\n' "$1" "$2"; shift 2; printf '%s\n' "$@"; }
 task t-present ''  "$(facts example-org/app "$SHA" '- `src/a.sh` · defines main(); CI `harness suite` proves it')"
 task t-stale   ''  "$(facts example-org/app "$SHA" '- src/b.sh · defines helper()')"
 task t-missing ''  ''
@@ -52,10 +52,8 @@ task t-short   ''  "$(facts example-org/app "${SHA:0:12}" '- src/a.sh · x')"
 task t-nolines ''  "$(facts example-org/app "$SHA" 'Premise holds.')"
 task t-other   ''  "$(facts example-org/elsewhere "$SHA" '- src/a.sh · x')"
 task t-noclone 'target_repo: example-org/absent\n' "$(facts example-org/absent "$SHA" '- src/a.sh · x')"
-task t-space   ''  "$(facts example-org/app "$SHA" '- src/a.sh · x
-- `src/with space.sh` · y')"
-task t-badline ''  "$(facts example-org/app "$SHA" '- src/a.sh · x
-- a fact line naming no path')"
+task t-space   ''  "$(facts example-org/app "$SHA" '- src/a.sh · x' '- `src/with space.sh` · y')"
+task t-badline ''  "$(facts example-org/app "$SHA" '- src/a.sh · x' '- a fact line naming no path')"
 task t-moved 'target_repo: example-org/moved\n' "$(facts example-org/moved "$SHA" '- src/a.sh · x')"
 task t-nofetch 'target_repo: example-org/nofetch\n' "$(facts example-org/nofetch "$SHA" '- src/a.sh · x')"
 
