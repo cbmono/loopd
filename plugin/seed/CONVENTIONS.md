@@ -1098,6 +1098,41 @@ above it so none may grow its share.
   snapshot that reports itself current. Skip silently if absent; it's an optional local
   index (see the loopd README).
 
+## Reserved decisions
+
+**None of these is ever your route to a green check.** Each hides a failure instead of
+fixing it, and on a project whose PRs merge unread nobody sees it land. A reserved decision
+is an **authority gap** (the table under "Exhaust your own tools"), never a capability gap:
+no tool, grant or rung makes it yours.
+
+1. **A lint, type or shell suppression** — `eslint-disable`, `@ts-ignore`,
+   `@ts-expect-error`, `# shellcheck disable=`, or a config override that turns a rule off.
+2. **A test skip** — `.skip`, `xit`, a skip marker, or a deleted assertion.
+3. **`continue-on-error`** on a CI step or job.
+4. **Widening an interface** — a looser type, an optional parameter made to fit, a new
+   public export or endpoint.
+5. **A new runtime dependency or pattern** — a package, a service, or a way of doing a
+   thing the repo does not already do.
+6. **Weakening a gate** — a lowered threshold, a check dropped or made non-required, a
+   narrowed trigger.
+7. **Changing an auth or exposure boundary** — who may call, read or reach something.
+
+**A hit is a line your diff ADDS to code or CI config to make a check pass.** A token
+already on the default branch is not one, and neither is prose or a test that names a
+token. A change the task's `acceptance_criteria`, an `answered_questions` entry or an
+acknowledged `D<n>` names is the human's decision already made, not a hit.
+
+**On a hit, make no such change.** Set the task `status: blocked`, add a numbered
+`open_questions` entry naming the decision and the failing check —
+`Q<n>: reserved decision: <which> to pass <check> — …` — with its `### Q<n>` block
+(`SCHEMA.md` → "Question details"), and stop. `software-engineer`, `devops-engineer` and
+`qa-reviewer` (mode A writes tests, and could add a skip) are all bound.
+
+**Never declarable.** A reserved decision is never a row under a PR body's `### Decided
+without asking`, and never an "Unapproved decision:" advisory: `qa-reviewer` treats a diff
+that adds one as a **blocking finding**. The declare-and-don't-re-raise rule covers only
+choices outside this list.
+
 ## Where files go
 
 **Every file you write has a home inside the project, and `~` is never one of them.** A build

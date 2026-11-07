@@ -401,7 +401,8 @@ pointer to the finished deliverable(s) on completion).
 
 Every `Q<n>:` entry in `open_questions` has a block in the task body, under one
 `## Question details` section, headed `### Q<n>` with the same label. The PM writes it at
-refine time, so answering never needs a model call:
+refine time — a role agent blocking on a reserved decision writes its own (`CONVENTIONS.md`
+→ "Reserved decisions") — so answering never needs a model call:
 
 ```markdown
 ## Question details

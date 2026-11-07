@@ -82,5 +82,10 @@ signature". Never on a PR body.
 `${CLAUDE_PLUGIN_ROOT}/scripts/do-not-repeat.sh append <task-doc> --line "<approach> — <evidence>"` and write
 the block `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES" defines into the task's `open_questions`: tried X and Y, failed because Z, need: ….
 
+**A reserved decision is never your route to green** (`CONVENTIONS.md` → "Reserved
+decisions"): if getting CI green would need one, make no such change, set the task
+`status: blocked`, add a numbered `open_questions` entry with its `### Q<n>` block naming
+the decision and the failing check, and stop. It is never a `### Decided without asking` row.
+
 If a change would require live access you don't have, set `status: blocked`,
 write exactly what's needed in the task's `open_questions`, and stop.
