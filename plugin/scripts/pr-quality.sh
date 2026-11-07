@@ -24,6 +24,7 @@ while [ $# -gt 0 ]; do
 done
 case "$repo" in */*) ;; *) usage ;; esac
 case "$limit$window" in *[!0-9]*|'') usage ;; esac
+[ "$limit" -ge 1 ] && [ "$window" -ge 1 ] || usage
 [ -z "$ledger" ] || [ -r "$ledger" ] || usage
 { command -v gh && command -v jq; } >/dev/null 2>&1 || { echo "pr-quality: gh and jq are required" >&2; exit 1; }
 
@@ -37,13 +38,17 @@ prs="$(gh pr list -R "$repo" --state merged --limit "$limit" --json number,merge
 table="$(printf '%s\n' "$prs" | while IFS=$'\t' read -r n at; do
   body="$(gh pr view "$n" -R "$repo" --json body --jq .body 2>/dev/null)" || exit 1
   x="$(printf '%s\n' "$body" | grep -c -E '^\|[^|]*\|[[:space:]]*✗[[:space:]]*\|')"
-  cr_rev="$(gh api --paginate "repos/$repo/pulls/$n/reviews" --jq '[.[] | select(.user.login | test("coderabbit"))] | length' 2>/dev/null)" || exit 1
-  if [ "${cr_rev:-0}" -gt 0 ]; then
-    cr="$(gh api --paginate "repos/$repo/pulls/$n/comments" --jq '[.[] | select(.user.login | test("coderabbit"))] | length' 2>/dev/null)" || exit 1
+  # `--paginate` prints one array per page, so the count is taken after `jq -s` joins them.
+  cr_rev="$(gh api --paginate "repos/$repo/pulls/$n/reviews" 2>/dev/null | jq -rs '[.[][] | select(.user.login | test("coderabbit"))] | length')" || exit 1
+  [ -n "$cr_rev" ] || exit 1
+  if [ "$cr_rev" -gt 0 ]; then
+    cr="$(gh api --paginate "repos/$repo/pulls/$n/comments" 2>/dev/null | jq -rs '[.[][] | select(.user.login | test("coderabbit"))] | length')" || exit 1
+    [ -n "$cr" ] || exit 1
   else cr="-"; fi
-  qa="$(gh api --paginate "repos/$repo/issues/$n/comments" --jq '
-      [.[] | select(.user.type != "Bot") | .body | select(contains("<!-- okf-verdict"))]
-      | if length == 0 then "-" else map([scan("\\|[^|\\n]*\\|[[:space:]]*FAIL[[:space:]]*\\|")] | length) | add end' 2>/dev/null)" || exit 1
+  qa="$(gh api --paginate "repos/$repo/issues/$n/comments" 2>/dev/null | jq -rs '
+      [.[][] | select(.user.type != "Bot") | .body | select(contains("<!-- okf-verdict"))]
+      | if length == 0 then "-" else map([scan("\\|[^|\\n]*\\|[[:space:]]*FAIL[[:space:]]*\\|")] | length) | add end')" || exit 1
+  [ -n "$qa" ] || exit 1
   printf '%s\t%s\t%s\t%s\t%s\n' "$n" "$at" "$x" "$cr" "${qa:--}"
 done)" || { echo "pr-quality: the host did not answer for every PR" >&2; exit 1; }
 [ "$(printf '%s\n' "$table" | grep -c .)" -eq "$(printf '%s\n' "$prs" | grep -c .)" ] || { echo "pr-quality: the host did not answer for every PR" >&2; exit 1; }
@@ -67,8 +72,9 @@ while [ $((w * window)) -lt "$total" ]; do
 done
 printf '%s\n' "$table" | awk -F'\t' -v window="$window" -v l="$ledger" '
   { i = int((NR - 1) / window) + 1; if (i > 2) next; n[i]++; x[i] += $3; if ($4 != "-") { cr[i] += $4; crp[i]++ }; if ($5 != "-") { qa[i] += $5; qap[i]++ }; if ($4 == "-" && $5 == "-") un[i]++ }
-  END { if (n[2] == 0) { print "band: needs two full windows"; exit }
-        a = (crp[1] ? cr[1] / crp[1] : 0); b = (crp[2] ? cr[2] / crp[2] : 0)
-        c = (qap[1] ? qa[1] / qap[1] : 0); d = (qap[2] ? qa[2] / qap[2] : 0)
-        printf "band (|window 1 - window 2|): x_rows/pr %.2f · cr_findings/pr %.2f · qa_fail/pr %.2f · unreviewed %d\n",
-          (x[1] / n[1] - x[2] / n[2] < 0 ? -1 : 1) * (x[1] / n[1] - x[2] / n[2]), (a - b < 0 ? b - a : a - b), (c - d < 0 ? d - c : c - d), (un[1] - un[2] < 0 ? un[2] - un[1] : un[1] - un[2]) }'
+  function abs(v) { return v < 0 ? -v : v }
+  # A reviewer with no reviewed PR in a window has no mean there, so that band is `-`, not 0.
+  END { if (n[2] != window) { print "band: needs two full windows"; exit }
+        printf "band (|window 1 - window 2|): x_rows/pr %.2f · cr_findings/pr %s · qa_fail/pr %s · unreviewed %d\n", abs(x[1] / n[1] - x[2] / n[2]),
+          (crp[1] && crp[2] ? sprintf("%.2f", abs(cr[1] / crp[1] - cr[2] / crp[2])) : "-"),
+          (qap[1] && qap[2] ? sprintf("%.2f", abs(qa[1] / qap[1] - qa[2] / qap[2])) : "-"), abs(un[1] - un[2]) }'
