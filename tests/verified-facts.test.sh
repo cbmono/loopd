@@ -23,13 +23,16 @@ GIT() { env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git -c user.name=t \
 commit() { mkdir -p "$1/$(dirname "$2")"; echo "$RANDOM" >> "$1/$2"; GIT -C "$1" add -A; GIT -C "$1" commit -qm "$2"; }
 
 UP="$TMP/upstream/app"; mkdir -p "$UP"; GIT init -q "$UP"
-commit "$UP" src/a.sh; commit "$UP" src/b.sh
+commit "$UP" src/a.sh; commit "$UP" src/b.sh; commit "$UP" "src/with space.sh"
 SHA="$(GIT -C "$UP" rev-parse HEAD)"
 RR="$TMP/repos"; mkdir -p "$RR"
 GIT clone -q "$UP" "$RR/app"
 GIT clone -q "$UP" "$RR/nofetch"; GIT -C "$RR/nofetch" remote set-url origin "$TMP/nowhere"
 # Upstream moves after the clone: only a fetch lets the clone see src/b.sh change.
-commit "$UP" src/b.sh
+commit "$UP" src/b.sh; commit "$UP" "src/with space.sh"
+# A remote whose default moved to trunk after the clone: the clone's origin/HEAD still says main.
+MV="$TMP/upstream/moved"; GIT clone -q "$UP" "$MV"; GIT clone -q "$MV" "$RR/moved"
+GIT -C "$MV" checkout -qb trunk; commit "$MV" src/a.sh; GIT -C "$MV" symbolic-ref HEAD refs/heads/trunk
 
 B="$TMP/bundle"; P="$B/projects/demo"; mkdir -p "$P/tasks" "$B/$AB_DIR"
 printf '{ "org": "example-org", "reposRoot": "%s" }\n' "$RR" > "$B/instance.config.json"
@@ -49,6 +52,11 @@ task t-short   ''  "$(facts example-org/app "${SHA:0:12}" '- src/a.sh · x')"
 task t-nolines ''  "$(facts example-org/app "$SHA" 'Premise holds.')"
 task t-other   ''  "$(facts example-org/elsewhere "$SHA" '- src/a.sh · x')"
 task t-noclone 'target_repo: example-org/absent\n' "$(facts example-org/absent "$SHA" '- src/a.sh · x')"
+task t-space   ''  "$(facts example-org/app "$SHA" '- src/a.sh · x
+- `src/with space.sh` · y')"
+task t-badline ''  "$(facts example-org/app "$SHA" '- src/a.sh · x
+- a fact line naming no path')"
+task t-moved 'target_repo: example-org/moved\n' "$(facts example-org/moved "$SHA" '- src/a.sh · x')"
 task t-nofetch 'target_repo: example-org/nofetch\n' "$(facts example-org/nofetch "$SHA" '- src/a.sh · x')"
 
 vf() { local o rc; o="$(cd "$B" && bash "$VF" "$@" 2>/dev/null)"; rc=$?; echo "$o $rc"; }
@@ -63,6 +71,9 @@ ok "a short sha is not the grammar ⇒ missing 1"         "$(vf "$P/tasks/t-shor
 ok "a section naming no path ⇒ missing 1"               "$(vf "$P/tasks/t-nolines.md")" "missing 1"
 ok "facts about another repo ⇒ missing 1"               "$(vf "$P/tasks/t-other.md")" "missing 1"
 ok "no clone ⇒ unknown 4"                               "$(vf "$P/tasks/t-noclone.md")" "unknown 4"
+ok "a changed path holding a space is checked ⇒ stale 3" "$(vf "$P/tasks/t-space.md")" "stale 3"
+ok "a fact line it cannot read fails the section ⇒ missing 1" "$(vf "$P/tasks/t-badline.md")" "missing 1"
+ok "the remote's moved default is read, not origin/HEAD ⇒ stale 3" "$(vf "$P/tasks/t-moved.md")" "stale 3"
 ok "a failed fetch ⇒ unknown 4"                         "$(vf "$P/tasks/t-nofetch.md")" "unknown 4"
 ok "--presence never runs git: stale reads present 0"   "$(vf --presence "$P/tasks/t-stale.md")" "present 0"
 ok "--presence on a missing section ⇒ missing 1"        "$(vf --presence "$P/tasks/t-missing.md")" "missing 1"

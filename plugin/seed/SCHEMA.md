@@ -415,9 +415,10 @@ rests on: the premise (file and symbol), the CI check that proves each criterion
 of each symbol the task changes, the versions it relies on, and whether the access it needs
 works — `yes` or `no` only, **never a secret or an environment value**.
 `scripts/verified-facts.sh <task>` reads it: `verified` (exit 0, the only clearance),
-`missing` (no well-formed heading, a short sha, another repo, or no fact line), `stale` (a
-path the section names changed on `origin/<default>` since the sha — only those paths are
-compared), `unknown` (no clone, a failed fetch, the sha absent), `research` (no check owed).
+`missing` (no well-formed heading, a short sha, another repo, no fact line, or a `- ` line
+naming no path), `stale` (a path the section names — spaces allowed — changed on the remote's
+default branch since the sha; only those paths are compared), `unknown` (no clone, a failed
+`ls-remote` or fetch, the sha absent), `research` (no check owed).
 AWAITING.md marks the promote row `unverified` or `stale`; it blocks no human promotion.
 A stale section is refreshed only by deleting it, so the next refine writes it again.
 
