@@ -12,8 +12,15 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh \
      --trailer <task-path>='<the one sentence that ends that row>' \
-     --merge   <task-path>='[<repo>#<n>](<pr-url>)'
+     --merge   <task-path>='[<repo>#<n>](<pr-url>)' \
+     --facts   <task-path>=<verdict>
    ```
+
+   **`--facts`, once per clean `kind: build` draft the page will show as `approve`:** the
+   word `${CLAUDE_PLUGIN_ROOT}/scripts/verified-facts.sh <task-path>` printed this tick. It
+   is the only point staleness is computed, and only for the paths the section names; the
+   script marks the row `unverified` or `stale` and never runs git itself. Without
+   `--facts` it marks a missing section only.
 
    The script owns the structure — the heading and its count, the `* ` marker, the glyph,
    the verb, the link and the ` · ` separator — and reads the task documents, never

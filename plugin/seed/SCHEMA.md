@@ -397,6 +397,30 @@ The task **body** uses these conventional headings: `# Context`, `# Notes`
 (PM refinement notes), `# Result` (role agent summary, or — for research — a
 pointer to the finished deliverable(s) on completion).
 
+### Verified facts
+
+A `kind: build` draft carries one `## Verified facts` section, directly after `# Context`,
+before it is promoted. The PM writes it at refine with read-only commands
+(`step-2-refine-drafts.md`), once: the tick never rewrites it when the target repo moves.
+
+```markdown
+## Verified facts (as of <owner>/<repo>@<40-char sha>)
+
+- <repo-relative path> · <claim>
+```
+
+`<owner>/<repo>` is the task's `target_repo`; the sha is the full 40 characters of
+`origin/<default>` when the facts were checked. One line per fact, each naming the file it
+rests on: the premise (file and symbol), the CI check that proves each criterion, the callers
+of each symbol the task changes, the versions it relies on, and whether the access it needs
+works — `yes` or `no` only, **never a secret or an environment value**.
+`scripts/verified-facts.sh <task>` reads it: `verified` (exit 0, the only clearance),
+`missing` (no well-formed heading, a short sha, another repo, or no fact line), `stale` (a
+path the section names changed on `origin/<default>` since the sha — only those paths are
+compared), `unknown` (no clone, a failed fetch, the sha absent), `research` (no check owed).
+AWAITING.md marks the promote row `unverified` or `stale`; it blocks no human promotion.
+A stale section is refreshed only by deleting it, so the next refine writes it again.
+
 ### Question details
 
 Every `Q<n>:` entry in `open_questions` has a block in the task body, under one

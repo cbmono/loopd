@@ -6,6 +6,7 @@
 #   Usage: build-awaiting.sh [--instance DIR] [--out FILE]
 #                            [--trailer <task-path>=<sentence>]...
 #                            [--merge   <task-path>=<pr markdown link>]...
+#                            [--facts   <task-path>=<verified-facts.sh verdict>]...
 #
 # Exit: 0 rendered (or no AWAITING.md, which is the off switch) · 2 usage · 3 a path it
 # could not read. Why the structure is not prose: docs/pm-design.md#step-8.
@@ -43,16 +44,20 @@
 # A `👀 review` row — one per unanswered `D<n>` in project.md's `decisions:` — passes the
 # same two gates, and sorts before `approve` without withholding it.
 #
+# A build draft's `approve` row is marked `unverified` (no `## Verified facts`, or a facts
+# verdict of unknown) or `stale`. The verdict is verified-facts.sh's, passed in with --facts:
+# this script never runs git. With no --facts it reads presence only. Never on research.
+#
 # GENERIC PLUGIN FILE — no org, repo or path literals.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
-usage() { echo "Usage: $(basename "$0") [--instance DIR] [--out FILE] [--trailer PATH=TEXT]... [--merge PATH=LINK]..." >&2; exit 2; }
+usage() { echo "Usage: $(basename "$0") [--instance DIR] [--out FILE] [--trailer PATH=TEXT]... [--merge PATH=LINK]... [--facts PATH=VERDICT]..." >&2; exit 2; }
 fail3() { echo "build-awaiting: $1" >&2; exit 3; }
 
 inst="$PWD"; out=""
-trailer_paths=(); trailer_texts=(); merge_paths=(); merge_links=()
+trailer_paths=(); trailer_texts=(); merge_paths=(); merge_links=(); facts_paths=(); facts_verdicts=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) [ $# -ge 2 ] || usage; inst="$2"; shift 2 ;;
@@ -63,6 +68,9 @@ while [ $# -gt 0 ]; do
     --merge)    [ $# -ge 2 ] || usage
                 case "$2" in *=*) ;; *) usage ;; esac
                 merge_paths+=("${2%%=*}");   merge_links+=("${2#*=}");   shift 2 ;;
+    --facts)    [ $# -ge 2 ] || usage
+                case "${2#*=}" in verified|missing|stale|unknown|research) ;; *) usage ;; esac
+                facts_paths+=("${2%%=*}");   facts_verdicts+=("${2#*=}"); shift 2 ;;
     -h|--help)  usage ;;
     *) usage ;;
   esac
@@ -79,6 +87,7 @@ norm() { # <path>
 }
 for ((_i = 0; _i < ${#trailer_paths[@]}; _i++)); do trailer_paths[$_i]="$(norm "${trailer_paths[$_i]}")"; done
 for ((_i = 0; _i < ${#merge_paths[@]};   _i++)); do merge_paths[$_i]="$(norm "${merge_paths[$_i]}")"; done
+for ((_i = 0; _i < ${#facts_paths[@]};   _i++)); do facts_paths[$_i]="$(norm "${facts_paths[$_i]}")"; done
 
 # ABSENCE IS THE OFF SWITCH, and it is the script's rule rather than the caller's — the
 # same shape write-snapshot.sh uses for SNAPSHOT.json. Never create the file.
@@ -216,9 +225,14 @@ paused() { # <path under projects/<slug>/>
   [ $? -eq 1 ]
 }
 
-lookup() { # <path> <"trailer"|"merge">  -> prints the value, or nothing
+lookup() { # <path> <"trailer"|"merge"|"facts">  -> prints the value, or nothing
   local p="$1" kind="$2" i n
-  if [ "$kind" = trailer ]; then
+  if [ "$kind" = facts ]; then
+    n=${#facts_paths[@]}
+    for ((i = 0; i < n; i++)); do
+      [ "${facts_paths[$i]}" = "$p" ] && { printf '%s' "${facts_verdicts[$i]}"; return; }
+    done
+  elif [ "$kind" = trailer ]; then
     n=${#trailer_paths[@]}
     for ((i = 0; i < n; i++)); do
       [ "${trailer_paths[$i]}" = "$p" ] && { printf '%s' "${trailer_texts[$i]}"; return; }
@@ -229,6 +243,16 @@ lookup() { # <path> <"trailer"|"merge">  -> prints the value, or nothing
       [ "${merge_paths[$i]}" = "$p" ] && { printf '%s' "${merge_links[$i]}"; return; }
     done
   fi
+}
+
+facts_mark() { # <file> <rel> -> "unverified · ", "stale · " or nothing
+  local v; v="$(bash "$HERE/verified-facts.sh" --presence "$1" 2>/dev/null)"
+  case "$v" in research|missing) ;; *) v="$(lookup "$1" facts)"; [ -n "$v" ] || v="$(lookup "$2" facts)" ;; esac
+  case "$v" in
+    missing) printf 'unverified · ' ;;
+    unknown) printf 'unverified (facts UNKNOWN) · ' ;;
+    stale)   printf 'stale · ' ;;
+  esac
 }
 
 # A row is `* <glyph> **<verb>** — [<title>](<link>) · <trailer>` and nothing else. One
@@ -331,7 +355,7 @@ EOF
         # refined draft is the human's promote.
         crit="$(entries "$f" acceptance_criteria)" || fail3 "cannot read acceptance_criteria in $rel"
         if [ "$qn" = 0 ] && [ -n "$crit" ]; then
-          add "✅" approve "$t" "$rel" "${trail:-$DEF_APPROVE}"
+          add "✅" approve "$t" "$rel" "$(facts_mark "$f" "$rel")${trail:-$DEF_APPROVE}"
         fi ;;
       blocked)
         add "⛔" unblock "$t" "$rel" "${trail:-$DEF_UNBLOCK}" ;;

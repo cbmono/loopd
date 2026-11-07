@@ -150,12 +150,12 @@ DEF=' · refined & clean, promote `draft → ready`'
 LINK=' · [design](/projects/p1/design.md)'
 rows="$(aw)"
 ok "DEF_APPROVE row: the first promote row carries the link" "$(printf '%s\n' "$rows" | sed -n 1p)" \
-  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md)$DEF$LINK"
+  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md) · unverified$DEF$LINK"
 ok "…exactly once per project" "$(printf '%s\n' "$rows" | grep -c 'design.md')" 1
 ok "…and a project with no design.md links nothing" "$(printf '%s\n' "$rows" | grep -F 'task-001-z' | grep -c design)" 0
 rows="$(aw --trailer "$P/tasks/task-001-a.md=an agent sentence")"
 ok "agent-trailer row: the link follows the trailer" "$(printf '%s\n' "$rows" | sed -n 1p)" \
-  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md) · an agent sentence$LINK"
+  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md) · unverified · an agent sentence$LINK"
 with="$(aw)"; rm "$P/design.md"; without="$(aw)"
 ok "no design.md ⇒ every row byte-identical to the link-free render" "$without" "$(printf '%s\n' "$with" | while IFS= read -r l; do printf '%s\n' "${l%"$LINK"}"; done)"
 ok "…and no row names design" "$(printf '%s\n' "$without" | grep -c design)" 0
@@ -166,21 +166,21 @@ pm() { cp "$TMP/design.keep" "$P/design.md"; printf '%s\n' "/^tasks:/a\\" "pre_m
 SENT='the most likely reason this project fails as designed is the edge from ui to api'
 pm "\"$SENT\""
 ok "present: the sentence follows the link, unquoted" "$(aw | sed -n 1p)" \
-  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md)$DEF$LINK · $SENT"
+  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md) · unverified$DEF$LINK · $SENT"
 pm "\"$SENT\"   # a YAML comment"
 ok "a trailing YAML comment is not part of it" "$(aw | sed -n 1p)" \
-  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md)$DEF$LINK · $SENT"
+  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md) · unverified$DEF$LINK · $SENT"
 ok "…on the linked row only" "$(aw | grep -c 'fails as designed')" 1
 ok "trailer: trailer, then link, then sentence" "$(aw --trailer "$P/tasks/task-001-a.md=an agent sentence" | sed -n 1p)" \
-  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md) · an agent sentence$LINK · $SENT"
+  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md) · unverified · an agent sentence$LINK · $SENT"
 pm "'it''s the \`cache\` *edge* [x](https://example.com) <b>|#_~!'"
 ok "markup and an apostrophe: single-quoted YAML unescaped, markup escaped" "$(aw | sed -n 1p)" \
-  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md)$DEF$LINK · it's the \\\`cache\\\` \\*edge\\* \\[x\\]\\(https://example.com\\) \\<b\\>\\|\\#\\_\\~\\!"
+  "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md) · unverified$DEF$LINK · it's the \\\`cache\\\` \\*edge\\* \\[x\\]\\(https://example.com\\) \\<b\\>\\|\\#\\_\\~\\!"
 pm "\"$(printf 'word%.0s ' $(seq 1 60))\""
 tail_="$(aw | sed -n 1p)"; tail_="${tail_#*"$LINK · "}"
 ok "cap: at most 200 characters, cut at a word" "$(python3 -c 'import sys; t=sys.argv[1]; print(len(t) <= 202 and t.endswith("word …"))' "$tail_")" True
 cp "$TMP/design.keep" "$P/design.md"
-ok "absent key: the linked row is unchanged" "$(aw | sed -n 1p)" "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md)$DEF$LINK"
+ok "absent key: the linked row is unchanged" "$(aw | sed -n 1p)" "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md) · unverified$DEF$LINK"
 pm "\"$SENT\""; mv "$P/design.md" "$TMP/design.pm"
 ok "absent file: no row carries the sentence" "$(aw | grep -c 'fails as designed')" 0
 mv "$TMP/design.pm" "$P/design.md"
