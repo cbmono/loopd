@@ -18,7 +18,7 @@ ok() { if [ "$2" = "$3" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "F
 ENTRIES=(
   '`eslint-disable`' '`@ts-ignore`' '`@ts-expect-error`' '`# shellcheck disable=`'
   'a config override that turns a rule off'
-  '`.skip`' '`xit`' 'a skip marker' 'a deleted assertion'
+  '`.skip`' '`xit`' 'a skip marker' 'or a deleted assertion.'
   '**`continue-on-error`**' '**Widening an interface**' '**A new runtime dependency or pattern**'
   '**Weakening a gate**' '**Changing an auth or exposure boundary**'
 )
@@ -28,7 +28,8 @@ RULE=(
   'with its `### Q<n>` block' '`software-engineer`, `devops-engineer` and\n`qa-reviewer`'
   'never a row under a PR body'"'"'s `### Decided\nwithout asking`'
   'never an "Unapproved decision:" advisory' '**blocking finding**'
-  '**A hit is a line your diff ADDS to code or CI config to make a check pass.**'
+  '**A hit is a line your diff ADDS or REMOVES in code or CI config to make a check pass**'
+  'a deleted assertion or a dropped required check is a hit with no line added'
 )
 AGENT_RULE=(
   '**A reserved decision is never your route to green**' '`CONVENTIONS.md` → "Reserved\ndecisions"): if getting CI green would need one'
@@ -39,6 +40,8 @@ QA_FINDING=(
   '**A reserved decision is a blocking finding, never an advisory**'
   '`verdict: changes-requested` with the decision and its file in `caveats`'
   'never an\n   "Unapproved decision:" line'
+  'a line the diff adds or removes that is one of its seven entries'
+  'a deleted assertion or a dropped required check included'
 )
 
 section() { awk '/^## Reserved decisions$/{on=1; next} on && /^## /{exit} on' "$1"; }
@@ -80,6 +83,9 @@ for r in software-engineer devops-engineer qa-reviewer; do
   for a in "${AGENT_RULE[@]}"; do mut "$r rule deleted: ${a%%\\n*}" "$AG/$r.md" "$a" "${AGENT_RULE[@]}"; done
 done
 for a in "${QA_FINDING[@]}"; do mut "qa finding deleted: ${a%%\\n*}" "$AG/qa-reviewer.md" "$a" "${QA_FINDING[@]}"; done
+sed 's/ADDS or REMOVES in code/ADDS to code/' "$TMP/sec" > "$TMP/addonly"
+ok "mutant: an add-only hit (deletions uncovered) is caught" \
+   "$( [ "$(missing "$TMP/addonly" "${RULE[@]}")" -gt 0 ] && echo caught || echo missed)" caught
 awk '/^## Reserved decisions$/{skip=1; next} skip && /^## /{skip=0} !skip' "$CONV" > "$TMP/nosec"
 ok "mutant: section removed ⇒ no heading" "$(grep -c '^## Reserved decisions$' "$TMP/nosec")" 0
 

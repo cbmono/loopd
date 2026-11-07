@@ -373,7 +373,8 @@ policy. Name the guide(s) consulted in the review. A server-only diff opens noth
    `pass` with an explanation.
 
    **A reserved decision is a blocking finding, never an advisory** (`CONVENTIONS.md` →
-   "Reserved decisions"): a line the diff adds that is one of its seven entries, and that
+   "Reserved decisions"): a line the diff adds or removes that is one of its seven entries
+   — a deleted assertion or a dropped required check included — and that
    neither `acceptance_criteria`, `answered_questions` nor an acknowledged `D<n>` names, sets
    `verdict: changes-requested` with the decision and its file in `caveats` — never an
    "Unapproved decision:" line, and a `### Decided without asking` row declaring it changes

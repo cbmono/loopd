@@ -1117,9 +1117,10 @@ no tool, grant or rung makes it yours.
    narrowed trigger.
 7. **Changing an auth or exposure boundary** — who may call, read or reach something.
 
-**A hit is a line your diff ADDS to code or CI config to make a check pass.** A token
-already on the default branch is not one, and neither is prose or a test that names a
-token. A change the task's `acceptance_criteria`, an `answered_questions` entry or an
+**A hit is a line your diff ADDS or REMOVES in code or CI config to make a check pass** —
+a deleted assertion or a dropped required check is a hit with no line added. A token
+already on the default branch is not one, and neither is prose or a test that only names
+a token. A change the task's `acceptance_criteria`, an `answered_questions` entry or an
 acknowledged `D<n>` names is the human's decision already made, not a hit.
 
 **On a hit, make no such change.** Set the task `status: blocked`, add a numbered
