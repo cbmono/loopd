@@ -64,7 +64,7 @@ printf 'not json %s\n' "$SECRET" > "$P/-work-other/66666666-6666-4666-8666-66666
 run() { bash "$PC" --projects-dir "$P" "$@" 2>&1; }
 row() { printf '%s\n' "$2" | awk -v k="$1" '$1 == k {print}' | awk -v b="$2" 'NR==1'; }
 cell() { # <kind> <bucket> <output> <column index>
-  printf '%s\n' "$3" | awk -v k="$1" -v b="$2" -v c="$4" '$1 == k && $2 == b { print $c; exit }'; }
+  awk -v k="$1" -v b="$2" -v c="$4" '$1 == k && $2 == b && !done { print $c; done = 1 }' <<<"$3"; }
 
 echo "== 1. buckets, turns and sums =="
 OUT="$(run)"; rc=$?
