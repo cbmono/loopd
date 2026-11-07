@@ -286,6 +286,7 @@ step2=0 step3=0 step4=0 step5=0 step6=0
 # Exit 2 is UNKNOWN, not "no": the caller poisons the fingerprint on it rather than let a
 # parser it could not run read as a task with nothing answered.
 FOLD="$(dirname "${BASH_SOURCE[0]}")/fold-answers.sh"
+DESIGN_INPUTS="$(dirname "${BASH_SOURCE[0]}")/design-inputs.sh"
 CKPT="$(dirname "${BASH_SOURCE[0]}")/continue-checkpoint.sh"
 SESS="$(dirname "${BASH_SOURCE[0]}")/agent-sessions.sh"
 answered_open() { # <file>
@@ -419,6 +420,13 @@ $prs"
     done
     [ "$mode" = digest ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && step6=1
     [ "$redraw" = 1 ] && { printf 'redraw owed %s\n' "${d#"$inst"/}design.md"; step2=1; }
+    # Stale inputs: design.md records the design-inputs.sh fingerprint it was drawn from
+    # (`inputs_hash:`); an answered question, a decision or a reworded criterion moves it.
+    # A design.md without the key predates it and is never reported stale.
+    if [ -f "${d}design.md" ] && want="$(fmfirst "${d}design.md" inputs_hash | tr -d "\"' \r")" && [ -n "$want" ]; then
+      have="$(bash "$DESIGN_INPUTS" "${d%/}")" || return 1
+      [ "$have" = "$want" ] || { printf 'redraw stale %s\n' "${d#"$inst"/}design.md"; step2=1; }
+    fi
   done
 
   # The one wall-clock fact: a stalled project's fingerprint never moves, and it is the
@@ -578,6 +586,11 @@ case "$cmd" in
     rd="$(printf '%s\n' "$FP" | sed -n 's/^redraw owed //p' | head -n1)"
     if [ -n "$rd" ]; then
       echo "DELTA: ${rd%/design.md} has a refined task its $rd does not map — step 2 owes it a redraw."
+      exit 1
+    fi
+    rd="$(printf '%s\n' "$FP" | sed -n 's/^redraw stale //p' | head -n1)"
+    if [ -n "$rd" ]; then
+      echo "DELTA: ${rd%/design.md} changed what its $rd was drawn from (a decision, a criterion or an answer) — step 2 owes it a redraw."
       exit 1
     fi
     [ -f "$STATE" ] || fail2 "no $STATE_NAME record yet (first tick, or an upgrade)"

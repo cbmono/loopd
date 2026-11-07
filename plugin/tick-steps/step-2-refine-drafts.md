@@ -120,11 +120,33 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `"<component or edge> → task-NNN"` entries, then one fenced `mermaid` block
    (`flowchart` or `graph`) of the components the project adds or touches — frontends,
    APIs, services, data stores, caches, queues, functions, infra — with integrations as
-   edges and trust boundaries as `subgraph`s, then one paragraph reading it: what is new,
-   what changes, what is reused. **No internal hostnames, no secrets and no customer PII
+   edges and trust boundaries as `subgraph`s, then the sections below reading it: what is
+   new, what changes, what is reused. **No internal hostnames, no secrets and no customer PII
    in design.md** — the board links it, so name a component by its role, never by its
    address. The approach critique reads design.md when it runs and may challenge it in
    `advisor_notes`.
+   **Readable at a glance — a human reads design.md to decide whether to promote.**
+   The diagram: `flowchart TB`, about 12 nodes at most; **a node label is 24 characters or
+   fewer** (common renderers clip longer ones mid-word) and an edge label 3 words or fewer
+   — detail goes in a `**Legend**` under the diagram, never into a label. Tag each node with
+   the task that builds it, as `(NNN)` or the task's slice letter. Draw an external party
+   (a vendor API, a platform verifier) as its own node, not as an edge label. Colour by
+   status with `classDef` — new, changed, reused, external — draw a described-but-not-built
+   component with `stroke-dasharray`, give each `subgraph` `fill:none` so the colours read,
+   and dash an edge that carries no trust (unauthenticated, fallback).
+   The body, in this order, each section bullets rather than prose: `## In one line` (what
+   it builds and what it proves, two sentences, then `pre_mortem:`'s sentence again as a
+   `> **Biggest risk:**` callout — most renderers hide frontmatter); `## Components` (the
+   diagram and its legend); `## Happy path`, a `sequenceDiagram`, only when the project is a
+   flow across three or more parties; `## Scope` (**New**, **Changed**, **Reused**, **Not
+   built**); `## Build order`, a `flowchart LR` of task or slice dependencies, only with
+   more than two; `## Decisions referenced`, one line per `D<n>` or `Q<n>` the document
+   names; and, optional, `## Open points` — an inconsistency you met while drawing, as a
+   question.
+   **`inputs_hash:` — the last act of every write or redraw:** run
+   `scripts/design-inputs.sh projects/<slug>` and write what it prints as `inputs_hash:` in
+   the frontmatter. It fingerprints the project's decisions and each refined task's
+   criteria and answered questions, so a later answer or reworded criterion is seen.
    **Label each queue, buffer, cache or connection pool that is a node with its overload
    `D<n>` id, not the bound's text**, so an overturn needs no redraw of the label — the
    diagram itself still redraws under the redraw rule below; retry budgets and
@@ -138,8 +160,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    list lacks, redraw it — diagram, paragraph and mapping — in the same tick.
    `tick-delta.sh check` reports that state as a `DELTA` naming the project. Any
    overturned `D<n>` of the project redraws it too, in the tick that folds the overturn.
-   **Every redraw of design.md — the unmapped-task redraw or an overturned `D<n>` —
-   rewrites `pre_mortem:`, and nothing else does.**
+   **A stale `inputs_hash:` redraws it too** — `tick-delta.sh check` reports a `redraw
+   stale` `DELTA` when `design-inputs.sh` prints anything else — so an answered question, a
+   new or reworded decision or a changed criterion reaches the design without the human
+   asking. Redraw what the change touches; if it touches nothing drawn, rewrite only
+   `inputs_hash:` and `timestamp:`. A design.md with no `inputs_hash:` is never stale.
+   **Every redraw of design.md — the unmapped-task redraw, a stale `inputs_hash:` or an
+   overturned `D<n>` — rewrites `pre_mortem:` and `inputs_hash:`, and nothing else does.**
 
    **Approach critique — MANDATORY on its trigger, advisory in what it may decide.**
    For a genuinely complex **`kind: build`** task — spans multiple files/services, or
