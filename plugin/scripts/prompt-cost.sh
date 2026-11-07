@@ -74,9 +74,9 @@ printf '%s\n' "$all" | awk -F'\t' -v since="$since" -v limit="$limit" -v kind="$
       if (limit != "" && !(f in keep)) continue
       key = a[1] "\t" a[3]; S[key, f] = 1; T[key]++; I[key] += a[6]; O[key] += a[7]; R[key] += a[8]; W[key] += a[9]
       tot = a[1] "\tall" ((a[3] ~ /\+sub$/) ? "+sub" : ""); S[tot, f] = 1; T[tot]++; I[tot] += a[6]; O[tot] += a[7]; R[tot] += a[8]; W[tot] += a[9]
+      if (!(key in order)) order[key] = ++no; if (!(tot in order)) order[tot] = ++no
       if (a[3] ~ /\+sub$/) continue
       sk = a[1] "\t" f; ST[sk]++; SI[sk] += a[6]; SO[sk] += a[7]; SR[sk] += a[8]; SW[sk] += a[9]; SB[sk] = a[1] "\t" substr(f, length(f) - 41, 36)
-      if (!(key in order)) order[key] = ++no; if (!(tot in order)) order[tot] = ++no
     }
     if (no == 0) { print "prompt-cost: no session in the window" > "/dev/stderr"; exit 1 }
     for (k in S) { split(k, p, SUBSEP); NS[p[1]]++ }

@@ -25,7 +25,7 @@ done
 case "$repo" in */*) ;; *) usage ;; esac
 case "$limit$window" in *[!0-9]*|'') usage ;; esac
 [ -z "$ledger" ] || [ -r "$ledger" ] || usage
-command -v gh >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 || { echo "pr-quality: gh and jq are required" >&2; exit 1; }
+{ command -v gh && command -v jq; } >/dev/null 2>&1 || { echo "pr-quality: gh and jq are required" >&2; exit 1; }
 
 prs="$(gh pr list -R "$repo" --state merged --limit "$limit" --json number,mergedAt 2>/dev/null \
   | jq -r 'sort_by(.mergedAt) | reverse | .[] | "\(.number)\t\(.mergedAt)"')" || prs=""

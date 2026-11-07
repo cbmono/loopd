@@ -126,6 +126,9 @@ retirements, **12 cases, 8 green, $2.12, 187 s at `-j 4`**; after them, **8 case
 $1.31, 130 s**. Concurrency is what wall time turns on — the same 12 cases took 443 s serial.
 `aggregate-result.json` reports **cost and duration, never tokens** — there is no token count
 to record.
+**The two inline cases, measured 2026-11-07 at loopd b40ad2d through the same flags, one at a
+time:** `conventions-pr-body-has-the-shape` **1.00, $0.33, 13 s**; `pm-usage-unknown-never-zero`
+**1.00, $0.23, 11 s** — the baseline a trimmed file is judged against (leaner-prompts/task-001).
 `tests/plugin-eval.test.sh` runs it at `--runs 1 --ablation none --judge-model claude-sonnet-5-5`
 and a `--max-cost-usd` ceiling — the question it asks is "did any case go red", not "what is
 the stable score". The judge is a Sonnet rather than the background-task default (haiku)
