@@ -34,9 +34,27 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    placeholder value. A docs or behaviour criterion needs no guard metric, and a guard
    metric is not `/audit`'s counter-metric.
 
+   **Fact check — the last act of refining a `kind: build` draft, in every autonomy mode.**
+   For each unpromoted build draft with `acceptance_criteria` and no `## Verified facts`
+   section — freshly refined or refined on an earlier tick — run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/verified-facts.sh <task-doc>`; on `missing`, check the
+   premise against the target clone at `origin/<default>` with **read-only** commands
+   (`git fetch`, `git show`, `git grep`, `gh run list`, `gh api` reads — never a write, a
+   checkout or a push), then write the section `SCHEMA.md` → "Verified facts" defines
+   (a bundle seeded before it has no such section; the shape is this) directly after
+   `# Context`: the heading `## Verified facts (as of <owner>/<repo>@<40-char sha>)`, the
+   commit you checked, then one `- <repo-relative path> · <claim>` line per fact: the
+   premise (file and symbol), the CI check that proves each criterion, the callers of each
+   symbol it changes, the versions it relies on, and whether the access it needs works,
+   `yes`/`no` only — never a secret or an environment value. A premise that no longer holds
+   is an `open_questions` entry, not a fact. On `missing` a malformed section is replaced, never
+   added beside. **Never rewrite one that reads `verified` or `stale`**: a `stale` one stays until a human deletes it, and a draft that is not a build draft gets
+   no section. `unknown` (no clone, a failed fetch) writes nothing and is reported.
+
    **Promotion follows the owning project's `autonomy`** (see Authority boundaries):
    leave it `draft` for the human unless that project delegates promotion and
-   `AUTONOMY.md` defines the mode.
+   `AUTONOMY.md` defines the mode. A delegated promotion of a build draft runs
+   `verified-facts.sh <task-doc>` immediately before it and promotes only on exit 0.
 
 
    **Bake the answer in FIRST, then run the script for the move.** The human answers by

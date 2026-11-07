@@ -63,7 +63,7 @@ Last refreshed: <ISO>.
 * 🧰 **grant** — [Has questions](/projects/demo/tasks/task-002-b.md) · Q2: install the foo CLI
 * ⛔ **unblock** — [Stuck](/projects/demo/tasks/task-003-c.md) · waiting on a host account
 * ❓ **answer** — [Has questions](/projects/demo/tasks/task-002-b.md) · Q1: which colour?
-* ✅ **approve** — [Clean draft](/projects/demo/tasks/task-001-a.md) · refined & clean, promote `draft → ready`
+* ✅ **approve** — [Clean draft](/projects/demo/tasks/task-001-a.md) · unverified · refined & clean, promote `draft → ready`
 * 🔀 **merge** — [Green](/projects/demo/tasks/task-004-d.md) · [ai-bridge#7](https://github.com/cbmono/ai-bridge/pull/7)
 WANT
 sed -E 's/^Last refreshed: .*$/Last refreshed: <ISO>./' "$B/$AB_AWAITING" > "$TMP/got"

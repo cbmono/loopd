@@ -67,6 +67,11 @@ open question stays `draft` and waits for the human — that is not negotiable, 
 unanswered question means the spec is incomplete, and no amount of autonomy substitutes
 for the missing answer.
 
+**Nor without verified facts.** Immediately before promoting, run
+`scripts/verified-facts.sh <task-doc>` and promote only on **exit 0**: `missing`, `stale`
+and `unknown` all leave the draft for the human, whose promote row AWAITING.md marks
+`unverified` or `stale`. Under `gated` nothing here blocks the human; the row is only marked.
+
 **`kind: research` tasks are never auto-promoted.** They are human-driven by definition
 (`SCHEMA.md`), so `yolo` is near-inert on a research project — expected, not a bug.
 
