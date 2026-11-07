@@ -380,7 +380,7 @@ policy. Name the guide(s) consulted in the review. A server-only diff opens noth
    nothing. Existing tokens, and prose or tests that name one, are not hits.
 
    **Advisory, and never a trailer `caveats:` entry (clause 6 would refuse the pass):** a
-   choice outside the reserved list — a schema or migration change, say — that neither
+   schema or migration change (a new dependency or public interface is reserved, above) that neither
    `acceptance_criteria`, `answered_questions` nor the project's `acknowledged_decisions:`
    (in the `project.md` your brief names) records gets one "Unapproved decision:" line in
    the comment. An `acknowledged_decisions:` entry approves its choice only when answered

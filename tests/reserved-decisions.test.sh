@@ -75,11 +75,11 @@ mut() { # <label> <file> <anchor> <anchor-set...>
   ok "$label" "$( [ "$(missing "$TMP/m" "$@")" -gt 0 ] && echo caught || echo missed)" caught
 }
 for a in "${ENTRIES[@]}"; do mut "entry deleted: $a" "$TMP/sec" "$a" "${ENTRIES[@]}"; done
-for a in "${RULE[@]}"; do mut "rule deleted: $(printf '%b' "$a" | head -1)" "$TMP/sec" "$a" "${RULE[@]}"; done
+for a in "${RULE[@]}"; do mut "rule deleted: ${a%%\\n*}" "$TMP/sec" "$a" "${RULE[@]}"; done
 for r in software-engineer devops-engineer qa-reviewer; do
-  for a in "${AGENT_RULE[@]}"; do mut "$r rule deleted: $(printf '%b' "$a" | head -1)" "$AG/$r.md" "$a" "${AGENT_RULE[@]}"; done
+  for a in "${AGENT_RULE[@]}"; do mut "$r rule deleted: ${a%%\\n*}" "$AG/$r.md" "$a" "${AGENT_RULE[@]}"; done
 done
-for a in "${QA_FINDING[@]}"; do mut "qa finding deleted: $(printf '%b' "$a" | head -1)" "$AG/qa-reviewer.md" "$a" "${QA_FINDING[@]}"; done
+for a in "${QA_FINDING[@]}"; do mut "qa finding deleted: ${a%%\\n*}" "$AG/qa-reviewer.md" "$a" "${QA_FINDING[@]}"; done
 awk '/^## Reserved decisions$/{skip=1; next} skip && /^## /{skip=0} !skip' "$CONV" > "$TMP/nosec"
 ok "mutant: section removed ⇒ no heading" "$(grep -c '^## Reserved decisions$' "$TMP/nosec")" 0
 
