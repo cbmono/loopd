@@ -425,10 +425,12 @@ claim_hits() { # <root>
   local root="$1" f n
   while IFS= read -r f; do
     [ -f "$root/$f" ] || continue
+    # A here-string, not a second process substitution: bash 3.2 leaks an fd per `<(…)`
+    # and spins at ~256 — one per scoped file crossed it at 259 files (leaner-prompts/task-001).
     while IFS= read -r n; do
       [ -n "$n" ] || continue
       printf '%s:%s:%s\n' "$f" "$n" "$(sed -n "${n}p" "$root/$f")"
-    done < <(normalize < "$root/$f" | grep -nE "$CLAIM_RE" | cut -d: -f1)
+    done <<<"$(normalize < "$root/$f" | grep -nE "$CLAIM_RE" | cut -d: -f1)"
   done < <(scope_files "$root")
 }
 
@@ -440,8 +442,8 @@ stub_hits() { # <root>
     while IFS= read -r n; do
       [ -n "$n" ] || continue
       printf '%s:%s:%s\n' "$f" "$n" "$(sed -n "${n}p" "$root/$f")"
-    done < <(normalize < "$root/$f" | grep -nE "$STUB_RE" | grep -E "$LIVE_CMD_RE" \
-             | grep -vE '(install|upgrade)\.sh' | cut -d: -f1)
+    done <<<"$(normalize < "$root/$f" | grep -nE "$STUB_RE" | grep -E "$LIVE_CMD_RE" \
+             | grep -vE '(install|upgrade)\.sh' | cut -d: -f1)"
   done < <(scope_files "$root")
 }
 
