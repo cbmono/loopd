@@ -54,6 +54,10 @@ policy. Name the guide(s) consulted in the review. A server-only diff opens noth
    deterministic; avoid flakiness (no real network/time dependence).
 3. Run the suite; ensure your tests pass and fail meaningfully. Commit, push, open
    a PR, set `status: in-review`, set `pr:`, add `# Result`. Do not merge.
+4. **A reserved decision is never your route to green** (`CONVENTIONS.md` → "Reserved
+   decisions"): if getting CI green would need one — a skip, a suppression, any entry —
+   make no such change, set the task `status: blocked`, add a numbered `open_questions`
+   entry with its `### Q<n>` block naming the decision and the failing check, and stop.
 
 ### B. Review an existing PR (no new branch)
 1. **Are you allowed to be here at all? Run `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh <pr> --for qa
@@ -368,8 +372,16 @@ policy. Name the guide(s) consulted in the review. A server-only diff opens noth
    you can't assess the work, `verdict: inconclusive` is the correct answer — never
    `pass` with an explanation.
 
+   **A reserved decision is a blocking finding, never an advisory** (`CONVENTIONS.md` →
+   "Reserved decisions"): a line the diff adds or removes that is one of its seven entries
+   — a deleted assertion or a dropped required check included — and that
+   neither `acceptance_criteria`, `answered_questions` nor an acknowledged `D<n>` names, sets
+   `verdict: changes-requested` with the decision and its file in `caveats` — never an
+   "Unapproved decision:" line, and a `### Decided without asking` row declaring it changes
+   nothing. Existing tokens, and prose or tests that name one, are not hits.
+
    **Advisory, and never a trailer `caveats:` entry (clause 6 would refuse the pass):** a
-   new dependency, a schema or migration change, or a new public interface that neither
+   schema or migration change (a new dependency or public interface is reserved, above) that neither
    `acceptance_criteria`, `answered_questions` nor the project's `acknowledged_decisions:`
    (in the `project.md` your brief names) records gets one "Unapproved decision:" line in
    the comment. An `acknowledged_decisions:` entry approves its choice only when answered
