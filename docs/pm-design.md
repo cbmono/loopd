@@ -839,9 +839,15 @@ in all four directions. The alternative shape — the PM running `--check` itsel
 **A clean check is cached, because the walk outgrew the tool.** `build-kb-index.sh --check`
 forks per file; on 2026-11-02 it took 31–35 s over 379 docs on an idle machine and about
 128–155 s with three role agents running, past the Bash tool's 120 s, so the tool
-backgrounded it and the tick closed UNKNOWN on a sweep that was due. Only a clean verdict
-is cached — one stamp file, `.loopd/.kb-check-stamp`, its time cut before the walk so a
-doc edited mid-walk is newer than it. Any file or directory under `knowledge/` newer than
+backgrounded it and the tick closed UNKNOWN on a sweep that was due. Every walk is
+stamped — one file, `.loopd/.kb-check-stamp`, holding the walk's time, its error count and
+its error list, its mtime cut before the walk so a doc edited mid-walk is newer than it.
+A clean stamp holds until something changes. One with errors also expires after
+`kbSweepIntervalHours` (absent ⇒ 24): a bundle that is never clean (alteos, 67 s a walk,
+2026-11-07) used to walk on every eligible tick. Inside the interval the probe exits 1 and
+prints `KB SWEEP CACHED: <n> error(s)` for the report, so the errors stay visible without a
+walk or a cataloguer; at expiry it walks and dispatches as before. The interval runs on the
+epoch inside the stamp, never its mtime, which the change gate owns. Any file or directory under `knowledge/` newer than
 the stamp (a deletion moves its directory's mtime) or a newer `build-kb-index.sh`,
 `bundle-paths.sh` or `plugin-name.sh` re-walks;
 a future-dated stamp is discarded. A file restored with an old mtime (`cp -p`, `rsync -a`)

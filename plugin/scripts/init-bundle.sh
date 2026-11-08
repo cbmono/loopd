@@ -1262,12 +1262,12 @@ if ! grep -qE "^/?${AB_DIR//./\\.}/kb\.git/?$" "$gi"; then
 GI
 fi
 
-# The clean-check stamp (kb-sweep-due.sh) — its OWN guard, the .tick-lock.claim lesson again.
+# The KB-check stamp (kb-sweep-due.sh) — its OWN guard, the .tick-lock.claim lesson again.
 # Unignored, every idle tick's probe would dirty the tree and force the dirty-tree DELTA.
 if ! grep -qE "^/?${AB_KB_STAMP//./\\.}\*?$" "$gi"; then
   gi_add <<'GI'
 
-# The time of the last clean `build-kb-index.sh --check` (kb-sweep-due.sh), and the
+# The last `build-kb-index.sh --check` walk and its errors (kb-sweep-due.sh), and the
 # reference it is cut from while a walk runs. Per clone; delete freely (absence = one walk).
 /__AB_KB_STAMP__*
 GI

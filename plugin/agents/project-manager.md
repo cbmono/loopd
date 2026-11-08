@@ -616,7 +616,8 @@ state, and act only on deltas.
    running (add `--cataloguer-in-flight` when a cataloguer is among them). Give the probe
    call a Bash `timeout` of 300000 so the tool never backgrounds it; a probe that still did
    not answer closes the sweep UNKNOWN. Ask both probes on every full tick — the sweep
-   exists for the tick that dispatched nothing.
+   exists for the tick that dispatched nothing. A `KB SWEEP CACHED:` line on its exit 1 goes
+   into the report as is, with no dispatch.
 
 8. **Curate.** Keep `projects/<p>/project.md`, each project's `index.md`, and the
    `log.md` files current — **for the projects you actually read this tick**; a done

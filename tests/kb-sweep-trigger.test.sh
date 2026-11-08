@@ -314,6 +314,11 @@ ok "it passes the cataloguer-in-flight flag" "$(hasf "$PM" "[--cataloguer-in-fli
 ok "exit 0 dispatches the cataloguer, namespaced" "$(hasf "$PM" 'dispatch `'"${PN}:"'cataloguer`')" yes
 ok "the error list goes into the brief verbatim" "$(hasf "$PM" "that output pasted into the brief")" yes
 ok "exit 1 is silence" "$(hasf "$PM" "Exit 1 is silence: no line in the report, no dispatch")" yes
+ok "  except the cached count line, reported" "$(hasf "$PM" '`KB SWEEP CACHED:` line, the open error count inside the interval: report that one line')" yes
+ok "the core prompt reports the cached count line too" \
+  "$(hasf "$REPO/plugin/agents/project-manager.md" 'A `KB SWEEP CACHED:` line on its exit 1 goes')" yes
+ok "step 7 names the interval and its fallback" "$(hasf "$PM" '`kbSweepIntervalHours` (absent ⇒ 24)')" yes
+ok "the seed config ships kbSweepIntervalHours 24" "$(jq -c '.kbSweepIntervalHours' "$REPO/plugin/seed/instance.config.json")" 24
 ok "the PM never re-derives the answer itself" "$(hasf "$PM" "Never re-derive the answer by running")" yes
 ok "the tick-wide throttle now counts three triggers" "$(hasf "$PM" "this refresh and the KB sweep below are the")" yes
 ok "the zero-delta IDLE tick is named as skipping it" "$(hasf "$PM" "A zero-delta IDLE tick (step 0.9) skips steps 1-7")" yes
