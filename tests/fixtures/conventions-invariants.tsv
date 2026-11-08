@@ -30,3 +30,36 @@ open-questions-not-final-message	**Anything the human must decide or provide goe
 pr-body-ceiling	Hard ceiling **2,500 characters**	authority gate
 role-signature	**Exempt:** a PR body, and the tick's bare `@coderabbitai review`	authority gate
 never-home-dir	**Every file you write has a home inside the project, and `~` is never one of them.**	authority gate
+# project-manager.md's invariants (leaner-prompts/task-003): a source starting `pm ` is read
+# against plugin/agents/project-manager.md ALONE, never a tick-steps/ file.
+pm-never-ready	**Never set a task to `ready`.**	pm gate
+pm-never-merge	**Never merge a PR.**	pm gate
+pm-own-work	**Dispatch only your own human's work.**	pm gate
+pm-owner-script	`${CLAUDE_PLUGIN_ROOT}/scripts/task-owner.sh <task-path>` — never re-derive ownership	pm gate
+pm-paused-script	never read `project.md`'s `status:` yourself	pm gate
+pm-autonomy-resolver	where that file is — never look for it yourself.	pm gate
+pm-gated-default	When in doubt, act as `gated`.	pm gate
+pm-dry-run	**Never auto-promote or auto-merge, whatever a project's `autonomy` says.**	pm gate
+pm-leave-for-human	**always** await a human decision regardless of autonomy	pm gate
+pm-unknown	it binds every state claim a tick writes	pm every tick
+pm-one-call	**Call a plugin script one command per call, by its resolved absolute path**	pm every tick
+pm-read-all	or no `steps:` line at all, ⇒ read ALL of them**	pm every tick
+pm-sync-first	**Sync the bundle first — pull before you read anything.**	pm every tick
+pm-never-clean	**Never `git clean`, never delete the untracked file**	pm every tick
+pm-no-autostash	**Never `--autostash`**	pm every tick
+pm-conflict-stops	**A conflict STOPS the tick. Do not resolve it.**	pm every tick
+pm-lock-first	**The lock comes first — before you re-derive anything, and whatever woke you:**	pm every tick
+pm-never-resumed	**a tick is never resumed**	pm every tick
+pm-disk-wins	**the task document wins**	pm every tick
+pm-caveat-evidence	**A caveat is cleared only by evidence**	pm every tick
+pm-idle-skip	**Skip steps 1–7.**	pm every tick
+pm-idle-one-line	**Then stop — your entire report is that one line, the probe's own, verbatim.**	pm every tick
+pm-session-sweep	every full tick runs `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` once	pm every tick
+pm-stamp-once	**Stamp promotions — every task past `draft`, once.**	pm every tick
+pm-sweep-answers-nothing	whose ` check:` predicate is true and **answers nothing**	pm every tick
+pm-index-uncommitted	never stage or commit them**	pm every tick
+pm-never-force-push	**Never force-push a shared bundle.**	pm every tick
+pm-no-lock-release	# nothing to run: a tick releases no lock, ever	pm every tick
+pm-idle-report	**A tick that changed nothing reports ONE line and nothing else**	pm every tick
+pm-url-or-path	**EVERY ITEM IN THE "AWAITS THE HUMAN" PART CARRIES A URL OR A PATH	pm every tick
+pm-tokens	**In tokens, never in money.**	pm every tick

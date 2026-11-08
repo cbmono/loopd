@@ -275,6 +275,37 @@ difference between a loop you leave running and one you turn off because it scro
 
 ## The tick
 
+<a id="preamble"></a>
+### Before step 0 — the preamble, the gates and the step-file router
+
+Relocated from the prompt on 2026-11-08 (leaner-prompts/task-003): every rule below is
+still in `project-manager.md`; these are the reasons that travelled with it.
+
+- **UNKNOWN.** A status you write from a read that could not have answered is the same
+  defect one document further on.
+- **Instance config.** `org` and `reposRoot` differ per instance. The per-machine override
+  set is listed in `SCHEMA.md` alone — don't infer it from anywhere else.
+- **Shared instance.** This bundle may be shared by more than one human, each running
+  their own loop against their own clone. With no owner key set the single-human case is
+  unchanged; step 3 is the one thing ownership gates.
+- **The autonomy resolver.** It resolves the **bundle root first** (a v1-era bundle's own
+  file always wins), else an installed **companion plugin** — today `loopd-yolo@loopd`,
+  which is the only thing that ships one.
+- **Gate 3.** On a single-human instance every task clears and this gate is invisible. It
+  is in the core rather than in step 3 for the reason the two above are: a tick that read
+  no step file still cannot cross it. `project-paused.sh` has the same disposition.
+- **One command per call.** Each of `AB=`, `$(…)`, `~` or a trailing `; echo "EXIT=$?"`
+  re-prompts the human on every call.
+- **The step-file router.** This prompt is re-sent every tick, and a step nobody is going
+  to run is a step nobody should pay to read. The `steps:` line is derived from the same
+  walk that prints the enumeration — a `draft` or a ` --- `-answered entry names step 2, a
+  `ready` task names step 3, and so on. The digest fails toward the behaviour that was
+  always correct: a tick that skipped a step on a refusal would skip it silently. Step 7
+  is never named because whether the knowledge base is owed a pass is not on disk before
+  the tick runs — it is known from step 5 having reflected a merge or moved a task to
+  `done`, or from `kb-sweep-due.sh` / `papercuts.sh` saying DUE. An IDLE tick skips steps
+  1-7 outright, so it never reaches the digest that would name one.
+
 <a id="step-0"></a>
 ### Step 0 — sync first; defer on dirty; never `--autostash`; conflicts stop the tick
 
@@ -310,6 +341,12 @@ nobody chose. Reporting a blocked tick costs one tick; a silently mis-resolved
 the untracked file` rule exists because on a control panel that file is usually a
 sibling agent's half-written project folder, and deleting it destroys work no commit
 holds.
+
+**Moved out of the prompt (2026-11-08).** A tick can start on a tree someone else left
+mid-conflict (`UU`, `AA`, any `U` line) or mid-rebase. Deferring that as dirt carries an
+unmerged index into step 0.9's ledger append and step 2's task edits, which the conflict
+rule forbids and never reaches on that branch — hence "read the first status for CONFLICT
+before you read it for DIRT".
 
 <a id="step-0-5"></a>
 ### Step 0.5 — the lock, the identity, and the ledger
@@ -357,6 +394,28 @@ difference between a report a human can act on and one that only says something 
 wrong. A stale open entry adopted silently miscounts the `maxAgentsInFlight` cap in
 both directions. `status: in-progress` on a task is task-scoped and answers a different
 question — whether that task was handed out — not whether a tick is done.
+
+**Moved out of the prompt (2026-11-08).**
+- Exit 0 with a preceding `re-entered:` line means a second acquire in this tick. Exit 1:
+  read the claim as somebody else's. Exit 2: the script printed everything the decision
+  needs. A missing script is likely an instance stamped before the lock shipped.
+- The id is the brief's because the launcher minted it, took the lock with it and
+  recorded it in `.tick-lock`. With no id the fallback is the session's id, which is one
+  per *session* and not per tick, so a match there proves nothing and is exit 2, the
+  human's. Passed back verbatim, the brief's id is what makes a second acquire in one tick
+  a proved re-entry (exit 0). `adopted:` names the launcher's dispatch lock, which its
+  reaper releases once the tick's close line is committed.
+- The ledger's `open:` and `close:` lines sit as a PAIR, and the open half is never
+  rewritten. Re-dispatching a finished task sequence costs a full set of agent runs and
+  opens duplicate PRs. The launcher's allowlist of four holds a cwd probe, the tick lock,
+  the reaper (`tick-reap.sh`, which reads only the tick it spawned) and a cron step that
+  reads and writes the scheduler and not this bundle; everything else is the tick's by
+  category.
+- Conclusions: "the rollout fixed it" is read from disk like a `status:`. A caveat goes in
+  `open_caveats:` rather than being argued in a report nobody re-reads. It is not a
+  promotion gate.
+- The ledger entry opens at step 0.9, not here, because an entry written first forces the
+  `DELTA` answer the probe exists to give, and the idle fast-path never once runs.
 
 <a id="step-0-9"></a>
 ### Step 0.9 — why an idle tick may skip, and why the probe can never lie it idle
@@ -427,6 +486,29 @@ it cannot compute the complete fingerprint, because a partial record would turn 
 next "match" into a lie. An idle tick leaves the record alone: it just proved it
 current, and rewriting it would only move a timestamp nothing judges.
 
+**Moved out of the prompt (2026-11-08).**
+- Omit `--gap` and the IDLE line says "on the next tick", which is still a whole report.
+- On IDLE, a `ready` task that clears or a `draft` with an untriaged concern is a `DELTA:`
+  naming the task. There is no open entry to rewrite: nothing was dispatched, so nothing
+  could die mid-dispatch, which is the only thing an open entry is for. No queue,
+  snapshot or board is rewritten because each derives from documents the probe just
+  proved unchanged. Leaving the old fingerprint record standing would make the next tick
+  read a mismatch and walk the whole thing.
+- An IDLE report has no sections, no counts, no preamble, and nothing from the Output
+  section. The fingerprint is re-recorded after the push because that commit moves bundle
+  `HEAD`, which the fingerprint covers.
+- On DELTA, step 1 still reads everything itself. Exit 2 means no record yet, no `gh`, or
+  the probe errored; the first tick after an upgrade lands there, by design. A missing
+  script means the instance was not re-stamped.
+- The open line is here rather than in step 0.5 because the probe reads a tree that append
+  would have dirtied, and by now the answer is already `DELTA`. The pair is what makes a
+  tick's wall duration readable from the ledger alone.
+- `by <login>` is this clone's `ownerGithubUser`. On a bundle two humans share, the ledger
+  is one file both loops append to, so a line that does not say whose tick it was is a
+  line a reader cannot attribute at all.
+- Step 0.95's script exists so none of the web page's queued text reaches the tick's
+  context; steps 1–2 then see what it answered like any human answer.
+
 <a id="step-1"></a>
 ### Step 1 — why one digest replaces the walk, and why the done-project skip is at the frontmatter
 
@@ -452,6 +534,15 @@ stop at its `project.md`. A done project costs one frontmatter parse. Filtering 
 tasks out *after* reading them costs the full walk and buys nothing — the point is the
 read that never happens. Nothing in a done project can need a tick: every task is
 terminal, no PR is open, and it is not reopenable (new work starts as a new project).
+
+**Moved out of the prompt (2026-11-08).** `kb-sync.sh pull` is bounded and never fatal,
+so a slow or unreachable remote costs the timeout and nothing else. Nothing upstream
+oriented the tick; the digest fetches PR state from the host once. A document is opened
+the moment the tick acts on it — the draft it refines, the task it dispatches, advances or
+reflects, the answer it folds in — and the digest's counts route attention, they decide
+nothing. The digest's enumeration per project is slug, status, autonomy and owner; per
+task, path, status, kind, assignee, dependency and open-question counts, criteria filled or
+not, worktree recorded or not.
 
 <a id="step-2"></a>
 ### Step 2 — the approach critique's cost objection, answered
@@ -484,6 +575,16 @@ adopted 2026-11-02:
 - **`not run` is not zero findings** (its synthesizer's failed reviewers). Without a
   receipt of its own, a critique that errored was either re-dispatched every tick or read
   as a concern; one re-dispatch, then a named report, bounds both.
+
+<a id="step-2-5"></a>
+### Step 2.5 — why a promotion is stamped, once
+
+Relocated from the prompt on 2026-11-08. The stamp derives from `git log -1` on the task
+file. A hand-promotion is attributed too, which is the whole point: `draft → ready` is a
+human authority, it leaves no other record inside the document, and on a shared bundle it
+is *either* human's — the promoter's login is the only thing that says whose approval this
+was. A later tick must not add a second line. Stamping before dispatch means the document
+a briefed agent reads already says who approved it.
 
 <a id="step-3"></a>
 ### Step 3 — dispatch discipline, priced
@@ -930,6 +1031,36 @@ re-opens the double-dispatch the lock exists to close. There is no longer a case
 a tick created its own lock — creating one is exactly what Step 0.5 refuses.
 `scripts/tick-lock.sh release` stays unconditional and holds no identity, because it is
 **the human's override**; it is not the tick's to run at the end of a tick.
+
+**Moved out of the prompt (2026-11-08).**
+- A done project was skipped in step 1 and is never curated.
+- Without `--tick` the script closes the only open entry and refuses when there are two —
+  and two open entries is exactly where guessing closes the other tick's entry under your
+  summary. The script owns the `usage …` form; with no numbers the line closes without
+  them, as it always did. A ledger line never carries a path under `~`. An IDLE tick has
+  no open entry, so the script would correctly refuse.
+- The close puts nothing in `AWAITING.md` because no human decision unblocks it, and the
+  queue holds only what one does.
+- `kb-sync.sh commit` regenerates the index, commits as the human with the tool as
+  co-author, pushes and retries once; if it stops, it says so and leaves no rebase behind.
+- An idle fast-path tick records the fingerprint too: its probe proved the record current
+  *before* its own ledger commit moved `HEAD`.
+
+<a id="output"></a>
+### Output — the report shape, and why its order check is only a detector
+
+Relocated from the prompt on 2026-11-08. The first refusal sends the tick back with the
+reasons to rewrite. A path the human has to go and find is a step before the step. No
+tick prints two cost lines; tokens, never money, because there is no price table anywhere
+in this loop and converting is the reader's business. The steps taken and the
+alternatives rejected go in the task document, the commit message or a `Finding`.
+
+**The order check is a detector, not the rule.** The rule is dependency. `first`,
+`before`, `once` and `after` are the cheap detector for the common case — `first` below
+item 1, `before <X>` below the item `<X>` names, `once <X>` or `after <X>` above it,
+matched on shared words. An inversion that uses none of the four words clears, and loopd's
+tests pin exactly that as a known miss: a clear report is not proof the order is right.
+The imperative, why and one-action checks are detectors in the same sense.
 
 ---
 
