@@ -298,7 +298,10 @@ before it — never one recorded after it at the same head. A FAIL whose unedite
 trailer names an earlier head is recorded at the comment's `createdAt`, so the waiver holds on
 every later tick; under the author's own login only with a QA dispatch recorded at that earlier
 head. Anything else is recorded now. The `last-round` line keeps the stamp of its first record
-at a head, so a FAIL posted after it refuses on every tick.
+at a head, so a FAIL posted after it refuses on every tick. A last QA verdict of FAIL opens
+`last-round` only when the head was pushed after that fail line's stamp — the push time is the
+host's repository activity record, never a commit date — and holds otherwise; a stamp or push
+time it cannot read is unknown (exit 2).
 
 **`qaRounds: 0` is an explicit opt-in to merging a PR nobody reviewed.** A refusal is read
 from comment text, so a misread comment can open such a merge. The owner accepted both

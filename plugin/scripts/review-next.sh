@@ -96,8 +96,8 @@ fi
 D="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 R=(); [ -n "$repo" ] && R=(--repo "$repo")
 
-meta="$(gh pr view "$pr" ${R[@]+"${R[@]}"} --json url,number,headRefOid \
-        --jq '[.url, (.number|tostring), .headRefOid] | @tsv' 2>/dev/null)" || unknown "PR $pr is unreadable"
+meta="$(gh pr view "$pr" ${R[@]+"${R[@]}"} --json url,number,headRefOid,headRefName \
+        --jq '[.url, (.number|tostring), .headRefOid, (.headRefName // "" | @uri)] | @tsv' 2>/dev/null)" || unknown "PR $pr is unreadable"
 url="$(printf '%s' "$meta" | cut -f1)"; num="$(printf '%s' "$meta" | cut -f2)"
 [ -n "$head" ] || head="$(printf '%s' "$meta" | cut -f3)"
 nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')"
@@ -182,6 +182,23 @@ case "$kind" in
       merges="$(printf '%s' "$cmp" | jq '[.commits // [] | .[] | select((.parents // []) | length > 1)] | length' 2>/dev/null)"
       what="the fix"; [ "${merges:-0}" -gt 0 ] && what="a merge from the base branch"
       hold "$what after the last round changes $lines lines since $reviewed, over reviewFixMaxLines ($max)"
+    fi
+    # A QA FAIL posted at or after the push of this head was not what the fix answered. Both
+    # times are host stamps: a commit's own dates are the author's to set (D3).
+    if [ "$who" = qa ] && [ "$qlast" = fail ]; then
+      rf="$("$D/clearance-receipt.sh" path --bundle "$inst" --repo "$nwo" --pr "$num" --head "$head" 2>/dev/null)"
+      t1="$(awk '$1 == "fail" && $2 == "pr-verdict-clearance.sh" { print $3 }' "$rf" 2>/dev/null | sort | tail -n 1)"
+      if [ -n "$t1" ]; then
+        iso='[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z'
+        printf '%s' "$t1" | grep -Eqx "$iso" || unknown "the QA FAIL's time in the receipt is unreadable"
+        ref="$(printf '%s' "$meta" | cut -f4)"
+        [ -n "$ref" ] || unknown "the PR's head branch is unreadable"
+        pushed="$(gh api "/repos/$nwo/activity?ref=refs/heads/$ref&per_page=100" --paginate \
+          --jq ".[] | select(.after == \"$head\") | .timestamp" 2>/dev/null)" || unknown "the push history of $head is unreadable"
+        [ -n "$pushed" ] && ! printf '%s\n' "$pushed" | grep -Evxq "$iso" || unknown "no readable push of $head is on record"
+        t0="$(printf '%s\n' "$pushed" | sort | head -n 1)"
+        [ "$t0" \> "$t1" ] || hold "the QA FAIL at $t1 came after $head was pushed at $t0, so the fix did not answer it"
+      fi
     fi
     echo "review-next: $lines of $max lines since the last reviewed commit $reviewed" >&2
     kind="last-round" ;;

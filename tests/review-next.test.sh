@@ -101,6 +101,7 @@ case "${1:-} ${2:-}" in
                 printf '{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}\n'; exit 0 ;;
   *) case "${2:-}" in
        */compare/*) src="$FIX/compare_json" ;;
+       */activity*) src="$FIX/activity_json" ;;
        */pulls/*/commits*) src="$FIX/commits_json" ;;
        */pulls/*/reviews*) src="$FIX/reviews_json" ;;
        */issues/*/comments*) src="$FIX/comments_json" ;;
@@ -243,6 +244,47 @@ ok "3: qaRounds 0, a refusal, QA FAIL at the head -> implementer round" \
 qa_at_x changes-requested "$H"; printf '{"qaRounds": 0}\n' > "$B/instance.config.json"
 ok "3: …the same live: --clear refuses" "$(clear)" rc=1
 ok "…and writes no waiver line" "$(grep -cE '^(last-round|qa-head|qa-zero|zero-zero) ' "$RCPT" 2>/dev/null || true)" 0
+
+echo "== a QA FAIL posted at or after the fix's push is not waived (D3: host times only) =="
+T1="2020-01-01T01:00:00Z"
+RC="$REPO/plugin/scripts/clearance-receipt.sh"
+"$REAL_JQ" '.headRefName = "fix/b"' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
+fail_after_push() { # <verdict> <push time of H> — the last QA round at X, its FAIL line stamped T1
+  qa_at_x "$1"; cmpf ahead "$(f modified a.sh 6 2)"
+  "$RC" record pr-verdict-clearance.sh --fail --at "$T1" --bundle "$B" --repo acme/widgets --pr 42 --head "$H"
+  "$REAL_JQ" -n --arg h "$H" --arg t "$2" '[{activity_type:"push", after:"0000000000000000000000000000000000000000", timestamp:"2019-01-01T00:00:00Z"},
+    {activity_type:"push", after:$h, timestamp:$t}]' > "$FIX/activity_json"
+}
+fail_after_push changes-requested 2020-01-01T00:59:59Z
+ok "fix pushed before the FAIL -> hold" "$(clear)" rc=1
+ok "…naming the verdict time" "$(said "QA FAIL at $T1")" yes
+ok "…and records no last-round line" "$(grep -c last-round "$RCPT")" 0
+fail_after_push changes-requested "$T1"
+ok "fix pushed at the FAIL's own second -> hold" "$(clear)" rc=1
+fail_after_push changes-requested 2020-01-01T00:59:59Z
+"$REAL_JQ" '.commits = [{sha:"c", parents:[{sha:"p"}], commit:{author:{date:"2020-01-01T02:00:00Z"}, committer:{date:"2020-01-01T02:00:00Z"}}}]' \
+  "$FIX/compare_json" > "$FIX/c" && mv "$FIX/c" "$FIX/compare_json"
+ok "amended or rebased: commit dates after the FAIL, push before -> hold" "$(clear)" rc=1
+fail_after_push changes-requested 2020-01-01T01:00:01Z
+for s in required-checks.sh pr-body-clearance.sh; do
+  "$RC" record "$s" --bundle "$B" --repo acme/widgets --pr 42 --head "$H"
+done
+ok "fix pushed after the FAIL -> clears as last-round" "$(clear | tr '\n' ' ')" "last-round rc=0 "
+ok "…and verify --unreviewed clears" \
+   "$("$RC" verify --unreviewed --bundle "$B" --repo acme/widgets --pr 42 --head "$H" >/dev/null 2>&1; echo $?)" 0
+fail_after_push pass 2020-01-01T00:59:59Z
+ok "last QA verdict PASS: no push-time check, still last-round" "$(clear | tr '\n' ' ')" "last-round rc=0 "
+
+echo "== fail closed: an unreadable time is unknown, never last-round =="
+fail_after_push changes-requested 2020-01-01T01:00:01Z
+sed 's/^fail pr-verdict-clearance.sh [^ ]*/fail pr-verdict-clearance.sh 2020-01-01/' "$RCPT" > "$RCPT.t" && mv "$RCPT.t" "$RCPT"
+ok "a malformed FAIL stamp in the receipt -> unknown" "$(clear | tail -n 1)/$(grep -c last-round "$RCPT")" rc=2/0
+fail_after_push changes-requested 2020-01-01T01:00:01Z; rm -f "$FIX/activity_json"
+ok "the push history unreadable -> unknown" "$(clear | tail -n 1)/$(grep -c last-round "$RCPT")" rc=2/0
+fail_after_push changes-requested 2020-01-01T01:00:01Z; printf '[]\n' > "$FIX/activity_json"
+ok "no push of the head on record -> unknown" "$(clear | tail -n 1)" rc=2
+fail_after_push changes-requested "2020-01-01 01:00:01"
+ok "a malformed push time -> unknown" "$(clear | tail -n 1)" rc=2
 
 echo
 echo "pass=$pass fail=$fail"
