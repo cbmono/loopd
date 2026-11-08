@@ -66,6 +66,12 @@ due() { # <bundle> <args…> — sets $RC and $OUT. NOT a substitution: `$(…)`
   local b="$1"; shift
   OUT="$(bash "${MUTANT:-$DUE}" --instance "$b" "$@" 2>&1)"; RC=$?
 }
+nostamp() { rm -f "$1/.loopd/.kb-check-stamp"; } # a gate test wants the walk, not the cache
+age_stamp() { # <stamp> <seconds ago> — moves the epoch inside it, keeping its mtime
+  local e=$(( $(date -u +%s) - $2 ))
+  { sed -n '1s/ .*//p' "$1" | tr -d '\n'; printf ' %s\n' "$e"; sed '1d' "$1"; } > "$1.age" \
+    && touch -r "$1" "$1.age" && mv -f "$1.age" "$1"
+}
 
 echo "== the files exist at all (or every assertion below is vacuous) =="
 for f in "$DUE" "$BUILD" "$PM" "$CAT" "$DESIGN" "$README"; do
@@ -108,7 +114,7 @@ ok "  and it says why" "$(saw "$OUT" "a cataloguer is already in flight")" yes
 
 echo
 echo "== maxAgentsInFlight is respected, and it is READ from the config =="
-due "$ERR" --dispatched 0 --in-flight 3
+nostamp "$ERR"; due "$ERR" --dispatched 0 --in-flight 3
 ok "cap 4, 3 in flight => due" "$RC" 0
 due "$ERR" --dispatched 0 --in-flight 4
 ok "cap 4, 4 in flight => not due" "$RC" 1
@@ -118,7 +124,7 @@ due "$ERR" --dispatched 0 --in-flight 3
 ok "cap 3, 3 in flight => not due (the cap moved, the answer moved)" "$RC" 1
 ok "  and it names the new cap" "$(saw "$OUT" "at the cap of 3")" yes
 printf '{ "org": "x", "maxAgentsInFlight": 8 }\n' > "$ERR/instance.config.json"
-due "$ERR" --dispatched 0 --in-flight 3
+nostamp "$ERR"; due "$ERR" --dispatched 0 --in-flight 3
 ok "cap 8, 3 in flight => due again" "$RC" 0
 rm -f "$ERR/instance.config.json"
 due "$ERR" --dispatched 0 --in-flight 4
@@ -179,18 +185,65 @@ touch "$TMP/now"
 ok "  and the stamp rewritten to a time not after now" "$([ "$ST" -nt "$TMP/now" ] && echo yes || echo no)" no
 
 echo
-echo "== a failing check writes no stamp, and the verdict is the walk's =="
+echo "== a walk with errors is stamped with its error list, and still due =="
 F="$TMP/failing"; mkbundle "$F" 4; finding "$F" an-off-enum-thing "An off-enum thing has a bad status." open
+FS="$F/.loopd/.kb-check-stamp"
 due "$F" --dispatched 0
 ok "errors with no stamp => due" "$RC" 0
-ok "  and no stamp, no reference written" "$(ls -A "$F/.loopd" 2>/dev/null | wc -l | tr -d ' ')" 0
+ok "  and the walk is stamped" "$([ -f "$FS" ] && echo yes || echo no)" yes
+ok "  with its error count" "$(sed -n 2p "$FS" | cut -d" " -f1)" "errors=2"
+ok "  and its error list" "$(grep -c '^  ERROR  ' "$FS" | tr -d ' ')" 2
+ok "  and no reference left behind" "$(ls -A "$F/.loopd" | tr '\n' ' ')" ".kb-check-stamp "
 NOCACHE="$(printf '%s\n' "$OUT" | grep '^KB SWEEP DUE')"
 G="$TMP/guard"; mkbundle "$G" 4; due "$G" --dispatched 0
-ok "a clean KB leaves a stamp" "$([ -f "$G/.loopd/.kb-check-stamp" ] && echo yes || echo no)" yes
+ok "a clean KB leaves a stamp" "$(sed -n 2p "$G/.loopd/.kb-check-stamp" | cut -d" " -f1)" "errors=0"
 finding "$G" an-off-enum-thing "An off-enum thing has a bad status." open
 due "$G" --dispatched 0
-ok "the same errors with a stamp present => still due" "$RC" 0
+ok "the same errors over a clean stamp => still due" "$RC" 0
 ok "  with the same trigger line and error count" "$(printf '%s\n' "$OUT" | grep '^KB SWEEP DUE')" "$NOCACHE"
+
+echo
+echo "== inside kbSweepIntervalHours (24) errors are cached, and still reported =="
+due "$F" --dispatched 0
+ok "errors cached => not due" "$RC" 1
+ok "  the count is printed for the tick report" "$(saw "$OUT" "KB SWEEP CACHED: 2 error(s) at stamp 20")" yes
+ok "  naming the default interval" "$(saw "$OUT" "walked again 24h after it")" yes
+ok "  and no trigger line" "$(saw "$OUT" "KB SWEEP DUE")" no
+ok "  and no walk" "$(saw "$OUT" "status 'open' is outside")" no
+age_stamp "$FS" $((23 * 3600))
+due "$F" --dispatched 0
+ok "23h old => still cached" "$RC" 1
+age_stamp "$FS" $((24 * 3600))
+due "$F" --dispatched 0
+ok "interval expired => walks and is due" "$RC" 0
+ok "  with the error list as the brief again" "$(saw "$OUT" "status 'open' is outside")" yes
+due "$F" --dispatched 0
+ok "  and the new stamp is cached again" "$(saw "$OUT" "KB SWEEP CACHED: 2 error(s)")" yes
+age_stamp "$FS" $((90 * 60)); printf '{ "org": "x", "kbSweepIntervalHours": 1 }\n' > "$F/instance.config.json"
+due "$F" --dispatched 0
+ok "kbSweepIntervalHours 1, 90 min old => walks (the key is read)" "$RC" 0
+age_stamp "$FS" $((30 * 60)); due "$F" --dispatched 0
+ok "kbSweepIntervalHours 1, 30 min old => cached" "$(saw "$OUT" "walked again 1h after it")" yes
+for bad in 0 '"soon"' 1.5; do
+  printf '{ "org": "x", "kbSweepIntervalHours": %s }\n' "$bad" > "$F/instance.config.json"
+  due "$F" --dispatched 0
+  ok "kbSweepIntervalHours $bad => 24, and says so" "$(saw "$OUT" "is not a positive integer; using 24")" yes
+done
+printf '{ "org": "x", "kbSweepIntervalHours": null }\n' > "$F/instance.config.json"
+due "$F" --dispatched 0
+ok "kbSweepIntervalHours null => 24, silently" "$(saw "$OUT" "walked again 24h after it")$(saw "$OUT" "using 24")" yesno
+printf '\nEdited.\n' >> "$F/knowledge/findings/a-first-thing.md"
+due "$F" --dispatched 0
+ok "an edit under knowledge/ inside the interval => walks and is due" "$RC" 0
+ok "  on the walk's list" "$(saw "$OUT" "status 'open' is outside")" yes
+( cd "$F" && sed 's/status: open/status: current/' knowledge/findings/an-off-enum-thing.md > "$TMP/f" \
+  && mv "$TMP/f" knowledge/findings/an-off-enum-thing.md && bash "$BUILD" >/dev/null 2>&1 )
+due "$F" --dispatched 0; due "$F" --dispatched 0
+ok "fixed => the clean stamp is cached, with no count line" "$(saw "$OUT" "cached, stamp")$(saw "$OUT" "KB SWEEP CACHED")" yesno
+OLDST="$TMP/oldstamp"; mkbundle "$OLDST" 4; mkdir -p "$OLDST/.loopd"
+printf '2026-11-01T00:00:00Z\n' > "$OLDST/.loopd/.kb-check-stamp"
+due "$OLDST" --dispatched 0
+ok "a pre-interval stamp (time only) reads as a clean one" "$(saw "$OUT" "cached, stamp 2026-11-01T00:00:00Z")" yes
 
 echo
 echo "== the stamp is ignored, and cut before the walk =="
