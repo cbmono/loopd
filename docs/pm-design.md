@@ -276,7 +276,7 @@ difference between a loop you leave running and one you turn off because it scro
 ## The tick
 
 <a id="preamble"></a>
-### Before step 0 — the preamble, the gates and the step-file router
+### Before Step 0 — the preamble, the gates and the step-file router
 
 Relocated from the prompt on 2026-11-08 (leaner-prompts/task-003): every rule below is
 still in `project-manager.md`; these are the reasons that travelled with it.
@@ -344,7 +344,7 @@ holds.
 
 **Moved out of the prompt (2026-11-08).** A tick can start on a tree someone else left
 mid-conflict (`UU`, `AA`, any `U` line) or mid-rebase. Deferring that as dirt carries an
-unmerged index into step 0.9's ledger append and step 2's task edits, which the conflict
+unmerged index into Step 0.9's ledger append and Step 2's task edits, which the conflict
 rule forbids and never reaches on that branch — hence "read the first status for CONFLICT
 before you read it for DIRT".
 
@@ -414,7 +414,7 @@ question — whether that task was handed out — not whether a tick is done.
 - Conclusions: "the rollout fixed it" is read from disk like a `status:`. A caveat goes in
   `open_caveats:` rather than being argued in a report nobody re-reads. It is not a
   promotion gate.
-- The ledger entry opens at step 0.9, not here, because an entry written first forces the
+- The ledger entry opens at Step 0.9, not here, because an entry written first forces the
   `DELTA` answer the probe exists to give, and the idle fast-path never once runs.
 
 <a id="step-0-9"></a>
@@ -500,7 +500,7 @@ current, and rewriting it would only move a timestamp nothing judges.
 - On DELTA, step 1 still reads everything itself. Exit 2 means no record yet, no `gh`, or
   the probe errored; the first tick after an upgrade lands there, by design. A missing
   script means the instance was not re-stamped.
-- The open line is here rather than in step 0.5 because the probe reads a tree that append
+- The open line is here rather than in Step 0.5 because the probe reads a tree that append
   would have dirtied, and by now the answer is already `DELTA`. The pair is what makes a
   tick's wall duration readable from the ledger alone.
 - `by <login>` is this clone's `ownerGithubUser`. On a bundle two humans share, the ledger

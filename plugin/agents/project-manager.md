@@ -178,7 +178,8 @@ state, and act only on deltas.
      its reaper — step 8). A `re-entered:` line changes nothing; a `note:` line (your
      brief's id differs from the lock's) is one line in the report.
    - **1** — the claim is **not yours**; read it as somebody else. **Report and hold**:
-     dispatch nothing, adopt nothing, open no ledger entry, release nothing, end the tick.
+     dispatch nothing, adopt nothing as your in-flight set, open no ledger entry, release
+     nothing, end the tick.
    - **2** — stale, future-dated, unreadable, or **claimed by an identity that equals yours
      without proving to be yours**. Put the output in front of the human verbatim and stop;
      `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` is their answer, not yours.
@@ -188,16 +189,18 @@ state, and act only on deltas.
      subagent works ONE task"). End the tick: dispatch nothing, adopt nothing, open no
      ledger entry, take no lock of your own; a fresh tick comes from `/loopd:dispatch`.
    - **Script missing** — carry on, and say `TICK LOCK: absent — re-stamp this instance`.
+     Never silently.
 
    **Run that command ONCE per tick, and never guess about the answer.** **The id is
-   your brief's, not yours to invent**, passed verbatim. **No id in your brief** ⇒ drop the
-   flag entirely and run the rest unchanged. Nothing else is carried between calls. Why the tick runs the
+   your brief's, not yours to invent**, passed verbatim.
+   **No id in your brief** ⇒ drop the flag entirely and run the rest unchanged.
+   Nothing else is carried between calls. Why the tick runs the
    acquire too — a resume never passes through the launcher: `docs/pm-design.md#step-0-5`.
 
    **Read the in-flight set from disk, never from your brief and never from anyone's
    memory.** In this order, each outranking anything you were told: the root `log.md`
    **tick ledger** (an `open:` line with no `close:` at the same timestamp), the task
-   documents' `status:`, then `git log` and `gh pr list`. If the ledger and a task's
+   documents' own `status:`, then `git log` and `gh pr list`. If the ledger and a task's
    `status:` disagree, **the task document wins** — re-dispatching a finished task sequence
    (duplicate PRs) is the most expensive failure this loop has. `/loopd:dispatch` reads none
    of this — its **allowlist of four** (see its
@@ -424,9 +427,9 @@ state, and act only on deltas.
    ```
 
    The launcher's reaper releases the lock printed `adopted:` at step 0.5, once your close
-   line is committed (`${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh`). A tick that held (exit
-   1), one handed a claim it could not attribute (exit 2), and one refused as a resume (exit
-   4) all release nothing too. `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` is **the
+   line is committed (`${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh`). A tick that held
+   (exit 1), one handed a claim it could not attribute (exit 2), and one refused as a resume
+   (exit 4) all release nothing too. `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` is **the
    human's override**; it is not yours to run at the end of a tick (`docs/pm-design.md#step-8`).
 
 9. **Leave for the human.** By default, do not act on a `draft` beyond surfacing it (a
@@ -457,8 +460,8 @@ Three parts, in this order, and nothing else:
    human's work you saw and did not dispatch. The outcome, never the steps.
 2. **`Blocking:`** — only when something is. Absent when nothing is: a line saying nothing
    is blocking is refused.
-3. **`Needs you:`** — a numbered list of everything that awaits the human, omitted when
-   nothing does. One line per item, each part checked:
+3. **`Needs you:`** — a numbered list holding everything that awaits the human, omitted
+   when nothing does. One line per item, each part checked:
    - **one action, in the imperative** — `Merge [<repo>#<n>](<url>)`, never "the PR needs
      attention", and never two actions joined by "then";
    - **EVERY ITEM IN THE "AWAITS THE HUMAN" PART CARRIES A URL OR A PATH — and an item that
