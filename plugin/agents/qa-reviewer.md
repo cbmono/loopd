@@ -82,7 +82,7 @@ policy. Name the guide(s) consulted in the review. A server-only diff opens noth
    - a *stable* set failing here but **not** on the default branch ⇒ **real
      regression** — request changes.
    Check `knowledge/findings/` for documented known-flaky tests before judging — and
-   capture a new `Finding` if you discover one.
+   capture a new `Finding` for one you discover only when a later task would plausibly hit the same problem.
 3. **The external reviewer — settle this BEFORE choosing a review route.** Whether an
    independent reviewer actually reviewed *this diff* is what decides step 4, so it comes
    first: reading it afterwards is how a PR ends up reviewed twice over one diff.

@@ -269,8 +269,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    those first. Then `grep -i '<term>' knowledge/index.md` — never read it whole — for
    prior `Finding`s / `Service` / `Runbook` docs on this area and reuse them — open only
    what matches, don't bulk-read `knowledge/`; a Finding you cite that you found only by
-   grep is graded `UNREAD` by `cite-check.sh`."* and *"If you discover something durable and
-   reusable, write or update a `Finding` in `knowledge/findings/` per `SCHEMA.md` and
+   grep is graded `UNREAD` by `cite-check.sh`."* and *"Write or update a `Finding` in
+   `knowledge/findings/` per `SCHEMA.md` only when a later task would plausibly hit the same problem, and
    link it from the task."*
 
    **Grounding, Effort, Commit attribution, PR title, Scratch, Deliverables, Signature and

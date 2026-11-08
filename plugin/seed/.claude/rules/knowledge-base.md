@@ -13,8 +13,7 @@ by the time this file loads you are already reading a `knowledge/` doc.
   `Finding`s (decisions/learnings), `Runbook`s, `Team`s, and `Reference`s
   (durable specs/contracts) (see `SCHEMA.md`).
 - The `cataloguer` agent builds/refreshes it (read-only on product repos); task
-  agents **capture `Finding`s as a byproduct** of their work and link them from
-  the task.
+  agents write a `Finding` **only when a later task would plausibly hit the same problem**, and link it from the task.
 - **Grep it, never read the index whole.** Before researching or implementing, start
   from your brief's `## Knowledge` rows, then `grep -i '<term>' knowledge/index.md`
   (capped) or `grep -ril '<term>' knowledge/` past the cap, and open **at most three**

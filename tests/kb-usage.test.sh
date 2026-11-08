@@ -37,7 +37,7 @@ cp "$REPO/plugin/seed/SCHEMA.md" "$D/$AB_DIR/SCHEMA.md"
 cd "$D" || exit 2
 bash "$BUILD" >/dev/null 2>&1
 git init -q . && git config user.name example-user-007 && git config user.email u@example.com
-git add -A && git commit -qm init
+git add -A && GIT_AUTHOR_DATE=2025-01-01T00:00:00Z GIT_COMMITTER_DATE=2025-01-01T00:00:00Z git commit -qm init
 
 echo "== criterion 1: one citation reaches the store =="
 printf 'Fixed it per [[cited-learning]] and [[stale-gotcha]], not [[nope]].\n' >"$TMP/result.md"
@@ -57,6 +57,62 @@ ok "record with no index stores nothing (exit 2)" \
 ok "a source id carrying a path is refused" \
   "$("$USAGE" record --source ../x --text-file "$TMP/result.md" --brief a >/dev/null 2>&1; echo $?)" 2
 rm -f "$STORE"
+
+echo
+echo "== --task: a citation of the task's own new Finding is SELF, never counted as a read =="
+# D3: self-citation = the Finding's adding commit postdates the task's first DISPATCH line.
+TASK="$TMP/task-009.md"
+printf -- '---\ntype: Task\n---\n\n# Notes\n\n* DISPATCH 2026-03-01T12:00:00Z · software-engineer · model opus\n* DISPATCH 2026-02-01T09:00:00Z · software-engineer · model opus\n' >"$TASK"
+item own-new-finding learning 2026-03-02
+git add knowledge/findings/own-new-finding.md \
+  && GIT_AUTHOR_DATE=2026-02-15T10:00:00Z GIT_COMMITTER_DATE=2026-02-15T10:00:00Z git commit -qm finding
+item rebased-old gotcha 2025-06-01
+git add knowledge/findings/rebased-old.md \
+  && GIT_AUTHOR_DATE=2025-06-01T00:00:00Z GIT_COMMITTER_DATE=2026-04-01T00:00:00Z git commit -qm rebased
+item uncommitted-new learning 2026-03-03
+printf 'Per [[own-new-finding]], [[stale-gotcha]], [[rebased-old]], [[uncommitted-new]] and [[cited-learning]].\n' >"$TMP/self.md"
+out="$("$USAGE" record --source task-009.result --task "$TASK" --text-file "$TMP/self.md" --brief cited-learning 2>/dev/null)"; rc=$?
+STORE="$D/$AB_DIR/citations/task-009.result.txt"
+ok "record --task still passes cite-check's exit code through" "$rc" 3
+ok "added after the EARLIEST DISPATCH, before a resume: SELF" "$(grep -cx 'SELF own-new-finding' "$STORE")" 1
+ok "…and is not stored UNREAD"                       "$(grep -c 'UNREAD own-new-finding' "$STORE")" 0
+ok "…and the printed report says SELF"               "$(grep -c '^SELF own-new-finding ' <<<"$out")" 1
+ok "an uncommitted Finding has no adding commit: SELF" "$(grep -cx 'SELF uncommitted-new' "$STORE")" 1
+ok "an older Finding, not carried, stays UNREAD"     "$(grep -cx 'UNREAD stale-gotcha' "$STORE")" 1
+ok "an older Finding rebased after DISPATCH stays UNREAD" "$(grep -cx 'UNREAD rebased-old' "$STORE")" 1
+ok "an older Finding the brief carried stays KEPT"   "$(grep -cx 'KEPT cited-learning' "$STORE")" 1
+"$USAGE" record --source task-009.pr --text-file "$TMP/self.md" --brief cited-learning >/dev/null 2>&1
+ok "without --task grading is unchanged: UNREAD"     "$(grep -cx 'UNREAD own-new-finding' "$D/$AB_DIR/citations/task-009.pr.txt")" 1
+printf -- '---\ntype: Task\n---\n' >"$TMP/undispatched.md"
+"$USAGE" record --source task-010.result --task "$TMP/undispatched.md" --text-file "$TMP/self.md" --brief cited-learning >/dev/null 2>&1
+ok "a task with no DISPATCH line: grading unchanged" "$(grep -c '^SELF ' "$D/$AB_DIR/citations/task-010.result.txt")" 0
+ok "an unreadable --task is refused (exit 2)" \
+  "$("$USAGE" record --source x --task "$TMP/nope.md" --text-file "$TMP/self.md" --brief a >/dev/null 2>&1; echo $?)" 2
+# A shallow clone's boundary commit lists every file as added, dated after the DISPATCH here.
+printf 'x\n' >"$D/later.txt" && git add later.txt \
+  && GIT_AUTHOR_DATE=2026-05-01T00:00:00Z GIT_COMMITTER_DATE=2026-05-01T00:00:00Z git commit -qm later
+git clone -q --depth 1 "file://$D" "$TMP/shallow" 2>/dev/null
+item shallow-new learning 2026-05-02 && mv "$D/knowledge/findings/shallow-new.md" "$TMP/shallow/knowledge/findings/"
+printf 'Per [[stale-gotcha]] and [[shallow-new]].\n' >"$TMP/shallow.md"
+"$USAGE" --instance "$TMP/shallow" record --source task-011.result --task "$TASK" --text-file "$TMP/shallow.md" --brief none >/dev/null 2>&1
+SH="$TMP/shallow/$AB_DIR/citations/task-011.result.txt"
+ok "shallow history: an old Finding stays UNREAD, never SELF" "$(grep -cx 'UNREAD stale-gotcha' "$SH")" 1
+ok "…while an uncommitted Finding is still SELF"     "$(grep -cx 'SELF shallow-new' "$SH")" 1
+rm -f "$D/knowledge/findings/uncommitted-new.md" "$D/$AB_DIR"/citations/task-0*.txt
+
+echo
+echo "== every prompt that tells an agent to write a Finding says: only when a later task would hit it =="
+PHRASE='only when a later task would plausibly hit the same problem'
+for f in plugin/seed/CONVENTIONS.md plugin/tick-steps/step-3-dispatch.md plugin/seed/CLAUDE.md \
+         plugin/seed/.claude/rules/knowledge-base.md plugin/agents/qa-reviewer.md \
+         plugin/tick-steps/step-7-knowledge-base.md plugin/agents/project-manager.md; do
+  ok "$f carries the phrase" "$(grep -qF "$PHRASE" "$REPO/$f" && echo yes || echo no)" yes
+done
+OLD='capture `Finding`s as a byproduct|If you discover something durable and|capture a new `Finding` if you discover one'
+ok "the probe sees a planted old wording" "$(printf 'If you discover something durable and\n' | grep -cE "$OLD")" 1
+ok "no file under plugin/ keeps the write-by-default wording" "$(grep -rlE "$OLD" "$REPO/plugin" | wc -l | tr -d ' ')" 0
+ok "step 5 passes --task to kb-usage record" \
+  "$(grep -c 'kb-usage.sh record --source <id> --task <task-path>' "$REPO/plugin/tick-steps/step-5-reflect-merges.md")" 1
 
 echo
 echo "== the archive sweep is retired: record is the only verb =="
