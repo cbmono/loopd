@@ -3,12 +3,12 @@
 #
 #   kb-sweep-due.sh --dispatched <n> [--in-flight <n>] [--cataloguer-in-flight] [--instance DIR]
 #
-# Due only when the tick dispatched nothing this round, no cataloguer is in flight, a slot
-# is free under maxAgentsInFlight, and `build-kb-index.sh --check` reports >=1 ERROR.
-# On 0 it prints the trigger line and the error list — the cataloguer's brief. Every walk is
-# stamped in $AB_KB_STAMP with its error list; a clean one holds until knowledge/ or the
-# checker's scripts change, one with errors also expires after kbSweepIntervalHours (24).
+# Due only when the tick dispatched nothing, no cataloguer is in flight, a slot is free
+# under maxAgentsInFlight, and `build-kb-index.sh --check` reports >=1 ERROR; on 0 it prints
+# the trigger line and the error list (the cataloguer's brief). Each walk is stamped in
+# $AB_KB_STAMP until knowledge/ or the checker changes; with errors, kbSweepIntervalHours (24) at most.
 # Exit: 0 due · 1 not due (reason on stderr; `KB SWEEP CACHED:` on stdout) · 2 unknown.
+# Why: project-manager.md step 7, docs/pm-design.md#step-7.
 set -uo pipefail
 
 LIST_LIMIT=20

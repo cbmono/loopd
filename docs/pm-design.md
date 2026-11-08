@@ -847,8 +847,8 @@ A clean stamp holds until something changes. One with errors also expires after
 2026-11-07) used to walk on every eligible tick. Inside the interval the probe exits 1 and
 prints `KB SWEEP CACHED: <n> error(s)` for the report, so the errors stay visible without a
 walk or a cataloguer; at expiry it walks and dispatches as before. The interval runs on the
-epoch inside the stamp, never its mtime, which the change gate owns. Any file or directory under `knowledge/` newer than
-the stamp (a deletion moves its directory's mtime) or a newer `build-kb-index.sh`,
+epoch inside the stamp, never its mtime, which the change gate owns. Any file or directory
+under `knowledge/` newer than the stamp (a deletion moves its directory's mtime) or a newer `build-kb-index.sh`,
 `bundle-paths.sh` or `plugin-name.sh` re-walks;
 a future-dated stamp is discarded. A file restored with an old mtime (`cp -p`, `rsync -a`)
 is not seen and is out of scope. The step also gives the call a 300000 ms Bash timeout: the
