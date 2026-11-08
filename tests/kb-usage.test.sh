@@ -37,7 +37,7 @@ cp "$REPO/plugin/seed/SCHEMA.md" "$D/$AB_DIR/SCHEMA.md"
 cd "$D" || exit 2
 bash "$BUILD" >/dev/null 2>&1
 git init -q . && git config user.name example-user-007 && git config user.email u@example.com
-git add -A && git commit -qm init
+git add -A && GIT_AUTHOR_DATE=2025-01-01T00:00:00Z GIT_COMMITTER_DATE=2025-01-01T00:00:00Z git commit -qm init
 
 echo "== criterion 1: one citation reaches the store =="
 printf 'Fixed it per [[cited-learning]] and [[stale-gotcha]], not [[nope]].\n' >"$TMP/result.md"
@@ -57,6 +57,38 @@ ok "record with no index stores nothing (exit 2)" \
 ok "a source id carrying a path is refused" \
   "$("$USAGE" record --source ../x --text-file "$TMP/result.md" --brief a >/dev/null 2>&1; echo $?)" 2
 rm -f "$STORE"
+
+echo
+echo "== --task: a citation of the task's own new Finding is SELF, never counted as a read =="
+# D3: self-citation = the Finding's adding commit postdates the task's first DISPATCH line.
+TASK="$TMP/task-009.md"
+printf -- '---\ntype: Task\n---\n\n# Notes\n\n* DISPATCH 2026-03-01T12:00:00Z · software-engineer · model opus\n* DISPATCH 2026-02-01T09:00:00Z · software-engineer · model opus\n' >"$TASK"
+item own-new-finding learning 2026-03-02
+git add knowledge/findings/own-new-finding.md \
+  && GIT_AUTHOR_DATE=2026-02-15T10:00:00Z GIT_COMMITTER_DATE=2026-02-15T10:00:00Z git commit -qm finding
+item rebased-old gotcha 2025-06-01
+git add knowledge/findings/rebased-old.md \
+  && GIT_AUTHOR_DATE=2025-06-01T00:00:00Z GIT_COMMITTER_DATE=2026-04-01T00:00:00Z git commit -qm rebased
+item uncommitted-new learning 2026-03-03
+printf 'Per [[own-new-finding]], [[stale-gotcha]], [[rebased-old]], [[uncommitted-new]] and [[cited-learning]].\n' >"$TMP/self.md"
+out="$("$USAGE" record --source task-009.result --task "$TASK" --text-file "$TMP/self.md" --brief cited-learning 2>/dev/null)"; rc=$?
+STORE="$D/$AB_DIR/citations/task-009.result.txt"
+ok "record --task still passes cite-check's exit code through" "$rc" 3
+ok "added after the EARLIEST DISPATCH, before a resume: SELF" "$(grep -cx 'SELF own-new-finding' "$STORE")" 1
+ok "…and is not stored UNREAD"                       "$(grep -c 'UNREAD own-new-finding' "$STORE")" 0
+ok "…and the printed report says SELF"               "$(grep -c '^SELF own-new-finding ' <<<"$out")" 1
+ok "an uncommitted Finding has no adding commit: SELF" "$(grep -cx 'SELF uncommitted-new' "$STORE")" 1
+ok "an older Finding, not carried, stays UNREAD"     "$(grep -cx 'UNREAD stale-gotcha' "$STORE")" 1
+ok "an older Finding rebased after DISPATCH stays UNREAD" "$(grep -cx 'UNREAD rebased-old' "$STORE")" 1
+ok "an older Finding the brief carried stays KEPT"   "$(grep -cx 'KEPT cited-learning' "$STORE")" 1
+"$USAGE" record --source task-009.pr --text-file "$TMP/self.md" --brief cited-learning >/dev/null 2>&1
+ok "without --task grading is unchanged: UNREAD"     "$(grep -cx 'UNREAD own-new-finding' "$D/$AB_DIR/citations/task-009.pr.txt")" 1
+printf -- '---\ntype: Task\n---\n' >"$TMP/undispatched.md"
+"$USAGE" record --source task-010.result --task "$TMP/undispatched.md" --text-file "$TMP/self.md" --brief cited-learning >/dev/null 2>&1
+ok "a task with no DISPATCH line: grading unchanged" "$(grep -c '^SELF ' "$D/$AB_DIR/citations/task-010.result.txt")" 0
+ok "an unreadable --task is refused (exit 2)" \
+  "$("$USAGE" record --source x --task "$TMP/nope.md" --text-file "$TMP/self.md" --brief a >/dev/null 2>&1; echo $?)" 2
+rm -f "$D/knowledge/findings/uncommitted-new.md" "$D/$AB_DIR"/citations/task-0*.txt
 
 echo
 echo "== the archive sweep is retired: record is the only verb =="
