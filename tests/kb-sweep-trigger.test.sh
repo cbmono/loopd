@@ -207,7 +207,7 @@ echo "== inside kbSweepIntervalHours (24) errors are cached, and still reported 
 due "$F" --dispatched 0
 ok "errors cached => not due" "$RC" 1
 ok "  the count is printed for the tick report" "$(saw "$OUT" "KB SWEEP CACHED: 2 error(s) at stamp 20")" yes
-ok "  naming the default interval" "$(saw "$OUT" "walked again 24h after it")" yes
+ok "  naming the default interval" "$(saw "$OUT" "next walk 24h after it")" yes
 ok "  and no trigger line" "$(saw "$OUT" "KB SWEEP DUE")" no
 ok "  and no walk" "$(saw "$OUT" "status 'open' is outside")" no
 age_stamp "$FS" $((23 * 3600))
@@ -223,7 +223,7 @@ age_stamp "$FS" $((90 * 60)); printf '{ "org": "x", "kbSweepIntervalHours": 1 }\
 due "$F" --dispatched 0
 ok "kbSweepIntervalHours 1, 90 min old => walks (the key is read)" "$RC" 0
 age_stamp "$FS" $((30 * 60)); due "$F" --dispatched 0
-ok "kbSweepIntervalHours 1, 30 min old => cached" "$(saw "$OUT" "walked again 1h after it")" yes
+ok "kbSweepIntervalHours 1, 30 min old => cached" "$(saw "$OUT" "next walk 1h after it")" yes
 for bad in 0 '"soon"' 1.5; do
   printf '{ "org": "x", "kbSweepIntervalHours": %s }\n' "$bad" > "$F/instance.config.json"
   due "$F" --dispatched 0
@@ -231,7 +231,7 @@ for bad in 0 '"soon"' 1.5; do
 done
 printf '{ "org": "x", "kbSweepIntervalHours": null }\n' > "$F/instance.config.json"
 due "$F" --dispatched 0
-ok "kbSweepIntervalHours null => 24, silently" "$(saw "$OUT" "walked again 24h after it")$(saw "$OUT" "using 24")" yesno
+ok "kbSweepIntervalHours null => 24, silently" "$(saw "$OUT" "next walk 24h after it")$(saw "$OUT" "using 24")" yesno
 printf '\nEdited.\n' >> "$F/knowledge/findings/a-first-thing.md"
 due "$F" --dispatched 0
 ok "an edit under knowledge/ inside the interval => walks and is due" "$RC" 0

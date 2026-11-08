@@ -71,7 +71,7 @@ if [ -d "$inst/knowledge" ] && ignored && mkdir -p "$inst/$AB_DIR" 2>/dev/null \
     # The interval runs on the epoch inside the stamp, not its mtime, which the -newer gate owns.
     case "${st_epoch:-}" in ""|*[!0-9]*) age=-1 ;; *) age=$(( $(date -u +%s) - st_epoch )) ;; esac
     if [ "$age" -ge 0 ] && [ "$age" -lt $((iv * 3600)) ]; then
-      printf 'KB SWEEP CACHED: %s error(s) at stamp %s; walked again %sh after it — no dispatch.\n' \
+      printf 'KB SWEEP CACHED: %s error(s) at stamp %s; next walk %sh after it — no dispatch.\n' \
         "$st_err" "$st_at" "$iv"
       not_due "cached, stamp $st_at — $st_err error(s) open, inside kbSweepIntervalHours $iv"
     fi
