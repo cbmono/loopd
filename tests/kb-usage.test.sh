@@ -65,8 +65,10 @@ ok "…and so is its --propose flag"                 "$("$USAGE" record --propos
 SWEPT='kb-usage\.sh( \[--instance DIR\])? sweep|kb-propose'
 ok "the probe sees a planted mention"              "$(printf 'run kb-usage.sh sweep\nkb-propose.sh\n' | grep -cE "$SWEPT")" 2
 ok "no file under plugin/ names the sweep verb or kb-propose" "$(grep -rlE "$SWEPT" "$REPO/plugin" | wc -l | tr -d ' ')" 0
+(cd "$REPO" && git ls-files -z -- . ':!docs/releases' ':!tests/kb-usage.test.sh' >"$TMP/tracked") || {
+  echo "kb-usage.test: cannot list tracked files" >&2; exit 2; }
 ok "…nor any tracked file outside the release notes" \
-  "$(cd "$REPO" && git ls-files -z -- . ':!docs/releases' ':!tests/kb-usage.test.sh' | xargs -0 grep -lE "$SWEPT" 2>/dev/null | wc -l | tr -d ' ')" 0
+  "$(cd "$REPO" && xargs -0 grep -lE "$SWEPT" <"$TMP/tracked" 2>/dev/null | wc -l | tr -d ' ')" 0
 # Every line that could remove or move a file is pinned: the temp-file pair in `record`, and
 # nothing else.
 DELETES="$(code "$USAGE" | grep -nE '(^|[^a-z])(rm|unlink|mv|truncate|shred|rmdir)([^a-z]|$)|os\.remove|git (rm|mv)' | sed 's/^[0-9]*://; s/^[[:space:]]*//')"

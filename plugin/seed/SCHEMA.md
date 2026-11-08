@@ -653,6 +653,10 @@ P1 · supersede · duplicate · status=superseded · keeper · 1234567890-412 ·
   harness, a calling context — is `append as new`, because a false merge costs more than a
   missed one. A superseded match follows `superseded_by:`; a match not `provenance: machine`
   is `human-authored, review only`, because a merge never applies to one; an empty `lesson:` is `no proposal: unreadable`.
+  Its stdout is five fields, `kind · slug · field=value · with · reason`; a report line
+  prefixes the id and puts the item's fingerprint before the reason — `P1 · <kind> · <slug> ·
+  <field=value> · <with> · <fingerprint> · <reason>`, the fingerprint from
+  `cksum <knowledge/<kind-dir>/<slug>.md | awk '{print $1 "-" $2}'` taken as you write the line.
 
 ### type: Service  (`knowledge/services/<name>.md`)
 
