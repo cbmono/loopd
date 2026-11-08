@@ -531,8 +531,7 @@ state, and act only on deltas.
    `<task-slug>.result` or `<repo>-pr-<n>`, so a re-run rewrites the same record instead
    of counting it twice. It runs
    `${CLAUDE_PLUGIN_ROOT}/scripts/cite-check.sh --text-file` and passes its report and exit
-   code through unchanged; that record is the only usage signal the archive sweep in
-   step 7 has, so a skipped run is a citation the KB never sees. Anything dropped (exit 3, or exit 1 where a citing line lost every id) is
+   code through unchanged; that record is the KB's only usage signal, so a skipped run is a citation the KB never sees. Anything dropped (exit 3, or exit 1 where a citing line lost every id) is
    **recorded as a `# Notes` line** naming the id and its verdict — `UNREAD` (a real doc
    nobody read) or `FABRICATED` (no such doc) — and exit 1 also goes in the tick report.
    It never changes the reflect verdict: a merged PR is merged. `CONVENTIONS.md` → cite

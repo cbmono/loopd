@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# kb-compare.sh — ONE candidate Finding against every `type: Finding` under knowledge/: the
-# instance proposer behind `kb-propose.sh --proposer`. It writes nothing. From a bundle root.
+# kb-compare.sh — ONE candidate Finding against every `type: Finding` under knowledge/. It
+# writes nothing, and no tick step calls it. From a bundle root.
 #
 #   kb-compare.sh [--instance DIR] <candidate.md>
 #
-# stdout: at most one kb-propose.sh proposal (merge, or patch as `edit`). stderr: one verdict —
+# stdout: at most one five-field proposal (merge, or patch as `edit`). stderr: one verdict —
 # merge · patch · append as new · human-authored, review only · no proposal: unreadable.
 # The key is the content words of title + description + lesson:; only an EQUAL key is the same.
 # Exit: 0 compared · 1 no proposal: unreadable · 2 usage. Reasoning: knowledge-base-reflector/task-004.

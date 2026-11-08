@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
-# kb-compare.test.sh — plugin/scripts/kb-compare.sh, the reflector's comparator, alone and as
-# kb-propose.sh's proposer.
+# kb-compare.test.sh — plugin/scripts/kb-compare.sh, the reflector's comparator.
 #
 # THE FALSE MERGE IS THE WHOLE RISK, so its fixtures are SYNTHETIC pairs built to the
 # dangerous shape — every word shared but the interpreter, the calling context or the
@@ -14,8 +13,6 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$REPO/plugin/scripts/bundle-paths.sh"
 CMP="$REPO/plugin/scripts/kb-compare.sh"
-PROPOSE="$REPO/plugin/scripts/kb-propose.sh"
-APPLY="$REPO/plugin/scripts/kb-apply.sh"
 SYNC="$REPO/plugin/scripts/kb-sync.sh"
 SEED="$REPO/plugin/seed"
 [ -x "$CMP" ] || { echo "kb-compare.test: $CMP is missing or not executable" >&2; exit 2; }
@@ -198,32 +195,16 @@ ok "build-kb-index.sh does not carry it"  "$(grep -c 'kb-compare' "$REPO/plugin/
 ok "the cataloguer prompt does not carry it" "$(grep -c 'kb-compare' "$REPO/plugin/agents/cataloguer.md")" 0
 ok "no write verb in its code"            "$(code "$CMP" | grep -cE 'git (add|commit|mv|rm|checkout|pull|fetch)|mkdir|mktemp| > *"|>>|tee |sed -i|\bmv |\brm ')" 0
 
-echo "== criteria 1, 2, 9: the productive run through kb-propose.sh writes nothing =="
+echo "== criteria 1, 9: a run that FINDS a duplicate writes nothing =="
 cp "$CD/cand-merge-wording.md" "$TMP/keep.md"
 BEFORE="$(kbsum "$D")"
 ok "the fingerprint covers the ignored file"  "$(grep -c 'knowledge/scratch.log' <<<"$BEFORE")" 1
 ok "…which git status cannot see"             "$(git status --porcelain --ignored=no knowledge/ | wc -l | tr -d ' ')" 0
-out="$("$PROPOSE" --proposer "$CMP $CD/cand-merge-wording.md" 2>/dev/null)"; rc=$?
-ok "kb-propose.sh runs it as the proposer and writes a report" "$rc" 0
-R="$(sed -n 's/.* in \(projects[^ ]*\.md\) .*/\1/p' <<<"$out")"
-ok "…the report is a draft task document outside knowledge/" "$(sed -n 's/^type: //p' "$R")/${R%%/*}" Task/projects
-ok "…carrying the merge"   "$(grep -c '^P1 · merge · worktree-remove-drops-ignored-files · timestamp=.* · cand-merge-wording · [0-9]*-[0-9]* · merge: ' "$R")" 1
-ok "…and the KB HEAD it read" "$(grep -c "kb bundle@$HEAD12" "$R")" 1
+out="$("$CMP" "$CD/cand-merge-wording.md" 2>/dev/null)"; rc=$?
+ok "it proposes the merge"  "$rc/$(grep -c '^merge · worktree-remove-drops-ignored-files · timestamp=.* · cand-merge-wording · merge: ' <<<"$out")" 0/1
+ok "…and names the KB HEAD it read" "$(grep -c "kb bundle@$HEAD12" <<<"$out")" 1
 ok "EVERY file under knowledge/ is byte-identical, ignored ones too" "$([ "$BEFORE" = "$(kbsum "$D")" ] && echo yes || echo no)" yes
 ok "…and so is the candidate"  "$(cmp -s "$TMP/keep.md" "$CD/cand-merge-wording.md" && echo yes || echo no)" yes
-out="$("$PROPOSE" --project kb-patch --proposer "$CMP $CD/cand-patch.md" 2>/dev/null)"
-RP="$(sed -n 's/.* in \(projects[^ ]*\.md\) .*/\1/p' <<<"$out")"
-ok "the patch reaches a report too"  "$(grep -c '^P1 · edit · ledger-is-append-only · tags=\[kb, ledger\] · cand-patch · ' "$RP")" 1
-ok "…still byte-identical"           "$([ "$BEFORE" = "$(kbsum "$D")" ] && echo yes || echo no)" yes
-git add -A projects && git commit -qm reports
-for r in "$R" "$RP"; do
-  A="$TMP/apply-$(basename "$r" .md)"; cp -R "$D" "$A"
-  ok "kb-apply.sh pre-flights and applies $(basename "$r")" \
-    "$(cd "$A" && "$APPLY" --by example-user-007 "$r" >/dev/null 2>&1; echo $?)" 0
-done
-ok "…the merge lands its ledger entry" "$(grep -c '^ledger:.*merge.*items worktree-remove-drops-ignored-files,cand-merge-wording' \
-  "$TMP/apply-$(basename "$R" .md)/knowledge/findings/worktree-remove-drops-ignored-files.md")" 1
-ok "…the patch lands its tags"         "$(sed -n 's/^tags: //p' "$TMP/apply-$(basename "$RP" .md)/knowledge/findings/ledger-is-append-only.md")" "[kb, ledger]"
 
 echo "== criteria 1, 9: a mounted KB is read as it stands, never pulled =="
 BARE="$TMP/kb.git"; SC="$TMP/seedclone"; M="$TMP/mounted"
@@ -239,10 +220,9 @@ cp "$CD/cand-new.md" "$SC/findings/remote-only.md"
 ( cd "$SC" && git add -A && git commit -qm ahead && git push -q origin main )
 MB="$(kbsum "$M")"
 ok "the fingerprint descends the mount's own gitdir" "$(grep -c "$AB_DIR/kb.git/HEAD" <<<"$MB")" 1
-out="$(cd "$M" && "$PROPOSE" --proposer "$CMP $CD/cand-merge-wording.md" 2>/dev/null)"; rc=$?
-RM="$M/$(sed -n 's/.* in \(projects[^ ]*\.md\) .*/\1/p' <<<"$out")"
-ok "the run over the mount finds the duplicate" "$rc/$(grep -c '^P1 · merge · worktree-remove-drops-ignored-files' "$RM")" 0/1
-ok "…and names the mount HEAD it read"          "$(grep -c "kb mount@$MHEAD" "$RM")" 1
+out="$(cd "$M" && "$CMP" "$CD/cand-merge-wording.md" 2>/dev/null)"; rc=$?
+ok "the run over the mount finds the duplicate" "$rc/$(grep -c '^merge · worktree-remove-drops-ignored-files' <<<"$out")" 0/1
+ok "…and names the mount HEAD it read"          "$(grep -c "kb mount@$MHEAD" <<<"$out")" 1
 ok "every file in the mount and its gitdir is byte-identical" "$([ "$MB" = "$(kbsum "$M")" ] && echo yes || echo no)" yes
 ok "…so it did not pull the newer remote item"  "$([ -e "$M/knowledge/findings/remote-only.md" ] && echo yes || echo no)" no
 

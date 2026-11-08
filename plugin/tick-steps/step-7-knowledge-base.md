@@ -72,29 +72,6 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    > (`cataloguer` step 3), not removed. Then regenerate the index and re-check to **0
    > errors**. **Warnings are reported, not chased.** One commit, as the `cataloguer`.
 
-   **The reflection pass is the fourth reason, and the only one that dispatches nobody.**
-   It is a SCRIPT, not an agent: it proposes merges and supersessions and writes none of
-   them, so byte-identity over `knowledge/` is something a plain harness can assert rather
-   than something an agent holding `Write` promises. Ask once per tick:
-
-   ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/kb-propose.sh --proposer "<the instance's proposer>"   # exit 0 = a report was written
-   ```
-
-   The shipped proposer is `scripts/kb-compare.sh <candidate.md>` (`SCHEMA.md` → "The
-   reflection report").
-   It runs the archive sweep first, with or without a proposer: a current Finding past
-   every qualifier `scripts/kb-usage.sh sweep` prints becomes a `status=archived` proposal
-   (a human-written one is listed apart, for the human to name with `--human-docs`). Exit 0 ⇒ it has already written the report as a `draft`
-   task; print its line and do **nothing else** — step 8 renders the row from that
-   document like any other. Exit 1 is silence (nothing to archive and no proposer
-   configured, nothing to propose, or a report still waiting on the human). Exit 2 could
-   not answer — report its line.
-   **Never apply a report from here, and never promote one.** `/loopd:kb-apply` is the
-   only path that writes `knowledge/` from a report, a human types it, and a report is
-   declined by cancelling it — not by promoting it to `ready`, which would dispatch an
-   agent and make a second apply path.
-
    **The stale list rides along with a cataloguer this tick already dispatches, and is
    never a reason to dispatch one.** Only when one of this step's reasons (or step 6's) is
    sending a cataloguer, run once and paste its output into that one brief:

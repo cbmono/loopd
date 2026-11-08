@@ -1,16 +1,16 @@
 ---
 name: kb-apply
 disable-model-invocation: true
-description: Apply one knowledge/ reflection report after you have read it — the human half of the reflector. A scheduled run proposes into a draft report; this is the only path that writes the proposals to knowledge/. Applies exactly what the report names, in one commit.
+description: Apply one knowledge/ reflection report after you have read it. A report is a hand-written draft task; this is the only path that writes its proposals to knowledge/. Applies exactly what the report names, in one commit.
 argument-hint: "<path to the report, e.g. projects/knowledge-reflection/tasks/task-001-knowledge-reflection.md> [--human-docs <slug,...>]"
 allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/kb-apply.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Read, Glob, Grep
 ---
 
 Apply one reflection report to `knowledge/`, after a human has read it.
 
-**The split this command is one half of: a scheduled run PROPOSES, and this APPLIES.**
-`kb-propose.sh` runs on the tick's cadence and writes a draft report; it never touches
-`knowledge/`. Nothing but this command applies one. An unattended process that rewrote
+**A report PROPOSES, and this APPLIES.** A report is a `draft` task document in the grammar
+of `SCHEMA.md` → "The reflection report"; nothing writes one on a schedule, and nothing but
+this command applies one. An unattended process that rewrote
 `knowledge/` on a timer would hold an authority no agent here has, over the documents every
 brief is built from (`SCHEMA.md` → "Two human authorities").
 
@@ -22,8 +22,8 @@ Run from a control-panel instance root — confirm `instance.config.json` in the
 ## Steps
 1. **Resolve the report.** `$ARGUMENTS` is a path to a task document under
    `projects/*/tasks/`. Empty ⇒ list every `status: draft` task carrying `P1 · ` lines
-   across **all** of `projects/*/tasks/*.md` and ask which — the proposer's `--project` is
-   a flag, so a report can live under any slug. No match ⇒ say so and stop.
+   across **all** of `projects/*/tasks/*.md` and ask which — a report can live under any
+   slug. No match ⇒ say so and stop.
 2. **Show the human the proposals first.** Print each `P<n> · …` line of the report with
    the item it names. When the report has a `## Human-written docs this report changes`
    section, show that list too, word for word — each slug with its `provenance:`, the
@@ -60,8 +60,8 @@ whole report rather than applying the part of it that still checks out.
 - **A refusal is information, not an obstacle.** A human-written item that `--human-docs`
   does not name, or a proposal on one other than `tags`/`status=archived`; the item changed
   since the report was written; the report is already `done`; or a tick holds the dispatch
-  lock and may be writing `knowledge/`. Re-run `kb-propose.sh` rather than editing the
-  report by hand.
+  lock and may be writing `knowledge/`. Write a new report against the items as they
+  stand rather than editing the refused one.
 - **`--human-docs` is derivable from the report, so it confirms nothing when an agent
   passes it.** What keeps agents out is `deny-destructive.sh`'s `kb_apply_human_docs` rule,
   which refuses the flag from any agent session — plus `disable-model-invocation` here.
