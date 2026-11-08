@@ -2,6 +2,8 @@
 
 Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short. Open a section only when the core's pointer to it names a trigger that applies. **The core wins on any disagreement**; fix this file to restate it.
 
+<!-- tool-mention: AskUserQuestion(1) — named to state its ABSENCE, never to instruct: no role agent holds it, which is why a tool request goes into open_questions instead of a live prompt. Enforced by tests/agent-tool-allowlist.test.sh. -->
+
 ### Exhaust your own tools before you hand work back
 
 - **Exhaust your own tools before you hand work back — three rungs, in order.** The default

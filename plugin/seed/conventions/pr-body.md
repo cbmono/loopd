@@ -2,6 +2,8 @@
 
 Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short. Open a section only when the core's pointer to it names a trigger that applies. **The core wins on any disagreement**; fix this file to restate it.
 
+<!-- tool-mention: Agent(1) — named to state its ABSENCE for three readers, never to instruct: only qa-reviewer holds it, and the self-review rule gives the route for the others. Enforced by tests/agent-tool-allowlist.test.sh. -->
+
 ### Commits
 
 - Conventional commits, and **the `Co-Authored-By: Claude` trailer stays, because it is

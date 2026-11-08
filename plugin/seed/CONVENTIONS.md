@@ -368,7 +368,7 @@ when a round count is in doubt.
 
 **Every dispatch, ad-hoc ones included**: `scripts/resolve-model.sh <agent>` for the model
 and `scripts/resolve-effort.sh <agent>` for the effort — never from memory. Nothing
-printed ⇒ report its stderr line, inherit the session model, pass no effort, and do not
+printed ⇒ report that line from its stderr, inherit the session model, pass no effort, and do not
 guess. Detail: `conventions/rounds.md` → "Resolve a dispatched agent's model with
 resolve-model.sh" — before you dispatch an agent.
 

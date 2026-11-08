@@ -2,6 +2,8 @@
 
 Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short. Open a section only when the core's pointer to it names a trigger that applies. **The core wins on any disagreement**; fix this file to restate it.
 
+<!-- tool-mention: Workflow(2), Agent(1) — named to state their ABSENCE, never to instruct: no role agent holds Workflow, and only qa-reviewer holds Agent, which is why wide work is sequential for the others. Enforced by tests/agent-tool-allowlist.test.sh. -->
+
 ### Resolve a dispatched agent's model with resolve-model.sh
 
 - **Resolve a dispatched agent's model with `scripts/resolve-model.sh <agent>`, never from

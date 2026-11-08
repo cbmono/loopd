@@ -2,6 +2,8 @@
 
 Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short. Open a section only when the core's pointer to it names a trigger that applies. **The core wins on any disagreement**; fix this file to restate it.
 
+<!-- tool-mention: Agent(2), EnterWorktree(1), mcp__claude-in-chrome__*(1) — named to state their ABSENCE for some readers, never to instruct: only qa-reviewer holds Agent, and the Explore rule gives the route for the others; EnterWorktree may be missing for a subagent; failure-analyst holds no browser tools. Enforced by tests/agent-tool-allowlist.test.sh. -->
+
 ### Parallel-safety
 
 - **Parallel-safety:** if the product repos share one clone / one package store,
