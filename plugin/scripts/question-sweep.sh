@@ -64,7 +64,7 @@ file_on_default() { # <owner>/<repo>:<path>[=<value>]
 decision() { # <D<n>> <task-doc>
   [[ "$1" =~ ^D[0-9]+$ ]] || { echo "refused	not D<n>"; return; }
   local pm rel origin slug sha line login
-  pm="$(cd "$(dirname "$2")/.." && pwd -P)/project.md"; rel="${pm#"$inst"/}"
+  pm="$(cd "$(dirname "$(dirname "$2")")" && pwd -P)/project.md"; rel="${pm#"$inst"/}"
   sha="$(git -C "$inst" rev-parse HEAD 2>/dev/null)" && git -C "$inst" show "HEAD:$rel" >"$TMP/pm" 2>/dev/null \
     || { echo "unknown	$rel not committed"; return; }
   origin="$(git -C "$inst" remote get-url origin 2>/dev/null)"
