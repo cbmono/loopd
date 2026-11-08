@@ -1000,9 +1000,9 @@ above it so none may grow its share.
 - **Cite knowledge as `[[finding-slug]]`, and only ids your brief actually carried.** A
   bracketed slug is the ONLY thing that counts as a citation — a title in prose, *"as the
   worktree finding notes"*, a bare link: all references, none of them citations, and
-  nothing reads them. The slug is the file's name without `.md`, and **`knowledge/index.md`
-  is the id source of truth**: the `cataloguer` writes one row per doc there, so a slug in
-  no row names no document at all.
+  nothing reads them. The slug is the file's name without `.md`, and **document
+  frontmatter under `knowledge/` is the id source of truth**: a slug with no file there
+  names no document at all, and a doc past the index's cap is still one.
   **Then the citation is checked instead of trusted.** `scripts/cite-check.sh --text-file
   <f> --brief <slugs>` keeps the ids the brief carried, drops the rest, and grades what is
   left — **exit 0** nothing dropped, **exit 3** dropped but every citing line still cites
@@ -1011,8 +1011,8 @@ above it so none may grow its share.
   to judge against). Run it on your own `# Result` before you hand back; the
   `project-manager` runs it again at reflect time.
   **The two ways an id gets dropped are reported apart, and that distinction is the
-  point.** An id that IS an index row but was not in your brief is **`UNREAD`** — a real
-  document nobody read, which is a briefing gap. An id in no row is **`FABRICATED`** —
+  point.** An id that IS a document but was not in your brief is **`UNREAD`** — a real
+  document nobody read, which is a briefing gap. An id no document carries is **`FABRICATED`** —
   invented provenance, which is a different failure with a different fix. Collapsing them
   into "invalid" loses the only thing the report was for. It is a cheap control and a
   narrow one: it proves an id was in front of you, never that the claim you hung on it is

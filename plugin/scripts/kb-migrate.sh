@@ -116,8 +116,8 @@ depends on a plugin.
 
 **How to read it — the rule, whatever tool you are on:**
 
-- Read `index.md` **first**. It is the lookup surface and it is derived from document
-  frontmatter — never hand-edit it.
+- Grep `index.md` — never read it whole. It is capped and derived from document
+  frontmatter (never hand-edit it); grep this repository past the cap.
 - Open **at most three** matching documents. Never bulk-read this repository.
 - A **Superseded** row is **history**: read it to understand a decision, never cite it
   as current guidance.

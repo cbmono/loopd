@@ -1,9 +1,11 @@
 # Knowledge Base — index
 
 Compact catalog of this control panel's OKF knowledge base (`Service`s, `Finding`s,
-`Runbook`s, `Team`s, `Reference`s — types in `/.loopd/SCHEMA.md`). **This index is the KB's lookup
-surface:** scan it to find prior work, then open only the specific doc(s) you need —
-**don't bulk-read `knowledge/`**.
+`Runbook`s, `Team`s, `Reference`s — types in `/.loopd/SCHEMA.md`). **Grep it, never read it
+whole:** `grep -i '<term>' knowledge/index.md`, then open only the doc(s) you need —
+**don't bulk-read `knowledge/`**. At most 8000 words: Services, Runbooks, Teams and
+References first, then Findings newest first. A document past the cap is still citable —
+`grep -ril '<term>' knowledge/` finds it.
 
 **Derived — do not hand-edit.** `build-kb-index.sh` rebuilds every row below from document
 frontmatter, and `--check` fails when this file and the documents disagree. Tags come from

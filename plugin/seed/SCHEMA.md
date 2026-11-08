@@ -768,7 +768,7 @@ find the reversal of gets re-made.
    one line saying what changed).
 2. On the new Finding: `supersedes: [ <old-slug> ]`.
 3. Rebuild: `build-kb-index.sh`. Superseded rows render in their own section **below** the
-   current ones, so the index-first read skips them.
+   current ones, as history.
 
 **A superseded Finding is history and is never citable.** `cite-check.sh` reports a
 `[[slug]]` naming one as `SUPERSEDED` and drops it, exactly as it drops an unread id — cite

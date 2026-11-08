@@ -223,10 +223,10 @@ lives there and not here because it governs work *outside* this bundle.
 ## Knowledge base
 `knowledge/` — `Service`s, `Finding`s, `Runbook`s, `Team`s, `Reference`s
 (`SCHEMA.md`). The `cataloguer` builds it; task agents capture `Finding`s as a
-byproduct. **Reading it: index first, at most three, superseded rows are history.**
-Scan `knowledge/index.md` (derived — `build-kb-index.sh` rebuilds it from frontmatter),
-open **at most three** matches, **never bulk-read `knowledge/`**; a **Superseded** row is
-history — read it, never cite it. Detail: `.claude/rules/knowledge-base.md`.
+byproduct. **Reading it: grep, never the whole index; at most three; superseded rows are history.**
+The brief's `## Knowledge` rows first, then `grep -i` the capped `knowledge/index.md`
+or `knowledge/`; open **at most three**, **never bulk-read** it; a **Superseded**
+row is history, never cited. Detail: `.claude/rules/knowledge-base.md`.
 
 ## Data handling
 - **No customer PII** in task documents, logs, or PR descriptions.

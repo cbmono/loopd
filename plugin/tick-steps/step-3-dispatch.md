@@ -266,10 +266,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
    **Knowledge base (consult + capture).** Include both lines in every dispatch
    brief: *"The `## Knowledge` rows below are the Findings this brief carried — open
-   those first. Then scan `knowledge/index.md` for prior `Finding`s / `Service` /
-   `Runbook` docs on this area and reuse them — open only what matches, don't bulk-read
-   `knowledge/`; a Finding you cite that you found only through the index is graded
-   `UNREAD` by `cite-check.sh`."* and *"If you discover something durable and
+   those first. Then `grep -i '<term>' knowledge/index.md` — never read it whole — for
+   prior `Finding`s / `Service` / `Runbook` docs on this area and reuse them — open only
+   what matches, don't bulk-read `knowledge/`; a Finding you cite that you found only by
+   grep is graded `UNREAD` by `cite-check.sh`."* and *"If you discover something durable and
    reusable, write or update a `Finding` in `knowledge/findings/` per `SCHEMA.md` and
    link it from the task."*
 

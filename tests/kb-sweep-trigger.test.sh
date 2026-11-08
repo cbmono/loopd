@@ -48,9 +48,9 @@ saw() { # <haystack> <fixed string> -> yes|no
   [ "$(printf '%s\n' "$1" | grep -cF -- "$2")" -gt 0 ] && echo yes || echo no
 }
 
-finding() { # <bundle> <slug> <lesson>
+finding() { # <bundle> <slug> <lesson> [status]
   mkdir -p "$1/knowledge/findings"
-  printf -- '---\ntype: Finding\ntitle: %s\nlesson: %s\nstatus: current\n---\n\nBody.\n' "$2" "$3" \
+  printf -- '---\ntype: Finding\ntitle: %s\nlesson: %s\nstatus: %s\n---\n\nBody.\n' "$2" "$3" "${4:-current}" \
     > "$1/knowledge/findings/$2.md"
 }
 mkbundle() { # <dir> <cap> -> a bundle whose index checks clean
@@ -84,13 +84,13 @@ ok "  and it says why" "$(saw "$OUT" "the index and the documents agree")" yes
 echo
 echo "== idle + errors => due, with the error list as the brief =="
 ERR="$TMP/errs"; mkbundle "$ERR" 4
-finding "$ERR" an-unindexed-thing "An unindexed thing has no row."
+finding "$ERR" an-off-enum-thing "An off-enum thing has a bad status." open
 due "$ERR" --dispatched 0
 ok "idle + errors => due" "$RC" 0
 ok "  the trigger line names it an idle tick" "$(saw "$OUT" "KB SWEEP DUE: idle tick,")" yes
 ok "  the trigger line carries the error count" "$(saw "$OUT" "2 error(s)")" yes
-ok "  the ERROR list is in the output (the brief)" "$(saw "$OUT" "no index row")" yes
-ok "  the offending document is named" "$(saw "$OUT" "an-unindexed-thing.md")" yes
+ok "  the ERROR list is in the output (the brief)" "$(saw "$OUT" "status 'open' is outside")" yes
+ok "  the offending document is named" "$(saw "$OUT" "an-off-enum-thing.md")" yes
 
 echo
 echo "== busy + errors => not due; the reflect path owns the KB there =="
@@ -127,9 +127,9 @@ ok "no cap in any config => the documented fallback of 4 applies" "$RC" 1
 echo
 echo "== the error list is bounded, and says what it left out =="
 BIG="$TMP/big"; mkbundle "$BIG" 4
-for i in $(seq 1 25); do finding "$BIG" "a-thing-$i" "Thing $i is thing $i."; done
+for i in $(seq 1 25); do finding "$BIG" "a-thing-$i" "Thing $i is thing $i." open; done
 due "$BIG" --dispatched 0
-ok "25 unindexed docs => due" "$RC" 0
+ok "25 off-enum docs => due" "$RC" 0
 ok "  the list is capped" "$(saw "$OUT" "... and 6 more")" yes
 ok "  at 20 ERROR lines" "$(printf '%s\n' "$OUT" | grep -c '^  ERROR  ')" 20
 
@@ -180,14 +180,14 @@ ok "  and the stamp rewritten to a time not after now" "$([ "$ST" -nt "$TMP/now"
 
 echo
 echo "== a failing check writes no stamp, and the verdict is the walk's =="
-F="$TMP/failing"; mkbundle "$F" 4; finding "$F" an-unindexed-thing "An unindexed thing has no row."
+F="$TMP/failing"; mkbundle "$F" 4; finding "$F" an-off-enum-thing "An off-enum thing has a bad status." open
 due "$F" --dispatched 0
 ok "errors with no stamp => due" "$RC" 0
 ok "  and no stamp, no reference written" "$(ls -A "$F/.loopd" 2>/dev/null | wc -l | tr -d ' ')" 0
 NOCACHE="$(printf '%s\n' "$OUT" | grep '^KB SWEEP DUE')"
 G="$TMP/guard"; mkbundle "$G" 4; due "$G" --dispatched 0
 ok "a clean KB leaves a stamp" "$([ -f "$G/.loopd/.kb-check-stamp" ] && echo yes || echo no)" yes
-finding "$G" an-unindexed-thing "An unindexed thing has no row."
+finding "$G" an-off-enum-thing "An off-enum thing has a bad status." open
 due "$G" --dispatched 0
 ok "the same errors with a stamp present => still due" "$RC" 0
 ok "  with the same trigger line and error count" "$(printf '%s\n' "$OUT" | grep '^KB SWEEP DUE')" "$NOCACHE"
