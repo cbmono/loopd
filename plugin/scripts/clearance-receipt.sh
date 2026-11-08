@@ -3,7 +3,7 @@
 # clearance-receipt.sh — the merge gate's preconditions, recorded on disk at the head they
 # were checked against, so the PreToolUse hook can read them OFFLINE.
 #
-#   clearance-receipt.sh record <script> [--kind internal|external] [--fail] --repo O/R --pr N --head SHA [--bundle DIR]
+#   clearance-receipt.sh record <script> [--kind internal|external] [--fail [--at YYYY-MM-DDTHH:MM:SSZ]] --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh record review-next.sh --unreviewed last-round|qa-head|qa-zero|zero-zero --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh verify [--unreviewed] --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh path   --repo O/R --pr N --head SHA [--bundle DIR]
@@ -29,7 +29,7 @@ usage() {
 }
 
 mode="${1:-}"; [ $# -gt 0 ] && shift
-script=""; kind=""; result=pass; unrev=""
+script=""; kind=""; result=pass; unrev=""; stamp=""
 case "$mode" in
   record) script="${1:-}"; [ -n "$script" ] || usage; shift ;;
   verify|path) ;;
@@ -46,6 +46,7 @@ while [ $# -gt 0 ]; do
     --kind)   [ "$mode" = record ] || usage
               case "${2:-}" in internal|external) kind="$2" ;; *) usage ;; esac; shift 2 ;;
     --fail)   [ "$mode" = record ] || usage; result=fail; shift ;;
+    --at)     [ "$mode" = record ] && [ $# -ge 2 ] || usage; stamp="$2"; shift 2 ;;
     --unreviewed)
       case "$mode" in
         record) [ "$script" = review-next.sh ] || usage
@@ -58,6 +59,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# Only a fail line may carry --at: a backdated pass or a forward-dated waiver line clears.
+[ -z "$stamp" ] || [ "$result" = fail ] || usage
 case "$repo" in */*) ;; *) usage ;; esac
 case "$pr" in ''|*[!0-9]*) usage ;; esac
 case "$head" in [0-9a-fA-F][0-9a-fA-F]*) ;; *) usage ;; esac
@@ -136,6 +139,15 @@ EOF
 
   record)
     mkdir -p "$dir" 2>/dev/null || exit 0
+    # A waiver line keeps its FIRST stamp at this head: re-stamping it each tick would waive a
+    # FAIL posted after it (AUTONOMY.md, "never one recorded after it").
+    case "$result" in last-round|qa-head|qa-zero|zero-zero)
+      [ -f "$file" ] && awk -v r="$result" '$1 == r && $2 == "review-next.sh" { f = 1 } END { exit !f }' \
+        "$file" 2>/dev/null && exit 0 ;;
+    esac
+    # verify compares stamps as strings, so anything but this one shape is replaced by now.
+    printf '%s' "$stamp" | grep -Eqx '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' \
+      || stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     tmp="$file.$$"
     {
       printf 'repo %s\npr %s\nhead %s\n' "$repo" "$pr" "$head"
@@ -143,7 +155,7 @@ EOF
       [ -f "$file" ] && awk '$1 ~ /^(pass|fail|last-round|qa-head|qa-zero|zero-zero)$/ &&
         !($2 == s && ($4 == "external" ? "external" : "internal") == k)' \
         s="$script" k="${kind:-internal}" "$file"
-      printf '%s %s %s%s\n' "$result" "$script" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${kind:+ $kind}"
+      printf '%s %s %s%s\n' "$result" "$script" "$stamp" "${kind:+ $kind}"
     } > "$tmp" 2>/dev/null && mv -f "$tmp" "$file" 2>/dev/null
     rm -f "$tmp" 2>/dev/null
     find "$dir" -type f -mtime "+$KEEP_DAYS" -delete 2>/dev/null

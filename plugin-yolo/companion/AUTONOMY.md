@@ -294,7 +294,11 @@ half only when `review-next.sh` already answers `merge-path` and one of these ho
 a QA round at the head answer `implementer-round`, never a merge. **Once a fix commit has
 landed after the last round, they block nothing**: no review is at the new head, so clause 9
 is not asked, and a `last-round` line ignores a `pr-verdict-clearance.sh` fail line recorded
-before it — never one recorded after it at the same head.
+before it — never one recorded after it at the same head. A FAIL whose unedited comment's
+trailer names an earlier head is recorded at the comment's `createdAt`, so the waiver holds on
+every later tick; under the author's own login only with a QA dispatch recorded at that earlier
+head. Anything else is recorded now. The `last-round` line keeps the stamp of its first record
+at a head, so a FAIL posted after it refuses on every tick.
 
 **`qaRounds: 0` is an explicit opt-in to merging a PR nobody reviewed.** A refusal is read
 from comment text, so a misread comment can open such a merge. The owner accepted both
