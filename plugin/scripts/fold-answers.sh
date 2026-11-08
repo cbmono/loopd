@@ -199,6 +199,7 @@ def scan_block(text, i, key):
     if rest and not rest.startswith("#"):
         die(3, "%s is neither a flow nor a block list" % key)
     out, end, pos = [], line_end, line_end + 1
+    SPANS[key] = spans = []
     while pos < FM_END:
         nl = text.find("\n", pos)
         if nl < 0:
@@ -220,13 +221,19 @@ def scan_block(text, i, key):
             tail = text[k:nl].strip()
             if tail and not tail.startswith("#"):
                 die(3, "text after a quoted entry in %s" % key)
+            spans.append((pos + m.end(), k))
         else:
-            v = re.split(r"[ \t]#", text[k:nl], 1)[0].strip()
+            cut = re.split(r"[ \t]#", text[k:nl], 1)[0]
+            v = cut.strip()
             if not v:
                 die(3, "an empty entry in %s" % key)
+            spans.append((k + len(cut) - len(cut.lstrip()), k + len(cut.rstrip())))
         out.append(v)
         end, pos = nl, nl + 1
     return out, end, (rest if rest.startswith("#") else "")
+
+
+SPANS = {}
 
 
 def find_key(key):
@@ -375,6 +382,22 @@ if list_key:
         print(e)
     sys.exit(0)
 
+# AN ANSWER MUST HAVE CONTENT. The test was `" --- " in e`, so an entry that merely
+# ENDED with the separator — the shape you get when the separator is pre-placed as an
+# affordance for the answer, and the shape a template leaves behind — counted as
+# answered: it moved to answered_questions carrying nothing, and open_questions
+# emptied. Since an empty open_questions IS the promotion signal, that turned "nobody
+# has answered this yet" into "this task is ready", which is the worst thing this
+# script can do. Measured on three task documents whose every question was written
+# that way: ten entries, none answered, all ten would have folded.
+# THE LAST SEPARATOR IS THE ANSWER'S, not the first: a question may carry ` --- ` in its
+# own text, and a search anywhere in the entry folded `Q: compare a --- b --- ` unanswered.
+def answered_entry(entry):
+    """True when the text after the FINAL ` --- ` has content."""
+    _, sep, answer = entry.rpartition(" --- ")
+    return bool(sep) and bool(answer.strip())
+
+
 open_q, o_at, o_end, o_cmt = read(SRC)
 ans_q, a_at, a_end, a_cmt = read(DST)
 if open_q is None:
@@ -387,11 +410,18 @@ if sweep_entry:
     hits = [i for i, e in enumerate(open_q) if e == sweep_entry]
     if len(hits) != 1:
         die(3, "the entry to sweep is not in %s exactly once" % SRC)
-    if not sweep_note.strip() or "\n" in sweep_note or " --- " in sweep_note or " --- " in sweep_entry:
+    if not sweep_note.strip() or "\n" in sweep_note or " --- " in sweep_note or answered_entry(sweep_entry):
         die(3, "a sweep note is one non-empty line without ` --- `, on an unanswered entry")
+    # Before an empty pre-placed ` --- `, or the note would become the answer.
+    head, sep, tail = sweep_entry.rpartition(" --- ")
     keep = list(open_q)
-    keep[hits[0]] += " · sweep: " + sweep_note
-    out = src[:o_at] + emit(keep, o_cmt) + src[o_end:]
+    keep[hits[0]] = (head + " · sweep: " + sweep_note + sep + tail) if sep else (sweep_entry + " · sweep: " + sweep_note)
+    if SPANS.get(SRC):
+        # Only that one scalar is rewritten, so every other entry's `# comment` survives.
+        a, b = SPANS[SRC][hits[0]]
+        out = src[:a] + emit([keep[hits[0]]]).lstrip()[2:] + src[b:]
+    else:
+        out = src[:o_at] + emit(keep, o_cmt) + src[o_end:]
     src = out
     FM_START, FM_END = frontmatter(out)
     if read(SRC)[0] != keep:
@@ -407,24 +437,6 @@ if ans_entry:
         die(3, "an answer must be one non-empty line")
     open_q = list(open_q)
     open_q[hits[0]] += " --- " + ans_text
-
-# AN ANSWER MUST HAVE CONTENT. The test was `" --- " in e`, so an entry that merely
-# ENDED with the separator — the shape you get when the separator is pre-placed as an
-# affordance for the answer, and the shape a template leaves behind — counted as
-# answered: it moved to answered_questions carrying nothing, and open_questions
-# emptied. Since an empty open_questions IS the promotion signal, that turned "nobody
-# has answered this yet" into "this task is ready", which is the worst thing this
-# script can do. Measured on three task documents whose every question was written
-# that way: ten entries, none answered, all ten would have folded.
-# THE LAST SEPARATOR IS THE ANSWER'S, not the first: a question may carry ` --- ` in its
-# own text, and a search anywhere in the entry folded `Q: compare a --- b --- ` unanswered.
-
-
-def answered_entry(entry):
-    """True when the text after the FINAL ` --- ` has content."""
-    _, sep, answer = entry.rpartition(" --- ")
-    return bool(sep) and bool(answer.strip())
-
 
 answered = [e for e in open_q if answered_entry(e)]
 if not answered:

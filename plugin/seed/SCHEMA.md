@@ -429,16 +429,16 @@ any answer: ` check: <kind> <arg>`. Three kinds, nothing else:
 
 | Kind | `<arg>` | True when | Evidence cited |
 |---|---|---|---|
-| `pr-merged` | `https://github.com/<owner>/<repo>/pull/<n>` | GitHub says `MERGED` | the URL |
-| `file` | `<owner>/<repo>:<path>[=<value>]` | the path exists on the default branch's head (and contains `<value>` verbatim) | `<owner>/<repo>@<sha>:<path>` |
-| `decision` | `D<n>` | the project's committed `acknowledged_decisions` holds `D<n>` stamped `by <login>` and answered ` --- ok` or ` --- ack` | `<owner>/<repo>@<sha>:projects/<slug>/project.md` |
+| `pr-merged` | `https://github.com/<owner>/<repo>/pull/<n>` | GitHub says `MERGED` into that repo's default branch | the URL |
+| `file` | `<owner>/<repo>:<path>[=<value>]` | `<owner>/<repo>` is the task's `target_repo` (never the bundle or the KB remote) and the path exists on its default branch's head (and contains a non-empty `<value>` verbatim) | `<owner>/<repo>@<sha>:<path>` |
+| `decision` | `D<n>` | the project's `project.md` on the bundle remote's default branch holds `D<n>` in `acknowledged_decisions`, stamped `by <login>` and answered ` --- ok` or ` --- ack` | `<owner>/<repo>@<sha>:projects/<slug>/project.md` |
 
 A question with no predicate is judgement and the sweep never touches it; a `Q<n>: do:`
 hand-off never carries one. Every full tick runs `scripts/question-sweep.sh --apply`, which
 appends ` · sweep: <kind> <arg> true @ <evidence>` to each entry whose predicate is true.
 **It never answers**: the entry stays in `open_questions`, so promotion still waits on the
 human, who folds it with ` --- ok` or, where the sweep is wrong, replies with the real
-answer. Text an agent wrote — a `Finding`, a PR body, a `# Result`, an uncommitted edit, a
+answer. Text an agent wrote — a `Finding`, a PR body, a `# Result`, an unpushed commit, a
 decision stamped `<unknown>` or `loopd:…` — is never evidence: any other kind is `refused`.
 A predicate that turns true while the bundle is unchanged is seen on the next full tick.
 
