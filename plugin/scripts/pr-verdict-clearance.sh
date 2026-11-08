@@ -369,13 +369,23 @@ trailer_of() { # <rendered> -> "<head_sha> <dispatch>" of its last okf-verdict b
 }
 HEAD_SHA="$(printf '%s' "${META:-}" | jq -r '.headRefOid // ""' 2>/dev/null)" || HEAD_SHA=""
 URL="$(printf '%s' "${META:-}" | jq -r '.url // ""' 2>/dev/null)" || URL=""
-if [ -n "$CLOGIN" ] && [ -n "$HEAD_SHA" ] && [ "$(norm "$CLOGIN")" = "$(norm "$ALOGIN")" ]; then
+NWO="$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')"
+NUM="$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/[^/]+/[^/]+/pull/([0-9]+).*#\1#')"
+dispatch_ok() { # <head> — a qa-reviewer dispatch at that head, recorded before the comment
+  "$(dirname "${BASH_SOURCE[0]:-$0}")/qa-dispatch.sh" check --repo "$NWO" --pr "$NUM" \
+    --head "$1" --nonce "$T_NONCE" --after "${CREATED:-}" >/dev/null 2>&1
+}
+T=""; T_SHA=""; T_NONCE=-; SAME=""; CARRIERS=0
+if [ -n "$CLOGIN" ] && [ -n "$HEAD_SHA" ]; then
   T="$(trailer_of "$TMPD/rchk")"
-  T_SHA="${T%% *}"; T_NONCE="${T#* }"
+  [ -z "$T" ] || { T_SHA="${T%% *}"; T_NONCE="${T#* }"; }
   printf '%s' "$T_NONCE" | grep -Eqx '[0-9a-f]{32}' || T_NONCE=-
+  [ "$(norm "$CLOGIN")" = "$(norm "$ALOGIN")" ] && SAME=yes
+fi
+if [ -n "$SAME" ]; then
   # The nonce is public once posted: only one unedited comment from that login may carry it,
   # counted by each comment's parsed trailer and case-folded, so a re-cased copy is a carrier.
-  CARRIERS=0; k=0; NC="$(printf '%s' "$META" | jq -r '.comments | length' 2>/dev/null)"
+  k=0; NC="$(printf '%s' "$META" | jq -r '.comments | length' 2>/dev/null)"
   while [ "$k" -lt "${NC:-0}" ]; do
     if [ "$(printf '%s' "$META" | jq -r --argjson i "$k" '.comments[$i].author.login // ""')" = "$CLOGIN" ]; then
       printf '%s' "$META" | jq -r --argjson i "$k" '.comments[$i].body // ""' > "$TMPD/c"
@@ -386,11 +396,7 @@ if [ -n "$CLOGIN" ] && [ -n "$HEAD_SHA" ] && [ "$(norm "$CLOGIN")" = "$(norm "$A
     k=$((k + 1))
   done
   if [ -n "$T" ] && [ "$T_SHA" = "$HEAD_SHA" ] && [ "$T_NONCE" != - ] \
-     && [ "${EDITED:-true}" = false ] && [ "${CARRIERS:-0}" = 1 ] \
-     && "$(dirname "${BASH_SOURCE[0]:-$0}")/qa-dispatch.sh" check \
-          --repo "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')" \
-          --pr "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/[^/]+/[^/]+/pull/([0-9]+).*#\1#')" \
-          --head "$HEAD_SHA" --nonce "$T_NONCE" --after "${CREATED:-}" >/dev/null 2>&1; then
+     && [ "${EDITED:-true}" = false ] && [ "${CARRIERS:-0}" = 1 ] && dispatch_ok "$HEAD_SHA"; then
     DISPATCHED=yes
   fi
 fi
@@ -400,11 +406,20 @@ decide "$(scan "$TMPD/rbody" worker)" "$(scan "$TMPD/rchk" checker)" "$CLOGIN" "
 # only — a draft comparison says nothing about any pull request — and silent on any failure.
 # A disagreement (1) is recorded too, replacing an earlier pass: it refuses the merge even
 # where an external review means no pass from here is required.
+# A FAIL from an earlier head keeps its comment's own time, so a last-round line recorded
+# after it still waives it on every later run; anything unproven is stamped now.
+AT=()
+if [ "$DRC" -eq 1 ] && [ "${EDITED:-true}" = false ] && [ -n "$CREATED" ] \
+   && printf '%s' "$T_SHA" | grep -Eqx '[0-9a-f]{40}' \
+   && [ "$T_SHA" != "$(printf '%s' "$HEAD_SHA" | tr '[:upper:]' '[:lower:]')" ] \
+   && { [ -z "$SAME" ] || { [ "$T_NONCE" != - ] && [ "$CARRIERS" = 1 ] && dispatch_ok "$T_SHA"; }; }; then
+  AT=(--at "$CREATED")
+  echo "note: the checker table is from $T_SHA, head is $HEAD_SHA — its FAIL is recorded at $(safe "$CREATED")." >&2
+fi
 if { [ "$DRC" -eq 0 ] || [ "$DRC" -eq 1 ]; } && [ -n "$HEAD_SHA" ] && [ -n "$URL" ]; then
   FAIL_FLAG=(); [ "$DRC" -eq 1 ] && FAIL_FLAG=(--fail)
   "$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record pr-verdict-clearance.sh ${FAIL_FLAG[@]+"${FAIL_FLAG[@]}"} \
-    --repo "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')" \
-    --pr "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/[^/]+/[^/]+/pull/([0-9]+).*#\1#')" --head "$HEAD_SHA" >/dev/null 2>&1 || true
+    ${AT[@]+"${AT[@]}"} --repo "$NWO" --pr "$NUM" --head "$HEAD_SHA" >/dev/null 2>&1 || true
 fi
 exit $DRC
 
