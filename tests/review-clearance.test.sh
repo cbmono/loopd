@@ -396,5 +396,26 @@ assert "…and the narrower one does not, so nothing clears on it" \
   "$(yes_if bash -c '! grep -Fq "Review limit reached" "$1"' _ "$TMP/sib.strict")"
 
 echo
+echo "== a QUOTED comment opener does not hide the trailer after it =="
+# loopd#502: a QA comment quoting `<!--` in backticks held review-next forever.
+qa_trailer() { # <lines before the trailer...>
+  body_file 'Verified against the criteria.' "$@" '' '<!-- okf-verdict v1' 'verdict: pass' \
+    'reviewer: qa-reviewer' "head_sha: $CLEAN_HEAD" '-->'
+}
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer 'An unclosed `<!--` in the PR body hides the rest.')"
+expect "a backticked <!-- before the trailer -> the trailer is found" 0 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer 'Spans of two: ``a `<!--` b`` stay code.')"
+expect "…and inside a double-backtick span" 0 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer '```html' '<!-- unclosed' '```')"
+expect "…and an unclosed <!-- inside a fenced block" 0 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer 'A real opener <!-- hides the rest.')"
+expect "a REAL unclosed <!-- before the trailer -> no trailer" 4 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer 'Unpaired ` then <!-- hides the rest.')"
+expect "…and an unpaired backtick does not make it code" 4 --reviewer qa-bot
+# The host reads a raw tag before a span, so this <!-- is real: never strip after a <.
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer '<a title="`"> <!-- hides ` the rest.')"
+expect "…nor a backtick inside an earlier raw HTML tag" 4 --reviewer qa-bot
+
+echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

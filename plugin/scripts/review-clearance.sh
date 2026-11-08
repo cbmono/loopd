@@ -1571,6 +1571,24 @@ refusal_hits() { # <stripped-body-file> — the refusal lines, from any refusal 
 verdict_trailer() { # <strict-body-file> -> prints "<verdict> <dispatch nonce or ->" of the block found
   awk -v head="$head_sha" -v marker="$VERDICT_MARKER" '
     function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+    # Inline code spans removed. Stops at an unpaired run, an escaped one, or any "<" before
+    # one: the host reads a raw tag first, so a backtick in its attribute opens no span.
+    function nocode(s,   out, p, n, rest, t, off, q, pre) {
+      out = ""
+      while ((p = index(s, "`")) > 0) {
+        pre = substr(s, 1, p - 1)
+        if (index(pre, "<") || substr(pre, length(pre)) == "\\") break
+        match(substr(s, p), /^`+/); n = RLENGTH; rest = substr(s, p + n)
+        q = 0; off = 0; t = rest
+        while (match(t, /`+/)) {
+          if (RLENGTH == n) { q = off + RSTART; break }
+          off += RSTART + RLENGTH - 1; t = substr(t, RSTART + RLENGTH)
+        }
+        if (!q) break
+        out = out pre; s = substr(rest, q + n)
+      }
+      return out s
+    }
     {
       line = $0
       if (inblk) {
@@ -1601,6 +1619,7 @@ verdict_trailer() { # <strict-body-file> -> prints "<verdict> <dispatch nonce or
       if (htmlopen == 0 && line ~ marker) {
         inblk = 1; verdict = ""; reviewer = ""; sha = ""; nonce = ""; next
       }
+      line = nocode(line)
       o = gsub(/<!--/, "&", line); c = gsub(/-->/, "&", line)
       htmlopen += o - c
       if (htmlopen < 0) htmlopen = 0
