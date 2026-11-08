@@ -241,7 +241,7 @@ assert "…and the bundle still exits 0"          "$(cd "$B" && bash "$VB" >/dev
 echo
 echo "== the rule and the field are documented where agents read them =="
 
-CONV_TXT="$(cat "$CONV")"
+CONV_TXT="$(cat "$CONV" "$REPO/plugin/seed/conventions/rounds.md")"
 assert "CONVENTIONS.md names the field"         "$(has 'do_not_repeat' "$CONV_TXT")"
 assert "…triggered by a failed check or a reviewer refusal" \
        "$(has 'A round that ends on a failed check or a reviewer refusal appends ONE line' "$CONV_TXT")"

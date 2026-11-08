@@ -30,7 +30,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CITE="$REPO/plugin/scripts/cite-check.sh"
 FIX="$REPO/tests/fixtures/cite-check"
-CONV="$REPO/plugin/seed/CONVENTIONS.md"
+CONV="$REPO/plugin/seed/conventions/knowledge.md"
 PM="$REPO/plugin/tick-steps/step-5-reflect-merges.md"
 CAT="$REPO/plugin/agents/cataloguer.md"
 BRIEF='worktree-isolation-spike,green-check-from-a-reviewer-that-declined'

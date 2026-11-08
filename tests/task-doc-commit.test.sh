@@ -30,7 +30,7 @@ export PATH="$BIN:$PATH"
 
 echo "== 1. the rule is in the prose of every role that edits its task doc =="
 RULE="Commit your task-doc edit immediately after each write — never at the round's end."
-ok "CONVENTIONS.md states the rule" "$(has "$REPO/plugin/seed/CONVENTIONS.md" "$RULE")" yes
+ok "CONVENTIONS.md states the rule" "$(has "$REPO/plugin/seed/conventions/rounds.md" "$RULE")" yes
 ok "CONVENTIONS.md names the bundle-side command" \
    "$(has "$REPO/plugin/seed/CONVENTIONS.md" 'scripts/commit-as.sh <role> "<msg>" --stage -- <task-doc>')" yes
 ok "CONVENTIONS.md: retry once, then leave it" \

@@ -294,15 +294,15 @@ ok "…and CLAUDE.md's core bullet names every one of them" "$missing" 0
 # CONVENTIONS.md (symlinked into every instance) before their first write in a target repo,
 # and the two rule files load on a read of the paths they govern.
 ok "CONVENTIONS.md carries the propose-don't-bump-silently rule" \
-  "$(grep -qF 'PROPOSE the bump, never make it silently' "$TPL/plugin/seed/CONVENTIONS.md" && echo yes || echo no)" yes
+  "$(grep -qF 'PROPOSE the bump, never make it silently' "$TPL/plugin/seed/conventions/pr-body.md" && echo yes || echo no)" yes
 ok "…and says the human approves by merging" \
-  "$(grep -qF 'approves it by merging' "$TPL/plugin/seed/CONVENTIONS.md" && echo yes || echo no)" yes
+  "$(grep -qF 'approves it by merging' "$TPL/plugin/seed/conventions/pr-body.md" && echo yes || echo no)" yes
 ok "…and forbids inventing a release process" \
-  "$(grep -qiE 'no changelog, no tag' "$TPL/plugin/seed/CONVENTIONS.md" && echo yes || echo no)" yes
+  "$(grep -qiE 'no changelog, no tag' "$TPL/plugin/seed/conventions/pr-body.md" && echo yes || echo no)" yes
 # THIS repo is the carve-out the rule above names: the bump is not in the PR at all, it is
 # made on main after the merge (ai-bridge-next/task-026, pinned by release-bump.test.sh).
 ok "…and carves out a repo that bumps at MERGE time" \
-  "$(grep -qF 'THE BUMP HAPPENS ON THE DEFAULT BRANCH AT MERGE TIME' "$TPL/plugin/seed/CONVENTIONS.md" && echo yes || echo no)" yes
+  "$(grep -qF 'THE BUMP HAPPENS ON THE DEFAULT BRANCH AT MERGE TIME' "$TPL/plugin/seed/conventions/pr-body.md" && echo yes || echo no)" yes
 ok "machinery.md carries it (loads on a /symlink/** read)" \
   "$(grep -qF 'carries NO version bump' "$TPL/.claude/rules/machinery.md" && echo yes || echo no)" yes
 ok "installer.md carries it (loads on install.sh, seed/, RETIRED)" \

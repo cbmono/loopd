@@ -71,7 +71,7 @@ ok "qa-reviewer.md puts the trailer after the signature" \
 echo
 echo "== EXEMPT: PR bodies and the bare @coderabbitai review request =="
 ok "CONVENTIONS.md exempts both" \
-   "$(grep -c 'Exempt:\*\* a PR body, and the tick.s bare `@coderabbitai review`' "$REPO/plugin/seed/CONVENTIONS.md")" 1
+   "$(grep -c 'Exempt:\*\* a PR body, and the tick.s bare `@coderabbitai review`' "$REPO/plugin/seed/conventions/review.md")" 1
 ok "project-manager.md exempts both" \
    "$(grep -c 'a PR body, and step 4.s bare' "$REPO/plugin/agents/project-manager.md")" 1
 ok "the tick's review request carries no signature" \

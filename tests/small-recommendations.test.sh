@@ -34,7 +34,7 @@ ok "/new-project does not ask for non_goals"      "$(grep -c 'non_goals' "$REPO/
 ok "qa-reviewer: the unapproved-decision note"    "$(has "$QA" '"Unapproved decision:"')" yes
 ok "qa-reviewer: it is not a trailer caveat"      "$(has "$QA" 'never a trailer `caveats:` entry')" yes
 ok "qa-reviewer: taste never qualifies"           "$(has "$QA" 'grade against the criteria, not against your own taste')" yes
-ok "CONVENTIONS.md still carries the cited rule"  "$(has "$REPO/plugin/seed/CONVENTIONS.md" 'grade against the criteria, not against your own taste')" yes
+ok "CONVENTIONS.md still carries the cited rule"  "$(has "$REPO/plugin/seed/conventions/review.md" 'grade against the criteria, not against your own taste')" yes
 ok "SCHEMA.md clause 6 still refuses a caveat"    "$(has "$SCHEMA" '6. **`caveats: none`**')" yes
 
 ok "software-engineer: docs move with behaviour"  "$(has "$SE" 'If the change alters behaviour that a document in the repo describes, update that document in the same PR.')" yes

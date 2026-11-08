@@ -52,7 +52,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CONV="$REPO/plugin/seed/CONVENTIONS.md"
+# The rule moved verbatim to the rounds detail of CONVENTIONS.md (leaner-prompts/task-002).
+CONV="$REPO/plugin/seed/conventions/rounds.md"
 AIB="$REPO/plugin/scripts/welcome.sh"
 for f in "$CONV" "$AIB"; do
   [ -f "$f" ] || { echo "background-teardown.test: missing $f" >&2; exit 2; }
@@ -466,7 +467,7 @@ echo "== 6. MUTATIONS on the rule — every clause is individually breakable =="
 # =======================================================================================
 # Delete the whole `- ` bullet whose text contains <marker>, up to the next top-level bullet.
 strip_bullet() { # <file> <marker>
-  awk -v m="$2" 'index($0, m) && /^- / { skip = 1; next } skip && /^- / { skip = 0 } !skip { print }' "$1"
+  awk -v m="$2" 'index($0, m) && /^- / { skip = 1; next } skip && /^(- |#)/ { skip = 0 } !skip { print }' "$1"
 }
 # Delete from the line containing <from> up to (not including) the line containing <to>.
 strip_range() { # <file> <from> <to>
@@ -482,7 +483,7 @@ else
   strip_bullet "$CONV" "$CLASS" > "$TMP/conv-no-rule.md"
   B_FLAT="$(flatten "$TMP/conv-no-rule.md")"
   ok "MUTATION B removed something"                  "$(mut_smaller "$TMP/conv-no-rule.md")" yes
-  ok "CONTROL: the harness-growth bullet survives"   "$(saw "$B_FLAT" "Don't grow the harness without a reason")" yes
+  ok "CONTROL: the dispatch-artifact bullet survives" "$(saw "$B_FLAT" "A dispatch is not finished until its artifact exists")" yes
   ok "CONTROL: the check-dispatch bullet survives"   "$(saw "$B_FLAT" 'A dispatch is not finished until its artifact exists')" yes
   ok "mutant: the class statement is gone"           "$(saw "$B_FLAT" "$CLASS")" no
   ok "mutant: the bound-on-the-child is gone"        "$(saw "$B_FLAT" "$CHILD")" no

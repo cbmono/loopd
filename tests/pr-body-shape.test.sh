@@ -78,7 +78,7 @@ flatten() { tr '\n' ' ' < "$1" | tr -s ' '; }
 strip_bullet() { # <file> <marker>
   awk -v m="$2" '
     index($0, m) && /^- / { skip=1; next }
-    skip && /^- /          { skip=0 }
+    skip && /^(- |#)/      { skip=0 }
     !skip                  { print }
   ' "$1"
 }
@@ -92,6 +92,10 @@ strip_to_heading() { # <file> <marker>
   ' "$1"
 }
 
+# The rules this pins moved verbatim into three CONVENTIONS.md detail files (leaner-prompts/
+# task-002); the core restates them, so the mutants cut from the detail, where the text lives.
+CONV="$TMP/conventions-detail.md"
+cat "$REPO"/plugin/seed/conventions/{pr-body,review,write-less}.md > "$CONV"
 for f in "$CONV" "$SEED" "$SCHEMA" "$AUTONOMY"; do
   [ -f "$f" ] || { echo "pr-body-shape.test: $f not found" >&2; exit 2; }
 done

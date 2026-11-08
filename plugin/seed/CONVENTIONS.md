@@ -424,8 +424,8 @@ do_not_repeat" — when the script refuses.
 
 **Never at the round's end.** `cd <bundle>`, then
 `scripts/commit-as.sh <role> "<msg>" --stage -- <task-doc>`. An uncommitted doc stalls
-every tick's pull. On a rebase refusal (exit 2): **retry once on your next write, or
-before your final message if there is none, then leave it.** Detail:
+every tick's pull. On a rebase refusal (exit 2): **retry once on your next write,
+or before your final message if there is none, then leave it.** Detail:
 `conventions/rounds.md` → "Commit your task-doc edit immediately after each write" —
 when `commit-as.sh` refuses.
 

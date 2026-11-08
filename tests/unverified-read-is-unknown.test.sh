@@ -28,7 +28,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CONV="$REPO/plugin/seed/CONVENTIONS.md"
+# The rule moved verbatim to the testing detail of CONVENTIONS.md (leaner-prompts/task-002).
+CONV="$REPO/plugin/seed/conventions/testing.md"
 SEED="$REPO/plugin/seed/CLAUDE.md"
 PM="$REPO/plugin/agents/project-manager.md"
 SKILL="$REPO/plugin/skills/dispatch/SKILL.md"
@@ -58,7 +59,7 @@ saw() { # <haystack> <fixed string> -> yes|no
 strip_bullet() { # <file> <marker>
   awk -v m="$2" '
     index($0, m) && /^- / { skip=1; next }
-    skip && /^- /          { skip=0 }
+    skip && /^(- |#)/          { skip=0 }
     !skip                  { print }
   ' "$1"
 }
@@ -177,7 +178,7 @@ echo "== 6. MUTATION A: cut the whole bullet — every assertion above CONVENTIO
 strip_bullet "$CONV" "$BULLET_LINE" > "$TMP/conv-no-rule.md"
 A_FLAT="$(flatten "$TMP/conv-no-rule.md")"
 ok "the mutation removed something"         "$([ "$(wc -c < "$TMP/conv-no-rule.md")" -lt "$(wc -c < "$CONV")" ] && echo yes || echo no)" yes
-ok "CONTROL: the PR-size bullet survives"   "$(saw "$A_FLAT" '**PR size is a heuristic that suggests a split, never a gate.**')" yes
+ok "CONTROL: the red-check bullet survives" "$(saw "$A_FLAT" '**A red check is EVIDENCE, and it is already written down')" yes
 ok "CONTROL: the error-text bullet survives" "$(saw "$A_FLAT" '**1. THE ERROR TEXT FIRST, BEFORE ANY HYPOTHESIS EXISTS.**')" yes
 ok "mutant: the rule is gone"               "$(saw "$A_FLAT" "$HEAD")" no
 ok "mutant: the distinction is gone"        "$(saw "$A_FLAT" "$TEST")" no

@@ -445,7 +445,7 @@ bullet_of() { # <file> <regex> — the whole `- ` bullet containing <regex>
 # 40-minute poll the parked-watcher failure this script exists for). `bullet_of` returns
 # the FIRST bullet that matches, so a bare-name regex silently retargeted all four
 # assertions below onto that bullet and reported the rule missing when it was intact.
-CONV_BULLET="$(bullet_of "$CONVENTIONS" "scripts/check-dispatch\\.sh")"
+CONV_BULLET="$(bullet_of "$REPO/plugin/seed/conventions/rounds.md" "scripts/check-dispatch\\.sh")"
 ok "CONVENTIONS.md names scripts/check-dispatch.sh in a bullet of its own" \
    "$([ -n "$CONV_BULLET" ] && echo yes || echo no)" yes
 ok "…giving the exact path to run"  "$(grep -qF 'scripts/check-dispatch.sh' <<<"$CONV_BULLET" && echo yes || echo no)" yes
