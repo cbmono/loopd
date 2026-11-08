@@ -53,11 +53,14 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    Give that call a Bash `timeout` of 300000 so the tool never backgrounds it: you hold no
    Monitor and foreground sleep is blocked, so a backgrounded probe is one you cannot wait
    for. A probe that still did not answer closes the sweep UNKNOWN. An unchanged
-   `knowledge/` answers from the last clean check's stamp (`cached, stamp <time>`).
+   `knowledge/` answers from the last walk's stamp (`cached, stamp <time>`); a walk that
+   found errors is re-walked only after `kbSweepIntervalHours` (absent ⇒ 24).
 
    Exit 0 ⇒ it prints the trigger line and the ERROR list; dispatch `loopd:cataloguer`
    with **that output pasted into the brief verbatim**, inside the same one-dispatch
-   throttle. Exit 1 is silence: no line in the report, no dispatch. Exit 2 could not answer
+   throttle. Exit 1 is silence: no line in the report, no dispatch — unless it printed a
+   `KB SWEEP CACHED:` line, the open error count inside the interval: report that one line,
+   still no dispatch. Exit 2 could not answer
    — report its line and dispatch nothing. Never re-derive the answer by running
    `build-kb-index.sh --check` yourself: the script is the one place the four conditions
    (idle, errors, no cataloguer in flight, a slot under `maxAgentsInFlight`) are decided

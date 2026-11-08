@@ -53,7 +53,7 @@ node_modules/
 # the first line already — /loopd:init appends this one separately for that reason.
 /.loopd/.tick-lock.claim
 
-# The time of the last clean `build-kb-index.sh --check` (scripts/kb-sweep-due.sh), and the
+# The last `build-kb-index.sh --check` walk and its errors (scripts/kb-sweep-due.sh), and the
 # reference it is cut from while a walk runs. Per clone; delete freely (absence = one walk).
 /.loopd/.kb-check-stamp*
 

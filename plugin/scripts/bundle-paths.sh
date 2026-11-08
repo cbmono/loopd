@@ -40,7 +40,7 @@ AB_BOARD_DIR="$AB_DIR/.board-live"
 AB_BOARD_OTHERS="$AB_DIR/.board-others.json"
 AB_LOCK="$AB_DIR/.tick-lock"
 AB_LOCK_CLAIM="$AB_DIR/.tick-lock.claim"
-# Per clone: the time of the last clean `build-kb-index.sh --check` (kb-sweep-due.sh).
+# Per clone: the last `build-kb-index.sh --check` walk and its errors (kb-sweep-due.sh).
 AB_KB_STAMP="$AB_DIR/.kb-check-stamp"
 # Per clone: one file per PR whose delegated merge merge-queue.sh holds. Ignores itself (a `*` .gitignore).
 AB_MERGE_HOLDS="$AB_DIR/.merge-holds"

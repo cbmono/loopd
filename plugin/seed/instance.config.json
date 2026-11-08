@@ -44,6 +44,8 @@
   "$reclaimIgnoreOk": "Extra first-path-component names scripts/reclaim-worktree.sh treats as build output when it reclaims a merged task's worktree, added to its built-in cache list. Empty (as here) or absent => the built-in list alone. A name starting with `.env` is warned about and never added. PER-MACHINE OVERRIDABLE -- SCHEMA.md, 'Per-machine config overrides'.",
   "kbStaleCommits": 20,
   "$kbStaleCommits": "How many commits on a Service's repo (its `path:`, else the whole repo) since the doc's `timestamp:` make scripts/kb-stale.sh list it as stale. Absent => 20; 0 or a non-integer => 20 with a warning. Report-only: the list rides along in a cataloguer brief the tick already sends and never dispatches one (step 7).",
+  "kbSweepIntervalHours": 24,
+  "$kbSweepIntervalHours": "Hours scripts/kb-sweep-due.sh keeps a KB check that found errors before walking knowledge/ again; inside them it reports the cached error count and dispatches no cataloguer. An edit under knowledge/ still forces a walk, and a clean check holds until one. Absent or null => 24; 0 or a non-integer => 24 with a warning (step 7).",
   "coderabbitRounds": 1,
   "$coderabbitRounds": "How many review rounds the external reviewer (CodeRabbit) may spend on one PR before scripts/review-rounds.sh --for coderabbit refuses another. Absent => 1. Any integer >= 0; 0 runs none. TRACKED, never per-machine: a merge policy both clones must agree on. CONVENTIONS.md, 'TWO ROUNDS, THEN THE HUMAN DECIDES'.",
   "qaRounds": 1,
