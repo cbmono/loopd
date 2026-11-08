@@ -70,6 +70,24 @@ for s in '0. **Sync the bundle first' '0.5. **Take the tick lock' \
 done
 
 echo
+echo "== 1b. NOTHING IN THE CORE DUPLICATES A STEP FILE (leaner-prompts/task-003) =="
+# A copy beside its pointer is paid every tick and drifts from the file a tick actually reads.
+# Unit: a whitespace-folded sentence of 60+ characters; any one found in a step file fails.
+fold() { tr '\n' ' ' | tr -s ' '; }
+dups() { # <core> -> core sentences restated in a tick-steps file
+  local steps; steps="$(cat "$STEPS"/*.md | fold)"
+  fold < "$1" | perl -pe 's/(?<=[.:;]) (?=[A-Z*`(])/\n/g' | sed 's/^ *//;s/ *$//' \
+    | awk 'length >= 60' | while IFS= read -r s; do
+        case "$steps" in *"$s"*) echo "$s" ;; esac
+      done
+}
+ok "no core sentence is restated in a step file" "$(dups "$CORE" | grep -c . | tr -d ' ')" 0
+dups "$CORE" | sed 's/^/        /'
+{ cat "$CORE"; echo; sed -n '/^[A-Z*]/{p;q;}' "$STEPS/step-5-reflect-merges.md"; } > "$TMP/core-dup.md"
+ok "MUTANT: a step-5 sentence pasted into the core is caught" \
+   "$(dups "$TMP/core-dup.md" | grep -c . | awk '{print ($1>=1)?"yes":"no"}')" yes
+
+echo
 echo "== 2. THE AGENT ROSTER IS UNCHANGED — no step file registered as an agent =="
 # The three harnesses that enumerate plugin/agents/ all use -maxdepth 1 or a flat glob, so
 # the assertion that matters is the ROSTER, by name, not the enumeration style.

@@ -105,9 +105,12 @@ echo "== every prompt that tells an agent to write a Finding says: only when a l
 PHRASE='only when a later task would plausibly hit the same problem'
 for f in plugin/seed/CONVENTIONS.md plugin/tick-steps/step-3-dispatch.md plugin/seed/CLAUDE.md \
          plugin/seed/.claude/rules/knowledge-base.md plugin/agents/qa-reviewer.md \
-         plugin/tick-steps/step-7-knowledge-base.md plugin/agents/project-manager.md; do
+         plugin/tick-steps/step-7-knowledge-base.md; do
   ok "$f carries the phrase" "$(grep -qF "$PHRASE" "$REPO/$f" && echo yes || echo no)" yes
 done
+# The core prompt points at step 7 and restates none of it (leaner-prompts/task-003).
+ok "plugin/agents/project-manager.md leaves it to step 7" \
+   "$(grep -qF "$PHRASE" "$REPO/plugin/agents/project-manager.md" && echo yes || echo no)" no
 OLD='capture `Finding`s as a byproduct|If you discover something durable and|capture a new `Finding` if you discover one'
 ok "the probe sees a planted old wording" "$(printf 'If you discover something durable and\n' | grep -cE "$OLD")" 1
 ok "no file under plugin/ keeps the write-by-default wording" "$(grep -rlE "$OLD" "$REPO/plugin" | wc -l | tr -d ' ')" 0

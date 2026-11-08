@@ -2,7 +2,7 @@
 #
 # papercuts-upstream.test.sh — a papercut pass completes when its proposals target loopd
 # plugin surfaces: the classifier resolves names, the writers refuse an empty edit, `pass`
-# is held until each plugin surface has an upstream row, and the four sites state one rule.
+# is held until each plugin surface has an upstream row, and the three sites state one rule.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 # Reasoning: kb-retrieval-and-papercut-fixes/task-001.
@@ -12,7 +12,7 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PC="$REPO/plugin/scripts/papercuts.sh"
 VALIDATOR="$REPO/plugin/scripts/validate-bundle.sh"
 SKILL="$REPO/plugin/skills/close-project/SKILL.md"
-SITES="$REPO/plugin/tick-steps/step-7-knowledge-base.md $REPO/plugin/agents/project-manager.md
+SITES="$REPO/plugin/tick-steps/step-7-knowledge-base.md
 $REPO/plugin/agents/cataloguer.md $SKILL"
 [ -x "$PC" ] || { echo "papercuts-upstream.test: missing or not executable: $PC" >&2; exit 2; }
 
@@ -133,12 +133,14 @@ ok "an instance-only entry: pass is not refused" "$(rc bash "$PC" pass --date 20
 ok "…and no upstream file was needed"        "$(yn test -e "$UP")" no
 
 echo
-echo "== 6. one rule, four sites =="
+echo "== 6. one rule, three sites — step 7 carries the tick's copy, the core prompt none =="
 norm() { tr '\n' ' ' < "$1" | tr -s ' '; }
 RULE='an instance-owned surface becomes a `draft` task in its owning project; a loopd plugin surface is written to `.loopd/upstream-proposals.md` instead'
 SIDE='`pass` checks only the plugin side; the drafts are'
 states() { local t; t="$(norm "$1")"; grep -qF "$RULE" <<<"$t" && grep -qF "$SIDE" <<<"$t"; }
 for f in $SITES; do ok "${f#"$REPO"/} states the rule" "$(yn states "$f")" yes; done
+ok "plugin/agents/project-manager.md leaves it to step 7 (no second copy)" \
+   "$(yn states "$REPO/plugin/agents/project-manager.md")" no
 sed 's/a loopd plugin surface is written/a plugin surface goes/' "$SKILL" > "$TMP/dropped.md"
 ok "…and a site that drops it fails the row"   "$(yn states "$TMP/dropped.md")" no
 ok "close-project names the refused-pass branch" \
