@@ -32,7 +32,9 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    two things and nothing else: the trailing sentence of each row, which is per-tick prose
    by design, and a `--merge` row per PR you have found verified and green at its current
    head — merge-eligibility is this tick's judgement and is written down nowhere the script
-   can read.
+   can read. A `--merge` value may end in the `##mq1 …`/`##mq2 …` token `merge-queue.sh`
+   printed in step 4; the script turns it into one `> warning:` line under the row, and the
+   renderer itself never calls `gh`.
 
    **No `AWAITING.md` ⇒ it writes nothing and exits 0.** **Presence means rewrite, never
    create — for `AWAITING.md` and `SNAPSHOT.json` alike:** `/loopd:init` is their one
