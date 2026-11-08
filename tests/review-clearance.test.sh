@@ -396,5 +396,37 @@ assert "…and the narrower one does not, so nothing clears on it" \
   "$(yes_if bash -c '! grep -Fq "Review limit reached" "$1"' _ "$TMP/sib.strict")"
 
 echo
+echo "== a QUOTED comment opener does not hide the trailer after it =="
+# loopd#502: a QA comment quoting `<!--` in backticks held review-next forever.
+qa_trailer() { # <lines before the trailer...>
+  body_file 'Verified against the criteria.' "$@" '' '<!-- okf-verdict v1' 'verdict: pass' \
+    'reviewer: qa-reviewer' "head_sha: $CLEAN_HEAD" '-->'
+}
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer 'An unclosed `<!--` in the PR body hides the rest.')"
+expect "a backticked <!-- before the trailer -> the trailer is found" 0 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer 'Spans of two: ``a `<!--` b`` stay code.')"
+expect "…and inside a double-backtick span" 0 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer '```html' '<!-- unclosed' '```')"
+expect "…and an unclosed <!-- inside a fenced block" 0 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer 'A real opener <!-- hides the rest.')"
+expect "a REAL unclosed <!-- before the trailer -> no trailer" 4 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer 'Unpaired ` then <!-- hides the rest.')"
+expect "…and an unpaired backtick does not make it code" 4 --reviewer qa-bot
+# The host reads a raw tag before a span, so this <!-- is real: never strip after a <.
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer '<a title="`"> <!-- hides ` the rest.')"
+expect "…nor a backtick inside an earlier raw HTML tag" 4 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer '<div>' 'Quoting `<!--` inside it.')"
+expect "…nor after a raw HTML block on an earlier line" 4 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer 'Rounds <5 and `<!--` quoted.')"
+expect "a literal < that opens no tag still lets a span be code" 0 --reviewer qa-bot
+# Two escapes, not one: render_body's span count ignores escapes, and an odd one drops the rest.
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer 'Escaped \` then `<!--` and \` again.')"
+expect "…and so do escaped backticks before it" 0 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer '<!-- a note' 'closed by `-->` here')"
+expect "a backticked --> still closes an open comment" 0 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer '<!-- a --> then `<!--` quoted')"
+expect "…and a span after a closed comment is code again" 0 --reviewer qa-bot
+
+echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
