@@ -24,7 +24,7 @@ no PII/secrets. The role-specific procedure is below.
 
 **Commit your task-doc edit immediately after each write — never at the round's end.**
 `cd <bundle>`, then `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh qa-reviewer "<msg>" --stage -- <task-doc>`
-— `CONVENTIONS.md` → the same rule. A rebase refusal (exit 2): retry once on your next write, or before your final message if there is none, then leave it.
+— `CONVENTIONS.md` → "Commit your task-doc edit immediately after each write". A rebase refusal (exit 2): retry once on your next write, or before your final message if there is none, then leave it.
 
 **Every file you write has a home in the project** — `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md`
 → "Where files go": a sheet, export or report goes in `projects/<slug>/deliverables/`

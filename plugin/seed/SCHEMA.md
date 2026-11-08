@@ -51,7 +51,7 @@ Every other document may **restate and point**, never redefine.
 | Concern | Authoritative document | What the others may do |
 |---|---|---|
 | Document shapes, frontmatter, enums, the task lifecycle, and **what a bundle contains** | `plugin/seed/SCHEMA.md` — this file | restate and point: `docs/schema.md`, a skill's precondition, an agent's probe |
-| How a role agent behaves in a target repo (branches, commits, PR size, tests, reporting) | `plugin/seed/CONVENTIONS.md` | restate and point: `plugin/seed/CLAUDE.md` § "Conventions for role agents", `plugin/agents/*.md` |
+| How a role agent behaves in a target repo (branches, commits, PR size, tests, reporting) | `plugin/seed/CONVENTIONS.md` — the core, which wins over its own detail | restate and point: `plugin/seed/conventions/*.md` (the reasons and edge cases, opened by heading), `plugin/seed/CLAUDE.md` § "Conventions for role agents", `plugin/agents/*.md` |
 | What one role holds and refuses (tools, scope, exits) | `plugin/agents/*.md`, one file per role | route and point: `plugin/seed/agents/index.md` is the routing reference |
 | The tick's steps — what a PM tick does, in which order, and what each step reads | `plugin/tick-steps/*.md` | launch and point: `plugin/skills/dispatch/SKILL.md` is the launcher, `plugin/agents/project-manager.md` the loop |
 | A skill's preconditions, arguments and scope | `plugin/skills/*/SKILL.md`, each for itself — except what it asserts about the bundle, which is row 1's | — |
@@ -890,7 +890,7 @@ dispatch: <the nonce from the brief's `## QA dispatch`; omit when there is none>
 
 **Two structured inputs; prose is never one.** A consumer reads the *verdict* from the
 trailer and nowhere else, and reads *criteria coverage* from the **`✓`/`✗` column** of the
-`acceptance_criteria` table in the PR body (`CONVENTIONS.md` → the required PR-body shape;
+`acceptance_criteria` table in the PR body (`CONVENTIONS.md` → "The PR body shape";
 a `✗` is an unchecked box and is read exactly as one). Both are structured signals, and they
 answer different questions — did the reviewer pass it, and did anyone verify each
 criterion. **Free prose is never an input**: not the review text around the trailer, not
@@ -1363,7 +1363,7 @@ of a stamp; the same code path as the single call, so the two cannot disagree.
 (**100** when the key is absent) bounds it in **files**. Both are shared facts in the
 tracked `instance.config.json`, and **both only ever propose** — a role agent past either
 one says so in the PR body as one `⚠️` line and opens the PR anyway, and no reviewer ever
-withholds clearance over either (`CONVENTIONS.md` → the PR-size heuristic).
+withholds clearance over either (`CONVENTIONS.md` → "PR size is a heuristic, never a gate").
 
 **Why the file count earns its own key rather than being inferred from the line count.**
 The two disagree in both directions and each direction has cost a real PR: a `git mv`

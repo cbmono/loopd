@@ -125,7 +125,7 @@ knowledge base") means several people write this KB. Absent the key nothing belo
    **re-check to 0 errors**, and commit once, as the cataloguer.
    **Warnings are reported in your summary, not chased.**
    **Document frontmatter is the id source of truth for citations**
-   (`CONVENTIONS.md` → cite knowledge as `[[finding-slug]]`): `cite-check.sh` reads every
+   (`CONVENTIONS.md` → "Cite knowledge by slug"): `cite-check.sh` reads every
    doc under `knowledge/`, so a doc past the cap is still citable and a slug with no file
    reads as fabricated.
    Append a dated entry to `knowledge/log.md` (`knowledge/log/<YYYY-MM>.md` when the KB is

@@ -136,7 +136,7 @@ PROVENANCE_ENUM="machine mixed human"
 
 # CONVENTIONS.md -> "Write less". Lowering it is free; raising it is a rule change.
 FINDING_MAX_LINES=40
-# CONVENTIONS.md -> the `do_not_repeat` cap. `do-not-repeat.sh append` refuses past it;
+# conventions/rounds.md -> "A round that ends on a failed check appends ONE line to do_not_repeat". `do-not-repeat.sh append` refuses past it;
 # this reports a list already over it, which is the PM's cue to fold the oldest into `# Notes`.
 DO_NOT_REPEAT_MAX=10
 
@@ -475,10 +475,10 @@ while IFS= read -r file; do
   if [[ "$type" == Finding ]]; then
     lines="$(awk 'NR==1 && $0=="---" { fm=1; next } fm && $0=="---" { fm=0; next } !fm { n++ } END { print n+0 }' "$file")"
     if [[ "$lines" -gt $FINDING_MAX_LINES ]]; then
-      warn "$rel" "Finding body is $lines lines; $AB_CONVENTIONS 'Write less' caps it at $FINDING_MAX_LINES — the history behind it belongs in the task doc"
+      warn "$rel" "Finding body is $lines lines; $AB_CONVENTIONS → \"Write less\" caps it at $FINDING_MAX_LINES — the history behind it belongs in the task doc"
     fi
     if ! grep -q '^lesson:[[:space:]]*[^[:space:]]' <<<"$fm"; then
-      warn "$rel" "Finding has no one-line 'lesson:' — the takeaway the next agent needs, required by $AB_CONVENTIONS 'Write less'"
+      warn "$rel" "Finding has no one-line 'lesson:' — the takeaway the next agent needs, required by $AB_CONVENTIONS → \"Write less\""
     fi
     # `author:` is the GitHub login that filed it. Provenance has to survive a file move,
     # so it is frontmatter and never the path — there are no per-user folders in the KB.
@@ -498,7 +498,7 @@ while IFS= read -r file; do
   if [[ "$type" == Task ]]; then
     n="$(flow_entries "$fm" do_not_repeat)"
     if [[ "$n" -gt $DO_NOT_REPEAT_MAX ]]; then
-      warn "$rel" "do_not_repeat carries $n entries; $AB_CONVENTIONS caps it at $DO_NOT_REPEAT_MAX — the project-manager folds the oldest into '# Notes'"
+      warn "$rel" "do_not_repeat carries $n entries; $AB_CONVENTIONS_DIR/rounds.md caps it at $DO_NOT_REPEAT_MAX — the project-manager folds the oldest into '# Notes'"
     fi
 
     # `open_caveats` holds a TERMINAL write only — `done`/`cancelled`. Any other status

@@ -296,7 +296,7 @@ check_docs() {
       if [ -n "$au" ] && ! printf '%s' "$au" | grep -qE '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$'; then
         warn "$f" "author: '$au' is not a GitHub login — provenance has to survive a file move"
       fi
-      [ "$n" -le "$FINDING_MAX_LINES" ] || warn "$f" "Finding body is $n lines; $AB_CONVENTIONS 'Write less' caps it at $FINDING_MAX_LINES"
+      [ "$n" -le "$FINDING_MAX_LINES" ] || warn "$f" "Finding body is $n lines; $AB_CONVENTIONS → \"Write less\" caps it at $FINDING_MAX_LINES"
       if [ -z "$(field "$fmv" lesson)" ]; then
         warn "$f" "no one-line 'lesson:' — the index row falls back to description:"
       elif [ "$(printf '%s' "$(summary_of "$fmv")" | wc -c | tr -d ' ')" -gt "$SUMMARY_MAX" ]; then

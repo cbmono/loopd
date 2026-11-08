@@ -188,8 +188,8 @@ the only reader this rule has.
 
 ## Conventions for role agents working in target repos
 **Full rules: [`CONVENTIONS.md`](.loopd/CONVENTIONS.md) — read it before your first write
-in a target repo.** It is the single source of truth for role-agent behaviour; it
-lives there and not here because it governs work *outside* this bundle.
+in a target repo.** It governs work *outside* this bundle; its `.loopd/conventions/`
+detail is read only when a rule's trigger fires.
 
 **These are invariants — hold them whether or not you have read `CONVENTIONS.md`:**
 - **Detect the default branch** — never assume `main`, and **never work on it**.

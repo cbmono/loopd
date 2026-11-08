@@ -486,7 +486,7 @@ if [ "$rounds" -lt "$CAP" ]; then
 fi
 
 echo "refuse: PR $pr ($nwo) has already had $rounds $for round(s), and $cap_key" >&2
-echo "        is $CAP — $AB_CONVENTIONS, \"TWO ROUNDS, THEN THE HUMAN DECIDES\". Do NOT" >&2
+echo "        is $CAP — $AB_CONVENTIONS → \"TWO ROUNDS, THEN THE HUMAN DECIDES\". Do NOT" >&2
 echo "        dispatch $for again. Rounds 3-8 on the pull request this rule comes" >&2
 echo "        from produced adversary-shaped findings against a change that already met" >&2
 echo "        its criteria, because nothing told the reviewer to stop." >&2
