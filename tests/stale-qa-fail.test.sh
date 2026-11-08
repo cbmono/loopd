@@ -57,14 +57,18 @@ fresh_bundle() {
   for s in required-checks.sh pr-body-clearance.sh; do
     "$RCPT" record "$s" --repo acme/widgets --pr 42 --head "$H"
   done
-  "$RCPT" record review-next.sh --unreviewed last-round --at "$LAST" --repo acme/widgets --pr 42 --head "$H"
+  "$RCPT" record review-next.sh --unreviewed last-round --repo acme/widgets --pr 42 --head "$H"
+  f="$("$RCPT" path --repo acme/widgets --pr 42 --head "$H")"
+  awk -v t="$LAST" '$1 == "last-round" { $3 = t } { print }' "$f" > "$f.t" && mv "$f.t" "$f"
 }
+tick() { "$RCPT" record review-next.sh --unreviewed last-round --repo acme/widgets --pr 42 --head "$H"; }
+last_at() { awk '$1 == "last-round" { print $3 }' "$("$RCPT" path --repo acme/widgets --pr 42 --head "$H")"; }
 serve() { # <author> <checker> <trailer head_sha or -> [nonce] [edited]
   { cat "$TMP/fail-table"
     [ "$3" = - ] || printf '\n<!-- okf-verdict v1\nverdict: changes-requested\nhead_sha: %s\nreviewer: qa-reviewer\ndispatch: %s\n-->\n' "$3" "${4:-none}"
   } > "$TMP/qa"
   jq -n --rawfile body "$TMP/worker" --rawfile c "$TMP/qa" --arg a "$1" --arg q "$2" --arg h "$H" \
-        --arg t "$CREATED" --argjson e "${5:-false}" \
+        --arg t "${AT_OVERRIDE:-$CREATED}" --argjson e "${5:-false}" \
     '{body:$body, author:{login:$a}, url:"https://github.com/acme/widgets/pull/42", headRefOid:$h,
       comments:[{author:{login:$q}, body:$c, createdAt:$t, includesCreatedEdit:$e}]}' > "$FIX/pr_json"
 }
@@ -114,6 +118,43 @@ ok "an edited checker comment: stamped now" "$([ "$(fail_at)" \> "$LAST" ] && ec
 ok "…verify refuses"                        "$(verify)" 1
 
 echo
+echo "== --at is a fail line's only, and a waiver line keeps its first stamp =="
+fresh_bundle flags
+ok "--at on an --unreviewed line is usage, exit 2" \
+   "$(rc_of "$RCPT" record review-next.sh --unreviewed last-round --at 2099-01-01T00:00:00Z --repo acme/widgets --pr 42 --head "$H")" 2
+ok "…and the pinned last-round stamp is untouched" "$(last_at)" "$LAST"
+ok "--at on a pass line is usage, exit 2" \
+   "$(rc_of "$RCPT" record y.sh --at "$CREATED" --repo acme/widgets --pr 42 --head "$H")" 2
+ok "--at swallowing --fail is usage, not a pass" \
+   "$(rc_of "$RCPT" record y.sh --at --fail --repo acme/widgets --pr 42 --head "$H")" 2
+ok "…and no y.sh line was written" "$(grep -c ' y.sh ' "$("$RCPT" path --repo acme/widgets --pr 42 --head "$H")")" 0
+tick; tick
+ok "two later ticks keep the last-round stamp" "$(last_at)" "$LAST"
+
+echo
+echo "== a stale FAIL posted AFTER the last-round line refuses on every tick =="
+fresh_bundle late; AT_OVERRIDE="2020-01-01T02:00:00Z" serve worker-bot qa-bot "$A"
+for n in 1 2 3; do
+  "$PVC" 42 --repo acme/widgets >/dev/null 2>&1; tick
+  ok "tick $n: verify refuses" "$(verify)" 1
+done
+ok "…the fail line keeps its createdAt" "$(fail_at)" "2020-01-01T02:00:00Z"
+sed 's/^      \[ -f "\$file" \] && awk -v r=/      false \&\& awk -v r=/' "$RCPT" > "$TMP/s/clearance-receipt.sh"
+ok "the re-stamping mutant differs" "$(cmp -s "$RCPT" "$TMP/s/clearance-receipt.sh" && echo same || echo differs)" differs
+fresh_bundle late-mut; AT_OVERRIDE="2020-01-01T02:00:00Z" serve worker-bot qa-bot "$A"
+"$TMP/s/pr-verdict-clearance.sh" 42 --repo acme/widgets >/dev/null 2>&1
+"$TMP/s/clearance-receipt.sh" record review-next.sh --unreviewed last-round --repo acme/widgets --pr 42 --head "$H"
+ok "MUTANT: re-stamping last-round waives it" "$(verify)" 0
+cp "$RCPT" "$TMP/s/clearance-receipt.sh"
+
+echo
+echo "== an odd createdAt is stamped now =="
+fresh_bundle odd; AT_OVERRIDE="2020-01-01T00:30:00.000Z" serve worker-bot qa-bot "$A"
+"$PVC" 42 --repo acme/widgets >/dev/null 2>&1
+ok "fractional seconds: stamped now" "$([ "$(fail_at)" \> "$LAST" ] && echo now || fail_at)" now
+ok "…verify refuses"                 "$(verify)" 1
+
+echo
 echo "== the PR author's own login: only a dispatch at the trailer head proves it (clause 8) =="
 fresh_bundle solo-forged; serve solo solo "$A" 0123456789abcdef0123456789abcdef
 "$PVC" 42 --repo acme/widgets >/dev/null 2>&1
@@ -127,6 +168,9 @@ mint_old() { # <head> — a dispatch record dated before the comment
 fresh_bundle solo-at-head; serve solo solo "$A" "$(mint_old "$H")"
 "$PVC" 42 --repo acme/widgets >/dev/null 2>&1
 ok "a dispatch at the head, not the trailer's: stamped now" "$([ "$(fail_at)" \> "$LAST" ] && echo now || fail_at)" now
+fresh_bundle solo-late; serve solo solo "$A" "$("$S/qa-dispatch.sh" mint --repo acme/widgets --pr 42 --head "$A")"
+"$PVC" 42 --repo acme/widgets >/dev/null 2>&1
+ok "a dispatch at the trailer head recorded after createdAt: stamped now" "$([ "$(fail_at)" \> "$LAST" ] && echo now || fail_at)" now
 fresh_bundle solo-proved; serve solo solo "$A" "$(mint_old "$A")"
 ok "a dispatch at the trailer head: exit 1" "$(rc_of "$PVC" 42 --repo acme/widgets)" 1
 ok "…the fail line keeps createdAt"        "$(fail_at)" "$CREATED"
