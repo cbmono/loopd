@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# build-kb-index.sh — regenerate knowledge/index.md from document frontmatter, or
-# `--check` that the file, the documents and their links agree. From a bundle root.
+# build-kb-index.sh — regenerate knowledge/index.md from document frontmatter, capped at
+# 8,000 words, or `--check` the file, the documents and their links. From a bundle root.
 #
 #   build-kb-index.sh [--check [--list] | --print] [--strict]
 #
 # Exit: 0 clean · 1 a defect (with --strict, a warning too) · 2 usage/no KB here.
-# A row's summary is the doc's `lesson:` (else `description:`), `|` escaped. A broken
-# link or a dangling `source:` WARNs; untagged and off-enum-category Findings are one
-# count line each, never the exit, and --list names them.
-# Reasoning: ai-bridge-next/task-007, task-019; kb-retrieval-and-papercut-fixes/task-004.
+# Summary = `lesson:` (else `description:`), `|` escaped; a doc past the cap is unlisted, never
+# an error. A broken link or dangling `source:` WARNs; untagged and off-enum-category Findings
+# are one count line each, never the exit, and --list names them.
+# Reasoning: ai-bridge-next/task-007, task-019; slim-knowledge-base/task-001.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
@@ -32,6 +32,7 @@ FINDING_STATUSES="current superseded corrected archived"
 FINDING_CATEGORIES="decision learning gotcha measurement"
 FINDING_MAX_LINES=40
 SUMMARY_MAX=240
+INDEX_CAP_WORDS=8000
 # The KB journal shards per month once it is shared; a single-writer bundle keeps the
 # flat file, and the footer names whichever this bundle actually has.
 JOURNAL=/knowledge/log.md
@@ -92,108 +93,141 @@ status_of()  { field "$1" status | sed 's/[[:space:]]*#.*//'; }
 summary_of() { local s; s=$(field "$1" lesson); [ -n "$s" ] || s=$(field "$1" description); printf '%s' "$s"; }
 
 # --- render -----------------------------------------------------------------
-render_rows() { # <kind> <want: current|superseded|archived> <last-column: status|superseded_by|none>
-  local kind=$1 want=$2 last=$3 f fmv st printed=0
-  while IFS= read -r f; do
-    [ -n "$f" ] || continue
-    fmv=$(fm "$f"); st=$(status_of "$fmv"); [ -n "$st" ] || st=current
-    case "$want:$st" in
-      superseded:superseded|archived:archived) : ;;
-      current:superseded|current:archived|superseded:*|archived:*) continue ;;
-    esac
-    local title summary path tail
-    title=$(esc "$(title_of "$fmv")"); [ -n "$title" ] || title=$(slug_of "$f")
-    summary=$(esc "$(summary_of "$fmv")")
-    path="\`/knowledge/$kind/$(slug_of "$f").md\`"
-    case "$last" in
-      status)         tail=" $(esc "$st") |" ;;
-      superseded_by)  tail=" $(esc "$(field "$fmv" superseded_by)")" ; [ "$tail" != " " ] || tail=" —"; tail="$tail |" ;;
-      none)           tail="" ;;
-    esac
-    printf '| %s | %s | %s |%s\n' "$title" "$summary" "$path" "$tail"
-    printed=1
-  done <<< "$(docs_in "$kind")"
-  [ "$printed" = 1 ] || case "$last" in
-    none) printf '| _(none yet)_ | | |\n' ;;
-    *)    printf '| _(none yet)_ | | | |\n' ;;
-  esac
+# One parse per doc: `<group> <key> <slug> <section> <row>`, tab-separated. The sort
+# below IS D1's rank: Services, Runbooks, Teams, References, then Findings newest first,
+# slug breaking a tie — frontmatter only, so every clone writes the same file.
+collect() {
+  local kind f fmv st title summary path tail sect group key ts
+  for kind in services runbooks teams references findings; do
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      fmv=$(fm "$f"); st=$(status_of "$fmv"); [ -n "$st" ] || st=current
+      title=$(esc "$(title_of "$fmv")"); [ -n "$title" ] || title=$(slug_of "$f")
+      summary=$(esc "$(summary_of "$fmv")")
+      path="\`/knowledge/$kind/$(slug_of "$f").md\`"
+      sect=$kind; tail=" $(esc "$st") |"
+      case "$kind:$st" in
+        teams:*) tail="" ;;
+        findings:superseded) sect=superseded
+          tail=" $(esc "$(field "$fmv" superseded_by)")"; [ "$tail" != " " ] || tail=" —"; tail="$tail |" ;;
+        findings:archived) sect=archived ;;
+      esac
+      case "$kind" in
+        services) group=0 key=9 ;; runbooks) group=0 key=8 ;; teams) group=0 key=7 ;; references) group=0 key=6 ;;
+        findings) group=1; ts=$(field "$fmv" timestamp); key=${ts:--} ;;
+      esac
+      printf '%s\t%s\t%s\t%s\t| %s | %s | %s |%s\n' "$group" "$key" "$(slug_of "$f")" "$sect" \
+        "$title" "$summary" "$path" "$(printf '%s' "$tail" | tr '\t' ' ')"
+    done <<< "$(docs_in "$kind")"
+  done
 }
 
-generate() {
-  # The heredoc is QUOTED (its markdown is full of backticks), so the one path in it is
-  # substituted afterwards rather than expanded in place.
-  cat <<'EOF' | sed "s|__AB_SCHEMA__|$AB_SCHEMA|g"
+skeleton() {
+  # QUOTED heredoc (its markdown is full of backticks); the two values are substituted after.
+  cat <<'EOF' | sed "s|__AB_SCHEMA__|$AB_SCHEMA|g; s|__CAP__|$INDEX_CAP_WORDS|g"
 # Knowledge Base — index
 
 Compact catalog of this control panel's OKF knowledge base (`Service`s, `Finding`s,
-`Runbook`s, `Team`s, `Reference`s — types in `/__AB_SCHEMA__`). **This index is the KB's lookup
-surface:** scan it to find prior work, then open only the specific doc(s) you need —
-**don't bulk-read `knowledge/`**.
+`Runbook`s, `Team`s, `Reference`s — types in `/__AB_SCHEMA__`). **Grep it, never read it
+whole:** `grep -i '<term>' knowledge/index.md`, then open only the doc(s) you need —
+**don't bulk-read `knowledge/`**. At most __CAP__ words: Services, Runbooks, Teams and
+References first, then Findings newest first. A document past the cap is still citable —
+`grep -ril '<term>' knowledge/` finds it.
 
 **Derived — do not hand-edit.** `build-kb-index.sh` rebuilds every row below from document
 frontmatter, and `--check` fails when this file and the documents disagree. Tags come from
 [the controlled vocabulary](/knowledge/vocab.md). Superseded rows are **history**: read
 them to understand a decision, never cite them as current guidance.
 
+@@capnote
 ## Services
 
 | Service | What it is | Path | Status |
 |---|---|---|---|
-EOF
-  render_rows services current status
-  cat <<'EOF'
+@@rows services 4
 
 ## Findings — decisions, learnings, gotchas
 
 | Finding | Summary | Path | Status |
 |---|---|---|---|
-EOF
-  render_rows findings current status
-  cat <<'EOF'
+@@rows findings 4
 
 ### Superseded findings — history, not current guidance
 
 | Finding | Summary | Path | Superseded by |
 |---|---|---|---|
-EOF
-  render_rows findings superseded superseded_by
-  # Only when one exists, so adding the status re-renders no existing index.
-  local archived; archived=$(render_rows findings archived status)
-  case "$archived" in *'_(none yet)_'*) : ;; *)
-    cat <<'EOF'
+@@rows superseded 4
+@@if archived
 
 ### Archived findings — history, not current guidance: no brief cited them
 
 | Finding | Summary | Path | Status |
 |---|---|---|---|
-EOF
-    printf '%s\n' "$archived" ;;
-  esac
-  cat <<'EOF'
+@@rows archived 4
+@@fi
 
 ## Runbooks
 
 | Runbook | When to use | Path | Status |
 |---|---|---|---|
-EOF
-  render_rows runbooks current status
-  cat <<'EOF'
+@@rows runbooks 4
 
 ## References — durable specs & contracts
 
 | Reference | What it specifies | Path | Status |
 |---|---|---|---|
-EOF
-  render_rows references current status
-  cat <<'EOF'
+@@rows references 4
 
 ## Teams — who owns what / routing
 
 | Team | Owns | Path |
 |---|---|---|
+@@rows teams 3
 EOF
-  render_rows teams current none
-  printf '\n---\n[KB log](%s) — what changed and when.\n' "$JOURNAL"
+}
+
+# Words are `wc -w`'s, footer included: runs of non-blank. The largest rank prefix that fits
+# wins; a binary search is exact because every added row adds words.
+generate() {
+  local work rc=0
+  work=$(mktemp -d "${TMPDIR:-/tmp}/kb-index.XXXXXX") || return 1
+  skeleton > "$work/skel"
+  collect | LC_ALL=C sort -t "$(printf '\t')" -k1,1 -k2,2r -k3,3 > "$work/rows"
+  awk -F'\t' -v cap="$INDEX_CAP_WORDS" -v journal="$JOURNAL" '
+    function words(t,   m, a, i, c) { m = split(t, a, /[ \t\n\r\v\f]+/); c = 0
+      for (i = 1; i <= m; i++) if (a[i] != "") c++; return c }
+    function render(k,   out, i, j, p, emitted, skip, arch) {
+      arch = 0; for (i = 1; i <= k; i++) if (sect[i] == "archived") arch = 1
+      out = ""; skip = 0
+      for (j = 1; j <= nt; j++) {
+        if (tl[j] == "@@if archived") { skip = !arch; continue }
+        if (tl[j] == "@@fi") { skip = 0; continue }
+        if (skip) continue
+        if (tl[j] == "@@capnote") {
+          if (k < n) out = out sprintf("**Capped:** %d of %d rows are past the %d-word cap and not listed.\n\n", n - k, n, cap)
+          continue
+        }
+        if (tl[j] ~ /^@@rows /) {
+          split(tl[j], p, " "); emitted = 0
+          for (i = 1; i <= k; i++) if (sect[i] == p[2]) { out = out row[i] "\n"; emitted = 1 }
+          if (!emitted) out = out (p[3] == 3 ? "| _(none yet)_ | | |" : "| _(none yet)_ | | | |") "\n"
+          continue
+        }
+        out = out tl[j] "\n"
+      }
+      return out "\n---\n[KB log](" journal ") — what changed and when.\n"
+    }
+    FNR == NR { tl[++nt] = $0; next }
+    { s = $0; for (i = 0; i < 4; i++) s = substr(s, index(s, "\t") + 1); sect[++n] = $4; row[n] = s }
+    END {
+      if (words(render(n)) <= cap) k = n
+      else { lo = 0; hi = n - 1
+        while (lo < hi) { mid = int((lo + hi + 1) / 2); if (words(render(mid)) <= cap) lo = mid; else hi = mid - 1 }
+        k = lo }
+      printf "%s", render(k)
+    }' "$work/skel" "$work/rows" || rc=1
+  rm -rf "$work"
+  [ "$rc" = 0 ]
 }
 
 # --- checks -----------------------------------------------------------------
@@ -245,14 +279,11 @@ check_index() {
 }
 
 check_docs() {
-  local kind f fmv slug st tag n catg edges=0 untagged="" offenum=""
-  local indexed=""
-  [ -r "$INDEX" ] && indexed=" $(grep -oE '[A-Za-z0-9._/-]+\.md' "$INDEX" | sed 's#.*/##; s#\.md$##' | LC_ALL=C sort -u | tr '\n' ' ')"
+  local kind f fmv st tag n catg edges=0 untagged="" offenum=""
   for kind in services findings runbooks teams references; do
     while IFS= read -r f; do
       [ -n "$f" ] || continue
-      slug=$(slug_of "$f"); fmv=$(fm "$f")
-      case "$indexed" in *" $slug "*) : ;; *) err "$f" "no index row — an unindexed doc is one nobody can find or cite" ;; esac
+      fmv=$(fm "$f")
       [ -n "$(summary_of "$fmv")" ] || err "$f" "no lesson: and no description: — the index row would have an empty summary"
       [ "$kind" = findings ] || continue
       st=$(status_of "$fmv")

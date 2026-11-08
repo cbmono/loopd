@@ -7,7 +7,7 @@
 # cells, two findings with no row at all, rows whose unescaped `|` split the table into the
 # wrong number of cells, and — in the whole life of the KB — not one finding ever
 # superseded. Every one of those is invisible to a reader and fatal to an agent that reads
-# the KB index-first, so each gets a FIXTURE CARRYING THAT DEFECT and an assertion that the
+# the KB, so each gets a FIXTURE CARRYING THAT DEFECT and an assertion that the
 # checker goes red naming it.
 #
 # NON-VACUOUS BY CONSTRUCTION. The same checker runs on a clean fixture first and must exit
@@ -146,7 +146,7 @@ plant() { # <name> — a fresh copy of the clean tree, index already built
 D="$(plant no-row)"
 grep -v 'pipe-in-title' "$D/knowledge/index.md" > "$D/k" && mv "$D/k" "$D/knowledge/index.md"
 ok "a Finding with no index row: red"    "$(check_rc "$D")" 1
-ok "…and the message names it"           "$(check_out | grep -c 'no index row')" 1
+ok "…and the message says the file drifted" "$(check_out | grep -c 'does not match the documents')" 1
 
 D="$(plant ghost-row)"
 sed 's#/knowledge/findings/new-rule.md#/knowledge/findings/ghost.md#' "$D/knowledge/index.md" > "$D/k" && mv "$D/k" "$D/knowledge/index.md"
@@ -392,7 +392,7 @@ ok "the cataloguer rebuilds, never edits" "$(has "$CATALOGUER" 'scripts/build-kb
 ok "…and runs the supersede pass"        "$(has "$CATALOGUER" 'Supersede rather than delete')" yes
 ok "close-project step 2 supersedes"     "$(has "$CLOSE" 'supersede what this project made untrue')" yes
 ok "…and rebuilds the index"             "$(has "$CLOSE" 'scripts/build-kb-index.sh')" yes
-ok "seed CLAUDE.md: index first"         "$(has "$SEED_CLAUDE" 'index first, at most three, superseded rows are history')" yes
+ok "seed CLAUDE.md: grep, never the whole index" "$(has "$SEED_CLAUDE" 'grep, never the whole index; at most three; superseded rows are history')" yes
 ok "…and it drops the old 1–3 wording"   "$(has "$SEED_CLAUDE" 'open only the 1–3')" no
 ok "the KB rule repeats the three points" "$(has "$KB_RULE" 'history, not guidance')" yes
 ok "the README row names the link check" "$(has "$REPO/README.md" 'bundle-relative link in `knowledge/**`')" yes

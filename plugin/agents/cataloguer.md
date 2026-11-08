@@ -113,10 +113,10 @@ knowledge base") means several people write this KB. Absent the key nothing belo
    ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh --check   # zero errors is the gate
    ```
 
-   One row per doc, sorted, pipes escaped, summary copied from `lesson:`. So a row you
-   would have written by hand is a row you fix **in the document**. `--check` fails on a
-   doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a
-   status outside `{current, superseded, corrected, archived}`, a tag outside `vocab.md`, and a
+   Capped at 8,000 words — Services, Runbooks, Teams, References, then Findings newest
+   first — pipes escaped, summary copied from `lesson:`. So a row you would have written
+   by hand is a row you fix **in the document**. `--check` fails on a row pointing at no
+   file, an empty summary, an unescaped pipe, a status outside `{current, superseded, corrected, archived}`, a tag outside `vocab.md`, and a
    dangling supersession edge — run it before you finish.
    **A KB sweep is that check as the whole job.** A tick with nothing to dispatch sends
    you one (`kb-sweep-due.sh`) and its brief carries the error list.
@@ -124,9 +124,10 @@ knowledge base") means several people write this KB. Absent the key nothing belo
    **never delete a `Finding`** — a wrong one is superseded (step 3). Then regenerate,
    **re-check to 0 errors**, and commit once, as the cataloguer.
    **Warnings are reported in your summary, not chased.**
-   **Those rows are the id source of truth for citations**
-   (`CONVENTIONS.md` → cite knowledge as `[[finding-slug]]`): a slug with no
-   row reads as fabricated, so a doc you write and don't index is a doc nobody may cite.
+   **Document frontmatter is the id source of truth for citations**
+   (`CONVENTIONS.md` → cite knowledge as `[[finding-slug]]`): `cite-check.sh` reads every
+   doc under `knowledge/`, so a doc past the cap is still citable and a slug with no file
+   reads as fabricated.
    Append a dated entry to `knowledge/log.md` (`knowledge/log/<YYYY-MM>.md` when the KB is
    mounted), and
    cross-link liberally (bundle-relative `/knowledge/...` and `/projects/...` links)

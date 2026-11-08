@@ -4,12 +4,12 @@
 # `[[finding-slug]]`, and a behavioural drive of `plugin/scripts/cite-check.sh`.
 #
 # THE THREE FIXTURES ARE THE CONTRACT, and they are chosen so the middle one cannot be
-# reached by accident. `tests/fixtures/cite-check/` holds one small index and three
+# reached by accident. `tests/fixtures/cite-check/` holds one small KB and three
 # answers written against the same two-slug brief:
 #
 #   all-valid.md     every id was in the brief                          -> exit 0
 #   one-invented.md  each citing line pairs a carried id with a dropped
-#                    one — a FABRICATED id (in no index row) on one line,
+#                    one — a FABRICATED id (no doc carries it) on one line,
 #                    an UNREAD id (a row nobody briefed) on the other, so
 #                    both drop classes are exercised and both lines survive -> exit 3
 #   all-invented.md  the same two dropped ids, now ALONE on their lines,
@@ -59,7 +59,7 @@ ok "…with a summary line the PM can quote"    "$(saw '2 kept, 0 dropped')" yes
 
 run one-invented.md
 ok "one invented -> exit 3 (dropped, blocks survive)" "$RC" 3
-ok "…the id in no index row is FABRICATED"    \
+ok "…the id no doc carries is FABRICATED"    \
    "$(saw 'FABRICATED a-worktree-finding-that-does-not-exist')" yes
 ok "…the id that IS a row but was unbriefed is UNREAD" \
    "$(saw 'UNREAD stale-local-main-is-not-the-remote-default-branch')" yes
@@ -104,8 +104,8 @@ ok "CONVENTIONS.md defines the citation form"   \
    "$(in_file "$CONV" 'Cite knowledge as `[[finding-slug]]`, and only ids your brief actually carried')" yes
 ok "…and says free-text references are not citations" \
    "$(in_file "$CONV" 'bracketed slug is the ONLY thing that counts as a citation')" yes
-ok "…names the index as the id source of truth" \
-   "$(in_file "$CONV" 'is the id source of truth**: the `cataloguer` writes one row per doc')" yes
+ok "…names frontmatter as the id source of truth" \
+   "$(in_file "$CONV" 'frontmatter under `knowledge/` is the id source of truth**')" yes
 ok "…names the script and its exit codes"       "$(in_file "$CONV" 'scripts/cite-check.sh --text-file')" yes
 ok "…and keeps UNREAD and FABRICATED apart"     \
    "$(in_file "$CONV" 'The two ways an id gets dropped are reported apart')" yes
@@ -116,7 +116,7 @@ ok "…over the # Result section and each PR body" \
 ok "…recording a stripped citation as a # Notes line" \
    "$(in_file "$PM" '**recorded as a `# Notes` line**')" yes
 ok "the cataloguer owns the id source of truth"  \
-   "$(in_file "$CAT" 'row reads as fabricated, so a doc you write and don'"'"'t index')" yes
+   "$(in_file "$CAT" 'a doc past the cap is still citable and a slug with no file')" yes
 # The reflect step is step 5; a move of this paragraph out of it would leave the rule
 # true and the timing wrong, which no other assertion here would see. Since
 # ai-bridge-v3/task-024 each step is its own file, so "inside step 5, before step 6" is the

@@ -25,7 +25,7 @@ Run from a control-panel instance root: `instance.config.json` must exist in the
 
 Open a specific task or project document **only** when the brief needs its exact wording
 (a question to quote verbatim, a goal statement). Never bulk-read the bundle or
-`knowledge/` — consult `knowledge/index.md` first if a Finding is worth citing.
+`knowledge/` — `grep -i '<term>' knowledge/index.md`, never read it whole, if a Finding is worth citing.
 
 ## Output — two modes
 
