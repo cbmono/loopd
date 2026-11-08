@@ -415,6 +415,17 @@ expect "…and an unpaired backtick does not make it code" 4 --reviewer qa-bot
 # The host reads a raw tag before a span, so this <!-- is real: never strip after a <.
 setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer '<a title="`"> <!-- hides ` the rest.')"
 expect "…nor a backtick inside an earlier raw HTML tag" 4 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer '<div>' 'Quoting `<!--` inside it.')"
+expect "…nor after a raw HTML block on an earlier line" 4 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer 'Rounds <5 and `<!--` quoted.')"
+expect "a literal < that opens no tag still lets a span be code" 0 --reviewer qa-bot
+# Two escapes, not one: render_body's span count ignores escapes, and an odd one drops the rest.
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer 'Escaped \` then `<!--` and \` again.')"
+expect "…and so do escaped backticks before it" 0 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer '<!-- a note' 'closed by `-->` here')"
+expect "a backticked --> still closes an open comment" 0 --reviewer qa-bot
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(qa_trailer '<!-- a --> then `<!--` quoted')"
+expect "…and a span after a closed comment is code again" 0 --reviewer qa-bot
 
 echo
 echo "pass=$pass fail=$fail"

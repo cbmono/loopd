@@ -1571,13 +1571,14 @@ refusal_hits() { # <stripped-body-file> — the refusal lines, from any refusal 
 verdict_trailer() { # <strict-body-file> -> prints "<verdict> <dispatch nonce or ->" of the block found
   awk -v head="$head_sha" -v marker="$VERDICT_MARKER" '
     function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
-    # Inline code spans removed. Stops at an unpaired run, an escaped one, or any "<" before
-    # one: the host reads a raw tag first, so a backtick in its attribute opens no span.
+    # Inline code spans removed. Stops at an unpaired run or at a raw-HTML "<" before one:
+    # the host reads a raw tag first, so a backtick in its attribute opens no span.
     function nocode(s,   out, p, n, rest, t, off, q, pre) {
       out = ""
       while ((p = index(s, "`")) > 0) {
         pre = substr(s, 1, p - 1)
-        if (index(pre, "<") || substr(pre, length(pre)) == "\\") break
+        if (pre ~ /<[A-Za-z\/!?]/) break
+        if (match(pre, /\\+$/) && RLENGTH % 2) { out = out pre "`"; s = substr(s, p + 1); continue }
         match(substr(s, p), /^`+/); n = RLENGTH; rest = substr(s, p + n)
         q = 0; off = 0; t = rest
         while (match(t, /`+/)) {
@@ -1619,10 +1620,20 @@ verdict_trailer() { # <strict-body-file> -> prints "<verdict> <dispatch nonce or
       if (htmlopen == 0 && line ~ marker) {
         inblk = 1; verdict = ""; reviewer = ""; sha = ""; nonce = ""; next
       }
-      line = nocode(line)
-      o = gsub(/<!--/, "&", line); c = gsub(/-->/, "&", line)
-      htmlopen += o - c
-      if (htmlopen < 0) htmlopen = 0
+      # Inside a comment there are no code spans, so its first --> closes it. Once raw HTML
+      # other than a comment appears, nothing is stripped again: a block such as <div> hands
+      # a later backticked <!-- to the browser as a real opener.
+      while (line != "") {
+        if (htmlopen) {
+          if (!(k = index(line, "-->"))) break
+          htmlopen = 0; line = substr(line, k + 3); continue
+        }
+        if (!rawhtml) line = nocode(line)
+        k = index(line, "<!--")
+        if ((k ? substr(line, 1, k - 1) : line) ~ /<([A-Za-z\/?]|!([^-]|-[^-]|-?$))/) rawhtml = 1
+        if (!k) break
+        htmlopen = 1; line = substr(line, k + 4)
+      }
     }
     # A block nobody closed is not a block: dropping out of the loop inside one must not
     # leave its fields to be completed by the next one.
