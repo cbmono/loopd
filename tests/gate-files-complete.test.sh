@@ -111,7 +111,7 @@ walk() { # <tree> — every file reached from ROOTS and the ALLOW entries, one p
   for f in $queue; do [ -f "$tree/$f" ] || queue="$(printf '%s' "$queue" | sed "s#$f##")"; done
   while [ -n "$(printf '%s' "$queue" | tr -d ' ')" ]; do
     set -- $queue; f="$1"; shift; queue="$*"
-    printf '%s\n' "$seen" | grep -Fxq "$f" && continue
+    grep -Fxq "$f" <<<"$seen" && continue
     seen="$seen"$'\n'"$f"
     case "$f" in *.sh) ;; *) continue ;; esac
     queue="$queue $(refs "$tree" "$f" | tr '\n' ' ')"
@@ -133,7 +133,7 @@ check_tree() { # <tree> — prints each gap, returns 1 on any
   done
   for f in $listed; do
     grep -Fxq "$f" <<<"$reached" && continue
-    printf '%s\n' "$ALLOW" | cut -d'|' -f1 | grep -Fxq "$f" && continue
+    grep -Fxq "$f" <<<"$(cut -d'|' -f1 <<<"$ALLOW")" && continue
     echo "UNJUSTIFIED $f — no walk reaches it and ALLOW does not name it"; bad=1
   done
   return "$bad"
