@@ -8,7 +8,7 @@
 # still cites something. Report on stdout, one
 # `KEPT|SUPERSEDED|ARCHIVED|UNREAD|FABRICATED|UNKNOWN|EMPTY` line per citation; `--strip` puts the
 # cleaned text on stdout and the report on stderr.
-# Offline by construction — files only, no network, no `gh`.
+# Ids and status from the KB's frontmatter; --index locates the KB. Offline: no network.
 # Why: CONVENTIONS.md → the citation bullet. Reasoning: ai-bridge-next/task-014.
 set -uo pipefail
 
@@ -42,21 +42,25 @@ slugs_of() { tr -c 'A-Za-z0-9._/-' ' ' | tr ' ' '\n' | sed 's#.*/##; s#\.md$##' 
 
 CARRIED=" $(printf '%s' "$BRIEF" | slugs_of | tr '\n' ' ')"
 
-# The `cataloguer`'s index rows are the id source of truth: every doc it writes gets a
-# row, so a slug in no row names no document. Default to the bundle's own index.
+# Ids and status come from each doc's FRONTMATTER, never the index's rows: the index is
+# capped, so a doc past the cap is still known, and a superseded or archived one still
+# history. The index file only locates the KB (its directory); default the bundle's own.
 [ -n "$INDEX" ] || { [ -r knowledge/index.md ] && INDEX=knowledge/index.md; }
-# A superseded doc keeps its row — it is history — so it is KNOWN and still not citable.
-# The generated index puts those rows under their own `### Superseded` heading, which is
-# what makes "never cite one" checkable instead of a rule agents remember. An archived doc
-# (no brief cited it) is history the same way, under its own `### Archived` heading.
 HAVE_INDEX=0; KNOWN=" "; GONE=" "; ARCH=" "
-under() { awk -v h="$1" '/^#{2,}[[:space:]]/ { in_h = ($0 ~ h) } in_h' "$INDEX" \
-          | grep -oE '[A-Za-z0-9._/-]+\.md' | slugs_of | tr '\n' ' '; }
 if [ -n "$INDEX" ] && [ -r "$INDEX" ]; then
   HAVE_INDEX=1
-  KNOWN=" $(grep -oE '[A-Za-z0-9._/-]+\.md' "$INDEX" | slugs_of | tr '\n' ' ')"
-  GONE=" $(under '[Ss]uperseded')"
-  ARCH=" $(under '^#+[[:space:]]+[Aa]rchived')"
+  KB="$(dirname "$INDEX")"
+  DOCS="$(for k in services findings runbooks teams references; do
+            find "$KB/$k" -maxdepth 1 -type f -name '*.md' 2>/dev/null; done \
+          | while IFS= read -r f; do
+              st=$(awk 'NR==1 && $0!="---" { exit } /^---$/ { if (++n == 2) exit; next }
+                        /^status:/ { sub(/^status:[[:space:]]*/, ""); sub(/[[:space:]]*#.*/, "")
+                                     gsub(/["\047[:space:]]/, ""); print; exit }' "$f")
+              printf '%s %s\n' "$(basename "$f" .md)" "${st:-current}"
+            done)"
+  KNOWN=" $(printf '%s\n' "$DOCS" | awk 'NF { print $1 }' | tr '\n' ' ')"
+  GONE=" $(printf '%s\n' "$DOCS" | awk '$2 == "superseded" { print $1 }' | tr '\n' ' ')"
+  ARCH=" $(printf '%s\n' "$DOCS" | awk '$2 == "archived" { print $1 }' | tr '\n' ' ')"
 elif [ -n "$INDEX" ]; then
   echo "cite-check: cannot read index '$INDEX' — a dropped id stays unclassified" >&2
 fi
