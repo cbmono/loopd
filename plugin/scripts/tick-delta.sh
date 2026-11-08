@@ -61,6 +61,9 @@
 #                           a ` --- `-answered `decisions:` entry, an immediate DELTA: step 2
 #                           owes its fold, and a tick whose tasks are all promoted has no draft
 #                           to name step 2 otherwise.
+#   merge hold              not a line: a `hold`/`unknown` mark merge-queue.sh keeps under
+#                           AB_MERGE_HOLDS for a PR still on an in-flight task is an immediate
+#                           DELTA, because a default-branch run finishing moves nothing above.
 #   queue/snapshot <present|absent>
 #                           the two artifacts' presence — a stamp that recreates
 #                           AWAITING.md needs one full tick to populate it.
@@ -579,6 +582,15 @@ case "$cmd" in
       echo "DELTA: a project's \`decisions:\` carries an answered entry — step 2 owes its fold."
       exit 1
     fi
+    for m in "$inst/$AB_MERGE_HOLDS"/*; do
+      [ -f "$m" ] || continue
+      IFS=$'\t' read -r _ _ mst mrepo mpr _ < "$m" || continue
+      [ "$mst" = human ] && continue
+      if printf '%s\n' "$FP" | grep '^pr ' | grep -qiF "/$mrepo/pull/$mpr "; then
+        echo "DELTA: merge-queue.sh holds the delegated merge of $mrepo#$mpr ($mst) — step 4 re-checks it."
+        exit 1
+      fi
+    done
     if printf '%s\n' "$FP" | grep -q '^reclaim owed '; then
       echo "DELTA: a done task's worktree is still on disk — step 5 owes its reclaim a retry."
       exit 1

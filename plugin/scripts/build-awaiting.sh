@@ -5,7 +5,7 @@
 #
 #   Usage: build-awaiting.sh [--instance DIR] [--out FILE]
 #                            [--trailer <task-path>=<sentence>]...
-#                            [--merge   <task-path>=<pr markdown link>]...
+#                            [--merge   <task-path>=<pr markdown link>[ <merge-queue.sh merge-row token>]]...
 #                            [--facts   <task-path>=<verified-facts.sh verdict>]...
 #
 # Exit: 0 rendered (or no AWAITING.md, which is the off switch) · 2 usage · 3 a path it
@@ -245,6 +245,20 @@ lookup() { # <path> <"trailer"|"merge"|"facts">  -> prints the value, or nothing
   fi
 }
 
+# A merge-queue.sh `merge-row:` token rides the --merge value; it becomes one line under the row.
+mq_link=""; mq_warn=""
+mq_split() { # <--merge value> -> sets mq_link and mq_warn
+  local v="$1" w; mq_warn=""
+  case "$v" in
+    *' ##mq1 '*) w="${v#* ##mq1 }"; v="${v%% ##mq1 *}"
+                 mq_warn="a ${w#* } run is in progress on ${w%% *}; merging now cancels it" ;;
+    *' ##mq2 '*) mq_warn="concurrency unknown: ${v#* ##mq2 }"; v="${v%% ##mq2 *}" ;;
+  esac
+  [ -z "$mq_warn" ] || mq_warn="
+  > warning: $(printf '%s' "$mq_warn" | tr -d '\r\n')"
+  mq_link="$v"
+}
+
 facts_mark() { # <file> <rel> -> "unverified · ", "stale · " or nothing
   local v; v="$(bash "$HERE/verified-facts.sh" --presence "$1" 2>/dev/null)"
   case "$v" in research|missing) ;; *) v="$(lookup "$1" facts)"; [ -n "$v" ] || v="$(lookup "$2" facts)" ;; esac
@@ -323,8 +337,9 @@ for pm in "$inst"/projects/*/project.md; do
     t="$(title_of "$f")"
     trail="$(lookup "$f" trailer)"; [ -n "$trail" ] || trail="$(lookup "$rel" trailer)"
     mlink="$(lookup "$f" merge)"; [ -n "$mlink" ] || mlink="$(lookup "$rel" merge)"
+    mq_split "$mlink"
     if [ "$held" = 1 ]; then
-      [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${mlink}${trail:+ · $trail}"
+      [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${mq_link}${trail:+ · $trail}$mq_warn"
       continue
     fi
 
@@ -347,7 +362,7 @@ $qlist
 EOF
     [ -n "$qs" ] && add "❓" answer "$t" "$rel" "${trail:-$qs}"
 
-    [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${mlink}${trail:+ · $trail}"
+    [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${mq_link}${trail:+ · $trail}$mq_warn"
 
     case "$st" in
       draft)

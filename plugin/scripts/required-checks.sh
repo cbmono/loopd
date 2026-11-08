@@ -88,6 +88,7 @@ plugin/scripts/plugin-name.sh
 plugin/scripts/clearance-receipt.sh
 plugin/scripts/review-clearance.sh
 plugin/scripts/required-checks.sh
+plugin/scripts/merge-queue.sh
 plugin/scripts/pr-body-clearance.sh
 plugin/scripts/pr-verdict-clearance.sh
 plugin/scripts/review-rounds.sh
