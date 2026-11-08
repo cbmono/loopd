@@ -107,8 +107,12 @@ not be able to talk the loop into a merge. Confirm all five and **abort if any f
      its own gate — the list is read from the base branch — but merging it would weaken
      every later one. Surface it, exactly as no agent raises `autonomy` itself.
    - **So is a PR that edits the merge gate's own files** (exit 4, `GATE_FILES` in
-     `required-checks.sh`: this file, the hook and the clearance scripts) — the gate
-     must not clear the PR that rewrites it.
+     `required-checks.sh`: this file, the hook, `merge-permit.sh` and the
+     `resolve-autonomy.sh` that finds this file, the clearance and receipt scripts, the
+     review-round and config readers they run, `bundle-paths.sh`, `merge-queue.sh`, and
+     `plugin-name.sh` with the two manifests it reads) — the gate must not clear the PR
+     that rewrites it. `tests/gate-files-complete.test.sh` fails when a file the merge
+     path executes, sources or reads is missing from the list.
 2. **The independent reviewer has cleared the current head** — *cleared* exactly as
    `SCHEMA.md` → "Independent verification gate" defines it (the `okf-verdict` trailer
    for the `qa-reviewer`; an identity-matched, non-dismissed, count-reconciled review for
