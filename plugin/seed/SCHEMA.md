@@ -357,7 +357,7 @@ interfaces:                           # optional, BUILD-shaped. NOT machine-read
 # spellings of the same function, route or column, and the mismatch surfaces at
 # review. Write exact identifiers, never prose. Omit the key entirely when a task
 # shares no surface with its siblings — an empty block is noise.
-open_questions:                       # PM-managed; ONLY still-unanswered questions — including a stopped role session's HAND-OFF, `Q<n>: do: …hand-off <id>…`, which `session-handoff.sh` writes as fixed text (the agent's own words never enter this file; they render from the ignored `.loopd/.handoffs/<id>.txt` as one `👉 do` row in AWAITING.md, on a done task too), answered `done` or with what the resumed round should know. Number every entry (Q1, Q2, …), and give each its `### Q<n>` block under "Question details" below. The human answers an entry by appending ` --- <answer>` to it on the same line (e.g. "Q1: Which region should we default to? --- eu-central-1"); the PM treats any text after the ` --- ` delimiter as the answer, folds it into the task (Context / acceptance_criteria / Notes) and MOVES that entry to `answered_questions`, stamped `by <login>` with the human who answered ("Decisions name the human" below) — this list still EMPTIES, because that is the signal promotion keys on. (Answering in-session works too.)
+open_questions:                       # PM-managed; ONLY still-unanswered questions — including a stopped role session's HAND-OFF, `Q<n>: do: …hand-off <id>…`, which `session-handoff.sh` writes as fixed text (the agent's own words never enter this file; they render from the ignored `.loopd/.handoffs/<id>.txt` as one `👉 do` row in AWAITING.md, on a done task too), answered `done` or with what the resumed round should know. Number every entry (Q1, Q2, …), and give each its `### Q<n>` block under "Question details" below. The human answers an entry by appending ` --- <answer>` to it on the same line (e.g. "Q1: Which region should we default to? --- eu-central-1"); the PM treats any text after the ` --- ` delimiter as the answer, folds it into the task (Context / acceptance_criteria / Notes) and MOVES that entry to `answered_questions`, stamped `by <login>` with the human who answered ("Decisions name the human" below) — this list still EMPTIES. A fact-settled question may end with a ` check: <kind> <arg>` predicate the tick's sweep evaluates ("Evidence sweep" below); it never answers one, because that is the signal promotion keys on. (Answering in-session works too.)
   - "Q1: <blocking question for the human>"
   - "Q2: ..."
 advisor_notes:                        # optional, PM-managed. Concerns raised by an ADVISORY agent — the `plan-architect` approach critique the PM runs at refine time — that the PM has NOT yet triaged. (The per-tick `advisor` observer also wrote here until it was RETIRED on 2026-10-08 — enabled in no bundle, and a second opinion drawn from the PM's own inputs; its entries in existing documents stay valid and this field stays, unchanged, with no new check.) DELIBERATELY NOT A GATE: unlike `open_questions` this does NOT block promotion, does NOT put a row in AWAITING.md, and `validate-bundle.sh` adds no check for it — a concern is the loop's problem first, not the human's. On the next tick the PM triages each entry and it leaves this list one of two ways: RESOLVED, moving to `answered_questions` prefixed `advisor:` so the provenance survives; or ESCALATED, copied into `open_questions` prefixed `advisor:` because the PM genuinely cannot decide — and only then does it reach the human and the board. Two PM receipts sit here too and are never concerns: `<ISO 8601> · advisor: approach critique — no concerns` (the critique ran) and `<ISO 8601> · advisor: approach critique — not run (<reason>)`, `<reason>` one of `error` or `no result by step 8` (it did not; tick step 2 allows one re-dispatch while the task is a draft, and deletes the receipt when that retry returns). Absent means no concern is outstanding, which is the normal state. **No customer PII**, same rule as every other document field.
@@ -421,6 +421,26 @@ default branch since the sha; only those paths are compared), `unknown` (no clon
 `ls-remote` or fetch, the sha absent), `research` (no check owed).
 AWAITING.md marks the promote row `unverified` or `stale`; it blocks no human promotion.
 A stale section is refreshed only by deleting it, so the next refine writes it again.
+
+### Evidence sweep
+
+A question a checkable fact settles ends with one predicate, after the question and before
+any answer: ` check: <kind> <arg>`. Three kinds, nothing else:
+
+| Kind | `<arg>` | True when | Evidence cited |
+|---|---|---|---|
+| `pr-merged` | `https://github.com/<owner>/<repo>/pull/<n>` | GitHub says `MERGED` into that repo's default branch | the URL |
+| `file` | `<owner>/<repo>:<path>[=<value>]` | `<owner>/<repo>` is the task's `target_repo` (never the bundle or the KB remote) and the path exists on its default branch's head (and contains a non-empty `<value>` verbatim) | `<owner>/<repo>@<sha>:<path>` |
+| `decision` | `D<n>` | the project's `project.md` on the bundle remote's default branch holds `D<n>` in `acknowledged_decisions`, stamped `by <login>` and answered ` --- ok` or ` --- ack` | `<owner>/<repo>@<sha>:projects/<slug>/project.md` |
+
+A question with no predicate is judgement and the sweep never touches it; a `Q<n>: do:`
+hand-off never carries one. Every full tick runs `scripts/question-sweep.sh --apply`, which
+appends ` · sweep: <kind> <arg> true @ <evidence>` to each entry whose predicate is true.
+**It never answers**: the entry stays in `open_questions`, so promotion still waits on the
+human, who folds it with ` --- ok` or, where the sweep is wrong, replies with the real
+answer. Text an agent wrote — a `Finding`, a PR body, a `# Result`, an unpushed commit, a
+decision stamped `<unknown>` or `loopd:…` — is never evidence: any other kind is `refused`.
+A predicate that turns true while the bundle is unchanged is seen on the next full tick.
 
 ### Question details
 
@@ -1081,7 +1101,10 @@ one that arrived as a commit, which is how a **hand**-promotion and a reply push
 *other* clone attribute to the other human rather than to whoever's loop noticed. It
 resolves the git author's email through `people`, and where it cannot it prints
 `<unknown>`: the stamp is written anyway, because an omitted stamp is indistinguishable
-from a decision nobody made. **None of this is a gate** — no validator checks it, nothing
+from a decision nobody made. The loop's own name is `loopd:project-manager` — a colon no
+GitHub login can hold — and it never stamps an answer: a sweep note ("Evidence sweep")
+answers nothing, and the human's ` --- ok` that folds it is stamped by that human.
+**None of this is a gate** — no validator checks it, nothing
 blocks on it, and a missing stamp is a later tick's to add.
 
 # Ownership on a shared instance

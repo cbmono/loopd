@@ -7,6 +7,7 @@
 #          fold-answers.sh --list <task-doc> <frontmatter-key>   # read-only
 #          fold-answers.sh --block Q<n> <task-doc>   # read-only: the ### Q<n> block as JSON, exit 1 if absent
 #          fold-answers.sh [--keys SRC DST] --add <doc> <entry>...  # append, skipping any open or answered
+#          fold-answers.sh --sweep <entry> <note> <doc>  # append ` · sweep: <note>` to one open entry, fold nothing
 # `--answer` appends ` --- <text>` to that one open entry first (answer.sh's in-session answer).
 # Exit: 0 done (nothing to move is also 0) · 2 usage · 3 a list it could not round-trip,
 # nothing written · 4 the move would leave one entry in BOTH lists, nothing written.
@@ -16,10 +17,10 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-usage() { sed -n '6,10p' "$0" >&2; exit 2; }
+usage() { sed -n '6,11p' "$0" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "fold-answers: python3 is required" >&2; exit 2; }
 
-inst="."; doc=""; src_key="open_questions"; dst_key="answered_questions"; list_key=""; ans_entry=""; ans_text=""; block_label=""; add_json=""
+inst="."; doc=""; src_key="open_questions"; dst_key="answered_questions"; list_key=""; ans_entry=""; ans_text=""; block_label=""; add_json=""; sweep_entry=""; sweep_note=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) [ $# -ge 2 ] || usage; inst="$2"; shift 2 ;;
@@ -27,6 +28,7 @@ while [ $# -gt 0 ]; do
     --keys)     [ $# -ge 3 ] && [[ "$2" =~ ^[a-z_]+$ && "$3" =~ ^[a-z_]+$ && "$2" != "$3" ]] || usage
                 src_key="$2"; dst_key="$3"; shift 3 ;;
     --answer)   [ $# -ge 3 ] || usage; ans_entry="$2"; ans_text="$3"; shift 3 ;;
+    --sweep)    [ $# -ge 3 ] || usage; sweep_entry="$2"; sweep_note="$3"; shift 3 ;;
     --block)    [ $# -ge 3 ] && [[ "$2" =~ ^Q[0-9]+$ ]] || usage; block_label="$2"; doc="$3"; shift 3 ;;
     # The ONE writer of a new entry, so it goes through the parser that round-trips.
     --add)      [ $# -ge 3 ] || usage; doc="$2"; shift 2
@@ -54,7 +56,7 @@ done
 # unresolvable author stays `<unknown>` rather than being stamped with whoever's loop is
 # folding it.
 login_self="<unknown>"; login_author="<unknown>"; committed_state="absent"; committed_file=""
-if [ -z "$list_key$block_label$add_json" ] && [ -x "$HERE/decision-stamp.sh" ]; then
+if [ -z "$list_key$block_label$add_json$sweep_entry" ] && [ -x "$HERE/decision-stamp.sh" ]; then
   committed_file="$(mktemp -t fold-answers.XXXXXX)"; head_doc="$(mktemp -t fold-answers-head.XXXXXX)"
   trap 'rm -f "$committed_file" "$head_doc"' EXIT
   login_self="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --self 2>/dev/null || true)"
@@ -73,13 +75,13 @@ if [ -z "$list_key$block_label$add_json" ] && [ -x "$HERE/decision-stamp.sh" ]; 
 fi
 
 python3 - "$doc" "$list_key" "$login_self" "$login_author" "$committed_state" \
-         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ans_entry" "$ans_text" "$block_label" "$add_json" "$src_key" "$dst_key" <<'PY'
+         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ans_entry" "$ans_text" "$block_label" "$add_json" "$src_key" "$dst_key" "$sweep_entry" "$sweep_note" <<'PY'
 import json, os, re, sys, tempfile
 
 ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "/": "/"}
 
 path, list_key = sys.argv[1], sys.argv[2]
-login_self, login_author, committed_state, committed_file, stamp, ans_entry, ans_text, block_label, add_json, SRC, DST = sys.argv[3:14]
+login_self, login_author, committed_state, committed_file, stamp, ans_entry, ans_text, block_label, add_json, SRC, DST, sweep_entry, sweep_note = sys.argv[3:16]
 src = open(path, encoding="utf-8").read()
 
 
@@ -197,6 +199,7 @@ def scan_block(text, i, key):
     if rest and not rest.startswith("#"):
         die(3, "%s is neither a flow nor a block list" % key)
     out, end, pos = [], line_end, line_end + 1
+    SPANS[key] = spans = []
     while pos < FM_END:
         nl = text.find("\n", pos)
         if nl < 0:
@@ -218,13 +221,19 @@ def scan_block(text, i, key):
             tail = text[k:nl].strip()
             if tail and not tail.startswith("#"):
                 die(3, "text after a quoted entry in %s" % key)
+            spans.append((pos + m.end(), k))
         else:
-            v = re.split(r"[ \t]#", text[k:nl], 1)[0].strip()
+            cut = re.split(r"[ \t]#", text[k:nl], 1)[0]
+            v = cut.strip()
             if not v:
                 die(3, "an empty entry in %s" % key)
+            spans.append((k + len(cut) - len(cut.lstrip()), k + len(cut.rstrip())))
         out.append(v)
         end, pos = nl, nl + 1
     return out, end, (rest if rest.startswith("#") else "")
+
+
+SPANS = {}
 
 
 def find_key(key):
@@ -373,21 +382,6 @@ if list_key:
         print(e)
     sys.exit(0)
 
-open_q, o_at, o_end, o_cmt = read(SRC)
-ans_q, a_at, a_end, a_cmt = read(DST)
-if open_q is None:
-    sys.exit(0)
-if ans_q is None:
-    ans_q, a_at, a_end = [], None, None
-if ans_entry:
-    hits = [i for i, e in enumerate(open_q) if e == ans_entry]
-    if len(hits) != 1:
-        die(3, "the entry to answer is not in %s exactly once" % SRC)
-    if not ans_text.strip() or "\n" in ans_text:
-        die(3, "an answer must be one non-empty line")
-    open_q = list(open_q)
-    open_q[hits[0]] += " --- " + ans_text
-
 # AN ANSWER MUST HAVE CONTENT. The test was `" --- " in e`, so an entry that merely
 # ENDED with the separator — the shape you get when the separator is pre-placed as an
 # affordance for the answer, and the shape a template leaves behind — counted as
@@ -398,13 +392,51 @@ if ans_entry:
 # that way: ten entries, none answered, all ten would have folded.
 # THE LAST SEPARATOR IS THE ANSWER'S, not the first: a question may carry ` --- ` in its
 # own text, and a search anywhere in the entry folded `Q: compare a --- b --- ` unanswered.
-
-
 def answered_entry(entry):
     """True when the text after the FINAL ` --- ` has content."""
     _, sep, answer = entry.rpartition(" --- ")
     return bool(sep) and bool(answer.strip())
 
+
+open_q, o_at, o_end, o_cmt = read(SRC)
+ans_q, a_at, a_end, a_cmt = read(DST)
+if open_q is None:
+    if sweep_entry:
+        die(3, "no %s to sweep" % SRC)
+    sys.exit(0)
+if ans_q is None:
+    ans_q, a_at, a_end = [], None, None
+if sweep_entry:
+    hits = [i for i, e in enumerate(open_q) if e == sweep_entry]
+    if len(hits) != 1:
+        die(3, "the entry to sweep is not in %s exactly once" % SRC)
+    if not sweep_note.strip() or "\n" in sweep_note or " --- " in sweep_note or answered_entry(sweep_entry):
+        die(3, "a sweep note is one non-empty line without ` --- `, on an unanswered entry")
+    # Before an empty pre-placed ` --- `, or the note would become the answer.
+    head, sep, tail = sweep_entry.rpartition(" --- ")
+    keep = list(open_q)
+    keep[hits[0]] = (head + " · sweep: " + sweep_note + sep + tail) if sep else (sweep_entry + " · sweep: " + sweep_note)
+    if SPANS.get(SRC):
+        # Only that one scalar is rewritten, so every other entry's `# comment` survives.
+        a, b = SPANS[SRC][hits[0]]
+        out = src[:a] + emit([keep[hits[0]]]).lstrip()[2:] + src[b:]
+    else:
+        out = src[:o_at] + emit(keep, o_cmt) + src[o_end:]
+    src = out
+    FM_START, FM_END = frontmatter(out)
+    if read(SRC)[0] != keep:
+        die(3, "the re-parse does not match; nothing written")
+    write_out(out)
+    print("swept: 1 entry")
+    sys.exit(0)
+if ans_entry:
+    hits = [i for i, e in enumerate(open_q) if e == ans_entry]
+    if len(hits) != 1:
+        die(3, "the entry to answer is not in %s exactly once" % SRC)
+    if not ans_text.strip() or "\n" in ans_text:
+        die(3, "an answer must be one non-empty line")
+    open_q = list(open_q)
+    open_q[hits[0]] += " --- " + ans_text
 
 answered = [e for e in open_q if answered_entry(e)]
 if not answered:
