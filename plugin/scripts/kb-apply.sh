@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# kb-apply.sh — the human half of the reflector: it APPLIES one report. From a bundle root.
+# kb-apply.sh — APPLIES one hand-written reflection report. From a bundle root.
 #
 #   kb-apply.sh [--instance DIR] --by <login> [--human-docs <slug,...>] <report>
 #
@@ -101,7 +101,7 @@ while IFS= read -r line; do
   MATCH=( knowledge/*/"$G3".md )
   { [ -f "${MATCH[0]}" ] && [ "${#MATCH[@]}" -eq 1 ]; } || die 1 "$G1: $G3 names no single item under knowledge/*/"
   [ "$(fingerprint "${MATCH[0]}")" = "$G6" ] \
-    || die 1 "$G1: $G3 has changed since the report was written — re-run kb-propose.sh"
+    || die 1 "$G1: $G3 has changed since the report was written — write a new report"
   [[ "$G4" =~ ^[a-z][a-z0-9_]*=[^[:space:]] ]] || die 1 "$G1: '$G4' is not field=value"
   case " $PROTECTED " in *" ${G4%%=*} "*) die 1 "$G1: '${G4%%=*}' is not a proposal's to write" ;; esac
   prov="$(fmfield "${MATCH[0]}" provenance)"

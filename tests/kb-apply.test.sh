@@ -1,29 +1,21 @@
 #!/usr/bin/env bash
 #
-# kb-reflect.test.sh — plugin/scripts/kb-propose.sh and plugin/scripts/kb-apply.sh, the
-# split a scheduled run PROPOSES and a human-typed /loopd:kb-apply APPLIES.
-#
-# BYTE-IDENTITY IS ASSERTED ON A PRODUCTIVE RUN. The proposer is a FIXTURE that always
-# emits one proposal, because the real one is task-004 and depends on this task — a
-# criterion needing the live reflector could never be met here, and a run with nothing to
-# propose passes byte-identity trivially, which is the hole the criterion was written
-# against. ok() compares actual to expected. Reasoning: knowledge-base-reflector/task-003.
+# kb-apply.test.sh — plugin/scripts/kb-apply.sh behind the human-typed /loopd:kb-apply:
+# it applies exactly what one hand-written report names, and refuses the whole report on
+# any doubt. ok() compares actual to expected. Reasoning: knowledge-base-reflector/task-003.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PROPOSE="$REPO/plugin/scripts/kb-propose.sh"
 APPLY="$REPO/plugin/scripts/kb-apply.sh"
 AWAIT="$REPO/plugin/scripts/build-awaiting.sh"
 SKILL="$REPO/plugin/skills/kb-apply/SKILL.md"
 STEP7="$REPO/plugin/tick-steps/step-7-knowledge-base.md"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 VALIDATE="$REPO/plugin/scripts/validate-bundle.sh"
-for f in "$PROPOSE" "$APPLY"; do
-  [ -x "$f" ] || { echo "kb-reflect.test: $f is missing or not executable" >&2; exit 2; }
-done
+[ -x "$APPLY" ] || { echo "kb-apply.test: $APPLY is missing or not executable" >&2; exit 2; }
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/kbreflect.XXXXXX")" || {
-  echo "kb-reflect.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}" >&2; exit 2; }
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/kbapply.XXXXXX")" || {
+  echo "kb-apply.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}" >&2; exit 2; }
 trap 'chmod -R u+rw "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
 
 pass=0; fail=0
@@ -34,9 +26,14 @@ ok() { # <name> <actual> <expected>
 # Every file under knowledge/, each with its checksum — the before/after comparison.
 kbsum() { find knowledge -type f -exec cksum {} + | sort; }
 rows() { grep -c '^\* ' "$1" 2>/dev/null || true; }
-# A script's executable lines. The header states the absences, so a grep over the whole
-# file answers "is it written down", never "does it call it" — which is what is asserted.
-code() { grep -vE '^[[:space:]]*#' "$1"; }
+fp() { cksum <"$1" | awk '{print $1 "-" $2}'; }
+# A hand-written report: a draft task carrying the given P<n> lines.
+report() { # <path> <proposal lines>
+  mkdir -p "$(dirname "$1")"
+  local pj; pj="$(dirname "$(dirname "$1")")/project.md"
+  [ -f "$pj" ] || printf -- '---\ntype: Project\ntitle: Knowledge reflection\ndescription: "Hand-written reports for /loopd:kb-apply."\nkind: build\nstatus: active\nretain: true\ntimestamp: 2026-10-22T00:00:00Z\n---\n\n# Context\n\nReports.\n' >"$pj"
+  printf -- '---\ntype: Task\ntitle: "Knowledge reflection — to review"\nkind: build\nstatus: draft\nassignee: human\nacceptance_criteria: [ ]\nopen_questions:\n  - "Apply this report? Read it, then run /loopd:kb-apply. Decline by cancelling this task."\ntimestamp: 2026-10-22T00:00:00Z\n---\n\n# Proposals\n\n%s\n' "$2" >"$1"
+}
 
 D="$TMP/bundle"
 mkdir -p "$D/knowledge/findings" "$D/.loopd"
@@ -53,57 +50,25 @@ cd "$D" || exit 2
 git init -q . && git config user.name example-user-007 && git config user.email u@example.com
 git add -A && git commit -qm init
 
-# The fixture proposer: always exactly one proposal, so the run below is PRODUCTIVE.
-ONE="$TMP/proposer-one.sh"
-cat >"$ONE" <<'EOS'
-#!/usr/bin/env bash
-echo "supersede · duplicate · status=superseded · keeper · the same claim as keeper, said twice"
-EOS
-chmod +x "$ONE"
-
-echo "== criterion 1: a PRODUCTIVE scheduled run reports, raises one row, and writes no byte of knowledge/ =="
+echo "== a hand-written report renders as one row and touches no byte of knowledge/ =="
 BEFORE="$(kbsum)"
+REPORT=projects/knowledge-reflection/tasks/task-001-knowledge-reflection.md
+report "$REPORT" "P1 · supersede · duplicate · status=superseded · keeper · $(fp knowledge/findings/duplicate.md) · the same claim as keeper, said twice"
 : >"$D/.loopd/AWAITING.md"          # absence is the off switch; the human opted in
-out="$("$PROPOSE" --proposer "$ONE" 2>"$TMP/propose.err")"; rc=$?
-ok "the scheduled run exits 0 — it found something" "$rc" 0
-ok "…and reports what it proposes"                  "$(grep -c '^KB REFLECTION: 1 proposal' <<<"$out")" 1
-REPORT="$(sed -n 's/.* in \(projects[^ ]*\.md\) .*/\1/p' <<<"$out")"
-ok "…naming a report that exists"                   "$([ -f "$REPORT" ] && echo yes || echo no)" yes
 bash "$AWAIT" --instance "$D" >/dev/null 2>&1
 ok "exactly one AWAITING.md row appears"            "$(rows "$D/.loopd/AWAITING.md")" 1
 ok "…and it is the report, asking the human"        "$(grep -c "answer.*Knowledge reflection" "$D/.loopd/AWAITING.md")" 1
 ok "EVERY file under knowledge/ is byte-identical"  "$([ "$BEFORE" = "$(kbsum)" ] && echo yes || echo no)" yes
-ok "…and git sees no change there either"           "$(git status --porcelain knowledge/ | wc -l | tr -d ' ')" 0
-ok "the report is a task document, so the row has a source" "$(head -1 <<<"$(sed -n 's/^type: //p' "$REPORT")")" Task
-ok "…left as a draft the human never promotes"      "$(head -1 <<<"$(sed -n 's/^status: //p' "$REPORT")")" draft
-ok "…carrying the one proposal"                     "$(grep -c '^P1 · supersede · duplicate · ' "$REPORT")" 1
 ok "validate-bundle accepts the report"             "$("$VALIDATE" "$REPORT" 2>&1 | grep -c ERROR)" 0
-
-echo "== criterion 2: the row comes from the normal machinery, never from the scheduled run =="
-ok "kb-propose.sh contains no write to AWAITING.md" \
-  "$(grep -cE 'AWAITING|AB_AWAITING' "$PROPOSE" | tr -d ' ')" 1
-ok "…and that one mention is the prose saying it does not" \
-  "$(grep -cE '^# .*never AWAITING\.md' "$PROPOSE" | tr -d ' ')" 1
-ok "it calls neither build-awaiting.sh nor any renderer" \
-  "$(code "$PROPOSE" | grep -c 'build-awaiting' | tr -d ' ')" 0
 rm -f "$D/.loopd/AWAITING.md"
 bash "$AWAIT" --instance "$D" >/dev/null 2>&1
-ok "absence stays the off switch across the whole path" "$([ -e "$D/.loopd/AWAITING.md" ] && echo yes || echo no)" no
-: >"$D/.loopd/AWAITING.md"
-bash "$AWAIT" --instance "$D" >/dev/null 2>&1
-ok "…and the row is re-rendered from the task document alone" "$(rows "$D/.loopd/AWAITING.md")" 1
+ok "absence stays the off switch"                   "$([ -e "$D/.loopd/AWAITING.md" ] && echo yes || echo no)" no
 
-echo "== criterion 3: apply is reachable only through the slash command =="
-ok "the cron entry point contains no call to kb-apply.sh" "$(code "$PROPOSE" | grep -c 'kb-apply\.sh' | tr -d ' ')" 0
-ok "…no call to ledger.sh, commit-as.sh or build-kb-index.sh" \
-  "$(code "$PROPOSE" | grep -cE 'ledger\.sh|commit-as\.sh|build-kb-index\.sh' | tr -d ' ')" 0
-ok "…and no git write verb at all"  "$(code "$PROPOSE" | grep -cE 'git (add|commit|mv|rm|checkout)' | tr -d ' ')" 0
-# The positive control: an entry point that calls nothing would pass the three above.
-ok "the skill DOES call it — the one path that applies" "$(grep -c 'scripts/kb-apply\.sh' "$SKILL" | tr -d ' ')" 2
+echo "== apply is reachable only through the slash command =="
+ok "the skill calls it — the one path that applies" "$(grep -c 'scripts/kb-apply\.sh' "$SKILL" | tr -d ' ')" 2
 ok "…and no other skill does"  "$(grep -rl 'scripts/kb-apply\.sh' "$REPO/plugin/skills" | wc -l | tr -d ' ')" 1
 ok "…nor any agent"            "$(grep -rl 'kb-apply\.sh' "$REPO/plugin/agents" | wc -l | tr -d ' ')" 0
-ok "the tick step runs the proposer and never the apply" \
-  "$(grep -c 'kb-propose\.sh' "$STEP7")/$(grep -c 'kb-apply\.sh --by' "$STEP7")" "1/0"
+ok "…nor the tick's knowledge step" "$(grep -c 'kb-apply\.sh --by' "$STEP7")" 0
 
 echo "== criterion 4: apply writes what the report names, plus a stated exclusion set =="
 bystander_before="$(cksum <knowledge/findings/bystander.md)"
@@ -126,26 +91,9 @@ ok "the commit touches only what the report + the exclusion set name" \
 ok "the same report applied twice is refused"       "$("$APPLY" --by example-user-007 "$REPORT" >/dev/null 2>&1; echo $?)" 1
 
 echo "== the refusals that make nothing else true =="
-: >"$D/.loopd/AWAITING.md"
-P2="$TMP/proposer-human.sh"
-printf '#!/usr/bin/env bash\necho "edit · handwritten · status=superseded · - · reads like keeper"\n' >"$P2"
-chmod +x "$P2"
-before2="$(kbsum)"
-ok "a proposal against a human-authored item is dropped" "$("$PROPOSE" --proposer "$P2" >/dev/null 2>&1; echo $?)" 1
-ok "…leaving knowledge/ byte-identical"             "$([ "$before2" = "$(kbsum)" ] && echo yes || echo no)" yes
-ok "no proposer configured is silence, not a failure" "$("$PROPOSE" >/dev/null 2>&1; echo $?)" 1
-ok "a proposer that FAILED is unknown, never nothing to propose" \
-  "$("$PROPOSE" --proposer 'exit 7' >/dev/null 2>&1; echo $?)" 2
-P3="$TMP/proposer-two.sh"
-cat >"$P3" <<'EOS'
-#!/usr/bin/env bash
-echo "status · keeper · status=corrected · - · a second look"
-echo "edit · bystander · lesson=a tightened claim · - · the lesson restated"
-EOS
-chmod +x "$P3"
-out2="$("$PROPOSE" --proposer "$P3" 2>/dev/null)"
-R2="$(sed -n 's/.* in \(projects[^ ]*\.md\) .*/\1/p' <<<"$out2")"
-ok "a second run reports two proposals"             "$(grep -c '^P[12] · ' "$R2")" 2
+R2=projects/knowledge-reflection/tasks/task-002-knowledge-reflection.md
+report "$R2" "P1 · status · keeper · status=corrected · - · $(fp knowledge/findings/keeper.md) · a second look
+P2 · edit · bystander · lesson=a tightened claim · - · $(fp knowledge/findings/bystander.md) · the lesson restated"
 sed -i.bak 's/^title: Title keeper$/title: Title keeper edited/' knowledge/findings/keeper.md && rm -f knowledge/findings/keeper.md.bak
 by_before="$(cksum <knowledge/findings/bystander.md)"
 ok "an item edited since the report refuses the WHOLE report" \
@@ -156,17 +104,7 @@ ok "a role name as --by is refused"                 "$("$APPLY" --by cataloguer 
 ok "a report outside projects/*/tasks/ is refused"  "$("$APPLY" --by example-user-007 knowledge/index.md >/dev/null 2>&1; echo $?)" 1
 echo "== round 2: the write scope is closed, and a partial apply cannot start =="
 LEDGER_BEFORE="$(grep -c '^ledger:' knowledge/findings/duplicate.md)"
-for k in ledger provenance; do
-  printf '#!/usr/bin/env bash\necho "edit · bystander · %s=x · - · why"\n' "$k" >"$TMP/p-$k.sh"
-  chmod +x "$TMP/p-$k.sh"
-  # Its own project slug: the default one already holds a draft report, and the
-  # waiting-report guard would short-circuit before the proposer ever ran.
-  ok "a proposal writing $k: is dropped at propose" \
-    "$("$PROPOSE" --proposer "$TMP/p-$k.sh" --project "kb-r2-$k" 2>&1 >/dev/null | grep -c "'$k' is not a proposal")" 1
-  ok "…and no report was written for it" "$([ -d "projects/kb-r2-$k/tasks" ] && find "projects/kb-r2-$k/tasks" -type f | grep -c . || echo 0)" 0
-done
-# propose already refuses these, so apply needs a hand-built report of its own. Each
-# assertion reads the REFUSAL TEXT: an exit 1 for some earlier reason would prove nothing.
+# Each assertion reads the REFUSAL TEXT: an exit 1 for some earlier reason would prove nothing.
 FORGED=projects/knowledge-reflection/tasks/task-098-forged.md
 mk() { { sed -n '1,/^---$/p' "$R2" | sed 's/^status: .*/status: draft/'
          printf '\n# Proposals\n\n%s\n' "$1"; } >"$FORGED"; }
@@ -185,9 +123,6 @@ ok "--with naming the item itself is refused before the field write" \
   "$(refusal | grep -c 'names duplicate itself')" 1
 ok "…and that item is byte-identical"        "$(cksum <knowledge/findings/duplicate.md | awk '{print $1 "-" $2}')" "$FP"
 rm -f "$FORGED"
-ok "a '..' project slug is refused, not resolved" \
-  "$("$PROPOSE" --proposer "$ONE" --project .. >/dev/null 2>&1; echo $?)" 2
-ok "…and no tasks/ appeared at the instance root" "$([ -e tasks ] && echo yes || echo no)" no
 printf 'lock\n' >"$D/.loopd/.tick-lock"
 ok "apply stands down while a tick holds the lock" \
   "$("$APPLY" --by example-user-007 "$R2" 2>&1 >/dev/null | grep -c 'holds the dispatch lock')" 1
@@ -196,8 +131,6 @@ ok "…and clears once it is free"             "$(bash "$REPO/plugin/scripts/tic
 ok "the skill discovers reports under ANY project slug" \
   "$(grep -c 'projects/\*/tasks/\*\.md' "$SKILL")" 1
 
-ok "a report that is still waiting blocks a second run" \
-  "$("$PROPOSE" --proposer "$ONE" >/dev/null 2>&1; echo $?)" 1
 SHORT=projects/knowledge-reflection/tasks/task-099-short.md
 sed 's/^P1 · .*/P1 · status · keeper/' "$R2" >"$SHORT"
 ok "a truncated proposal line refuses the whole report" \
@@ -212,7 +145,7 @@ ok "…and it is in plugin-skills.test.sh's STATE_CHANGING list" \
   "$(grep -c '^STATE_CHANGING=.*kb-apply' "$REPO/tests/plugin-skills.test.sh")" 1
 ok "the README's command table carries the row"     "$(grep -c '^| `/loopd:kb-apply <report>` |' "$REPO/README.md")" 1
 ok "SCHEMA.md defines the report"                   "$(grep -c '^### The reflection report' "$SCHEMA")" 1
-ok "…and names both halves"                         "$(grep -c 'scripts/kb-propose.sh' "$SCHEMA")/$(grep -c 'scripts/kb-apply.sh' "$SCHEMA")" "1/1"
+ok "…and names the apply path"                      "$(grep -c 'scripts/kb-apply.sh' "$SCHEMA")" 1
 
 echo "== human-written docs: tags and status=archived only, only with --human-docs naming them =="
 D2="$TMP/bundle-hd"
@@ -271,35 +204,12 @@ rep k-ledger "P1 · edit · h1 · ledger=[] · - · $(fp h1) · wipe";          
 rep k-block "P1 · edit · blk · tags=[c] · - · $(fp blk) · retag";               refuse "a block-form tags: is refused, the doc byte-identical" "block form" --human-docs blk "$R"
 rep k-gap "P1 · edit · blkgap · tags=[c] · - · $(fp blkgap) · retag";         refuse "…with a blank line before its items too" "block form" --human-docs blkgap "$R"
 rep k-hash "P1 · edit · blkhash · tags=[c] · - · $(fp blkhash) · retag";      refuse "…and with a # comment line before them" "block form" --human-docs blkhash "$R"
-rm -rf projects/kb-hd
 
-echo "== …kb-propose keeps the narrow shape and marks it; apply names it before writing =="
-PH="$TMP/proposer-hd.sh"
-cat >"$PH" <<'EOS'
-#!/usr/bin/env bash
-echo "edit · m1 · title=New · - · retitle"
-echo "edit · h1 · tags=[ops, kb] · - · tag it"
-echo "status · x1 · status=archived · - · stale"
-echo "edit · h2 · title=Nope · - · outside the shape"
-echo "edit · blk · tags=[c] · - · block form"
-echo "edit · blkgap · tags=[c] · - · block form"
-echo "edit · blkhash · tags=[c] · - · block form"
-EOS
-chmod +x "$PH"
-out="$("$PROPOSE" --proposer "$PH" --project kb-prop 2>"$TMP/hd.err")"
-RH="$(sed -n 's/.* in \(projects[^ ]*\.md\) .*/\1/p' <<<"$out")"
-sect() { sed -n '/^## Human-written docs this report changes$/,$p' "$RH"; }
-ok "the narrow-shape human proposals are kept as P<n> lines" "$(grep -cE '^P[0-9]+ · (edit · h1 · tags=|status · x1 · status=archived)' "$RH")" 2
-ok "…one outside the shape is still dropped"   "$(grep -c 'h2 is provenance: human' "$TMP/hd.err")/$(grep -c ' h2 ' "$RH")" "1/0"
-ok "…and so is every block-form target apply would refuse" \
-  "$(grep -cE '(blk|blkgap|blkhash) holds .tags:. in block form' "$TMP/hd.err")/$(grep -cE ' blk(gap|hash)? ' "$RH")" "3/0"
-ok "the report carries the human-written section" "$(grep -c '^## Human-written docs this report changes$' "$RH")" 1
-ok "…archived in their own sub-list, with provenance" \
-  "$(sect | sed -n '/^Archived/,/^$/p' | grep -c '^- `x1` (provenance: mixed)$')" 1
-ok "…tag edits in another, with provenance and value" \
-  "$(sect | sed -n '/^Tag edits/,$p' | grep -c '^- `h1` (provenance: human) · `tags=\[ops, kb\]`$')" 1
-ok "…and the exact apply line"  "$(sect | grep -cxF "\`/loopd:kb-apply $RH --human-docs h1,x1\`")" 1
-ok "a machine-only report carries no such section" "$(grep -c 'Human-written docs' "$D/$REPORT")" 0
+echo "== apply names the human-written docs before it writes =="
+rep hd-mixed "P1 · edit · m1 · title=New · - · $(fp m1) · retitle
+P2 · edit · h1 · tags=[ops, kb] · - · $(fp h1) · tag it
+P3 · status · x1 · status=archived · - · $(fp x1) · stale"
+RH="$R"
 chmod u-w knowledge/findings
 out="$("$APPLY" --by example-user-007 --human-docs x1,h1 "$RH" 2>&1)"; rc=$?
 chmod u+w knowledge/findings
@@ -332,19 +242,15 @@ git init -q . && git config user.name example-user-007 && git config user.email 
 git add -A && git commit -qm init
 ok "validate-bundle reads provenance: machine  # x as machine" \
   "$("$VALIDATE" knowledge/findings/commented.md 2>&1 | grep -c ERROR)" 0
-printf '#!/usr/bin/env bash\necho "edit · commented · title=New · - · retitle"\n' >"$TMP/p-comment.sh"
-chmod +x "$TMP/p-comment.sh"
-out="$("$PROPOSE" --proposer "$TMP/p-comment.sh" 2>"$TMP/comment.err")"; rc=$?
-RC3="$(sed -n 's/.* in \(projects[^ ]*\.md\) .*/\1/p' <<<"$out")"
-ok "kb-propose keeps the commented machine doc" "$rc/$(grep -c '^P1 · edit · commented · ' "$RC3" 2>/dev/null)" 0/1
+RC3=projects/kb-c/tasks/task-001-commented.md
+report "$RC3" "P1 · edit · commented · title=New · - · $(fp commented) · retitle"
 sed -i.bak 's/^status: draft$/status: draft  # awaiting the human/' "$RC3" && rm -f "$RC3.bak"
 ok "kb-apply accepts the report, its status: commented too" \
   "$("$APPLY" --by example-user-007 "$RC3" >/dev/null 2>"$TMP/comment-apply.err"; echo $?)/$(sed -n 's/^title: //p' knowledge/findings/commented.md)" 0/New
 cd "$D" || exit 2
 
 echo "== the guards that keep agents out =="
-ok "step 7 still never applies from the tick" \
-  "$(grep -cxF '   **Never apply a report from here, and never promote one.** `/loopd:kb-apply` is the' "$STEP7")" 1
+ok "no tick step applies a report" "$(grep -rl 'kb-apply' "$REPO/plugin/tick-steps" | wc -l | tr -d ' ')" 0
 for f in "$SKILL" "$SCHEMA"; do
   ok "$(basename "$f") says --human-docs is derivable, so the hook rule binds agents" \
     "$(grep -c 'derivable from the report' "$f")/$(grep -c 'kb_apply_human_docs' "$f")" 1/1

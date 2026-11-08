@@ -603,11 +603,10 @@ ledger: [ "L12 · 2026-10-01T09:00:00Z · merge · by <login> · items <this-slu
   pull-before-write and no floor-conflict resolution.
 - **Not counted** against a Finding's 40 lines — no frontmatter line is.
 
-### The reflection report — a scheduled run proposes, a human-typed command applies
+### The reflection report — a human-typed command applies it
 
-`knowledge/` is merged rather than piled up by two halves that never meet. `scripts/kb-propose.sh`
-runs on the tick's cadence and writes **one draft task document** — the report — and nothing
-else; `scripts/kb-apply.sh`, reachable only through `/loopd:kb-apply`, is the one path that
+A report is **one draft task document**, written by hand — nothing writes one on a schedule —
+and `scripts/kb-apply.sh`, reachable only through `/loopd:kb-apply`, is the one path that
 writes a proposal into `knowledge/`.
 
 ```text
@@ -620,7 +619,7 @@ P1 · supersede · duplicate · status=superseded · keeper · 1234567890-412 ·
   item's `cksum` fingerprint when the report was written; the reason. The reason keeps any
   ` · ` it carries, so it goes last.
 - **The report is a task document** because `AWAITING.md` is derived and rewritten by every
-  tick: a row the scheduled run wrote into that file directly is deleted by the next one. It
+  tick: a row written into that file directly is deleted by the next one. It
   is a `draft` carrying one `open_questions` entry, so it renders as `❓ answer` and never as
   `✅ approve` — **a report is never promoted to `ready`**, which would dispatch an agent and
   make a second apply path. Declining it is `status: cancelled`.
@@ -631,8 +630,8 @@ P1 · supersede · duplicate · status=superseded · keeper · 1234567890-412 ·
   every other, so the tick commits it under the `project-manager` identity; putting it in
   apply's commit would widen a scope whose whole point is that it is closed.
 - **A `mixed` or `human` item takes two proposals and no others:** `edit · tags=<value>` and
-  `status · status=archived`. `kb-propose.sh` lists each under the report's `## Human-written
-  docs this report changes`, with its `provenance:`, and `kb-apply.sh` applies them only with
+  `status · status=archived`. The report lists each under `## Human-written docs this report
+  changes`, with its `provenance:`, and `kb-apply.sh` applies them only with
   `--human-docs <slug,...>` naming exactly that set, printing the list before its first write.
   This reverses "never a non-`machine` item" (owner decision 2026-10-21): one live instance's
   reflector could reach 40 of 877 items, and a tag or an archive is one frontmatter line the
@@ -642,19 +641,22 @@ P1 · supersede · duplicate · status=superseded · keeper · 1234567890-412 ·
 - **Refusals cover the whole report, never part of it:** a `mixed`/`human` item outside the
   two proposals above or not named by `--human-docs`, a `--human-docs` set that differs from
   the report's, a `provenance:` absent or outside `machine | mixed | human`, a target field
-  held in YAML block form (blank or `#` lines before its items included — `kb-propose.sh`
-  never queues one), an item whose fingerprint has moved since the report was written, a
+  held in YAML block form (blank or `#` lines before its items included), an item whose fingerprint has moved since the report was written, a
   report that is not `draft`, two proposals naming one item, a `ledger:` or `provenance:` write, and a tick holding the dispatch lock — which
   narrows the concurrent-writer window with the mechanism the bundle has, and does not close
   it (`skills/audit/SKILL.md` says the same of the same probe).
 
-- **The shipped proposer is `scripts/kb-compare.sh <candidate.md>`** — one candidate Finding,
+- **`scripts/kb-compare.sh <candidate.md>` drafts a proposal's fields** — one candidate Finding,
   before it is appended, against every `type: Finding`. Its key is the content words of
   `title` + `description` + `lesson:` (case, punctuation, order, articles and plurals
   dropped), and **only an equal key is proposed**: one differing word — an interpreter, a
   harness, a calling context — is `append as new`, because a false merge costs more than a
   missed one. A superseded match follows `superseded_by:`; a match not `provenance: machine`
   is `human-authored, review only`, because a merge never applies to one; an empty `lesson:` is `no proposal: unreadable`.
+  Its stdout is five fields, `kind · slug · field=value · with · reason`; a report line
+  prefixes the id and puts the item's fingerprint before the reason — `P1 · <kind> · <slug> ·
+  <field=value> · <with> · <fingerprint> · <reason>`, the fingerprint from
+  `cksum <knowledge/<kind-dir>/<slug>.md | awk '{print $1 "-" $2}'` taken as you write the line.
 
 ### type: Service  (`knowledge/services/<name>.md`)
 
