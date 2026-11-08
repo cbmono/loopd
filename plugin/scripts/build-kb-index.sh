@@ -186,14 +186,14 @@ them to understand a decision, never cite them as current guidance.
 EOF
 }
 
-# Words are `wc -w`'s: runs of non-blank. The largest rank prefix that fits wins; a binary
-# search is exact because every added row adds words.
+# Words are `wc -w`'s, footer included: runs of non-blank. The largest rank prefix that fits
+# wins; a binary search is exact because every added row adds words.
 generate() {
   local work rc=0
   work=$(mktemp -d "${TMPDIR:-/tmp}/kb-index.XXXXXX") || return 1
   skeleton > "$work/skel"
   collect | LC_ALL=C sort -t "$(printf '\t')" -k1,1 -k2,2r -k3,3 > "$work/rows"
-  awk -F'\t' -v cap="$INDEX_CAP_WORDS" '
+  awk -F'\t' -v cap="$INDEX_CAP_WORDS" -v journal="$JOURNAL" '
     function words(t,   m, a, i, c) { m = split(t, a, /[ \t\n\r\v\f]+/); c = 0
       for (i = 1; i <= m; i++) if (a[i] != "") c++; return c }
     function render(k,   out, i, j, p, emitted, skip, arch) {
@@ -215,7 +215,7 @@ generate() {
         }
         out = out tl[j] "\n"
       }
-      return out
+      return out "\n---\n[KB log](" journal ") — what changed and when.\n"
     }
     FNR == NR { tl[++nt] = $0; next }
     { s = $0; for (i = 0; i < 4; i++) s = substr(s, index(s, "\t") + 1); sect[++n] = $4; row[n] = s }
@@ -227,8 +227,7 @@ generate() {
       printf "%s", render(k)
     }' "$work/skel" "$work/rows" || rc=1
   rm -rf "$work"
-  [ "$rc" = 0 ] || return 1
-  printf '\n---\n[KB log](%s) — what changed and when.\n' "$JOURNAL"
+  [ "$rc" = 0 ]
 }
 
 # --- checks -----------------------------------------------------------------

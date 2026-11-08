@@ -68,6 +68,26 @@ cp "$D/knowledge/index.md" "$TMP/pass1"
 ok "a rebuild is byte-identical"       "$(cmp -s "$TMP/pass1" "$D/knowledge/index.md" && echo same || echo differs)" same
 
 echo
+echo "== the footer is inside the cap, at the exact boundary =="
+mkdir -p "$TMP/bin"; cp "$REPO/plugin/scripts/bundle-paths.sh" "$TMP/bin/"
+capped() { # <cap> — build with that cap, print wc -w of the written index
+  sed "s/^INDEX_CAP_WORDS=8000\$/INDEX_CAP_WORDS=$1/" "$BUILD" > "$TMP/bin/build.sh"
+  ( cd "$D" && bash "$TMP/bin/build.sh" >/dev/null 2>&1 ); wc -w < "$D/knowledge/index.md" | tr -d ' '
+}
+FULL=$(capped 1000000)
+ok "an uncapped build lists every row"                   "$(grep -c '^\*\*Capped:' "$D/knowledge/index.md")" 0
+ok "cap = rows + footer exactly: same file, nothing cut"  "$(capped "$FULL")" "$FULL"
+ok "…and no Capped line"                                 "$(grep -c '^\*\*Capped:' "$D/knowledge/index.md")" 0
+W=$(capped $((FULL - 1)))
+ok "one word under: the file still fits (wc -w: $W)"     "$([ "$W" -le $((FULL - 1)) ] && echo yes || echo no)" yes
+ok "…because a row was cut"                              "$(grep -c '^\*\*Capped:' "$D/knowledge/index.md")" 1
+ok "the footer is still written"                         "$(tail -1 "$D/knowledge/index.md" | grep -c '^\[KB log\]')" 1
+ok "a capped prefix + footer landing exactly on the cap fits" "$(capped "$W")" "$W"
+W=$(capped 398)
+ok "the QA repro, cap 398, writes at most 398 (wc -w: $W)" "$([ "$W" -le 398 ] && echo yes || echo no)" yes
+( cd "$D" && bash "$BUILD" >/dev/null 2>&1 )
+
+echo
 echo "== every id survives the cap =="
 ( cd "$D" && bash "$BUILD" --check >"$TMP/check" 2>&1 ); rc=$?
 ok "--check clears a capped index (exit 0)" "$rc" 0
