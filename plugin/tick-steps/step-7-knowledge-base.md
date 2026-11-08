@@ -6,9 +6,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
 7. **Refresh the knowledge base.** If this tick reflected one or more merges (or a
    task reached `done`) whose work produced durable, reusable knowledge, dispatch the
-   `cataloguer` (subagent) to capture `Finding`s / update the `Service` catalog / add
-   or update a `Runbook` (`loopd:cataloguer`), and link the `Finding`s from the
-   relevant task doc. **Skip this refresh**
+   `cataloguer` (subagent) to capture a `Finding` only when a later task would plausibly hit the same problem /
+   update the `Service` catalog / add or update a `Runbook` (`loopd:cataloguer`), and link
+   the `Finding`s from the relevant task doc. **Skip this refresh**
    if neither a merge nor a `done` task happened this tick, or the work is trivial —
    the sweep below has its own trigger and is not skipped with it.
    **Throttle: at most one `cataloguer` dispatch per TICK, across every step that can

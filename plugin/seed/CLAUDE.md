@@ -222,8 +222,8 @@ lives there and not here because it governs work *outside* this bundle.
 
 ## Knowledge base
 `knowledge/` — `Service`s, `Finding`s, `Runbook`s, `Team`s, `Reference`s
-(`SCHEMA.md`). The `cataloguer` builds it; task agents capture `Finding`s as a
-byproduct. **Reading it: grep, never the whole index; at most three; superseded rows are history.**
+(`SCHEMA.md`). The `cataloguer` builds it; task agents write a `Finding`
+only when a later task would plausibly hit the same problem. **Reading it: grep, never the whole index; at most three; superseded rows are history.**
 The brief's `## Knowledge` rows first, then `grep -i` the capped `knowledge/index.md`
 or `knowledge/`; open **at most three**, **never bulk-read** it; a **Superseded**
 row is history, never cited. Detail: `.claude/rules/knowledge-base.md`.

@@ -91,6 +91,20 @@ ok "an unreadable --task is refused (exit 2)" \
 rm -f "$D/knowledge/findings/uncommitted-new.md" "$D/$AB_DIR"/citations/task-0*.txt
 
 echo
+echo "== every prompt that tells an agent to write a Finding says: only when a later task would hit it =="
+PHRASE='only when a later task would plausibly hit the same problem'
+for f in plugin/seed/CONVENTIONS.md plugin/tick-steps/step-3-dispatch.md plugin/seed/CLAUDE.md \
+         plugin/seed/.claude/rules/knowledge-base.md plugin/agents/qa-reviewer.md \
+         plugin/tick-steps/step-7-knowledge-base.md plugin/agents/project-manager.md; do
+  ok "$f carries the phrase" "$(grep -qF "$PHRASE" "$REPO/$f" && echo yes || echo no)" yes
+done
+OLD='capture `Finding`s as a byproduct|If you discover something durable and|capture a new `Finding` if you discover one'
+ok "the probe sees a planted old wording" "$(printf 'If you discover something durable and\n' | grep -cE "$OLD")" 1
+ok "no file under plugin/ keeps the write-by-default wording" "$(grep -rlE "$OLD" "$REPO/plugin" | wc -l | tr -d ' ')" 0
+ok "step 5 passes --task to kb-usage record" \
+  "$(grep -c 'kb-usage.sh record --source <id> --task <task-path>' "$REPO/plugin/tick-steps/step-5-reflect-merges.md")" 1
+
+echo
 echo "== the archive sweep is retired: record is the only verb =="
 ok "sweep is refused as an unknown argument"       "$("$USAGE" sweep >/dev/null 2>&1; echo $?)" 2
 ok "…and so is its --propose flag"                 "$("$USAGE" record --propose >/dev/null 2>&1; echo $?)" 2

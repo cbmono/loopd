@@ -116,7 +116,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
    **Check the citations you are reflecting, and store them.** For each task you move to
    `done`, run
-   `${CLAUDE_PLUGIN_ROOT}/scripts/kb-usage.sh record --source <id> --text-file <f> --brief <slugs>`
+   `${CLAUDE_PLUGIN_ROOT}/scripts/kb-usage.sh record --source <id> --task <task-path> --text-file <f> --brief <slugs>`
    over its `# Result` section and over each merged PR body, with `<slugs>` the output of
    `${CLAUDE_PLUGIN_ROOT}/scripts/kb-select.sh --recorded <task-path>` passed verbatim — the
    set step 3 recorded at dispatch, never a re-run of the selector, which reads today's KB
@@ -126,7 +126,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `${CLAUDE_PLUGIN_ROOT}/scripts/cite-check.sh --text-file` and passes its report and exit
    code through unchanged; that record is the KB's only usage signal, so a skipped run is a citation the KB never sees. Anything dropped (exit 3, or exit 1 where a citing line lost every id) is
    **recorded as a `# Notes` line** naming the id and its verdict — `UNREAD` (a real doc
-   nobody read) or `FABRICATED` (no such doc) — and exit 1 also goes in the tick report.
+   nobody read), `SELF` (a Finding the task itself added) or `FABRICATED` (no such doc) — and exit 1 also goes in the tick report.
    It never changes the reflect verdict: a merged PR is merged. `CONVENTIONS.md` → cite
    knowledge as `[[finding-slug]]`.
 
