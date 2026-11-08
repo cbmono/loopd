@@ -96,8 +96,9 @@ fi
 D="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 R=(); [ -n "$repo" ] && R=(--repo "$repo")
 
-meta="$(gh pr view "$pr" ${R[@]+"${R[@]}"} --json url,number,headRefOid,headRefName \
-        --jq '[.url, (.number|tostring), .headRefOid, (.headRefName // "" | @uri)] | @tsv' 2>/dev/null)" || unknown "PR $pr is unreadable"
+meta="$(gh pr view "$pr" ${R[@]+"${R[@]}"} --json url,number,headRefOid,headRefName,headRepository,headRepositoryOwner \
+        --jq '[.url, (.number|tostring), .headRefOid, (.headRefName // "" | @uri),
+               ((.headRepositoryOwner.login // "") + "/" + (.headRepository.name // ""))] | @tsv' 2>/dev/null)" || unknown "PR $pr is unreadable"
 url="$(printf '%s' "$meta" | cut -f1)"; num="$(printf '%s' "$meta" | cut -f2)"
 [ -n "$head" ] || head="$(printf '%s' "$meta" | cut -f3)"
 nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')"
@@ -194,7 +195,10 @@ case "$kind" in
         t1="$(printf '%s\n' "$t1" | sort | tail -n 1)"
         ref="$(printf '%s' "$meta" | cut -f4)"
         [ -n "$ref" ] || unknown "the PR's head branch is unreadable"
-        pushed="$(gh api "/repos/$nwo/activity?ref=refs/heads/$ref&per_page=100" --paginate \
+        # The head branch lives in the head repository — a fork's pushes are on its own record.
+        hnwo="$(printf '%s' "$meta" | cut -f5)"
+        case "$hnwo" in ?*/?*) ;; *) unknown "the PR's head repository is unreadable" ;; esac
+        pushed="$(gh api "/repos/$hnwo/activity?ref=refs/heads/$ref&per_page=100" --paginate \
           --jq ".[] | select(.after == \"$head\") | .timestamp" 2>/dev/null)" || unknown "the push history of $head is unreadable"
         [ -n "$pushed" ] && ! printf '%s\n' "$pushed" | grep -Evxq "$iso" || unknown "no readable push of $head is on record"
         t0="$(printf '%s\n' "$pushed" | sort | head -n 1)"

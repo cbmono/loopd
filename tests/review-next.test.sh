@@ -101,7 +101,8 @@ case "${1:-} ${2:-}" in
                 printf '{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}\n'; exit 0 ;;
   *) case "${2:-}" in
        */compare/*) src="$FIX/compare_json" ;;
-       */activity*) src="$FIX/activity_json" ;;
+       /repos/acme/widgets/activity*) src="$FIX/activity_json" ;;
+       /repos/forker/widgets/activity*) src="$FIX/fork_activity_json" ;;
        */pulls/*/commits*) src="$FIX/commits_json" ;;
        */pulls/*/reviews*) src="$FIX/reviews_json" ;;
        */issues/*/comments*) src="$FIX/comments_json" ;;
@@ -115,6 +116,7 @@ export PATH="$TMP/bin:$PATH"
 B="$TMP/bundle"; mkdir -p "$B"; printf '{}\n' > "$B/instance.config.json"
 export CLAUDE_PROJECT_DIR="$B"
 "$REAL_JQ" -n --arg h "$H" '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
+  headRepository:{name:"widgets"}, headRepositoryOwner:{login:"acme"},
   author:{login:"dev"}, mergeable:"MERGEABLE", mergeStateStatus:"CLEAN", commits:[]}' > "$FIX/pr_json"
 printf '[{"sha":"%s"}]\n' "$H" > "$FIX/commits_json"
 printf '[]\n' > "$FIX/reviews_json"
@@ -285,6 +287,18 @@ fail_after_push changes-requested 2020-01-01T01:00:01Z; printf '[]\n' > "$FIX/ac
 ok "no push of the head on record -> unknown" "$(clear | tail -n 1)" rc=2
 fail_after_push changes-requested "2020-01-01 01:00:01"
 ok "a malformed push time -> unknown" "$(clear | tail -n 1)" rc=2
+
+echo "== a fork head: the push is read from the head repository, not the base =="
+fail_after_push changes-requested 2020-01-01T01:00:01Z
+mv "$FIX/activity_json" "$FIX/fork_activity_json"; printf '[]\n' > "$FIX/activity_json"
+"$REAL_JQ" '.headRepositoryOwner.login = "forker"' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
+for s in required-checks.sh pr-body-clearance.sh; do
+  "$RC" record "$s" --bundle "$B" --repo acme/widgets --pr 42 --head "$H"
+done
+ok "fork pushed after the FAIL -> clears from the fork's record" "$(clear | tr '\n' ' ')" "last-round rc=0 "
+fail_after_push changes-requested 2020-01-01T01:00:01Z
+"$REAL_JQ" 'del(.headRepository)' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
+ok "the head repository unreadable -> unknown" "$(clear | tail -n 1)/$(grep -c last-round "$RCPT")" rc=2/0
 
 echo
 echo "pass=$pass fail=$fail"
