@@ -408,6 +408,12 @@ state, and act only on deltas.
    reads already says who approved it. Applies to `kind: research` as well, which never
    reaches step 3.
 
+2.6. **Sweep open questions — every full tick.** Run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/question-sweep.sh --apply` once. It annotates a question
+   whose ` check:` predicate is true and **answers nothing**; never answer, fold or write a
+   ` check:` yourself to clear a question (`SCHEMA.md` → "Evidence sweep"). Carry its
+   `sweep:` line onto the tick report.
+
 3. **Dispatch `ready → in-progress`** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-3-dispatch.md`.
    Gate 3 above binds whether or not you read it.
 
