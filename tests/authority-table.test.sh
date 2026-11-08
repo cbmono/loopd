@@ -66,7 +66,7 @@ unowned() {
   done
 }
 
-SETS=('plugin/agents/*.md' 'plugin/tick-steps/*.md' 'plugin/skills/*/SKILL.md')
+SETS=('plugin/agents/*.md' 'plugin/tick-steps/*.md' 'plugin/skills/*/SKILL.md' 'plugin/seed/conventions/*.md')
 
 echo "== (a) the section exists =="
 ok "SCHEMA.md is readable"                 "$([ -f "$SCHEMA" ] && echo yes || echo no)" yes

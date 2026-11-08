@@ -9,7 +9,7 @@
 # `KEPT|SUPERSEDED|ARCHIVED|UNREAD|FABRICATED|UNKNOWN|EMPTY` line per citation; `--strip` puts the
 # cleaned text on stdout and the report on stderr.
 # Ids and status from the KB's frontmatter; --index locates the KB. Offline: no network.
-# Why: CONVENTIONS.md → the citation bullet. Reasoning: ai-bridge-next/task-014.
+# Why: CONVENTIONS.md → "Cite knowledge by slug". Reasoning: ai-bridge-next/task-014.
 set -uo pipefail
 
 TEXT=""; BRIEF=""; BRIEF_FILE=""; INDEX=""; STRIP=0

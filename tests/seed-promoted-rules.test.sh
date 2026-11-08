@@ -29,7 +29,8 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SEED="$REPO/plugin/seed/CLAUDE.md"
-CONV="$REPO/plugin/seed/CONVENTIONS.md"
+# The rule moved verbatim to the product-repo detail of CONVENTIONS.md (leaner-prompts/task-002).
+CONV="$REPO/plugin/seed/conventions/repos.md"
 PRUNE="$REPO/plugin/scripts/prune-worktrees.sh"
 EVALS_DIR="$REPO/plugin/evals"
 EVALS_README="$REPO/plugin/evals/README.md"

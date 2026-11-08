@@ -33,7 +33,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CONV="$REPO/plugin/seed/CONVENTIONS.md"
+# The rule moved verbatim to the testing detail of CONVENTIONS.md (leaner-prompts/task-002).
+CONV="$REPO/plugin/seed/conventions/testing.md"
 FA="$REPO/plugin/agents/failure-analyst.md"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/read-the-error-text-first.XXXXXX")" || {
@@ -59,7 +60,7 @@ saw() { # <haystack> <fixed string> -> yes|no
 strip_bullet() { # <file> <marker>
   awk -v m="$2" '
     index($0, m) && /^- / { skip=1; next }
-    skip && /^- /          { skip=0 }
+    skip && /^(- |#)/          { skip=0 }
     !skip                  { print }
   ' "$1"
 }
@@ -192,7 +193,7 @@ echo "== 7. MUTATION A: cut the whole CONVENTIONS bullet — every clause assert
 strip_bullet "$CONV" "$BULLET_LINE" > "$TMP/conv-no-rule.md"
 A_FLAT="$(flatten "$TMP/conv-no-rule.md")"
 ok "the mutation removed something"        "$([ "$(wc -c < "$TMP/conv-no-rule.md")" -lt "$(wc -c < "$CONV")" ] && echo yes || echo no)" yes
-ok "CONTROL: the PR-size bullet survives"  "$(saw "$A_FLAT" '**PR size is a heuristic that suggests a split, never a gate.**')" yes
+ok "CONTROL: the UNKNOWN bullet survives" "$(saw "$A_FLAT" '**A read that could not have established the answer returns UNKNOWN')" yes
 ok "CONTROL: the CI-suite bullet survives" "$(saw "$A_FLAT" '**The full suite belongs to CI — locally, run the tests your change touches.**')" yes
 ok "mutant: clause 1 is gone"              "$(saw "$A_FLAT" "$C1")" no
 ok "mutant: clause 2 is gone"              "$(saw "$A_FLAT" "$C2")" no
@@ -217,7 +218,7 @@ ok "mutant: the whole-pipeline cost is gone" "$(saw "$B_FLAT" "$PIPELINE")" no
 
 echo
 echo "== 9. MUTATION C: keep clause 1, drop clause 2 — half the rule is not the rule =="
-strip_range "$CONV" "$C2" '- **PR size is a heuristic' > "$TMP/conv-half.md"
+strip_range "$CONV" "$C2" '- **A read that could not have established' > "$TMP/conv-half.md"
 C_FLAT="$(flatten "$TMP/conv-half.md")"
 ok "the mutation removed something"        "$([ "$(wc -c < "$TMP/conv-half.md")" -lt "$(wc -c < "$CONV")" ] && echo yes || echo no)" yes
 ok "CONTROL: clause 1 survives"            "$(saw "$C_FLAT" "$C1")" yes

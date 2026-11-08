@@ -529,8 +529,8 @@ state, and act only on deltas.
    code through unchanged; that record is the KB's only usage signal, so a skipped run is a citation the KB never sees. Anything dropped (exit 3, or exit 1 where a citing line lost every id) is
    **recorded as a `# Notes` line** naming the id and its verdict — `UNREAD` (a real doc
    nobody read), `SELF` (a Finding the task itself added) or `FABRICATED` (no such doc) — and exit 1 also goes in the tick report.
-   It never changes the reflect verdict: a merged PR is merged. `CONVENTIONS.md` → cite
-   knowledge as `[[finding-slug]]`.
+   It never changes the reflect verdict: a merged PR is merged. `CONVENTIONS.md` → "Cite
+   knowledge by slug".
 
 6. **Close completed projects (propose only — human-gated).** For each project whose
    tasks are **all** terminal (`done`/`cancelled`) and hold no unanswered `Q<n>: do:`

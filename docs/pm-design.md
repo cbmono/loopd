@@ -893,7 +893,7 @@ half-happened — the divergence grows quietly until someone hits a conflict.
 
 **Why `🧰 grant` has a glyph of its own**: an `open_questions` entry that asks for a
 tool, an install, a credential or an access grant — an agent hitting a capability gap,
-per `CONVENTIONS.md` → "the middle rung NEVER BLOCKS" — reads identically to a question
+per `CONVENTIONS.md` → "The middle rung NEVER BLOCKS" — reads identically to a question
 otherwise, so a request to install a CLI looks like a question the human can dispose of
 by typing a sentence, and it sits in the queue while they wait for a question that was
 never being asked. The reply mechanism is the same; the glyph changes what the human is

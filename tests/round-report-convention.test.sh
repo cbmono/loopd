@@ -6,17 +6,17 @@
 set -uo pipefail
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
-CONV="$TPL/plugin/seed/CONVENTIONS.md"
+CONV="$TPL/plugin/seed/conventions/rounds.md"
 pass=0 fail=0
 ok() { if [ "$2" = "$3" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1 — got [$2], want [$3]"; fi; }
 has() { grep -qF -- "$2" "$1" && echo yes || echo no; }
 
 ok "CONVENTIONS states the rule" "$(has "$CONV" "**A round's final message is a report, not an ask**")" yes
 for r in software-engineer devops-engineer qa-reviewer; do
-  ok "CONVENTIONS scopes it to $r" "$(sed -n "/final message is a report, not an ask/,/^- /p" "$CONV" | grep -c "\`$r\`")" 1
+  ok "CONVENTIONS scopes it to $r" "$(sed -n "/^- .*final message is a report, not an ask/,/^- /p" "$CONV" | grep -c "\`$r\`")" 1
 done
 ok "CONVENTIONS routes the escalation block to open_questions" \
-  "$(has "$CONV" "the task's \`open_questions\`, not the final message.")" yes
+  "$(has "$TPL/plugin/seed/conventions/review.md" "the task's \`open_questions\`, not the final message.")" yes
 
 for r in software-engineer devops-engineer; do
   f="$TPL/plugin/agents/$r.md"

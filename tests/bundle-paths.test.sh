@@ -19,7 +19,7 @@ ok() { # <name> <actual> <expected>
 }
 
 # The keys ai-bridge-v3/task-031 names, plus the three the triage folded in.
-KEYS="AB_DIR AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER
+KEYS="AB_DIR AB_SCHEMA AB_CONVENTIONS AB_CONVENTIONS_DIR AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER
 AB_STATE_DIR AB_RECEIPTS AB_ANSWER_DEPTH AB_ANSWER_LATER AB_HANDOFFS AB_NEW_PROJECT_FORM AB_QUEUE AB_QUEUE_LEDGER AB_MODE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM AB_KB_STAMP AB_MERGE_HOLDS AB_UPSTREAM"
 
 echo
@@ -82,6 +82,7 @@ ok "SCHEMA.md maps"            "$(ab_seed_dest SCHEMA.md)"           "$AB_SCHEMA
 ok "agents/index.md maps"      "$(ab_seed_dest agents/index.md)"     "$AB_ROSTER"
 ok "log.md maps"               "$(ab_seed_dest log.md)"              "$AB_LEDGER"
 ok "CLAUDE.md stays at the root" "$(ab_seed_dest CLAUDE.md)"         "CLAUDE.md"
+ok "conventions/ detail maps under $AB_DIR" "$(ab_seed_dest conventions/review.md)" "$AB_CONVENTIONS_DIR/review.md"
 # The KB index is the human's curated surface and shares a basename with the derived one.
 ok "knowledge/index.md is untouched" "$(ab_seed_dest knowledge/index.md)" "knowledge/index.md"
 

@@ -419,6 +419,12 @@ state, and act only on deltas.
    reads already says who approved it. Applies to `kind: research` as well, which never
    reaches step 3.
 
+2.6. **Sweep open questions — every full tick.** Run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/question-sweep.sh --apply` once. It annotates a question
+   whose ` check:` predicate is true and **answers nothing**; never answer, fold or write a
+   ` check:` yourself to clear a question (`SCHEMA.md` → "Evidence sweep"). Carry its
+   `sweep:` line onto the tick report.
+
 3. **Dispatch `ready → in-progress`** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-3-dispatch.md`.
    Gate 3 above binds whether or not you read it.
 
@@ -523,7 +529,7 @@ state, and act only on deltas.
 
    **Check the citations you are reflecting, and store them.** For each task you move to
    `done`, run
-   `${CLAUDE_PLUGIN_ROOT}/scripts/kb-usage.sh record --source <id> --text-file <f> --brief <slugs>`
+   `${CLAUDE_PLUGIN_ROOT}/scripts/kb-usage.sh record --source <id> --task <task-path> --text-file <f> --brief <slugs>`
    over its `# Result` section and over each merged PR body, with `<slugs>` the output of
    `${CLAUDE_PLUGIN_ROOT}/scripts/kb-select.sh --recorded <task-path>` passed verbatim — the
    set step 3 recorded at dispatch, never a re-run of the selector, which reads today's KB
@@ -533,9 +539,9 @@ state, and act only on deltas.
    `${CLAUDE_PLUGIN_ROOT}/scripts/cite-check.sh --text-file` and passes its report and exit
    code through unchanged; that record is the KB's only usage signal, so a skipped run is a citation the KB never sees. Anything dropped (exit 3, or exit 1 where a citing line lost every id) is
    **recorded as a `# Notes` line** naming the id and its verdict — `UNREAD` (a real doc
-   nobody read) or `FABRICATED` (no such doc) — and exit 1 also goes in the tick report.
-   It never changes the reflect verdict: a merged PR is merged. `CONVENTIONS.md` → cite
-   knowledge as `[[finding-slug]]`.
+   nobody read), `SELF` (a Finding the task itself added) or `FABRICATED` (no such doc) — and exit 1 also goes in the tick report.
+   It never changes the reflect verdict: a merged PR is merged. `CONVENTIONS.md` → "Cite
+   knowledge by slug".
 
 6. **Close completed projects (propose only — human-gated).** For each project whose
    tasks are **all** terminal (`done`/`cancelled`) and hold no unanswered `Q<n>: do:`
@@ -568,9 +574,9 @@ state, and act only on deltas.
 
 7. **Refresh the knowledge base.** If this tick reflected one or more merges (or a
    task reached `done`) whose work produced durable, reusable knowledge, dispatch the
-   `cataloguer` (subagent) to capture `Finding`s / update the `Service` catalog / add
-   or update a `Runbook` (`loopd:cataloguer`), and link the `Finding`s from the
-   relevant task doc. **Skip this refresh**
+   `cataloguer` (subagent) to capture a `Finding` only when a later task would plausibly hit the same problem /
+   update the `Service` catalog / add or update a `Runbook` (`loopd:cataloguer`), and link
+   the `Finding`s from the relevant task doc. **Skip this refresh**
    if neither a merge nor a `done` task happened this tick, or the work is trivial —
    the sweep below has its own trigger and is not skipped with it.
    **Throttle: at most one `cataloguer` dispatch per TICK, across every step that can

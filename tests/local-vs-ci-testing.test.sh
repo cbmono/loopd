@@ -60,7 +60,9 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CONV="$REPO/plugin/seed/CONVENTIONS.md"
+# The rule moved verbatim to the testing detail of CONVENTIONS.md (leaner-prompts/task-002).
+CONV="$REPO/plugin/seed/conventions/testing.md"
+CORE="$REPO/plugin/seed/CONVENTIONS.md"
 CLAUDEMD="$REPO/CLAUDE.md"
 TESTRULE="$REPO/.claude/rules/tests.md"
 AGENTS="$REPO/plugin/agents"
@@ -87,7 +89,7 @@ saw() { # <haystack> <fixed string> -> yes|no
 strip_bullet() { # <file> <marker>
   awk -v m="$2" '
     index($0, m) && /^- / { skip=1; next }
-    skip && /^- /          { skip=0 }
+    skip && /^(- |#)/          { skip=0 }
     !skip                  { print }
   ' "$1"
 }
@@ -108,6 +110,7 @@ done
 [ -d "$AGENTS" ] || { echo "local-vs-ci-testing.test: $AGENTS not found" >&2; exit 2; }
 
 CONV_FLAT="$(flatten "$CONV")"
+CORE_FLAT="$(flatten "$CORE")"
 CLAUDE_FLAT="$(flatten "$CLAUDEMD")"
 RULE_FLAT="$(flatten "$TESTRULE")"
 
@@ -183,10 +186,10 @@ ok "…so it is not less verification"       "$(saw "$CONV_FLAT" 'asks nobody to
 echo
 echo "== 7. RECONCILED: the bullet that instructed the full local run is gone =="
 ok "the old contradicting sentence is out" "$(saw "$CONV_FLAT" "$OLD_CONTRADICTION")" no
-ok "build and lint are still required"     "$(saw "$CONV_FLAT" "**Get the repo's build and lint green before opening a PR")" yes
-ok "…and 'tests' now means what you touch" "$(saw "$CONV_FLAT" '**the ones your change touches, not the whole suite**')" yes
-ok "…deferring to the bullet that follows" "$(saw "$CONV_FLAT" 'where the scope of "tests" is settled')" yes
-ok "report-rather-than-open survives"      "$(saw "$CONV_FLAT" "report rather than open the PR")" yes
+ok "build and lint are still required"     "$(saw "$CORE_FLAT" "**Get the repo's build and lint green before opening a PR")" yes
+ok "…and 'tests' now means what you touch" "$(saw "$CORE_FLAT" '**the ones your change touches, not the whole suite**')" yes
+ok "…deferring to the bullet that follows" "$(saw "$CORE_FLAT" 'where the scope of "tests" is settled')" yes
+ok "report-rather-than-open survives"      "$(saw "$CORE_FLAT" "report rather than open the PR")" yes
 
 echo
 echo "== 8. the two repo-local docs no longer instruct the routine full local run =="
@@ -214,16 +217,16 @@ for a in software-engineer devops-engineer qa-reviewer; do
 done
 ok "all 3 role-agent files were read"      "$missing" 0
 ok "no role agent restates the rule"       "$copies" 0
-ok "CONVENTIONS is the single source"      "$(saw "$CONV_FLAT" '**This is the single source of truth for shared role-agent behaviour.**')" yes
-ok "…with its keep-in-sync instruction"    "$(saw "$CONV_FLAT" '**keep them in sync**')" yes
+ok "CONVENTIONS is the single source"      "$(saw "$CORE_FLAT" '**This is the single source of truth for shared role-agent behaviour.**')" yes
+ok "…with its keep-in-sync instruction"    "$(saw "$CORE_FLAT" '**keep them in sync**')" yes
 
 echo
 echo "== 10. MUTATION A: cut the whole bullet — every clause assertion flips =="
 strip_bullet "$CONV" "$BULLET" > "$TMP/conv-no-rule.md"
 A_FLAT="$(flatten "$TMP/conv-no-rule.md")"
 ok "the mutation removed something"        "$([ "$(wc -c < "$TMP/conv-no-rule.md")" -lt "$(wc -c < "$CONV")" ] && echo yes || echo no)" yes
-ok "CONTROL: build/lint bullet survives"   "$(saw "$A_FLAT" "**Get the repo's build and lint green before opening a PR")" yes
-ok "CONTROL: the PR-size bullet survives"  "$(saw "$A_FLAT" '**PR size is a heuristic that suggests a split, never a gate.**')" yes
+ok "CONTROL: the red-check bullet survives" "$(saw "$A_FLAT" '**A red check is EVIDENCE, and it is already written down')" yes
+ok "CONTROL: the UNKNOWN bullet survives" "$(saw "$A_FLAT" '**A read that could not have established the answer returns UNKNOWN')" yes
 ok "mutant: run-what-you-touch is gone"    "$(saw "$A_FLAT" "$TOUCH")" no
 ok "mutant: not-the-full-suite is gone"    "$(saw "$A_FLAT" "$NOFULL")" no
 ok "mutant: the per-branch signal is gone" "$(saw "$A_FLAT" "$SIGNAL")" no

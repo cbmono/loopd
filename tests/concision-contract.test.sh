@@ -27,6 +27,7 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
+CONV_DETAIL="$REPO/plugin/seed/conventions/write-less.md"
 CAP=350
 
 BASELINE='577 plugin/hooks/agent-control.sh
@@ -89,7 +90,7 @@ ok "…and it never licenses dropping evidence" \
 ok "…the reasoning is relocated, not deleted"  "$(saw "$CONV" 'relocated, never deleted')" yes
 # The three numbers with readers say who reads them, so nobody re-derives it.
 ok "it names its own three readers"        \
-   "$(grep -cF -e 'pr-body-clearance.sh` refuses a body over 2,500' "$CONV")" 1
+   "$(grep -cF -e 'pr-body-clearance.sh` refuses a body over 2,500' "$CONV_DETAIL")" 1
 
 echo
 echo "== every role agent contract points at it =="

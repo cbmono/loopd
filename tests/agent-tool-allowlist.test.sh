@@ -647,12 +647,23 @@ resolve_doc() { # <reference> — repo-relative path of the shipped doc, or noth
   return 1
 }
 
+conventions_detail() { # the plugin/seed/conventions/*.md files the core names
+  grep -oE 'conventions/[a-z-]+\.md' "$REPO/plugin/seed/CONVENTIONS.md" | sort -u \
+    | while IFS= read -r c; do [ -f "$REPO/plugin/seed/$c" ] && printf 'plugin/seed/%s\n' "$c"; done
+}
+
 shared_docs() { # — every shipped doc a restricted agent is told to read
+  local d
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     [ "$(has_tools_key "$f")" = yes ] || continue
     while IFS= read -r ref; do
-      [ -n "$ref" ] && resolve_doc "$ref"
+      [ -n "$ref" ] || continue
+      d="$(resolve_doc "$ref")" || continue
+      printf '%s\n' "$d"
+      # The CONVENTIONS.md core sends its readers on into its conventions/ detail by
+      # pointer (leaner-prompts/task-002), so each detail file it names is read too.
+      [ "$d" = plugin/seed/CONVENTIONS.md ] && conventions_detail
     done < <(doc_refs_of "$f")
   done <<EOF
 $AGENTS
@@ -665,6 +676,7 @@ readers_of() { # <shared-doc-relpath> — agent files that read it
   # intersection must not be widened by deriving a smaller set. Every other doc is read by
   # exactly the agents that point at it.
   local doc="$1" f ref
+  case "$doc" in plugin/seed/conventions/*) doc=plugin/seed/CONVENTIONS.md ;; esac
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     [ "$(has_tools_key "$f")" = yes ] || continue

@@ -47,7 +47,8 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT="$REPO/plugin/scripts/pr-comment-clearance.sh"
-CONV="$REPO/plugin/seed/CONVENTIONS.md"
+# The reply rule moved verbatim to the review detail of CONVENTIONS.md (leaner-prompts/task-002).
+CONV="$REPO/plugin/seed/conventions/review.md"
 SELFTEST_OK="pr-comment-clearance: self-test ok"
 [ -r "$SCRIPT" ] || { echo "pr-comment-clearance.test: missing $SCRIPT" >&2; exit 2; }
 [ -r "$CONV" ]   || { echo "pr-comment-clearance.test: missing $CONV" >&2; exit 2; }
@@ -581,7 +582,7 @@ ok "the harness is named as the pin"  "$(saw "$CONV_FLAT" '`tests/pr-comment-cle
 strip_bullet() { # <file> <marker>
   awk -v m="$2" '
     index($0, m) && /^- / { skip=1; next }
-    skip && /^- /          { skip=0 }
+    skip && /^(- |#)/      { skip=0 }
     !skip                  { print }
   ' "$1"
 }

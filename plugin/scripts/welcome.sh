@@ -1274,7 +1274,7 @@ EOF
   warn "$hits orphaned process(es) of yours (ppid 1) run out of a worktree — nothing will reap them"
   printf '%s' "$detail"
   [ "$hits" -gt 12 ] && note "… and $((hits - 12)) more not listed"
-  note "a bound on the child is what stops this — $AB_CONVENTIONS, 'Anything you background'"
+  note "a bound on the child is what stops this — $AB_CONVENTIONS → \"Anything you background must be reaped by something that outlives YOU\""
   hint "yours, not fix's: ps -p ${pids_hit%% *} -o command= ; then kill $pids_hit"
   return 1
 }

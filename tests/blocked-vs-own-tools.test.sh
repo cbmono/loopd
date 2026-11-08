@@ -31,12 +31,15 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$REPO/plugin/scripts/bundle-paths.sh"
 SCRIPT="$REPO/plugin/scripts/check-dispatch.sh"
-CONV="$REPO/plugin/seed/CONVENTIONS.md"
 PM="$REPO/plugin/agents/project-manager.md"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/blocked-vs-own-tools.XXXXXX")" || {
   echo "blocked-vs-own-tools.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
+# The rule moved verbatim into CONVENTIONS.md's detail files (leaner-prompts/task-002); the
+# mutant cuts it from them, beside the PR-shape and browser bullets it must leave standing.
+CONV="$TMP/conventions-detail.md"
+cat "$REPO"/plugin/seed/conventions/{authority,pr-body,repos}.md > "$CONV"
 # The mutants run from $TMP, and the script sources its sibling resolver
 # (ai-bridge-v3/task-031) — without it they exit 2 before reaching their subject.
 cp "$(dirname "$SCRIPT")/bundle-paths.sh" "$TMP/bundle-paths.sh"

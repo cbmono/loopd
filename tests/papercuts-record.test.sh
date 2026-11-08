@@ -148,7 +148,7 @@ ok "…and states the four-field line"        "$(has "$SEED" 'DATE | TASK | KIND
 ok "…and the two bounds"                    "$(has "$SEED" '15-160 bytes')" yes
 ok "…and that it is never edited"           "$(has "$SEED" 'Never edit or delete a line here')" yes
 ok "CONVENTIONS tells an agent to record one" "$(has "$CONV" 'scripts/papercuts.sh add')" yes
-ok "…with the same two bounds"              "$(has "$CONV" '15-160 bytes')" yes
+ok "…with the same two bounds"              "$(has "$REPO/plugin/seed/conventions/knowledge.md" '15-160 bytes')" yes
 ok "…and the append-never-edit rule"        "$(has "$CONV" 'Append, never edit or delete')" yes
 ok "the cataloguer runs the grouping pass"  "$(has "$CAT" 'scripts/papercuts.sh report')" yes
 ok "…proposing one task per surface"        "$(has "$CAT" 'One proposal per surface')" yes

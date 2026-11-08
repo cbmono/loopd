@@ -11,7 +11,8 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 BRIEF="$REPO/plugin/scripts/dispatch-brief.sh"
 SEED_CFG="$REPO/plugin/seed/instance.config.json"
-CONV="$REPO/plugin/seed/CONVENTIONS.md"
+# The rule moved verbatim to the PR detail of CONVENTIONS.md (leaner-prompts/task-002).
+CONV="$REPO/plugin/seed/conventions/pr-body.md"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 PM="$REPO/plugin/tick-steps/step-3-dispatch.md"
 for f in "$BRIEF" "$SEED_CFG" "$CONV" "$SCHEMA" "$PM"; do

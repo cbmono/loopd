@@ -1,0 +1,32 @@
+# id	anchor (a fixed string the CONVENTIONS.md core must carry; whitespace-folded)	source
+default-branch	never assume `main`. Never work on it.	seed CLAUDE.md invariant 1
+never-merge	Target the default branch. **Never merge.**	seed CLAUDE.md invariant 2
+co-authored-trailer	**the `Co-Authored-By: Claude` trailer stays, because it is true.**	seed CLAUDE.md invariant 3
+no-pii	**No customer PII** in code, commits, or PR text	seed CLAUDE.md invariant 4
+no-secrets	**never echo, print, or log secrets or environment variables**	seed CLAUDE.md invariant 4
+pr-body-heading	**It opens with the literal heading `## Description`**	seed CLAUDE.md invariant 5
+verified-line	**A `Verified:` line that cites something a reader can open**	seed CLAUDE.md invariant 5
+criteria-table-always	**The table is required, always**	seed CLAUDE.md invariant 5
+tick-only-verified	**Mark `✓` only for a criterion you actually verified; mark the rest `✗`**	seed CLAUDE.md invariant 5
+tally-matches	the gate counts rows and refuses a tally that disagrees	seed CLAUDE.md invariant 5
+row-is-command	**A row is a command and its result**	seed CLAUDE.md invariant 5
+run-the-reader	Every role agent, both surfaces, every time	seed CLAUDE.md invariant 5
+own-worktree	**never parallel writes to a shared clone/worktree**	seed CLAUDE.md invariant 6
+browser-writes-ask	**Browser writes follow the project's `autonomy`: ask first**	seed CLAUDE.md invariant 7
+generic-browser-labels	**Generic browser labels are a Claude Code defect, not a misconfiguration**	seed CLAUDE.md invariant 8
+authority-gap-human	**THE LADDER COVERS CAPABILITY GAPS ONLY. AN AUTHORITY GAP STAYS HUMAN REGARDLESS OF WHAT TOOL IS AVAILABLE.**	authority gate
+authority-class	promoting a task `draft → ready`; merging a pull request; **any destructive or irreversible action**; **anything outward-facing**	authority gate
+capability-gap-never-blocks	`blocked` is not the response to a missing tool	authority gate
+reserved-never-green	**None of these is ever your route to a green check.**	authority gate
+reserved-on-hit	**On a hit, make no such change.** Set the task `status: blocked`	authority gate
+reserved-never-declarable	**Never declarable.**	authority gate
+unverified-blocks-merge	A `✗` **blocks the PR from being merge-eligible**	authority gate
+round-cap	**There is no round past the cap**	authority gate
+review-once	**Never ask for a re-review to confirm fixes**	authority gate
+dispatch-report-only	**it is report-only, and a non-zero verdict is never a licence to re-dispatch**	authority gate
+tick-never-resumed	same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never	authority gate
+unknown-not-conclusion	you report `UNKNOWN` plus the read that would settle it — **never a conclusion**	authority gate
+open-questions-not-final-message	**Anything the human must decide or provide goes in the task's `open_questions`**	authority gate
+pr-body-ceiling	Hard ceiling **2,500 characters**	authority gate
+role-signature	**Exempt:** a PR body, and the tick's bare `@coderabbitai review`	authority gate
+never-home-dir	**Every file you write has a home inside the project, and `~` is never one of them.**	authority gate

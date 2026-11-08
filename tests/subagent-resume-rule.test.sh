@@ -45,7 +45,8 @@ set -uo pipefail
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CONV="$REPO/plugin/seed/CONVENTIONS.md"
+# The rule moved verbatim to the rounds detail of CONVENTIONS.md (leaner-prompts/task-002).
+CONV="$REPO/plugin/seed/conventions/rounds.md"
 PM="$REPO/plugin/tick-steps/step-3-dispatch.md"
 # Step 0.5 stayed in the core when steps 2-7 moved out (ai-bridge-v3/task-024): the lock
 # is a gate, and a gate a tick might not have read is not a gate.
@@ -89,6 +90,7 @@ echo "== 1. stated ONCE: the full rule lives in CONVENTIONS.md and nowhere else 
 bullet_of() { # <file> <regex> — the whole `- ` bullet containing <regex>
   awk -v n="$2" 'BEGIN{buf=""}
     /^- / { if (buf ~ n) { print buf; exit } ; buf=$0; next }
+    /^#/  { if (buf ~ n) { print buf; exit } ; buf=""; next }
     { buf = buf "\n" $0 }
     END { if (buf ~ n) print buf }' "$1"
 }
@@ -109,7 +111,7 @@ ok "…exactly once"                       "$(count "$CONV" "$CANON")" 1
 # path-scan: absent symlink — retired in #122; the four other roots on this line resolve
 copies="$(grep -rlF -- 'DISPATCH FRESH.' "$REPO/symlink" "$REPO/plugin/seed" "$REPO/docs" \
   "$REPO/README.md" "$REPO/CLAUDE.md" 2>/dev/null | sort | sed "s|^$REPO/||" | tr '\n' ' ' | sed 's/ *$//')"
-ok "…and exactly one shipped file carries the table" "$copies" "plugin/seed/CONVENTIONS.md"
+ok "…and exactly one shipped file carries the table" "$copies" "plugin/seed/conventions/rounds.md"
 
 echo
 echo "== 2. it reaches every dispatcher, word for word, with the citation =="
@@ -176,7 +178,7 @@ ok "the operator docs say it too"        "$(has "$OPS" 'no "delete the agent" pr
 hits=0
 for phrase in 'delete the agent' 'kill the agent' 'terminate the agent' 'delete a subagent' 'kill a subagent'; do
   # path-scan: absent symlink — retired in #122; "$REPO/plugin/seed" resolves
-  if grep -qv -e 'CONVENTIONS.md' -e '^$' \
+  if grep -qv -e 'CONVENTIONS.md' -e 'conventions/rounds.md' -e '^$' \
        <<<"$(grep -rlF -- "$phrase" "$REPO/symlink" "$REPO/plugin/seed" 2>/dev/null)"; then
     echo "  (a shipped file describes: $phrase)"; hits=$((hits+1))
   fi

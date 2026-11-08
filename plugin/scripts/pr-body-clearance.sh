@@ -1048,8 +1048,8 @@ report_rows() { # <scan> <label> -> 0 clear, 3 at least one row outside the boun
 $offenders
 EOF
   echo "        This bounds ONE CELL of ONE ROW. The body's own ceiling is a separate" >&2
-  echo "        check with a separate code (4). See $AB_CONVENTIONS, 'The criteria table" >&2
-  echo "        is the merge gate'." >&2
+  echo "        check with a separate code (4). See" >&2
+  echo "        $AB_CONVENTIONS → \"The criteria table is the merge gate\"." >&2
   return 3
 }
 
@@ -1068,8 +1068,8 @@ EOF
   if [ "$chars" -gt "$BODY_CEILING_CHARS" ]; then
     rc=4
     echo "refuse: $label carries every required element, and it is $chars authored" >&2
-    echo "        characters — over the $BODY_CEILING_CHARS-character ceiling $AB_CONVENTIONS sets in" >&2
-    echo "        'Write less'. A marked reviewer block is not counted, up to $GENERATED_CEILING" >&2
+    echo "        characters — over the $BODY_CEILING_CHARS-character ceiling" >&2
+    echo "        $AB_CONVENTIONS → \"Write less\" sets. A marked reviewer block is not counted, up to $GENERATED_CEILING" >&2
     echo "        characters; a larger one is counted in full, markers or no markers." >&2
     echo "        Nor is each criteria row's verbatim criterion text, up to" >&2
     echo "        $CRITERION_ALLOWANCE characters a row, nor each Decided without asking row; the" >&2
@@ -1225,8 +1225,7 @@ EOF
            echo "        criterion or an answered question'." >&2 ;;
   esac
   echo "        This is the STRUCTURE refusal. Length is a separate check with a" >&2
-  echo "        separate code (4). See $AB_CONVENTIONS, 'The PR body has a required" >&2
-  echo "        shape'." >&2
+  echo "        separate code (4). See $AB_CONVENTIONS → \"The PR body shape\"." >&2
   return "$rc"
 }
 

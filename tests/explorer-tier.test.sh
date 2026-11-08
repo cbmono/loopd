@@ -65,7 +65,7 @@ ok "…the lookup that failed"              "$(yn grep -q 'roleTiers entry' "$TM
 ok "…and the consequence"                 "$(yn grep -q 'SESSION model' "$TMP/err")" yes
 
 echo "== the fallback is written where the caller reads it =="
-ok "CONVENTIONS: no entry => light"       "$(yn grep -q 'no entry ⇒ the seed' "$CONV")" yes
+ok "CONVENTIONS: no entry => light"       "$(yn grep -q 'no entry ⇒ the seed' "$REPO/plugin/seed/conventions/repos.md")" yes
 ok "PM brief resolves explorer"           "$(yn grep -q 'resolve-model.sh explorer' "$PM")" yes
 ok "…and says light IS the default"       "$(yn grep -q 'seed default' "$PM")" yes
 

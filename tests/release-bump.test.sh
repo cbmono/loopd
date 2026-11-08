@@ -447,7 +447,7 @@ ok "CLAUDE.md's core bullet says the PR does not carry it" \
 ok "machinery.md carries it"                "$(saw "$REPO/.claude/rules/machinery.md" 'carries NO version bump')" yes
 ok "installer.md carries it"                "$(saw "$REPO/.claude/rules/installer.md" 'carries NO version bump')" yes
 ok "the seed CONVENTIONS.md carves the repo out" \
-  "$(saw "$REPO/plugin/seed/CONVENTIONS.md" 'THE BUMP HAPPENS ON THE DEFAULT BRANCH AT MERGE TIME')" yes
+  "$(saw "$REPO/plugin/seed/conventions/pr-body.md" 'THE BUMP HAPPENS ON THE DEFAULT BRANCH AT MERGE TIME')" yes
 
 echo
 echo "pass=$pass fail=$fail"

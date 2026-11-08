@@ -21,7 +21,8 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 . "$(dirname "$0")/tools/plugin-name.sh"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 SKILL="$REPO/plugin/skills/new-project/SKILL.md"
-CONV="$REPO/plugin/seed/CONVENTIONS.md"
+# The rule moved verbatim to the product-repo detail of CONVENTIONS.md (leaner-prompts/task-002).
+CONV="$REPO/plugin/seed/conventions/repos.md"
 YOLO="$REPO/plugin-yolo/companion/AUTONOMY.md"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/browser-default-off.XXXXXX")" || {

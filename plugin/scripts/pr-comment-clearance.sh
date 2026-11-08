@@ -494,7 +494,7 @@ decide() { # <rendered> <label> -> 0 clear, 1 shape missing, 2 unknown, 3 an ele
   if [ "$state" = empty ]; then
     echo "refuse: $label is empty — a reply with no readable text tells the reviewer" >&2
     echo "        nothing. One line per finding, each with its verdict. See" >&2
-    echo "        $AB_CONVENTIONS, 'A reply to review findings has a shape'." >&2
+    echo "        $AB_CONVENTIONS → \"A reply to review findings has a shape\"." >&2
     return 1
   fi
 
@@ -517,8 +517,8 @@ decide() { # <rendered> <label> -> 0 clear, 1 shape missing, 2 unknown, 3 an ele
 $noverdict
 EOF
     echo "        Say it in one word per entry — valid, fixed, declined, already" >&2
-    echo "        deferred — then the fix or the reason. See $AB_CONVENTIONS, 'A reply" >&2
-    echo "        to review findings has a shape'." >&2
+    echo "        deferred — then the fix or the reason. See" >&2
+    echo "        $AB_CONVENTIONS → \"A reply to review findings has a shape\"." >&2
     return 1
   }
 
