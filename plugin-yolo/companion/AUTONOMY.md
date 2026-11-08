@@ -230,8 +230,9 @@ not be able to talk the loop into a merge. Confirm all five and **abort if any f
    `required-checks.sh` and `--match-head-commit` do not see this. **Exit 1 holds**: the
    script names the group and the run, keeps a mark under the bundle's ignored
    `.loopd/.merge-holds/`, and `tick-delta.sh check` reports that mark as a DELTA, so the next
-   tick asks again rather than idling. **Exit 2 is unknown, and unknown holds** — a group
-   expression bash cannot evaluate, or `gh` failing — but for **at most 3 ticks at one head**
+   tick asks again rather than idling. **Exit 2 is unknown, and unknown holds** — a trigger or
+   group expression bash cannot read, a job calling a reusable workflow, a branch or workflow
+   file the host does not return, or `gh` failing — but for **at most 3 ticks at one head**
    (the project's D2): the third unknown answer is **exit 3**, and the merge is the human's.
    Surface it as a 🔀 merge row in `AWAITING.md`, carrying the script's `merge-row:` token so
    the row says `concurrency unknown: <reason>`, and do not ask again at that head. A new head

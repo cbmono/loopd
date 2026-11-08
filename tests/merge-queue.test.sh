@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # plugin/scripts/merge-queue.sh against a `gh` stub: hold, clear and unknown, loopd's own
-# tests.yml, the D2 bound under --pr, tick-delta.sh's DELTA for a held mark and the merge-row
-# warning build-awaiting.sh renders.
+# tests.yml, every false clear QA found on #493, the D2 bound under --pr, tick-delta.sh's DELTA
+# for a held mark and the merge-row warning build-awaiting.sh renders.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,7 +14,8 @@ pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-66s (%s)\n' "$1" "$2"; pass=$((pass+1))
        else printf '  FAIL  %-66s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi }
 
-# The stub answers from $FIX: workflows.json, files/<name>, runs.<status>.json; *.fail breaks a call.
+# The stub answers from $FIX: workflows.json, files/<name> (at.<ref>/<name> instead, when that
+# directory exists), runs.<status>.json; *.fail breaks a call, branch.missing 404s the branch.
 BIN="$TMP/bin"; mkdir -p "$BIN"
 cat > "$BIN/gh" <<'EOS'
 #!/usr/bin/env bash
@@ -26,7 +27,9 @@ done
 case "$url" in
   */actions/workflows) [ -e "$FIX/workflows.fail" ] && { echo "gh: Server Error (HTTP 502)" >&2; exit 1; }
                        jq -r "$filter" "$FIX/workflows.json" ;;
-  */contents/*) f="${url#*/contents/}"; f="$FIX/files/$(basename "${f%%\?*}")"
+  */branches/*) [ -e "$FIX/branch.missing" ] && { echo "gh: Branch not found (HTTP 404)" >&2; exit 1; }; echo '{}' ;;
+  */contents/*) f="${url#*/contents/}"; ref="${f#*\?ref=}"; d="$FIX/files"; [ -d "$FIX/at.$ref" ] && d="$FIX/at.$ref"
+                f="$d/$(basename "${f%%\?*}")"
                 [ -f "$f" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }; cat "$f" ;;
   */actions/runs\?status=*) st="${url#*status=}"; st="${st%%&*}"
                 [ -e "$FIX/runs.fail" ] && { echo "gh: Bad credentials (HTTP 401)" >&2; exit 1; }
@@ -41,11 +44,11 @@ fixture() { # <name> -> sets FIX, a repo with loopd's own tests.yml and no runs
   cp "$REPO/.github/workflows/tests.yml" "$FIX/files/tests.yml"
   printf '{"workflows":[{"path":".github/workflows/tests.yml","state":"active"}]}\n' > "$FIX/workflows.json"
 }
-run() { # <status> <id> <event> <branch> [pr] -> appends a run to runs.<status>.json
+run() { # <status> <id> <event> <branch> [pr] [file] [head_sha] -> appends a run to runs.<status>.json
   local f="$FIX/runs.$1.json" pr="[]"
   [ -n "${5:-}" ] && pr="[{\"number\":$5,\"base\":{\"ref\":\"main\"}}]"
   [ -f "$f" ] || printf '{"workflow_runs":[]}' > "$f"
-  jq --argjson r "{\"id\":$2,\"path\":\".github/workflows/${6:-tests.yml}\",\"event\":\"$3\",\"head_branch\":\"$4\",\"status\":\"$1\",\"pull_requests\":$pr,\"html_url\":\"https://github.com/example-org/example-repo/actions/runs/$2\"}" \
+  jq --argjson r "{\"id\":$2,\"path\":\".github/workflows/${6:-tests.yml}\",\"event\":\"$3\",\"head_branch\":\"$4\",\"head_sha\":\"${7:-run$2}\",\"status\":\"$1\",\"pull_requests\":$pr,\"html_url\":\"https://github.com/example-org/example-repo/actions/runs/$2\"}" \
     '.workflow_runs += [$r]' "$f" > "$f.n" && mv "$f.n" "$f"
 }
 mq() { PATH="$BIN:$PATH" bash "$SH" example-org/example-repo main "$@" 2>&1; }
@@ -112,8 +115,45 @@ fixture ghruns; : > "$FIX/runs.fail"
 ok "gh failing to list the runs is exit 2"                  "$(rc)" 2
 fixture fork; run in_progress 51 pull_request feat-z
 ok "a run whose group needs a missing PR number is unknown" "$(rc)" 2
+
+echo "== every false clear the QA review found answers hold or unknown =="
+fixture case; run in_progress 71 push MAIN
+ok "a group that differs only in case holds (exit 1)"       "$(rc)" 1
+trig() { # <name> <on: block> -> a fixture whose only workflow has that trigger, a main run in progress
+  fixture "$1"; printf 'name: CI\n%s\nconcurrency: ci-${{ github.ref }}\njobs:\n  b:\n    runs-on: x\n' "$2" > "$FIX/files/tests.yml"
+  run in_progress 72 push main
+}
+trig flow 'on: { push: { branches: [main] } }'
+ok "a flow-style on: is unknown (exit 2)"                   "$(rc)" 2
+trig scalar $'on:\n  push:\n    branches: main'
+ok "a scalar branches: is unknown"                          "$(rc)" 2
+trig multiline $'on:\n  push:\n    branches: [main,\n      release]'
+ok "a multi-line [ list is unknown"                         "$(rc)" 2
+trig anchor $'on:\n  push:\n    branches: &b [main]'
+ok "an &anchor is unknown"                                  "$(rc)" 2
+trig alias $'on:\n  push:\n    branches:\n      - *b'
+ok "an *alias is unknown"                                   "$(rc)" 2
+ok "…naming the file and the trigger"                       "$(mq | grep -c '^unknown: .github/workflows/tests.yml: its push trigger cannot be read')" 1
+trig quoted $'on:\n  push:\n    branches:\n      - \'main\' # prod\n      - "rel" # x'
+ok "a quoted branch with a trailing comment is read: hold"  "$(rc)" 1
+trig quotedflow $'on:\n  push:\n    branches: [\'main\'] # prod'
+ok "…in a flow list too"                                    "$(rc)" 1
+fixture nobranch; : > "$FIX/branch.missing"
+ok "a branch the host does not have is unknown"             "$(rc)" 2
 fixture norepo; rm -f "$FIX/files/tests.yml"
-ok "a workflow absent at the branch is skipped: clear"      "$(rc)" 0
+ok "every workflow 404 at the branch is unknown"            "$(rc)" 2
+fixture onegone; printf '{"workflows":[{"path":".github/workflows/tests.yml","state":"active"},{"path":".github/workflows/gone.yml","state":"active"}]}\n' > "$FIX/workflows.json"
+ok "one workflow absent at the branch is skipped: clear"    "$(rc)" 0
+fixture reusable; printf '  call:\n    uses: ./.github/workflows/shared.yml\n' >> "$FIX/files/tests.yml"
+ok "a job calling a reusable workflow is unknown"           "$(rc)" 2
+fixture ownbranch; mkdir -p "$FIX/at.main"; cp "$FIX/files/tests.yml" "$FIX/at.main/"
+printf 'name: Feat\non: push\nconcurrency: tests-Tests-refs/heads/main\njobs:\n  b:\n    runs-on: x\n' > "$FIX/files/feat.yml"
+run in_progress 73 push feat-only "" feat.yml
+ok "a run of a workflow only on its own branch holds"       "$(rc)" 1
+rm -f "$FIX/files/feat.yml"
+ok "…and is unknown when its file cannot be read"           "$(rc)" 2
+fixture requested; run requested 74 push main
+ok "a requested main run holds"                             "$(rc)" 1
 
 echo "== --pr: a mark per PR and head, and D2's bound =="
 B="$TMP/bundle"; mkdir -p "$B/projects/demo/tasks" "$B/$AB_DIR"; printf '{}\n' > "$B/instance.config.json"
@@ -165,6 +205,8 @@ ok "exit 1: the in-progress warning"                        "$(grep -cxF '  > wa
 ok "…under the merge row, which keeps its link"             "$(awk -v l=" · $L" '/^\* 🔀 \*\*merge\*\*/ { r = substr($0, length($0) - length(l) + 1) == l; getline w; print r (w ~ /^  > warning: /) }' <<<"$out")" 11
 out="$(aw "$L ##mq2 gh could not list the workflows of example-org/example-repo")"
 ok "exit 2: the unknown warning"                            "$(grep -cxF '  > warning: concurrency unknown: gh could not list the workflows of example-org/example-repo' <<<"$out")" 1
+out="$(aw "$L ##mq2 group 'a ##mq1 b c' cannot be evaluated")"
+ok "the first token decides, whatever the reason quotes"    "$(grep -cxF "  > warning: concurrency unknown: group 'a ##mq1 b c' cannot be evaluated" <<<"$out")" 1
 out="$(aw "$L")"
 ok "exit 0: no warning line"                                "$(grep -c 'warning:' <<<"$out")" 0
 ok "the warning is not counted as a row"                    "$(aw "$L ##mq2 x" | grep -c '^\* ')" 1

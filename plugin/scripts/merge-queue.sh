@@ -39,14 +39,15 @@ fi
 
 TMP="$(mktemp -d)" || { echo "unknown: mktemp failed"; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
-US=$'\037'; UNK=$'\001'; TAB=$'\t'
+US=$'\037'; UNK=$'\001'
 
 # Keeps the D2 count per PR and head; a new head starts again at 0.
 finish() { # <exit> <merge-row token>
-  local rc="$1" dir m h=""; local -i n=0; local st=""
+  local rc="$1" dir m h="" n=0 st=""
   if [ -n "$pr" ]; then
     dir="$inst/$AB_MERGE_HOLDS"; m="$dir/$(printf '%s' "$repo" | tr '/' '_')_$pr"
     [ -f "$m" ] && IFS=$'\t' read -r h n st _ < "$m"
+    case "$n" in ''|*[!0-9]*) n=0 ;; esac
     [ "$h" = "$head" ] || { n=0; st=""; }
     if [ "$rc" = 0 ]; then rm -f "$m"
     else
@@ -66,24 +67,42 @@ finish() { # <exit> <merge-row token>
 }
 unknown() { echo "unknown: $1"; finish 2 "##mq2 $1"; }
 
-# One `path<TAB>value` per scalar of a block-style YAML file; a list item is `path[]`. A block
-# scalar or flow mapping is UNK-prefixed, so nothing reads it as a value.
+# One `path<TAB>value` per scalar of a block-style YAML file; a list item is `path[]`. What this
+# cannot read (a block scalar, a flow mapping, an unclosed `[` or quote, an anchor, alias or tag)
+# is UNK-prefixed, so nothing reads it as a value.
 flatten() {
   awk '
     function unq(v) { if (v ~ /^".*"$/ || v ~ /^\047.*\047$/) v = substr(v, 2, length(v) - 2); return v }
     function trim(v) { sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v); return v }
+    function scal(v) {
+      v = trim(v)
+      if (v ~ /^[&*!]/) return "\001anchor"
+      if (v ~ /^\[/ && v !~ /\]$/) return "\001flow"
+      v = unq(v); if (v ~ /^["\047]/) return "\001quote"
+      return v
+    }
+    function nocomment(t,   i, c, q, p) {
+      q = ""; p = " "
+      for (i = 1; i <= length(t); i++) {
+        c = substr(t, i, 1)
+        if (q != "") { if (c == q) q = "" }
+        else if ((c == "\"" || c == "\047") && p ~ /[ \t\[,]/) q = c
+        else if (c == "#" && p ~ /[ \t]/) return substr(t, 1, i - 1)
+        p = c
+      }
+      return t
+    }
     BEGIN { skip = -1; n = 0 }
     {
       sub(/\r$/, "")
       if (skip >= 0) { if ($0 ~ /^[ \t]*$/) next; match($0, /^ */); if (RLENGTH > skip) next; skip = -1 }
       if ($0 ~ /^[ \t]*(#|$)/ || $0 ~ /^(---|\.\.\.)/) next
       match($0, /^ */); ind = RLENGTH; t = substr($0, ind + 1)
-      if (t !~ /["\047]/) sub(/[ \t]+#.*$/, "", t)
-      t = trim(t)
+      t = trim(nocomment(t))
       if (t ~ /^-( |$)/) {
         while (n > 0 && ind_[n] > ind) n--
         lp = (n ? path_[n] : "") "[]"; t = trim(substr(t, 2))
-        if (index(t, ": ") == 0 && t !~ /:$/) { print lp "\t" unq(t); next }
+        if (index(t, ": ") == 0 && t !~ /:$/) { print lp "\t" scal(t); next }
         n++; ind_[n] = ind + 1; path_[n] = lp; ind += 2
       } else while (n > 0 && ind_[n] >= ind) n--
       ci = index(t, ": "); if (ci == 0 && t ~ /:$/) ci = length(t)
@@ -94,18 +113,21 @@ flatten() {
       if (v ~ /^\{/) { print p "\t\001flow"; next }
       if (v ~ /^\[.*\]$/) {
         print p "\t"; c = split(substr(v, 2, length(v) - 2), a, ",")
-        for (i = 1; i <= c; i++) { x = unq(trim(a[i])); if (x != "") print p "[]\t" x }
+        for (i = 1; i <= c; i++) { x = scal(a[i]); if (x != "") print p "[]\t" x }
         next
       }
-      print p "\t" unq(v)
+      print p "\t" scal(v)
     }'
 }
 sel() { awk -F'\t' -v k="$2" '$1 == k { print substr($0, length(k) + 2) }' "$1"; }
 has() { awk -F'\t' -v k="$2" '$1 == k || index($1, k ".") == 1 || index($1, k "[]") == 1 { f = 1 } END { exit !f }' "$1"; }
 
 # shellcheck disable=SC2053  # branch filters are globs
-triggers() { # <flat> -> 0 a push to $branch starts it · 1 it does not
+triggers() { # <flat> -> 0 a push to $branch starts it · 1 it does not · 2 cannot tell
   local f="$1" p m=0
+  awk -F'\t' '($1 == "on" || $1 ~ /^on[.[]/) && index($2, "\001") == 1 { f = 1 }
+    $1 ~ /^on\.push\.(branches|branches-ignore|tags|tags-ignore)$/ && $2 != "" { f = 1 }
+    END { exit !f }' "$f" && return 2
   [ "$(sel "$f" on)" = push ] && return 0
   sel "$f" 'on[]' | grep -qx push && return 0
   has "$f" on.push || return 1
@@ -173,7 +195,7 @@ evalg() { # <expr> -> the group string; 1 when bash cannot evaluate it
 
 gh_api() { # <out> <args...> -> 0 · 1 HTTP 404 · 2 anything else
   local out="$1"; shift
-  gh api "$@" > "$out" 2> "$TMP/err" && return 0
+  gh api "$@" < /dev/null > "$out" 2> "$TMP/err" && return 0
   grep -q 'HTTP 404' "$TMP/err" && return 1
   return 2
 }
@@ -182,20 +204,27 @@ command -v gh >/dev/null 2>&1 || unknown "gh not found"
 gh_api "$TMP/wfs" --paginate "repos/$repo/actions/workflows" \
   --jq '.workflows[] | select(.state == "active") | .path' || unknown "gh could not list the workflows of $repo"
 
-i=0; : > "$TMP/index"
+gh_api "$TMP/b" "repos/$repo/branches/$branch"
+case $? in 1) unknown "branch $branch not found in $repo" ;; 2) unknown "gh could not read branch $branch of $repo" ;; esac
+i=0; gone=0; : > "$TMP/index"
 while IFS= read -r path; do
   [ -n "$path" ] || continue
   i=$((i + 1))
   gh_api "$TMP/raw.$i" -H 'Accept: application/vnd.github.raw' "repos/$repo/contents/$path?ref=$branch"
-  case $? in 1) continue ;; 2) unknown "gh could not read $path at $branch" ;; esac
+  case $? in 1) gone=$((gone + 1)); continue ;; 2) unknown "gh could not read $path at $branch" ;; esac
   flatten < "$TMP/raw.$i" > "$TMP/flat.$i"
   wf="$(sel "$TMP/flat.$i" name | head -n1)"
   printf '%s\t%s\t%s\n' "$i" "$path" "${wf:-$path}" >> "$TMP/index"
 done < "$TMP/wfs"
+[ "$i" = 0 ] || [ "$gone" != "$i" ] || unknown "none of the $i workflow file(s) of $repo is readable at $branch"
+uses() { awk -F'\t' '$1 ~ /^jobs\.[^.]+\.uses$/ { print $2; exit }' "$1"; }
 
 : > "$TMP/pushg"
 while IFS=$'\t' read -r i path wf; do
-  triggers "$TMP/flat.$i" || continue
+  triggers "$TMP/flat.$i"
+  case $? in 1) continue ;; 2) unknown "$path: its push trigger cannot be read" ;; esac
+  u="$(uses "$TMP/flat.$i")"
+  [ -z "$u" ] || unknown "$path: a job calls $u, whose concurrency bash does not read"
   X_WF="$wf" X_EVENT=push X_REF="refs/heads/$branch" X_REFNAME="$branch" X_HEADREF="" X_BASEREF="" \
     X_PRNUM="" X_RUN="$UNK.new-run"
   while IFS= read -r e; do
@@ -206,19 +235,26 @@ done < "$TMP/index"
 [ -s "$TMP/pushg" ] || { echo "clear: no workflow a push to $branch triggers sets a concurrency group"; finish 0; }
 
 : > "$TMP/runs"
-for st in queued waiting pending in_progress; do
+for st in requested queued waiting pending in_progress; do
   gh_api "$TMP/r" --paginate "repos/$repo/actions/runs?status=$st&per_page=100" \
-    --jq '.workflow_runs[] | [.id, .path, .event, .head_branch, (.pull_requests[0].number // ""), (.pull_requests[0].base.ref // ""), .status, .html_url] | map(tostring) | join("\u001f")' \
+    --jq '.workflow_runs[] | [.id, .path, .event, .head_branch, .head_sha, (.pull_requests[0].number // ""), (.pull_requests[0].base.ref // ""), .status, .html_url] | map(tostring) | join("\u001f")' \
     || unknown "gh could not list $st runs of $repo"
   cat "$TMP/r" >> "$TMP/runs"
 done
 
 why=""
-while IFS="$US" read -r id path ev hb prn base st url; do
+while IFS="$US" read -r id path ev hb sha prn base st url; do
   [ -n "$id" ] || continue
-  hit="$(awk -F'\t' -v p="${path%%@*}" '$2 == p { print $1 "\t" $3; exit }' "$TMP/index")"
-  [ -n "$hit" ] || continue
-  i="${hit%%"$TAB"*}"; X_WF="${hit#*"$TAB"}"; X_EVENT="$ev"; X_RUN="run.$id"; X_HEADREF=""; X_BASEREF=""; X_PRNUM=""
+  rf="${path%%@*}"; f="$TMP/run.$(printf '%s@%s' "$rf" "$sha" | cksum | cut -d' ' -f1)"
+  if [ ! -e "$f" ]; then
+    gh_api "$f.raw" -H 'Accept: application/vnd.github.raw' "repos/$repo/contents/$rf?ref=$sha"
+    case $? in 0) flatten < "$f.raw" > "$f" ;; 1) : > "$f"; : > "$f.404" ;; 2) unknown "gh could not read $rf at $sha" ;; esac
+  fi
+  if [ -e "$f.404" ]; then why="${why:-run $id ($rf, $st): its workflow file is not readable at $sha}"; continue; fi
+  u="$(uses "$f")"
+  if [ -n "$u" ]; then why="${why:-run $id ($rf, $st): a job calls $u, whose concurrency bash does not read}"; continue; fi
+  X_WF="$(sel "$f" name | head -n1)"; X_WF="${X_WF:-$rf}"
+  X_EVENT="$ev"; X_RUN="run.$id"; X_HEADREF=""; X_BASEREF=""; X_PRNUM=""
   X_REF="refs/heads/$hb"; X_REFNAME="$hb"
   case "$ev" in pull_request*)
     X_HEADREF="$hb"; X_BASEREF="${base:-$UNK}"; X_PRNUM="${prn:-$UNK}"
@@ -229,12 +265,12 @@ while IFS="$US" read -r id path ev hb prn base st url; do
     fi ;;
   esac
   while IFS= read -r e; do
-    if ! g="$(evalg "$e")"; then why="${why:-run $id ($path, $st): its group '${e#"$UNK"}' cannot be evaluated}"; continue; fi
-    if grep -Fxq -- "$g" "$TMP/pushg"; then
+    if ! g="$(evalg "$e")"; then why="${why:-run $id ($rf, $st): its group '${e#"$UNK"}' cannot be evaluated}"; continue; fi
+    if grep -Fxqi -- "$g" "$TMP/pushg"; then
       echo "hold: group '$g' has run $id ($X_WF, $st, $ev on $hb) $url"
       finish 1 "##mq1 $branch $g"
     fi
-  done < <(groups "$TMP/flat.$i")
+  done < <(groups "$f")
 done < "$TMP/runs"
 [ -z "$why" ] || unknown "$why"
 echo "clear: $(sort -u "$TMP/pushg" | grep -c .) group(s) a push to $branch joins, none with a pending run"

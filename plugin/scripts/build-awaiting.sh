@@ -248,11 +248,10 @@ lookup() { # <path> <"trailer"|"merge"|"facts">  -> prints the value, or nothing
 # A merge-queue.sh `merge-row:` token rides the --merge value; it becomes one line under the row.
 mq_link=""; mq_warn=""
 mq_split() { # <--merge value> -> sets mq_link and mq_warn
-  local v="$1" w; mq_warn=""
-  case "$v" in
-    *' ##mq1 '*) w="${v#* ##mq1 }"; v="${v%% ##mq1 *}"
-                 mq_warn="a ${w#* } run is in progress on ${w%% *}; merging now cancels it" ;;
-    *' ##mq2 '*) mq_warn="concurrency unknown: ${v#* ##mq2 }"; v="${v%% ##mq2 *}" ;;
+  local v="${1%% ##mq[12] *}" w; mq_warn=""; w="${1#"$v"}"
+  case "$w" in
+    ' ##mq1 '*) w="${w# ##mq1 }"; mq_warn="a ${w#* } run is in progress on ${w%% *}; merging now cancels it" ;;
+    ' ##mq2 '*) mq_warn="concurrency unknown: ${w# ##mq2 }" ;;
   esac
   [ -z "$mq_warn" ] || mq_warn="
   > warning: $(printf '%s' "$mq_warn" | tr -d '\r\n')"
