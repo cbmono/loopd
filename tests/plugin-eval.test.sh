@@ -285,6 +285,22 @@ ok "…and the PR workflow calls the runner that excludes it" \
   "$(yn grep -qF 'tests/run.sh --ci' "$WF")" yes
 
 # =======================================================================================
+echo "== 5b. a case that inlines a prompt file carries that file's CURRENT text =="
+# =======================================================================================
+# The block is the whole point of the case: a stale one grades last month's prose and reads
+# green through a trim. tests/tools/eval-inline.sh is the one writer and the one checker.
+INLINE="$TPL/tests/tools/eval-inline.sh"
+n_inline=0
+for c in $CASES; do
+  P="$EVALS/$c/prompt.md"
+  grep -q '^<!-- inline: ' "$P" || continue
+  n_inline=$((n_inline+1))
+  ok "$c inlines the file it names, byte for byte" "$(bash "$INLINE" "$P" --check >/dev/null 2>&1 && echo current || echo stale)" current
+done
+ok "the two prompt-file readers exist (CONVENTIONS.md, project-manager.md)" "$n_inline" 2
+ok "…and the writer refuses a prompt with no block" "$(bash "$INLINE" "$EVALS/$CONTROL/prompt.md" --check >/dev/null 2>&1; echo $?)" 1
+
+# =======================================================================================
 echo "== 6. the run itself — where the CLI supports it, and a LOUD skip where it does not =="
 # =======================================================================================
 # THREE gates, and each one prints WHY. `claude plugin eval` runs ungated on 2.1.270 and was

@@ -214,7 +214,10 @@ step0_mentioning_files() {
   while IFS= read -r -d '' f; do files+=("$f"); done < <(
     g ls-files -z --cached --others --exclude-standard -- '*.md')
   [ ${#files[@]} -gt 0 ] || return 0
-  (cd "$REPO" && grep -l "step 0" -- "${files[@]}" 2>/dev/null) | sort
+  # An eval prompt that quotes project-manager.md verbatim (`<!-- inline: … -->`, kept
+  # current by tests/tools/eval-inline.sh) is a copy of the tick's core, not a third document.
+  (cd "$REPO" && grep -l "step 0" -- "${files[@]}" 2>/dev/null \
+     | while IFS= read -r f; do grep -q '^<!-- inline: plugin/agents/project-manager.md -->$' "$f" || printf '%s\n' "$f"; done) | sort
 }
 S0FILES="$(step0_mentioning_files)"
 # The TICK is eight files since ai-bridge-v3/task-024 — the core prompt plus one per
