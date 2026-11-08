@@ -967,7 +967,8 @@ above it so none may grow its share.
   secrets or environment variables** (rely on existing env / `.npmrc` for auth).
 - **Capture knowledge — a `Finding` only when a later task would plausibly hit the same problem.**
   Write or update it in `knowledge/findings/` (per `SCHEMA.md`), link it from the task,
-  and never cite it as evidence: `kb-usage.sh` grades that `SELF`. It carries **`provenance: machine`**
+  and never cite it as evidence: `kb-usage.sh record --task` grades that `SELF` once the task
+  has a `DISPATCH` line (without either it stays `UNREAD`). It carries **`provenance: machine`**
   (`SCHEMA.md` → `provenance:`) — never on a document a person wrote. **Run
   `scripts/validate-bundle.sh <path>` on the one you just wrote** — it is the 40-line cap
   and the `lesson:` checked at the moment they are cheap to fix.

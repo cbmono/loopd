@@ -60,12 +60,16 @@ if [ -n "$TASK" ]; then
   git -C "$INST/knowledge/findings" rev-parse 2>/dev/null \
     || { [ ! -d "$INST/knowledge/findings" ] || echo "kb-usage: knowledge/findings is not in git — no citation graded SELF" >&2; FIRST=""; }
 fi
+# A shallow clone's boundary commit lists every file as added, so its date is no Finding's.
+SHALLOW=""
+[ -z "$FIRST" ] || [ "$(git -C "$INST/knowledge/findings" rev-parse --is-shallow-repository 2>/dev/null)" = false ] \
+  || { SHALLOW=1; echo "kb-usage: shallow history — only an uncommitted Finding is graded SELF" >&2; }
 if [ -n "$FIRST" ]; then
   self=0
   for slug in $(printf '%s\n' "$report" | awk '/^UNREAD [A-Za-z0-9._-]+ / { print $2 }' | LC_ALL=C sort -u); do
     [ -f "$INST/knowledge/findings/$slug.md" ] || continue
     at="$(added_at "$slug")"
-    [ -z "$at" ] || [[ "$at" > "$FIRST" ]] || continue
+    [ -z "$at" ] || { [ -z "$SHALLOW" ] && [[ "$at" > "$FIRST" ]]; } || continue
     report="$(printf '%s\n' "$report" | sed "s/^UNREAD ${slug//./\\.} (/SELF $slug (/")"; self=$((self + 1))
   done
   [ "$self" -eq 0 ] || echo "kb-usage: $self UNREAD citation(s) graded SELF — the task's own new Finding" >&2

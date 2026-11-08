@@ -88,6 +88,16 @@ printf -- '---\ntype: Task\n---\n' >"$TMP/undispatched.md"
 ok "a task with no DISPATCH line: grading unchanged" "$(grep -c '^SELF ' "$D/$AB_DIR/citations/task-010.result.txt")" 0
 ok "an unreadable --task is refused (exit 2)" \
   "$("$USAGE" record --source x --task "$TMP/nope.md" --text-file "$TMP/self.md" --brief a >/dev/null 2>&1; echo $?)" 2
+# A shallow clone's boundary commit lists every file as added, dated after the DISPATCH here.
+printf 'x\n' >"$D/later.txt" && git add later.txt \
+  && GIT_AUTHOR_DATE=2026-05-01T00:00:00Z GIT_COMMITTER_DATE=2026-05-01T00:00:00Z git commit -qm later
+git clone -q --depth 1 "file://$D" "$TMP/shallow" 2>/dev/null
+item shallow-new learning 2026-05-02 && mv "$D/knowledge/findings/shallow-new.md" "$TMP/shallow/knowledge/findings/"
+printf 'Per [[stale-gotcha]] and [[shallow-new]].\n' >"$TMP/shallow.md"
+"$USAGE" --instance "$TMP/shallow" record --source task-011.result --task "$TASK" --text-file "$TMP/shallow.md" --brief none >/dev/null 2>&1
+SH="$TMP/shallow/$AB_DIR/citations/task-011.result.txt"
+ok "shallow history: an old Finding stays UNREAD, never SELF" "$(grep -cx 'UNREAD stale-gotcha' "$SH")" 1
+ok "…while an uncommitted Finding is still SELF"     "$(grep -cx 'SELF shallow-new' "$SH")" 1
 rm -f "$D/knowledge/findings/uncommitted-new.md" "$D/$AB_DIR"/citations/task-0*.txt
 
 echo
