@@ -283,6 +283,14 @@ setup
 checks "pass	Build"; declared "Build"; diff_files "src/app.ts" ".github/required-checks.txt"
 expect "PR edits the declared list -> human decision" 4
 
+GATES="$(sed -n '/^GATE_FILES="$/,/^"$/p' "$SCRIPT" | grep -v '"')"
+[ "$(grep -c . <<<"$GATES")" -ge 19 ] || { echo "  FAIL  GATE_FILES parsed to $(grep -c . <<<"$GATES") entries"; fail=$((fail+1)); }
+for f in $GATES; do
+  setup; checks "pass	Build"; declared "Build"; diff_files "$f"
+  expect "PR edits only $f -> human decision" 4
+  says   "  ...and names it" "edits the merge gate itself ($f)"
+done
+
 setup; checks "pass	Build"; declared "Build"; diff_files "src/app.ts" "README.md"
 expect "PR touches unrelated files -> unaffected" 0
 

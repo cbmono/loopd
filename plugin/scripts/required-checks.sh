@@ -81,10 +81,14 @@ set -euo pipefail
 
 DECLARED_PATH=".github/required-checks.txt"
 # The delegated merge's own machinery, as paths in the plugin's repository. A PR that edits
-# one would be cleared by the gate it rewrites (loopd-papercuts/task-010).
+# one would be cleared by the gate it rewrites (loopd-papercuts/task-010). Complete by
+# tests/gate-files-complete.test.sh: every file the merge path executes, sources or reads.
 GATE_FILES="
 plugin/scripts/merge-permit.sh
+plugin/scripts/resolve-autonomy.sh
 plugin/scripts/plugin-name.sh
+plugin/.claude-plugin/plugin.json
+.claude-plugin/marketplace.json
 plugin/scripts/clearance-receipt.sh
 plugin/scripts/review-clearance.sh
 plugin/scripts/required-checks.sh
