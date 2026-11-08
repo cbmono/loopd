@@ -35,7 +35,7 @@ bad() {
     esac
     case "$h" in '!'*) echo "$f -> $target paraphrases: ${h#!}"; continue ;; esac
     [ -f "$file" ] || { echo "$f -> $target: no such file"; continue; }
-    headings "$file" | grep -qxF -- "$h" || echo "$f -> $target \"$h\": no such heading"
+    grep -qxF -- "$h" <<<"$(headings "$file")" || echo "$f -> $target \"$h\": no such heading"
   done
 }
 # core_pointers <core> — `conventions/<topic>.md<TAB>heading<TAB>text after the closing quote`.
@@ -49,7 +49,7 @@ orphans() {
   for d in "$seed"/conventions/*.md; do
     while IFS= read -r h; do
       [ -n "$h" ] || continue
-      core_pointers "$seed/CONVENTIONS.md" | cut -f1,2 | grep -qxF -- "conventions/${d##*/}	$h" \
+      grep -qxF -- "conventions/${d##*/}	$h" <<<"$(core_pointers "$seed/CONVENTIONS.md" | cut -f1,2)" \
         || echo "conventions/${d##*/} \"$h\""
     done <<<"$(sed -n 's/^### //p' "$d")"
   done

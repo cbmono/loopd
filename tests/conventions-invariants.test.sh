@@ -38,7 +38,7 @@ k="$(awk '/^\*\*These are invariants/{p=1;next} p&&/^## /{exit} p&&/^- /{n++} EN
 ok "seed CLAUDE.md lists its invariants (is $k)" "$([ "$k" -ge 8 ] && echo yes || echo no)" yes
 unlisted=""; i=1
 while [ "$i" -le "$k" ]; do
-  entries "$LIST" | cut -f3 | grep -qx "seed CLAUDE.md invariant $i" || unlisted="$unlisted $i"
+  grep -qx "seed CLAUDE.md invariant $i" <<<"$(entries "$LIST" | cut -f3)" || unlisted="$unlisted $i"
   i=$((i+1))
 done
 ok "every seed invariant has an anchor" "${unlisted:-none}" none
