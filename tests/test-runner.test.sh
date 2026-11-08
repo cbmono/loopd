@@ -374,4 +374,13 @@ assert "a harness that destroys the checkout fails the run despite printing fail
 assert "…naming the harness that did it"                      "$(has "$W_OUT" 'the checkout was destroyed while running')"
 assert "…and never reaching the all-passed banner"            "$(lacks "$W_OUT" 'ok: all')"
 
+echo "== a harness killed at the bound is told what usually spins =="
+K="$TMP/k"; mkdir -p "$K"; build "$K"
+printf '#!/usr/bin/env bash\nsleep 30\n' > "$K/work/tests/fp-hangs.test.sh"
+K_OUT="$( cd "$K/work" && HARNESS_TIMEOUT=2 bash tests/run.sh --all 2>&1 )"; K_RC=$?
+assert "a harness over the bound fails the run"       "$([ "$K_RC" -eq 1 ] && echo 0 || echo 1)"
+assert "…with the KILLED line naming the bound"        "$(has "$K_OUT" 'KILLED at the 2s per-harness bound')"
+assert "…and the process-substitution hint"            "$(has "$K_OUT" 'At 100% CPU, look for a harness with one <(…) per scoped file, which spins past ~256 files on bash 3.2; read the file list from a temp file instead')"
+assert "…while the harnesses that returned stay green" "$(lacks "$K_OUT" 'fp-names-nothing.test.sh never returned')"
+
 summary

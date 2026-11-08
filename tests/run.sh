@@ -12,6 +12,7 @@
 #   --jobs N                  harnesses in parallel (default: CPUs); `# serial` runs alone
 # Each harness is bounded by HARNESS_TIMEOUT seconds (600, 1800 under --deep): one that
 # never returns is killed and fails as ITSELF, and the rest of the suite still reports.
+# A kill at 100% CPU is usually one `<( )` per scoped file spinning past ~256 files on bash 3.2.
 # A full run also reports its harness-seconds against SUITE_BUDGET_S (2000) — a warning,
 # never a failure: the runner's own speed varies by a third between two runs of one tree.
 # The gate runs on ubuntu-latest (since 2026-10-09) and nightly on macos-latest; the
@@ -154,7 +155,7 @@ run_one() {
   fi
   s=$(date +%s)
   if out="$(bounded "$f" 2>&1)"; then rc=0; else rc=$?; fi
-  [ "$rc" -ne 142 ] || out="$out"$'\n'"run.sh: KILLED at the ${HARNESS_TIMEOUT}s per-harness bound — $f never returned"
+  [ "$rc" -ne 142 ] || out="$out"$'\n'"run.sh: KILLED at the ${HARNESS_TIMEOUT}s per-harness bound — $f never returned. At 100% CPU, look for a harness with one <(…) per scoped file, which spins past ~256 files on bash 3.2; read the file list from a temp file instead"
   printf '%s\n' "$out" > "$RUN_OUT_DIR/$b.out"
   if verify_checkout; then state=intact; else state=broken; fi
   s=$(( $(date +%s) - s ))
