@@ -210,14 +210,14 @@ state, and act only on deltas.
    **`open_caveats:`** (`SCHEMA.md`) is their strongest form. **You WRITE that field**: on
    evidence contradicting a conclusion, append
    `<ISO 8601> · <the conclusion, and the evidence against it>`. **A caveat is cleared only
-   by evidence**. It holds `done`/`cancelled` (`validate-bundle.sh` errors on that write).
+   by evidence**. A non-empty list holds `done`/`cancelled` (`validate-bundle.sh` errors on that write).
 
    **Do NOT open the tick ledger entry here — step 0.9 does, on the paths that own one**:
    the append dirties `log.md`, which `tick-delta.sh check` would read as a `DELTA`.
 
    **On finding an open entry: orient first, then report, then hold** — task statuses,
    `worktree:`/`branch:` keys, PR state, so the report says *which* tasks claim in-flight;
-   then dispatch nothing, adopt nothing, end the tick. It does **not** prove agents alive.
+   then dispatch nothing, adopt nothing, end the tick. An open entry does **not** prove its agents alive.
 
 0.9. **Probe the idle fast-path — one command decides whether the full walk is owed.**
 

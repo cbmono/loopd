@@ -63,7 +63,7 @@ rather than a paraphrase of one.
 
 **The last two inline a prompt file, because a case here loads no seed prose.** Each
 carries each named file's current text between `<!-- inline: <repo path> -->` and `<!-- /inline -->`
-in a 5-backtick fence; `tests/tools/eval-inline.sh <prompt.md>` rewrites the block and
+in a 5-backtick fence; `tests/tools/eval-inline.sh <prompt.md>` rewrites every block and
 `tests/plugin-eval.test.sh` fails a stale one. They grade a behaviour the quoted text
 governs, so a trim of that file is judged by the same case before and after
 (leaner-prompts/task-001; baseline run recorded under "Running it").
