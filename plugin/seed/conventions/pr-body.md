@@ -65,9 +65,10 @@ Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short
 
   **The worked example is [alteos-gmbh/monorepo#3286](https://github.com/alteos-gmbh/monorepo/pull/3286)** —
   3,554 characters for a +1,657-line change, read in under a minute. It predates the
-  `## Description` heading and the `### Decided without asking` section; add both. Open it before you write your first one. A rule with an
-  exemplar is followed; a rule described in the abstract is the one that produced a
-  14,673-character body five hours after it shipped.
+  `## Description` heading and the `### Decided without asking` section; add both. Open
+  it before you write your first one. A rule with an exemplar is followed; a rule
+  described in the abstract is the one that produced a 14,673-character body five hours
+  after it shipped.
 
   1. **The heading `## Description`, first**, then **a one-sentence TL;DR** under
      it. **That exact string, character for character** — it is the shape's only greppable
