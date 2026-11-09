@@ -239,21 +239,6 @@ to be `@~/.claude/claude-defaults.md`, which resolved to NOTHING on any machine 
 never ran that repo's installer — silently, in every instance. If this group's
 ../CLAUDE.md says the same things, drop one copy. -->
 
-### Planning & thinking
-- **Front-load the spec** — intent, constraints, criteria, paths in the first turn.
-- **Plan before editing non-trivial work** — multi-file or fuzzy-criteria tasks:
-  confirm the approach first.
-
-### Parallelism & delegation
-- **Spawn subagents explicitly** for genuinely independent work; **use tools
-  proactively** (Grep/Glob before answering); **read before you write** (exports,
-  callers, shared utilities).
-
-### Compounding engineering
-- **Learn from corrections** — turn a pointed-out mistake into a specific rule in
-  the relevant `CLAUDE.md`. `Don't import from lodash — we use remeda` beats
-  `be careful with imports`.
-
 ### PR sizing
 - **Keep PRs under `maxPrLoc` (500 when absent) and `maxPrFiles` (100 when absent).**
   Past either, propose a split before committing — suggest, don't block.
