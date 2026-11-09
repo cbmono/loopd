@@ -6,8 +6,7 @@
 # `validate-bundle.sh` and `migrate-bundle.sh` through symlinks that no longer exist (both
 # ship in the plugin and are reachable directly, and `/<plugin>:welcome check` is the one
 # command that surveys a bundle). What was left is the stage nothing else can do: the
-# 3-way seed merge, reachable as `/<plugin>:welcome fix` and `/<plugin>:init
-# --refresh-seeds`.
+# 3-way seed merge, reachable as `/<plugin>:init`.
 #
 # The properties that matter are the negative ones, in this order:
 #   · a default run writes NOTHING (the whole instance is checksummed before and after,

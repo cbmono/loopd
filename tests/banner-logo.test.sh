@@ -265,7 +265,7 @@ NCW="$(NO_COLOR=1 CLAUDE_PROJECT_DIR="$INST" bash "$SH" 2>/dev/null)"
 assert "NO_COLOR takes the other branch and carries none either" "$(no_logo_at_all "$NCW")"
 assert "the explicit \`banner\` form carries none"  "$(eq "$(welcome banner)" "$W")"
 assert "\`check\` carries none"  "$(no_logo_at_all "$(welcome check --instance "$INST" --template "$TPL")")"
-assert "\`fix\` carries none"    "$(no_logo_at_all "$(welcome fix --instance "$INST" --template "$TPL")")"
+assert "\`fix\` carries none"    "$(no_logo_at_all "$(LOOPD_INIT_PASS=1 welcome fix --instance "$INST" --template "$TPL")")"
 # A FLAG THE CALLER PASSED LEAVES THE DECISION ALONE — that contract is the reason this is
 # `--no-logo` on the wrapper's own branches and not a format the hook picks for itself.
 assert "a caller's own --format md still gets the mark" \

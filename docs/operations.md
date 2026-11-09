@@ -20,7 +20,7 @@ every bundle. `claude plugin update` swaps the whole plugin tree and gives the s
 property, so the symlinks lost their reason to exist — and a plugin-shipped installer
 could not have kept them anyway, since the plugin cache path changes on every update and
 every link would dangle. **No clone of this repo is needed on a user's machine to stamp a
-bundle** — and that sentence was FALSE for one release, which is worth keeping here rather
+bundle** — and that sentence was FALSE at 0.15.0, which is worth keeping here rather
 than quietly correcting. Measured 2026-09-05 on the installed 0.15.0 cache: it holds
 `agents/ evals/ hooks/ scripts/ skills/ README.md` and nothing else, so `init-bundle.sh`
 exited 2 with *cannot locate the loopd template root* and `/loopd:init` was
@@ -104,11 +104,9 @@ conflict markers is left in the bundle tree: every copy it keeps goes under the 
 finds nothing to do.
 
 **What `/loopd:welcome` is for, now that it does not fix anything:** the banner, and
-`check` — the report-only survey of state that could be wrong. `welcome fix` prints one
-line pointing here and exits 0 for one release, then it is removed.
-
-`/loopd:init <dir> --refresh-seeds` is accepted and ignored for the same release: the
-seed pass runs on every refresh now.
+`check` — the report-only survey of state that could be wrong. `welcome fix` and
+`/loopd:init <dir> --refresh-seeds` are removed: the repair and seed passes run on every
+refresh now.
 
 #### The decidable conflict classes
 
@@ -1680,7 +1678,7 @@ fixes drifted into because this was never written down (task-019).
   rule was added: the intermittent-refusal reading above applies.
 - **It writes a `claude --bg` grant on exactly one path — a human's yes — and never a
   trust key.** A plugin must not grant itself a bypass (owner, 2026-09-25 and
-  2026-09-30), so until 3.5.0 `/loopd:init` only printed the rule and the operator added it.
+  2026-09-30), so before 3.5.0 `/loopd:init` only printed the rule and the operator added it.
   **Changed 2026-10-09, by the owner's decision** — "let loopd:init ask during installation
   with Y as default" — after the measured onboarding cost: the second operator on a shared
   bundle, who is not an engineer, had to edit `.claude/settings.local.json` by hand, and

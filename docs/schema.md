@@ -3,7 +3,7 @@
 **The normative contract is [`plugin/seed/SCHEMA.md`](../plugin/seed/SCHEMA.md), not this page.**
 
 That file is **seed**, not machinery: `/loopd:init` copies it into a bundle once and
-the bundle owns it from then on, with `/loopd:welcome fix` 3-way merging a later
+the bundle owns it from then on, with `/loopd:init` 3-way merging a later
 template change onto local edits. Every role agent reads it, and
 `scripts/validate-bundle.sh` enforces it. Duplicating its field lists here would
 create a second copy that drifts, so this page is a **map** — what the types are, where

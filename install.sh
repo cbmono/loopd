@@ -29,8 +29,7 @@ this machine at all.
   · the ~/.claude config layer (was `install.sh --config`): RETIRED — the three agents
        it linked ship in the plugin now (loopd:code-architect, loopd:deep-bug-scan,
        loopd:plan-architect); nothing to install
-  · the seed 3-way merge (was `upgrade.sh`):
-       /loopd:welcome fix
+  · the seed 3-way merge (was `upgrade.sh`): part of step 2 above
 
 Why: a plugin-shipped installer cannot stamp absolute symlinks into a plugin cache
 whose path changes on every update. docs/migrating.md walks the conversion.

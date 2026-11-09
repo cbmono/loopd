@@ -46,6 +46,7 @@ CORE=(
   tests/companion-plugins.test.sh
   tests/harness-read-paths.test.sh
   tests/gate-files-complete.test.sh
+  tests/deprecation-windows.test.sh
 )
 
 # The per-harness wall-clock bound, in seconds, named once for the whole suite. The slowest

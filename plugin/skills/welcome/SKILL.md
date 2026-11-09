@@ -1,12 +1,12 @@
 ---
 name: welcome
-description: The loopd welcome screen — banner, or `check` (state that could be wrong). Reports facts, never rules; it repairs nothing (`fix` moved into /loopd:init).
-argument-hint: "[check|fix]  omit for the banner"
+description: The loopd welcome screen — banner, or `check` (state that could be wrong). Reports facts, never rules; it repairs nothing (the repair pass runs inside /loopd:init).
+argument-hint: "[check]  omit for the banner"
 allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/welcome.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
 
 Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/welcome.sh $ARGUMENTS` from the bundle root and
-**relay its output verbatim**. `$ARGUMENTS` is empty, `check` or `fix` — nothing else; anything else is a
+**relay its output verbatim**. `$ARGUMENTS` is empty or `check` — nothing else; anything else is a
 typo and the script will say so rather than guess.
 
 That is the whole skill. Every fact, every warning and every repair lives in the
@@ -42,13 +42,13 @@ as an autolink once, and that row's `FROM` sat two columns left of every other's
 |---|---|
 | `/welcome` | `exec`s the SessionStart hook with `--full`, so you get **that** banner minus its mark, plus the two tables — not a copy of it |
 | `/welcome check` | reports state that could be wrong, each line a fact with its evidence |
-| `/welcome fix` | **retired** — prints one line pointing at `/loopd:init`, which runs that pass itself, and exits 0. Relay the line; do not run the repairs by hand |
+| `/welcome fix` | **removed** — a usage error (exit 2). `/loopd:init` runs that repair pass itself; do not run the repairs by hand |
 
 ## What you must not do with the output
 
 - **Do not summarise the `⚠` lines away.** They are facts about this instance, and the
   human is the one who acts on most of them.
-- **Do not act on a tier the script declined to act on.** If `fix` printed a line and did
+- **Do not act on a tier the script declined to act on.** If init's repair pass printed a line and did
   not repair it, that is the design, not an omission for you to finish. In particular:
   never revert, stage or rewrite `instance.config.json` / `instance.config.local.json`
   (an uncommitted value there is routinely a decision somebody made minutes ago), and

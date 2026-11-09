@@ -258,6 +258,22 @@ ok "…and leaves the tree clean"             "$(GIT -C "$TMP/dry" status --porc
 ok "…while naming the five places it would write" \
   "$("$BUMP" minor --dry-run --repo "$TMP/dry" | grep -cE '^(VERSION|plugin/VERSION|plugin/\.claude-plugin/plugin\.json|\.claude-plugin/marketplace\.json|docs/operations\.md)$')" 5
 
+# AN OPEN `until <x.y.z>` IS A LINE ONLY THE BUMP CAN CROSS: PRs carry no version, so a
+# window expires here or nowhere. Both directions, and --dry-run refuses the same way.
+fixture "$TMP/window"
+plant "$TMP/window" 2.4.7
+printf 'kept until 2.4.8\n' > "$TMP/window/plugin/window.md"
+GIT -C "$TMP/window" add -A; GIT -C "$TMP/window" commit -q -m "plant a window"
+before="$(five "$TMP/window")"
+ok "a bump that reaches an open until is refused" "$(run patch --repo "$TMP/window")" 1
+ok "…naming file:line"                     \
+  "$("$BUMP" patch --repo "$TMP/window" 2>&1 | grep -c 'EXPIRED plugin/window.md:1 until 2.4.8')" 1
+ok "…and --dry-run refuses it too"         "$(run patch --dry-run --repo "$TMP/window")" 1
+ok "…having written NOTHING"               "$(five "$TMP/window")" "$before"
+printf 'kept until 2.4.9\n' > "$TMP/window/plugin/window.md"
+GIT -C "$TMP/window" commit -q -am "move the window"
+ok "…while a bump below the until is accepted" "$(run patch --repo "$TMP/window")" 0
+
 echo
 echo "== 2b. on minor and patch, a companion moves only when its SHIPPED tree changed =="
 # Its version commit is the one that set the current version string (pickaxe), so a later

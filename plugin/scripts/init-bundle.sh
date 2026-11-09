@@ -5,7 +5,6 @@
 #   Usage:
 #     init-bundle.sh [TARGET]           # create/refresh a bundle at TARGET (default: cwd)
 #     init-bundle.sh --instance [TARGET]  # the same thing, stated explicitly
-#     init-bundle.sh --refresh-seeds [TARGET]  # accepted and ignored — always applied now
 #     init-bundle.sh --with-objectives [TARGET]  # also create the OPTIONAL objectives/ dir
 #     init-bundle.sh --normalise-config [TARGET]  # also APPLY the config findings it reports
 #     init-bundle.sh --owner LOGIN --email ADDR --repos-root DIR [TARGET]
@@ -64,7 +63,7 @@
 #      that map has this clone's `ownerGithubUser`, which is the one derivation a second
 #      clone used to type by hand.
 #   6. Reports seed DRIFT — a seed doc this repo has changed since the bundle was stamped
-#      — via refresh-seeds.sh, report-only unless `--refresh-seeds` is given.
+#      — and applies it, via the welcome fix pass (refresh-seeds.sh).
 #   7. Its ONE write outside TARGET: re-points the per-machine link
 #      ${CLAUDE_CONFIG_DIR:-~/.claude}/plugins/<plugin>/bin at this plugin's scripts/ (step 1g),
 #      and prints — never writes — the shell-rc line that puts it on PATH.
@@ -138,7 +137,6 @@ END_MARK="# <<< ai-bridge machinery <<<"
 
 MODE="install"
 TARGET=""
-REFRESH_SEEDS=0
 WITH_OBJECTIVES=0
 NORMALISE_CONFIG=0
 # This clone's three per-machine identity values, when the caller supplies them instead of
@@ -160,14 +158,15 @@ while [ "$#" -gt 0 ]; do
   arg="$1"
   case "$arg" in
     --uninstall) MODE="uninstall" ;;
-    # ACCEPTED AND IGNORED, for one release. The seed merge is part of every refresh now
-    # (step 5), so a saved command line does not become a fatal "unknown argument".
-    --refresh-seeds) REFRESH_SEEDS=1 ;;
+    # Retired: every refresh applies the seed merge (step 5). Refused by name, like --config.
+    --refresh-seeds)
+      echo "error: --refresh-seeds is retired — every stamp applies the seed merge now; drop the flag." >&2
+      exit 2 ;;
     # `objectives/` is the OPTIONAL layer (SCHEMA.md -> type: Objective), so the seed
     # ships none and this flag is how a bundle that wants one asks for it.
     --with-objectives) WITH_OBJECTIVES=1 ;;
     # APPLY the config findings step 4d reports, instead of only printing them. Off by
-    # default for the same reason --refresh-seeds is: this one rewrites a TRACKED file.
+    # default because it rewrites a TRACKED file.
     --normalise-config) NORMALISE_CONFIG=1 ;;
     --spawn-grant) SPAWN_GRANT_FLAG=1 ;;
     # A BARE directory argument has always meant "stamp a bundle here" — three live
@@ -2577,7 +2576,6 @@ fi
 # variable and runs no second pass. Without it, a symlink the sweep KEEPS (a human's own)
 # and that row still counts would loop forever. `AI_BRIDGE_INIT_PASS`, its pre-rename name,
 # is still honoured as an alias, read here and in welcome.sh and never set.
-[ "$REFRESH_SEEDS" -eq 0 ] || REFRESH_SEEDS=0   # read and dropped — see the flag above
 if [ "$FIRST_STAMP" = no ] && [ -z "${LOOPD_INIT_PASS:-}${AI_BRIDGE_INIT_PASS:-}" ]; then
   if [ -f "$BIN_DIR/welcome.sh" ]; then
     echo

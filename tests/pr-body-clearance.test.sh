@@ -33,11 +33,8 @@
 #
 # EVERY SPELLING OF THE TL;DR MARKER IS PINNED, and that is coordination, not
 # thoroughness. `CONVENTIONS.md` requires the heading `## Description` since 2026-09-06;
-# the `(TL;DR)` suffix it carried before that clears FOR ONE MORE RELEASE, with a
-# one-line deprecation notice, so a pull request opened before the rename is told rather
-# than refused. Both spellings, and the notice, are pinned below; the notice is pinned in
-# BOTH directions, because a notice that fires on the new heading is as wrong as one that
-# never fires at all.
+# the `(TL;DR)` suffix it carried before that is accepted permanently, with no notice.
+# Both spellings are pinned below, and so is the absence of any deprecation text on either.
 #
 # `gh` is replaced by a stub on PATH, so the whole matrix runs offline. The stub answers
 # from $FIX; an absent fixture is an absent thing, exactly as in review-clearance.lib.sh.
@@ -259,18 +256,17 @@ serve "$(body_file 'TL;DR: adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" ''
 expect "the bare-token form -> clear" 0 42
 
 echo
-echo "== the heading rename: the new form, the retired one, and the notice =="
-# `## Description` is the required heading; `## Description (TL;DR)` clears for one more
-# release so a body written before the rename is not refused at the merge gate.
+echo "== the heading rename: the new form and the old one, both silent =="
+# `## Description` is the required heading; `## Description (TL;DR)` is accepted
+# permanently, with no notice.
 serve "$(good_body)"
 expect "'## Description' -> clear" 0 42
-says_not "  ...with NO deprecation notice on the current heading" "is deprecated"
+says_not "  ...with NO deprecation notice on the current heading" "deprecated"
 
 serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
                    "$(crit_head 1)" '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
-expect "the retired '## Description (TL;DR)' -> still clear" 0 42
-says   "  ...carrying the one-line deprecation notice" "is deprecated"
-says   "  ...that names the heading to move to"        "use '## Description'"
+expect "the old '## Description (TL;DR)' -> clear" 0 42
+says_not "  ...with NO deprecation notice"            "deprecated"
 
 # The new row matches the WHOLE heading text, so a heading that merely STARTS with the
 # word is not the marker — the same fail-closed narrowing `## Is the TL;DR rule required?`

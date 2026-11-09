@@ -134,8 +134,8 @@ It does three things, and **none of them is a symlink into a checkout**:
 | 3 | **Links** the group's repos into `<bundle>/repos/` | skipped while `reposRoot` is the seeded placeholder. **The only symlinks a stamped bundle holds.** |
 
 It is idempotent. It backs up any conflicting real file as `<name>.bak.<epoch>`.
-`--refresh-seeds` additionally 3-way merges a seed change this repo has made since the
-bundle was stamped; without it that drift is reported and nothing is written.
+A refresh also 3-way merges a seed change this repo has made since the bundle was
+stamped; a hand-diverged file is reported, never forced.
 
 > **This replaced `install.sh`, and the reason is structural.** A plugin-shipped installer
 > cannot stamp absolute symlinks into a plugin cache whose path changes on every update —
@@ -665,7 +665,8 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `verified-facts.sh` | `[--instance DIR] [--presence] <task-doc>` — is a build task's `## Verified facts` section present and still true: `verified` 0, `missing` 1, `stale` 3 (a path it names changed on `origin/<default>` since its sha), `unknown` 4 (no clone, failed fetch, sha absent), `research` 5. One bounded `ls-remote` for the remote's default branch and one bounded fetch of it; `--presence` reads the document alone | no |
 | `question-sweep.sh` | `[--instance DIR] [--apply] [<task-doc>...]` — evaluates each open question's trailing ` check: <kind> <arg>` (`pr-merged`, `file`, `decision`) from GitHub or the committed bundle and prints `true`/`false`/`unknown`/`refused` per entry; `--apply` appends ` · sweep: <predicate> true @ <evidence>` through `fold-answers.sh --sweep` and never answers. Run by every full tick (`project-manager.md` step 2.6); `SCHEMA.md` → "Evidence sweep" | `--apply` only, one open entry per true predicate |
 | `kb-words.sh` | sourced, never run — the content-word key `kb-compare.sh` and `kb-select.sh` share | no |
-| `release-bump.sh` | `<minor\|patch>` — moves the version in the **five** places that carry it (`VERSION`, `plugin/VERSION`, both manifests, and the banner sample, whose `─` rule is re-cut to the new header's width), on the **default branch, after a merge**. Refuses on a feature branch or a dirty tree; commits and prints the push, never pushes | yes, those five |
+| `release-bump.sh` | `<minor\|patch>` — moves the version in the **five** places that carry it (`VERSION`, `plugin/VERSION`, both manifests, and the banner sample, whose `─` rule is re-cut to the new header's width), on the **default branch, after a merge**. Refuses on a feature branch, a dirty tree, or a new version that reaches an open deprecation `until`; commits and prints the push, never pushes | yes, those five |
+| `deprecation-windows.sh` | `[--root DIR] [--version X.Y.Z]` — lists each deprecation window under `plugin/` and in `docs/operations.md` with no `until <x.y.z>` on its line (`BARE`) or whose `until` the version has reached (`EXPIRED`); `--cmp A B` is the per-field comparator. Run by `tests/deprecation-windows.test.sh` and `release-bump.sh`. 0 none · 1 listed · 2 usage | no |
 | `check-template-version.sh` | is the plugin on this machine older than the remote's default branch — prints a line **only when behind**, silence on every failure | not the instance — `--fetch` (opt-in) updates the template checkout's remote-tracking refs, nothing else |
 | `close-project-folder.sh` | closeout's folder step — `git rm -r` the project, or freeze and keep it on `retain: true` | only with `--apply` |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
@@ -836,8 +837,7 @@ Agent-facing rules are in [`CLAUDE.md`](CLAUDE.md) and [`.claude/rules/`](.claud
 loopd used to live as an `ai-bridge/` subtree inside
 [`ai-setup`](https://github.com/cbmono/ai-setup), the Claude Code defaults repo. **This
 repo is now the canonical copy** — every instance's machinery ships from *this* repo as
-the `loopd` plugin, and `/loopd:init` and `/loopd:welcome fix` here are the
-ones to run.
+the `loopd` plugin, and `/loopd:init` here is the one to run.
 
 `ai-setup` **no longer carries the subtree** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69)
 removed it, because a stale second copy that documentation still described as live was

@@ -19,7 +19,7 @@
 # a bad trade.
 #
 # So: every entry here is REPORTED, with the exact command to remove it, and
-# `/loopd:welcome fix` puts it in the numbered "what's left for you" list. Nothing here is
+# `/loopd:init` puts it in the numbered "what's left for you" list. Nothing here is
 # ever deleted by either script. The decision stays with the human who wrote the
 # file.
 #

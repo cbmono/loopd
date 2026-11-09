@@ -4,10 +4,10 @@
 #
 #   welcome.sh                      reprint the SessionStart banner
 #   welcome.sh check  [flags]       report the state of this instance
-#   welcome.sh fix    [flags]       RETIRED — points at /<plugin>:init and exits 0
+#   welcome.sh fix    [flags]       the repair pass — run ONLY by /<plugin>:init
 #
-# `fix` MOVED INTO `/<plugin>:init` — it stamps the bundle, then runs this file's pass
-# (`LOOPD_INIT_PASS=1`, same tiers, same refusals). This form is a pointer for one release.
+# `fix` lives inside `/<plugin>:init`: it stamps the bundle, then runs this file's pass with
+# `LOOPD_INIT_PASS=1`. Called without that variable, `fix` is a usage error (exit 2).
 #
 # WHAT THIS IS NOT, because the rejected shape is the one that keeps getting proposed. It
 # does NOT load rules into context. `CLAUDE.md` is injected into every turn and the banner
@@ -146,8 +146,7 @@ Usage: welcome.sh [banner]                       reprint the SessionStart banner
        welcome.sh check [--instance DIR] [--template DIR] [--fetch]
                           [--since <ref>] [--only-problems] [--banner] [--list]
                           [--style auto|markdown|ansi|plain]
-       welcome.sh fix   [--instance DIR] [--template DIR] [--fetch]
-                          [--style auto|markdown|ansi|plain]
+The repair pass (fix) runs inside /<plugin>:init, never on its own.
 USAGE
 }
 
@@ -155,7 +154,9 @@ USAGE
 # flag is fatal here (unlike the banner, which is a hook and must start anyway): this is an
 # interactive command, and silently ignoring `--intsance` would report on the wrong root.
 case "${1:-}" in
-  check|fix)   FORM="$1"; shift ;;
+  check)       FORM=check; shift ;;
+  fix)         [ -n "${LOOPD_INIT_PASS:-}${AI_BRIDGE_INIT_PASS:-}" ] || { usage; exit 2; }
+               FORM=fix; shift ;;
   banner)      FORM=banner; shift ;;
   -h|--help)   usage; exit 0 ;;
   "")          FORM=banner ;;
@@ -1377,10 +1378,6 @@ fi
 # `config-uncommitted` is; it reads the tier the row declares and dispatches on that alone.
 # The two ship-blockers therefore hold by construction rather than by care: there is no
 # branch here that could be pointed at a config file or a lock file.
-if [ -z "${LOOPD_INIT_PASS:-}${AI_BRIDGE_INIT_PASS:-}" ]; then   # the old name is a read-only alias
-  echo "${PLUGIN_NAME} fix has moved into /${PLUGIN_NAME}:init — run that instead; it stamps the bundle and then runs this same pass."
-  exit 0
-fi
 echo "${PLUGIN_NAME} fix — acting ONLY on the idempotent tier."
 echo "                Config files and tick locks are NEVER written, reverted, staged,"
 echo "                cleared or rewritten by this command. They are reported."

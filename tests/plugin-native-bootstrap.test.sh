@@ -123,7 +123,7 @@ ok "install.sh is a stub that refuses"       "$(bash "$REPO/install.sh" /tmp >/d
 ok "…naming /${PN}:init"                 "$(bash "$REPO/install.sh" 2>&1 | grep -c '/'"${PN}:"'init' | tr -d ' ')" 1
 ok "…on ONE screen (≤ 40 lines)"             "$([ "$(bash "$REPO/install.sh" 2>&1 | grep -c .)" -le 40 ] && echo yes || echo no)" yes
 ok "upgrade.sh is a stub that refuses"       "$(bash "$REPO/upgrade.sh" /tmp >/dev/null 2>&1; echo $?)" 2
-ok "…naming /${PN}:welcome fix"          "$(bash "$REPO/upgrade.sh" 2>&1 | grep -c ''"${PN}:"'welcome fix' | tr -d ' ')" 1
+ok "…naming /${PN}:init <dir>"            "$(bash "$REPO/upgrade.sh" 2>&1 | grep -c '/'"${PN}:"'init <dir>' | tr -d ' ')" 1
 ok "…on ONE screen (≤ 40 lines)"             "$([ "$(bash "$REPO/upgrade.sh" 2>&1 | grep -c .)" -le 40 ] && echo yes || echo no)" yes
 
 # =========================================================================================

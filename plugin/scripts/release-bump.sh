@@ -7,11 +7,12 @@
 # (every non-core marketplace source, the alias included): `major` moves each to <new major>.0.0;
 # `minor`/`patch` move by the same field each whose SHIPPED tree changed since the commit that
 # set its current version (pickaxe), where `tests/` and `*.test.*` ship nothing.
-# Exit: 0 bumped · 1 refused (branch, dirty tree, missing file, no version commit, unverifiable) · 2 usage.
+# Exit: 0 bumped · 1 refused (branch, dirty tree, missing file, no version commit, unverifiable,
+# a deprecation window the new version reaches — deprecation-windows.sh) · 2 usage.
 # Reasoning: ai-bridge-next/task-026, task-028; interactive-board/task-014; conventions §20. Tests: tests/release-bump.test.sh.
 set -uo pipefail
 
-usage() { sed -n '2,11p' "$0" >&2; exit 2; }
+usage() { sed -n '2,12p' "$0" >&2; exit 2; }
 die() { printf 'release-bump: %s\n' "$1" >&2; exit 1; }
 
 FIELD=""; ROOT=""; ROOT_GIVEN=0; COMMIT=1; DRY=0
@@ -55,6 +56,11 @@ case "$FIELD" in
   minor) NEW="$MA.$((MI + 1)).0" ;;
   patch) NEW="$MA.$MI.$((PA + 1))" ;;
 esac
+
+# PRs carry no bump, so only this line can cross an `until <x.y.z>`; refusing here keeps main green.
+WINDOWS="$(bash "$_d/deprecation-windows.sh" --root "$ROOT" --version "$NEW" 2>&1)" \
+  || die "$NEW would reach an open deprecation window — close it first:
+$WINDOWS"
 
 # The release note for the version being cut is the ONE path allowed to be dirty: the bump
 # commit carries it, and a dirty tree is otherwise refused, so there is no other route by
