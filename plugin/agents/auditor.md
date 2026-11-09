@@ -74,8 +74,8 @@ instance's `CLAUDE.md` (data-handling, units, no PII).
   read-only, so a parallel fan-out would suit them — but you hold neither `Workflow` nor
   `Agent`, so you have no way to dispatch one and sequential is your only route. Don't plan
   around a fan-out, and don't reinstate a "fan out when the tool is available" clause here:
-  the condition can never be true for this agent, and read-only-by-allowlist is what makes
-  your "I never act" claim enforceable rather than aspirational. Bound the cost by sampling
+  the condition can never be true for this agent. Your "I never act" is an instruction you
+  follow, not something `tools:` enforces — it grants `Bash`. Bound the cost by sampling
   (above) instead of by parallelism.
   <!-- tool-mention: Workflow(1), Agent(1) — named to record that this agent holds neither, so the fan-out clause that used to be here was permanently dead. Stating the sequential route is the fix; widening the allowlist is not. Enforced by tests/agent-tool-allowlist.test.sh. -->
 - **The cost series comes from the LEDGER, and from nothing else.** One command:
