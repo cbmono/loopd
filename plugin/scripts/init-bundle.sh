@@ -2631,12 +2631,26 @@ fi
 # 6. One nudge, and only a nudge, when the bundle's own documents do not satisfy the
 # schema. Silent unless the validator says exactly "there are errors" (exit 1): absent,
 # clean, or "not a bundle root" (exit 2) are not things a human can act on from here.
+# Report mode only, never --apply. The sed patterns below are the two scripts' summary
+# lines; tests/init-migrate-hint.test.sh fails when either drifts.
 if [ -f "$BIN_DIR/validate-bundle.sh" ]; then
   vrc=0
-  ( cd "$TARGET" && bash "$BIN_DIR/validate-bundle.sh" ) >/dev/null 2>&1 || vrc=$?
+  vout="$(cd "$TARGET" && bash "$BIN_DIR/validate-bundle.sh" 2>/dev/null)" || vrc=$?
   if [ "$vrc" -eq 1 ]; then
-    echo "Note: this bundle has schema errors. To see and repair them, run:"
-    echo "      /${PLUGIN_NAME}:welcome check   (or: bash $BIN_DIR/validate-bundle.sh from $TARGET)"
+    nerr="$(printf '%s\n' "$vout" | LC_ALL=C sed -n 's/^validate-bundle: checked [0-9]*, skipped [0-9]*, \([0-9]*\) errors, [0-9]* warnings\.$/\1/p' | tail -1)"
+    mout=""
+    [ ! -f "$BIN_DIR/migrate-bundle.sh" ] || mout="$(cd "$TARGET" && bash "$BIN_DIR/migrate-bundle.sh" 2>/dev/null)" || true
+    nfix="$(printf '%s\n' "$mout" | LC_ALL=C sed -n 's/^migrate-bundle: \([0-9]*\) would be fixed, [0-9]* need a human, [0-9]* skipped\. .*/\1/p' | tail -1)"
+    nmount="$(printf '%s\n' "$mout" | LC_ALL=C sed -n 's/^  SKIPPED  knowledge\/ (\([0-9]*\) document(s))$/\1/p' | tail -1)"
+    if [ -n "$nerr" ] && [ -n "$nfix" ]; then
+      line="Note: $nerr schema errors, $nfix fixable"
+      [ "$nfix" -eq 0 ] || line="$line: $BIN_DIR/migrate-bundle.sh --apply"
+      [ -z "$nmount" ] || line="$line ($nmount knowledge/ documents skipped: mounted, repair them from that repository)"
+      echo "$line"
+      echo "      from $TARGET; see every error with: bash $BIN_DIR/validate-bundle.sh"
+    else
+      echo "Note: this bundle has schema errors. See them with: bash $BIN_DIR/validate-bundle.sh from $TARGET"
+    fi
   fi
 fi
 
