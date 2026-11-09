@@ -1207,6 +1207,12 @@ ok "…in UTC under a non-UTC TZ"          "$([ "$mh" = "$h0" ] || [ "$mh" = "$h
 ok "…and two mints differ"               "$([ "$M1" != "$M2" ] && echo yes || echo no)" yes
 ok "…which acquire accepts as a claimant" \
   "$(mkdir -p "$TMP/mint" && bash "$LOCKSH" acquire --instance "$TMP/mint" --claimant "$M1" >/dev/null 2>&1; echo $?)" 0
+# SIGPIPE ignored on entry (as a nightly runner's parent can leave it): an unbounded
+# /dev/urandom reader never ends there. perl's alarm is the 10 s bound; it kills the group.
+mrc2="$( trap '' PIPE; perl -e 'setpgrp(0,0); $SIG{ALRM}=sub{$SIG{TERM}="IGNORE"; kill "TERM",-$$; exit 124}; alarm 10;
+  $p=fork; exec @ARGV unless $p; waitpid($p,0); exit($?>>8)' bash "$LOCKSH" mint >"$TMP/mint-nosigpipe.out" 2>/dev/null; echo $? )"
+ok "mint with SIGPIPE ignored finishes within 10 s, exit 0" "$mrc2" 0
+ok "…and prints the id shape"            "$(grep -qxE 'tick-[0-9]{8}T[0-9]{6}Z-[a-z0-9]{4}' "$TMP/mint-nosigpipe.out" && echo yes || echo no)" yes
 ok "mint takes no arguments"             "$(bash "$LOCKSH" mint --instance . >/dev/null 2>&1; echo $?)" 3
 ok "…passing it to its own acquire"      "$(has "$LAUNCHER" 'acquire --agent project-manager --claimant <id>')" yes
 ok "…handing the same literal to the tick" "$(has "$LAUNCHER" 'id you minted at step 1, verbatim')" yes

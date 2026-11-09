@@ -157,7 +157,7 @@ run_one() {
   fi
   s=$(date +%s)
   if out="$(bounded "$f" 2>&1)"; then rc=0; else rc=$?; fi
-  [ "$rc" -ne 142 ] || out="$out"$'\n'"run.sh: KILLED at the ${HARNESS_TIMEOUT}s per-harness bound — $f never returned. At 100% CPU, look for a harness with one <(…) per scoped file, which spins past ~256 files on bash 3.2; read the file list from a temp file instead"
+  [ "$rc" -ne 142 ] || out="$out"$'\n'"run.sh: KILLED at the ${HARNESS_TIMEOUT}s per-harness bound — $f never returned. At 100% CPU, look first for an endless reader such as tr </dev/urandom | head, which never ends when SIGPIPE is ignored — bound the read (od -N); else one <(…) per scoped file, which spins past ~256 files on bash 3.2"
   printf '%s\n' "$out" > "$RUN_OUT_DIR/$b.out"
   if verify_checkout; then state=intact; else state=broken; fi
   s=$(( $(date +%s) - s ))
