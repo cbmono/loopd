@@ -13,8 +13,8 @@ paths:
 Loads when you read `init-bundle.sh`, `refresh-seeds.sh`, `RETIRED`, or anything under
 `plugin/seed/`. **`install.sh` and `upgrade.sh` at the root are one-screen deprecation
 stubs** that print the `/loopd:init` line and exit 2; they ship for one version and are
-then deleted. `/loopd:init` and `/loopd:welcome fix` are the working replacements
-they point at. The engines are `plugin/scripts/init-bundle.sh` and
+then deleted. `/loopd:init` (which runs the welcome fix pass itself) is the working
+replacement they point at. The engines are `plugin/scripts/init-bundle.sh` and
 `plugin/scripts/refresh-seeds.sh`, and they run from the plugin so a bundle needs no clone
 of this repo at all.
 Reasoning: [`docs/conventions.md`](../../docs/conventions.md) and
