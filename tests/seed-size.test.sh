@@ -79,7 +79,10 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # file is a markdown link whose target is its ABSOLUTE path, never a bare path, a GitHub URL
 # or AWAITING.md's bundle-relative target — the owner had three unopenable or unreadable
 # Needs-you lists in a row before the rule was written down. Measured, not rounded.
-CEILING=16783
+# 16783 -> 16095 (hygiene/task-005, 2026-11-09). -664 bytes: the generic "Planning & thinking",
+# "Parallelism & delegation" and "Compounding engineering" session defaults are deleted; their
+# specific forms already sit under the role and brief rules. The ceiling follows the file down.
+CEILING=16095
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
