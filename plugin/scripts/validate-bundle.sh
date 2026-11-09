@@ -559,6 +559,7 @@ if [[ ( ${#NAMED[@]} -eq 0 || $NAMED_INDEX -eq 1 ) && -r knowledge/index.md && -
 fi
 
 echo "---"
+# init-bundle.sh step 6 parses this line; tests/init-migrate-hint.test.sh pins the format.
 printf 'validate-bundle: checked %d, skipped %d, %d errors, %d warnings.\n' "$checked" "$skipped" "$errors" "$warns"
 [[ $errors -eq 0 ]] || exit 1
 if [[ $STRICT -eq 1 && $warns -gt 0 ]]; then
