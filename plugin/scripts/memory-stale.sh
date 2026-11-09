@@ -42,7 +42,7 @@ for f in "$mem"/*.md; do
 
   while IFS= read -r p; do
     [ -d "$real/$p" ] || add "$p has no folder (closed)"
-  done < <(LC_ALL=C grep -oE 'projects/[a-z0-9][a-z0-9_-]*' "$f" | sort -u)
+  done < <(LC_ALL=C grep -oE '(^|[^A-Za-z0-9_./~-])/?projects/[a-z0-9][a-z0-9_-]*' "$f" | sed 's#^.*projects/#projects/#' | sort -u)
 
   # D2/D7: a version right after one of these words is history, not a claim about now.
   [ -n "$ver" ] && while IFS= read -r v; do
