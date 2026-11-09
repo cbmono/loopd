@@ -475,8 +475,8 @@ case "$cmd" in
   acquire|release|status) ;;
   mint)
     [ "$#" -eq 0 ] || usage
-    # `tr` dies of SIGPIPE under pipefail, so the length is the check, not the status.
-    suffix="$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom 2>/dev/null | head -c 4)"
+    # Bounded read: an endless `tr </dev/urandom | head` never ends when SIGPIPE is ignored.
+    suffix="$(od -An -N8 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' | head -c 4)"
     [ "${#suffix}" -eq 4 ] || { echo "tick-lock: cannot read /dev/urandom" >&2; exit 3; }
     echo "tick-$(date -u +%Y%m%dT%H%M%SZ)-$suffix"
     exit 0 ;;

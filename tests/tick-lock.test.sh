@@ -1207,6 +1207,16 @@ ok "…in UTC under a non-UTC TZ"          "$([ "$mh" = "$h0" ] || [ "$mh" = "$h
 ok "…and two mints differ"               "$([ "$M1" != "$M2" ] && echo yes || echo no)" yes
 ok "…which acquire accepts as a claimant" \
   "$(mkdir -p "$TMP/mint" && bash "$LOCKSH" acquire --instance "$TMP/mint" --claimant "$M1" >/dev/null 2>&1; echo $?)" 0
+# SIGPIPE ignored on entry (as a nightly runner's parent can leave it): an unbounded
+# /dev/urandom reader never ends there, so the watchdog, not mint, must be what is bounded.
+( trap '' PIPE; bash "$LOCKSH" mint >"$TMP/mint-nosigpipe.out" 2>/dev/null; echo $? >"$TMP/mint-nosigpipe.rc" ) &
+mpid=$!
+for _ in $(seq 1 100); do kill -0 "$mpid" 2>/dev/null || break; sleep 0.1; done
+if kill -0 "$mpid" 2>/dev/null; then pkill -P "$mpid" 2>/dev/null; kill "$mpid" 2>/dev/null; hung=yes; else hung=no; fi
+wait "$mpid" 2>/dev/null
+ok "mint with SIGPIPE ignored finishes within 10 s" "$hung" no
+ok "…exits 0"                            "$(cat "$TMP/mint-nosigpipe.rc" 2>/dev/null)" 0
+ok "…and prints the id shape"            "$(grep -qxE 'tick-[0-9]{8}T[0-9]{6}Z-[a-z0-9]{4}' "$TMP/mint-nosigpipe.out" && echo yes || echo no)" yes
 ok "mint takes no arguments"             "$(bash "$LOCKSH" mint --instance . >/dev/null 2>&1; echo $?)" 3
 ok "…passing it to its own acquire"      "$(has "$LAUNCHER" 'acquire --agent project-manager --claimant <id>')" yes
 ok "…handing the same literal to the tick" "$(has "$LAUNCHER" 'id you minted at step 1, verbatim')" yes
