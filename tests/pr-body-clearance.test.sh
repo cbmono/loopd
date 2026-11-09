@@ -360,6 +360,16 @@ ok "the fixture is there"   "$([ -r "$BODY195" ] && echo yes || echo no)" yes
 ok "…verbatim, to the character" "$(chars "$BODY195")" "$PR195_POSTED"
 ok "…carrying the marker pair"   "$(grep -cF -e "$OPEN195" -e "$CLOSE195" "$BODY195")" 2
 
+# #195 predates element 8, so every case below runs on it with a declared-none section
+# added before its Notes; the fixture stays verbatim and both counts grow by that section.
+BODY195D="$TMP/pr195-decided.md"
+awk -v h="$DECIDED_HEAD" -v n="$DECIDED_NONE" '$0 == "### Notes" { print h; print n; print "" } { print }' \
+  "$BODY195" > "$BODY195D"
+ok "…the section added once, before its Notes" "$(( $(chars "$BODY195D") - PR195_POSTED ))" "$DECIDED_CHARS"
+BODY195="$BODY195D"
+PR195_POSTED=$(( PR195_POSTED + DECIDED_CHARS ))
+PR195_AUTHORED=$(( PR195_AUTHORED + DECIDED_CHARS ))
+
 serve "$BODY195"
 expect "#195 as posted (${PR195_POSTED}) -> CLEAR on its ${PR195_AUTHORED} authored" 0 42
 says   "  ...reporting the counted half" \
@@ -402,7 +412,7 @@ echo "== and the marker pair is NOT an exemption an author can write himself =="
 GENERATED_CEILING=1000
 PR195_BLOCK=740            # markers included: 2672 - 1932, the block CodeRabbit wrote
 
-ok "the fixture's block is the measured 740" "$(( PR195_POSTED - PR195_AUTHORED ))" "$PR195_BLOCK"
+ok "the block is the measured 740" "$(( PR195_POSTED - PR195_AUTHORED ))" "$PR195_BLOCK"
 
 padded_block() { # <chars> -> #195 with its block padded to exactly that many characters
   local want="$1" out="$TMP/pr195-block-$1.md"
@@ -447,9 +457,12 @@ ok "the fixture is there, to the character" "$(chars "$BODY025")" "$T025_POSTED"
 ok "…its criterion column alone, past the ceiling" \
    "$(awk -F' [|] ' '$2 == "✓" && $1 != "| Criterion" { sub(/^[|] /, "", $1); printf "%s", $1 }' \
       "$BODY025" | "$REAL_JQ" -Rs 'length')" "$T025_CRITERIA"
-expect "task-025 quoted in full (${T025_POSTED}) -> CLEAR" 0 --body-file "$BODY025"
+# The fixture predates element 8, so the section is appended here, never written into it.
+BODY025D="$TMP/task-025-decided.md"
+{ cat "$BODY025"; printf '\n%s\n%s\n' "$DECIDED_HEAD" "$DECIDED_NONE"; } > "$BODY025D"
+expect "task-025 quoted in full (${T025_POSTED}) -> CLEAR" 0 --body-file "$BODY025D"
 says   "  ...printing the number it compared" \
-       "is $(( T025_POSTED - T025_CRITERIA )) characters (ceiling $BODY_CEILING)"
+       "is $(( T025_POSTED + DECIDED_CHARS - T025_CRITERIA )) characters (ceiling $BODY_CEILING)"
 says   "  ...and what it left out"   "not counting $T025_CRITERIA characters"
 
 crit_body() { # <criterion cell> <prose chars> -> one row, padded to COUNT <prose chars>
@@ -947,7 +960,7 @@ serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '### Notes'
 expect "a nested sub-bullet under a claim-first note -> clear" 0 42
 
 # THE HEADING DEPTH IS NOT SIGNIFICANT, and that is not a nicety: `CONVENTIONS.md` writes
-# `## Notes` in its prose while #3286 — the worked example the same document names — writes
+# `## Notes` in its prose while #3286 — the worked example `conventions/pr-body.md` names — writes
 # `### Notes`. A reader pinned to either depth would silently stop checking one of them.
 serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '## Notes' '' "$NOTE_BARE")"
 expect "a bare bullet under '## Notes' -> refuse, same as under '### Notes'" 1 42
@@ -996,9 +1009,9 @@ says_not "  …and its eight ✗ are explained"             "MISSING: the reason
 says_not "  element 6: its notes all lead with a claim"  "MISSING: the bold claim opening"
 says_not "  …and its criteria table is well-formed"     "MISSING: the acceptance-criteria table"
 
-# WHAT IT IS REFUSED FOR IS TWO RULES THAT ARE OLDER THAN THIS CHANGE AND ARE NOT ITS
-# SUBJECT, and #3286 is a pull request in ANOTHER repository with its own house style. Both
-# are pinned here so the day either moves, this goes red and somebody decides it on purpose
+# WHAT IT IS REFUSED FOR IS THREE RULES THAT ARE NOT THIS CHANGE'S SUBJECT, and #3286 is
+# a pull request in ANOTHER repository with its own house style. All three are pinned here
+# so the day any moves, this goes red and somebody decides it on purpose
 # rather than discovering it:
 #   1. `CONVENTIONS.md` requires the literal heading `## Description` opening every
 #      body — "that exact string, character for character". #3286 opens with its TL;DR
@@ -1008,9 +1021,16 @@ says "  what it is refused for: the loopd TL;DR heading" "MISSING: the TL;DR lin
 #   2. Two of its evidence cells are under the measured 13-byte floor — `see Notes` (9)
 #      and `binary slice` (12). `see above` (9) is the longest thing CONVENTIONS.md names
 #      as a floor FAILURE, so this is the floor working, not the floor misfiring.
+#   3. It has no `### Decided without asking` section, which loopd requires (element 8).
 EXEMPLAR_HOUSED="$TMP/exemplar-housed.md"
 { printf '%s\n\n' '## Description'; cat "$EXEMPLAR"; } > "$EXEMPLAR_HOUSED"
-expect "…the same body under the loopd heading -> the ROW bound, and only it" \
+expect "…the same body under the loopd heading -> REFUSE, for element 8 alone" \
+       1 --body-file "$EXEMPLAR_HOUSED"
+says   "  naming the section"  "MISSING: the 'Decided without asking' section"
+ok     "  …and nothing else"   "$(grep -c 'MISSING:\|INCOMPLETE:\|WRONG:\|EMPTY:\|CONTRADICTED:' <<<"$LAST_OUT")" 1
+{ cat "$EXEMPLAR_HOUSED"; printf '\n%s\n%s\n' "$DECIDED_HEAD" "$DECIDED_NONE"; } > "$TMP/exemplar-decided.md"
+EXEMPLAR_HOUSED="$TMP/exemplar-decided.md"
+expect "…and with the section too -> the ROW bound, and only it" \
        3 --body-file "$EXEMPLAR_HOUSED"
 says   "  naming both cells under the floor"  "but 2 acceptance-criteria"
 says   "  row 11, 'binary slice'"             "row 11 under the FLOOR at 12 bytes"
@@ -1025,8 +1045,8 @@ dw_body() { raw_body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' "$
 expect "a row -> CLEAR"              0 --body-file "$(dw_body "$DECIDED_HEAD" "$DROW")"
 expect "none — <why> -> CLEAR"       0 --body-file "$(dw_body '## decided without asking' "$DECIDED_NONE")"
 says_not "  ...with no notice"       "Decided without asking' section —"
-expect "no section -> CLEAR for one release" 0 --body-file "$(dw_body)"
-says   "  ...told, not refused"      "note: no '### Decided without asking' section"
+expect "no section -> REFUSE"        1 --body-file "$(dw_body)"
+says   "  ...naming the none form"   "MISSING: the 'Decided without asking' section; with nothing to declare it is the one line 'none — <why>'."
 expect "an empty section -> REFUSE"  1 --body-file "$(dw_body "$DECIDED_HEAD" '' '### Notes')"
 says   "  ...naming the section"     "EMPTY: the 'Decided without asking' section"
 expect "rows and a none line -> REFUSE" 1 --body-file "$(dw_body "$DECIDED_HEAD" "$DROW" "$DECIDED_NONE")"
@@ -1051,7 +1071,7 @@ says   "  ...not charging the row" "nor $DROW_CHARS characters of Decided withou
 expect "…one prose character more -> REFUSE" 4 --body-file "$(sized_body "$(( BODY_CEILING + 1 ))" "$DROW")"
 
 # A mutant that accepts every section state must fail the refusals above and its self-test.
-MUT="$TMP/mutant.sh"; sed 's/absent|rows|none) true ;;/absent|rows|none|empty|both|bare) true ;;/' \
+MUT="$TMP/mutant.sh"; sed 's/rows|none) true ;;/rows|none|empty|both|bare) true ;;/' \
   "$SCRIPT" > "$MUT"; cp "$(dirname "$SCRIPT")/bundle-paths.sh" "$TMP/"; chmod +x "$MUT"
 ok "the mutant differs from the script" "$(cmp -s "$SCRIPT" "$MUT" && echo same || echo differs)" differs
 ok "…clears an empty section" \

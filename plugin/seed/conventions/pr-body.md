@@ -64,10 +64,11 @@ Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short
   ```
 
   **The worked example is [alteos-gmbh/monorepo#3286](https://github.com/alteos-gmbh/monorepo/pull/3286)** —
-  3,554 characters for a +1,657-line change, read in under a minute, and the shape every
-  body here is measured against. Open it before you write your first one. A rule with an
-  exemplar is followed; a rule described in the abstract is the one that produced a
-  14,673-character body five hours after it shipped.
+  3,554 characters for a +1,657-line change, read in under a minute. It predates the
+  `## Description` heading and the `### Decided without asking` section; add both. Open
+  it before you write your first one. A rule with an exemplar is followed; a rule
+  described in the abstract is the one that produced a 14,673-character body five hours
+  after it shipped.
 
   1. **The heading `## Description`, first**, then **a one-sentence TL;DR** under
      it. **That exact string, character for character** — it is the shape's only greppable
@@ -103,7 +104,8 @@ Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short
      rows, so the two lists compare directly. A choice that departs from a `D<n>` is always
      a row. Nothing to declare is the single line `none — <why>`, never a bare `none`.
      `pr-body-clearance.sh` refuses an empty section, rows beside a none line, a second
-     none line, a row missing one of the three keys, and a bare `none`; a body without the section is told, not refused, for one release. Its rows
+     none line, a row missing one of the three keys, a bare `none`, and a body without the
+     section — `MISSING: the 'Decided without asking' section; with nothing to declare it is the one line 'none — <why>'.` Its rows
      are not charged against the 2,500, up to 800 characters each.
   5. **A short flagged line per threshold question** the owner must answer — harness
      growth, PR size, a wide change you could not split. One line each, `⚠️`-prefixed,

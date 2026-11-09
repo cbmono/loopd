@@ -192,8 +192,7 @@
 #      nobody told you to?". Matched by heading text at any depth, as Notes is. It holds
 #      bullet rows carrying `alternatives:`, `why:` and `reversible:`, or ONE `none — <why>`
 #      line; empty, both, two none lines, an unshaped row or a `none` with no why is
-#      refused at 1. ABSENT IS TOLD, NOT REFUSED, FOR ONE RELEASE — the precedent of the
-#      retired TL;DR spelling above: open PRs and un-restamped instances predate the rule.
+#      refused at 1, and so is a body without the section (owner decision, 2026-11-09).
 #      Its rows are not charged against the ceiling, up to `CRITERION_ALLOWANCE` each.
 #
 # WHAT THIS DOES NOT DO, AND WHOSE JOB THAT IS. It answers "is the criteria table there
@@ -1117,9 +1116,6 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
   dstate="$(decided_scan "$rendered" | awk -F'\t' '$1 == "decided" { print $2; n = $3; exit } END { if (n != "") print n }')"
   dunshaped="$(printf '%s\n' "$dstate" | sed -n 2p)"; dstate="$(printf '%s\n' "$dstate" | sed -n 1p)"
   case "$dstate" in absent|rows|none|empty|both|many|bare|unshaped) : ;; *) return 2 ;; esac
-  # A notice, never a verdict, for one release — element 8.
-  [ "$dstate" = absent ] \
-    && echo "note: no '### Decided without asking' section — add one ('none — <why>' when there is nothing to declare); it is required from the next release." >&2
 
   # STRUCTURE IS DECIDED BEFORE THE ROW BOUND, AND THAT ORDER IS THE POINT. Exit 1 says a
   # required element is missing; exit 3 says every element is there and one row is out of
@@ -1127,7 +1123,7 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
   # trim rows of a table the gate has not agreed exists.
   if [ "$tldr" -eq 0 ] && [ "$verified" -eq 0 ] && [ "$tstate" = ok ] \
      && [ "$tkind" = ok ] && [ "$nstate" != bare ] \
-     && case "$dstate" in absent|rows|none) true ;; *) false ;; esac; then
+     && case "$dstate" in rows|none) true ;; *) false ;; esac; then
     report_rows "$scan" "$label" || return $?
     report_concision "$raw" "$nscan" "$label" || return $?
     echo "ok: $label carries a TL;DR line and a well-formed acceptance-criteria" >&2
@@ -1210,6 +1206,10 @@ EOF
     echo "        alone. The section is optional; a note that buries its claim is not." >&2
   fi
   case "$dstate" in
+    absent)
+           echo "        MISSING: the 'Decided without asking' section; with nothing to declare it is the one line 'none — <why>'." >&2
+           echo "        Otherwise one row per choice nobody named, shaped" >&2
+           echo "        '<decision> — alternatives: …; why: …; reversible: …'." >&2 ;;
     empty) echo "        EMPTY: the 'Decided without asking' section holds no row and no" >&2
            echo "        'none — <why>' line. Write one row per choice nobody named, or" >&2
            echo "        the one none line." >&2 ;;
@@ -1410,13 +1410,15 @@ if [ "${1:-}" = "--self-test" ]; then
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
     '' '### Notes' '' "$ST_NOTE1" "$ST_NOTE2" "$ST_NOTE3" "$ST_NOTE4"
 
-  # ELEMENT 8, every state. The missing section clears for one release; a copy that
-  # dropped the check answers 0 on the three refusals.
+  # ELEMENT 8, every state. A copy that dropped the check answers 0 on the refusals.
   ST_BODY=('## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' '')
   ST_ROW='- Kept awk — alternatives: jq; why: no new dependency; reversible: yes'
   st_raw 0 "a Decided without asking row" "${ST_BODY[@]}" '### Decided without asking' "$ST_ROW"
-  st_raw 0 "…a body with no such section, told for one release" "${ST_BODY[@]}"
+  st_raw 1 "…a body with no such section" "${ST_BODY[@]}"
+  decide "$TMPD/raw" "$TMPD/rendered" "self-test body" 2> "$TMPD/err" >/dev/null
+  grep -Fq "MISSING: the 'Decided without asking' section; with nothing to declare it is the one line 'none — <why>'." "$TMPD/err" || {
+      echo "self-test: …which did not name the 'none — <why>' form — refusing" >&2; exit 2; }
   st_raw 1 "…an empty section" "${ST_BODY[@]}" '### Decided without asking'
   st_raw 1 "…rows and a none line" "${ST_BODY[@]}" '### Decided without asking' "$ST_ROW" "$ST_DECIDED"
   st_raw 1 "…a bare none" "${ST_BODY[@]}" '### Decided without asking' 'none'
