@@ -350,8 +350,8 @@ checks whether projects are reaching their goals, `failure-analyst` diagnoses a 
 | Question it answers | Does this PR meet its acceptance criteria? | Are we reaching the goals, or just closing tasks? | Why is this build, CI run or deployment red? |
 | Looks at | one PR's diff and CI against its task's `acceptance_criteria` | each objective's `success_criteria`, or a project's own where it has no objective, and `knowledge/` | logs, recent changes, config |
 | Started by | the PM, for a QA task or a PR without a usable external review; `/loopd:new-project`, for a scaffold review | `/loopd:audit`, on a slow cadence | ad hoc, usually in the background |
-| Writes | tests, and its verdict on the PR | nothing; returns a dated report | nothing; returns a report |
-| Output | PASS/FAIL per criterion, read by the merge gate | goal drift, stale knowledge, green-but-not-progressing work | root cause, ranked next steps, an optional Finding draft |
+| Writes | tests, and its verdict on the PR; for a scaffold, an advisory verdict in the project's `log.md` | nothing; returns a dated report | nothing; returns a report |
+| Output | on a PR, PASS/FAIL per criterion, read by the merge gate; on a scaffold, an advisory verdict that gates nothing | goal drift, stale knowledge, green-but-not-progressing work | root cause, ranked next steps, an optional Finding draft |
 
 `auditor` and `failure-analyst` are read-only by instruction. Both hold `Bash`, so the
 allowlist does not enforce it (see `plugin/agents/auditor.md`).
