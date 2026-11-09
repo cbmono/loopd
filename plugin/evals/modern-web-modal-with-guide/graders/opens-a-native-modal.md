@@ -6,4 +6,4 @@ flags: m
 weight: 1
 ---
 
-^```[\w-]*[ \t]*\n(?:(?!^```)[\s\S])*?(?:showModal\(\)|command="show-modal")
+^```[\w-]+[ \t]*\n(?:(?!^```)[\s\S])*?(?:showModal\(\)|command="show-modal")
