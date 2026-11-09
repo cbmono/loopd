@@ -94,7 +94,7 @@ COMMANDS="answer audit board brief-me capture close-project dispatch fanout hand
 # A REFERENCE skill (`user-invocable: false` — the model opens it, nobody types it) is not a
 # command and has no /$PN: line to document; it is listed here by name so a new one is a
 # decision, not a silent widening of the baseline.
-REFERENCE="modern-web"
+REFERENCE=""
 commands_on_disk() { # every plugin/skills/ entry that is not a named reference skill
   local d; for d in "$REPO"/plugin/skills/*/; do d="$(basename "$d")"
     case " $REFERENCE " in *" $d "*) grep -q '^user-invocable: false' "$REPO/plugin/skills/$d/SKILL.md" && continue ;; esac

@@ -176,9 +176,8 @@ for c in $CASES; do
   # out, which reads as a red case about the plugin instead of one about the case file.
   ok "…and bounds its own run"                  "$([ -n "$(fm "$P" max_turns)" ] && echo yes || echo no)" yes
   # Section 6 runs `--tag gate` only, because the CLI's --case glob cannot exclude. An
-  # untagged case would silently leave that run, so every case says which side it is on.
-  case "$c" in modern-web-*) want_tag="[measurement]" ;; *) want_tag="[gate]" ;; esac
-  ok "…and is tagged gate or measurement"       "$(fm "$P" tags)" "$want_tag"
+  # untagged case would silently leave that run.
+  ok "…and is tagged gate"                      "$(fm "$P" tags)" "[gate]"
 done
 
 # The Skill tool is what the original four grade through, so it is asserted for them and
@@ -301,7 +300,7 @@ for c in $CASES; do
   n_inline=$((n_inline+1))
   ok "$c inlines the file it names, byte for byte" "$(bash "$INLINE" "$P" --check >/dev/null 2>&1 && echo current || echo stale)" current
 done
-ok "the three prompt-file readers exist (CONVENTIONS.md, project-manager.md, ui-components.md)" "$n_inline" 3
+ok "the two prompt-file readers exist (CONVENTIONS.md, project-manager.md)" "$n_inline" 2
 ok "…and the writer refuses a prompt with no block" "$(bash "$INLINE" "$EVALS/$CONTROL/prompt.md" --check >/dev/null 2>&1; echo $?)" 1
 
 # =======================================================================================
@@ -345,8 +344,7 @@ else
   # --trust-plugin: the first run in an untrusted plugin directory PROMPTS, and a harness
   # that waits for an answer nobody is there to give hangs instead of failing. The plugin
   # is this checkout's own.
-  # --tag gate: the modern-web pair is a with/without measurement whose control arm may
-  # score below 1.0 by design, so it is run by hand (evals/README.md), never here.
+  # --tag gate: a measurement case may score below 1.0 by design, so it is run by hand.
   out="$(claude plugin eval "$PLUGIN" --tag gate --runs 1 --ablation none --no-publish --trust-plugin \
     --judge-model claude-sonnet-5-5 --max-cost-usd 7 2>&1)"
   rc=$?
