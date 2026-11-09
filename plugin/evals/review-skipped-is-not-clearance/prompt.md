@@ -1,4 +1,5 @@
 ---
+tags: [gate]
 runs: 2
 max_turns: 4
 timeout_seconds: 120
