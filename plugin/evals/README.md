@@ -95,7 +95,8 @@ its `tool_used` Skill `0..0` grader is what showed it.
 
 The guide wins when its regex-grader passes (3 graders × 3 runs) are strictly greater than
 the control's; equal totals are inconclusive. **Measured 2026-11-09 on 2.1.319:** guide 9/9,
-control 9/9 — a tie at the ceiling, $0.90, 50 s at `-j 4`.
+control 8/9 (one run used `aria-modal`/`role="dialog"`), $0.87, 42 s at `-j 4`; an earlier run
+under a looser fence opener tied 9/9 — at three runs a one-point margin is within noise.
 
 ## Retired 2026-09-13 — the four cases that needed a fixture bundle
 
