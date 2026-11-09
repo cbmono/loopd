@@ -52,6 +52,7 @@ plugin/scripts/control.sh|control.sh clear '<agent-id>'
 plugin/scripts/control.sh|control.sh clear --all
 plugin/scripts/control.sh|control.sh clear --all
 plugin/scripts/control.sh|control.sh halt '<agent-id>' '\"<why>\"'
+plugin/scripts/init-bundle.sh|\"\$BIN_DIR/migrate-bundle.sh\" --apply
 plugin/scripts/init-bundle.sh|bash \"\$BIN_DIR/kb-sync.sh\" status
 plugin/scripts/init-bundle.sh|init-bundle.sh '--email <commit-address>'
 plugin/scripts/init-bundle.sh|init-bundle.sh '--email <commit-address>'

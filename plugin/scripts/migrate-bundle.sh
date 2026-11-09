@@ -526,6 +526,7 @@ if [[ -d "$AB_DIR/kb.git" || -d "$RENAME_FROM/kb.git" ]]; then
   mounted="$(grep -c '^\./knowledge/' <<<"$FILE_LIST" || true)"
   if [[ "$mounted" -gt 0 ]]; then
     FILE_LIST="$(grep -v '^\./knowledge/' <<<"$FILE_LIST" || true)"
+    # init-bundle.sh step 6 parses this line too.
     printf '  SKIPPED  knowledge/ (%d document(s))\n           lives in a knowledge mount; repair it from that repository, not here\n' "$mounted"
     skipped=$((skipped+mounted))
   fi
@@ -624,6 +625,7 @@ if [[ $APPLY -eq 1 ]]; then
   ab_say_run "Now run:" validate-bundle.sh
   [[ $failed -eq 0 ]] || exit 1
 else
+  # init-bundle.sh step 6 parses this line; tests/init-migrate-hint.test.sh pins the format.
   printf 'migrate-bundle: %d would be fixed, %d need a human, %d skipped. (report only — nothing changed)\n' \
     "$fixed" "$human" "$skipped"
   ab_say_run "Write these changes with:" migrate-bundle.sh --apply

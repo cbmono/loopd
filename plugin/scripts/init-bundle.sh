@@ -2643,10 +2643,13 @@ if [ -f "$BIN_DIR/validate-bundle.sh" ]; then
     nfix="$(printf '%s\n' "$mout" | LC_ALL=C sed -n 's/^migrate-bundle: \([0-9]*\) would be fixed, [0-9]* need a human, [0-9]* skipped\. .*/\1/p' | tail -1)"
     nmount="$(printf '%s\n' "$mout" | LC_ALL=C sed -n 's/^  SKIPPED  knowledge\/ (\([0-9]*\) document(s))$/\1/p' | tail -1)"
     if [ -n "$nerr" ] && [ -n "$nfix" ]; then
-      line="Note: $nerr schema errors, $nfix fixable"
-      [ "$nfix" -eq 0 ] || line="$line: $BIN_DIR/migrate-bundle.sh --apply"
-      [ -z "$nmount" ] || line="$line ($nmount knowledge/ documents skipped: mounted, repair them from that repository)"
-      echo "$line"
+      lead="Note: $nerr schema errors"
+      [ -z "$nmount" ] || lead="$lead ($nmount knowledge/ documents skipped: mounted, repair them from that repository)"
+      if [ "$nfix" -gt 0 ]; then
+        ab_say_run "$lead, $nfix fixable:" "$BIN_DIR/migrate-bundle.sh" --apply
+      else
+        echo "$lead, 0 fixable"
+      fi
       echo "      from $TARGET; see every error with: bash $BIN_DIR/validate-bundle.sh"
     else
       echo "Note: this bundle has schema errors. See them with: bash $BIN_DIR/validate-bundle.sh from $TARGET"
