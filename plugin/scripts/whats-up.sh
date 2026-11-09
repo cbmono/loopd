@@ -100,4 +100,4 @@ printf '%s\n' "$items" | awk '{ printf "%d. %s\n", NR, $0 }'
 echo
 echo "$fresh"
 echo "$tick"
-echo "In-flight work and progress: /${PLUGIN_NAME}:brief-me"
+echo "In-flight work and progress: /${PLUGIN_NAME}:board"
