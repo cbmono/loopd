@@ -1283,7 +1283,7 @@ EOF
 # =========================================================================================
 # CHECK 9 — memory-stale (HUMAN — never repaired; banner:no)
 # =========================================================================================
-# THE FACT: an auto-memory note names a task now done, a closed project or an older loopd —
+# THE FACT: an auto-memory note names a task now done, a closed project or an older plugin version —
 # and a session reads it as current. `memory-stale.sh` decides; a note is the human's to edit.
 check_memory_stale() {
   _warned=0
@@ -1300,7 +1300,7 @@ check_memory_stale() {
   fi
   n="$(printf '%s' "$out" | grep -c .)"
   if [ "$n" -eq 0 ]; then
-    good "memory notes: none names a done task, a closed project or an older loopd"
+    good "memory notes: none names a done task, a closed project or an older ${PLUGIN_NAME}"
     return 0
   fi
   warn "$n auto-memory note(s) name something no longer true"
