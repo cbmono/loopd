@@ -380,7 +380,7 @@ printf '#!/usr/bin/env bash\nsleep 30\n' > "$K/work/tests/fp-hangs.test.sh"
 K_OUT="$( cd "$K/work" && HARNESS_TIMEOUT=2 bash tests/run.sh --all 2>&1 )"; K_RC=$?
 assert "a harness over the bound fails the run"       "$([ "$K_RC" -eq 1 ] && echo 0 || echo 1)"
 assert "…with the KILLED line naming the bound"        "$(has "$K_OUT" 'KILLED at the 2s per-harness bound')"
-assert "…and the process-substitution hint"            "$(has "$K_OUT" 'At 100% CPU, look for a harness with one <(…) per scoped file, which spins past ~256 files on bash 3.2; read the file list from a temp file instead')"
+assert "…and the process-substitution hint"            "$(has "$K_OUT" 'At 100% CPU, look first for an endless reader such as tr </dev/urandom | head, which never ends when SIGPIPE is ignored — bound the read (od -N); else one <(…) per scoped file, which spins past ~256 files on bash 3.2')"
 assert "…while the harnesses that returned stay green" "$(lacks "$K_OUT" 'fp-names-nothing.test.sh never returned')"
 
 summary
