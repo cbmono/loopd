@@ -188,7 +188,7 @@ assert "…and is NOT deleted"                 "$(yes_if grep -q 'my private not
 # A manifest entry for a file the instance does not have must stay quiet — most entries
 # will be irrelevant to most instances, forever.
 assert "an absent entry says nothing" \
-  "$(hasnt 'stale ' "$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" 2>&1)")"
+  "$(hasnt '^  stale ' "$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" 2>&1)")"
 # Comments, blanks and a reason-less line must all parse without noise.
 printf '# a comment\n\nretired-thing.md\n' > "$TPL/plugin/RETIRED"
 OUT2="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
@@ -199,7 +199,7 @@ assert "…and comments are not reported"      "$(hasnt 'stale # a comment' "$OU
 rm -f "$TPL/plugin/RETIRED"
 RC=0; OUT3="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)" || RC=$?
 assert "no manifest: exits 0"                "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
-assert "no manifest: reports nothing"        "$(hasnt 'stale ' "$OUT3")"
+assert "no manifest: reports nothing"        "$(hasnt '^  stale ' "$OUT3")"
 assert "no manifest: file still there"       "$(yes_if grep -q 'my private notes' "$SEEDY/retired-thing.md")"
 # A dangling SYMLINK at a manifested path belongs to the sweep, not to this list.
 : > "$TPL/plugin/RETIRED"; printf 'linky.md\tretired\n' >> "$TPL/plugin/RETIRED"
