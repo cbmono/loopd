@@ -340,6 +340,22 @@ writes. Seeded at `light` / `low`; with no entry the brief says `light` and says
 the default. Delete the row and nothing breaks, but the only dial for the cheapest reads
 in the system is gone.
 
+### The three checkers
+
+**Three agents check, at three different scales.** `qa-reviewer` checks one PR, `auditor`
+checks whether projects are reaching their goals, `failure-analyst` diagnoses a red build.
+
+| | `qa-reviewer` | `auditor` | `failure-analyst` |
+|---|---|---|---|
+| Question it answers | Does this PR meet its acceptance criteria? | Are we reaching the goals, or just closing tasks? | Why is this build, CI run or deployment red? |
+| Looks at | one PR's diff and CI against its task's `acceptance_criteria` | each objective's `success_criteria`, or a project's own where it has no objective, and `knowledge/` | logs, recent changes, config |
+| Started by | the PM, for a QA task or a PR without a usable external review; `/loopd:new-project`, for a scaffold review | `/loopd:audit`, on a slow cadence | ad hoc, usually in the background |
+| Writes | tests, and its verdict on the PR | nothing; returns a dated report | nothing; returns a report |
+| Output | PASS/FAIL per criterion, read by the merge gate | goal drift, stale knowledge, green-but-not-progressing work | root cause, ranked next steps, an optional Finding draft |
+
+`auditor` and `failure-analyst` are read-only by instruction. Both hold `Bash`, so the
+allowlist does not enforce it (see `plugin/agents/auditor.md`).
+
 ## Where the work lives
 
 ```
