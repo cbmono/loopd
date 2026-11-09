@@ -125,7 +125,8 @@ config-unknown-keys|ambiguous|yes
 review-config|ambiguous|yes
 output-style|ambiguous|no
 tick-lock|human|yes
-orphan-processes|human|yes'
+orphan-processes|human|yes
+memory-stale|human|no'
 
 # =========================================================================================
 # ARGUMENTS
@@ -1276,6 +1277,35 @@ EOF
   [ "$hits" -gt 12 ] && note "… and $((hits - 12)) more not listed"
   note "a bound on the child is what stops this — $AB_CONVENTIONS → \"Anything you background must be reaped by something that outlives YOU\""
   hint "yours, not fix's: ps -p ${pids_hit%% *} -o command= ; then kill $pids_hit"
+  return 1
+}
+
+# =========================================================================================
+# CHECK 9 — memory-stale (HUMAN — never repaired; banner:no)
+# =========================================================================================
+# THE FACT: an auto-memory note names a task now done, a closed project or an older loopd —
+# and a session reads it as current. `memory-stale.sh` decides; a note is the human's to edit.
+check_memory_stale() {
+  _warned=0
+  if [ ! -f "$BIN/memory-stale.sh" ]; then
+    good "memory notes: memory-stale.sh is not installed here, so this is UNKNOWN"
+    return 0
+  fi
+  local out rc n
+  out="$(bash "$BIN/memory-stale.sh" --instance "$ROOT" 2>/dev/null)"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    good "memory notes: not judged"
+    note "${out:-UNKNOWN: memory-stale.sh exited $rc}"
+    return 0
+  fi
+  n="$(printf '%s' "$out" | grep -c .)"
+  if [ "$n" -eq 0 ]; then
+    good "memory notes: none names a done task, a closed project or an older loopd"
+    return 0
+  fi
+  warn "$n auto-memory note(s) name something no longer true"
+  printf '%s\n' "$out" | sed 's/^/    /'
+  hint "yours, not fix's: /memory — correct or delete each listed note"
   return 1
 }
 
