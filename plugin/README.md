@@ -172,7 +172,7 @@ That is the whole list, on purpose. Retired 2026-10-28 (`MIGRATION.md` names the
 for each): the three mods, folded into core as `hooks/register.ts`; `loopd-all`, the
 one-command bundle, because with the mods in core it would have bundled only core and `yolo`,
 and a one-command install that includes `yolo` makes delegated autonomy a default instead of a
-choice; the `ai-bridge` rename alias, kept for one release since 3.0.0; and the accounts and
+choice; the `ai-bridge` rename alias, which had served its purpose since 3.0.0; and the accounts and
 llm launchers, which nothing used — core already behaved as if they were absent, and now
 carries no code path for them at all.
 

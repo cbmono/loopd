@@ -7,7 +7,7 @@
 # So: each class in `plugin/scripts/refresh-seeds.sh`'s DECIDABLE table is pinned against
 # a fixture, an undecidable hunk in the SAME file must still reach the human, and the
 # bundle tree must gain no `.bak` at all. Plus the two pointers criterion 6/7 name:
-# `/<plugin>:init` runs the check-and-fix pass itself, and `welcome fix` points at it.
+# `/<plugin>:init` runs the check-and-fix pass itself, and `welcome fix` alone is refused.
 #
 # The fixture builds its own template in a temp git repo — its own controlled seed
 # content — so these assertions describe this test's edits and not today's real seed.
@@ -178,12 +178,11 @@ assert "…and the seed drift was actually resolved" \
   "$(yes_if sh -c "grep -qx '/$AB_STATE_DIR' \"\$1\" && grep -qx 'MY-OWN-IGNORE' \"\$1\"" _ "$INST/.gitignore")"
 assert "…without re-entering the stamp"        "$(hasnt 'NOT re-stamped' "$STAMP")"
 
-echo "== welcome fix points at init and exits 0 =="
+echo "== welcome fix outside init is a usage error =="
 FIX_RC=0
-FIX="$(bash "$TPL/plugin/scripts/welcome.sh" fix --instance "$INST" 2>&1)" || FIX_RC=$?
-assert "welcome fix exits 0"                   "$([ "$FIX_RC" -eq 0 ] && echo 0 || echo 1)"
-assert "…and points at /${PN}:init"        "$(has ''"${PN}:"'init' "$FIX")"
-assert "…in ONE line"                          "$([ "$(printf '%s\n' "$FIX" | wc -l | tr -d ' ')" = 1 ] && echo 0 || echo 1)"
+FIX="$(env -u LOOPD_INIT_PASS -u AI_BRIDGE_INIT_PASS bash "$TPL/plugin/scripts/welcome.sh" fix --instance "$INST" 2>&1)" || FIX_RC=$?
+assert "welcome fix exits 2"                   "$([ "$FIX_RC" -eq 2 ] && echo 0 || echo 1)"
+assert "…and names /<plugin>:init in its usage" "$(has '/<plugin>:init' "$FIX")"
 assert "…and repairs nothing itself"           "$(hasnt 'idempotent tier' "$FIX")"
 CHECK="$(bash "$TPL/plugin/scripts/welcome.sh" check --instance "$INST" 2>&1 || true)"
 assert "welcome check still surveys the bundle" "$(has 'seed documents' "$CHECK")"

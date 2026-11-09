@@ -47,8 +47,8 @@
 #      allowed anything before the token, which cleared exactly that heading. The failure
 #      is toward refusal. THE MARKER IS DELIBERATELY SPELLED SEVERAL WAYS BECAUSE THE
 #      RULE ITSELF MOVES: `CONVENTIONS.md` requires the heading `## Description` today,
-#      and the `(TL;DR)` suffix it carried until 2026-09-06 still clears FOR ONE RELEASE
-#      with a one-line deprecation notice. A gate that pinned one spelling exclusively
+#      and the `(TL;DR)` suffix it carried until 2026-09-06 is ACCEPTED PERMANENTLY, with
+#      no notice: it costs one regex row, and a notice nobody acts on is noise. A gate that pinned one spelling exclusively
 #      would refuse correct pull requests opened before the rename landed — and a gate
 #      that refuses correct work is a gate somebody switches off.
 #
@@ -266,7 +266,7 @@ set -uo pipefail
 # discussion. Row 1 is the heading `CONVENTIONS.md` requires today, matched as the WHOLE
 # heading text — trailing `#`s and all, since a closed ATX heading is one the host renders
 # — so `## Description of the parser` does not clear; row 2 is the same heading
-# with the retired `(TL;DR)` suffix, plus the bare `## TL;DR` spelling; row 3 is the
+# with the old `(TL;DR)` suffix (accepted permanently), plus the bare `## TL;DR`; row 3 is the
 # leading-emphasis form `**TL;DR** — …`; row 4 is the bare token followed by a separator,
 # which is what an author writes when they are not looking at any document.
 TLDR_MARKERS='
@@ -274,14 +274,6 @@ TLDR_MARKERS='
 ^[[:space:]]{0,3}#{1,6}[[:space:]]+(description[[:space:]]*)?\(?tl[;:/ ]?dr
 ^[[:space:]]{0,3}(\*\*|__|\*|_)[[:space:]]*(description[[:space:]]*)?\(?tl[;:/ ]?dr\)?[[:space:]]*(\*\*|__|\*|_)
 ^[[:space:]]{0,3}\(?tl[;:/ ]?dr\)?[[:space:]]*[]):：.,;—–-]
-'
-
-# --- table 1a: the RETIRED heading spelling, kept for one release --------------
-# A strict subset of table 1, read the same way. It decides nothing — a body matching it
-# has already cleared element 1 — it only earns the one-line deprecation notice below, so
-# an author who opened a pull request before the rename is told rather than refused.
-DEPRECATED_TLDR_MARKERS='
-^[[:space:]]{0,3}#{1,6}[[:space:]]+description[[:space:]]*\(?tl[;:/ ]?dr
 '
 
 # --- table 2: the marks that identify the ACCEPTANCE-CRITERIA table ------------
@@ -484,7 +476,6 @@ validate_tables() {
 "
   done <<EOF
 $(rows "$TLDR_MARKERS")
-$(rows "$DEPRECATED_TLDR_MARKERS")
 $(rows "$VERIFIED_MARKERS")
 $(rows "$VERIFIED_CITATIONS")
 EOF
@@ -555,21 +546,6 @@ has_tldr() { # <rendered-body>
     [ "$rc" -eq 1 ] || return 2
   done <<EOF
 $(rows "$TLDR_MARKERS")
-EOF
-  return 1
-}
-
-# --- element 1a: is that marker the RETIRED heading spelling? -----------------
-#   0 yes   1 no   2 the table will not compile (unknown; the caller refuses)
-has_deprecated_tldr() { # <rendered-body>
-  local pat rc
-  while IFS= read -r pat; do
-    [ -n "$pat" ] || continue
-    grep -Eiq "$pat" "$1" 2>/dev/null; rc=$?
-    [ "$rc" -eq 0 ] && return 0
-    [ "$rc" -eq 1 ] || return 2
-  done <<EOF
-$(rows "$DEPRECATED_TLDR_MARKERS")
 EOF
   return 1
 }
@@ -1095,9 +1071,6 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
   local tab; tab="$(printf '\t')"
   has_tldr "$rendered"; tldr=$?
   [ "$tldr" -eq 2 ] && return 2
-  # A notice, never a verdict: the retired spelling clears for one release.
-  has_deprecated_tldr "$rendered" \
-    && echo "note: '## Description (TL;DR)' is deprecated — use '## Description'; it clears for one more release." >&2
   has_verified "$rendered"; verified=$?
   [ "$verified" -eq 2 ] && return 2
   scan="$(table_scan "$rendered")"
@@ -1292,7 +1265,7 @@ if [ "${1:-}" = "--self-test" ]; then
   st_probe 0 "a conforming body (heading form)" \
     '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
-  st_probe 0 "…and the retired heading spelling, still cleared for one release" \
+  st_probe 0 "…and the old (TL;DR) heading spelling, accepted permanently" \
     '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
   st_probe 0 "a conforming body (bold form)" \

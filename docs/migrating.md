@@ -48,9 +48,8 @@ somebody's work, and safe to run again.
    the conversion removes the link and says so loudly, and the bundle is back to
    ask-first — the safe end. To opt back in, install the companion plugin that carries it:
    `/plugin install loopd-yolo@loopd`; the run prints that line.
-2. **Seed drift is reported, never merged.** A seed document this repo changed since your
-   bundle was stamped is listed and left alone. `/loopd:welcome fix` — or
-   `/loopd:init <dir> --refresh-seeds` — 3-way merges the ones that merge cleanly; a
+2. **Seed drift is merged only where it merges cleanly.** A seed document this repo changed
+   since your bundle was stamped is 3-way merged by `/loopd:init <dir>`; a
    hand-diverged file is never forced, and its conflicted merge is saved beside it as
    `.bak.<epoch>`. `instance.config.json` is never merged at all.
 

@@ -11,7 +11,7 @@ anything that names the omission. **A task's `assignee:` field stays BARE** — 
 role name, not a dispatch string, and the PM adds the namespace when it spawns.
 
 > **Seed file — copied once, then yours.** Copied into this bundle from the `loopd`
-> plugin and owned by it since; `/loopd:welcome fix` 3-way merges a later template
+> plugin and owned by it since; `/loopd:init` 3-way merges a later template
 > change onto your edits.
 
 ## Roles

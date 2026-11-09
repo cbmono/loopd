@@ -1,7 +1,7 @@
 ---
 name: init
 description: Create a new loopd bundle, refresh an existing one, or convert a symlink-era bundle in place. Data only — a bundle it stamps carries no machinery and no link into any checkout.
-argument-hint: "<dir>  [--org O [--name R]] [--refresh-seeds] [--with-objectives] [--normalise-config] [--owner L] [--email A] [--repos-root D] [--spawn-grant]"
+argument-hint: "<dir>  [--org O [--name R]] [--with-objectives] [--normalise-config] [--owner L] [--email A] [--repos-root D] [--spawn-grant]"
 disable-model-invocation: true
 allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
@@ -13,7 +13,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh $ARGUMENTS
 ```
 
 `$ARGUMENTS` is the bundle directory, optionally followed by `--org <org>` (see "One org,
-one bundle"), `--refresh-seeds`,
+one bundle"),
 `--with-objectives`, `--normalise-config`, one of `--owner <login>` / `--email
 <address>` / `--repos-root <dir>` (see "When it says `needs`"), or `--spawn-grant` (see
 "The spawn grant"). No directory means the current one. That is the whole skill: every
