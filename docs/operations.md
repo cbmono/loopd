@@ -789,7 +789,7 @@ owns the detail. (Until 2026-10-28 they were three companion plugins — `MIGRAT
 | Mod | Switch | One line |
 |---|---|---|
 | usage | `usage` | records a session's usage in the plugin store after every turn; `session-usage.sh` reads the store first and the transcript second |
-| pane | `pane`, `paneMode` | `/pane` opens a pane drawing `SNAPSHOT.json`, with **Tick** and **Refresh** buttons; `paneMode: simple` shows an inbox — one open question, stuck tasks, progress — and a form to start a project |
+| pane | `pane`, `paneMode` | `/pane` opens a pane drawing `SNAPSHOT.json`, with **Answer questions**, **Refresh** and **Close pane** buttons; `paneMode: simple` shows an inbox — one open question, stuck tasks, progress — and a form to start a project |
 | signal | `signal` | a role agent's session tells the PM's session its turn is over; step 4 settles that session first |
 
 **What a mod may do here** is the same short list for all three — no model call, no
