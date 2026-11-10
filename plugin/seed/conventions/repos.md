@@ -72,8 +72,7 @@ Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short
   goes to an `Explore` subagent; a direct `Read` is for the file you are about to edit or
   verify.** Explore returns the conclusion instead of the file dumps and runs on the cheap
   `explorer` tier. Measured by the owner on one monorepo, 5 real questions: Explore 5/5,
-  plain grep 4/5, CodeGraph 1/5. It is scoped to the target repos this document governs —
-  `auditor` reads the bundle, not a product repo, and this changes nothing for it.
+  plain grep 4/5, CodeGraph 1/5. It is scoped to the target repos this document governs.
   **The direct read is the other half of the rule, not a fallback from it:** a summary
   carries no reliable line numbers, so an edit never works from one. Locate with Explore,
   then read the one file you are about to change.

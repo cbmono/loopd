@@ -1,8 +1,8 @@
 ---
 name: answer
 disable-model-invocation: true
-description: Answer the PM's pending open_questions interactively — gather the unanswered questions (all projects, one project, or one task), ask them in one batch, then fold the answers back into the tasks (clearing them). In-session convenience instead of editing each task file by hand.
-argument-hint: "[<project-slug> | projects/<slug> | <task path> [Q<n>] <n | more | later | text>]  omit for every project"
+description: Answer the PM's pending open_questions interactively — gather the unanswered questions (all projects, one project, or one task), ask them in one batch, then fold the answers back into the tasks (clearing them). Given a blocked task, take your one decision and return it to ready. In-session convenience instead of editing each task file by hand.
+argument-hint: "[<project-slug> | projects/<slug> | <task path> [Q<n>] <n | more | later | text> | <blocked task path> [<decision>]]  omit for every project"
 allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh:*), Read, Edit, Glob, Grep, AskUserQuestion
 ---
 
@@ -46,6 +46,18 @@ the record. `more` prints the next stored depth (1, then 2, then 3) and changes 
   nothing written. **Exit 4** — the answer is recorded but not pushed: relay the line
   and stop; a rebase it did not start is left alone. **Exit 6** — `more` or `later` could not save
   its record: relay the line and stop. Never force-push, never resolve a rebase for the human.
+
+## A blocked task — `<task path> [<decision>]`
+When the task's `status:` is `blocked` and no `Q<n>` was given, `answer.sh` hands it to
+`unblock.sh`. Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path>` first and relay
+its `last_blocker` and escalation note — in the session, never the pane. **Exit 1** — the task
+still has open questions, named in its one sentence: ask those through the steps below and stop;
+it is unblocked only once they are gone (`answer.sh --first <task path> <answer>` answers the first,
+numbered or not). `more`, `later` or a bare number is refused as a decision; pass it with `--text`. With no decision in the arguments, ask for exactly one
+with `AskUserQuestion` — what the next agent should do differently, in a line. Then run
+`bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path> --text <the decision>`: one `# Notes`
+line `- <ISO 8601> by <login>: unblocked — <decision>`, the stall counter reset, `status: ready`,
+committed as you. Exit 3 and 4 read as above. It never dispatches: the next tick does.
 
 ## Steps
 1. **Gather.** Within the scope above, collect every task with a non-empty

@@ -31,7 +31,7 @@ second copy of an enforcement hook would fire it twice in every session on the m
 
 `yolo` is all-out: it delegates both gates, browser writes, and the fallback reviewer's
 spend. Read [`companion/AUTONOMY.md`](companion/AUTONOMY.md) before you install it, and
-pair it with `/audit`, the slow counter-metric that watches an autonomous loop for drift.
+pair it with the slow drift check in `docs/autonomy.md` → "The audit counter-metric".
 
 The contract this plugin is an instance of — how a companion registers, where core looks,
 and the rule that a companion may ADD behaviour but never remove a core gate — is in

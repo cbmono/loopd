@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# plugin-agents.test.sh — the seven role agents ship in the plugin, and the plugin is
+# plugin-agents.test.sh — the six role agents ship in the plugin, and the plugin is
 # now the ONLY place they ship from. (Eight until the `advisor` was retired, 2026-10-08.)
 # Since 2026-10-28 the three ADVISORY REVIEW agents — `code-architect`, `deep-bug-scan`,
 # `plan-architect` — ship here too (section 5): they were the last thing a machine needed
@@ -38,7 +38,7 @@ ok() { # <name> <actual> <expected>
   else printf '  FAIL  %-64s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi
 }
 
-AGENTS="auditor cataloguer devops-engineer failure-analyst project-manager qa-reviewer software-engineer"
+AGENTS="cataloguer devops-engineer failure-analyst project-manager qa-reviewer software-engineer"
 # The three advisory review agents. NOT role agents: never a task assignee, never in
 # `roles`, dispatched with the `Agent` tool (the PM's approach critique, the qa-reviewer's
 # escalation, `/plan`, `/scan`). They deliberately declare NO `tools:` allowlist — rung 2 of
@@ -54,9 +54,9 @@ fm() { # <file> <key> — frontmatter value from between the first `---` pair on
 }
 
 # =======================================================================================
-echo "== 1. the plugin carries exactly the seven role agents and the three review agents =="
+echo "== 1. the plugin carries exactly the six role agents and the three review agents =="
 # =======================================================================================
-ok "plugin/agents carries exactly the ten" \
+ok "plugin/agents carries exactly the nine" \
   "$(ls "$PA" | sed 's/\.md$//' | sort | tr '\n' ' ' | sed 's/ $//')" \
   "$(printf '%s\n' $AGENTS $REVIEW_AGENTS | sort | tr '\n' ' ' | sed 's/ $//')"
 # Phase 2's whole point. A second copy under symlink/ SHADOWS the plugin one in every
@@ -100,11 +100,11 @@ echo "== 3. every dispatch string is NAMESPACED =="
 # its bare name describes something that fails at runtime, and it fails SILENTLY — the
 # caller sees "no such agent", never "you forgot the namespace".
 #
-# Scoped to the two documents that actually dispatch a role agent (the loop launcher and
-# the audit skill) plus the tick, so a prose mention of a role's NAME anywhere else is
+# Scoped to the documents that actually dispatch a role agent (the loop launcher and the
+# PM), so a prose mention of a role's NAME anywhere else is
 # not swept up. Each is checked from both directions: the namespaced form is present, and
 # the old transition namespace is gone.
-DISPATCHERS="plugin/skills/dispatch/SKILL.md plugin/skills/audit/SKILL.md plugin/agents/project-manager.md"
+DISPATCHERS="plugin/skills/dispatch/SKILL.md plugin/agents/project-manager.md"
 OLDSUF="-v$((1 + 1))"   # "-v2" — assembled, never spelled; see the comment below
 for d in $DISPATCHERS; do
   ok "$(basename "$(dirname "$d")")/$(basename "$d") names ${PN}:" \
@@ -122,10 +122,10 @@ ok "the namespace, plugin.json's name, is the marketplace's ./plugin entry" \
   "$(jq -r '.plugins[] | select(.source == "./plugin") | .name' "$TPL/.claude-plugin/marketplace.json")"
 
 # =======================================================================================
-echo "== 4. each of the seven roles, BY NAME, dispatches only under ${PN}: =="
+echo "== 4. each of the six roles, BY NAME, dispatches only under ${PN}: =="
 # =======================================================================================
 # A rename that misses one role's namespace fails at dispatch with "no such agent", so the
-# seven are asserted one by one (loopd/task-007): each is spelled ${PN}:<role> somewhere
+# six are asserted one by one (loopd/task-007): each is spelled ${PN}:<role> somewhere
 # the plugin ships, and no <other-name>:<role> survives on the shipped surface. `agent:`
 # is prose ("`agent:project-manager` has…"), not a namespace.
 surface() {

@@ -1149,8 +1149,6 @@ ok "an agent's kb-apply.sh --human-docs is refused, the rule named" \
 ok "…the =value spelling too"         "$(verdict_agent "$INSTROOT" "$KBA --human-docs=a $KBR")" "$K"
 ok "…the script run directly"         "$(verdict_agent "$INSTROOT" "kb-apply.sh --by u --human-docs a $KBR")" "$K"
 ok "…inside bash -c, after a cd"      "$(verdict_agent "$INSTROOT" "bash -c \"cd $INSTROOT && kb-apply.sh --by u --human-docs a $KBR\"")" "$K"
-ok "…and the slash command via claude -p" \
-   "$(verdict_agent "$INSTROOT" "claude -p \"/loopd:kb-apply $KBR --human-docs a\"")" "$K"
 ok "the HUMAN's session runs the identical command" \
    "$(verdict "$INSTROOT" "$KBA --human-docs a,b $KBR")" "allow"
 ok "an agent's kb-apply.sh without the flag is untouched" \

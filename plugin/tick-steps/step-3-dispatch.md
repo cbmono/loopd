@@ -149,7 +149,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    - **The namespace is not optional** — the role agents ship in the `loopd` plugin
      and a bare agent name does NOT resolve (measured 2026-09-02); it fails with "no
      such agent", never with "you forgot the namespace". **It applies to every one of
-     the ten** — `loopd:cataloguer`, `loopd:auditor`, `loopd:qa-reviewer`
+     the nine** — `loopd:cataloguer`, `loopd:qa-reviewer`
      and the rest, wherever this document tells you to dispatch one. The three advisory
      review agents ship in the same plugin since 2026-10-28 — `loopd:code-architect`,
      `loopd:deep-bug-scan`, `loopd:plan-architect` — so they take the namespace too

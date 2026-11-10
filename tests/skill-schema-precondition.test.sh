@@ -27,6 +27,6 @@ for f in "$REPO"/plugin/skills/*/SKILL.md; do
     ok "$s: grants bundle-paths.sh" "$(grep -q 'scripts/bundle-paths\.sh:\*' <<<"$tools" && echo yes || echo no)" yes
   fi
 done
-ok "found the preconditioned skills (at least 7)" "$([ "$n" -ge 7 ] && echo yes || echo no)" yes
+ok "found the preconditioned skills (at least 5)" "$([ "$n" -ge 5 ] && echo yes || echo no)" yes
 echo "$pass passed, $fail failed ($n skills)"
 [ "$fail" -eq 0 ]

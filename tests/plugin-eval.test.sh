@@ -11,7 +11,7 @@
 # That is the right shape for most of the contract and it stays exactly as it was — this
 # file deletes nothing and replaces nothing. It adds the one class of pin a grep cannot
 # express: what a MODEL does when the plugin is loaded. `disable-model-invocation: true`
-# is not a string, it is an effect — the model must not reach for `dispatch`, `work` or
+# is not a string, it is an effect — the model must not reach for `dispatch` or
 # `answer` on its own — and only a real run can see the effect.
 #
 # THE DIVISION OF LABOUR, so a contributor knows where a new pin goes:
@@ -81,11 +81,11 @@ fm() {
                  infm && index($0, k ":")==1 {sub("^" k ":[ ]*", ""); print; exit}' "$1"
 }
 
-# The three skills this suite grades, and the control arm that keeps them non-vacuous.
+# The two skills this suite grades, and the control arm that keeps them non-vacuous.
 # These are PROPERTY GROUPS, not the case list: the case list is discovered from the
 # directories that exist (section 1), so a new case is asserted over by section 2 the
 # moment it lands, and only a case wanting a group's extra assertions is named here.
-GATED="dispatch work answer"
+GATED="dispatch answer"
 CONTROL="skills-are-reachable"
 # RETIRED 2026-09-13 (ai-bridge-v3/task-033): four cases that could only ever pass inside a
 # fixture bundle. `scaffold_script` + `--scaffold` runs author-supplied bash on every machine
@@ -120,7 +120,7 @@ ok "…and its results/ output is gitignored" \
 CASES="$(cd "$EVALS" && find . -mindepth 1 -maxdepth 1 -type d ! -name results -exec basename {} \; | sort | tr '\n' ' ' | sed 's/ $//')"
 ok "the suite ships cases"                       "$([ -n "$CASES" ] && echo yes || echo no)" yes
 # The control arm, by name, because dropping it is the one edit that makes the whole
-# suite vacuous: three cases asserting "the model never invoked this skill" all pass in a
+# suite vacuous: two cases asserting "the model never invoked this skill" all pass in a
 # harness where no skill is reachable at all.
 case " $CASES " in *" $CONTROL "*) has_control=yes ;; *) has_control=no ;; esac
 ok "…including the control arm, which may never be dropped" "$has_control" yes

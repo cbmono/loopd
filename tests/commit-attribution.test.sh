@@ -25,8 +25,7 @@ CONV="$REPO/plugin/seed/CONVENTIONS.md"
 SEED_CLAUDE="$REPO/plugin/seed/CLAUDE.md"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 PM="$REPO/plugin/tick-steps/step-3-dispatch.md"
-WORK="$REPO/plugin/skills/work/SKILL.md"
-for f in "$BRIEF" "$SEED_CFG" "$COMMIT_AS" "$CONV" "$SEED_CLAUDE" "$SCHEMA" "$PM" "$WORK"; do
+for f in "$BRIEF" "$SEED_CFG" "$COMMIT_AS" "$CONV" "$SEED_CLAUDE" "$SCHEMA" "$PM"; do
   [ -f "$f" ] || { echo "commit-attribution.test: $f not found" >&2; exit 2; }
 done
 command -v python3 >/dev/null 2>&1 || { echo "commit-attribution.test: python3 required" >&2; exit 2; }
@@ -98,7 +97,6 @@ echo "== the seed prose no longer forbids it =="
 ok "CONVENTIONS: no 'no AI attribution'"  "$(count 'no AI attribution' "$CONV")" 0
 ok "CLAUDE.md: no 'No AI attribution'"    "$(count 'No AI attribution' "$SEED_CLAUDE")" 0
 ok "CLAUDE.md: 'many forbid' is gone"     "$(count 'many forbid AI attribution' "$SEED_CLAUDE")" 0
-ok "work SKILL: no 'No AI attribution'"   "$(count 'No AI attribution' "$WORK")" 0
 ok "CONVENTIONS states the default"       "$(yn grep -q 'trailer stays, because it is' "$CONV")" yes
 ok "…and that the brief decides"          "$(yn grep -q '## Commit attribution' "$CONV")" yes
 ok "CLAUDE.md keeps the invariant"        "$(yn grep -q 'Keep the `Co-Authored-By: Claude` trailer' "$SEED_CLAUDE")" yes

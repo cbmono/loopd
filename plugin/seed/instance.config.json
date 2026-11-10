@@ -54,7 +54,6 @@
   "$reviewFixMaxLines": "The most changed lines (added plus deleted) a fix may carry since the last reviewed commit and still merge with no re-review; over it the loop holds for the human. Read by scripts/review-next.sh --clear (AUTONOMY.md, 'Merge after the last round'). Absent => 300. Any integer >= 0. TRACKED, never per-machine: a merge policy both clones must agree on.",
   "codegraphSkip": "",
   "externalReviewer": null,
-  "prReviewSlackChannel": null,
   "board": true,
   "$board": "ON BY DEFAULT, and it is read at BOTH ends of the lifecycle. true (or absent) => /loopd:init creates SNAPSHOT.json when missing on any stamp, so this instance appears on the terminal board, AND each /loopd:dispatch tick re-renders the page to .loopd/.board-live/board.html (derived and gitignored, served by bundle-paths.sh) and reports that path. false => the snapshot is never created, the installer says so, and the tick renders nothing and says nothing. NOTHING IS COMMITTED AND NOTHING IS ACCOUNT-SCOPED: the page is derived, so no copy leaves this machine unless you publish one yourself. (The account-scoped publish path, and the config key that recorded its URL, were deleted: only the publishing account could ever update the page, and it vanished from under its own owner at the next login.) Question TEXT is never in the snapshot or the page file; only scripts/board-serve.sh's localhost response shows it. scripts/watch-board.sh renders the same file continuously if you want it live between ticks.",
   "boardServe": true,
@@ -66,8 +65,7 @@
     "software-engineer",
     "devops-engineer",
     "qa-reviewer",
-    "cataloguer",
-    "auditor"
+    "cataloguer"
   ],
   "$roles": "Agents the PM may dispatch as TASK ASSIGNEES. Not every configured agent belongs here \u2014 `plan-architect` is deliberately absent: `/plan` and the PM's approach critique dispatch it directly (as `loopd:plan-architect`, a plugin agent), and no task is ever assigned to it. See `$roleTiers` and SCHEMA.md 'type: Agent'.",
   "$models": "Which model alias each TIER costs. PER-MACHINE SPEND, and /loopd:init seeds this key into instance.config.local.json on any stamp that finds it missing there -- so on a stamped instance the LOCAL copy is the one in force and the session banner's FROM column reads `local`. This tracked copy stays as the fallback and as the seed source: removing it would let an unseeded instance resolve to nothing, and an agent that resolves to nothing inherits the session model with no error. Edit the LOCAL file to change what this machine pays; a partial local map overrides entry by entry, and the installer never tops it up. See SCHEMA.md, 'Per-machine config overrides'.",
@@ -84,7 +82,6 @@
     "qa-reviewer": "apex",
     "cataloguer": "standard",
     "plan-architect": "apex",
-    "auditor": "deep",
     "explorer": "light"
   },
   "$roleTiers": "PER-MACHINE SPEND, seeded and overridden exactly as `models` above (see `$models`). The model tier for ANY agent this instance dispatches, including ones no task is ever assigned to \u2014 broader than `roles`. `plan-architect: apex` here and nowhere in `roles` is the intentional case: `models.apex` prices two agents, `plan-architect` and `qa-reviewer`, and `plan-architect` appears in no `roles` list, so 'what does apex cost me?' is unanswerable from `roles` alone. `explorer: light` is the second: it prices the Explore subagent a role agent delegates a broad read to (CONVENTIONS.md), which is a harness subagent type and never a task assignee. Do not delete either row to make the two lists match; see SCHEMA.md 'type: Agent' and tests/roles-roletiers-asymmetry.test.sh.",
@@ -95,7 +92,6 @@
     "qa-reviewer": "high",
     "cataloguer": "medium",
     "plan-architect": "high",
-    "auditor": "medium",
     "explorer": "low"
   },
   "$roleEffort": "PER-MACHINE SPEND, seeded and overridden exactly as `roleTiers` (see `$models`): one entry per `roleTiers` key, the reasoning effort (low|medium|high|xhigh|max) that agent is spawned at. scripts/resolve-effort.sh is the one reader; a spawn passes its answer as `claude --bg --effort` or the Agent tool's `effort:`. Medium for the orchestration roles, high for the roles that write code or adjudicate; a role's `maxStallRounds` escalations are the evidence to move it up. Absent from both layers => no effort is passed: an Agent-tool spawn runs at the agent's frontmatter `effort:`, while a `claude --bg` spawn reads no frontmatter and runs at the machine's `modelSettings[<model>].effortLevel`, else the model default -- as before this key, until the next /loopd:init seeds the map. See SCHEMA.md 'Per-machine config overrides'."

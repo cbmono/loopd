@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# kb-apply.test.sh — plugin/scripts/kb-apply.sh behind the human-typed /loopd:kb-apply:
+# kb-apply.test.sh — plugin/scripts/kb-apply.sh, run by a human in their own terminal:
 # it applies exactly what one hand-written report names, and refuses the whole report on
 # any doubt. ok() compares actual to expected. Reasoning: knowledge-base-reflector/task-003.
 set -uo pipefail
@@ -8,7 +8,6 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 APPLY="$REPO/plugin/scripts/kb-apply.sh"
 AWAIT="$REPO/plugin/scripts/build-awaiting.sh"
-SKILL="$REPO/plugin/skills/kb-apply/SKILL.md"
 STEP7="$REPO/plugin/tick-steps/step-7-knowledge-base.md"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 VALIDATE="$REPO/plugin/scripts/validate-bundle.sh"
@@ -31,8 +30,8 @@ fp() { cksum <"$1" | awk '{print $1 "-" $2}'; }
 report() { # <path> <proposal lines>
   mkdir -p "$(dirname "$1")"
   local pj; pj="$(dirname "$(dirname "$1")")/project.md"
-  [ -f "$pj" ] || printf -- '---\ntype: Project\ntitle: Knowledge reflection\ndescription: "Hand-written reports for /loopd:kb-apply."\nkind: build\nstatus: active\nretain: true\ntimestamp: 2026-10-22T00:00:00Z\n---\n\n# Context\n\nReports.\n' >"$pj"
-  printf -- '---\ntype: Task\ntitle: "Knowledge reflection — to review"\nkind: build\nstatus: draft\nassignee: human\nacceptance_criteria: [ ]\nopen_questions:\n  - "Apply this report? Read it, then run /loopd:kb-apply. Decline by cancelling this task."\ntimestamp: 2026-10-22T00:00:00Z\n---\n\n# Proposals\n\n%s\n' "$2" >"$1"
+  [ -f "$pj" ] || printf -- '---\ntype: Project\ntitle: Knowledge reflection\ndescription: "Hand-written reports for plugin/scripts/kb-apply.sh."\nkind: build\nstatus: active\nretain: true\ntimestamp: 2026-10-22T00:00:00Z\n---\n\n# Context\n\nReports.\n' >"$pj"
+  printf -- '---\ntype: Task\ntitle: "Knowledge reflection — to review"\nkind: build\nstatus: draft\nassignee: human\nacceptance_criteria: [ ]\nopen_questions:\n  - "Apply this report? Read it, then run plugin/scripts/kb-apply.sh. Decline by cancelling this task."\ntimestamp: 2026-10-22T00:00:00Z\n---\n\n# Proposals\n\n%s\n' "$2" >"$1"
 }
 
 D="$TMP/bundle"
@@ -64,9 +63,9 @@ rm -f "$D/.loopd/AWAITING.md"
 bash "$AWAIT" --instance "$D" >/dev/null 2>&1
 ok "absence stays the off switch"                   "$([ -e "$D/.loopd/AWAITING.md" ] && echo yes || echo no)" no
 
-echo "== apply is reachable only through the slash command =="
-ok "the skill calls it — the one path that applies" "$(grep -c 'scripts/kb-apply\.sh' "$SKILL" | tr -d ' ')" 2
-ok "…and no other skill does"  "$(grep -rl 'scripts/kb-apply\.sh' "$REPO/plugin/skills" | wc -l | tr -d ' ')" 1
+echo "== apply is reachable only by a human running the script =="
+ok "no skill calls it"         "$(grep -rl 'kb-apply\.sh' "$REPO/plugin/skills" | wc -l | tr -d ' ')" 0
+ok "the hook's refusal names the script" "$(grep -c 'run `plugin/scripts/kb-apply.sh --by <login> --human-docs <slugs> <report>` in their own terminal' "$REPO/plugin/hooks/deny-destructive.sh")" 1
 ok "…nor any agent"            "$(grep -rl 'kb-apply\.sh' "$REPO/plugin/agents" | wc -l | tr -d ' ')" 0
 ok "…nor the tick's knowledge step" "$(grep -c 'kb-apply\.sh --by' "$STEP7")" 0
 
@@ -128,8 +127,6 @@ ok "apply stands down while a tick holds the lock" \
   "$("$APPLY" --by example-user-007 "$R2" 2>&1 >/dev/null | grep -c 'holds the dispatch lock')" 1
 rm -f "$D/.loopd/.tick-lock" "$D/.loopd/.tick-lock.claim"
 ok "…and clears once it is free"             "$(bash "$REPO/plugin/scripts/tick-lock.sh" status --instance "$D" >/dev/null 2>&1; echo $?)" 0
-ok "the skill discovers reports under ANY project slug" \
-  "$(grep -c 'projects/\*/tasks/\*\.md' "$SKILL")" 1
 
 SHORT=projects/knowledge-reflection/tasks/task-099-short.md
 sed 's/^P1 · .*/P1 · status · keeper/' "$R2" >"$SHORT"
@@ -137,15 +134,11 @@ ok "a truncated proposal line refuses the whole report" \
   "$("$APPLY" --by example-user-007 "$SHORT" >/dev/null 2>&1; echo $?)" 1
 rm -f "$SHORT"
 
-echo "== criterion 6: the command is namespaced, state-changing and documented =="
-ok "the skill ships"                                "$([ -f "$SKILL" ] && echo yes || echo no)" yes
-ok "…named for its directory"                       "$(head -1 <<<"$(sed -n 's/^name: //p' "$SKILL")")" kb-apply
-ok "…human-triggered, never model-invoked"          "$(head -1 <<<"$(sed -n 's/^disable-model-invocation: //p' "$SKILL")")" true
-ok "…and it is in plugin-skills.test.sh's STATE_CHANGING list" \
-  "$(grep -c '^STATE_CHANGING=.*kb-apply' "$REPO/tests/plugin-skills.test.sh")" 1
-ok "the README's command table carries the row"     "$(grep -c '^| `/loopd:kb-apply <report>` |' "$REPO/README.md")" 1
+echo "== criterion 6: the script is documented, and no slash command fronts it =="
+# path-scan: absent — the slash command is retired; its absence IS the assertion
+ok "no kb-apply skill ships"                        "$([ -e "$REPO/plugin/skills/kb-apply" ] && echo yes || echo no)" no
 ok "SCHEMA.md defines the report"                   "$(grep -c '^### The reflection report' "$SCHEMA")" 1
-ok "…and names the apply path"                      "$(grep -c 'scripts/kb-apply.sh' "$SCHEMA")" 1
+ok "…and names the apply path"                      "$(grep -c 'plugin/scripts/kb-apply.sh`, run by a human' "$SCHEMA")" 1
 
 echo "== human-written docs: tags and status=archived only, only with --human-docs naming them =="
 D2="$TMP/bundle-hd"
@@ -251,12 +244,12 @@ cd "$D" || exit 2
 
 echo "== the guards that keep agents out =="
 ok "no tick step applies a report" "$(grep -rl 'kb-apply' "$REPO/plugin/tick-steps" | wc -l | tr -d ' ')" 0
-for f in "$SKILL" "$SCHEMA"; do
+for f in "$SCHEMA"; do
   ok "$(basename "$f") says --human-docs is derivable, so the hook rule binds agents" \
     "$(grep -c 'derivable from the report' "$f")/$(grep -c 'kb_apply_human_docs' "$f")" 1/1
 done
 ok "SCHEMA records the owner's reversal" "$(grep -c 'owner decision 2026-10-21' "$SCHEMA")" 1
-ok "…its provenance table names the narrow path" "$(grep -cE '^\| `(mixed|human)` .*`tags` and `status=archived` only, only through `/loopd:kb-apply --human-docs`' "$SCHEMA")" 2
+ok "…its provenance table names the narrow path" "$(grep -cE '^\| `(mixed|human)` .*`tags` and `status=archived` only, only through `plugin/scripts/kb-apply.sh --human-docs`' "$SCHEMA")" 2
 ok "no plugin line still says the machinery never rewrites a person's doc" \
   "$(grep -rn 'never rewrites what a person wrote' "$REPO/plugin" | wc -l | tr -d ' ')" 0
 

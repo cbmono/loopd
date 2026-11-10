@@ -82,6 +82,10 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # 16783 -> 16095 (hygiene/task-005, 2026-11-09). -664 bytes: the generic "Planning & thinking",
 # "Parallelism & delegation" and "Compounding engineering" session defaults are deleted; their
 # specific forms already sit under the role and brief rules. The ceiling follows the file down.
+# 16095 -> 16083 (article-batch-8-hygiene/task-013, 2026-11-10). -12 bytes: the command table
+# drops pr-review-request and gains whats-up, answer, prune-wt and a /pane line; .loopd/ paths
+# and the cut docs/sharing.md citation are paid for by tighter close-project, new-project and
+# two-gates prose. The ceiling is not lowered: the margin is noise.
 CEILING=16095
 
 pass=0; fail=0

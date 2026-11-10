@@ -113,6 +113,7 @@ printf -- '---\ntype: Task\ntitle: "T"\nstatus: blocked\nacceptance_criteria: [ 
   > "$QI/projects/p/tasks/task-001-t.md"
 bash "$REPO/plugin/scripts/build-awaiting.sh" --instance "$QI" >/dev/null 2>&1
 assert "build-awaiting.sh renders that same row"   "$(has '* ⛔ **unblock** — ' "$(cat "$QI/$AB_AWAITING" 2>/dev/null)")"
+assert "…whose default trailer names /loopd:answer" "$(has '· blocked — run `/loopd:answer <task path>` with your decision' "$(cat "$QI/$AB_AWAITING" 2>/dev/null)")"
 
 echo
 echo "== re-running the escalation is idempotent =="

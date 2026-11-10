@@ -976,7 +976,7 @@ later. The tick NAMES the entry it closes (`--tick <its own open timestamp>`) ra
 taking the newest open one: two loops on one `log.md` — the case a missing `.tick-lock`
 allows — would otherwise let the first to finish close the second's entry under its own
 summary, and an unnamed close is refused when two are open rather than guessed. The same three go on each task per dispatch, and their sum against the merged PR at
-reflect time; `/audit` reads those two surfaces and nothing else. **Tokens, never money**:
+reflect time; `agent-usage.sh series` reads those two surfaces and nothing else. **Tokens, never money**:
 there is no price table here to maintain and no USD figure anywhere in the feature, so a
 reader who wants money converts it with today's prices rather than last quarter's.
 
@@ -1087,7 +1087,7 @@ projects serving one measurable end. `/loopd:init <dir> --with-objectives` creat
 the directory; a plain stamp ships none, and an existing `objectives/` is data the
 stamp never touches.
 
-**What did not get weaker is the measurement.** `/audit` grounds the objective's
-criteria where there is one, the project's own where there is not, and reports **"no
-criteria"** for a project carrying neither — a mandatory finding, never a silent pass.
+**What did not get weaker is the measurement.** The human reviewing progress grounds the
+objective's criteria where there is one, the project's own where there is not, and a
+project carrying neither has **"no criteria"** — a finding, never a silent pass.
 Deleting the layer without that clause would have deleted the counter-metric with it.

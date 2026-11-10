@@ -402,7 +402,7 @@ type Doc = { title: string; status: string; autonomy: string; timestamp: string;
 type Held = { kind: 'answer' | 'later'; mtimeMs: number; laterMtime: number; at: number; text: string }
 type Entry = { p: Simple; it: Item; q: Question; id: string; later: number }
 
-const UNBLOCK = 'loopd:unblock'
+const UNBLOCK = ANSWER
 // answer.sh's `later` record, AB_ANSWER_LATER in bundle-paths.sh: one `<task path>#Q<n>` a line.
 const LATER = '.loopd/.answer-later'
 let simple: Simple[] = []

@@ -8,7 +8,7 @@
 # reached — which nothing then cleans up, because `prune-worktrees.sh` is
 # report-only by design. The exposure is concentrated exactly where it is worst:
 # with `AUTONOMY.md` present an agent commits, pushes and merges without asking,
-# and the only counter-metric (`/audit`) is retrospective and slow-cadence.
+# and the only counter-metric (a human's audit) is retrospective and slow-cadence.
 #
 # So this consults one control file at every PreToolUse boundary and supports
 # three verbs against ONE agent:

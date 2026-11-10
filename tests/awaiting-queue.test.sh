@@ -499,6 +499,8 @@ OUTQ="$(aw)"
 for v in approve answer unblock merge; do
   simple "active project keeps its $v row"  "$(row_for "$OUTQ" "$v" "live-$v")" shown
 done
+simple "the default unblock row names /loopd:answer" \
+  "$(grep -cF -- '**unblock** — [live-unblock](/projects/live/tasks/t3.md) · blocked — run `/loopd:answer <task path>` with your decision' <<<"$OUTQ" | tr -d ' ')" 1
 for v in approve answer unblock; do
   simple "paused project drops its $v row"  "$(row_for "$OUTQ" "$v" "held-$v")" hidden
 done

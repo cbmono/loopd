@@ -1612,13 +1612,13 @@ rule_kb_apply_human_docs() {
     case "$c" in kb-apply.sh|bash|sh|zsh|dash|ksh|source|.|eval|claude) ;; *) continue ;; esac
     run=0; flag=0
     while IFS= read -r w; do
-      case "${w##*/}" in kb-apply.sh|*:kb-apply) run=1 ;; esac
+      case "${w##*/}" in kb-apply.sh) run=1 ;; esac
       case "$w" in --human-docs|--human-docs=*) flag=1 ;; esac
     done <<EOT
 $(tokens_of "$stage")
 EOT
     if [ "$run" = 1 ] && [ "$flag" = 1 ]; then
-      printf '`kb-apply.sh --human-docs` changes knowledge documents a person wrote or edited, and the slug list it asks for is printed in the report itself, so an agent passing it confirms nothing. Only a human applies it: point them at the report and let them run `/loopd:kb-apply <report> --human-docs <slugs>` in their own session. Without the flag, `kb-apply.sh` still applies a machine-only report.'
+      printf '`kb-apply.sh --human-docs` changes knowledge documents a person wrote or edited, and the slug list it asks for is printed in the report itself, so an agent passing it confirms nothing. Only a human applies it: point them at the report and let them run `plugin/scripts/kb-apply.sh --by <login> --human-docs <slugs> <report>` in their own terminal. Without the flag, `kb-apply.sh` still applies a machine-only report.'
       return 0
     fi
   done <<EOF

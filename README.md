@@ -280,20 +280,19 @@ Run these inside an instance.
 |---|---|
 | `/loopd:new-project <description>` | (plugin) scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
 | `/loopd:dispatch [gap\|once\|stop]` | (plugin) the serial background loop: dispatch, track, report. Bare, it ticks every ten minutes on its own; `once` is a single tick, `stop` ends it |
-| `/loopd:answer` | (plugin) answer the PM's open questions from inside the session — or one, as `<task> [Q<n>] <n \| more \| later \| text>` |
-| `/loopd:unblock <task>` | (plugin) see why a `blocked` task stopped, give your one decision, and send it back to `ready` with that decision in its `# Notes` |
+| `/loopd:answer` | (plugin) answer the PM's open questions from inside the session — or one, as `<task> [Q<n>] <n \| more \| later \| text>`. Given a `blocked` task, shows why it stopped, takes your one decision and sends it back to `ready` with that decision in its `# Notes` |
 | `/loopd:board` | (plugin) `serve` — **the default, so a bare call serves** — the board on a local URL, one process per bundle (every session starts it while `boardServe` is on); `publish` — the same page as a private artifact, at the same URL every run; `--help` — the forms |
-| `/loopd:pr-review-request <pr>` | (plugin) ask for an independent review of a PR |
-| `/loopd:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/loopd:fanout <task>` | (plugin) parallel work across several repos |
 | `/loopd:close-project [<slug>]` | (plugin) close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. No slug opens a picker of the projects, multi-select, and asks about `--force`. [→](docs/schema.md#closing-a-project) |
 | `/loopd:welcome [check\|fix]` | (plugin) reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-loopdwelcome-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
 | `/loopd:whats-up` | (plugin) "what do you need from me?" — reprints `AWAITING.md`'s Needs-you rows, numbered, with its last refresh and whether a tick is in flight. Read-only; nothing else is read |
-| `/loopd:capture <notes>` | (plugin) turn a decision or meeting notes into drafted projects and tasks, with provenance — never promoted |
-| `/loopd:work <task>` | (plugin) work one task in **this** session, ledger kept for you — the solo alternative to dispatching an agent |
 | `/loopd:handoff <path> <login>` | (plugin) transfer a task or project to another human, with the context that makes the transfer real |
-| `/loopd:kb-apply <report>` | (plugin) apply one hand-written `knowledge/` reflection report after reading it — the only path that writes a proposal |
 | `/loopd:prune-wt` | (plugin) remove the worktrees `prune-worktrees.sh` reports `REMOVABLE`, after one yes — each re-checked at removal time, skipped on any doubt; refuses while a tick holds the lock. [→](docs/operations.md#4-worktrees-two-scripts-delete-the-pruner-still-reports) |
+
+| `/loopd:init <dir>` | (plugin) create a bundle or refresh one, then run the check-and-fix pass |
+
+`/pane` is a mod, not a skill: the board, or an inbox of questions and stuck tasks, beside the
+session ([`plugin/hooks/MODS.md`](plugin/hooks/MODS.md)).
 
 Flags `/loopd:new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
 `browser=off|claude-for-chrome` (default `off`), `/yolo`, `/cli …`, `/claudeforchrome`,
@@ -308,10 +307,9 @@ Flags `/loopd:new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="�
 | `devops-engineer` | infrastructure, CI, deploys |
 | `qa-reviewer` | the **independent** verification gate — fresh context, real signals |
 | `cataloguer` | folds conclusions into `knowledge/` |
-| `auditor` | read-only drift check for `/loopd:audit` |
 | `failure-analyst` | diagnoses a failing check or a broken build |
 
-All eight ship in the **plugin** and are dispatched **namespaced** —
+All six ship in the **plugin** and are dispatched **namespaced** —
 `loopd:software-engineer`, `loopd:qa-reviewer`, and so on. A bare agent name does
 not resolve (measured 2026-09-02). A task's `assignee:` field stays bare; the PM adds the
 namespace when it spawns.
@@ -333,21 +331,21 @@ writes. Seeded at `light` / `low`; with no entry the brief says `light` and says
 the default. Delete the row and nothing breaks, but the only dial for the cheapest reads
 in the system is gone.
 
-### The three checkers
+### The two checkers
 
-**Three agents check, at three different scales.** `qa-reviewer` checks one PR, `auditor`
-checks whether projects are reaching their goals, `failure-analyst` diagnoses a red build.
+**Two agents check, at two different scales.** `qa-reviewer` checks one PR,
+`failure-analyst` diagnoses a red build.
 
-| | `qa-reviewer` | `auditor` | `failure-analyst` |
-|---|---|---|---|
-| Question it answers | Does this PR meet its acceptance criteria? | Are we reaching the goals, or just closing tasks? | Why is this build, CI run or deployment red? |
-| Looks at | one PR's diff and CI against its task's `acceptance_criteria` | each objective's `success_criteria`, or a project's own where it has no objective, and `knowledge/` | logs, recent changes, config |
-| Started by | the PM, for a QA task or a PR without a usable external review; `/loopd:new-project`, for a scaffold review | `/loopd:audit`, on a slow cadence | ad hoc, usually in the background |
-| Writes | tests, and its verdict on the PR; for a scaffold, an advisory verdict in the project's `log.md` | nothing; returns a dated report | nothing; returns a report |
-| Output | on a PR, PASS/FAIL per criterion, read by the merge gate; on a scaffold, an advisory verdict that gates nothing | goal drift, stale knowledge, green-but-not-progressing work | root cause, ranked next steps, an optional Finding draft |
+| | `qa-reviewer` | `failure-analyst` |
+|---|---|---|
+| Question it answers | Does this PR meet its acceptance criteria? | Why is this build, CI run or deployment red? |
+| Looks at | one PR's diff and CI against its task's `acceptance_criteria` | logs, recent changes, config |
+| Started by | the PM, for a QA task or a PR without a usable external review; `/loopd:new-project`, for a scaffold review | ad hoc, usually in the background |
+| Writes | tests, and its verdict on the PR; for a scaffold, an advisory verdict in the project's `log.md` | nothing; returns a report |
+| Output | on a PR, PASS/FAIL per criterion, read by the merge gate; on a scaffold, an advisory verdict that gates nothing | root cause, ranked next steps, an optional Finding draft |
 
-`auditor` and `failure-analyst` are read-only by instruction. Both hold `Bash`, so the
-allowlist does not enforce it (see `plugin/agents/auditor.md`).
+`failure-analyst` is read-only by instruction. It holds `Bash`, so the allowlist does not
+enforce it (see `plugin/agents/failure-analyst.md`).
 
 ## Where the work lives
 
@@ -568,7 +566,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 | **Board data** | the board's field list is a data-governance boundary — no question text, no document bodies, no author identity, no out-of-bundle paths. Nothing publishes it now, and a rendered file is still copyable. [→](docs/operations.md#before-it-leaves-the-machine-know-what-it-carries) |
 | **Untrusted text** | `AWAITING.md` items and the per-turn state injection are fenced as data before they enter session context. Keep the boundary. [→](docs/conventions.md#12-three-loopd-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) |
 | **No customer PII** | not in a task title, not in an answer, not in a `Finding`. Titles reach the board; answers persist for the life of the repo. |
-| **Drift check** | `/loopd:audit` is read-only and advisory. It catches an autonomous loop gaming itself; it is not a merge-blocking guarantee. [→](docs/autonomy.md#the-audit-counter-metric) |
+| **Drift check** | a human's read on a slow cadence, advisory. It catches an autonomous loop gaming itself; it is not a merge-blocking guarantee. [→](docs/autonomy.md#the-audit-counter-metric) |
 
 ## Configuration reference
 
@@ -618,7 +616,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `migrate-bundle.sh` | mechanical schema repairs; `--layout-only` runs just the two directory steps (the `.loopd/` move) and no content repair | only with `--apply` |
 | `ledger.sh` | `append` / `show` a knowledge item's append-only `ledger:` line — why it changed, who applied it, which items; no verb edits or removes an entry | `append` only, that one item |
 | `kb-compare.sh` | `[--instance DIR] <candidate.md>` — compares ONE candidate Finding against every `type: Finding` under `knowledge/`; no tick step calls it. The key is the content words of title + description + `lesson:`, and only an EQUAL key is the same. Prints at most one proposal (merge, or patch as `edit`) on stdout and one verdict on stderr — merge · patch · append as new · human-authored, review only. 0 compared · 1 unreadable · 2 usage | no |
-| `kb-apply.sh` | behind `/loopd:kb-apply`: applies exactly the proposals one report names, plus the regenerated index, one `ledger:` entry per item, the report's `status: done` and ONE commit. Every proposal is checked first, so a stale or missing item, or a human-written one `--human-docs` does not name, refuses the whole report | yes, the items the report names |
+| `kb-apply.sh` | run by a human in their own terminal: applies exactly the proposals one report names, plus the regenerated index, one `ledger:` entry per item, the report's `status: done` and ONE commit. Every proposal is checked first, so a stale or missing item, or a human-written one `--human-docs` does not name, refuses the whole report | yes, the items the report names |
 | `kb-usage.sh` | `record` — the citation store: runs `cite-check.sh` on a text and stores the slugs it kept, one file per text; `--task` grades the task's citation of its own new Finding `SELF` | one citation file under the bundle directory |
 | `dispatchable-ready.sh` | the one reader of which `ready` tasks step 3 could dispatch (kind, open questions, dependencies, pause, owner — an unanswered gate counts), shared by `tick-delta.sh check` and the session banner | no |
 | `project-paused.sh` | answers whether a project is paused, as one predicate with a three-value exit | no |
@@ -660,8 +658,8 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `fold-answers.sh` | `<task-doc>` (`--sweep <entry> <note>` appends a sweep note to one open entry and moves nothing) — moves every ` --- `-answered `open_questions` entry into `answered_questions`, stamped `<ISO> by <login> · <entry verbatim>` with the login from `decision-stamp.sh`. Exit 4 rather than leave one entry in both lists, exit 3 rather than emit a list it could not round-trip; `--list <doc> <key>` is the same parser, read-only; `--answer <entry> <text>` answers that one entry first; `--add <doc> <entry>...` appends entries through the same round-trip, skipping any already open or answered | yes, that task document |
 | `session-handoff.sh` | `<task-doc> [--jobs-dir <dir>]` — the tick's stop of a role session only the human can move on. A `blocked` session with a `needs` (and no live `waitingFor` prompt) is HANDED OFF: its text goes verbatim to the ignored `.loopd/.handoffs/<id>.txt`, which `AWAITING.md` renders as one `👉 do` row, and the task gets one fixed-text `Q<n>: do:` entry, its block and a note in one atomic write; then `claude stop <short>`. A `done`/`cancelled` task's session is stopped unless it already ended, after filing any pending `needs`. `--owed <task-doc>` says when the answered hand-off's round is due a resume. 0 done · 1 not its case · 2 unknown · 3 the stop did not land. Never `claude rm` | yes — that task document, the hand-off file and one `claude stop` |
 | `session-sweep.sh` | `<bundle-root>` — step 5's stop of this bundle's dead sessions no task owns: `claude stop` on each id `agent-sessions.sh dead-ids` selects (no live pid on the row or in the roster, no task records it or its `cwd`, a `cwd` under the bundle root, past 10m — 24h when `blocked`), each resolved back through `full` first, at most 20 a run; prints `stopped <short> (<age>)` or `stop-failed <short>` per id. Exit 2 is unknown and stopped nothing | no file; `claude stop` only |
-| `answer.sh` | `<task-doc> [Q<n>] <n \| more \| later \| text>` — behind `/loopd:answer <task> …`: a bare integer records that option's text from the `### Q<n>` block, `--text` records any words, `more` prints the next stored depth (counted per clone under `.loopd/.answer-depth/`), `later` appends `<task path>#Q<n>` to the per-clone `.loopd/.answer-later` the pane draws last. Moves the entry through `fold-answers.sh`, commits through `commit-as.sh human`, then pushes through `push-commit.sh`. 0 done · 1 refused · 3 move refused · 4 committed, not pushed (never forced; aborts only a rebase it started) · 5 past the stored depths · 6 `more` or `later` could not save its record | yes, that task document and one commit |
-| `unblock.sh` | `<task-doc> [--decision <words>]` — behind `/loopd:unblock`: refuses a task that is not `blocked` (exit 1); with no decision prints `last_blocker` and the escalation note; with one appends a `# Notes` line stamped `by <login>` (`decision-stamp.sh --self`), runs `stall-counter.sh reset`, sets `status: ready`, commits through `commit-as.sh human` and pushes through `push-commit.sh`. 3 a write failed · 4 committed, not pushed | yes, that task document and one commit |
+| `answer.sh` | `<task-doc> [Q<n>] <n \| more \| later \| text>` — behind `/loopd:answer <task> …`: a `blocked` task with no `Q<n>` goes to `unblock.sh` (refused while it has an open question); a bare integer records that option's text from the `### Q<n>` block, `--text` records any words, `more` prints the next stored depth (counted per clone under `.loopd/.answer-depth/`), `later` appends `<task path>#Q<n>` to the per-clone `.loopd/.answer-later` the pane draws last. Moves the entry through `fold-answers.sh`, commits through `commit-as.sh human`, then pushes through `push-commit.sh`. 0 done · 1 refused · 3 move refused · 4 committed, not pushed (never forced; aborts only a rebase it started) · 5 past the stored depths · 6 `more` or `later` could not save its record | yes, that task document and one commit |
+| `unblock.sh` | `<task-doc> [--decision <words>]` — behind `/loopd:answer` on a `blocked` task (`answer.sh` routes it): refuses a task that is not `blocked` (exit 1); with no decision prints `last_blocker` and the escalation note; with one appends a `# Notes` line stamped `by <login>` (`decision-stamp.sh --self`), runs `stall-counter.sh reset`, sets `status: ready`, commits through `commit-as.sh human` and pushes through `push-commit.sh`. 3 a write failed · 4 committed, not pushed | yes, that task document and one commit |
 | `new-project-form.sh` | `[<n> <text> \| submit \| cancel]` — behind a no-description `/loopd:new-project`: the five-field form (title, what, for whom, done when, target repo, prefilled with `defaultRepo`) the pane draws. No arguments opens it, `<n> <text>` fills a field verbatim, `cancel` removes it; `submit` writes ✗ on each missing field (exit 1) or prints one JSON line the skill creates from, with `kind`, `autonomy` and `owner` (`decision-stamp.sh --self`) set by the script so field text never moves them. Exit 3: not a form command | yes — `.loopd/.new-project/form.json`, self-ignoring |
 | `new-project-file.sh` | `<entry.json>` — run by `web-queue.sh consume` for a queued `new-project`: one project, `autonomy: gated` whatever the text says, every value a quoted string, one `draft` seed task, stage 1 of the scaffold review, then a commit as `human`. Exit 1: refused (e.g. the slug exists), nothing written | yes — the project, its ledger entry |
 | `web-queue.sh` | `append`/`consume`/`pending`/`status` — the web board's answer queue: `board-serve.sh` appends a POSTed entry (strict schema, server-set `ts` and `from`); the dispatch tick consumes it under the tick lock (`project-manager.md`, after the idle probe), printing ids and verdicts only, into a durable ledger. Exit 3: another consumer · 4: no tick lock | yes — `.loopd/.queue/`, self-ignoring |

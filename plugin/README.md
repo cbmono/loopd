@@ -51,14 +51,18 @@ setup and nothing on a machine needs a clone. A stale link an older `--config` l
 | Skill | What it does |
 |---|---|
 | `/whats-up` | Read-only. Reprints the Needs-you rows of `AWAITING.md`, numbered and verbatim, with when it was last refreshed — nothing else is read. |
-| `/capture <notes>` | Intake. Turns a decision or meeting notes into `draft` projects/tasks with provenance, fitted into existing projects where they belong. Never promotes; refinement stays the loop's job, promotion stays yours. |
-| `/work <task>` | Work one `ready` task in the current session — the solo alternative to a background dispatch, leaving the same record (worktree/branch on the task, PR in `pr:`, `in-review` at the end). The gates still hold: no merging, review still independent. |
 | `/dispatch [gap]` | The gated background loop. It carries the contract itself now — during the migration it delegated to the bundle's own copy verbatim, so there was never a second implementation to drift. |
 | `/handoff <path> <login>` | Ownership transfer with the context that makes it real: `owner:` set, a dated handoff note, and a paste-ready summary (open questions, PRs, linked Findings) for the new owner. Dispatch-gating only — never a promotion. |
 | `/welcome` | The welcome screen: bundle, owner, config layers, tier→model routing, board path, what awaits you. `check` reports state that could be wrong; `fix` repairs only the idempotent tier. |
 | `/init <dir>` | Create a bundle, refresh one, or convert one stamped by the retired `install.sh` — data only, and the only symlinks it leaves are under `repos/`. |
+| `/new-project <description>` | Scaffold a project: phases, draft tasks, acceptance criteria. |
+| `/close-project [<slug>]` | Close a project and fold its conclusions into `knowledge/`. |
+| `/answer` | Answer the PM's open questions; given a `blocked` task, take your one decision and return it to `ready`. |
+| `/board` | Serve the board on a local URL, or publish it as a private artifact. |
+| `/fanout <task>` | Parallel work across several repos. |
+| `/prune-wt` | Remove the worktrees `prune-worktrees.sh` reports `REMOVABLE`, after one yes. |
 
-Both also answer to their namespaced forms (`/loopd:whats-up`, `/loopd:capture`).
+Each also answers to its namespaced form (`/loopd:whats-up`, `/loopd:dispatch`).
 **`ai-bridge-v2` was the transition name** — its one-version deprecation stub was
 removed in 1.0.0; the swap is in [`docs/migrating.md`](../docs/migrating.md).
 Run them from a bundle root (where `SCHEMA.md` and `instance.config.json` live).
@@ -66,9 +70,9 @@ Run them from a bundle root (where `SCHEMA.md` and `instance.config.json` live).
 ## Evals
 
 `evals/` holds the `claude plugin eval` suite: real model runs, graded, pinning the one
-class of contract a file check cannot reach. **Seven cases.** Three that the model never
-reaches for `/dispatch`, `/work` or `/answer` on its own, plus a control arm that proves
-those three are not vacuous; and three that grade the **main thread** rather than a skill —
+class of contract a file check cannot reach. Two that the model never
+reaches for `/dispatch` or `/answer` on its own, plus a control arm that proves
+those two are not vacuous; and three that grade the **main thread** rather than a skill —
 diagnosis dispatched instead of run inline, an unanswerable read reported as unknown, and a
 tick caveat outranking the launcher's own conclusion. See
 [`evals/README.md`](evals/README.md) for how to run it and why it self-skips where
@@ -181,7 +185,7 @@ the loop cannot come to disagree about whether delegation exists at all.
 A plugin skill **shadows** a same-named project command, so each command migrated in a
 slice that moved the contract and retired the instance copy **in one change**, with the
 template's test suite as the spec — `/loopd:welcome` first (its whole contract is this
-plugin's `/welcome`), then `/audit`, `/answer`, `/fanout`, `/pr-review-request`,
+plugin's `/welcome`), then `/answer`, `/fanout`,
 `/new-project`, `/close-project` and finally the loop itself, which is `/dispatch` here.
 The
 **enforcement hooks** have made that move (above); `session-banner.sh` and
