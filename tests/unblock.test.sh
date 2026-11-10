@@ -4,7 +4,8 @@
 # blocker in the session without writing, and with a decision stamps one `# Notes` line, zeroes
 # stall_count and returns the task to `ready`, committed as the human and pushed — in one
 # atomic write, so a retry never doubles it. A blocked task that still has open questions is
-# refused naming them; a `Q<n>` answer to one of them is an answer, not an unblock.
+# refused naming them; a `Q<n>` or `--first` answer to one of them is an answer, not an unblock.
+# `more`, `later` and a bare integer are refused as a decision unless `--text` forces them.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -139,7 +140,31 @@ ok "--text-file carries the decision"        "$(grep -c 'unblocked — retry wit
 B="$(fixture notblocked in-progress)"
 OUT="$(ans "$B" use the staging key 2>&1)"; RC=$?
 ok "a task that is not blocked takes no unblock: exit 1" "$RC" 1
+ok "…refused as having no question, not routed" "$OUT" "task-001-x has no open question."
 ok "…and gets no note"                       "$(grep -c 'unblocked —' "$B/$TASK_REL" | tr -d ' ')" 0
+Q1ONLY='
+  - "Q1: which key?"'
+B="$(fixture notblockedq in-progress "$Q1ONLY")"
+OUT="$(ans "$B" use the staging key 2>&1)"; RC=$?
+ok "…with an open question, the words answer it: exit 0" "$RC" 0
+ok "…with no unblock note"                   "$(grep -c 'unblocked —' "$B/$TASK_REL" | tr -d ' ')" 0
+
+echo
+echo "== ANSWER: on a blocked task, more, later and a number are not a decision unless --text =="
+B="$(fixture kw blocked)"
+cp "$B/$TASK_REL" "$TMP/before"
+for w in later more 7; do
+  OUT="$(ans "$B" "$w" 2>&1)"; RC=$?
+  ok "'$w' is refused: exit 1"               "$RC" 1
+  ok "…pointing at --text $w"                "$(printf '%s' "$OUT" | grep -c -- "use --text $w\.$" | tr -d ' ')" 1
+done
+ok "…writing nothing"                        "$(cmp -s "$B/$TASK_REL" "$TMP/before" && echo yes || echo no)" yes
+ok "…and committing nothing"                 "$(git -C "$B" rev-list --count HEAD)" 1
+OUT="$(ans "$B" --text 2>&1)"; RC=$?
+ok "an empty --text is a usage error"        "$RC" 2
+OUT="$(ans "$B" --text later 2>&1)"; RC=$?
+ok "--text later records it: exit 0"         "$RC" 0
+ok "…as the decision"                        "$(grep -c 'unblocked — later$' "$B/$TASK_REL" | tr -d ' '),$(field "$B" status)" "1,ready"
 
 echo
 echo "== ANSWER: a blocked task with open questions is refused, naming them =="
@@ -157,6 +182,24 @@ ok "Q1 <answer> answers the question: exit 0" "$RC" 0
 ok "…which leaves open_questions"            "$(bash "$REPO/plugin/scripts/fold-answers.sh" --list "$B/$TASK_REL" open_questions | grep -c '^Q1:' | tr -d ' ')" 0
 ok "…and the task blocked"                   "$(field "$B" status)" blocked
 ok "…with no unblock note"                   "$(grep -c 'unblocked —' "$B/$TASK_REL" | tr -d ' ')" 0
+
+echo
+echo "== ANSWER: an unnumbered entry on a blocked task is answered with --first, then unblocked =="
+UNNUM='
+  - "advisor: which key?"'
+B="$(fixture unnumbered blocked "$UNNUM")"
+cp "$B/$TASK_REL" "$TMP/before"
+OUT="$(ans "$B" use the staging key 2>&1)"; RC=$?
+ok "words alone are refused: exit 1"         "$RC" 1
+ok "…naming the unnumbered entry and --first" "$(printf '%s' "$OUT" | grep -c '(an unnumbered entry).*--first' | tr -d ' ')" 1
+ok "…and writes nothing"                     "$(cmp -s "$B/$TASK_REL" "$TMP/before" && echo yes || echo no)" yes
+OUT="$(ans "$B" --first the staging key 2>&1)"; RC=$?
+ok "--first answers it: exit 0"              "$RC" 0
+ok "…which leaves open_questions"            "$(bash "$REPO/plugin/scripts/fold-answers.sh" --list "$B/$TASK_REL" open_questions | grep -c . | tr -d ' ')" 0
+ok "…and the task blocked, with no unblock note" "$(field "$B" status),$(grep -c 'unblocked —' "$B/$TASK_REL" | tr -d ' ')" "blocked,0"
+OUT="$(ans "$B" use the staging key 2>&1)"; RC=$?
+ok "then the words unblock it: exit 0"       "$RC" 0
+ok "…status ready"                           "$(field "$B" status)" ready
 
 echo
 echo "== THE SKILLS =="

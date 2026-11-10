@@ -2,13 +2,14 @@
 #
 # answer.sh — answer one open question of one task: option n, free text, or `more`.
 #
-#   Usage: answer.sh [--instance DIR] <task-doc> [Q<n>] <n | more | later | --text <answer> | --text-file <path> | <answer>...>
+#   Usage: answer.sh [--instance DIR] [--first] <task-doc> [Q<n>] <n | more | later | --text <answer> | --text-file <path> | <answer>...>
 #
 # No Q<n> ⇒ the first unanswered entry. A bare integer is an option of its `### Q<n>` block.
 # `--text-file` reads the answer from a file, so no caller has to put free text in an argument.
 # `later` appends `<task path>#Q<n>` to AB_ANSWER_LATER; neither it nor `more` edits a tracked file.
 # A `blocked` task with no Q<n> goes to unblock.sh: no words show the blocker, words are the
-# decision; refused while it still has an open question.
+# decision (`more`, `later` or a bare integer only with --text); refused while it still has an
+# open question. `--first` answers its first open question instead, numbered or not.
 # Exit: 0 done · 1 refused, one sentence · 2 usage · 3 the move refused, nothing written
 #       4 committed, but the commit, rebase or push failed — nothing forced · 5 `more` is past the stored depths
 #       6 `more` or `later` could not save its record, nothing printed
@@ -21,10 +22,11 @@ usage() { sed -n '5p' "$0" >&2; exit 2; }
 refuse() { echo "$*"; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "answer: python3 is required" >&2; exit 2; }
 
-inst="."; doc=""; label=""; forced=0; words=(); text_file=""
+inst="."; doc=""; label=""; forced=0; first=0; words=(); text_file=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) [ $# -ge 2 ] || usage; inst="$2"; shift 2 ;;
+    --first)    first=1; shift ;;
     --text)     forced=1; shift; words+=("$@"); break ;;
     --text-file) [ $# -eq 2 ] || usage; forced=1; text_file="$2"; words=(file); shift 2 ;;
     -h|--help)  usage ;;
@@ -45,15 +47,18 @@ task="$(basename "$doc" .md)"
 
 open_list="$(bash "$HERE/fold-answers.sh" --list "$doc" open_questions)" || exit 3
 status="$(awk 'NR==1{if($0!="---")exit;next} $0=="---"{exit} /^status:/{sub(/^status:[ \t]*/,"");gsub(/["\047 \t\r]/,"");print;exit}' "$doc")"
-if [ "$status" = blocked ] && [ -z "$label" ]; then
+if [ "$status" = blocked ] && [ -z "$label" ] && [ "$first" -eq 0 ]; then
   pending=""
   while IFS= read -r e; do
     [ -n "$e" ] || continue
     case "$e" in *" --- "*) rest="${e##* --- }"; [ -n "${rest// /}" ] && continue ;; esac
-    pending="${pending:+$pending, }${e%%:*}"
+    name="an unnumbered entry"; [[ "$e" =~ ^(Q[0-9]+): ]] && name="${BASH_REMATCH[1]}"
+    pending="${pending:+$pending, }$name"
   done <<<"$open_list"
-  [ -z "$pending" ] || refuse "$task is blocked and still has open questions ($pending) — answer each with $doc Q<n> <answer>, then unblock it."
-  [ -n "${reply// /}" ] || exec bash "$HERE/unblock.sh" --instance "$inst" "$doc"
+  [ -z "$pending" ] || refuse "$task is blocked and still has open questions ($pending) — answer each with $doc Q<n> <answer>, or the first with --first $doc <answer>, then unblock it."
+  [ -n "${reply// /}" ] || { [ "$forced" -eq 0 ] || usage; exec bash "$HERE/unblock.sh" --instance "$inst" "$doc"; }
+  [ "$forced" -eq 1 ] || ! [[ "$reply" =~ ^(more|later|[0-9]+)$ ]] ||
+    refuse "$task is blocked, so '$reply' would be its unblock decision; to record that, use --text $reply."
   exec bash "$HERE/unblock.sh" --instance "$inst" "$doc" --decision "$reply"
 fi
 [ -n "${reply// /}" ] || usage

@@ -52,7 +52,8 @@ When the task's `status:` is `blocked` and no `Q<n>` was given, `answer.sh` hand
 `unblock.sh`. Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path>` first and relay
 its `last_blocker` and escalation note — in the session, never the pane. **Exit 1** — the task
 still has open questions, named in its one sentence: ask those through the steps below and stop;
-it is unblocked only once they are gone. With no decision in the arguments, ask for exactly one
+it is unblocked only once they are gone (`answer.sh --first <task path> <answer>` answers the first,
+numbered or not). `more`, `later` or a bare number is refused as a decision; pass it with `--text`. With no decision in the arguments, ask for exactly one
 with `AskUserQuestion` — what the next agent should do differently, in a line. Then run
 `bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path> --text <the decision>`: one `# Notes`
 line `- <ISO 8601> by <login>: unblocked — <decision>`, the stall counter reset, `status: ready`,
