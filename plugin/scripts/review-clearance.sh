@@ -117,7 +117,7 @@
 # here once no reviewer-authored review thread is still unresolved, and the refusal NAMES
 # the open threads. Clause 9 is in the predicate because a thread the reviewer opened and
 # nobody answered is an unanswered finding whatever the review object says — and it was the
-# one clause with no reader at all: `qa-reviewer.md` and `auditor.md` state it in prose, and
+# one clause with no reader at all: `qa-reviewer.md` stated it in prose, and
 # the 2026-09-05 audit of seven PRs found FOUR failing on clauses 3 and 9, three of them
 # merged with a reviewer that had answered. Not quota. A rule with no reader is not a rule.
 #

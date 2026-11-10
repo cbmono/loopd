@@ -541,7 +541,7 @@ by adding `plan-architect` to `roles` or deleting either `roleTiers` row; see
 
 **`roleEffort` is the second axis beside `roleTiers`: one entry per `roleTiers` key**, the
 reasoning effort (`low|medium|high|xhigh|max`) that agent is spawned at. The seed is
-**medium** for the orchestration roles (`project-manager`, `cataloguer`, `auditor`),
+**medium** for the orchestration roles (`project-manager`, `cataloguer`),
 **high** for the roles that write code or adjudicate (`software-engineer`,
 `devops-engineer`, `qa-reviewer`, `plan-architect`) and `low` for `explorer`. Move a role
 up on evidence: its `maxStallRounds` escalations. `scripts/resolve-effort.sh <agent>` is the

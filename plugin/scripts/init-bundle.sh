@@ -2287,7 +2287,6 @@ DEFAULTS = {
         "qa-reviewer": "apex",
         "cataloguer": "standard",
         "plan-architect": "apex",
-        "auditor": "deep",
         "explorer": "light",
     },
     "roleEffort": {
@@ -2297,7 +2296,6 @@ DEFAULTS = {
         "qa-reviewer": "high",
         "cataloguer": "medium",
         "plan-architect": "high",
-        "auditor": "medium",
         "explorer": "low",
     },
 }

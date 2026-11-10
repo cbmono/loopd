@@ -280,20 +280,19 @@ Run these inside an instance.
 |---|---|
 | `/loopd:new-project <description>` | (plugin) scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
 | `/loopd:dispatch [gap\|once\|stop]` | (plugin) the serial background loop: dispatch, track, report. Bare, it ticks every ten minutes on its own; `once` is a single tick, `stop` ends it |
-| `/loopd:answer` | (plugin) answer the PM's open questions from inside the session — or one, as `<task> [Q<n>] <n \| more \| later \| text>` |
-| `/loopd:unblock <task>` | (plugin) see why a `blocked` task stopped, give your one decision, and send it back to `ready` with that decision in its `# Notes` |
+| `/loopd:answer` | (plugin) answer the PM's open questions from inside the session — or one, as `<task> [Q<n>] <n \| more \| later \| text>`. Given a `blocked` task, shows why it stopped, takes your one decision and sends it back to `ready` with that decision in its `# Notes` |
 | `/loopd:board` | (plugin) `serve` — **the default, so a bare call serves** — the board on a local URL, one process per bundle (every session starts it while `boardServe` is on); `publish` — the same page as a private artifact, at the same URL every run; `--help` — the forms |
-| `/loopd:pr-review-request <pr>` | (plugin) ask for an independent review of a PR |
-| `/loopd:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/loopd:fanout <task>` | (plugin) parallel work across several repos |
 | `/loopd:close-project [<slug>]` | (plugin) close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. No slug opens a picker of the projects, multi-select, and asks about `--force`. [→](docs/schema.md#closing-a-project) |
 | `/loopd:welcome [check\|fix]` | (plugin) reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-loopdwelcome-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
 | `/loopd:whats-up` | (plugin) "what do you need from me?" — reprints `AWAITING.md`'s Needs-you rows, numbered, with its last refresh and whether a tick is in flight. Read-only; nothing else is read |
-| `/loopd:capture <notes>` | (plugin) turn a decision or meeting notes into drafted projects and tasks, with provenance — never promoted |
-| `/loopd:work <task>` | (plugin) work one task in **this** session, ledger kept for you — the solo alternative to dispatching an agent |
 | `/loopd:handoff <path> <login>` | (plugin) transfer a task or project to another human, with the context that makes the transfer real |
-| `/loopd:kb-apply <report>` | (plugin) apply one hand-written `knowledge/` reflection report after reading it — the only path that writes a proposal |
 | `/loopd:prune-wt` | (plugin) remove the worktrees `prune-worktrees.sh` reports `REMOVABLE`, after one yes — each re-checked at removal time, skipped on any doubt; refuses while a tick holds the lock. [→](docs/operations.md#4-worktrees-two-scripts-delete-the-pruner-still-reports) |
+
+| `/loopd:init <dir>` | (plugin) create a bundle, refresh one, or convert one stamped by the retired `install.sh` |
+
+`/pane` is a mod, not a skill: the board, or an inbox of questions and stuck tasks, beside the
+session ([`plugin/hooks/MODS.md`](plugin/hooks/MODS.md)).
 
 Flags `/loopd:new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
 `browser=off|claude-for-chrome` (default `off`), `/yolo`, `/cli …`, `/claudeforchrome`,
@@ -308,10 +307,9 @@ Flags `/loopd:new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="�
 | `devops-engineer` | infrastructure, CI, deploys |
 | `qa-reviewer` | the **independent** verification gate — fresh context, real signals |
 | `cataloguer` | folds conclusions into `knowledge/` |
-| `auditor` | read-only drift check for `/loopd:audit` |
 | `failure-analyst` | diagnoses a failing check or a broken build |
 
-All eight ship in the **plugin** and are dispatched **namespaced** —
+All six ship in the **plugin** and are dispatched **namespaced** —
 `loopd:software-engineer`, `loopd:qa-reviewer`, and so on. A bare agent name does
 not resolve (measured 2026-09-02). A task's `assignee:` field stays bare; the PM adds the
 namespace when it spawns.
@@ -333,21 +331,21 @@ writes. Seeded at `light` / `low`; with no entry the brief says `light` and says
 the default. Delete the row and nothing breaks, but the only dial for the cheapest reads
 in the system is gone.
 
-### The three checkers
+### The two checkers
 
-**Three agents check, at three different scales.** `qa-reviewer` checks one PR, `auditor`
-checks whether projects are reaching their goals, `failure-analyst` diagnoses a red build.
+**Two agents check, at two different scales.** `qa-reviewer` checks one PR,
+`failure-analyst` diagnoses a red build.
 
-| | `qa-reviewer` | `auditor` | `failure-analyst` |
-|---|---|---|---|
-| Question it answers | Does this PR meet its acceptance criteria? | Are we reaching the goals, or just closing tasks? | Why is this build, CI run or deployment red? |
-| Looks at | one PR's diff and CI against its task's `acceptance_criteria` | each objective's `success_criteria`, or a project's own where it has no objective, and `knowledge/` | logs, recent changes, config |
-| Started by | the PM, for a QA task or a PR without a usable external review; `/loopd:new-project`, for a scaffold review | `/loopd:audit`, on a slow cadence | ad hoc, usually in the background |
-| Writes | tests, and its verdict on the PR; for a scaffold, an advisory verdict in the project's `log.md` | nothing; returns a dated report | nothing; returns a report |
-| Output | on a PR, PASS/FAIL per criterion, read by the merge gate; on a scaffold, an advisory verdict that gates nothing | goal drift, stale knowledge, green-but-not-progressing work | root cause, ranked next steps, an optional Finding draft |
+| | `qa-reviewer` | `failure-analyst` |
+|---|---|---|
+| Question it answers | Does this PR meet its acceptance criteria? | Why is this build, CI run or deployment red? |
+| Looks at | one PR's diff and CI against its task's `acceptance_criteria` | logs, recent changes, config |
+| Started by | the PM, for a QA task or a PR without a usable external review; `/loopd:new-project`, for a scaffold review | ad hoc, usually in the background |
+| Writes | tests, and its verdict on the PR; for a scaffold, an advisory verdict in the project's `log.md` | nothing; returns a report |
+| Output | on a PR, PASS/FAIL per criterion, read by the merge gate; on a scaffold, an advisory verdict that gates nothing | root cause, ranked next steps, an optional Finding draft |
 
-`auditor` and `failure-analyst` are read-only by instruction. Both hold `Bash`, so the
-allowlist does not enforce it (see `plugin/agents/auditor.md`).
+`failure-analyst` is read-only by instruction. It holds `Bash`, so the allowlist does not
+enforce it (see `plugin/agents/failure-analyst.md`).
 
 ## Where the work lives
 

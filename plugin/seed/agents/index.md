@@ -25,7 +25,6 @@ role name, not a dispatch string, and the PM adds the namespace when it spawns.
 * `loopd:project-manager` - orchestrator: refines, assigns, reviews, curates.
 * `loopd:cataloguer` - librarian for the knowledge base (service catalog, findings, runbooks); read-only on product repos.
 * `loopd:failure-analyst` - read-only diagnostician for a failing build / red CI / failed deploy (incl. from a pasted PR). Reports root cause + ranked next steps; never changes code. Dispatched ad-hoc (usually in the background).
-* `loopd:auditor` - read-only audit loop (slow counter-metric): grounds objectives against reality and flags Goodhart drift / stale knowledge / green-but-not-progressing work / weakened anchors. Writes only an audit report; never acts. Run via `/audit`.
 
 **Advisory review agents** — **never** task assignees, never in `roles`; dispatched with the `Agent` tool by the PM and the `qa-reviewer`, and by `/plan` and `/scan`. They ship in the same plugin and take the same namespace (a bare name does not resolve):
 * `loopd:plan-architect` - critiques an implementation plan before any code is written (the PM's approach critique, step 2; priced by the `plan-architect` row of `roleTiers`).
