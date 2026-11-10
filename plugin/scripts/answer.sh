@@ -7,10 +7,12 @@
 # No Q<n> ⇒ the first unanswered entry. A bare integer is an option of its `### Q<n>` block.
 # `--text-file` reads the answer from a file, so no caller has to put free text in an argument.
 # `later` appends `<task path>#Q<n>` to AB_ANSWER_LATER; neither it nor `more` edits a tracked file.
+# A `blocked` task with no Q<n> goes to unblock.sh: no words show the blocker, words are the
+# decision; refused while it still has an open question.
 # Exit: 0 done · 1 refused, one sentence · 2 usage · 3 the move refused, nothing written
 #       4 committed, but the commit, rebase or push failed — nothing forced · 5 `more` is past the stored depths
 #       6 `more` or `later` could not save its record, nothing printed
-# Reasoning: simple-board/task-002.
+# Reasoning: simple-board/task-002; the blocked route, article-batch-8-hygiene/task-013.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -32,17 +34,29 @@ while [ $# -gt 0 ]; do
        shift ;;
   esac
 done
-[ -n "$doc" ] && [ ${#words[@]} -gt 0 ] || usage
+[ -n "$doc" ] || usage
 [ -r "$doc" ] || refuse "No task document at $doc."
-reply="${words[*]}"
+reply="${words[*]-}"
 if [ -n "$text_file" ]; then
   [ -r "$text_file" ] || refuse "No answer file at $text_file."
   reply="$(tr '\n\r\t' '   ' < "$text_file")"
 fi
-[ -n "${reply// /}" ] || usage
 task="$(basename "$doc" .md)"
 
 open_list="$(bash "$HERE/fold-answers.sh" --list "$doc" open_questions)" || exit 3
+status="$(awk 'NR==1{if($0!="---")exit;next} $0=="---"{exit} /^status:/{sub(/^status:[ \t]*/,"");gsub(/["\047 \t\r]/,"");print;exit}' "$doc")"
+if [ "$status" = blocked ] && [ -z "$label" ]; then
+  pending=""
+  while IFS= read -r e; do
+    [ -n "$e" ] || continue
+    case "$e" in *" --- "*) rest="${e##* --- }"; [ -n "${rest// /}" ] && continue ;; esac
+    pending="${pending:+$pending, }${e%%:*}"
+  done <<<"$open_list"
+  [ -z "$pending" ] || refuse "$task is blocked and still has open questions ($pending) — answer each with $doc Q<n> <answer>, then unblock it."
+  [ -n "${reply// /}" ] || exec bash "$HERE/unblock.sh" --instance "$inst" "$doc"
+  exec bash "$HERE/unblock.sh" --instance "$inst" "$doc" --decision "$reply"
+fi
+[ -n "${reply// /}" ] || usage
 entry=""
 while IFS= read -r e; do
   [ -n "$e" ] || continue
