@@ -40,7 +40,8 @@ unattributable number is worse than none.
 ## pane — the board in a pane
 
 `/pane` opens a pane drawing this bundle's board beside the transcript (or above the prompt
-in a narrow terminal). `paneMode` decides what it draws:
+in a narrow terminal); `/pane` while it is open, or `/pane close`, closes it the way its `×`
+does. `paneMode` decides what it draws:
 
 | `paneMode` | Draws | Reads |
 |---|---|---|
@@ -56,11 +57,16 @@ re-implemented: nothing this pane shows is anything the file does not already ca
 
 | Section | From the snapshot's fields |
 |---|---|
-| header | `group`, `counts.projects`, `counts.tasks`, `counts.awaiting` |
-| need you | the AWAITING verbs — `approve · answer · merge · unblock · close` — counted off each task's `awaiting` verb, plus one `close` per project with `awaiting_close` (print-board.sh's rule) |
-| in flight | each task with `in_flight`: `<project slug>/<task id>`, `assignee` (a **role**, never a person), `status`, the PR's `pr_mergeable` when `prs` is non-empty, `title` |
-| projects | per project: `slug`, `status`, `phase_progress.done/total`, the task count, in-flight count, awaiting count, `title` |
-| footer | `generated_at` — when the writer last wrote the file — and `tick queued` while a Tick is waiting for the session to go idle |
+| header | `group` and the snapshot's age off `generated_at`: `just now`, `N min ago`, `N h ago` under 48 h, then `N d ago`; `age unknown` when it is unparseable or in the future |
+| NEEDS YOU | one row per task whose `awaiting` is an AWAITING verb — `approve · answer · merge · unblock` — and one `close` per project with `awaiting_close` (print-board.sh's rule): the verb, then the `title`, in snapshot order. Hidden when empty |
+| WORKING | each task with `in_flight`: `assignee` (a **role**, never a person) and `title`, plus `PR <pr_mergeable>` when `prs` is non-empty and it is not `MERGEABLE`; else `nothing right now` |
+| PROJECTS | one line per project, by `title`: `●` active, `○` paused, `✓` done; `N need you` only when N > 0. Needs-you first, then active, paused, done, snapshot order within each. Under each active project a 10-cell bar and `done/total` off its tasks' `status` (`cancelled` not counted; none, no bar), and `phase_progress` only when it has phases |
+| footer | `tick queued` while a Tick is waiting for the session to go idle |
+
+Width is the pane's `bodyColumns` (45 when the surface gives none). No row wraps: a title is
+cut by code point with `…`; a count and the `paused`/`done` word never are. Colours are
+`plugin/themes/loopd.json` tokens — pink needs you, blue work, green done, grey quiet; the
+kit's `Button` takes no colour, so the two buttons are uncoloured.
 
 Not drawn, because the snapshot does not carry it: a round number, a session id, a usage
 line, a `continue` verb, any question or blocker **text**, any document body, any author
@@ -75,7 +81,8 @@ every number passes one `toint()`, so a `"tasks": "many"` draws as `0` and never
 **A number is never truncated**: a clipped count is a wrong count.
 
 The pane redraws from the file every **5 seconds**, by `stat` first and `read` only when
-the mtime moved; the poll starts when the pane opens and stops when it closes.
+the mtime moved, and also when the age the header shows would change; the poll starts when
+the pane opens and stops when it closes.
 
 | Button | Does |
 |---|---|
