@@ -10,8 +10,8 @@ agents, the scripts and the `SessionStart` hook) ships in the `loopd`
 any checkout. Its seed docs (`SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, this file)
 were **copied once and are yours**. The slash commands come from the same **plugin**
 (`/loopd:dispatch`, `/loopd:new-project`,
-`/loopd:close-project`, `/loopd:pr-review-request`,
-`/loopd:answer`, `/loopd:audit`, `/loopd:board`,
+`/loopd:close-project`, `/loopd:whats-up`,
+`/loopd:answer`, `/loopd:board`,
 `/loopd:fanout`) and are
 installed per machine, not per instance. This repo tracks only its own
 **content**: `projects/`, `knowledge/`, `log.md`, an optional `objectives/`, and
@@ -68,9 +68,8 @@ worktree mid-run), and absent it worktrees fall back to `<reposRoot>/_wt`, which
 still swept as the legacy root. Neither belongs in the tracked file — an absolute path on
 one machine cannot be right on the other — and `/loopd:init` reports one that is
 there (`normalise-config.sh`) rather than leaving it to be noticed.
-- `defaultRepo` — optional; default repo for `/loopd:pr-review-request` (bare name is
+- `defaultRepo` — optional; default target repo for `/loopd:new-project` (bare name is
   qualified with `org`, or give `owner/name`).
-- `prReviewSlackChannel` — optional; channel name or id for `/loopd:pr-review-request`.
 
 Per-instance permission/env overrides go in `.claude/settings.local.json`
 (gitignored) — keep them out of `.claude/settings.json` beside it, which is a seed file

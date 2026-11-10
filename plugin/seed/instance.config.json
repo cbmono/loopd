@@ -54,7 +54,6 @@
   "$reviewFixMaxLines": "The most changed lines (added plus deleted) a fix may carry since the last reviewed commit and still merge with no re-review; over it the loop holds for the human. Read by scripts/review-next.sh --clear (AUTONOMY.md, 'Merge after the last round'). Absent => 300. Any integer >= 0. TRACKED, never per-machine: a merge policy both clones must agree on.",
   "codegraphSkip": "",
   "externalReviewer": null,
-  "prReviewSlackChannel": null,
   "board": true,
   "$board": "ON BY DEFAULT, and it is read at BOTH ends of the lifecycle. true (or absent) => /loopd:init creates SNAPSHOT.json when missing on any stamp, so this instance appears on the terminal board, AND each /loopd:dispatch tick re-renders the page to .loopd/.board-live/board.html (derived and gitignored, served by bundle-paths.sh) and reports that path. false => the snapshot is never created, the installer says so, and the tick renders nothing and says nothing. NOTHING IS COMMITTED AND NOTHING IS ACCOUNT-SCOPED: the page is derived, so no copy leaves this machine unless you publish one yourself. (The account-scoped publish path, and the config key that recorded its URL, were deleted: only the publishing account could ever update the page, and it vanished from under its own owner at the next login.) Question TEXT is never in the snapshot or the page file; only scripts/board-serve.sh's localhost response shows it. scripts/watch-board.sh renders the same file continuously if you want it live between ticks.",
   "boardServe": true,

@@ -185,12 +185,12 @@ failed" defect the control arm exists to catch.
 
 ## What this suite does NOT cover
 
-- **The other seven state-changing skills.** `capture`, `handoff`, `audit`, `fanout`,
-  `pr-review-request`, `new-project` and `close-project` are pinned as text only.
+- **The other state-changing skills.** `handoff`, `fanout`, `new-project`, `close-project`,
+  `board`, `init` and `prune-wt` are pinned as text only.
 - **Anything needing a real bundle.** A case runs in a scratch scaffold with no
   `instance.config.json` — an empty cwd, `Glob` outside it denied, and none of the seed
   prose on disk. So contracts about *what a skill does to a bundle* (`answer` never
-  widening scope on a typo, `capture` never promoting), and **any rule whose only statement
+  widening scope on a typo), and **any rule whose only statement
   is in `seed/`**, stay in the shell harness until a fixture bundle exists. It is what
   retired the four cases above, and it is why a prompt here carries its own material.
 - **The gated skills, beyond the refusal itself.** Inside an eval the model can only ever
