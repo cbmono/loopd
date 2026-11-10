@@ -300,7 +300,7 @@ EOF
 # The default trailers, assigned rather than inlined: a backtick or an apostrophe inside a
 # `${x:-…}` default is re-parsed by the shell and the script will not even load.
 DEF_APPROVE='refined & clean, promote `draft → ready`'
-DEF_UNBLOCK='blocked — see the task’s `# Notes`'
+DEF_UNBLOCK='blocked — run `/loopd:answer <task path>` with your decision'
 DEF_CLOSE='all tasks terminal → `/close-project '
 
 # The `continue` row's sentence is the script's, not the model's: it carries the one line the
