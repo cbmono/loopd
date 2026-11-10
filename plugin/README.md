@@ -50,7 +50,6 @@ setup and nothing on a machine needs a clone. A stale link an older `--config` l
 
 | Skill | What it does |
 |---|---|
-| `/brief-me [project]` | Read-only. No argument: the board brief — what needs you, what's in flight, what moved since the last full tick. With a project slug: a meeting-ready brief with questions quoted by number and a "decide today" list. |
 | `/whats-up` | Read-only. Reprints the Needs-you rows of `AWAITING.md`, numbered and verbatim, with when it was last refreshed — nothing else is read. |
 | `/capture <notes>` | Intake. Turns a decision or meeting notes into `draft` projects/tasks with provenance, fitted into existing projects where they belong. Never promotes; refinement stays the loop's job, promotion stays yours. |
 | `/work <task>` | Work one `ready` task in the current session — the solo alternative to a background dispatch, leaving the same record (worktree/branch on the task, PR in `pr:`, `in-review` at the end). The gates still hold: no merging, review still independent. |
@@ -59,7 +58,7 @@ setup and nothing on a machine needs a clone. A stale link an older `--config` l
 | `/welcome` | The welcome screen: bundle, owner, config layers, tier→model routing, board path, what awaits you. `check` reports state that could be wrong; `fix` repairs only the idempotent tier. |
 | `/init <dir>` | Create a bundle, refresh one, or convert one stamped by the retired `install.sh` — data only, and the only symlinks it leaves are under `repos/`. |
 
-Both also answer to their namespaced forms (`/loopd:brief-me`, `/loopd:capture`).
+Both also answer to their namespaced forms (`/loopd:whats-up`, `/loopd:capture`).
 **`ai-bridge-v2` was the transition name** — its one-version deprecation stub was
 removed in 1.0.0; the swap is in [`docs/migrating.md`](../docs/migrating.md).
 Run them from a bundle root (where `SCHEMA.md` and `instance.config.json` live).
