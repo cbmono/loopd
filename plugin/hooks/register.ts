@@ -141,12 +141,15 @@ function registerUsage(on: any) {
 // operator — the fourth renderer over `.loopd/SNAPSHOT.json` (docs/conventions.md §11), with
 // Tick and Refresh; simple — an inbox of open questions, stuck tasks and progress, read from
 // the task documents, every button one slash command. Untrusted text and types: every string
-// through clean(), every number through toint(), none truncated (conventions 11d, 11e).
+// through clean(), every number through toint(); a title may be cut to the pane's width, a
+// number never is (conventions 11d, 11e).
 const PANE = 'loopd-board'
 const COMMAND = 'pane'
 const TITLE = 'loopd board'
 const SNAPSHOT = '.loopd/SNAPSHOT.json'
 const POLL_MS = 5000
+const WIDTH = 45        // the operator layout's width where the surface names no bodyColumns
+const BAR = 10          // progress-bar cells, whatever the task count
 const DISPATCH = 'loopd:dispatch'   // the command, without its slash, as $.command.run names it
 // write-snapshot.sh's verb set, minus nothing: the pane names the verb, never the reason.
 const VERBS = ['approve', 'answer', 'merge', 'unblock', 'close'] as const
@@ -201,6 +204,8 @@ let reads = 0            // how many times the file was actually read (the poll 
 let timer: { cancel: () => void } | null = null
 let tickQueued = false
 let tickRefused = ''     // why the last Tick's submit was refused, drawn in the footer; '' = it was not
+let shownAge = ''        // the age text last drawn; the poll redraws when it would change
+let open = false         // a /pane placed the pane and no ui.close has fired since
 
 // ---------------------------------------------------------------- untrusted input
 // The TERMINAL sink's one sanitising point, the same rule print-board.sh applies: drop
@@ -299,6 +304,24 @@ async function refresh($: any, force: boolean): Promise<void> {
   kind = 'ok'; board = b; detail = ''
 }
 
+function cols(s: string): number { return Array.from(s).length }
+// Cut by code point, so a surrogate pair is never split.
+function cut(s: string, n: number): string {
+  const cp = Array.from(s)
+  return cp.length <= n ? s : cp.slice(0, Math.max(0, n - 1)).join('') + '…'
+}
+function age(now: number, at: string): string {
+  const s = (now - (/^\d{4}-\d\d-\d\dT/.test(at) ? Date.parse(at) : NaN)) / 1000
+  if (!isFinite(s) || s < 0) return 'age unknown'
+  if (s < 60) return 'just now'
+  if (s < 3600) return Math.floor(s / 60) + ' min ago'
+  if (s < 48 * 3600) return Math.floor(s / 3600) + ' h ago'
+  return Math.floor(s / 86400) + ' d ago'
+}
+async function nowMs($: any): Promise<number> {
+  try { const n = await $.clock.now(); return typeof n === 'number' ? n : NaN } catch { return NaN }
+}
+
 function summary(): string {
   if (kind !== 'ok' || !board) return detail
   return 'loopd board: ' + board.projects + ' project(s) · ' + board.tasks + ' task(s) · ' + board.awaiting + ' awaiting you'
@@ -307,51 +330,86 @@ function summary(): string {
 // ---------------------------------------------------------------- the drawing
 // Function-call form (this is a .ts file, so no JSX); Box, Text and Button are the three
 // elements every surface draws. Every string passed to Text has been through clean().
-function draw($: any, e: any): any {
+function draw($: any, e: any, now: number): any {
   const { Box, Text, Button } = $.ui.resolve(e)
   const line = (s: string, props: Record<string, unknown> = {}) => Text({ ...props, children: [s] })
+  const seg = (s: string, props: Record<string, unknown> = {}) => s ? Text({ ...props, children: [s] }) : null
+  const row = (...parts: any[]) => Text({ children: parts.filter(Boolean) })
   const rows: any[] = []
 
   if (kind !== 'ok' || !board) {
     rows.push(line(kind === 'unread' ? 'loopd board: reading…' : detail, { dimColor: kind === 'unread' }))
   } else {
     const b = board
-    rows.push(line(TITLE + (b.group ? ' · ' + b.group : '') + ' · ' + b.projects + ' project(s) · ' + b.tasks + ' task(s) · ' + b.awaiting + ' awaiting you', { bold: true }))
+    const W = toint(e && e.props ? e.props.bodyColumns : 0) || WIDTH
+    const fit = (s: string, room: number) => cut(s, Math.max(1, room))
+    const gap = (used: number) => ' '.repeat(Math.max(1, W - used))
+    const needs = (t: Task) => (VERBS as readonly string[]).includes(t.awaiting)
 
-    // The need-you rail: the AWAITING verbs, counted off each task's `awaiting` plus one
-    // `close` per project whose `awaiting_close` is set — print-board.sh's rule.
-    const need: Record<string, number> = {}
-    for (const v of VERBS) need[v] = 0
-    const inFlight: { slug: string; t: Task }[] = []
+    shownAge = age(now, b.generated_at)
+    const name = fit(b.group || TITLE, W - cols(shownAge) - 1)
+    rows.push(row(seg(name, { ...TEXT, bold: true }), seg(gap(cols(name) + cols(shownAge))), seg(shownAge, MUTED)))
+    rows.push(line('─'.repeat(W), RULE))
+
+    // print-board.sh's need-you rule: a task's AWAITING verb, plus one close per awaiting_close project.
+    const need: { verb: string; title: string }[] = []
+    const working: Task[] = []
     for (const p of b.rows) {
-      if (p.awaiting_close) need.close += 1
+      if (p.awaiting_close) need.push({ verb: 'close', title: p.title || p.slug })
       for (const t of p.tasks) {
-        if ((VERBS as readonly string[]).includes(t.awaiting)) need[t.awaiting] += 1
-        if (t.in_flight) inFlight.push({ slug: p.slug, t })
+        if (needs(t)) need.push({ verb: t.awaiting, title: t.title || t.id })
+        if (t.in_flight) working.push(t)
       }
     }
-    rows.push(line('need you: ' + VERBS.map(v => v + ' ' + need[v]).join(' · ')))
+    if (need.length) {
+      rows.push(row(seg('NEEDS YOU', { ...NEEDS_YOU, bold: true }), seg('  ' + need.length, NEEDS_YOU)))
+      for (const n of need) {
+        const head = '› ' + n.verb.padEnd(7) + '  '
+        rows.push(row(seg(head, NEEDS_YOU), seg(fit(n.title, W - cols(head)), TEXT)))
+      }
+      rows.push(line(' '))
+    }
 
-    rows.push(line(' '))
-    rows.push(line('in flight (' + inFlight.length + ')', { bold: true }))
-    if (inFlight.length === 0) rows.push(line('nothing in flight', { dimColor: true }))
-    for (const { slug, t } of inFlight) {
-      rows.push(line('  ' + slug + '/' + t.id + ' · ' + (t.assignee || 'unassigned') + ' · ' + t.status
-        + (t.prs ? ' · PR ' + (t.pr_mergeable || 'UNKNOWN') : '') + ' · ' + t.title))
+    rows.push(line('WORKING', { ...WORK, bold: true }))
+    if (working.length === 0) rows.push(line('  nothing right now', MUTED))
+    for (const t of working) {
+      const head = '  ' + (t.assignee || 'unassigned') + '  '
+      const mark = t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : ''
+      rows.push(row(seg(head, WORK), seg(fit(t.title || t.id, W - cols(head) - cols(mark)), TEXT), seg(mark, MUTED)))
     }
 
     rows.push(line(' '))
-    rows.push(line('projects (' + b.rows.length + ')', { bold: true }))
-    for (const p of b.rows) {
-      let aw = p.awaiting_close ? 1 : 0
-      let fly = 0
-      for (const t of p.tasks) { if ((VERBS as readonly string[]).includes(t.awaiting)) aw += 1; if (t.in_flight) fly += 1 }
-      rows.push(line('  ' + p.slug + ' · ' + p.status + ' · phases ' + p.phase_done + '/' + p.phase_total
-        + ' · tasks ' + p.tasks.length + ' · in flight ' + fly + ' · awaiting ' + aw + ' · ' + p.title))
+    rows.push(line('PROJECTS', { ...TEXT, bold: true }))
+    const ranked = b.rows.map((p, i) => {
+      let n = p.awaiting_close ? 1 : 0
+      for (const t of p.tasks) if (needs(t)) n += 1
+      return { p, n, i, rank: n ? 0 : p.status === 'active' ? 1 : p.status === 'paused' ? 2 : p.status === 'done' ? 3 : 4 }
+    }).sort((x, y) => x.rank - y.rank || x.i - y.i)
+    for (const { p, n } of ranked) {
+      const active = p.status === 'active'
+      const [glyph, look] = active ? ['●', WORK] : p.status === 'paused' ? ['○', MUTED] : p.status === 'done' ? ['✓', DONE] : ['·', MUTED]
+      const tail: [string, Record<string, unknown>][] = []
+      if (n) tail.push([n + ' need you', NEEDS_YOU])
+      if (p.status === 'paused') tail.push(['paused', MUTED])
+      if (p.status === 'done') tail.push(['done', DONE])
+      const tailCols = cols(tail.map(([s]) => s).join(' · '))
+      const title = fit(p.title || p.slug, W - 2 - (tailCols ? tailCols + 1 : 0))
+      const parts = [seg(glyph + ' ', look), seg(title, active || n ? TEXT : MUTED)]
+      if (tailCols) parts.push(seg(gap(2 + cols(title) + tailCols)), ...tail.map(([s, c], k) => seg((k ? ' · ' : '') + s, c)))
+      rows.push(row(...parts))
+      if (!active) continue
+      const live = p.tasks.filter(t => t.status !== 'cancelled')
+      const done = live.filter(t => t.status === 'done').length
+      const sub: any[] = []
+      if (live.length) {
+        const fill = Math.floor(BAR * done / live.length)
+        sub.push(seg('█'.repeat(fill), WORK), seg('░'.repeat(BAR - fill), RULE), seg('  ' + done + '/' + live.length, MUTED))
+      }
+      if (p.phase_total) sub.push(seg((sub.length ? '  ' : '') + 'phases ' + p.phase_done + '/' + p.phase_total, MUTED))
+      if (sub.length) rows.push(row(seg('  '), ...sub))
     }
 
-    rows.push(line(' '))
-    rows.push(line('snapshot written ' + (b.generated_at || 'unknown') + (tickQueued ? ' · tick queued' : ''), { dimColor: true }))
+    if (tickQueued) { rows.push(line(' ')); rows.push(line('tick queued', MUTED)) }
   }
   // A refused submit is said, not swallowed: a Tick that silently did nothing is the
   // silent wrong answer convention 12 is about.
@@ -418,10 +476,15 @@ let sendNote = ''        // the line drawn after a run: a confirmation naming it
 // one until the later file's does), or until a turn that started after the press completes
 // without moving it (answer.sh refused).
 let held = new Map<string, Held>()
-// The pane's colours: pink for a row only a person can clear, green for sent and finished
-// (loopd-design/cli-theme.json human_pink; plugin/themes/loopd.json success).
+// The pane's colours, all plugin/themes/loopd.json tokens: pink for a row only a person can
+// clear, green for sent and finished (loopd-design/cli-theme.json human_pink; success); the
+// operator layout adds blue for work and active, the text white, grey for quiet, the rule line.
 const NEEDS_YOU = { color: '#ff7ac2' }
 const DONE = { color: '#76d6a4' }
+const WORK = { color: '#5ea2ff' }
+const TEXT = { color: '#f5f5f5' }
+const MUTED = { color: '#6c7488' }
+const RULE = { color: '#33405a' }
 const STUCK_KEYS = ['c', 'd', 'e']
 
 // AB_NEW_PROJECT_FORM in bundle-paths.sh: new-project-form.sh writes it and its ✗ marks; the pane only draws it.
@@ -899,14 +962,30 @@ async function paneTurn($: any, e: any): Promise<void> {
 }
 
 function registerPane(on: any) {
-  on('command.run', { command: COMMAND }, async ($: any) => {
+  on('command.run', { command: COMMAND }, async ($: any, e: any) => {
+    // A toggle. Closing goes through $.ui.close, so the ui.close hook below cancels the
+    // poll exactly as the pane's own × does.
+    const close = clean(e && e.args).toLowerCase() === 'close'
+    if (open || close) {
+      if (open) { try { await $.ui.close({ id: PANE }) } catch { /* already gone */ } }
+      return {}
+    }
     await reread($, true)
     let placed = false
     try { const r = await $.ui.open({ id: PANE, title: TITLE }); placed = !!(r && r.isPlaced === true) } catch { placed = false }
+    open = placed
     if (!timer) {
-      // The poll redraws only when a file it reads moved; it never runs or submits
-      // anything. It starts with the pane and ends with it (ui.close below).
-      try { timer = $.clock.every(POLL_MS, async () => { if (await reread($, false)) $.ui.invalidate('ui.render') }) } catch { timer = null }
+      // The poll redraws when a file it reads moved, or when the age the header shows
+      // would change; it never runs or submits anything. It starts with the pane and ends
+      // with it (ui.close below).
+      try {
+        timer = $.clock.every(POLL_MS, async () => {
+          const moved = await reread($, false)
+          if (moved || (MODE === 'operator' && board && age(await nowMs($), board.generated_at) !== shownAge)) {
+            try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
+          }
+        })
+      } catch { timer = null }
     }
     // Where no surface draws a pane (a narrow terminal, a `-p` run), one transcript line.
     if (!placed) $.ui.log(MODE === 'simple' ? summarySimple() : summary())
@@ -914,6 +993,7 @@ function registerPane(on: any) {
   }).catch(async (_$: any, e: any, next: any) => next(e))   // fail OPEN: a broken pane never eats the command
 
   on('ui.close', { id: PANE }, async (_$: any, e: any, next: any) => {
+    open = false
     if (timer) { try { timer.cancel() } catch { /* already gone */ } timer = null }
     return next(e)
   }).catch(async (_$: any, e: any, next: any) => next(e))   // fail OPEN: the pane still closes
@@ -923,7 +1003,7 @@ function registerPane(on: any) {
       // Drawn before /pane ran (a reload while the pane stayed up): read, then redraw.
       reread($, true).then(() => $.ui.invalidate('ui.render'), () => $.ui.invalidate('ui.render'))
     }
-    return MODE === 'simple' ? drawSimple($, e) : draw($, e)
+    return MODE === 'simple' ? drawSimple($, e) : draw($, e, await nowMs($))
   })
 }
 
