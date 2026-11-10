@@ -46,7 +46,7 @@ REPORT="${REPORT#"$INST"/}"
 case "$REPORT" in projects/*/tasks/*.md) ;; *) die 1 "$REPORT is not a task document under projects/*/tasks/" ;; esac
 
 # Narrows the tick-vs-human window with the mechanism the bundle already has; it does not
-# close it, exactly as skills/audit/SKILL.md says of the same probe.
+# close it.
 lock="$(bash "$HERE/tick-lock.sh" status --instance "$INST" 2>&1)"; lrc=$?
 [ "$lrc" -eq 0 ] || die 1 "a tick holds the dispatch lock, and it may be writing knowledge/ — $lock"
 

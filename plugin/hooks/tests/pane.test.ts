@@ -677,14 +677,14 @@ test('ONE COMMAND PER BUTTON: hotkeys are unique, a 1 while sending runs nothing
   await ui.unmount()
 })
 
-test('UNBLOCK: each stuck-you-can-help row runs /loopd:unblock on its task, once', SIMPLE, async ($, on) => {
+test('UNBLOCK: each stuck-you-can-help row runs /loopd:answer on its task, once', SIMPLE, async ($, on) => {
   const w = inboxWorld()
   const clock = mock.clock(on)
   stubs(on, w, true, () => clock.sleep(1000))
   await open($)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await hot(ui, 'd')).toBe(true)
-  expect(w.submitted[0]).toMatchObject({ command: 'loopd:unblock', args: 'projects/one/tasks/task-002-blocked.md' })
+  expect(w.submitted[0]).toMatchObject({ command: 'loopd:answer', args: 'projects/one/tasks/task-002-blocked.md' })
   expect(await hot(ui, 'c')).toBe(false)
   await clock.advance(1000)
   expect(await shown(ui)).toContain('Unblocking "Needs a key" in One — answer in the conversation.')

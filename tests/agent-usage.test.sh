@@ -235,7 +235,7 @@ ok "an empty ledger says UNKNOWN, not nothing"    "$("$AU" series --instance "$T
 ok "no readable log.md is exit 2"                 "$("$AU" series --instance "$TMP/i7/nope" >/dev/null 2>&1; echo $?)" 2
 
 echo "== tokens, never money — and no transcript on this path =="
-FEATURE=("$AU" "$TD" "$REPO/plugin/agents/auditor.md")
+FEATURE=("$AU" "$TD")
 # `cost` as a word is allowed (it names the subject); a PRICE is what may not appear.
 # No `\$[0-9]` arm: these files read their own positional parameters, and a pattern that
 # matches `$1` measures bash, not money.
@@ -244,11 +244,6 @@ money='USD\|EUR\|price\|pricing\|per million\|per 1M\|cents'
 # line as 0 — these two were green whatever the files held. The count is the LAST field.
 sumc() { awk -F: '{s+=$NF} END{print s+0}'; }
 ok "no price, no currency, no pricing source"     "$(grep -ic "$money" "$AU" "$TD" | sumc)" 0
-# The auditor's body STATES the prohibition, so the word appears there once, on the line
-# that forbids it. Any other line carrying money vocabulary is the thing being forbidden.
-AUD="$REPO/plugin/agents/auditor.md"
-ok "the auditor states the prohibition"            "$(grep -c 'never convert to money, and never introduce a price table' "$AUD" | tr -d ' ')" 1
-ok "…and names money nowhere else"               "$(grep -iv 'never convert to money' "$AUD" | grep -ic "$money" | tr -d ' ')" 0
 ok "no transcript path on the tick path"          "$(grep -c 'claude/projects\|\.jsonl' "${FEATURE[@]}" | sumc)" 0
 # The mutant: the same sum over a fixture that DOES carry a price must not read 0.
 printf 'costs 5 USD\n' > "$TMP/priced.txt"; : > "$TMP/clean.txt"
@@ -268,8 +263,6 @@ ok "a dispatch is recorded per role dispatch"     "$(has "$REPO/plugin/tick-step
 ok "reflect sums against the merged PR"           "$(has "$REPO/plugin/tick-steps/step-5-reflect-merges.md" 'agent-usage.sh total <task-path> --pr <merged-pr-url>')" yes
 ok "the report gains at most one cost line"       "$(has "$PM" 'At most ONE cost line')" yes
 ok "…and none at all on an empty tick"          "$(has "$PM" 'dispatched nothing and merged nothing prints no')" yes
-ok "the audit reads the ledger offline"           "$(has "$REPO/plugin/agents/auditor.md" 'agent-usage.sh series')" yes
-ok "…and converts nothing to money"             "$(has "$REPO/plugin/agents/auditor.md" 'never convert to money')" yes
 
 # THE TICK REPORT'S FOOTER (ai-bridge-v3/task-025) — the launcher's instruction, and the
 # only thing about it a harness CAN fail: its caller is a model, so nothing here can go red

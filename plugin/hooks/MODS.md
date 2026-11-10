@@ -113,7 +113,7 @@ unique on the screen:
 | — | the text field | `/loopd:answer <task> Q<n> --text <words>` |
 | `m` | More | `/loopd:answer <task> Q<n> more` |
 | `l` | Later | `/loopd:answer <task> Q<n> later` — the question goes to the end; the next one opens |
-| `c` `d` `e` | Unblock it (the first three stuck tasks; the rest by click) | `/loopd:unblock <task>` — the blocker is shown in the session, never here |
+| `c` `d` `e` | Unblock it (the first three stuck tasks; the rest by click) | `/loopd:answer <task>`, which routes a blocked task to `unblock.sh` — the blocker is shown in the session, never here |
 | `n` | New project | `/loopd:new-project` — opens the form |
 | — | the form's text field: a field number, then the text | `/loopd:new-project <n> "<text>"` |
 | `y` | Start the project (form) | `/loopd:new-project submit` |

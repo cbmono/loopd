@@ -94,7 +94,7 @@ type: Objective
 title: <short goal>
 description: <one line>
 status: active | paused | achieved | dropped
-success_criteria: [ "<measurable signal>", ... ]   # optional but expected for `active` objectives — the anchor /audit grounds progress against; the audit flags an active objective that lacks it. MEASURABLE: name the command and today's number, never "faster" or "better"
+success_criteria: [ "<measurable signal>", ... ]   # optional but expected for `active` objectives — the anchor the human reviewing progress grounds against; an active objective without it has none. MEASURABLE: name the command and today's number, never "faster" or "better"
 timestamp: <ISO 8601>
 ---
 ```
@@ -109,7 +109,7 @@ description: <one line>
 original_request: "<what the human asked for, verbatim, on one line>"   # optional (older bundles lack it, and `validate-bundle.sh` emits no diagnostic for its absence). WRITTEN ONCE AT CREATION, NEVER REWRITTEN — not by refine, not by any tick step, not by a role agent, not by closeout. `/loopd:new-project` writes it from the owner's one-line description and `/loopd:capture` from the captured decisive sentence, as a quoted single-line YAML string (a multi-line ask collapsed to one line). Why: `title`, `description` and `# Context` are DERIVED from the ask, and refine bakes answers into `# Context` in place, so the human's own wording otherwise survives nowhere — and on an instance shared by two humans the reviewer must be able to see what was actually asked, not what the loop made of it. Same rule as every other document field: **no customer PII** — it persists for the life of the repo.
 kind: build | research                # build = ships code via PRs (default); research = produces in-bundle deliverables
 objective: /objectives/<slug>.md      # optional: link up to the objective it serves, WHEN one exists. Omit it and this project's own `success_criteria` are its anchor — see "Where a project's success is measured" below
-success_criteria: [ "<measurable signal>", ... ]   # optional: this project's own measurable success. Same rule as an objective's — name the command and today's number. What /audit grounds against when there is no `objective:`
+success_criteria: [ "<measurable signal>", ... ]   # optional: this project's own measurable success. Same rule as an objective's — name the command and today's number. What the human reviewing progress grounds against when there is no `objective:`
 need: <who needs this, and what breaks for them if it never exists>   # THE VALUE GATE, all three keys: should this exist at all. Written on BOTH kinds, always — present is required, filled is not. See "The value gate" below
 cost_of_not_doing: <what the need above costs if it never ships>      # the answer that makes "not now" a real option
 no_owner: <who is allowed to say no>                                  # NOT the negation of `owner:` — the human who may stop this project. A decision with no owner is a trap
@@ -237,17 +237,17 @@ seeded from the deliverables.
 
 **Where a project's success is measured.** `success_criteria` **on the project** is the
 default: self-contained work, measured against itself. `objective:` is the opt-in for a
-goal that outlives this project, and a project may carry both. `/audit` grounds against
-the **objective's** criteria where there is an `objective:`, against the **project's own**
-where there is not, and reports **"no criteria"** for a project carrying neither — never a
-silent pass, because a project with no anchor cannot be honestly audited. Same bar for the
+goal that outlives this project, and a project may carry both. The human reviewing progress
+grounds against the **objective's** criteria where there is an `objective:`, against the
+**project's own** where there is not; a project carrying neither has **no criteria**, and no
+anchor to be honestly reviewed against. Same bar for the
 lines either way: **measurable — name the command and today's number.** A line whose purpose
 is to move a measured number also names a guard metric — the number that must not get worse
 — as a second criterion with its own command and today's value: tail latency, loss or error
 rate, memory under load, cost. A line that merely reports a count is not one. When the guard
 metric cannot be measured yet, the line is `a measurement exists for <X>`, with one
 project body line saying so, instead of a placeholder value. A docs or behaviour criterion
-needs no guard metric, and a guard metric is not `/audit`'s counter-metric.
+needs no guard metric.
 
 ## type: Phase  (`projects/<slug>/phases/<n>-<slug>.md`)
 
@@ -566,8 +566,8 @@ all five types below, closed set, enforced by `validate-bundle.sh`:
 | Value | Meaning | May a cleanup pass rewrite it? |
 |---|---|---|
 | `machine` | a role agent wrote it and no person has edited it | yes |
-| `mixed` | a role agent wrote it and a person edited it since | `tags` and `status=archived` only, only through `/loopd:kb-apply --human-docs` |
-| `human` | a person wrote it, **or who wrote it cannot be resolved** | `tags` and `status=archived` only, only through `/loopd:kb-apply --human-docs` |
+| `mixed` | a role agent wrote it and a person edited it since | `tags` and `status=archived` only, only through `plugin/scripts/kb-apply.sh --human-docs` |
+| `human` | a person wrote it, **or who wrote it cannot be resolved** | `tags` and `status=archived` only, only through `plugin/scripts/kb-apply.sh --human-docs` |
 
 A role agent writes `machine`; the in-thread session and a person write `human`; a person
 editing a `machine` document sets it to `mixed`. **Ambiguity is `human`**: a wrong `human`
@@ -606,7 +606,7 @@ ledger: [ "L12 · 2026-10-01T09:00:00Z · merge · by <login> · items <this-slu
 ### The reflection report — a human-typed command applies it
 
 A report is **one draft task document**, written by hand — nothing writes one on a schedule —
-and `scripts/kb-apply.sh`, reachable only through `/loopd:kb-apply`, is the one path that
+and `plugin/scripts/kb-apply.sh`, run by a human in their own terminal, is the one path that
 writes a proposal into `knowledge/`.
 
 ```text
@@ -644,7 +644,7 @@ P1 · supersede · duplicate · status=superseded · keeper · 1234567890-412 ·
   held in YAML block form (blank or `#` lines before its items included), an item whose fingerprint has moved since the report was written, a
   report that is not `draft`, two proposals naming one item, a `ledger:` or `provenance:` write, and a tick holding the dispatch lock — which
   narrows the concurrent-writer window with the mechanism the bundle has, and does not close
-  it (`skills/audit/SKILL.md` says the same of the same probe).
+  it.
 
 - **`scripts/kb-compare.sh <candidate.md>` drafts a proposal's fields** — one candidate Finding,
   before it is appended, against every `type: Finding`. Its key is the content words of

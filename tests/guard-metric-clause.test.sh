@@ -17,7 +17,7 @@ PINS=(
   "names a guard metric — the number that must not get worse — as a second criterion with its own command and today's value"
   "today's value"
   '`a measurement exists for <X>`'
-  'A docs or behaviour criterion needs no guard metric, and a guard metric is not `/audit`'"'"'s counter-metric'
+  'A docs or behaviour criterion needs no guard metric.'
 )
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/guard-metric.XXXXXX")" || exit 2
 trap 'rm -rf "$TMP"' EXIT

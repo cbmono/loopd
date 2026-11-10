@@ -31,8 +31,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    load, cost. A criterion that merely reports a count (`N harnesses green`,
    `0 validator errors`) is not one. When the guard metric cannot be measured yet, write the criterion
    as `a measurement exists for <X>` with one `# Notes` line saying so, instead of a
-   placeholder value. A docs or behaviour criterion needs no guard metric, and a guard
-   metric is not `/audit`'s counter-metric.
+   placeholder value. A docs or behaviour criterion needs no guard metric.
 
    **Fact check — the last act of refining a `kind: build` draft, in every autonomy mode.**
    For each unpromoted build draft with `acceptance_criteria` and no `## Verified facts`
