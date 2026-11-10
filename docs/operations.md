@@ -173,7 +173,7 @@ to guess.
 "models":    { "light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable" },
 "roleTiers": { "project-manager": "deep", "software-engineer": "deep",
                "devops-engineer": "deep", "qa-reviewer": "apex",
-               "cataloguer": "standard", "auditor": "deep", "plan-architect": "apex",
+               "cataloguer": "standard", "plan-architect": "apex",
                "explorer": "light" }
 ```
 
@@ -861,7 +861,7 @@ Three knobs in `instance.config.json` (all per-machine overridable, and seeded i
 | `roleEffort` | the second axis: each role's reasoning effort (`low\|medium\|high\|xhigh\|max`), resolved by `resolve-effort.sh` and passed as `--effort` / `effort:` |
 
 **Effort: medium for the orchestration roles, high for the roles that write code or
-adjudicate** (seed: `project-manager`, `cataloguer`, `auditor` medium; engineers,
+adjudicate** (seed: `project-manager`, `cataloguer` medium; engineers,
 `qa-reviewer`, `plan-architect` high; `explorer` low). Move a role up on evidence — its
 `maxStallRounds` escalations — not by default. With no entry no effort is passed: an
 Agent-tool spawn runs at the agent's frontmatter `effort:`, but `claude --bg` reads no
