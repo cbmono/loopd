@@ -51,7 +51,6 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
 LOCKSH="$REPO/plugin/scripts/tick-lock.sh"
 DISPATCH="$REPO/plugin/skills/dispatch/SKILL.md"
-AUDIT="$REPO/plugin/skills/audit/SKILL.md"
 OPS="$REPO/docs/operations.md"
 SEEDIGNORE="$REPO/plugin/seed/.gitignore"
 
@@ -238,23 +237,16 @@ ok "…and that the exit code does not move" "$(saw "$O" '**The exit code delibe
 ok "…/schedule is quoted as REMOTE"       "$(saw "$O" 'scheduled **remote** Claude Code agents (routines)')" yes
 ok "…the 7-of-7 measurement is stated"    "$(saw "$O" '**7 of 7 operating inputs are gitignored, so a fresh clone has none of them**')" yes
 ok "…the per-clone lock is the unsafe row" "$(saw "$O" 'a routine driving `/'"${PN}:"'dispatch` would be a **second orchestrator**')" yes
-ok "…and the fallback is /loop at 7d"     "$(saw "$O" '**`/loop 7d /'"${PN}:"'audit`**')" yes
+ok "…and the fallback is /loop"          "$(saw "$O" 'the same primitive: **`/loop`**, in a session on the machine that holds the bundle')" yes
 ok "…pointing at the recorded Finding"    "$(saw "$O" 'a-cloud-routine-cannot-run-a-bundle-checkout')" yes
 
-A="$(flatten "$AUDIT")"
-ok "the audit skill's fallback is /loop 7d" "$(saw "$A" '`/loop 7d /'"${PN}:"'audit`')" yes
-ok "…it says a routine is remote"         "$(saw "$A" 'creates *remote* Claude Code agents')" yes
-# THE BABYSITTER THAT WAS REMOVED. "a cron job or your scheduler of choice" was the whole
-# of the audit cadence, and it is exactly the hand-driven instruction this task deletes.
-ok "…and the vague cron line is GONE"     "$(saw "$A" 'a cron job or your scheduler of')" no
-ok "…(the assertion can see it: control)" "$(saw 'run it (e.g. a cron job or your scheduler of choice).' 'a cron job or your scheduler of')" yes
 
 echo
 # A suite can LOSE assertions without going red — an unterminated string once swallowed
 # nine of them and the file still reported fail=0. Pin the count so a block that stops
 # executing shows up here rather than as silence.
 total=$((pass + fail))
-ok "exactly 79 assertions ran"            "$total" 79
+ok "exactly 75 assertions ran"            "$total" 75
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

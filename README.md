@@ -289,7 +289,7 @@ Run these inside an instance.
 | `/loopd:handoff <path> <login>` | (plugin) transfer a task or project to another human, with the context that makes the transfer real |
 | `/loopd:prune-wt` | (plugin) remove the worktrees `prune-worktrees.sh` reports `REMOVABLE`, after one yes — each re-checked at removal time, skipped on any doubt; refuses while a tick holds the lock. [→](docs/operations.md#4-worktrees-two-scripts-delete-the-pruner-still-reports) |
 
-| `/loopd:init <dir>` | (plugin) create a bundle, refresh one, or convert one stamped by the retired `install.sh` |
+| `/loopd:init <dir>` | (plugin) create a bundle or refresh one, then run the check-and-fix pass |
 
 `/pane` is a mod, not a skill: the board, or an inbox of questions and stuck tasks, beside the
 session ([`plugin/hooks/MODS.md`](plugin/hooks/MODS.md)).

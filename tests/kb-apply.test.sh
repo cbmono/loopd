@@ -135,6 +135,7 @@ ok "a truncated proposal line refuses the whole report" \
 rm -f "$SHORT"
 
 echo "== criterion 6: the script is documented, and no slash command fronts it =="
+# path-scan: absent — the slash command is retired; its absence IS the assertion
 ok "no kb-apply skill ships"                        "$([ -e "$REPO/plugin/skills/kb-apply" ] && echo yes || echo no)" no
 ok "SCHEMA.md defines the report"                   "$(grep -c '^### The reflection report' "$SCHEMA")" 1
 ok "…and names the apply path"                      "$(grep -c 'plugin/scripts/kb-apply.sh`, run by a human' "$SCHEMA")" 1

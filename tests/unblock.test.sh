@@ -160,6 +160,7 @@ ok "…with no unblock note"                   "$(grep -c 'unblocked —' "$B/$T
 
 echo
 echo "== THE SKILLS =="
+# path-scan: absent — the unblock skill folded into answer; its absence IS the assertion
 ok "the unblock skill is gone"               "$([ -e "$REPO/plugin/skills/unblock" ] && echo present || echo gone)" gone
 ok "the answer skill names the blocked route" "$(grep -c 'blocked' "$SKILL" | awk '{print ($1>0)?"yes":"no"}')" yes
 ok "…and stays human-invoked only"           "$(grep -c '^disable-model-invocation: true' "$SKILL" | tr -d ' ')" 1

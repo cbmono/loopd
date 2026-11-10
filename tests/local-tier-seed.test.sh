@@ -366,18 +366,18 @@ ok "…and the alias on stdout"                           "$(MODEL "$I" software
 # =========================================================================== #
 echo
 echo "-- 6. every prose caller carries the same instruction"
-# A rule with no reader is not a rule, and these six are the readers: `resolve-model.sh`
+# A rule with no reader is not a rule, and these five are the readers: `resolve-model.sh`
 # has no shell callers at all — every caller is an AGENT following a document. So the
 # document is where "report that line rather than dispatching on a guess" has to live, and
 # a caller that silently drops it is the failure this whole section is against.
 for f in plugin/seed/CONVENTIONS.md docs/operations.md \
          plugin/skills/dispatch/SKILL.md plugin/skills/fanout/SKILL.md \
-         plugin/skills/audit/SKILL.md plugin/tick-steps/step-3-dispatch.md; do
+         plugin/tick-steps/step-3-dispatch.md; do
   ok "$(basename "$f") names resolve-model.sh"  "$(yn grep -q 'resolve-model\.sh' "$TPL/$f")" yes
   ok "…and says to report that line"            "$(yn grep -q 'report that line' "$TPL/$f")" yes
 done
 # SCHEMA.md is the one place the overridable set is listed, so the seeding contract and
-# the deliberate exception belong there rather than in six documents.
+# the deliberate exception belong there rather than in five documents.
 SCHEMA="$TPL/plugin/seed/SCHEMA.md"
 ok "SCHEMA.md says the installer seeds them"    "$(yn grep -q 'SEEDED into the local file' "$SCHEMA")" yes
 ok "…and that the tracked pair is the fallback" "$(yn grep -q 'tracked pair is the' "$SCHEMA")" yes

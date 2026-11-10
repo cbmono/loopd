@@ -614,7 +614,7 @@ REVIEW_AGENTS="code-architect deep-bug-scan plan-architect"
 skipped_names="$(while IFS= read -r f; do [ -n "$f" ] && [ "$(has_tools_key "$f")" = no ] && basename "$f" .md; done <<<"$AGENTS" | sort | tr '\n' ' ' | sed 's/ $//')"
 ok "every shipped ROLE agent declares tools:"  "$skipped_names" "$(printf '%s\n' $REVIEW_AGENTS | sort | tr '\n' ' ' | sed 's/ $//')"
 ok "…and only the three review agents are skipped" "$SKIPPED" 3
-ok "shipped agents scanned"              "$([ "$SCANNED" -ge 7 ] && echo yes || echo no)" yes
+ok "shipped agents scanned"              "$([ "$SCANNED" -ge 6 ] && echo yes || echo no)" yes
 
 # =============================================== 2. the shared docs an agent is told to read
 # DERIVED, NOT LISTED. Two paths used to be hardcoded here, and a hardcoded list can only
