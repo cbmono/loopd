@@ -52,6 +52,9 @@ PM="$PN:project-manager"   # the tick's agent_type, namespaced exactly as Claude
 # worktree (the agent's cwd, whose `origin` is what resolves the PR's repository).
 mkdir -p "$TMP/home" "$TMP/bundle" "$TMP/work/repo"
 FIXHOME="$(res "$TMP/home")"
+# resolve-autonomy.sh prefers CLAUDE_CONFIG_DIR over HOME, so a caller's real registry
+# would leak in and decide row (e).
+export CLAUDE_CONFIG_DIR="$FIXHOME/.claude"
 BUNDLE="$(res "$TMP/bundle")"
 GITREPO="$(res "$TMP/work/repo")"
 printf '{}\n' > "$BUNDLE/instance.config.json"
