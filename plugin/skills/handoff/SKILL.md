@@ -49,7 +49,7 @@ adding them before their clone runs a loop.
 By explicit path, as the human's own act:
 `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human 'chore: hand <slug> to <login>' --stage -- <paths...>` —
 strip `$`, backticks, quotes and backslashes from any argument-derived text and pass
-the message single-quoted, exactly as `/capture` does. If the bundle has a remote,
+the message single-quoted. If the bundle has a remote,
 pull `--rebase` (never `--autostash`) and push, so the other human's clone sees the
 transfer on their next tick.
 

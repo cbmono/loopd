@@ -3,13 +3,13 @@
 # original-request.test.sh — `original_request:` is written ONCE at intake and never
 # rewritten (roadmap R23). Before it existed the human's own wording survived nowhere:
 # `/loopd:new-project` derives `title`, `description` and `# Context` from the one-line
-# ask, `/loopd:capture` keeps one quoted sentence inside `# Context`, and step 2 (refine)
+# ask, and step 2 (refine)
 # bakes every answer into `# Context` IN PLACE. On a shared instance the reviewer then
 # saw what the loop made of the ask, never the ask. Four things hold the key in place:
 #
 #   a. SCHEMA.md names it on BOTH Project and Task, optional, with the write-once
 #      declaration in the same register as `stall_count`'s "NEVER HAND-EDITED".
-#   b. The two intake skills say they WRITE it (an unwritten key is a schema entry nobody
+#   b. The intake skill says it WRITES it (an unwritten key is a schema entry nobody
 #      fills), and both say it is never rewritten.
 #   c. Step 2 says refine never writes or changes it — the one step that rewrites the
 #      body it exists to outlive.
@@ -23,7 +23,6 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 NEWPROJ="$REPO/plugin/skills/new-project/SKILL.md"
-CAPTURE="$REPO/plugin/skills/capture/SKILL.md"
 STEP2="$REPO/plugin/tick-steps/step-2-refine-drafts.md"
 VALIDATOR="$REPO/plugin/scripts/validate-bundle.sh"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
@@ -38,7 +37,7 @@ ok() { # <name> <actual> <expected>
 hasf() { [ "$(grep -cF -- "$2" "$1")" -gt 0 ] && echo yes || echo no; }
 
 echo "== the files exist, or every assertion below is vacuous =="
-for f in "$SCHEMA" "$NEWPROJ" "$CAPTURE" "$STEP2" "$VALIDATOR"; do
+for f in "$SCHEMA" "$NEWPROJ" "$STEP2" "$VALIDATOR"; do
   ok "$(basename "$(dirname "$f")")/$(basename "$f") exists" "$([ -f "$f" ] && echo yes || echo no)" yes
 done
 
@@ -69,7 +68,7 @@ ok "stall_count still reads PM-OWNED, NEVER HAND-EDITED (the register borrowed)"
    "$(printf '%s\n' "$TASK" | grep -F 'stall_count:' | grep -cF 'PM-OWNED, NEVER HAND-EDITED' | tr -d ' ')" 1
 
 echo
-echo "== b. both intake skills WRITE it, and say it is never rewritten =="
+echo "== b. the intake skill WRITES it, and says it is never rewritten =="
 # new-project: in the scaffold step, on project.md AND on the seed tasks (two mentions).
 ok "new-project names the key"                     "$(hasf "$NEWPROJ" '`original_request:`')" yes
 ok "new-project: on project.md, verbatim"          "$(hasf "$NEWPROJ" 'description from `$ARGUMENTS`')" yes
@@ -77,12 +76,6 @@ ok "new-project: …quoted single line"              "$(hasf "$NEWPROJ" 'quoted 
 ok "new-project: …once and never rewritten"        "$(hasf "$NEWPROJ" '**once and never rewritten**')" yes
 ok "new-project: …and on every seed task too"      "$(hasf "$NEWPROJ" 'the same verbatim description the project carries')" yes
 ok "new-project: two mentions, project + task"     "$(grep -cF -- '`original_request:`' "$NEWPROJ" | tr -d ' ')" 2
-# capture: at the provenance step, after the same redaction the # Context line gets.
-ok "capture names the key"                         "$(hasf "$CAPTURE" '`original_request:`')" yes
-ok "capture: the decisive sentence, verbatim"      "$(hasf "$CAPTURE" 'verbatim as captured, after the same')" yes
-ok "capture: …after the same redaction, quoted"    "$(hasf "$CAPTURE" 'redaction, as a quoted single-line YAML string')" yes
-ok "capture: …once, here, and never rewritten"     "$(hasf "$CAPTURE" '**once, here, and never rewritten**')" yes
-ok "capture: …on every project and task created"   "$(hasf "$CAPTURE" 'on every project and task you')" yes
 
 echo
 echo "== c. step 2 says refine never writes or changes it =="

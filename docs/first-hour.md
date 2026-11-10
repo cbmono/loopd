@@ -63,7 +63,6 @@ first week**; the rest wait until you meet the problem they solve.
 | `/loopd:new-project <description>` | you have work. It scaffolds phases and `draft` tasks and asks for what it cannot infer |
 | `/loopd:answer` | the PM left you numbered `open_questions` and you would rather answer in chat than in the file |
 | `/loopd:dispatch [gap\|once\|stop]` | you promoted something. The serial loop — bare, it ticks every ten minutes on its own; `once` is a single tick, `stop` ends it |
-| `/loopd:work <task>` | you want to do this one yourself, in this session, instead of dispatching an agent |
 | `/loopd:whats-up` | you were away and want what needs you, numbered |
 | `/loopd:close-project <slug>` | its tasks are all `done` or `cancelled` |
 

@@ -1612,7 +1612,7 @@ rule_kb_apply_human_docs() {
     case "$c" in kb-apply.sh|bash|sh|zsh|dash|ksh|source|.|eval|claude) ;; *) continue ;; esac
     run=0; flag=0
     while IFS= read -r w; do
-      case "${w##*/}" in kb-apply.sh|*:kb-apply) run=1 ;; esac
+      case "${w##*/}" in kb-apply.sh) run=1 ;; esac
       case "$w" in --human-docs|--human-docs=*) flag=1 ;; esac
     done <<EOT
 $(tokens_of "$stage")

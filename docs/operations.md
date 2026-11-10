@@ -165,7 +165,7 @@ to guess.
 ### Then
 
 1. **Restart Claude Code** in the instance (`/exit`, then `claude`) so new agents register.
-2. **Verify.** Invoke a changed command or agent (e.g. `/loopd:audit`, or a `/loopd:dispatch` dry run) and confirm it resolves **and** that model routing resolves as configured. "Unknown command" on a `/loopd:…` name means the **plugin** is missing or stale on this machine, not that the stamp failed — the two halves fail differently, and that message only ever accuses the plugin.
+2. **Verify.** Invoke a changed command or agent (e.g. `/loopd:whats-up`, or a `/loopd:dispatch` dry run) and confirm it resolves **and** that model routing resolves as configured. "Unknown command" on a `/loopd:…` name means the **plugin** is missing or stale on this machine, not that the stamp failed — the two halves fail differently, and that message only ever accuses the plugin.
 3. If `instance.config.json` lacks the model-routing block, add it — otherwise model routing stays off and everything runs on the session model:
 
 ```json
@@ -299,8 +299,8 @@ that most need converting. Full reasoning:
 
 **The plugin migration is the worked example, and it lands entirely on the top row.** Each
 command that became a plugin skill was one file under `symlink/.claude/commands/` — eight
-of them, `/loopd:welcome`, `/answer`, `/audit`, `/fanout`, `/pr-review-request`,
-`/new-project`, `/close-project` and the loop command that is now `/loopd:dispatch`.
+of them, `/loopd:welcome`, `/answer`, the audit command, `/fanout`, the PR-review request
+(those two retired since, task-013), `/new-project`, `/close-project` and the loop command that is now `/loopd:dispatch`.
 All eight are **machinery**, so all eight are swept by the re-stamp and **none** gets a
 `RETIRED` entry; no seed file was retired at all. That is not an oversight and `RETIRED`
 says so in its own header, because "nothing to declare" and "somebody forgot to declare
@@ -1001,8 +1001,8 @@ lock exists to prevent, arriving by a route the lock cannot see. It is not a gap
 with a shared lock file either: two dispatchers on two machines against one set of local
 worktrees has no correct behaviour to converge on.
 
-So the fallback is documented and it is the same primitive: **`/loop 7d /loopd:audit`**
-for the slow counter-metric cadence, in a session on the machine that holds the bundle.
+So the fallback is documented and it is the same primitive: **`/loop`**, in a session on
+the machine that holds the bundle.
 This is recorded in the control panel's knowledge base as
 `a-cloud-routine-cannot-run-a-bundle-checkout`.
 

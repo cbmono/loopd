@@ -67,7 +67,7 @@ There is **no partial variant, on purpose.** `yolo` is all-out. Don't reintroduc
 ask-first carve-out on top of it — carving out the browser while the loop self-merges is
 inconsistent.
 
-Pair it with `/audit`, the slow counter-metric that watches an autonomous loop for drift.
+Pair it with the slow drift check below ([The audit counter-metric](#the-audit-counter-metric)).
 
 **Preflight.** With a single `gh` identity and no external reviewer, or with no required
 status checks, the merge authority cannot be exercised at all. The loop says so once and
@@ -445,13 +445,14 @@ the extension, then grant it **per-site** permissions there.
 
 ## The audit counter-metric
 
-`/loopd:dispatch` optimizes throughput; **`/audit`** is the independent check that the throughput
-is actually moving the real goals. Run it on a **slow cadence** — weekly, or after a batch
-of projects close.
+`/loopd:dispatch` optimizes throughput; the independent check that the throughput is
+actually moving the real goals is **yours**. The audit command and its `auditor` agent did
+it until task-013 retired them (2026-11-10; last report 2026-09-06). Do it on a **slow
+cadence** — weekly, or after a batch of projects close.
 
-The read-only `auditor` grounds each goal's `success_criteria` — an objective's, or a
-project's own where it carries no `objective:` — against live `gh`/`git`
-reality and flags the four ways a busy control panel drifts:
+Ground each goal's `success_criteria` — an objective's, or a project's own where it carries
+no `objective:` — against live `gh`/`git` reality and look for the four ways a busy control
+panel drifts:
 
 | Drift | What it looks like |
 |---|---|
@@ -460,7 +461,6 @@ reality and flags the four ways a busy control panel drifts:
 | **Green but not progressing** | projects passing every check without moving anything |
 | **A weakened anchor** | a human gate or the verification gate slipping — or a merge-delegating project merging PRs an independent reviewer hasn't cleared |
 
-It writes a dated audit to `log.md` and **never acts** — responding (adjust targets,
-re-validate findings) is your governance call. It is the independent signal that catches
-an autonomous loop gaming itself: a periodic, advisory guardrail, **not** a merge-blocking
-guarantee.
+Responding (adjust targets, re-validate findings) is your governance call. It is the
+independent signal that catches an autonomous loop gaming itself: a periodic, advisory
+guardrail, **not** a merge-blocking guarantee.
