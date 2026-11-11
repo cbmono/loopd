@@ -215,6 +215,7 @@ mkdir -p "$PLUGROOT/hooks"
 ln -s "$TPL/plugin/scripts" "$PLUGROOT/scripts"
 ln -s "$TPL/VERSION" "$TMP/tplroot/VERSION"
 ln -s "$HOOK" "$PLUGROOT/hooks/session-banner.sh"
+ln -s "${HOOK%/*}/register.ts" "$PLUGROOT/hooks/register.ts"   # the mark's one source
 export CLAUDE_PLUGIN_ROOT="$PLUGROOT"
 hook_run() { OUT="$(CLAUDE_PLUGIN_ROOT="$PLUGROOT" CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>"$TMP/stderr")"; RC=$?
              ERR="$(cat "$TMP/stderr" 2>/dev/null || true)"; }
