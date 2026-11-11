@@ -119,7 +119,9 @@ ok "…and every registered hook file exists"  "${HOOKMISS:-none}" none
 # (f) the retired design is gone from the tree entirely.
 # path-scan: absent — asserted GONE; this line IS the assertion that it went
 ok "the repo ships no symlink/ directory"    "$(yn test -e "$REPO/symlink")" no
+# path-scan: absent — asserted GONE
 ok "the retired install.sh stub is deleted" "$(yn test -e "$REPO/install.sh")" no
+# path-scan: absent — asserted GONE
 ok "…and so is upgrade.sh"                   "$(yn test -e "$REPO/upgrade.sh")" no
 
 # =========================================================================================

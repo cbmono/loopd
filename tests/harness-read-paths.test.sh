@@ -374,6 +374,7 @@ printf 'exit 2\n'               > "$FX/install.sh"   # exists, and can do nothin
   printf 'test -e "$TPL/%s/index.md" && echo no || echo yes\n' "$GONE"
   printf '\n'
   printf '# F. the item-3 shape: a real path to a file that cannot act. OUT OF REACH.\n'
+  # path-scan: absent — a printf FORMAT, not a path; the fixture plants its own install.sh
   printf 'grep -qF boardArtifactUrl "$TPL/install.sh"\n'
 } > "$FX/tests/planted.test.sh"
 
