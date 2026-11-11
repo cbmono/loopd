@@ -32,7 +32,8 @@
 #                                             -> this bundle's background sessions, one
 #                                                row each: task, state, process, age, id;
 #                                                `--summary` prints `<working> <idle> <dead>`,
-#                                                `--counts` adds `<word> TAB <json task path>` rows
+#                                                `--counts` adds `tick TAB <n>` (the .tick-lock
+#                                                session, if working) and `<word> TAB <json task path>` rows
 #   agent-sessions.sh working <bundle-root>   -> `<short> <task-stem|unrecorded>` per session
 #                                                `view` counts as working
 #   agent-sessions.sh dead-ids <bundle-root>  -> `<uuid> <short> <age>` per session the tick
@@ -358,6 +359,10 @@ PY
         v="$(bash "$here/resolve-config.sh" --instance "$root" "${k%%:*}" 2>/dev/null)" || v=""
         bounds="$bounds ${v:-${k#*:}}"
       done
+    fi
+    if [ "$summary" = counts ]; then
+      . "$here/bundle-paths.sh" || exit 2
+      self="$(sed -n 's/^session:[[:space:]]*//p' "$root/$AB_LOCK" 2>/dev/null)"
     fi
     # `<worktree> TAB <task file>` per task that recorded one, terminal tasks included: a
     # merged task's lingering session is still THAT task's session.

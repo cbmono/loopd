@@ -390,6 +390,18 @@ ok "per-task words, keyed by task path (two sessions on one task: the busier wor
    "$(J '",".join("%s=%s" % kv for kv in sorted(d["task_sessions"].items()))')" \
    "projects/proj-a/tasks/task-001.md=working,projects/proj-a/tasks/task-002.md=idle,projects/proj-a/tasks/task-005.md=dead"
 ok "a task with no session is absent" "$(J '"projects/proj-a/tasks/task-003.md" in d["task_sessions"]')" False
+ok "no .tick-lock ⇒ tick_working 0" "$(J 'd["sessions"]["tick_working"]')" 0
+# The tick is the session its .tick-lock records; working, it is counted apart in counts.json only.
+printf 'claimant: tick-x\nsession: s1-x\n' > "$S/$AB_LOCK"
+rm -f "$XDG_CACHE_HOME/loopd/counts-$(printf '%s' "$S" | cksum | cut -d' ' -f1)"
+BAR2="$(AB_SESSIONS_LISTING="$TMP/listing.json" plain "$S")"
+ok "a working session the lock records ⇒ tick_working 1" "$(J 'd["sessions"]["tick_working"]')" 1
+ok "…and the bar is the same bar, but for the lock's own segment: the tick is the pane's" "$BAR2" "${BAR/ · last tick/ · lock held · last tick}"
+printf 'claimant: tick-x\nsession: s2-x\n' > "$S/$AB_LOCK"
+rm -f "$XDG_CACHE_HOME/loopd/counts-$(printf '%s' "$S" | cksum | cut -d' ' -f1)"
+AB_SESSIONS_LISTING="$TMP/listing.json" plain "$S" >/dev/null
+ok "a lock naming an idle session (a lingering lock) ⇒ tick_working 0" "$(J 'd["sessions"]["tick_working"]')" 0
+rm -f "$S/$AB_LOCK"
 ok "written_at is a UTC stamp" "$(J 'd["written_at"]' | grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$')" 1
 ok "the keys are exactly the contract" "$(J '",".join(sorted(d))')" \
    "in_progress,in_review,need_you,queue,sessions,task_sessions,written_at"
@@ -404,7 +416,7 @@ CJ="$TMP/d4/$AB_COUNTS"
 ok "no projects/ ⇒ in_progress and in_review null" "$(J 'd["in_progress"], d["in_review"]')" "(None, None)"
 D="$TMP/q1"; mk "$D"; seed_agents "$D" "garbage"; plain "$D" >/dev/null; CJ="$D/$AB_COUNTS"
 ok "unknown sessions ⇒ every session count and the per-task map null" \
-   "$(J '[d["sessions"][k] for k in ("working","idle","dead")] + [d["task_sessions"]]')" "[None, None, None, None]"
+   "$(J '[d["sessions"][k] for k in ("working","idle","dead","tick_working")] + [d["task_sessions"]]')" "[None, None, None, None, None]"
 plain "$TMP/d1" >/dev/null; CJ="$TMP/d1/$AB_COUNTS"
 ok "queue off ⇒ need_you null and queue \"off\"" "$(J 'd["need_you"], d["queue"]')" "(None, 'off')"
 CJ="$INST/$AB_COUNTS"; plain "$INST" >/dev/null

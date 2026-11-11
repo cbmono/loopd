@@ -218,12 +218,12 @@ type N = number | null     // null is drawn `?`
 type Counts = {
   state: 'absent' | 'unreadable' | 'ok'
   mtimeMs: number
-  in_progress: N; in_review: N; working: N; idle: N; dead: N; need_you: N
+  in_progress: N; in_review: N; working: N; idle: N; dead: N; tick: N; need_you: N
   queue: string
   tasks: Record<string, string> | null
   written_at: string
 }
-const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, need_you: null, queue: '', tasks: null, written_at: '' }
+const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, queue: '', tasks: null, written_at: '' }
 
 // Module state. A reload starts it over, and the next poll or /pane fills it again.
 let kind: Kind = 'unread'
@@ -318,7 +318,7 @@ function readCounts(text: unknown, m: number): Counts {
   if (ts) { tasks = {}; for (const [k, v] of Object.entries(ts)) if (typeof v === 'string' && WORDS.includes(v)) tasks[k] = v }
   return {
     state: 'ok', mtimeMs: m, in_progress: nint(o.in_progress), in_review: nint(o.in_review),
-    working: nint(se.working), idle: nint(se.idle), dead: nint(se.dead), need_you: nint(o.need_you),
+    working: nint(se.working), idle: nint(se.idle), dead: nint(se.dead), tick: nint(se.tick_working), need_you: nint(o.need_you),
     queue: str(o.queue), tasks, written_at: str(o.written_at),
   }
 }
@@ -577,9 +577,12 @@ function draw($: any, e: any, now: number): any {
     const c = counts
     rows.push(heading('IN PROGRESS', c.in_progress, WORK, true))
     rows.push(line(' '))
-    rows.push(row(seg('   '), seg(nstr(c.working) + ' working', WORK), seg(' · ', MUTED), seg(nstr(c.idle) + ' idle', MUTED), seg(' · ', MUTED), seg(nstr(c.dead) + ' dead', NEEDS_YOU)))
+    // The tick is a working session but no task, so it is named apart: `1 working (tick)`, `2 working (1 tick)`.
+    const tick = c.tick !== null && c.tick > 0 && c.working !== null && c.tick <= c.working ? c.tick : 0
+    const ticks = tick ? (tick === c.working ? ' (tick)' : ' (' + tick + ' tick)') : ''
+    rows.push(row(seg('   '), seg(nstr(c.working) + ' working' + ticks, WORK), seg(' · ', MUTED), seg(nstr(c.idle) + ' idle', MUTED), seg(' · ', MUTED), seg(nstr(c.dead) + ' dead', NEEDS_YOU)))
     rows.push(line(' '))
-    if (progress.length === 0) rows.push(line('   nothing right now', MUTED))
+    if (progress.length === 0) rows.push(line(tick ? '   no task in progress — tick running' : '   nothing right now', MUTED))
     for (const [p, t] of progress) {
       const head = '   ' + (t.assignee || 'unassigned') + '  '
       const word = c.tasks === null ? '?' : c.tasks[taskPath(p, t)] || '—'

@@ -1767,6 +1767,32 @@ test('INFO LINE: answer queued does not expire while the run is in flight', ONLY
   await ui.unmount()
 })
 
+test('TICK: a working tick is named apart from task sessions, and with no task in progress the empty line says so', ONLY, async ($, on) => {
+  const idle = needSnap('x')   // no task in progress
+  const cases: [any, Record<string, number>, string, string][] = [
+    [idle, { working: 1, idle: 0, dead: 0, tick_working: 1 }, '   1 working (tick) · 0 idle · 0 dead', '   no task in progress — tick running'],
+    [idle, { working: 0, idle: 1, dead: 0, tick_working: 0 }, '   0 working · 1 idle · 0 dead', '   nothing right now'],
+    [SNAP, { working: 1, idle: 1, dead: 0, tick_working: 0 }, '   1 working · 1 idle · 0 dead', '   software-engineer  Ship the widg…  working'],
+    [SNAP, { working: 2, idle: 1, dead: 0, tick_working: 1 }, '   2 working (1 tick) · 1 idle · 0 dead', '   software-engineer  Ship the widg…  working'],
+  ]
+  const w = world(idle)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  let m = 2000
+  for (const [snap, sessions, line, first] of cases) {
+    w.files.set(SNAPSHOT, { text: JSON.stringify(snap), mtimeMs: m++ })
+    w.files.set(COUNTS, { text: JSON.stringify({ ...(countsOf(snap) as any), sessions }), mtimeMs: m++ })
+    await ui.press({ key: 'refresh' })
+    const rows = await rowsOf(ui)
+    const at = rows.indexOf(line)
+    expect([line, at > -1]).toEqual([line, true])
+    expect(rows[at + 2]).toBe(first)
+  }
+  await ui.unmount()
+})
+
 test('a zero in_review still draws IN REVIEW (0)', ONLY, async ($, on) => {
   const w = world(SNAP, true, { ...FIXTURE_COUNTS, in_review: 0 })
   stubs(on, w)

@@ -187,9 +187,17 @@ rm -f "$B/projects/p/tasks/task-00[456]-"*.md
 CT="$(FIXTURE="$FIX" PATH="$P" bash "$SESS" view "$B" --counts 2>/dev/null)"
 ok "--counts: first line is --summary's" "$(head -1 <<<"$CT")" \
    "$(FIXTURE="$FIX" PATH="$P" bash "$SESS" view "$B" --summary 2>/dev/null)"
-ok "…then <word> TAB <json task path>, relative to the bundle" "$(sed 1d <<<"$CT" | cut -f2 | sort | tr '\n' ';')" \
+ok "…then tick TAB 0, with no .tick-lock" "$(sed -n 2p <<<"$CT")" "$(printf 'tick\t0')"
+ok "…then <word> TAB <json task path>, relative to the bundle" "$(sed 1,2d <<<"$CT" | cut -f2 | sort | tr '\n' ';')" \
    '"projects/p/tasks/task-001-working.md";"projects/p/tasks/task-002-ghost.md";"projects/p/tasks/task-003-merged.md";'
-ok "…each word working, idle or dead" "$(sed 1d <<<"$CT" | cut -f1 | grep -cvE '^(working|idle|dead)$' | tr -d ' ')" 0
+ok "…each word working, idle or dead" "$(sed 1,2d <<<"$CT" | cut -f1 | grep -cvE '^(working|idle|dead)$' | tr -d ' ')" 0
+mkdir -p "$B/.loopd"
+for lk in 'aaaa0001-x:1' 'aaaa0001:1' 'abab0007-x:0' 'zzzz0009-x:0'; do
+  printf 'claimant: tick-x\nsession: %s\n' "${lk%:*}" > "$B/.loopd/.tick-lock"
+  ok "tick: the lock's session ${lk%:*} ⇒ tick ${lk#*:}" \
+     "$(FIXTURE="$FIX" PATH="$P" bash "$SESS" view "$B" --counts 2>/dev/null | sed -n 2p)" "$(printf 'tick\t%s' "${lk#*:}")"
+done
+rm -f "$B/.loopd/.tick-lock"
 
 echo "== 5. the status line's agents segment =="
 sl() { rm -rf "$XDG_CACHE_HOME"; PATH="$P" bash "$SL" --instance "$B" --color "${C:-never}" </dev/null 2>/dev/null; }
