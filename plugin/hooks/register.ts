@@ -8,7 +8,7 @@
 //   · pane   — `/pane`, a pane beside the transcript drawing this bundle's board from
 //              `.loopd/SNAPSHOT.json`, its numbers from the status line's `.loopd/counts.json`
 //              (operator mode: projects by folder slug, with Answer
-//              questions, Refresh and Close pane), or — `paneMode:
+//              questions, Refresh and Close Pane), or — `paneMode:
 //              simple` — an inbox of open questions, stuck tasks and progress read from the
 //              task documents, every button one slash command.
 //   · signal — a role agent's session tells the project-manager's session that its turn is
@@ -143,7 +143,7 @@ function registerUsage(on: any) {
 // ======================================================================== pane
 // TWO MODES, decided by the `paneMode` userConfig field alone (register's `options`):
 // operator — the fourth renderer over `.loopd/SNAPSHOT.json` (docs/conventions.md §11), with
-// Answer questions, Refresh and Close pane, projects named by folder slug, never title;
+// Answer Questions, Refresh and Close Pane, projects named by folder slug, never title;
 // simple — an inbox of open questions, stuck tasks and progress, read from the task
 // documents, every button one slash command. Untrusted text and types: every string through
 // clean(), every number through toint(); a name may be cut to the pane's width, a number
@@ -154,6 +154,14 @@ const TITLE = 'loopd board'
 const SNAPSHOT = '.loopd/SNAPSHOT.json'
 // AB_COUNTS: the status line writes it on every redraw, so these numbers are the bar's.
 const COUNTS = '.loopd/counts.json'
+// The version /loopd:init last stamped (`$AB_DIR/seed-base/VERSION`); the plugin root is not readable from here.
+const STAMPED = '.loopd/seed-base/VERSION'
+// THE MARK, the welcome banner's and the pane's: `indent|pink|blue` a row, split by position,
+// not glyph — row 1's first `▄` is the gate and the rest is tube. session-banner.sh reads this
+// very line, so it stays one line in this shape. The two pink spans are the whole point and
+// there are never more: the gate on the top edge and the `◀━` exit arrow. Every pink pixel is
+// a decision waiting. `◀━` needs a true monospace font or the rows shear; checked by eye.
+const LOGO_ROWS = ['   |▄|▄▄▄', '|◀━|▐    ▌', '  ||▝▄▄▄▄▘']
 const WORDS = ['working', 'idle', 'dead']
 const POLL_MS = 5000
 const NOTE_MS = 10000
@@ -229,6 +237,7 @@ let note = ''            // the info line: a copy's result or a refused Answer; 
 let noteAt = NaN         // the clock when `note` was set; it is drawn for NOTE_MS after
 let shownAge = ''        // the age text last drawn; the poll redraws when it would change
 let open = false         // a /pane placed the pane and no ui.close has fired since
+let brand = { version: '', org: '' }   // read on open and Refresh: neither changes between stamps
 
 // ---------------------------------------------------------------- untrusted input
 // The TERMINAL sink's one sanitising point, the same rule print-board.sh applies: drop
@@ -327,6 +336,14 @@ async function refreshCounts($: any, root: string, force: boolean): Promise<void
   counts = readCounts(text, m)
 }
 
+// org from the tracked config, the version /loopd:init stamped; either unreadable is ''.
+async function readBrand($: any, root: string): Promise<void> {
+  let org = '', version = ''
+  try { const o = obj(JSON.parse(await $.fs.read(root + '/' + CONFIG))); org = o ? str(o.org) : '' } catch { org = '' }
+  try { const v = String(await $.fs.read(root + '/' + STAMPED)).trim(); version = /^\d+\.\d+\.\d+$/.test(v) ? v : '' } catch { version = '' }
+  brand = { version, org }
+}
+
 // ---------------------------------------------------------------- the read
 // `force` re-reads regardless of mtime (Refresh, the first open); the poll passes false and
 // reads only when stat says the file moved. Every `$` call is caught: a missing or renamed
@@ -360,6 +377,7 @@ async function refresh($: any, force: boolean): Promise<void> {
   try { json = JSON.parse(text) } catch { kind = 'malformed'; board = null; detail = SNAPSHOT + ' is not valid JSON — the next write-snapshot.sh run overwrites it'; return }
   const b = shape(json)
   if (!b) { kind = 'malformed'; board = null; detail = SNAPSHOT + ' is not a JSON object — the next write-snapshot.sh run overwrites it'; return }
+  if (force || kind !== 'ok') await readBrand($, root)
   kind = 'ok'; board = b; detail = ''
 }
 
@@ -503,11 +521,20 @@ function draw($: any, e: any, now: number): any {
       row(seg(s, { ...look, bold: true }), seg(v === 0 && !zero ? '' : ' (' + nstr(v) + ')', look))
     const showNeed = !queueOff() && (counts.need_you !== 0 || b.itemsUnknown)
 
+    // The banner's mark, the brand line beside row 2 and a rule beside row 3 to the edge;
+    // the need-you count and the age on their own line under it.
+    const marks = LOGO_ROWS.map(r => r.split('|'))
+    const lw = Math.max(...marks.map(m => cols(m.join(''))))
+    const brandLine = ['loopd' + (brand.version ? ' v' + brand.version : ''), b.group, brand.org ? 'org: ' + brand.org : ''].filter(Boolean).join(' · ')
+    marks.forEach(([indent, pink, blue], i) => {
+      const pad = seg(' '.repeat(lw - cols(indent + pink + blue) + 1))
+      rows.push(row(seg(indent), seg(pink, GATE), seg(blue, TUBE),
+        ...(i === 1 ? [pad, seg(fit(brandLine, W - lw - 1), { ...TEXT, bold: true })] : i === 2 ? [pad, seg('─'.repeat(Math.max(1, W - lw - 1)), RULE)] : [])))
+    })
     const snapAge = headAge(now, b)
-    const count = showNeed ? ' · ' + needYou(counts.need_you === null ? '?' : counts.need_you) : ''
-    const name = fit(b.group || TITLE, W - cols(snapAge) - cols(count) - 1)
-    rows.push(row(seg(name, { ...HEAD, bold: true }), seg(count, NEEDS_YOU), seg(gap(cols(name) + cols(count) + cols(snapAge))), seg(snapAge, MUTED)))
-    rows.push(line('─'.repeat(W), RULE))
+    const count = showNeed ? needYou(counts.need_you === null ? '?' : counts.need_you) : ''
+    rows.push(row(seg(count, NEEDS_YOU), seg(gap(cols(count) + cols(snapAge))), seg(snapAge, MUTED)))
+    rows.push(line(' '))
 
     rows.push(heading('PROJECTS', b.rows.length, HEAD))
     const ranked = b.rows.map((p, i) => {
@@ -598,7 +625,7 @@ function draw($: any, e: any, now: number): any {
   rows.push(Box({
     key: 'buttons', flexDirection: 'row', columnGap: 2, paddingLeft: 2, children: [
       Button({
-        key: 'answer', ...label('✎ Answer questions', FILL), hotkey: 'a',
+        key: 'answer', ...label('✎ Answer Questions', FILL), hotkey: 'a',
         // The human pressed a key in their own session: one /loopd:answer run, queued
         // until the session is idle (the engine's own contract for a plugin's command.run).
         // Not awaited — a handler that waits for the run would block the press. Never on
@@ -623,7 +650,7 @@ function draw($: any, e: any, now: number): any {
         onPress: async () => { await refresh($, true); $.ui.invalidate('ui.render') },
       }),
       Button({
-        key: 'close', ...label('✕ Close pane', PLUM), hotkey: 'c',
+        key: 'close', ...label('✕ Close Pane', PLUM), hotkey: 'c',
         // The same path as `/pane close`. A $.ui.close from a press did not reach this module's
         // own ui.close hook in the kit (2.1.322), so the poll is stopped here as well.
         onPress: async () => { try { await $.ui.close({ id: PANE }) } catch { /* already gone */ } stopPoll() },
@@ -680,6 +707,9 @@ const TEXT = { color: '#f5f5f5' }
 const MUTED = { color: '#6c7488' }
 const RULE = { color: '#33658A' }
 const PLUM = { color: '#9A348E' }
+// The mark's own two, cli-theme.sh's T_PINK and T_BLUE in truecolour.
+const GATE = { color: '#ff7ac2' }
+const TUBE = { color: '#5ea2ff' }
 const STUCK_KEYS = ['c', 'd', 'e']
 
 // AB_NEW_PROJECT_FORM in bundle-paths.sh: new-project-form.sh writes it and its ✗ marks; the pane only draws it.
