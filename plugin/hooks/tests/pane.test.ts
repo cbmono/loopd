@@ -74,7 +74,8 @@ const SNAP = {
   ],
 }
 const GENERATED = Date.parse(SNAP.generated_at)
-const NARROW = { ...PANE, props: { ...PANE.props, bodyColumns: 45 } }
+// 45 columns of content inside the operator pane's 2-column padding on either side.
+const NARROW = { ...PANE, props: { ...PANE.props, bodyColumns: 49 } }
 
 type World = {
   files: Map<string, { text: string; mtimeMs: number }>
@@ -262,9 +263,11 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRE
   const drawn = (await ui.drawn()).children
   const at = drawn.findIndex((c: any) => c.type === 'Box' && c.props.key === 'buttons')
   expect(drawn.slice(at - 3, at).map(flat).concat(drawn.slice(at + 1).map(flat))).toEqual([' ', '─'.repeat(45), ' ', ' '])
-  // The operator row sits 2 columns in from where it was.
+  // The pane is padded 2 columns either side; the operator row adds no padding of its own.
+  const root = (await ui.drawn()).props
+  expect([root.paddingLeft, root.paddingRight]).toEqual([2, 2])
   const row = drawn[at]
-  expect([row.props.paddingLeft, row.props.flexDirection, row.props.columnGap]).toEqual([2, 'row', 2])
+  expect([row.props.paddingLeft, row.props.flexDirection, row.props.columnGap]).toEqual([undefined, 'row', 2])
   expect(text).not.toMatch(/tick/i)
   await ui.unmount()
 })
@@ -366,8 +369,8 @@ test('HEADER LOGO: the banner mark, the brand line cut to the width, the rule to
   await ui.unmount()
   ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   rows = await rowsOf(ui)
-  expect(rows[1]).toBe(LOGO[1] + ' loopd v4.11.0 · example · org: fixture-org')   // fits at 100: not cut
-  expect(rows[2]).toBe(LOGO[2] + ' ' + '─'.repeat(91))
+  expect(rows[1]).toBe(LOGO[1] + ' loopd v4.11.0 · example · org: fixture-org')   // fits in 96: not cut
+  expect(rows[2]).toBe(LOGO[2] + ' ' + '─'.repeat(87))
   // No stamped VERSION, a junk one, no org: each part is left out, never guessed.
   w.files.delete(STAMPED)
   w.files.set(CONFIG, { text: '{}', mtimeMs: 2 })
@@ -401,7 +404,8 @@ test('width comes from bodyColumns, 45 when absent or 0; a 120-character title i
   stubs(on, w)
   mock.clock(on, { now: GENERATED })
   await open($)
-  for (const [props, width] of [[{ bodyColumns: 0 }, 45], [{ bodyColumns: undefined }, 45], [{ bodyColumns: 60 }, 60]] as const) {
+  // The content width: bodyColumns less the 2-column padding either side.
+  for (const [props, width] of [[{ bodyColumns: 0 }, 41], [{ bodyColumns: undefined }, 41], [{ bodyColumns: 60 }, 56]] as const) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, ...props }, surface: 'terminal' })
     const rows = await rowsOf(ui)
     expect(rows.slice(0, 3)).toEqual(header(width))
@@ -413,6 +417,27 @@ test('width comes from bodyColumns, 45 when absent or 0; a 120-character title i
     const at = rows.findIndex(r => r.startsWith('1. answer'))
     expect(rows[at + 2]).toMatch(/^ {12}\S.*…$/)          // the third line is the last, and it is cut
     expect(rows[at + 3]).toMatch(/^2\. merge/)
+    await ui.unmount()
+  }
+})
+
+test('PADDING: every row, the buttons and the info line start at column 2 and end by bodyColumns - 2', ONLY, async ($, on) => {
+  const w = world(SNAP, true, null)   // no counts.json, so the info line is drawn as well
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  for (const body of [45, 49, 60, 100]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: body }, surface: 'terminal' })
+    const root = await ui.drawn()
+    const left = root.props.paddingLeft
+    expect(left).toBeGreaterThanOrEqual(2)
+    expect(root.children.at(-1).children.map(flat)).toEqual([HINT])
+    for (const c of root.children) {
+      const width = c.type === 'Box' && c.props.key === 'buttons'
+        ? c.children.reduce((n: number, b: any) => n + cols(flat(b)), 0) + c.props.columnGap * (c.children.length - 1)
+        : cols(flat(c))
+      expect(left + width).toBeLessThanOrEqual(body - 2)
+    }
     await ui.unmount()
   }
 })
@@ -490,9 +515,9 @@ test('malformed JSON is one error line and no throw; wrong types draw as 0', ONL
   w.files.set(SNAPSHOT, { text: JSON.stringify({ counts: { projects: 'many', tasks: null, awaiting: -3 }, projects: 'nope', group: 7 }), mtimeMs: 2000 })
   await ui.press({ key: 'refresh' })
   text = await shown(ui)
-  expect(await rowsOf(ui)).toEqual([...header(100, 'loopd v4.11.0 · org: fixture-org'), ' '.repeat(89) + 'age unknown', ' ', 'PROJECTS', ' ', ' ',
+  expect(await rowsOf(ui)).toEqual([...header(96, 'loopd v4.11.0 · org: fixture-org'), ' '.repeat(85) + 'age unknown', ' ', 'PROJECTS', ' ', ' ',
     'IN PROGRESS (?)', ' ', '   ? working · ? idle · ? dead', ' ', '   nothing right now', ' ', ' ', 'IN REVIEW (?)', ' ', '   none', ' ', ' ',
-    'NEEDS YOU (?)', ' ', '   none', ' ', '─'.repeat(100), ' ', ' ', '  counts unavailable — run /loopd:init'])
+    'NEEDS YOU (?)', ' ', '   none', ' ', '─'.repeat(96), ' ', ' ', 'counts unavailable — run /loopd:init'])
   await ui.unmount()
 })
 
@@ -584,8 +609,7 @@ function copies(on: any, answer: (e: any) => any = () => ({ value: { isCopied: t
   on('ui.copy', (_$: any, e: any) => { got.push({ text: e.text, surface: e.surface }); return answer(e) })
   return got
 }
-// The info line sits at the buttons' padding, 2 columns in; footer() returns it without them.
-const footer = async (ui: any) => (await shown(ui)).split('\n').filter(l => /^ {2}(copied|copy |answer )/.test(l)).map(l => l.slice(2))
+const footer = async (ui: any) => (await shown(ui)).split('\n').filter(l => /^(copied|copy |answer )/.test(l))
 
 test('COPY FROM NEEDS YOU: a verb copies the task path or the close row\'s slug, from the snapshot, not the cut text', ONLY, async ($, on) => {
   const snap = JSON.parse(JSON.stringify(SNAP))
@@ -600,7 +624,7 @@ test('COPY FROM NEEDS YOU: a verb copies the task path or the close row\'s slug,
   await ui.press({ key: 'copy-need-0' })
   expect(got).toEqual([{ text: path, surface: 'terminal' }])
   const [line] = await footer(ui)
-  expect(line).toBe(('copied: ' + path).slice(0, 42) + '…')    // fit to 43 columns after the padding, the ref whole on the clipboard
+  expect(line).toBe(('copied: ' + path).slice(0, 44) + '…')    // fit to 45 columns, the ref whole on the clipboard
   await ui.press({ key: 'copy-need-2' })
   expect(got[1]).toEqual({ text: 'beta', surface: 'terminal' })
   expect(await footer(ui)).toEqual(['copied: beta'])              // replaced, not stacked
@@ -1602,7 +1626,7 @@ test('SAME NUMBERS: every section count is the value counts.json gives, and NEED
   await ui.unmount()
 })
 
-const HINT = '  counts unavailable — run /loopd:init'
+const HINT = 'counts unavailable — run /loopd:init'
 
 test('COUNTS UNAVAILABLE: no counts.json keeps the layout with ? and one hint under the buttons; an older snapshot\'s NEEDS YOU as today', ONLY, async ($, on) => {
   const w = world(SNAP, true, null)
@@ -1719,12 +1743,11 @@ test('INFO LINE: a note is drawn under the buttons, which never move; it is gone
   const [at] = await place()
   expect(await place()).toEqual([at, [' ', HINT]])
   await ui.press({ key: 'copy-project-1' })
-  expect(await place()).toEqual([at, [' ', '  copied: beta']])
-  // It starts where the buttons do: its indent is their paddingLeft.
-  const pad = (await ui.drawn()).children[at].props.paddingLeft
-  expect(((await place())[1] as string[])[1].search(/\S/)).toBe(pad)
+  expect(await place()).toEqual([at, [' ', 'copied: beta']])
+  // It starts where the buttons do: neither is indented inside the pane's padding.
+  expect([(await ui.drawn()).children[at].props.paddingLeft, ((await place())[1] as string[])[1].search(/\S/)]).toEqual([undefined, 0])
   await clock.advance(9000)
-  expect(await place()).toEqual([at, [' ', '  copied: beta']])
+  expect(await place()).toEqual([at, [' ', 'copied: beta']])
   await clock.advance(1000)
   expect(await place()).toEqual([at, [' ', HINT]])
   await ui.unmount()

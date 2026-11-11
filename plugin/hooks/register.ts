@@ -166,7 +166,7 @@ const WORDS = ['working', 'idle', 'dead']
 const POLL_MS = 5000
 const NOTE_MS = 10000
 const WIDTH = 45        // the operator layout's width where the surface names no bodyColumns
-const INDENT = 2        // the operator buttons' left padding, which the info line under them shares
+const PAD = 2           // the operator pane's padding, left and right; every row is drawn inside it
 const BAR = 10          // progress-bar cells, whatever the task count
 // write-snapshot.sh's verb set, minus nothing: the pane names the verb, never the reason.
 const VERBS = ['approve', 'answer', 'merge', 'unblock', 'close'] as const
@@ -476,7 +476,7 @@ function draw($: any, e: any, now: number): any {
   const copyButton = (key: string, s: string, look: Record<string, unknown>, ref: string) =>
     Button({ key, plain: true, children: [Text({ ...look, children: [s] })], onPress: (press: any) => copyRef($, ref, press && press.surface) })
   const rows: any[] = []
-  const W = toint(e && e.props ? e.props.bodyColumns : 0) || WIDTH
+  const W = (toint(e && e.props ? e.props.bodyColumns : 0) || WIDTH) - 2 * PAD
   const fit = (s: string, room: number) => cut(s, Math.max(1, room))
   shownAge = ageKey(now)
 
@@ -623,7 +623,8 @@ function draw($: any, e: any, now: number): any {
   // A Button drops `color`; a coloured Text child is the kit's route to a coloured label.
   const label = (s: string, look: Record<string, unknown>) => ({ label: s, plain: true, children: [Text({ ...look, children: [s] })] })
   rows.push(Box({
-    key: 'buttons', flexDirection: 'row', columnGap: 2, paddingLeft: INDENT, children: [
+    // A gap of 1 under 43 columns, where 2 would push the three labels past the padding.
+    key: 'buttons', flexDirection: 'row', columnGap: W >= 43 ? 2 : 1, children: [
       Button({
         key: 'answer', ...label('✎ Answer Questions', FILL),
         // The human pressed a button in their own session: one /loopd:answer run, queued
@@ -660,9 +661,9 @@ function draw($: any, e: any, now: number): any {
   rows.push(line(' '))
   // Below the buttons, so they never move. A refused submit is said, not swallowed (convention 12).
   const info = noteLive(now) ? note : answerQueued ? 'answer queued' : kind === 'ok' && countsGone() ? 'counts unavailable — run /loopd:init' : ''
-  if (info) rows.push(line(' '.repeat(INDENT) + fit(info, W - INDENT), MUTED))
+  if (info) rows.push(line(fit(info, W), MUTED))
 
-  return Box({ flexDirection: 'column', children: rows })
+  return Box({ flexDirection: 'column', paddingLeft: PAD, paddingRight: PAD, children: rows })
 }
 
 // ---------------------------------------------------------------- simple mode
