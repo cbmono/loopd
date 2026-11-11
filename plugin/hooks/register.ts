@@ -168,6 +168,7 @@ const NOTE_MS = 10000
 const WIDTH = 45        // the operator layout's width where the surface names no bodyColumns
 const PAD = 2           // the operator pane's padding, left and right; every row is drawn inside it
 const BAR = 10          // progress-bar cells, whatever the task count
+const ROW_LINES = 3     // a wrapped row's most lines, every section alike; the last is cut
 // write-snapshot.sh's verb set, minus nothing: the pane names the verb, never the reason.
 const VERBS = ['approve', 'answer', 'merge', 'unblock', 'close'] as const
 const ANSWER = 'loopd:answer'
@@ -388,24 +389,26 @@ function cut(s: string, n: number): string {
   const cp = Array.from(s)
   return cp.length <= n ? s : cp.slice(0, Math.max(0, n - 1)).join('') + '…'
 }
-function wrap(s: string, n: number, max: number): string[] {
+// `first` is the first line's room, narrower where a right-aligned cell shares that line.
+function wrap(s: string, n: number, max: number, first = n): string[] {
   const out: string[] = []
+  const lim = () => out.length ? n : first
   let cur = ''
   const words = s.split(' ')
   for (let i = 0; i < words.length; i++) {
     let w = words[i]
-    while (cols(w) > n) {
-      const room = cur ? n - cols(cur) - 1 : n
+    while (cols(w) > lim()) {
+      const room = cur ? lim() - cols(cur) - 1 : lim()
       if (room < 1) { out.push(cur); cur = ''; continue }
       const cp = Array.from(w)
       out.push((cur ? cur + ' ' : '') + cp.slice(0, room).join(''))
       cur = ''; w = cp.slice(room).join('')
     }
     if (!cur) cur = w
-    else if (cols(cur) + 1 + cols(w) <= n) cur += ' ' + w
+    else if (cols(cur) + 1 + cols(w) <= lim()) cur += ' ' + w
     else { out.push(cur); cur = w }
     if (out.length >= max) {
-      return [...out.slice(0, max - 1), cut([...out.slice(max - 1), cur, ...words.slice(i + 1)].filter(Boolean).join(' '), n)]
+      return [...out.slice(0, max - 1), cut([...out.slice(max - 1), cur, ...words.slice(i + 1)].filter(Boolean).join(' '), max > 1 ? n : first)]
     }
   }
   if (cur || !out.length) out.push(cur)
@@ -586,8 +589,9 @@ function draw($: any, e: any, now: number): any {
     for (const [p, t] of progress) {
       const head = '   ' + (t.assignee || 'unassigned') + '  '
       const word = c.tasks === null ? '?' : c.tasks[taskPath(p, t)] || '—'
-      const title = fit(t.title || t.id, W - cols(head) - cols(word) - 2)
+      const [title, ...more] = wrap(t.title || t.id, Math.max(1, W - cols(head)), ROW_LINES, Math.max(1, W - cols(head) - cols(word) - 2))
       rows.push(row(seg(head, WORK), seg(title, TEXT), seg(gap(cols(head) + cols(title) + cols(word))), seg(word, LOOK[word] || MUTED)))
+      for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
     }
 
     rows.push(line(' '))
@@ -598,7 +602,9 @@ function draw($: any, e: any, now: number): any {
     for (const [, t] of review) {
       const head = '   ' + (t.assignee || 'unassigned') + '  '
       const mark = t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : ''
-      rows.push(row(seg(head, WORK), seg(fit(t.title || t.id, W - cols(head) - cols(mark)), TEXT), seg(mark, MUTED)))
+      const [title, ...more] = wrap(t.title || t.id, Math.max(1, W - cols(head)), ROW_LINES, Math.max(1, W - cols(head) - cols(mark)))
+      rows.push(row(seg(head, WORK), seg(title, TEXT), seg(mark, MUTED)))
+      for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
     }
 
     if (showNeed) {
@@ -612,7 +618,7 @@ function draw($: any, e: any, now: number): any {
       need.forEach((x, k) => {
         const num = String(k + 1).padStart(digits) + '. '
         const head = num + x.verb.padEnd(vw) + '  '
-        const wrapped = wrap(x.text, Math.max(1, W - cols(head)), 3)
+        const wrapped = wrap(x.text, Math.max(1, W - cols(head)), ROW_LINES)
         rows.push(pressRow(seg(num, NEEDS_YOU), copyButton('copy-need-' + k, x.verb, NEEDS_YOU, x.ref),
           seg(' '.repeat(cols(head) - cols(num) - cols(x.verb)), NEEDS_YOU), seg(wrapped[0], TEXT)))
         for (const l of wrapped.slice(1)) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))

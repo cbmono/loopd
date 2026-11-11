@@ -218,7 +218,7 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRE
     ' ',
     '   1 working · 1 idle · 0 dead',
     ' ',
-    '   software-engineer  Ship the widg…  working',
+    '   software-engineer  Ship the' + ' '.repeat(8) + 'working', ' '.repeat(22) + 'widget',
     '   unassigned  G3' + ' '.repeat(27) + '—',
     ' ',
     ' ',
@@ -817,6 +817,62 @@ test('NEEDS YOU is numbered, slug-prefixed, last, and wraps under its text to th
   expect(r2[3]).toBe(' '.repeat(36) + '1 min ago')
   expect(r2.slice(-7)).toEqual(['NEEDS YOU (1)', ' ', '1. unblock  leaner-prompts · Judge the trims', ' ', '─'.repeat(45), ' ', ' '])
   await ui2.unmount()
+})
+
+// The owner's case: a long IN PROGRESS and IN REVIEW title beside a role, and a short row.
+const LONG = 'iPhone capability proof: real text recognition and App Attest in a signed build on a real device, with the evidence attached'
+function longSnap() {
+  const t = (id: string, title: string, status: string, pr_mergeable = 'MERGEABLE') =>
+    ({ id, title, status, assignee: 'software-engineer', in_flight: false, pr_mergeable, awaiting: '', prs: [{ repo: 'o/r', number: 9, url: 'https://github.com/o/r/pull/9' }] })
+  return {
+    ...SNAP, counts: { projects: 1, tasks: 4, awaiting: 0 },
+    projects: [{ slug: 'alpha', title: 'Alpha', status: 'active', awaiting_close: false, phase_progress: { done: 0, total: 0 },
+      tasks: [t('task-001', LONG, 'in-progress'), t('task-002', LONG, 'in-review'), t('task-003', LONG, 'in-review', 'CONFLICTING'), t('task-004', 'Merge me', 'in-review')] }],
+  }
+}
+// A section's rows: from the line after its heading's blank to the next blank.
+function section(rows: string[], h: string): string[] {
+  const at = rows.findIndex(r => r.startsWith(h)) + 2
+  const rest = rows.slice(at)
+  return rest.slice(0, rest.indexOf(' '))
+}
+
+test('IN PROGRESS and IN REVIEW wrap like NEEDS YOU: under the title, the right cell kept on line one, three lines at most', ONLY, async ($, on) => {
+  const w = world(longSnap())
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED + 60000 })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = await rowsOf(ui)
+  const prog = rows.slice(rows.indexOf('   1 working · 1 idle · 0 dead') + 2)
+  expect(prog.slice(0, prog.indexOf(' '))).toEqual([
+    '   software-engineer  iPhone' + ' '.repeat(10) + 'working',
+    '                      capability proof: real',
+    '                      text recognition and A…',
+  ])
+  expect(section(rows, 'IN REVIEW')).toEqual([
+    '   software-engineer  iPhone capability',
+    '                      proof: real text',
+    '                      recognition and App At…',
+    '   software-engineer  iPhone  PR CONFLICTING',
+    '                      capability proof: real',
+    '                      text recognition and A…',
+    '   software-engineer  Merge me',              // a short row, byte for byte as before
+  ])
+  await ui.unmount()
+
+  for (const body of [45, 100]) {
+    const u = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: body }, surface: 'terminal' })
+    const r = await rowsOf(u)
+    const left = (await u.drawn()).props.paddingLeft
+    for (const x of r) expect(left + cols(x)).toBeLessThanOrEqual(body - 2)
+    const p = r.slice(r.indexOf('   1 working · 1 idle · 0 dead') + 2)
+    for (const sec of [p.slice(0, p.indexOf(' ')), section(r, 'IN REVIEW')]) {
+      expect(sec[0]).toMatch(/^ {3}software-engineer {2}iPhone/)
+      for (const x of sec) expect(x).toMatch(/^ {3}software-engineer {2}\S|^ {22}\S/)
+    }
+    await u.unmount()
+  }
 })
 
 test('with nothing needing you: no header count and no NEEDS YOU; the two session sections show (0) and IN REVIEW stays', ONLY, async ($, on) => {
@@ -1599,7 +1655,7 @@ test('SAME NUMBERS: every section count is the value counts.json gives, and NEED
   expect(rows).toContain('   ' + c.sessions.working + ' working · ' + c.sessions.idle + ' idle · ' + c.sessions.dead + ' dead')
   expect(rows.slice(rows.indexOf('IN PROGRESS (2)'))).toEqual([
     'IN PROGRESS (2)', ' ', '   2 working · 1 idle · 1 dead', ' ',
-    '   software-engineer  Ship the widg…  working',
+    '   software-engineer  Ship the' + ' '.repeat(8) + 'working', ' '.repeat(22) + 'widget',
     '   unassigned  G3' + ' '.repeat(24) + 'dead',
     ' ', ' ', 'IN REVIEW (1)', ' ', '   software-engineer  Merge me',
     ' ', ' ', 'NEEDS YOU (7)', ' ',
@@ -1772,8 +1828,8 @@ test('TICK: a working tick is named apart from task sessions, and with no task i
   const cases: [any, Record<string, number>, string, string][] = [
     [idle, { working: 1, idle: 0, dead: 0, tick_working: 1 }, '   1 working (tick) · 0 idle · 0 dead', '   no task in progress — tick running'],
     [idle, { working: 0, idle: 1, dead: 0, tick_working: 0 }, '   0 working · 1 idle · 0 dead', '   nothing right now'],
-    [SNAP, { working: 1, idle: 1, dead: 0, tick_working: 0 }, '   1 working · 1 idle · 0 dead', '   software-engineer  Ship the widg…  working'],
-    [SNAP, { working: 2, idle: 1, dead: 0, tick_working: 1 }, '   2 working (1 tick) · 1 idle · 0 dead', '   software-engineer  Ship the widg…  working'],
+    [SNAP, { working: 1, idle: 1, dead: 0, tick_working: 0 }, '   1 working · 1 idle · 0 dead', '   software-engineer  Ship the' + ' '.repeat(8) + 'working'],
+    [SNAP, { working: 2, idle: 1, dead: 0, tick_working: 1 }, '   2 working (1 tick) · 1 idle · 0 dead', '   software-engineer  Ship the' + ' '.repeat(8) + 'working'],
   ]
   const w = world(idle)
   stubs(on, w)

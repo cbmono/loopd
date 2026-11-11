@@ -71,9 +71,10 @@ one definition; the pane computes none of them, so it agrees with the bar.
 
 The pane is padded 2 columns left and right; every row is drawn inside that, so width is the
 pane's `bodyColumns` (45 when the surface gives none) less 4. The buttons' gap is 1 below 43
-columns, so the three labels never pass the padding. A NEEDS YOU row wraps,
-continuation lines under its text, at most 3 lines, the third cut with `…`; every other row
-is one line, its name cut by code point with `…`. A count and the `paused`/`done`/`closed`
+columns, so the three labels never pass the padding. A NEEDS YOU, IN PROGRESS or IN REVIEW
+row wraps, continuation lines under its text, at most 3 lines, the third cut with `…`; a session
+word or `PR` mark stays on the first line. Every other row is one line, its name cut by code
+point with `…`. A count and the `paused`/`done`/`closed`
 word are never cut, and a zero count is not drawn (`(0)` on IN PROGRESS and IN REVIEW is); a count counts.json does not give — the file absent, unparseable, or the value `null` — is drawn `?`, never `0`. Colours are a pastel trial palette
 (2026-11-11, before the rest of loopd adopts it): rose `#DA627D` needs you, peach `#FCA17D`
 the bundle name and PROJECTS, sky `#86BBD8` work, teal `#06969A` a bar's done part, deep
