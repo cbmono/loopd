@@ -94,6 +94,9 @@ _ab_jnum() { case "$2" in ''|*[!0-9]*) printf -v "$1" null ;; *) printf -v "$1" 
 ab_write_counts() {
   local f="$1/$AB_COUNTS" tasks="null" sep="" l p r w i d n
   [ -d "${f%/*}" ] || return 0
+  # Until /loopd:init adds the ignore line, a broad `git add` would commit this per-clone file.
+  # Read .gitignore rather than ask git: the status line never runs git.
+  if [ -e "$1/.git" ] && ! grep -qxE "/?${AB_COUNTS//./\\.}" "$1/.gitignore" 2>/dev/null; then return 0; fi
   _ab_jnum p "$CNT_IN_PROGRESS"; _ab_jnum r "$CNT_IN_REVIEW"; _ab_jnum n "$CNT_NEED_YOU"
   _ab_jnum w "$CNT_WORKING"; _ab_jnum i "$CNT_IDLE"; _ab_jnum d "$CNT_DEAD"
   if [ "$CNT_TASKS" != '?' ]; then

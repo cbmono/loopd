@@ -409,6 +409,13 @@ plain "$TMP/d1" >/dev/null; CJ="$TMP/d1/$AB_COUNTS"
 ok "queue off ⇒ need_you null and queue \"off\"" "$(J 'd["need_you"], d["queue"]')" "(None, 'off')"
 CJ="$INST/$AB_COUNTS"; plain "$INST" >/dev/null
 ok "a readable queue ⇒ \"on\" with its count" "$(J 'd["need_you"], d["queue"]')" "(3, 'on')"
+D="$TMP/g-old"; mk "$D"; mkdir -p "$D/.git"; printf '/%s\n' "$AB_SNAPSHOT" > "$D/.gitignore"
+plain "$D" >/dev/null
+ok "a git bundle whose .gitignore lacks the line gets NO counts.json" "$([ -e "$D/$AB_COUNTS" ] && echo yes || echo no)" no
+printf '/%s\n' "$AB_COUNTS" >> "$D/.gitignore"; plain "$D" >/dev/null
+ok "…and gets it once /loopd:init has added the line" "$([ -s "$D/$AB_COUNTS" ] && echo yes || echo no)" yes
+ok "…while the line itself is unchanged by it" \
+   "$(plain "$D")" "loopd · 2 in progress · 1 in review · 0 working · 0 idle · 0 dead · 3 need you · last tick $HM"
 D="$TMP/q2"; mk "$D"; rm -f "$D"/projects/proj-a/tasks/task-005.md
 ok "0 in review hides the segment, as the line's other zero-is-quiet segments" \
    "$(plain "$D" | grep -c 'in review' | tr -d ' ')" 0
