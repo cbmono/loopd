@@ -69,10 +69,12 @@
 #   thing as `depends_on`'s task IDs; the question it names is still only in the task
 #   doc and in AWAITING.md.
 #     awaiting_items: one {verb, slug, task} per AWAITING.md item, in its order — the
-#              row's `**verb**` and the slug and task id of its link target, each kept only
-#              when it has a label's shape and names a file in this bundle (task `""` on a
-#              project row). Never a byte of the row's title or sentence: that text is
-#              agent-written (task-005, D5). Left OUT when the queue is off or unreadable.
+#              row's `**verb**` (one of build-awaiting.sh's nine, else `""`) and the slug
+#              and task id of its link target, each kept only when it has a label's shape
+#              and names a file in this bundle (task `""` on a project row; both `""` for a
+#              bad task target). Never a byte of the row's title or sentence: that text is
+#              agent-written (task-005, D5). Left OUT when the queue is off or the file is
+#              deleted; `null` when it is there but unreadable (D7).
 #   NEVER CARRIED:
 #     · task `description:` and every document BODY (`# Context`, `# Notes`,
 #       `# Result`) — free prose, the likeliest place a logged-in page or a customer
@@ -831,20 +833,11 @@ fi
 
 # ---------------------------------------------------------------- awaiting items
 # Only `**verb**` and the link target are read off a row; everything else on it is skipped.
+# A file that is there but cannot be read is `null` (unknown), never `[]` (nothing waits).
 AWAITING_BLOCK=""
-if ab_awaiting_on . && [[ -f "$AB_AWAITING" && -r "$AB_AWAITING" ]]; then
-  items=""
-  while IFS=$'\037' read -r a_row a_verb a_slug a_task; do
-    [[ "$a_row" == R ]] || continue
-    [[ "$a_verb" =~ ^[a-z]+$ ]] || a_verb=""
-    [[ "$a_slug" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && "$a_slug" != *..* ]] || a_slug=""
-    [[ "$a_task" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && "$a_task" != *..* ]] || a_task=""
-    if [[ -n "$a_task" ]]; then [[ -n "$a_slug" && -f "projects/$a_slug/tasks/$a_task.md" ]] || { a_slug=""; a_task=""; }
-    elif [[ -n "$a_slug" && ! -f "projects/$a_slug/project.md" ]]; then a_slug=""; fi
-    [[ -n "$items" ]] && items="$items, "
-    items="$items{\"verb\": $(jstr "$a_verb"), \"slug\": $(jstr "$a_slug"), \"task\": $(jstr "$a_task")}"
-  done <<EOF
-$(awk '
+if ab_awaiting_on . && [[ -e "$AB_AWAITING" ]]; then
+  a_ok=0; a_out=""
+  [[ -f "$AB_AWAITING" && -r "$AB_AWAITING" ]] && a_out="$(awk '
   /^##[[:space:]].*Awaiting you/ { inblk = 1; next }
   inblk && /^##[[:space:]]/      { exit }
   inblk && /^[[:space:]]*\* / {
@@ -856,10 +849,23 @@ $(awk '
     }
     print "R\037" v "\037" sl "\037" tk
   }
-' "$AB_AWAITING" 2>/dev/null)
-EOF
-  AWAITING_BLOCK="\"awaiting_items\": [$items],
+' "$AB_AWAITING" 2>/dev/null)" && a_ok=1
+  items=""
+  while IFS=$'\037' read -r a_row a_verb a_slug a_task; do
+    [[ "$a_row" == R ]] || continue
+    case "$a_verb" in answer|approve|close|continue|do|grant|merge|review|unblock) ;; *) a_verb="" ;; esac
+    [[ "$a_slug" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && "$a_slug" != *..* ]] || a_slug=""
+    if [[ -n "$a_task" ]]; then
+      [[ -n "$a_slug" && "$a_task" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && "$a_task" != *..* && -f "projects/$a_slug/tasks/$a_task.md" ]] || { a_slug=""; a_task=""; }
+    elif [[ -n "$a_slug" && ! -f "projects/$a_slug/project.md" ]]; then a_slug=""; fi
+    [[ -n "$items" ]] && items="$items, "
+    items="$items{\"verb\": $(jstr "$a_verb"), \"slug\": $(jstr "$a_slug"), \"task\": $(jstr "$a_task")}"
+  done <<<"$a_out"
+  if [[ $a_ok -eq 1 ]]; then AWAITING_BLOCK="\"awaiting_items\": [$items],
   "
+  else AWAITING_BLOCK="\"awaiting_items\": null,
+  "
+  fi
 fi
 
 # ---------------------------------------------------------------- write
