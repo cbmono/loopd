@@ -390,6 +390,9 @@ ok "per-task words, keyed by task path (two sessions on one task: the busier wor
    "$(J '",".join("%s=%s" % kv for kv in sorted(d["task_sessions"].items()))')" \
    "projects/proj-a/tasks/task-001.md=working,projects/proj-a/tasks/task-002.md=idle,projects/proj-a/tasks/task-005.md=dead"
 ok "a task with no session is absent" "$(J '"projects/proj-a/tasks/task-003.md" in d["task_sessions"]')" False
+ok "per-task status, the same documents the two counts read" \
+   "$(J '",".join("%s=%s" % kv for kv in sorted(d["task_status"].items()))')" \
+   "projects/proj-a/tasks/task-001.md=in-progress,projects/proj-a/tasks/task-002.md=in-progress,projects/proj-a/tasks/task-005.md=in-review"
 ok "no .tick-lock ⇒ tick_working 0" "$(J 'd["sessions"]["tick_working"]')" 0
 # The tick is the session its .tick-lock records; working, it is counted apart in counts.json only.
 printf 'claimant: tick-x\nsession: s1-x\n' > "$S/$AB_LOCK"
@@ -404,7 +407,7 @@ ok "a lock naming an idle session (a lingering lock) ⇒ tick_working 0" "$(J 'd
 rm -f "$S/$AB_LOCK"
 ok "written_at is a UTC stamp" "$(J 'd["written_at"]' | grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$')" 1
 ok "the keys are exactly the contract" "$(J '",".join(sorted(d))')" \
-   "in_progress,in_review,need_you,queue,sessions,task_sessions,written_at"
+   "in_progress,in_review,need_you,queue,sessions,task_sessions,task_status,written_at"
 ok "no AWAITING text and no task title reaches it (planted sentinel)" "$(grep -c "$SENT" "$CJ" | tr -d ' ')" 0
 ok "…while the sentinel IS in the fixtures it was read from" \
    "$(cat "$S/$AB_AWAITING" "$S"/projects/proj-a/tasks/*.md | grep -c "$SENT" | tr -d ' ')" 6
@@ -413,7 +416,7 @@ echo
 echo "== 14. a number the bar shows as ? is null in counts.json =="
 plain "$TMP/d4" >/dev/null
 CJ="$TMP/d4/$AB_COUNTS"
-ok "no projects/ ⇒ in_progress and in_review null" "$(J 'd["in_progress"], d["in_review"]')" "(None, None)"
+ok "no projects/ ⇒ in_progress, in_review and task_status null" "$(J 'd["in_progress"], d["in_review"], d["task_status"]')" "(None, None, None)"
 D="$TMP/q1"; mk "$D"; seed_agents "$D" "garbage"; plain "$D" >/dev/null; CJ="$D/$AB_COUNTS"
 ok "unknown sessions ⇒ every session count and the per-task map null" \
    "$(J '[d["sessions"][k] for k in ("working","idle","dead","tick_working")] + [d["task_sessions"]]')" "[None, None, None, None, None]"
