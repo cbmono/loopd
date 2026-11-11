@@ -194,10 +194,12 @@ $(entries "$1" open_questions || true)
 EOF
 }
 
+# Escaped with the trailers' set, so a link or `**` in a title cannot pose as the row's own.
 title_of() { # <file>
   local t; t="$(fmfirst "$1" title)"
   t="${t%\"}"; t="${t#\"}"
-  [ -n "$t" ] && printf '%s' "$t" || basename "$1" .md
+  [ -n "$t" ] || t="$(basename "$1" .md)"
+  printf '%s' "$t" | LC_ALL=C sed 's/[][\\`*_()<>|~!#]/\\&/g'
 }
 
 # THE GLYPH IS NEVER THE MODEL'S. A question asking for a tool, an install, a credential or
@@ -271,9 +273,7 @@ facts_mark() { # <file> <rel> -> "unverified · ", "stale · " or nothing
 # A row is `* <glyph> **<verb>** — [<title>](<link>) · <trailer>` and nothing else. One
 # writer for every row, so a new verb cannot arrive with a new marker: session-banner.sh
 # greps the `* ` literally.
-# The title is escaped with the trailers' set, so a link or `**` in it cannot pose as the row's own.
-mdesc() { printf '%s' "$1" | LC_ALL=C sed 's/[][\\`*_()<>|~!#]/\\&/g'; }
-row() { printf '* %s **%s** — [%s](%s) · %s\n' "$1" "$2" "$(mdesc "$3")" "$4" "$5"; }
+row() { printf '* %s **%s** — [%s](%s) · %s\n' "$1" "$2" "$3" "$4" "$5"; }
 
 row_txt=(); row_node=(); row_sev=(); row_design=(); cur_design=""
 node_lines=""; node=0
