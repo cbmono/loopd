@@ -17,8 +17,9 @@
 // decides a permission, starts a process, reaches the network or the environment, writes a
 // file, or walks up from the cwd — tests/mods.test.sh in cbmono/loopd asserts each absence on
 // this source, so none of those is spelled here even as a call. The pane's one outward action
-// is a clipboard write in copyRef(), on a press, of a slug or a task path and nothing else. What it reads, exactly, is
-// hooks/MODS.md → "What it reads", and that harness asserts every path literal below is in it.
+// is a clipboard write in copyRef(), on a press, of a slug or a task path and nothing else.
+// What it reads, exactly, is hooks/MODS.md → "What it reads", and that harness asserts every
+// path literal below is in it.
 //
 // Until 2026-10-28 these were three companion plugins (loopd-mod-usage, loopd-mod-pane,
 // loopd-mod-signal); MIGRATION.md says how to uninstall those. Their kit tests ship beside
