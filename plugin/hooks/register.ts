@@ -16,7 +16,8 @@
 // Observe only: every hook hands the event on unchanged. None of the three calls a model,
 // decides a permission, starts a process, reaches the network or the environment, writes a
 // file, or walks up from the cwd — tests/mods.test.sh in cbmono/loopd asserts each absence on
-// this source, so none of those is spelled here even as a call. What it reads, exactly, is
+// this source, so none of those is spelled here even as a call. The pane's one outward action
+// is a clipboard write in copyRef(), on a press, of a slug or a task path and nothing else. What it reads, exactly, is
 // hooks/MODS.md → "What it reads", and that harness asserts every path literal below is in it.
 //
 // Until 2026-10-28 these were three companion plugins (loopd-mod-usage, loopd-mod-pane,
@@ -169,6 +170,7 @@ type Kind = 'unread' | 'not-bundle' | 'off' | 'malformed' | 'ok'
 
 type Task = {
   id: string
+  ref: string            // `id` as the snapshot gave it, uncleaned: what a copy takes, if it passes okRef()
   title: string
   status: string
   assignee: string
@@ -180,6 +182,7 @@ type Task = {
 }
 type Project = {
   slug: string
+  ref: string
   title: string
   status: string
   awaiting_close: boolean
@@ -205,6 +208,7 @@ let reads = 0            // how many times the file was actually read (the poll 
 let timer: { cancel: () => void } | null = null
 let answerQueued = false
 let answerRefused = ''   // why the last Answer run was refused, drawn in the footer; '' = it was not
+let copyNote = ''        // the last copy's footer line; a later copy, an Answer press or a re-read replaces it
 let shownAge = ''        // the age text last drawn; the poll redraws when it would change
 let open = false         // a /pane placed the pane and no ui.close has fired since
 
@@ -253,13 +257,13 @@ function shape(json: unknown): Board | null {
       const to = obj(t)
       if (!to) continue
       tasks.push({
-        id: str(to.id), title: str(to.title), status: str(to.status), assignee: str(to.assignee),
+        id: str(to.id), ref: raw(to.id), title: str(to.title), status: str(to.status), assignee: str(to.assignee),
         in_flight: to.in_flight === true, pr_mergeable: str(to.pr_mergeable), awaiting: str(to.awaiting),
         open_questions: toint(to.open_questions), prs: arr(to.prs).length,
       })
     }
     rows.push({
-      slug: str(po.slug), title: str(po.title), status: str(po.status),
+      slug: str(po.slug), ref: raw(po.slug), title: str(po.title), status: str(po.status),
       awaiting_close: po.awaiting_close === true,
       phase_done: toint(pp.done), phase_total: toint(pp.total), tasks,
     })
@@ -296,6 +300,7 @@ async function refresh($: any, force: boolean): Promise<void> {
   let text: unknown = null
   try { text = await $.fs.read(path) } catch { text = null }
   reads += 1
+  copyNote = ''
   mtimeMs = m
   if (typeof text !== 'string') { kind = 'malformed'; board = null; detail = 'could not read ' + SNAPSHOT; return }
   let json: unknown
@@ -351,6 +356,25 @@ function summary(): string {
   return 'loopd board: ' + board.projects + ' project(s) · ' + board.tasks + ' task(s) · ' + board.awaiting + ' awaiting you'
 }
 
+// ---------------------------------------------------------------- the copy
+// A ref is a slug or a task file stem in the shape a folder name takes: a total match, so
+// no path separator, `..`, whitespace or control character can ride along into a paste.
+function okRef(s: string): boolean { return SAFE.test(s) && !s.includes('..') }
+// isCopied true is what the API says, OSC 52 included; a result of no known shape is not
+// a confirmation, so it reads `copy sent`.
+async function copyRef($: any, ref: string, surface: unknown): Promise<void> {
+  answerRefused = ''
+  if (!ref) copyNote = 'copy refused: bad ref'
+  else {
+    let r: any = null
+    try { r = await $.ui.copy(surface ? { text: ref, surface } : { text: ref }) } catch (err) { r = { isCopied: false, reason: why(err) } }
+    copyNote = r && r.isCopied === true ? 'copied ' + ref
+      : r && r.isCopied === false ? 'copy failed: ' + (clean(r.reason) || 'refused')
+      : 'copy sent ' + ref
+  }
+  try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
+}
+
 // ---------------------------------------------------------------- the drawing
 // Function-call form (this is a .ts file, so no JSX); Box, Text and Button are the three
 // elements every surface draws. Every string passed to Text has been through clean().
@@ -359,6 +383,10 @@ function draw($: any, e: any, now: number): any {
   const line = (s: string, props: Record<string, unknown> = {}) => Text({ ...props, children: [s] })
   const seg = (s: string, props: Record<string, unknown> = {}) => s ? Text({ ...props, children: [s] }) : null
   const row = (...parts: any[]) => Text({ children: parts.filter(Boolean) })
+  // A row with one pressable part: Button is the kit's only pressable, and it cannot sit inside a Text.
+  const pressRow = (...parts: any[]) => Box({ flexDirection: 'row', children: parts.filter(Boolean) })
+  const copyButton = (key: string, s: string, look: Record<string, unknown>, ref: string) =>
+    Button({ key, plain: true, children: [Text({ ...look, children: [s] })], onPress: (press: any) => copyRef($, ref, press && press.surface) })
   const rows: any[] = []
 
   if (kind !== 'ok' || !board) {
@@ -371,12 +399,14 @@ function draw($: any, e: any, now: number): any {
     const needs = (t: Task) => (VERBS as readonly string[]).includes(t.awaiting)
 
     // print-board.sh's need-you rule: a task's AWAITING verb, plus one close per awaiting_close project.
-    const need: { verb: string; text: string }[] = []
+    const need: { verb: string; text: string; ref: string }[] = []
     const working: Task[] = []
     for (const p of b.rows) {
-      if (p.awaiting_close) need.push({ verb: 'close', text: p.slug })
+      const slugOk = okRef(p.ref)
+      if (p.awaiting_close) need.push({ verb: 'close', text: p.slug, ref: slugOk ? p.ref : '' })
       for (const t of p.tasks) {
-        if (needs(t)) need.push({ verb: t.awaiting, text: p.slug + ' · ' + (t.title || t.id) })
+        const ref = slugOk && okRef(t.ref) ? PROJECTS_DIR + '/' + p.ref + '/' + TASKS_DIR + '/' + t.ref + TASK_SUFFIX : ''
+        if (needs(t)) need.push({ verb: t.awaiting, text: p.slug + ' · ' + (t.title || t.id), ref })
         if (t.in_flight) working.push(t)
       }
     }
@@ -396,7 +426,7 @@ function draw($: any, e: any, now: number): any {
       for (const t of p.tasks) if (needs(t)) n += 1
       return { p, n, i, rank: n ? 0 : p.status === 'active' ? 1 : p.status === 'paused' ? 2 : p.status === 'done' ? 3 : 4 }
     }).sort((x, y) => x.rank - y.rank || x.i - y.i)
-    for (const { p, n } of ranked) {
+    ranked.forEach(({ p, n }, k) => {
       rows.push(line(' '))
       const active = p.status === 'active'
       // awaiting_close is finished work waiting on /loopd:close-project; status done is a closed, retained folder.
@@ -408,10 +438,10 @@ function draw($: any, e: any, now: number): any {
       else if (p.status === 'done') tail.push(['closed', MUTED])
       const tailCols = cols(tail.map(([s]) => s).join(' · '))
       const title = fit(p.slug, W - 2 - (tailCols ? tailCols + 1 : 0))
-      const parts = [seg(glyph + ' ', look), seg(title, active || n ? TEXT : MUTED)]
-      if (tailCols) parts.push(seg(gap(2 + cols(title) + tailCols)), ...tail.map(([s, c], k) => seg((k ? ' · ' : '') + s, c)))
-      rows.push(row(...parts))
-      if (!active) continue
+      const parts = [seg(glyph + ' ', look), copyButton('copy-project-' + k, title, active || n ? TEXT : MUTED, okRef(p.ref) ? p.ref : '')]
+      if (tailCols) parts.push(seg(gap(2 + cols(title) + tailCols)), ...tail.map(([s, c], j) => seg((j ? ' · ' : '') + s, c)))
+      rows.push(pressRow(...parts))
+      if (!active) return
       const live = p.tasks.filter(t => t.status !== 'cancelled')
       const done = live.filter(t => t.status === 'done').length
       const sub: any[] = []
@@ -421,7 +451,7 @@ function draw($: any, e: any, now: number): any {
       }
       if (p.phase_total) sub.push(seg((sub.length ? '  ' : '') + 'phases ' + p.phase_done + '/' + p.phase_total, MUTED))
       if (sub.length) rows.push(row(seg('  '), ...sub))
-    }
+    })
 
     rows.push(line(' '))
     rows.push(line(' '))
@@ -441,14 +471,18 @@ function draw($: any, e: any, now: number): any {
       rows.push(line(' '))
       const digits = String(need.length).length
       need.forEach((n, k) => {
-        const head = String(k + 1).padStart(digits) + '. ' + n.verb.padEnd(7) + '  '
+        const num = String(k + 1).padStart(digits) + '. '
+        const head = num + n.verb.padEnd(7) + '  '
         const wrapped = wrap(n.text, Math.max(1, W - cols(head)), 3)
-        rows.push(row(seg(head, NEEDS_YOU), seg(wrapped[0], TEXT)))
+        rows.push(pressRow(seg(num, NEEDS_YOU), copyButton('copy-need-' + k, n.verb, NEEDS_YOU, n.ref),
+          seg(' '.repeat(cols(head) - cols(num) - cols(n.verb)), NEEDS_YOU), seg(wrapped[0], TEXT)))
         for (const l of wrapped.slice(1)) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
       })
     }
 
-    if (answerQueued) { rows.push(line(' ')); rows.push(line('answer queued', MUTED)) }
+    // One footer line: the latest of a copy and a queued Answer, never both.
+    const foot = copyNote || (answerQueued ? 'answer queued' : '')
+    if (foot) { rows.push(line(' ')); rows.push(line(fit(foot, W), MUTED)) }
   }
   // A refused submit is said, not swallowed: a button that silently did nothing is the
   // silent wrong answer convention 12 is about.
@@ -456,10 +490,12 @@ function draw($: any, e: any, now: number): any {
 
   rows.push(line(' '))
   rows.push(line(' '))
+  // A Button drops `color`; a coloured Text child is the kit's route to a coloured label.
+  const label = (s: string, look: Record<string, unknown>) => ({ label: s, children: [Text({ ...look, children: [s] })] })
   rows.push(Box({
-    flexDirection: 'row', columnGap: 2, children: [
+    key: 'buttons', flexDirection: 'row', columnGap: 2, paddingLeft: 2, children: [
       Button({
-        key: 'answer', label: '✎ Answer questions', hotkey: 'a',
+        key: 'answer', ...label('✎ Answer questions', FILL), hotkey: 'a',
         // The human pressed a key in their own session: one /loopd:answer run, queued
         // until the session is idle (the engine's own contract for a plugin's command.run).
         // Not awaited — a handler that waits for the run would block the press. Never on
@@ -468,9 +504,10 @@ function draw($: any, e: any, now: number): any {
           if (answerQueued) return
           answerQueued = true
           answerRefused = ''
+          copyNote = ''
           const done = (err?: unknown) => {
             answerQueued = false
-            if (err !== undefined) answerRefused = clean(err && (err as any).message ? (err as any).message : String(err)) || 'refused'
+            if (err !== undefined) { copyNote = ''; answerRefused = clean(err && (err as any).message ? (err as any).message : String(err)) || 'refused' }
             try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
           }
           let p: any = null
@@ -480,11 +517,11 @@ function draw($: any, e: any, now: number): any {
         },
       }),
       Button({
-        key: 'refresh', label: '↻ Refresh', hotkey: 'r',
+        key: 'refresh', ...label('↻ Refresh', RULE), hotkey: 'r',
         onPress: async () => { await refresh($, true); $.ui.invalidate('ui.render') },
       }),
       Button({
-        key: 'close', label: '✕ Close pane', hotkey: 'c',
+        key: 'close', ...label('✕ Close pane', PLUM), hotkey: 'c',
         // The same path as `/pane close`. A $.ui.close from a press did not reach this module's
         // own ui.close hook in the kit (2.1.322), so the poll is stopped here as well.
         onPress: async () => { try { await $.ui.close({ id: PANE }) } catch { /* already gone */ } stopPoll() },
@@ -526,7 +563,8 @@ let held = new Map<string, Held>()
 // loopd. Rose for a row only a person can clear, green for sent and finished (unchanged,
 // plugin/themes/loopd.json success); peach for the bundle name and PROJECTS, sky for work and
 // active, teal for a bar's done part, deep blue for the rule and a bar's open part; the text
-// white and grey for quiet, as before.
+// white and grey for quiet, as before. The buttons take the muted three: teal Answer, deep blue
+// Refresh, plum Close.
 const NEEDS_YOU = { color: '#DA627D' }
 const DONE = { color: '#76d6a4' }
 const HEAD = { color: '#FCA17D' }
@@ -535,6 +573,7 @@ const FILL = { color: '#06969A' }
 const TEXT = { color: '#f5f5f5' }
 const MUTED = { color: '#6c7488' }
 const RULE = { color: '#33658A' }
+const PLUM = { color: '#9A348E' }
 const STUCK_KEYS = ['c', 'd', 'e']
 
 // AB_NEW_PROJECT_FORM in bundle-paths.sh: new-project-form.sh writes it and its ✗ marks; the pane only draws it.

@@ -146,10 +146,11 @@ async function shown(ui: any): Promise<string> {
   const all = await ui.findAll({ type: 'Text' })
   return all.map((el: any) => el.text).join('\n')
 }
-// The pane's rows as drawn: each top-level Text, its coloured segments joined.
+// The pane's rows as drawn: each top-level Text, and each row Box holding a copy Button
+// (never the operator buttons' Box), its coloured segments joined.
 function flat(n: any): string { return typeof n === 'string' ? n : n && n.children ? n.children.map(flat).join('') : '' }
 async function rowsOf(ui: any): Promise<string[]> {
-  return (await ui.drawn()).children.filter((c: any) => c.type === 'Text').map(flat)
+  return (await ui.drawn()).children.filter((c: any) => c.type === 'Text' || (c.type === 'Box' && c.props.key !== 'buttons')).map(flat)
 }
 const cols = (s: string) => Array.from(s).length
 
@@ -211,14 +212,22 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, WORKING, 
   expect(text).not.toContain('example-user-007')
   expect(text).not.toContain('Q1')
   expect(text).not.toContain('github.com')
-  // Three buttons, in order, and no Tick.
-  expect((await ui.findAll({ type: 'Button' })).map((b: any) => [b.key, b.props.label])).toEqual([
-    ['answer', '✎ Answer questions'], ['refresh', '↻ Refresh'], ['close', '✕ Close pane']])
+  // One plain copy Button per PROJECTS name and NEEDS YOU verb, keyed by row index and with
+  // no hotkey or autofocus; then the three operator buttons, in order, and no Tick.
+  const buttons = await ui.findAll({ type: 'Button' })
+  expect(buttons.map((b: any) => [b.key, b.props.label, b.props.hotkey, b.props.plain, b.props.autoFocus])).toEqual([
+    ...['alpha', 'beta', 'gamma', 'zeta', 'delta', 'epsilon'].map((s, i) => ['copy-project-' + i, s, undefined, true, undefined]),
+    ...['answer', 'merge', 'close'].map((s, i) => ['copy-need-' + i, s, undefined, true, undefined]),
+    ['answer', '✎ Answer questions', 'a', undefined, undefined], ['refresh', '↻ Refresh', 'r', undefined, undefined],
+    ['close', '✕ Close pane', 'c', undefined, undefined]])
+  // The operator row sits 2 columns in from where it was.
+  const row = (await ui.drawn()).children.find((c: any) => c.type === 'Box' && c.props.key === 'buttons')
+  expect([row.props.paddingLeft, row.props.flexDirection, row.props.columnGap]).toEqual([2, 'row', 2])
   expect(text).not.toMatch(/tick/i)
   await ui.unmount()
 })
 
-test('the layout is coloured with the pastel palette; buttons take no colour', ONLY, async ($, on) => {
+test('the layout is coloured with the pastel palette; the buttons take the muted three', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w)
   mock.clock(on, { now: GENERATED + 3 * 60000 })
@@ -233,7 +242,11 @@ test('the layout is coloured with the pastel palette; buttons take no colour', O
   expect(colour(' · 3 need you')).toEqual(['#DA627D'])
   expect(colour('NEEDS YOU')).toEqual(['#DA627D'])
   expect(colour(' (3)')).toEqual(['#DA627D'])
-  expect(colour('2. merge    ')).toEqual(['#DA627D'])
+  expect(colour('2. ')).toEqual(['#DA627D'])
+  expect(colour('merge')).toEqual(['#DA627D'])             // the copy Button's own Text, as rose as before
+  expect(colour('    ')).toEqual(['#DA627D', '#DA627D'])   // merge's and close's padding
+  expect(colour('alpha')).toEqual(['#f5f5f5'])             // a PROJECTS name inside its copy Button
+  expect(colour('epsilon')).toEqual(['#6c7488'])
   expect(colour('alpha · Merge me')).toEqual(['#f5f5f5'])
   expect(colour('2 need you')).toEqual(['#DA627D'])
   expect(colour('WORKING')).toEqual(['#86BBD8'])
@@ -248,9 +261,15 @@ test('the layout is coloured with the pastel palette; buttons take no colour', O
   expect(colour('✓ ')).toEqual(['#76d6a4', '#6c7488'])    // beta awaits its close; epsilon is closed
   expect(colour('done')).toEqual(['#76d6a4'])
   expect(colour('closed')).toEqual(['#6c7488'])
-  expect([...new Set(segs.map((el: any) => el.props.color))].sort()).toEqual(['#06969A', '#33658A', '#6c7488', '#76d6a4', '#86BBD8', '#DA627D', '#FCA17D', '#f5f5f5'])
-  // The kit's Button drops a colour prop, so the buttons stay uncoloured.
-  for (const b of await ui.findAll({ type: 'Button' })) expect(b.props.color).toBeUndefined()
+  expect([...new Set(segs.map((el: any) => el.props.color))].sort()).toEqual(['#06969A', '#33658A', '#6c7488', '#76d6a4', '#86BBD8', '#9A348E', '#DA627D', '#FCA17D', '#f5f5f5'])
+  // The kit's Button drops a colour prop, so each operator button's label is a coloured Text
+  // child: teal, deep blue, plum — never the bright rose or peach.
+  const row = (await ui.drawn()).children.find((c: any) => c.type === 'Box' && c.props.key === 'buttons')
+  const tone = row.children.map((b: any) => [b.props.key, b.props.color, b.children.map((t: any) => [flat(t), t.props.color])])
+  expect(tone).toEqual([
+    ['answer', undefined, [['✎ Answer questions', '#06969A']]],
+    ['refresh', undefined, [['↻ Refresh', '#33658A']]],
+    ['close', undefined, [['✕ Close pane', '#9A348E']]]])
   await ui.unmount()
 })
 
@@ -465,6 +484,128 @@ test('Close pane closes through $.ui.close, the way /pane close does, and the po
   // Closed, so the next /pane opens again rather than closing.
   await $.command.run({ command: 'pane', args: '' })
   expect([w.opened, w.closed]).toEqual([2, 1])
+})
+
+// What reached $.ui.copy, and what the stub answers it with.
+function copies(on: any, answer: (e: any) => any = () => ({ value: { isCopied: true } })) {
+  const got: any[] = []
+  on('ui.copy', (_$: any, e: any) => { got.push({ text: e.text, surface: e.surface }); return answer(e) })
+  return got
+}
+const footer = async (ui: any) => (await shown(ui)).split('\n').filter(l => /^(copied|copy |answer )/.test(l))
+
+test('COPY FROM NEEDS YOU: a verb copies the task path or the close row\'s slug, from the snapshot, not the cut text', ONLY, async ($, on) => {
+  const snap = JSON.parse(JSON.stringify(SNAP))
+  snap.projects[0].slug = 'alpha-' + 'x'.repeat(60)
+  const w = world(snap)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  const got = copies(on)
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const path = 'projects/' + snap.projects[0].slug + '/tasks/task-002.md'
+  await ui.press({ key: 'copy-need-0' })
+  expect(got).toEqual([{ text: path, surface: 'terminal' }])
+  const [line] = await footer(ui)
+  expect(line).toBe(('copied ' + path).slice(0, 44) + '…')     // fit to 45 columns, the ref whole on the clipboard
+  await ui.press({ key: 'copy-need-2' })
+  expect(got[1]).toEqual({ text: 'beta', surface: 'terminal' })
+  expect(await footer(ui)).toEqual(['copied beta'])              // replaced, not stacked
+  expect(w.submitted).toEqual([])
+  await ui.unmount()
+})
+
+test('COPY FROM PROJECTS: a name copies its slug, with the same footer line', ONLY, async ($, on) => {
+  const w = world(SNAP)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  const got = copies(on)
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  await ui.press({ key: 'copy-project-3' })
+  expect(got).toEqual([{ text: 'zeta', surface: 'terminal' }])
+  expect(await footer(ui)).toEqual(['copied zeta'])
+  await ui.unmount()
+})
+
+test('SHAPE GUARD: an empty slug or id, or one with /, .. or whitespace, is never copied; keys stay unique', ONLY, async ($, on) => {
+  const bad = ['', 'a/b', '..', 'a..b', 'a b', ' alpha', 'alpha\n']
+  const snap = { ...SNAP, projects: [
+    ...bad.map(slug => ({ slug, status: 'active', awaiting_close: true, tasks: [] })),
+    { slug: 'alpha', status: 'active', awaiting_close: false, tasks: bad.map(id => ({ id, title: 'T', awaiting: 'answer' })) },
+    { slug: 'alpha', status: 'active', awaiting_close: false, tasks: [] },
+  ] }
+  const w = world(snap)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  const got = copies(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const keys = (await ui.findAll({ type: 'Button' })).map((b: any) => b.key)
+  expect(new Set(keys).size).toBe(keys.length)
+  const pressable = keys.filter((k: string) => k.startsWith('copy-'))
+  expect(pressable.length).toBe(9 + 14)
+  // The two good `alpha` rows rank first (it needs you) and last.
+  for (const key of pressable.filter((k: string) => k !== 'copy-project-0' && k !== 'copy-project-8')) {
+    await ui.press({ key })
+    expect(await footer(ui)).toEqual(['copy refused: bad ref'])
+  }
+  expect(got).toEqual([])
+  // The other direction: a good slug on the same board still copies.
+  await ui.press({ key: 'copy-project-8' })
+  expect(got).toEqual([{ text: 'alpha', surface: 'terminal' }])
+  await ui.unmount()
+})
+
+for (const [channel, answer, want] of [
+  ['resolves isCopied: false', () => ({ value: { isCopied: false, reason: 'no-clipboard' } }), /^copy failed: no-clipboard$/],
+  ['rejects (a hook denies it)', () => ({ deny: 'not here' }), /^copy failed: \S/],
+  ['throws', () => { throw new Error('boom') }, /^copy failed: \S/],
+] as const) {
+  test('FAILED COPY SHOWN: a copy that ' + channel + ' is drawn, never `copied`', ONLY, async ($, on) => {
+    const w = world(SNAP)
+    stubs(on, w)
+    mock.clock(on, { now: GENERATED })
+    copies(on, answer as any)
+    await open($)
+    const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+    await ui.press({ key: 'copy-project-0' })
+    const lines = await footer(ui)
+    expect(lines.length).toBe(1)
+    expect(lines[0]).toMatch(want)
+    expect(cols(lines[0])).toBeLessThanOrEqual(45)
+    await ui.unmount()
+  })
+}
+
+test('FOOTER: a copy replaces the Answer line and an Answer the copy line; a re-read clears it; an unconfirmed copy is `copy sent`', ONLY, async ($, on) => {
+  const w = world(SNAP)
+  const clock = mock.clock(on, { now: GENERATED })
+  stubs(on, w, true, () => clock.sleep(1000))
+  let confirm = true
+  copies(on, () => ({ value: confirm ? { isCopied: true } : {} }))
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  await ui.press({ key: 'answer' })
+  expect(await footer(ui)).toEqual(['answer queued'])
+  await ui.press({ key: 'copy-project-1' })
+  expect(await footer(ui)).toEqual(['copied beta'])
+  await clock.advance(1000)
+  w.onRun = () => { throw new Error('busy') }
+  await ui.press({ key: 'answer' })
+  expect(await footer(ui)).toEqual(['answer queued'])
+  await ui.press({ key: 'copy-project-1' })
+  expect(await footer(ui)).toEqual(['copied beta'])
+  await clock.advance(1000)
+  expect((await footer(ui)).map(l => l.replace(/:.*/, ':'))).toEqual(['answer refused:'])
+  await ui.press({ key: 'copy-project-1' })
+  expect(await footer(ui)).toEqual(['copied beta'])
+  await ui.press({ key: 'refresh' })
+  expect(await footer(ui)).toEqual([])
+  confirm = false
+  await ui.press({ key: 'copy-project-1' })
+  expect(await footer(ui)).toEqual(['copy sent beta'])
+  await ui.unmount()
 })
 
 // Two need rows, a closed project, a project waiting on its close, nobody working.
