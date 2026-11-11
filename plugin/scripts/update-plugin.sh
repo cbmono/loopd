@@ -93,7 +93,8 @@ if [ -z "$ip" ] || [ ! -f "$ip/scripts/init-bundle.sh" ]; then
   finish 2
 fi
 echo "init: $ip/scripts/init-bundle.sh $here"
-bash "$ip/scripts/init-bundle.sh" "$here"
+# init's check-and-fix pass reads CLAUDE_PLUGIN_ROOT (welcome.sh), still the old version here.
+CLAUDE_PLUGIN_ROOT="$ip" bash "$ip/scripts/init-bundle.sh" "$here"
 irc=$?
 [ "$irc" -eq 0 ] || rc="$irc"
 finish "$rc"

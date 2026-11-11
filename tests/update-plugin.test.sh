@@ -41,7 +41,7 @@ chmod +x "$BIN/claude"
 
 install_at() { # <plugin> <version> — a cache dir whose init-bundle.sh logs and exits $INIT_RC
   mkdir -p "$CACHE/$1/$2/scripts"
-  printf '#!/usr/bin/env bash\nprintf "init %%s %%s\\n" "$0" "$*" >> "%s"\nexit "${INIT_RC:-0}"\n' "$CALLS" \
+  printf '#!/usr/bin/env bash\nprintf "init %%s %%s\\n" "$0" "$*" >> "%s"\nprintf "root %%s\\n" "$CLAUDE_PLUGIN_ROOT" >> "%s"\nexit "${INIT_RC:-0}"\n' "$CALLS" "$CALLS" \
     > "$CACHE/$1/$2/scripts/init-bundle.sh"
 }
 install_at "$PN" 1.0.0; install_at "$PN" 1.0.1; install_at "$PN-yolo" 4.4.0
@@ -90,6 +90,7 @@ ok "the project-scope install is listed"        "$(has "$PN 1.0.0 (project scope
 ok "…and warned about, older than user scope"   "$(has "this bundle's project-scope $PN is 1.0.0, older than the user-scope 1.0.1" "$OUT")" yes
 ok "init runs from the NEW user-scope version"  "$(grep '^init ' <<<"$LOG")" "init $CACHE/$PN/1.0.1/scripts/init-bundle.sh $BUNDLE"
 ok "…never from CLAUDE_PLUGIN_ROOT"             "$(has "$CACHE/$PN/1.0.0/scripts" "$LOG")" no
+ok "…and hands init the NEW root as CLAUDE_PLUGIN_ROOT" "$(grep '^root ' <<<"$LOG")" "root $CACHE/$PN/1.0.1"
 ok "…with no flag"                              "$(grep -c -- '--spawn-grant\|--normalise-config\|--owner\|--email\|--repos-root' <<<"$LOG")" 0
 ok "the last two lines are reload, then restart" "$(last2)" "$RELOAD"
 
