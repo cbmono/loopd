@@ -6,7 +6,8 @@
 //              `loopd.usage.<session id>`, and `loopd.usage.<session id>.ended` at session end.
 //              Core's plugin/scripts/session-usage.sh reads that record before the transcript.
 //   · pane   — `/pane`, a pane beside the transcript drawing this bundle's board from
-//              `.loopd/SNAPSHOT.json` (operator mode: projects by folder slug, with Answer
+//              `.loopd/SNAPSHOT.json`, its numbers from the status line's `.loopd/counts.json`
+//              (operator mode: projects by folder slug, with Answer
 //              questions, Refresh and Close pane), or — `paneMode:
 //              simple` — an inbox of open questions, stuck tasks and progress read from the
 //              task documents, every button one slash command.
@@ -151,6 +152,9 @@ const PANE = 'loopd-board'
 const COMMAND = 'pane'
 const TITLE = 'loopd board'
 const SNAPSHOT = '.loopd/SNAPSHOT.json'
+// AB_COUNTS: the status line writes it on every redraw, so these numbers are the bar's.
+const COUNTS = '.loopd/counts.json'
+const WORDS = ['working', 'idle', 'dead']
 const POLL_MS = 5000
 const WIDTH = 45        // the operator layout's width where the surface names no bodyColumns
 const BAR = 10          // progress-bar cells, whatever the task count
@@ -191,20 +195,32 @@ type Project = {
   phase_total: number
   tasks: Task[]
 }
+type Need = { verb: string; slug: string; task: string }
 type Board = {
   group: string
   generated_at: string
   projects: number
   tasks: number
-  awaiting: number
   rows: Project[]
+  items: Need[] | null     // null: a snapshot written before awaiting_items, or with the queue off
 }
+type N = number | null     // null is drawn `?`
+type Counts = {
+  state: 'absent' | 'unreadable' | 'ok'
+  mtimeMs: number
+  in_progress: N; in_review: N; working: N; idle: N; dead: N; need_you: N
+  queue: string
+  tasks: Record<string, string> | null
+  written_at: string
+}
+const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, need_you: null, queue: '', tasks: null, written_at: '' }
 
 // Module state. A reload starts it over, and the next poll or /pane fills it again.
 let kind: Kind = 'unread'
 let board: Board | null = null
 let detail = ''          // the one line a non-ok kind shows
 let mtimeMs = -1         // the snapshot's mtime at the last read; -1 = never read
+let counts: Counts = NO_COUNTS
 let reads = 0            // how many times the file was actually read (the poll skips an unchanged one)
 let timer: { cancel: () => void } | null = null
 let answerQueued = false
@@ -269,11 +285,45 @@ function shape(json: unknown): Board | null {
       phase_done: toint(pp.done), phase_total: toint(pp.total), tasks,
     })
   }
+  const items = Array.isArray(top.awaiting_items) ? top.awaiting_items.map(i => {
+    const io = obj(i) || {}
+    return { verb: str(io.verb), slug: raw(io.slug), task: raw(io.task) }
+  }) : null
   return {
     group: str(top.group), generated_at: str(top.generated_at),
-    projects: toint(counts.projects), tasks: toint(counts.tasks), awaiting: toint(counts.awaiting),
-    rows,
+    projects: toint(counts.projects), tasks: toint(counts.tasks),
+    rows, items,
   }
+}
+
+function nint(v: unknown): N { return typeof v === 'number' && isFinite(v) && v >= 0 ? Math.floor(v) : null }
+function readCounts(text: unknown, m: number): Counts {
+  let j: unknown = null
+  if (typeof text === 'string') { try { j = JSON.parse(text) } catch { j = null } }
+  const o = obj(j)
+  if (!o) return { ...NO_COUNTS, state: 'unreadable', mtimeMs: m }
+  const se = obj(o.sessions) || {}, ts = obj(o.task_sessions)
+  let tasks: Record<string, string> | null = null
+  if (ts) { tasks = {}; for (const [k, v] of Object.entries(ts)) if (typeof v === 'string' && WORDS.includes(v)) tasks[k] = v }
+  return {
+    state: 'ok', mtimeMs: m, in_progress: nint(o.in_progress), in_review: nint(o.in_review),
+    working: nint(se.working), idle: nint(se.idle), dead: nint(se.dead), need_you: nint(o.need_you),
+    queue: str(o.queue), tasks, written_at: str(o.written_at),
+  }
+}
+// Stat every poll, read when the mtime moved, as for the snapshot. Reading never clears a
+// copy line: the status line rewrites this file every few seconds.
+async function refreshCounts($: any, root: string, force: boolean): Promise<void> {
+  const path = root + '/' + COUNTS
+  let st: any = null
+  try { st = await $.fs.stat(path) } catch { st = null }
+  if (!st || st.kind !== 'file') { if (counts.state !== 'absent') reads += 1; counts = NO_COUNTS; return }
+  const m = typeof st.mtimeMs === 'number' ? st.mtimeMs : -2
+  if (!force && counts.state !== 'absent' && m === counts.mtimeMs) return
+  let text: unknown = null
+  try { text = await $.fs.read(path) } catch { text = null }
+  reads += 1
+  counts = readCounts(text, m)
 }
 
 // ---------------------------------------------------------------- the read
@@ -288,6 +338,7 @@ async function refresh($: any, force: boolean): Promise<void> {
   let isBundle = false
   try { isBundle = (await $.fs.exists(root + '/' + CONFIG)) === true } catch { isBundle = false }
   if (!isBundle) { kind = 'not-bundle'; board = null; detail = 'not a loopd bundle — no ' + CONFIG + ' in ' + clean(root); mtimeMs = -1; return }
+  await refreshCounts($, root, force)
   const path = root + '/' + SNAPSHOT
   let st: any = null
   try { st = await $.fs.stat(path) } catch { st = null }
@@ -352,9 +403,25 @@ async function nowMs($: any): Promise<number> {
   try { const n = await $.clock.now(); return typeof n === 'number' ? n : NaN } catch { return NaN }
 }
 
+// counts.json's numbers as drawn: `?` for one the file does not give.
+const nstr = (v: N) => v === null ? '?' : String(v)
+// The bar prints no need-you segment with the queue off, a choice the human made; so neither does the pane.
+const queueOff = () => counts.state === 'ok' && counts.queue === 'off'
+// A line only while some number is `?`: why, and how old the file is when there is one.
+function countsNote(now: number): string {
+  if (counts.state === 'absent') return 'no ' + COUNTS + ' yet'
+  const at = counts.state === 'ok' ? age(now, counts.written_at) : isFinite(counts.mtimeMs) && counts.mtimeMs >= 0 ? age(now, new Date(counts.mtimeMs).toISOString()) : 'age unknown'
+  if (counts.state === 'unreadable') return COUNTS + ' unreadable · ' + at
+  const c = counts
+  const unknown = [c.in_progress, c.in_review, c.working, c.idle, c.dead].includes(null) || (!queueOff() && c.need_you === null)
+  return unknown ? COUNTS + ' · ' + at : ''
+}
+// What the poll compares: a change in either age redraws.
+function ageKey(now: number): string { return (board ? age(now, board.generated_at) : '') + '|' + countsNote(now) }
+
 function summary(): string {
   if (kind !== 'ok' || !board) return detail
-  return 'loopd board: ' + board.projects + ' project(s) · ' + board.tasks + ' task(s) · ' + board.awaiting + ' awaiting you'
+  return 'loopd board: ' + board.projects + ' project(s) · ' + board.tasks + ' task(s)' + (queueOff() ? '' : ' · ' + nstr(counts.need_you) + ' awaiting you')
 }
 
 // ---------------------------------------------------------------- the copy
@@ -398,33 +465,54 @@ function draw($: any, e: any, now: number): any {
     const fit = (s: string, room: number) => cut(s, Math.max(1, room))
     const gap = (used: number) => ' '.repeat(Math.max(1, W - used))
     const needs = (t: Task) => (VERBS as readonly string[]).includes(t.awaiting)
+    const taskPath = (p: Project, t: { ref: string }) => okRef(p.ref) && okRef(t.ref) ? PROJECTS_DIR + '/' + p.ref + '/' + TASKS_DIR + '/' + t.ref + TASK_SUFFIX : ''
 
-    // print-board.sh's need-you rule: a task's AWAITING verb, plus one close per awaiting_close project.
-    const need: { verb: string; text: string; ref: string }[] = []
-    const working: Task[] = []
-    for (const p of b.rows) {
-      const slugOk = okRef(p.ref)
-      if (p.awaiting_close) need.push({ verb: 'close', text: p.slug, ref: slugOk ? p.ref : '' })
-      for (const t of p.tasks) {
-        const ref = slugOk && okRef(t.ref) ? PROJECTS_DIR + '/' + p.ref + '/' + TASKS_DIR + '/' + t.ref + TASK_SUFFIX : ''
-        if (needs(t)) need.push({ verb: t.awaiting, text: p.slug + ' · ' + (t.title || t.id), ref })
-        if (t.in_flight) working.push(t)
+    // NEEDS YOU: AWAITING.md's items from the snapshot, title looked up by task id; a snapshot
+    // without them gets print-board.sh's rule — a task's AWAITING verb, plus one close per awaiting_close project.
+    const need: { verb: string; slug: string; text: string; ref: string }[] = []
+    if (b.items) {
+      for (const it of b.items) {
+        const p = b.rows.find(r => r.ref === it.slug)
+        const t = p && it.task ? p.tasks.find(x => x.ref === it.task) : undefined
+        const slug = clean(it.slug)
+        need.push({
+          verb: it.verb || '?', slug: it.slug,
+          text: it.task ? slug + ' · ' + (t ? t.title || t.id : clean(it.task)) : slug,
+          ref: p && t ? taskPath(p, t) : !it.task && okRef(it.slug) ? it.slug : '',
+        })
+      }
+    } else {
+      for (const p of b.rows) {
+        if (p.awaiting_close) need.push({ verb: 'close', slug: p.ref, text: p.slug, ref: okRef(p.ref) ? p.ref : '' })
+        for (const t of p.tasks) if (needs(t)) need.push({ verb: t.awaiting, slug: p.ref, text: p.slug + ' · ' + (t.title || t.id), ref: taskPath(p, t) })
       }
     }
-    const needYou = (n: number) => n + (n === 1 ? ' needs you' : ' need you')
-    const heading = (s: string, n: number, look: Record<string, unknown>) =>
-      row(seg(s, { ...look, bold: true }), seg(n ? ' (' + n + ')' : '', look))
+    const progress: [Project, Task][] = []
+    const review: [Project, Task][] = []
+    for (const p of b.rows) for (const t of p.tasks) {
+      if (t.status === 'in-progress') progress.push([p, t])
+      else if (t.status === 'in-review') review.push([p, t])
+    }
+    const needYou = (n: number | string) => n + (n === 1 ? ' needs you' : ' need you')
+    // A known zero hides the count; `?` is drawn, never taken for a zero.
+    const heading = (s: string, v: N, look: Record<string, unknown>) =>
+      row(seg(s, { ...look, bold: true }), seg(v === 0 ? '' : ' (' + nstr(v) + ')', look))
+    const showNeed = !queueOff() && counts.need_you !== 0
 
-    shownAge = age(now, b.generated_at)
-    const count = need.length ? ' · ' + needYou(need.length) : ''
-    const name = fit(b.group || TITLE, W - cols(shownAge) - cols(count) - 1)
-    rows.push(row(seg(name, { ...HEAD, bold: true }), seg(count, NEEDS_YOU), seg(gap(cols(name) + cols(count) + cols(shownAge))), seg(shownAge, MUTED)))
+    shownAge = ageKey(now)
+    const snapAge = age(now, b.generated_at)
+    const count = showNeed ? ' · ' + needYou(counts.need_you === null ? '?' : counts.need_you) : ''
+    const name = fit(b.group || TITLE, W - cols(snapAge) - cols(count) - 1)
+    rows.push(row(seg(name, { ...HEAD, bold: true }), seg(count, NEEDS_YOU), seg(gap(cols(name) + cols(count) + cols(snapAge))), seg(snapAge, MUTED)))
     rows.push(line('─'.repeat(W), RULE))
+    const note = countsNote(now)
+    if (note) rows.push(line(fit(note, W), MUTED))
 
     rows.push(heading('PROJECTS', b.rows.length, HEAD))
     const ranked = b.rows.map((p, i) => {
       let n = 0
-      for (const t of p.tasks) if (needs(t)) n += 1
+      if (b.items) { for (const it of b.items) if (it.slug === p.ref && it.verb !== 'close') n += 1 }
+      else for (const t of p.tasks) if (needs(t)) n += 1
       return { p, n, i, rank: n ? 0 : p.status === 'active' ? 1 : p.status === 'paused' ? 2 : p.status === 'done' ? 3 : 4 }
     }).sort((x, y) => x.rank - y.rank || x.i - y.i)
     ranked.forEach(({ p, n }, k) => {
@@ -456,27 +544,46 @@ function draw($: any, e: any, now: number): any {
 
     rows.push(line(' '))
     rows.push(line(' '))
-    rows.push(heading('WORKING', working.length, WORK))
+    const LOOK: Record<string, Record<string, unknown>> = { working: WORK, idle: MUTED, dead: NEEDS_YOU }
+    const c = counts
+    rows.push(heading('IN PROGRESS', c.in_progress, WORK))
+    rows.push(row(seg('  '), seg(nstr(c.working) + ' working', WORK), seg(' · ', MUTED), seg(nstr(c.idle) + ' idle', MUTED), seg(' · ', MUTED), seg(nstr(c.dead) + ' dead', NEEDS_YOU)))
     rows.push(line(' '))
-    if (working.length === 0) rows.push(line('  nothing right now', MUTED))
-    for (const t of working) {
+    if (progress.length === 0) rows.push(line('  nothing right now', MUTED))
+    for (const [p, t] of progress) {
       const head = '  ' + (t.assignee || 'unassigned') + '  '
-      const mark = t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : ''
-      rows.push(row(seg(head, WORK), seg(fit(t.title || t.id, W - cols(head) - cols(mark)), TEXT), seg(mark, MUTED)))
+      const word = c.tasks === null ? '?' : c.tasks[taskPath(p, t)] || '—'
+      const title = fit(t.title || t.id, W - cols(head) - cols(word) - 2)
+      rows.push(row(seg(head, WORK), seg(title, TEXT), seg(gap(cols(head) + cols(title) + cols(word))), seg(word, LOOK[word] || MUTED)))
     }
 
-    if (need.length) {
+    if (c.in_review !== 0) {
       rows.push(line(' '))
       rows.push(line(' '))
-      rows.push(heading('NEEDS YOU', need.length, NEEDS_YOU))
+      rows.push(heading('IN REVIEW', c.in_review, WORK))
       rows.push(line(' '))
+      if (review.length === 0) rows.push(line('  none in the snapshot', MUTED))
+      for (const [, t] of review) {
+        const head = '  ' + (t.assignee || 'unassigned') + '  '
+        const mark = t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : ''
+        rows.push(row(seg(head, WORK), seg(fit(t.title || t.id, W - cols(head) - cols(mark)), TEXT), seg(mark, MUTED)))
+      }
+    }
+
+    if (showNeed) {
+      rows.push(line(' '))
+      rows.push(line(' '))
+      rows.push(heading('NEEDS YOU', counts.need_you, NEEDS_YOU))
+      rows.push(line(' '))
+      if (need.length === 0) rows.push(line('  none in the snapshot', MUTED))
       const digits = String(need.length).length
-      need.forEach((n, k) => {
+      const vw = Math.max(7, ...need.map(x => cols(x.verb)))
+      need.forEach((x, k) => {
         const num = String(k + 1).padStart(digits) + '. '
-        const head = num + n.verb.padEnd(7) + '  '
-        const wrapped = wrap(n.text, Math.max(1, W - cols(head)), 3)
-        rows.push(pressRow(seg(num, NEEDS_YOU), copyButton('copy-need-' + k, n.verb, NEEDS_YOU, n.ref),
-          seg(' '.repeat(cols(head) - cols(num) - cols(n.verb)), NEEDS_YOU), seg(wrapped[0], TEXT)))
+        const head = num + x.verb.padEnd(vw) + '  '
+        const wrapped = wrap(x.text, Math.max(1, W - cols(head)), 3)
+        rows.push(pressRow(seg(num, NEEDS_YOU), copyButton('copy-need-' + k, x.verb, NEEDS_YOU, x.ref),
+          seg(' '.repeat(cols(head) - cols(num) - cols(x.verb)), NEEDS_YOU), seg(wrapped[0], TEXT)))
         for (const l of wrapped.slice(1)) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
       })
     }
@@ -1076,7 +1183,7 @@ function registerPane(on: any) {
       try {
         timer = $.clock.every(POLL_MS, async () => {
           const moved = await reread($, false)
-          if (moved || (MODE === 'operator' && board && age(await nowMs($), board.generated_at) !== shownAge)) {
+          if (moved || (MODE === 'operator' && board && ageKey(await nowMs($)) !== shownAge)) {
             try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
           }
         })
