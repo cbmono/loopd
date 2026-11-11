@@ -1466,3 +1466,123 @@ test('a project someone else adds while a create is pending is not taken for it'
   expect(text).toContain('Created "Garden "log"". Its first questions will appear here.')
   await ui.unmount()
 })
+
+// ---------------------------------------------------------------- counts.json and AWAITING items
+// One fixture pair, as status-line.sh and write-snapshot.sh write them: every AWAITING.md
+// verb, a project row (review, close, continue) with no task, and sessions in all three states.
+const ITEMS_SNAP = {
+  ...SNAP,
+  awaiting_items: [
+    { verb: 'grant', slug: 'alpha', task: 'task-002' }, { verb: 'do', slug: 'alpha', task: 'task-001', text: 'SENTINEL never drawn' },
+    { verb: 'answer', slug: 'alpha', task: 'task-002' }, { verb: 'review', slug: 'beta', task: '' },
+    { verb: 'merge', slug: 'alpha', task: 'task-003' }, { verb: 'close', slug: 'beta', task: '' }, { verb: 'continue', slug: 'gamma', task: '' },
+  ],
+}
+const FIXTURE_COUNTS = {
+  in_progress: 2, in_review: 1, sessions: { working: 2, idle: 1, dead: 1 }, need_you: 7, queue: 'on',
+  task_sessions: { 'projects/alpha/tasks/task-001.md': 'working', 'projects/gamma/tasks/task-004.md': 'dead' },
+  written_at: SNAP.generated_at,
+}
+const countOf = (rows: string[], h: string) => { const r = rows.find(x => x.startsWith(h)); const m = r && r.match(/\((\d+|\?)\)$/); return m ? m[1] : r === h ? '0' : 'absent' }
+
+test('SAME NUMBERS: every section count is the value counts.json gives, and NEEDS YOU is AWAITING.md, item for item', ONLY, async ($, on) => {
+  const w = world(ITEMS_SNAP, true, FIXTURE_COUNTS)
+  stubs(on, w)
+  copies(on, () => ({ value: { isCopied: true } }))
+  mock.clock(on, { now: GENERATED + 3 * 60000 })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = await rowsOf(ui)
+  const c = FIXTURE_COUNTS
+  expect(countOf(rows, 'IN PROGRESS')).toBe(String(c.in_progress))
+  expect(countOf(rows, 'IN REVIEW')).toBe(String(c.in_review))
+  expect(countOf(rows, 'NEEDS YOU')).toBe(String(c.need_you))
+  expect(rows[0]).toMatch(new RegExp('^example · ' + c.need_you + ' need you '))
+  expect(rows).toContain('  ' + c.sessions.working + ' working · ' + c.sessions.idle + ' idle · ' + c.sessions.dead + ' dead')
+  expect(rows.slice(rows.indexOf('IN PROGRESS (2)'))).toEqual([
+    'IN PROGRESS (2)', '  2 working · 1 idle · 1 dead', ' ',
+    '  software-engineer  Ship the widget  working',
+    '  unassigned  G3' + ' '.repeat(25) + 'dead',
+    ' ', ' ', 'IN REVIEW (1)', ' ', '  software-engineer  Merge me',
+    ' ', ' ', 'NEEDS YOU (7)', ' ',
+    '1. grant     alpha · Decide the colour',
+    '2. do        alpha · Ship the widget',
+    '3. answer    alpha · Decide the colour',
+    '4. review    beta',
+    '5. merge     alpha · Merge me',
+    '6. close     beta',
+    '7. continue  gamma',
+    ' ', ' ',
+  ])
+  // A project's count is its AWAITING items; a close is its `done`, not a count.
+  expect(rows).toContain('● alpha' + ' '.repeat(28) + '4 need you')
+  expect(rows).toContain('✓ beta' + ' '.repeat(21) + '1 needs you · done')
+  expect(rows).toContain('● gamma' + ' '.repeat(27) + '1 needs you')
+  expect(rows).not.toContain('no .loopd/counts.json yet')
+  expect(await shown(ui)).not.toContain('SENTINEL')
+  // A task row copies its task path, a project row its slug.
+  await ui.press({ key: 'copy-need-1' })
+  expect(await footer(ui)).toEqual(['copied projects/alpha/tasks/task-001.md'])
+  await ui.press({ key: 'copy-need-3' })
+  expect(await footer(ui)).toEqual(['copied beta'])
+  await ui.unmount()
+})
+
+test('FALLBACK: no counts.json draws every number as ?, never 0, and an older snapshot\'s NEEDS YOU as today', ONLY, async ($, on) => {
+  const w = world(SNAP, true, null)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED + 3 * 60000 })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = await rowsOf(ui)
+  expect(rows.slice(0, 3)).toEqual(['example · ? need you' + ' '.repeat(16) + '3 min ago', '─'.repeat(45), 'no .loopd/counts.json yet'])
+  for (const h of ['IN PROGRESS', 'IN REVIEW', 'NEEDS YOU']) expect(countOf(rows, h)).toBe('?')
+  expect(rows).toContain('  ? working · ? idle · ? dead')
+  expect(rows).toContain('  software-engineer  Ship the widget' + ' '.repeat(8) + '?')
+  expect(rows.slice(rows.indexOf('NEEDS YOU (?)'))).toEqual(['NEEDS YOU (?)', ' ',
+    '1. answer   alpha · Decide the colour', '2. merge    alpha · Merge me', '3. close    beta', ' ', ' '])
+  await ui.unmount()
+})
+
+test('FALLBACK: an unparseable counts.json is ? with the file\'s age; a null count is ? with written_at\'s age', ONLY, async ($, on) => {
+  const w = world(SNAP, true, '{ not json')
+  w.files.set(COUNTS, { text: '{ not json', mtimeMs: GENERATED - 60 * 60000 })
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED + 3 * 60000 })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  let rows = await rowsOf(ui)
+  expect(rows[2]).toBe('.loopd/counts.json unreadable · 1 h ago')
+  expect(countOf(rows, 'IN PROGRESS')).toBe('?')
+
+  w.files.set(COUNTS, { text: JSON.stringify({ ...FIXTURE_COUNTS, in_review: null, sessions: { working: 2, idle: null, dead: 1 } }), mtimeMs: GENERATED })
+  await ui.press({ key: 'refresh' })
+  rows = await rowsOf(ui)
+  expect(rows[2]).toBe('.loopd/counts.json · 3 min ago')
+  expect([countOf(rows, 'IN PROGRESS'), countOf(rows, 'IN REVIEW'), countOf(rows, 'NEEDS YOU')]).toEqual(['2', '?', '7'])
+  expect(rows).toContain('  2 working · ? idle · 1 dead')
+  await ui.unmount()
+})
+
+test('QUEUE OFF: the bar prints no need-you segment, so the pane draws no header count and no NEEDS YOU', ONLY, async ($, on) => {
+  const w = world(SNAP, true, { ...FIXTURE_COUNTS, need_you: null, queue: 'off' })
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED + 3 * 60000 })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = await rowsOf(ui)
+  expect(rows[0]).toBe('example' + ' '.repeat(29) + '3 min ago')
+  expect(rows[2]).toBe('PROJECTS (6)')
+  expect(countOf(rows, 'NEEDS YOU')).toBe('absent')
+  await ui.unmount()
+})
+
+test('a zero in_review hides IN REVIEW, though the snapshot still lists a task in review', ONLY, async ($, on) => {
+  const w = world(SNAP, true, { ...FIXTURE_COUNTS, in_review: 0 })
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  expect(countOf(await rowsOf(ui), 'IN REVIEW')).toBe('absent')
+  await ui.unmount()
+})

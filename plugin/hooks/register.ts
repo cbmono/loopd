@@ -179,7 +179,6 @@ type Task = {
   title: string
   status: string
   assignee: string
-  in_flight: boolean
   pr_mergeable: string
   awaiting: string
   open_questions: number
@@ -275,7 +274,7 @@ function shape(json: unknown): Board | null {
       if (!to) continue
       tasks.push({
         id: str(to.id), ref: raw(to.id), title: str(to.title), status: str(to.status), assignee: str(to.assignee),
-        in_flight: to.in_flight === true, pr_mergeable: str(to.pr_mergeable), awaiting: str(to.awaiting),
+        pr_mergeable: str(to.pr_mergeable), awaiting: str(to.awaiting),
         open_questions: toint(to.open_questions), prs: arr(to.prs).length,
       })
     }
@@ -410,7 +409,8 @@ const queueOff = () => counts.state === 'ok' && counts.queue === 'off'
 // A line only while some number is `?`: why, and how old the file is when there is one.
 function countsNote(now: number): string {
   if (counts.state === 'absent') return 'no ' + COUNTS + ' yet'
-  const at = counts.state === 'ok' ? age(now, counts.written_at) : isFinite(counts.mtimeMs) && counts.mtimeMs >= 0 ? age(now, new Date(counts.mtimeMs).toISOString()) : 'age unknown'
+  const d = new Date(counts.mtimeMs)
+  const at = counts.state === 'ok' ? age(now, counts.written_at) : counts.mtimeMs >= 0 && isFinite(d.getTime()) ? age(now, d.toISOString()) : 'age unknown'
   if (counts.state === 'unreadable') return COUNTS + ' unreadable · ' + at
   const c = counts
   const unknown = [c.in_progress, c.in_review, c.working, c.idle, c.dead].includes(null) || (!queueOff() && c.need_you === null)
@@ -469,22 +469,22 @@ function draw($: any, e: any, now: number): any {
 
     // NEEDS YOU: AWAITING.md's items from the snapshot, title looked up by task id; a snapshot
     // without them gets print-board.sh's rule — a task's AWAITING verb, plus one close per awaiting_close project.
-    const need: { verb: string; slug: string; text: string; ref: string }[] = []
+    const need: { verb: string; text: string; ref: string }[] = []
     if (b.items) {
       for (const it of b.items) {
         const p = b.rows.find(r => r.ref === it.slug)
         const t = p && it.task ? p.tasks.find(x => x.ref === it.task) : undefined
         const slug = clean(it.slug)
         need.push({
-          verb: it.verb || '?', slug: it.slug,
+          verb: cut(it.verb, 10) || '?',
           text: it.task ? slug + ' · ' + (t ? t.title || t.id : clean(it.task)) : slug,
           ref: p && t ? taskPath(p, t) : !it.task && okRef(it.slug) ? it.slug : '',
         })
       }
     } else {
       for (const p of b.rows) {
-        if (p.awaiting_close) need.push({ verb: 'close', slug: p.ref, text: p.slug, ref: okRef(p.ref) ? p.ref : '' })
-        for (const t of p.tasks) if (needs(t)) need.push({ verb: t.awaiting, slug: p.ref, text: p.slug + ' · ' + (t.title || t.id), ref: taskPath(p, t) })
+        if (p.awaiting_close) need.push({ verb: 'close', text: p.slug, ref: okRef(p.ref) ? p.ref : '' })
+        for (const t of p.tasks) if (needs(t)) need.push({ verb: t.awaiting, text: p.slug + ' · ' + (t.title || t.id), ref: taskPath(p, t) })
       }
     }
     const progress: [Project, Task][] = []

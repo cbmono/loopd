@@ -45,7 +45,7 @@ does. `paneMode` decides what it draws:
 
 | `paneMode` | Draws | Reads |
 |---|---|---|
-| `operator` (default) | the board below, with Answer questions, Refresh and Close pane | the snapshot |
+| `operator` (default) | the board below, with Answer questions, Refresh and Close pane | the snapshot, and its numbers from `counts.json` |
 | `simple` | an inbox — questions, stuck tasks, progress — and a form to start a project; nothing else | the task documents and the form |
 
 ### operator mode
@@ -53,20 +53,24 @@ does. `paneMode` decides what it draws:
 The **fourth renderer** over the one board contract, `plugin/scripts/write-snapshot.sh` →
 `.loopd/SNAPSHOT.json` (`docs/conventions.md` §11 in `cbmono/loopd`). It reads the snapshot,
 never the bundle, so the snapshot writer's field allowlist holds here without being
-re-implemented: nothing this pane shows is anything the file does not already carry.
+re-implemented: nothing this pane shows is anything the file does not already carry. Its
+numbers — in progress, in review, sessions by state, need you — come from
+`.loopd/counts.json`, which `status-line.sh` writes on every redraw through `counts.sh`, the
+one definition; the pane computes none of them, so it agrees with the bar.
 
-| Section | From the snapshot's fields |
+| Section | From |
 |---|---|
-| header | `group`, then `· N need you` (`1 needs you`, here and in PROJECTS) when NEEDS YOU has rows (so the count shows when that section is below the fold), and the snapshot's age off `generated_at`: `just now`, `N min ago`, `N h ago` under 48 h, then `N d ago`; `age unknown` when it is unparseable or in the future |
-| PROJECTS (N) | one line per project, by folder `slug` (never `title`), a blank line between projects; pressing a name copies its slug: `●` active, `○` paused; `✓ … done` in green for a project with `awaiting_close` (its close is a NEEDS YOU row, not counted here); `✓ … closed` in grey for `status: done` (only a retained folder is in the snapshot). `N need you` counts its tasks' AWAITING verbs, only when N > 0. Needs-you first, then active, paused, done, snapshot order within each. Under each active project a 10-cell bar and `done/total` off its tasks' `status` (`cancelled` not counted; none, no bar), and `phase_progress` only when it has phases |
-| WORKING (N) | each task with `in_flight`: `assignee` (a **role**, never a person) and `title`, plus `PR <pr_mergeable>` when `prs` is non-empty and it is not `MERGEABLE`; else `nothing right now` and no count |
-| NEEDS YOU (N) | last, next to the buttons: rows numbered `1.`–`N.`, one per task whose `awaiting` is an AWAITING verb — `approve · answer · merge · unblock` — as `<slug> · <title>`, and one `close <slug>` per project with `awaiting_close` (print-board.sh's rule), in snapshot order. Pressing a row's verb copies `projects/<slug>/tasks/<id>.md`, or `<slug>` on a `close` row. Hidden when empty |
+| header | `group`, then `· N need you` (`1 needs you`, here and in PROJECTS), N counts.json's `need_you` (hidden at 0 and with the queue off, as on the bar), and under the rule one grey line while a number is `?`: `no .loopd/counts.json yet`, `.loopd/counts.json unreadable · <its mtime's age>`, or `.loopd/counts.json · <written_at's age>`. Then and the snapshot's age off `generated_at`: `just now`, `N min ago`, `N h ago` under 48 h, then `N d ago`; `age unknown` when it is unparseable or in the future |
+| PROJECTS (N) | one line per project, by folder `slug` (never `title`), a blank line between projects; pressing a name copies its slug: `●` active, `○` paused; `✓ … done` in green for a project with `awaiting_close` (its close is a NEEDS YOU row, not counted here); `✓ … closed` in grey for `status: done` (only a retained folder is in the snapshot). `N need you` counts its `awaiting_items` other than `close` (an older snapshot: its tasks' AWAITING verbs), only when N > 0. Needs-you first, then active, paused, done, snapshot order within each. Under each active project a 10-cell bar and `done/total` off its tasks' `status` (`cancelled` not counted; none, no bar), and `phase_progress` only when it has phases |
+| IN PROGRESS (N) | N is counts.json's `in_progress`; under it `W working · I idle · D dead` from its `sessions`. One row per `status: in-progress` task: `assignee` (a **role**, never a person), `title`, and its session word from `task_sessions` — `working`, `idle`, `dead`, or `—` when none is recorded; else `nothing right now` |
+| IN REVIEW (N) | N is counts.json's `in_review`; one row per `status: in-review` task, `assignee` and `title`, plus `PR <pr_mergeable>` when `prs` is non-empty and it is not `MERGEABLE`. Hidden at 0 |
+| NEEDS YOU (N) | last, next to the buttons. N is counts.json's `need_you`; rows numbered `1.`–`N.`, one per `awaiting_items` entry in AWAITING.md's order — every verb, `👉 do` and `👀 review` included — as `<slug> · <title>` (the title looked up by task id), or `<slug>` on a project row. An older snapshot without `awaiting_items`: one row per task whose `awaiting` is a verb, and one `close <slug>` per project with `awaiting_close` (print-board.sh's rule). Pressing a row's verb copies `projects/<slug>/tasks/<id>.md`, or `<slug>` on a project row. Hidden at 0 and with the queue off |
 | footer | one line, the latest of: `answer queued` while an Answer run waits for the session to go idle; `copied <ref>`, `copy sent <ref>` (the copy's result did not say), `copy failed: <reason>` or `copy refused: bad ref`. A copy line is cut to the width and cleared by the next re-read |
 
 Width is the pane's `bodyColumns` (45 when the surface gives none). A NEEDS YOU row wraps,
 continuation lines under its text, at most 3 lines, the third cut with `…`; every other row
 is one line, its name cut by code point with `…`. A count and the `paused`/`done`/`closed`
-word are never cut, and a zero count is not drawn. Colours are a pastel trial palette
+word are never cut, and a zero count is not drawn; a count counts.json does not give — the file absent, unparseable, or the value `null` — is drawn `?`, never `0`. Colours are a pastel trial palette
 (2026-11-11, before the rest of loopd adopts it): rose `#DA627D` needs you, peach `#FCA17D`
 the bundle name and PROJECTS, sky `#86BBD8` work, teal `#06969A` a bar's done part, deep
 blue `#33658A` the rule, green `#76d6a4` done, grey quiet. The kit's `Button` drops a
@@ -75,7 +79,7 @@ blue `#33658A` the rule, green `#76d6a4` done, grey quiet. The kit's `Button` dr
 a monochrome symbol, the row indented 2 columns.
 
 Not drawn, because the snapshot does not carry it: a round number, a session id, a usage
-line, a `continue` verb, any question or blocker **text**, any document body, any author
+line, any question or blocker **text**, any document body, any author
 identity (`owner` is in the file for the HTML board's partitioning and is deliberately not
 drawn here), any URL. The two things that would make those appear are a field added to the
 writer — read its header first — or a second reader of the bundle, which this must never be.
@@ -86,14 +90,14 @@ already read and a newline cannot forge a row), whitespace controls become one s
 every number passes one `toint()`, so a `"tasks": "many"` draws as `0` and never throws.
 **A number is never truncated**: a clipped count is a wrong count.
 
-The pane redraws from the file every **5 seconds**, by `stat` first and `read` only when
-the mtime moved, and also when the age the header shows would change; the poll starts when
-the pane opens and stops when it closes.
+The pane redraws from its two files every **5 seconds**, by `stat` first and `read` only
+when a file's mtime moved, and also when an age it shows would change; Refresh re-reads both
+and runs nothing; the poll starts when the pane opens and stops when it closes.
 
 | Button | Does |
 |---|---|
 | **Answer questions** (`a`) | `$.command.run({ command: 'loopd:answer' })` — runs `/loopd:answer` once in **this** session, as if you had typed it. The engine queues a plugin's command run until the session is idle, so this is idle-only by contract. (Not `$.prompt.submit`: the host refuses a prompt text that begins with `/`, measured on 2.1.293.) A refused run is drawn in the footer as `answer refused: <reason>`, never swallowed. **It is the human pressing a key at their own prompt, not automation**: nothing here runs on a timer, and no message goes to another session. One press, one queued run; a second press while one is queued is ignored and the footer says `answer queued`. |
-| **Refresh** (`r`) | re-read the snapshot now, mtime or not. |
+| **Refresh** (`r`) | re-read the snapshot and `counts.json` now, mtime or not; it runs nothing. |
 | **Close pane** (`c`) | `$.ui.close({ id: 'loopd-board' })`, the path `/pane close` takes; the poll stops. |
 | a PROJECTS name, a NEEDS YOU verb (no hotkey) | `$.ui.copy({ text, surface })` — the pane's **one outward action**: the slug or task path, built from the snapshot's `slug` and `id`, onto the clipboard of the surface the press came from, so you can paste it into the session with your reply. A slug or id that is not a folder-name shape (empty, `/`, `..`, whitespace) is never copied. |
 
@@ -204,8 +208,8 @@ Only under the session's working directory as `$.session.cwd()` gives it, or alo
 own worktree layout from there — never a parent directory walked, never a path a config
 file names. Every path literal the module spells is in this table; `tests/mods.test.sh` in
 `cbmono/loopd` asserts it, and that a module which lists a directory spells its walk as a
-quoted glob. The `.loopd/SNAPSHOT.json`, `.loopd/.answer-later` and
-`.loopd/.new-project/form.json` spellings are `AB_SNAPSHOT`, `AB_ANSWER_LATER` and
+quoted glob. The `.loopd/SNAPSHOT.json`, `.loopd/counts.json`, `.loopd/.answer-later` and
+`.loopd/.new-project/form.json` spellings are `AB_SNAPSHOT`, `AB_COUNTS`, `AB_ANSWER_LATER` and
 `AB_NEW_PROJECT_FORM` in `plugin/scripts/bundle-paths.sh`; `.git`, `commondir` and `loopd-bundle`
 are git's and `link-repos.sh`'s.
 
@@ -213,6 +217,7 @@ are git's and `link-repos.sh`'s.
 |---|---|---|---|
 | `<cwd>/instance.config.json` | pane, signal | `exists` | the cwd is a loopd bundle. Pane: absent ⇒ *not a loopd bundle* and nothing else. Signal: present ⇒ this is the PM side; a `turn.complete` here signals nothing |
 | `.loopd/SNAPSHOT.json` | pane (`operator`) | `stat` every poll, `read` when the mtime moved | the board. Absent ⇒ *board OFF* with the `touch` that turns it on (absence is the off switch — conventions 3 and 11) and nothing else. Unparseable ⇒ one line, and the next `write-snapshot.sh` run overwrites it |
+| `.loopd/counts.json` | pane (`operator`) | `stat` every poll, `read` when the mtime moved | the four numbers, session totals and per-task session words `status-line.sh` writes on every redraw. Absent or unparseable ⇒ those numbers draw `?` |
 | `projects/*/project.md` | pane (`simple`) | `list`, `read` | `title`, `status`, `autonomy` and `timestamp` |
 | `projects/*/tasks/*.md` | pane (`simple`) | `list`, `read` | `title`, `status`, `timestamp`, `stall_count`, `open_questions` and the `### Q<n>` blocks. Listed every poll, read when an mtime moved. A list it cannot parse is drawn as *could not read*, never guessed |
 | `.loopd/.new-project/form.json` | pane (`simple`) | `stat` every poll, `read` when the mtime moved | the new project form in progress, written by `new-project-form.sh`; absent ⇒ no form open. Its directory carries a `*` `.gitignore`, so it is never tracked |

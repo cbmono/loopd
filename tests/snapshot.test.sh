@@ -1951,6 +1951,50 @@ import re, sys
 prog = open(sys.argv[1], encoding="utf-8").read().split("closed_records()", 1)[1].split("\n}", 1)[0]
 sys.exit(0 if "q + length(SEP)" in prog and not re.search(r"q \+ [0-9]", prog) else 1)' "$TPL/plugin/scripts/write-snapshot.sh")"
 
+echo "== AWAITING.md -> \`awaiting_items\`: verb, slug and task id, never the row's text =="
+AWI="$TMP/group/_loopd-awaiting"
+mkdir -p "$AWI/projects/alpha/tasks" "$AWI/projects/beta" "$AWI/$AB_DIR"
+echo '{ "org": "fixture-org" }' > "$AWI/instance.config.json"; : > "$AWI/$AB_SNAPSHOT"
+printf -- '---\ntype: Project\ntitle: Alpha\nstatus: active\n---\n' > "$AWI/projects/alpha/project.md"
+printf -- '---\ntype: Project\ntitle: Beta\nstatus: active\n---\n'  > "$AWI/projects/beta/project.md"
+printf -- '---\ntype: Task\ntitle: Ship it\nstatus: in-progress\n---\n' > "$AWI/projects/alpha/tasks/task-001.md"
+AWJ="$AWI/$AB_SNAPSHOT"
+items() { python3 -c '
+import json,sys; d=json.load(open(sys.argv[1]))
+print("absent" if "awaiting_items" not in d else ";".join("%s,%s,%s" % (i["verb"], i["slug"], i["task"]) for i in d["awaiting_items"]))' "$AWJ"; }
+( cd "$AWI" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
+assert "no AWAITING.md ⇒ no \`awaiting_items\` key (the pane falls back to the verbs)" "$([ "$(items)" = absent ] && echo 0 || echo 1)"
+# A sentinel in every free-text position build-awaiting.sh's row() has: the link text, the
+# sentence, a link inside the sentence, a continuation line — and an item past the section.
+cat > "$AWI/$AB_AWAITING" <<'AW'
+# Awaiting you
+
+Last refreshed: SENTINEL-HEADER.
+
+## 🔴 Awaiting you (6)
+* 👉 **do** — [SENTINEL-TITLE](/projects/alpha/tasks/task-001.md) · SENTINEL-TEXT [x](/projects/beta/project.md)
+* 👀 **review** — [Beta](/projects/beta/project.md) · D1: SENTINEL-DECISION
+* ❓ **answer** — [gone](/projects/alpha/tasks/task-999.md) · Q1: SENTINEL-QUESTION
+* 🏁 **close** — [x](/projects/../project.md) · SENTINEL-CLOSE
+  > warning: SENTINEL-WARNING
+* ⏳ **continue** — [Beta](/projects/beta/project.md) · SENTINEL-CONTINUE
+* ⛔ **unblock** — no link at all · SENTINEL-NOLINK
+## Later
+* ✅ **approve** — [SENTINEL-OUTSIDE](/projects/alpha/tasks/task-001.md)
+AW
+( cd "$AWI" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
+assert "the snapshot still parses as JSON"         "$(yes_if python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$AWJ")"
+assert "one entry per item, in AWAITING's order; a target that names no file or is not a label is blanked" \
+  "$([ "$(items)" = 'do,alpha,task-001;review,beta,;answer,,;close,,;continue,beta,;unblock,,' ] && echo 0 || echo 1)"
+assert "…as many entries as counts.sh counts need-you items" "$(yes_if bash -c '
+. "$1/plugin/scripts/bundle-paths.sh"; . "$1/plugin/scripts/counts.sh"; ab_counts "$2" >/dev/null 2>&1
+[ "$CNT_NEED_YOU" = "$(python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))[\"awaiting_items\"]))" "$2/$AB_SNAPSHOT")" ]' _ "$TPL" "$AWI")"
+assert "…the fixture does carry the sentinels the scan reads past" "$(fhas 'SENTINEL-TITLE' "$AWI/$AB_AWAITING")"
+assert "…and not one SENTINEL reaches the snapshot" "$(fhasnt 'SENTINEL' "$AWJ")"
+sed 's/^{/{"awaiting": false,/' "$AWI/instance.config.json" > "$AWI/c" && mv "$AWI/c" "$AWI/instance.config.json"
+( cd "$AWI" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
+assert "the queue off (\`awaiting: false\`) ⇒ no \`awaiting_items\` key"    "$([ "$(items)" = absent ] && echo 0 || echo 1)"
+
 echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
