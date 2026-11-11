@@ -48,7 +48,7 @@ done
 MUT="$TMP/mut"; cp -R "$TPL" "$MUT"
 grep -v 'gi_managed="$gi_managed /$AB_KB_STAMP\*' "$INIT_SRC" > "$MUT/plugin/scripts/init-bundle.sh"
 
-KB="/$AB_KB_STAMP*"; REF="/$AB_DIR/refresh/"
+KB="/$AB_KB_STAMP*"; REF="/$AB_DIR/refresh/"; CNT="/$AB_COUNTS"
 count() { grep -cxF "$2" "$1/.gitignore" | tr -d ' '; }
 stamp() { bash "$1/plugin/scripts/init-bundle.sh" "$2" </dev/null >"$TMP/out" 2>&1; }
 commit() { ( cd "$1" && { [ -d .git ] || git init -q .; } && git add -A && git commit -qm s ) >/dev/null 2>&1; }
@@ -57,7 +57,7 @@ commit() { ( cd "$1" && { [ -d .git ] || git init -q .; } && git add -A && git c
 old_bundle() { # <dir>
   mkdir -p "$1"; stamp "$TPL" "$1"
   local f; for f in "$1/.gitignore" "$1/$AB_DIR/seed-base/.gitignore"; do
-    grep -vxF -e "$KB" -e "$REF" "$f" > "$f.n" && mv "$f.n" "$f"
+    grep -vxF -e "$KB" -e "$REF" -e "$CNT" "$f" > "$f.n" && mv "$f.n" "$f"
   done
   commit "$1"
 }
@@ -74,13 +74,17 @@ echo
 echo "== a 4.3.0-shaped bundle, stamped twice =="
 OLD="$TMP/old"; old_bundle "$OLD"
 ok "the fixture starts with no KB-stamp line" "$(count "$OLD" "$KB")" 0
+ok "  and no counts.json line" "$(count "$OLD" "$CNT")" 0
 stamp "$TPL" "$OLD"; ok "the re-stamp exits 0" "$?" 0
 ok "  the seed merge ran (PORTED .gitignore)" "$(grep -q 'PORTED    .gitignore' "$TMP/out" && echo yes || echo no)" yes
 ok "  one KB-stamp line" "$(count "$OLD" "$KB")" 1
 ok "  one refresh/ line" "$(count "$OLD" "$REF")" 1
+ok "  one counts.json line" "$(count "$OLD" "$CNT")" 1
+ok "  and counts.json is ignored" "$(cd "$OLD" && git check-ignore -q "$AB_COUNTS" && echo yes || echo no)" yes
 commit "$OLD"; stamp "$TPL" "$OLD"
 ok "a second stamp leaves one KB-stamp line" "$(count "$OLD" "$KB")" 1
 ok "  and one refresh/ line" "$(count "$OLD" "$REF")" 1
+ok "  and one counts.json line" "$(count "$OLD" "$CNT")" 1
 
 echo
 echo "== a negation between two copies keeps the repeat (git's last match wins) =="
