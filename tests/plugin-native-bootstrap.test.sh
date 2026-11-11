@@ -119,12 +119,8 @@ ok "…and every registered hook file exists"  "${HOOKMISS:-none}" none
 # (f) the retired design is gone from the tree entirely.
 # path-scan: absent — asserted GONE; this line IS the assertion that it went
 ok "the repo ships no symlink/ directory"    "$(yn test -e "$REPO/symlink")" no
-ok "install.sh is a stub that refuses"       "$(bash "$REPO/install.sh" /tmp >/dev/null 2>&1; echo $?)" 2
-ok "…naming /${PN}:init"                 "$(bash "$REPO/install.sh" 2>&1 | grep -c '/'"${PN}:"'init' | tr -d ' ')" 1
-ok "…on ONE screen (≤ 40 lines)"             "$([ "$(bash "$REPO/install.sh" 2>&1 | grep -c .)" -le 40 ] && echo yes || echo no)" yes
-ok "upgrade.sh is a stub that refuses"       "$(bash "$REPO/upgrade.sh" /tmp >/dev/null 2>&1; echo $?)" 2
-ok "…naming /${PN}:init <dir>"            "$(bash "$REPO/upgrade.sh" 2>&1 | grep -c '/'"${PN}:"'init <dir>' | tr -d ' ')" 1
-ok "…on ONE screen (≤ 40 lines)"             "$([ "$(bash "$REPO/upgrade.sh" 2>&1 | grep -c .)" -le 40 ] && echo yes || echo no)" yes
+ok "the retired install.sh stub is deleted" "$(yn test -e "$REPO/install.sh")" no
+ok "…and so is upgrade.sh"                   "$(yn test -e "$REPO/upgrade.sh")" no
 
 # =========================================================================================
 echo "== 2. a stamped bundle passes the validator and the banner =="

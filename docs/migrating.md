@@ -93,8 +93,7 @@ Every command is namespaced — `/loopd:dispatch`, `/loopd:welcome`,
 
 Three steps — plugin install (per machine), `/loopd:init <bundle>`, restart. The
 stamp converts, so the sweep below removes the symlink-era command links for you, and it
-never removes bundle content. `upgrade.sh` was the old spelling of this and is now a stub
-that says so.
+never removes bundle content. `upgrade.sh` was the old spelling of this and is deleted.
 
 **Nothing on the [checklist](#what-you-must-not-lose-and-what-must-not-travel) below
 applies to you**, because on path A nothing moves. It is there for path B.

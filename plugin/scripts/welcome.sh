@@ -132,12 +132,6 @@ memory-stale|human|no'
 # ARGUMENTS
 # =========================================================================================
 FORM=""; ROOT=""; TEMPLATE=""; ONLY_PROBLEMS=0; BANNER_ONLY=0; FETCH=0
-# `--since <ref>` is ACCEPTED AND IGNORED, deliberately. It asked the retired
-# `unstamped-machinery` check for the literal post-merge form — which machinery files a
-# template range ADDED, because only a stamp delivered a new machinery file. A bundle has
-# no machinery, so the question has no answer to give; the flag stays parsed for one
-# version so a saved command line does not become a fatal "unknown argument".
-SINCE=""
 LIST=0; STYLE=auto
 
 # usage — the three forms and their flags, on stderr so `--help` never pollutes a pipeline.
@@ -145,7 +139,7 @@ usage() {
   cat >&2 <<'USAGE'
 Usage: welcome.sh [banner]                       reprint the SessionStart banner
        welcome.sh check [--instance DIR] [--template DIR] [--fetch]
-                          [--since <ref>] [--only-problems] [--banner] [--list]
+                          [--only-problems] [--banner] [--list]
                           [--style auto|markdown|ansi|plain]
 The repair pass (fix) runs inside /<plugin>:init, never on its own.
 USAGE
@@ -176,8 +170,6 @@ if [ "$FORM" != banner ]; then
       --instance=*)  ROOT="${1#--instance=}"; shift ;;
       --template)    [ $# -ge 2 ] || { echo "${PLUGIN_NAME}: --template needs a directory" >&2; exit 2; }; TEMPLATE="$2"; shift 2 ;;
       --template=*)  TEMPLATE="${1#--template=}"; shift ;;
-      --since)       [ $# -ge 2 ] || { echo "${PLUGIN_NAME}: --since needs a git ref" >&2; exit 2; }; SINCE="$2"; shift 2 ;;  # accepted, ignored — see above
-      --since=*)     SINCE="${1#--since=}"; shift ;;                                                                       # accepted, ignored
       --only-problems) ONLY_PROBLEMS=1; shift ;;
       --banner)      BANNER_ONLY=1; shift ;;
       --list)        LIST=1; shift ;;
@@ -191,13 +183,6 @@ if [ "$FORM" != banner ]; then
 fi
 
 [ -n "$ROOT" ] || ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-
-# `--since` IS READ AND THEN DROPPED, and that is stated here rather than left as an
-# unused variable somebody deletes as dead code. It asked the retired
-# `unstamped-machinery` row for the literal post-merge form; a bundle has no machinery, so
-# the question has no answer to give. Parsed for one version so a saved command line does
-# not become a fatal "unknown argument".
-[ -z "$SINCE" ] || SINCE=""
 
 # WHERE THE SIBLING MACHINERY IS. Beside this file, always — it is the plugin's own
 # `scripts/` directory and this script is executing out of it, so `dirname $0` is right by

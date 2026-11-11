@@ -22,7 +22,7 @@
 #
 # THE ENGINE BEHIND `/<plugin>:init`. It ships in the PLUGIN, and a human never needs a
 # clone of this repo: the skill invokes it as ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh.
-# It replaces install.sh, which now exists only as a deprecation stub.
+# It replaces install.sh, whose deprecation stub is deleted too.
 #
 # A BUNDLE CARRIES NO MACHINERY, AND THAT IS THE WHOLE CHANGE. install.sh stamped 37 files
 # into a bundle as symlinks into a template checkout, by absolute path. A plugin-shipped

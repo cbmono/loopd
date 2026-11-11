@@ -186,12 +186,8 @@ ok "an unconverted bundle is reported as such"             "$(printf '%s\n' "$OU
 ok "…naming the link it found"                             "$(printf '%s\n' "$OUTL" | grep -c 'scripts/commit-as.sh' | tr -d ' ')" 1
 ok "…with the repair, which is /${PN}:init"            "$(printf '%s\n' "$OUTL" | grep -A3 'has not been converted' | grep -c '/'"${PN}:"'init' | tr -d ' ')" 1
 
-# `--since` IS ACCEPTED AND IGNORED, and that is asserted rather than left to be
-# discovered. It asked the retired `unstamped-machinery` row for the literal post-merge
-# form — which `symlink/` files a template range ADDED, because only a stamp delivered a
-# new machinery file. A bundle has no machinery, so the question has no answer to give.
-# The flag stays parsed for one version so a saved command line does not become a fatal
-# "unknown argument"; both halves are pinned so neither can regress silently.
+# `--since` was kept one version after its check retired; it is gone now, and a saved
+# command line carrying it is refused like any other unknown flag.
 RTPL="$TMP/rangetpl"
 mkdir -p "$RTPL/plugin/scripts"
 printf '0.0.1\n' > "$RTPL/VERSION"
@@ -201,8 +197,8 @@ GIT -C "$RTPL" add -A; GIT -C "$RTPL" commit -qm base
 base="$(GIT -C "$RTPL" rev-parse HEAD)"
 srrc=0
 S1="$(bash "$SH" check --instance "$INST1" --template "$RTPL" --since "$base" 2>&1)" || srrc=$?
-ok "--since is still accepted (exit 0, not 'unknown argument')" "$srrc" 0
-ok "…and says nothing about a range any more"              "$(printf '%s\n' "$S1" | grep -c 'added no symlink' | tr -d ' ')" 0
+ok "--since is refused (exit 2)"                           "$srrc" 2
+ok "…as an unknown argument"                               "$(printf '%s\n' "$S1" | grep -c 'unknown argument: --since' | tr -d ' ')" 1
 
 # AN UNASKED QUESTION IS ALSO A FACT. A plugin whose `scripts/` is missing
 # `check-template-version.sh` cannot answer the VERSION half of the template row, and

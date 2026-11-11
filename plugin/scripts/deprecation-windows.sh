@@ -4,14 +4,15 @@
 #   deprecation-windows.sh [--root DIR] [--version X.Y.Z]   scan; VERSION defaults to DIR/VERSION
 #   deprecation-windows.sh --cmp A B                         print lt|eq|gt, per field, numerically
 #
-# Scans plugin/ and docs/operations.md under DIR (the repo root by default) and prints:
+# Scans plugin/, README.md, .claude/rules/, docs/operations.md and docs/conventions.md
+# under DIR (the repo root by default) and prints:
 #   BARE <file>:<line>     a release-relative window with no `until <x.y.z>` on the same line
 #   EXPIRED <file>:<line>  an `until <x.y.z>` the version has reached (version >= until)
 # Exit: 0 none · 1 at least one · 2 usage or unreadable.
 # Callers: tests/deprecation-windows.test.sh (VERSION) and release-bump.sh (the version it would mint).
 set -uo pipefail
 
-usage() { sed -n '2,10p' "$0" >&2; exit 2; }
+usage() { sed -n '2,11p' "$0" >&2; exit 2; }
 is_ver() { printf '%s' "$1" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; }
 
 vcmp() { # <a> <b> -> lt|eq|gt
@@ -26,9 +27,9 @@ vcmp() { # <a> <b> -> lt|eq|gt
 }
 
 # Spelled with [[:space:]] so this file never matches the phrases it looks for.
-WINDOW='one[[:space:]]+release|next[[:space:]]+release|one[[:space:]]+more[[:space:]]+release'
+WINDOW='one[[:space:]]+release|next[[:space:]]+release|one[[:space:]]+more[[:space:]]+release|for[[:space:]]+one[[:space:]]+version|next[[:space:]]+version'
 UNTIL='until[[:space:]]+`?v?[0-9]+\.[0-9]+\.[0-9]+'
-PATHS=(plugin docs/operations.md)
+PATHS=(plugin README.md .claude/rules docs/operations.md docs/conventions.md)
 
 ROOT=""; VER=""
 while [ $# -gt 0 ]; do

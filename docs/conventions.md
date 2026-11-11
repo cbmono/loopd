@@ -704,7 +704,7 @@ adding a rule to `RULES` with no test here fails by name.
 
 ## 20. The version is a number the MERGE moves, and the drift check speaks only when behind
 
-**There was no version anywhere in this repo until 0.9.1** — no `VERSION` file, no
+**There was no version anywhere in this repo before 0.9.1** — no `VERSION` file, no
 `package.json`, no string in `README.md` or `/loopd:init`. That was survivable while one
 person ran one instance, and it stopped being survivable the week three instances went
 seven days missing four scripts with nothing reporting it.
@@ -863,8 +863,8 @@ could always be answered was "which of the files a stamp *would* link are not li
 enumerated with the same `find` the installer walked, so the two could not disagree about
 what a stamp covered. **A bundle has carried no machinery since the plugin replatform**, so
 the question has no answer left to give: the `unstamped-machinery` row is retired and
-`--since` is parsed and then dropped, kept for one version so a saved command line does not
-become a fatal unknown argument (`plugin/scripts/welcome.sh`). What it leaves behind still
+`--since`, kept a while so a saved command line did not become a fatal unknown argument,
+is gone too (`plugin/scripts/welcome.sh`). What it leaves behind still
 governs every other row: **empty output is a reported answer**, never silence.
 
 ---
