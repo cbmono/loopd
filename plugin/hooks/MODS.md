@@ -66,9 +66,12 @@ re-implemented: nothing this pane shows is anything the file does not already ca
 Width is the pane's `bodyColumns` (45 when the surface gives none). A NEEDS YOU row wraps,
 continuation lines under its text, at most 3 lines, the third cut with `…`; every other row
 is one line, its name cut by code point with `…`. A count and the `paused`/`done`/`closed`
-word are never cut, and a zero count is not drawn. Colours are `plugin/themes/loopd.json`
-tokens — pink needs you, blue work, green done, grey quiet; the kit's `Button` takes no
-colour, so the buttons are uncoloured.
+word are never cut, and a zero count is not drawn. Colours are a pastel trial palette
+(2026-11-11, before the rest of loopd adopts it): rose `#DA627D` needs you, peach `#FCA17D`
+the bundle name and PROJECTS, sky `#86BBD8` work, teal `#06969A` a bar's done part, deep
+blue `#33658A` the rule, green `#76d6a4` done, grey quiet. The kit's `Button` takes no
+colour, so the buttons are uncoloured; each label leads with a monochrome symbol
+(`✎ Answer questions`, `↻ Refresh`, `✕ Close pane`).
 
 Not drawn, because the snapshot does not carry it: a round number, a session id, a usage
 line, a `continue` verb, any question or blocker **text**, any document body, any author
@@ -110,8 +113,8 @@ For someone who answers questions and does not run the loop. One inbox, top to b
 No role, tick, pull request, session, usage, round, worktree or branch is drawn; the kit
 test asserts their absence against task documents that carry all of them.
 
-**Pink means you, green means done.** The open question's text and a blocked task's sentence
-are drawn `#ff7ac2`; a sent answer and the finished line `#76d6a4` (Text's `color` prop);
+**Rose means you, green means done.** The open question's text and a blocked task's sentence
+are drawn `#DA627D`; a sent answer and the finished line `#76d6a4` (Text's `color` prop);
 every other line keeps the theme default or `dimColor`.
 
 **Every button is one slash command** (`$.command.run`, as operator mode's Answer questions is), and every hotkey is

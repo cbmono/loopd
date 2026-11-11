@@ -185,13 +185,18 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, WORKING, 
     ' ',
     '✓ epsilon' + ' '.repeat(30) + 'closed',
     ' ',
+    ' ',
     'WORKING (1)',
+    ' ',
     '  software-engineer  Ship the wi…  PR UNKNOWN',
     ' ',
+    ' ',
     'NEEDS YOU (3)',
+    ' ',
     '1. answer   alpha · Decide the colour',
     '2. merge    alpha · Merge me',
     '3. close    beta',
+    ' ',
     ' ',
   ])
   for (const r of rows) expect(cols(r)).toBeLessThanOrEqual(45)
@@ -208,12 +213,12 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, WORKING, 
   expect(text).not.toContain('github.com')
   // Three buttons, in order, and no Tick.
   expect((await ui.findAll({ type: 'Button' })).map((b: any) => [b.key, b.props.label])).toEqual([
-    ['answer', 'Answer questions'], ['refresh', 'Refresh'], ['close', 'Close pane']])
+    ['answer', '✎ Answer questions'], ['refresh', '↻ Refresh'], ['close', '✕ Close pane']])
   expect(text).not.toMatch(/tick/i)
   await ui.unmount()
 })
 
-test('the layout is coloured with the six theme values; buttons take no colour', ONLY, async ($, on) => {
+test('the layout is coloured with the pastel palette; buttons take no colour', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w)
   mock.clock(on, { now: GENERATED + 3 * 60000 })
@@ -221,21 +226,21 @@ test('the layout is coloured with the six theme values; buttons take no colour',
   const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
   const segs = (await ui.findAll({ type: 'Text' })).filter((el: any) => el.props.color !== undefined)
   const colour = (t: string) => segs.filter((el: any) => el.text === t).map((el: any) => el.props.color)
-  expect(colour('example')).toEqual(['#f5f5f5'])
+  expect(colour('example')).toEqual(['#FCA17D'])
   expect(segs.find((el: any) => el.text === 'example').props.bold).toBe(true)
   expect(colour('3 min ago')).toEqual(['#6c7488'])
-  expect(colour('─'.repeat(45))).toEqual(['#33405a'])
-  expect(colour(' · 3 need you')).toEqual(['#ff7ac2'])
-  expect(colour('NEEDS YOU')).toEqual(['#ff7ac2'])
-  expect(colour(' (3)')).toEqual(['#ff7ac2'])
-  expect(colour('2. merge    ')).toEqual(['#ff7ac2'])
+  expect(colour('─'.repeat(45))).toEqual(['#33658A'])
+  expect(colour(' · 3 need you')).toEqual(['#DA627D'])
+  expect(colour('NEEDS YOU')).toEqual(['#DA627D'])
+  expect(colour(' (3)')).toEqual(['#DA627D'])
+  expect(colour('2. merge    ')).toEqual(['#DA627D'])
   expect(colour('alpha · Merge me')).toEqual(['#f5f5f5'])
-  expect(colour('2 need you')).toEqual(['#ff7ac2'])
-  expect(colour('WORKING')).toEqual(['#5ea2ff'])
-  expect(colour('PROJECTS')).toEqual(['#f5f5f5'])
-  expect(colour('● ')).toEqual(['#5ea2ff', '#5ea2ff', '#5ea2ff'])
-  expect(colour('██████')).toEqual(['#5ea2ff'])
-  expect(colour('░░░░')).toEqual(['#33405a'])
+  expect(colour('2 need you')).toEqual(['#DA627D'])
+  expect(colour('WORKING')).toEqual(['#86BBD8'])
+  expect(colour('PROJECTS')).toEqual(['#FCA17D'])
+  expect(colour('● ')).toEqual(['#86BBD8', '#86BBD8', '#86BBD8'])
+  expect(colour('██████')).toEqual(['#06969A'])
+  expect(colour('░░░░')).toEqual(['#33658A'])
   expect(colour('2/3')).toEqual([])                       // inside '  2/3', grey
   expect(colour('  2/3')).toEqual(['#6c7488'])
   expect(colour('○ ')).toEqual(['#6c7488'])
@@ -243,7 +248,7 @@ test('the layout is coloured with the six theme values; buttons take no colour',
   expect(colour('✓ ')).toEqual(['#76d6a4', '#6c7488'])    // beta awaits its close; epsilon is closed
   expect(colour('done')).toEqual(['#76d6a4'])
   expect(colour('closed')).toEqual(['#6c7488'])
-  expect([...new Set(segs.map((el: any) => el.props.color))].sort()).toEqual(['#33405a', '#5ea2ff', '#6c7488', '#76d6a4', '#f5f5f5', '#ff7ac2'])
+  expect([...new Set(segs.map((el: any) => el.props.color))].sort()).toEqual(['#06969A', '#33658A', '#6c7488', '#76d6a4', '#86BBD8', '#DA627D', '#FCA17D', '#f5f5f5'])
   // The kit's Button drops a colour prop, so the buttons stay uncoloured.
   for (const b of await ui.findAll({ type: 'Button' })) expect(b.props.color).toBeUndefined()
   await ui.unmount()
@@ -376,7 +381,7 @@ test('malformed JSON is one error line and no throw; wrong types draw as 0', ONL
   w.files.set(SNAPSHOT, { text: JSON.stringify({ counts: { projects: 'many', tasks: null, awaiting: -3 }, projects: 'nope', group: 7 }), mtimeMs: 2000 })
   await ui.press({ key: 'refresh' })
   text = await shown(ui)
-  expect(await rowsOf(ui)).toEqual(['loopd board' + ' '.repeat(78) + 'age unknown', '─'.repeat(100), 'PROJECTS', ' ', 'WORKING', '  nothing right now', ' '])
+  expect(await rowsOf(ui)).toEqual(['loopd board' + ' '.repeat(78) + 'age unknown', '─'.repeat(100), 'PROJECTS', ' ', ' ', 'WORKING', ' ', '  nothing right now', ' ', ' '])
   await ui.unmount()
 })
 
@@ -497,14 +502,19 @@ test('NEEDS YOU is numbered, slug-prefixed, last, and wraps under its text to th
     ' ',
     '✓ article-evaluation' + ' '.repeat(19) + 'closed',
     ' ',
+    ' ',
     'WORKING',
+    ' ',
     '  nothing right now',
     ' ',
+    ' ',
     'NEEDS YOU (2)',
+    ' ',
     '1. unblock  leaner-prompts · Judge the trims\'',
     "            quality over the first 20 PRs",
     '            after the install, and decide an…',
     '2. close    article-batch-8-hygiene',
+    ' ',
     ' ',
   ])
   for (const r of rows) expect(cols(r)).toBeLessThanOrEqual(45)
@@ -516,7 +526,7 @@ test('NEEDS YOU is numbered, slug-prefixed, last, and wraps under its text to th
   await ui2.press({ key: 'refresh' })
   const r2 = await rowsOf(ui2)
   expect(r2[0]).toBe('example · 1 needs you' + ' '.repeat(15) + '1 min ago')
-  expect(r2.slice(-3)).toEqual(['NEEDS YOU (1)', '1. unblock  leaner-prompts · Judge the trims', ' '])
+  expect(r2.slice(-5)).toEqual(['NEEDS YOU (1)', ' ', '1. unblock  leaner-prompts · Judge the trims', ' ', ' '])
   await ui2.unmount()
 })
 
@@ -530,7 +540,7 @@ test('with nothing needing you: no header count, no NEEDS YOU section, no zero c
   const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
   const rows = await rowsOf(ui)
   expect(rows).toEqual(['example' + ' '.repeat(29) + '1 min ago', '─'.repeat(45), 'PROJECTS (1)', ' ',
-    '✓ article-evaluation' + ' '.repeat(19) + 'closed', ' ', 'WORKING', '  nothing right now', ' '])
+    '✓ article-evaluation' + ' '.repeat(19) + 'closed', ' ', ' ', 'WORKING', ' ', '  nothing right now', ' ', ' '])
   await ui.unmount()
 })
 
@@ -680,8 +690,8 @@ test('PINK MEANS YOU, GREEN MEANS DONE: the open question and a blocked task are
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const coloured = (await ui.findAll({ type: 'Text' })).filter((el: any) => el.props.color !== undefined)
   expect(coloured.map((el: any) => [el.props.color, el.text.trim()])).toEqual([
-    ['#ff7ac2', 'Which colour, given the brand, ships first?'],
-    ['#ff7ac2', 'Unblock "Import the archive" in Alpha project: it cannot move until you do.'],
+    ['#DA627D', 'Which colour, given the brand, ships first?'],
+    ['#DA627D', 'Unblock "Import the archive" in Alpha project: it cannot move until you do.'],
     ['#76d6a4', '✓ Finished: Beta closed'],
   ])
   await ui.unmount()
@@ -1117,7 +1127,7 @@ test('✗ ON A MISSING FIELD: submit redraws the form with ✗ on each empty fie
   const l = await lines(ui)
   expect(l).toContain('New project · 2 things to fix')
   expect(l.filter(x => x.startsWith('✗ '))).toEqual(['✗ ' + FIX.what, '✗ ' + FIX.done])
-  const pink = (await ui.findAll({ type: 'Text' })).filter((el: any) => el.props.color === '#ff7ac2').map((el: any) => el.text.trim())
+  const pink = (await ui.findAll({ type: 'Text' })).filter((el: any) => el.props.color === '#DA627D').map((el: any) => el.text.trim())
   expect(pink).toEqual(['New project · 2 things to fix', '✗ ' + FIX.what, '✗ ' + FIX.done])
   expect(w.files.has(P + '/garden-log/project.md')).toBe(false)
   expect(await ui.find({ key: 'form-submit' })).toBeDefined()

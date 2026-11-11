@@ -387,10 +387,10 @@ function draw($: any, e: any, now: number): any {
     shownAge = age(now, b.generated_at)
     const count = need.length ? ' · ' + needYou(need.length) : ''
     const name = fit(b.group || TITLE, W - cols(shownAge) - cols(count) - 1)
-    rows.push(row(seg(name, { ...TEXT, bold: true }), seg(count, NEEDS_YOU), seg(gap(cols(name) + cols(count) + cols(shownAge))), seg(shownAge, MUTED)))
+    rows.push(row(seg(name, { ...HEAD, bold: true }), seg(count, NEEDS_YOU), seg(gap(cols(name) + cols(count) + cols(shownAge))), seg(shownAge, MUTED)))
     rows.push(line('─'.repeat(W), RULE))
 
-    rows.push(heading('PROJECTS', b.rows.length, TEXT))
+    rows.push(heading('PROJECTS', b.rows.length, HEAD))
     const ranked = b.rows.map((p, i) => {
       let n = 0
       for (const t of p.tasks) if (needs(t)) n += 1
@@ -417,14 +417,16 @@ function draw($: any, e: any, now: number): any {
       const sub: any[] = []
       if (live.length) {
         const fill = Math.floor(BAR * done / live.length)
-        sub.push(seg('█'.repeat(fill), WORK), seg('░'.repeat(BAR - fill), RULE), seg('  ' + done + '/' + live.length, MUTED))
+        sub.push(seg('█'.repeat(fill), FILL), seg('░'.repeat(BAR - fill), RULE), seg('  ' + done + '/' + live.length, MUTED))
       }
       if (p.phase_total) sub.push(seg((sub.length ? '  ' : '') + 'phases ' + p.phase_done + '/' + p.phase_total, MUTED))
       if (sub.length) rows.push(row(seg('  '), ...sub))
     }
 
     rows.push(line(' '))
+    rows.push(line(' '))
     rows.push(heading('WORKING', working.length, WORK))
+    rows.push(line(' '))
     if (working.length === 0) rows.push(line('  nothing right now', MUTED))
     for (const t of working) {
       const head = '  ' + (t.assignee || 'unassigned') + '  '
@@ -434,7 +436,9 @@ function draw($: any, e: any, now: number): any {
 
     if (need.length) {
       rows.push(line(' '))
+      rows.push(line(' '))
       rows.push(heading('NEEDS YOU', need.length, NEEDS_YOU))
+      rows.push(line(' '))
       const digits = String(need.length).length
       need.forEach((n, k) => {
         const head = String(k + 1).padStart(digits) + '. ' + n.verb.padEnd(7) + '  '
@@ -451,10 +455,11 @@ function draw($: any, e: any, now: number): any {
   if (answerRefused) rows.push(line('answer refused: ' + answerRefused, { dimColor: true }))
 
   rows.push(line(' '))
+  rows.push(line(' '))
   rows.push(Box({
     flexDirection: 'row', columnGap: 2, children: [
       Button({
-        key: 'answer', label: 'Answer questions', hotkey: 'a',
+        key: 'answer', label: '✎ Answer questions', hotkey: 'a',
         // The human pressed a key in their own session: one /loopd:answer run, queued
         // until the session is idle (the engine's own contract for a plugin's command.run).
         // Not awaited — a handler that waits for the run would block the press. Never on
@@ -475,11 +480,11 @@ function draw($: any, e: any, now: number): any {
         },
       }),
       Button({
-        key: 'refresh', label: 'Refresh', hotkey: 'r',
+        key: 'refresh', label: '↻ Refresh', hotkey: 'r',
         onPress: async () => { await refresh($, true); $.ui.invalidate('ui.render') },
       }),
       Button({
-        key: 'close', label: 'Close pane', hotkey: 'c',
+        key: 'close', label: '✕ Close pane', hotkey: 'c',
         // The same path as `/pane close`. A $.ui.close from a press did not reach this module's
         // own ui.close hook in the kit (2.1.322), so the poll is stopped here as well.
         onPress: async () => { try { await $.ui.close({ id: PANE }) } catch { /* already gone */ } stopPoll() },
@@ -517,15 +522,19 @@ let sendNote = ''        // the line drawn after a run: a confirmation naming it
 // one until the later file's does), or until a turn that started after the press completes
 // without moving it (answer.sh refused).
 let held = new Map<string, Held>()
-// The pane's colours, all plugin/themes/loopd.json tokens: pink for a row only a person can
-// clear, green for sent and finished (loopd-design/cli-theme.json human_pink; success); the
-// operator layout adds blue for work and active, the text white, grey for quiet, the rule line.
-const NEEDS_YOU = { color: '#ff7ac2' }
+// The pane's colours: a pastel palette (owner, 2026-11-11), trialled here before the rest of
+// loopd. Rose for a row only a person can clear, green for sent and finished (unchanged,
+// plugin/themes/loopd.json success); peach for the bundle name and PROJECTS, sky for work and
+// active, teal for a bar's done part, deep blue for the rule and a bar's open part; the text
+// white and grey for quiet, as before.
+const NEEDS_YOU = { color: '#DA627D' }
 const DONE = { color: '#76d6a4' }
-const WORK = { color: '#5ea2ff' }
+const HEAD = { color: '#FCA17D' }
+const WORK = { color: '#86BBD8' }
+const FILL = { color: '#06969A' }
 const TEXT = { color: '#f5f5f5' }
 const MUTED = { color: '#6c7488' }
-const RULE = { color: '#33405a' }
+const RULE = { color: '#33658A' }
 const STUCK_KEYS = ['c', 'd', 'e']
 
 // AB_NEW_PROJECT_FORM in bundle-paths.sh: new-project-form.sh writes it and its ✗ marks; the pane only draws it.
