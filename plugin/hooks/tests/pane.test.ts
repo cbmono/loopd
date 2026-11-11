@@ -557,6 +557,25 @@ test('SHAPE GUARD: an empty slug or id, or one with /, .. or whitespace, is neve
   await ui.unmount()
 })
 
+test('SHAPE GUARD: a task path under a bad slug is never copied, though its id is good', ONLY, async ($, on) => {
+  const task = { id: 'task-001', title: 'T', awaiting: 'answer' }
+  const snap = { ...SNAP, projects: ['..', 'a/b', 'alpha'].map(slug => ({ slug, status: 'active', awaiting_close: false, tasks: [task] })) }
+  const w = world(snap)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  const got = copies(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  for (const key of ['copy-need-0', 'copy-need-1']) {
+    await ui.press({ key })
+    expect(await footer(ui)).toEqual(['copy refused: bad ref'])
+  }
+  expect(got).toEqual([])
+  await ui.press({ key: 'copy-need-2' })
+  expect(got).toEqual([{ text: 'projects/alpha/tasks/task-001.md', surface: 'terminal' }])
+  await ui.unmount()
+})
+
 for (const [channel, answer, want] of [
   ['resolves isCopied: false', () => ({ value: { isCopied: false, reason: 'no-clipboard' } }), /^copy failed: no-clipboard$/],
   ['rejects (a hook denies it)', () => ({ deny: 'not here' }), /^copy failed: \S/],
