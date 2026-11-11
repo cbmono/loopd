@@ -73,12 +73,12 @@ for key in $users; do
   if [ -n "$new" ] && [ "$new" != "$old" ]; then echo "${key%@*} $old → $new"; else echo "${key%@*} up to date"; fi
 done
 
-here="$(pwd -P)"
+here="$(pwd -P)" here_l="$(pwd)"
 while IFS="$TAB" read -r key sc ve ip pp; do
   [ -n "$key" ] && [ "$sc" != user ] || continue
   echo "${key%@*} $ve ($sc scope${pp:+, $pp}) — listed, not updated"
   uv="$(printf '%s\n' "$after" | awk -F "$TAB" -v k="$key" '$1 == k && $2 == "user" { print $3; exit }')"
-  if [ -n "$pp" ] && [ "$pp" = "$here" ] && [ -n "$uv" ] && ver_lt "$ve" "$uv"; then
+  if [ -n "$pp" ] && { [ "$pp" = "$here" ] || [ "$pp" = "$here_l" ]; } && [ -n "$uv" ] && ver_lt "$ve" "$uv"; then
     echo "  warn  this bundle's $sc-scope ${key%@*} is $ve, older than the user-scope $uv it is stamped from" >&2
   fi
 done <<<"$after"
