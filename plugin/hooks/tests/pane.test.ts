@@ -97,7 +97,7 @@ function stubs(on: any, w: World, placed = true, hold?: () => Promise<void>) {
   on('ui.log', (_$: any, e: any) => { w.logged.push(e.text); return { value: undefined } })
   on('ui.open', () => { w.opened += 1; return { value: placed ? { isPlaced: true } : { isPlaced: false, reason: 'the terminal is 80 columns' } } })
   on('ui.close', () => { w.closed += 1; return { value: undefined } })
-  // Tick runs the dispatch COMMAND through the engine (prompt.submit refuses a text that
+  // Answer questions runs its COMMAND through the engine (prompt.submit refuses a text that
   // begins with `/`); the stub records what reached it. The prompt.submit stub stays so a
   // regression back to a prompt is counted too (asserted zero).
   on('command.run', async (_$: any, e: any) => { w.submitted.push(e); if (hold) await hold(); if (w.onRun) w.onRun(e); return {} })
@@ -153,7 +153,7 @@ async function rowsOf(ui: any): Promise<string[]> {
 }
 const cols = (s: string) => Array.from(s).length
 
-test('/pane draws the approved layout at 45 columns: header, NEEDS YOU, WORKING, PROJECTS', ONLY, async ($, on) => {
+test('/pane draws the approved layout at 45 columns: header, PROJECTS, WORKING, NEEDS YOU, buttons', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w)
   mock.clock(on, { now: GENERATED + 3 * 60000 })
@@ -166,33 +166,39 @@ test('/pane draws the approved layout at 45 columns: header, NEEDS YOU, WORKING,
   const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
   const rows = await rowsOf(ui)
   expect(rows).toEqual([
-    'example' + ' '.repeat(29) + '3 min ago',
+    'example · 3 need you' + ' '.repeat(16) + '3 min ago',
     '─'.repeat(45),
-    'NEEDS YOU  3',
-    '› answer   Decide the colour',
-    '› merge    Merge me',
-    '› close    Beta research',
+    'PROJECTS (6)',
     ' ',
-    'WORKING',
+    '● alpha' + ' '.repeat(28) + '2 need you',
+    '  ░░░░░░░░░░  0/3  phases 1/3',
+    ' ',
+    '✓ beta' + ' '.repeat(35) + 'done',  // awaiting_close: done, and the close is not counted here
+    '  ██████████  1/1  phases 2/2',
+    ' ',
+    '● gamma',
+    '  ██████░░░░  2/3',               // cancelled is not counted; floor(10*2/3) = 6 cells
+    ' ',
+    '● zeta',                          // no tasks: no bar
+    ' ',
+    '○ delta' + ' '.repeat(32) + 'paused',
+    ' ',
+    '✓ epsilon' + ' '.repeat(30) + 'closed',
+    ' ',
+    'WORKING (1)',
     '  software-engineer  Ship the wi…  PR UNKNOWN',
     ' ',
-    'PROJECTS',
-    '● Alpha project' + ' '.repeat(20) + '2 need you',
-    '  ░░░░░░░░░░  0/3  phases 1/3',
-    '● Beta research' + ' '.repeat(20) + '1 need you',
-    '  ██████████  1/1  phases 2/2',
-    '● Gamma steady',
-    '  ██████░░░░  2/3',               // cancelled is not counted; floor(10*2/3) = 6 cells
-    '● Zeta empty',                    // no tasks: no bar
-    '○ Delta on hold' + ' '.repeat(24) + 'paused',
-    '✓ Epsilon shipped' + ' '.repeat(24) + 'done',
+    'NEEDS YOU (3)',
+    '1. answer   alpha · Decide the colour',
+    '2. merge    alpha · Merge me',
+    '3. close    beta',
     ' ',
   ])
   for (const r of rows) expect(cols(r)).toBeLessThanOrEqual(45)
   const text = await shown(ui)
-  // No zero counts, no slugs, no ISO timestamp.
-  expect(text).not.toMatch(/\b0 need you|approve 0|phases 0\/0/)
-  expect(text).not.toContain('alpha')
+  // No zero counts, no project titles, no ISO timestamp.
+  expect(text).not.toMatch(/\b0 need you|approve 0|phases 0\/0|\(0\)/)
+  for (const title of ['Alpha project', 'Beta research', 'Gamma steady', 'Zeta empty', 'Delta on hold', 'Epsilon shipped']) expect(text).not.toContain(title)
   expect(text).not.toContain('2026-10-08')
   // The allowlist, from the other side: nothing the snapshot carries that the board must
   // not show is drawn — and the description/owner fields are not drawn either.
@@ -200,9 +206,10 @@ test('/pane draws the approved layout at 45 columns: header, NEEDS YOU, WORKING,
   expect(text).not.toContain('example-user-007')
   expect(text).not.toContain('Q1')
   expect(text).not.toContain('github.com')
-  // Both buttons exist, by key.
-  expect(await ui.find({ key: 'tick' })).toBeDefined()
-  expect(await ui.find({ key: 'refresh' })).toBeDefined()
+  // Three buttons, in order, and no Tick.
+  expect((await ui.findAll({ type: 'Button' })).map((b: any) => [b.key, b.props.label])).toEqual([
+    ['answer', 'Answer questions'], ['refresh', 'Refresh'], ['close', 'Close pane']])
+  expect(text).not.toMatch(/tick/i)
   await ui.unmount()
 })
 
@@ -218,20 +225,24 @@ test('the layout is coloured with the six theme values; buttons take no colour',
   expect(segs.find((el: any) => el.text === 'example').props.bold).toBe(true)
   expect(colour('3 min ago')).toEqual(['#6c7488'])
   expect(colour('─'.repeat(45))).toEqual(['#33405a'])
+  expect(colour(' · 3 need you')).toEqual(['#ff7ac2'])
   expect(colour('NEEDS YOU')).toEqual(['#ff7ac2'])
-  expect(colour('› merge    ')).toEqual(['#ff7ac2'])
-  expect(colour('Merge me')).toEqual(['#f5f5f5'])
+  expect(colour(' (3)')).toEqual(['#ff7ac2'])
+  expect(colour('2. merge    ')).toEqual(['#ff7ac2'])
+  expect(colour('alpha · Merge me')).toEqual(['#f5f5f5'])
   expect(colour('2 need you')).toEqual(['#ff7ac2'])
   expect(colour('WORKING')).toEqual(['#5ea2ff'])
-  expect(colour('● ')).toEqual(['#5ea2ff', '#5ea2ff', '#5ea2ff', '#5ea2ff'])
+  expect(colour('PROJECTS')).toEqual(['#f5f5f5'])
+  expect(colour('● ')).toEqual(['#5ea2ff', '#5ea2ff', '#5ea2ff'])
   expect(colour('██████')).toEqual(['#5ea2ff'])
   expect(colour('░░░░')).toEqual(['#33405a'])
   expect(colour('2/3')).toEqual([])                       // inside '  2/3', grey
   expect(colour('  2/3')).toEqual(['#6c7488'])
   expect(colour('○ ')).toEqual(['#6c7488'])
   expect(colour('paused')).toEqual(['#6c7488'])
-  expect(colour('✓ ')).toEqual(['#76d6a4'])
+  expect(colour('✓ ')).toEqual(['#76d6a4', '#6c7488'])    // beta awaits its close; epsilon is closed
   expect(colour('done')).toEqual(['#76d6a4'])
+  expect(colour('closed')).toEqual(['#6c7488'])
   expect([...new Set(segs.map((el: any) => el.props.color))].sort()).toEqual(['#33405a', '#5ea2ff', '#6c7488', '#76d6a4', '#f5f5f5', '#ff7ac2'])
   // The kit's Button drops a colour prop, so the buttons stay uncoloured.
   for (const b of await ui.findAll({ type: 'Button' })) expect(b.props.color).toBeUndefined()
@@ -270,7 +281,7 @@ test('the age reads off the snapshot and the clock, and the poll redraws it as i
 
 test('width comes from bodyColumns, 45 when absent or 0; a 120-character title is cut by code point and its count is not', ONLY, async ($, on) => {
   const snap = JSON.parse(JSON.stringify(SNAP))
-  snap.projects[0].title = 'A' + '😀'.repeat(119)
+  snap.projects[0].slug = 'a' + '😀'.repeat(119)
   snap.projects[0].tasks[1].title = 'Q'.repeat(120)
   const w = world(snap)
   stubs(on, w)
@@ -281,11 +292,13 @@ test('width comes from bodyColumns, 45 when absent or 0; a 120-character title i
     const rows = await rowsOf(ui)
     expect(rows[1]).toBe('─'.repeat(width))
     for (const r of rows) expect(cols(r)).toBeLessThanOrEqual(width)
-    const alpha = rows.find(r => r.startsWith('● A'))!
+    const alpha = rows.find(r => r.startsWith('● a'))!
     expect(cols(alpha)).toBe(width)
     expect(alpha).toMatch(/…  *2 need you$/)
-    expect(alpha).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)   // no half a pair
-    expect(rows.find(r => r.startsWith('› answer'))).toBe('› answer   ' + 'Q'.repeat(width - 12) + '…')
+    for (const r of rows) expect(r).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)   // no half a pair
+    const at = rows.findIndex(r => r.startsWith('1. answer'))
+    expect(rows[at + 2]).toMatch(/^ {12}\S.*…$/)          // the third line is the last, and it is cut
+    expect(rows[at + 3]).toMatch(/^2\. merge/)
     await ui.unmount()
   }
 })
@@ -363,14 +376,14 @@ test('malformed JSON is one error line and no throw; wrong types draw as 0', ONL
   w.files.set(SNAPSHOT, { text: JSON.stringify({ counts: { projects: 'many', tasks: null, awaiting: -3 }, projects: 'nope', group: 7 }), mtimeMs: 2000 })
   await ui.press({ key: 'refresh' })
   text = await shown(ui)
-  expect(await rowsOf(ui)).toEqual(['loopd board' + ' '.repeat(78) + 'age unknown', '─'.repeat(100), 'WORKING', '  nothing right now', ' ', 'PROJECTS', ' '])
+  expect(await rowsOf(ui)).toEqual(['loopd board' + ' '.repeat(78) + 'age unknown', '─'.repeat(100), 'PROJECTS', ' ', 'WORKING', '  nothing right now', ' '])
   await ui.unmount()
 })
 
 test('a title carrying a newline, a tab, ESC and a bidi override is drawn without them, and a number is never clipped', ONLY, async ($, on) => {
   const snap = JSON.parse(JSON.stringify(SNAP))
   snap.projects[0].tasks[0].title = 'Ship\nthe\u001b[2Jwidget\u202e now\tplease'
-  snap.projects[0].title = 'Alpha\u0000project'
+  snap.projects[0].slug = 'alpha\u0000project'
   snap.projects[0].phase_progress = { done: 1234567890, total: '1234567891' }
   const w = world(snap)
   stubs(on, w)
@@ -384,7 +397,7 @@ test('a title carrying a newline, a tab, ESC and a bidi override is drawn withou
   // inert text (its own docstring says so). A CSI stripper would be a blocklist of known
   // sequences, which conventions 11 rejects; a terminal acts on none of this without ESC.
   expect(text).toContain('Ship the[2Jwidget now please')
-  expect(text).toContain('Alphaproject')
+  expect(text).toContain('alphaproject')
   expect(text).not.toContain('\u001b')
   expect(text).not.toContain('\u202e')
   expect(await rowsOf(ui)).toContain('  software-engineer  Ship the[2Jwidget now please  PR UNKNOWN')   // one row, not a forged second
@@ -392,7 +405,7 @@ test('a title carrying a newline, a tab, ESC and a bidi override is drawn withou
   await ui.unmount()
 })
 
-test('Tick runs exactly /loopd:dispatch, once per press, never as a prompt', ONLY, async ($, on) => {
+test('Answer questions runs exactly /loopd:answer, once per press, never as a prompt', ONLY, async ($, on) => {
   const w = world(SNAP)
   const clock = mock.clock(on)
   // The real engine queues a plugin's command run until the session is idle; the stub
@@ -400,21 +413,124 @@ test('Tick runs exactly /loopd:dispatch, once per press, never as a prompt', ONL
   stubs(on, w, true, () => clock.sleep(1000))
   await open($)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'tick' })
+  await ui.press({ key: 'answer' })
   // A refused run is drawn, so a failure here shows the engine's reason in the dump.
-  expect(await shown(ui)).not.toContain('tick refused')
+  expect(await shown(ui)).not.toContain('answer refused')
   expect(w.submitted.length).toBe(1)
-  expect((w.submitted[0] as any).command).toBe('loopd:dispatch')
+  expect(w.submitted[0]).toMatchObject({ command: 'loopd:answer' })
+  expect((w.submitted[0] as any).args ?? '').toBe('')
   expect(w.prompted).toEqual([])            // never as a prompt: the engine refuses a `/` text there
-  expect(await shown(ui)).toContain('tick queued')
-  // A second press while the first is still in flight is one tick, not two.
-  await ui.press({ key: 'tick' })
+  expect(await shown(ui)).toContain('answer queued')
+  // A second press while the first is still in flight is one run, not two.
+  await ui.press({ key: 'answer' })
   expect(w.submitted.length).toBe(1)
-  // Once the run has gone through, the footer clears and the next press is a new tick.
+  // Once the run has gone through, the footer clears and the next press is a new run.
   await clock.advance(1000)
-  expect(await shown(ui)).not.toContain('tick queued')
-  await ui.press({ key: 'tick' })
+  expect(await shown(ui)).not.toContain('answer queued')
+  await ui.press({ key: 'answer' })
   expect(w.submitted.length).toBe(2)
+  await ui.unmount()
+})
+
+test('a refused Answer run is drawn in the footer, not swallowed', ONLY, async ($, on) => {
+  const w = world(SNAP)
+  stubs(on, w)
+  mock.clock(on)
+  w.onRun = () => { throw new Error('busy') }
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'answer' })
+  expect(await shown(ui)).toContain('answer refused: ')
+  expect(await shown(ui)).not.toContain('answer queued')
+  await ui.unmount()
+})
+
+test('Close pane closes through $.ui.close, the way /pane close does, and the poll stops', ONLY, async ($, on) => {
+  const w = world(SNAP)
+  stubs(on, w)
+  const clock = mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'close' })
+  expect([w.opened, w.closed]).toEqual([1, 1])
+  expect(w.submitted).toEqual([])
+  w.files.set(SNAPSHOT, { text: JSON.stringify(SNAP), mtimeMs: 2000 })
+  await clock.advance(5000)
+  expect(w.reads).toBe(1)
+  // Closed, so the next /pane opens again rather than closing.
+  await $.command.run({ command: 'pane', args: '' })
+  expect([w.opened, w.closed]).toEqual([2, 1])
+})
+
+// Two need rows, a closed project, a project waiting on its close, nobody working.
+function needSnap(title: string) {
+  return {
+    ...SNAP, counts: { projects: 3, tasks: 2, awaiting: 2 },
+    projects: [
+      { slug: 'leaner-prompts', title: 'Leaner prompts', status: 'active', awaiting_close: false, phase_progress: { done: 0, total: 0 },
+        tasks: [{ id: 'task-007', title, status: 'blocked', in_flight: false, awaiting: 'unblock', prs: [] }] },
+      { slug: 'article-batch-8-hygiene', title: 'Article batch 8', status: 'active', awaiting_close: true, phase_progress: { done: 0, total: 0 },
+        tasks: [{ id: 'task-001', title: 'Done', status: 'done', in_flight: false, awaiting: '', prs: [] }] },
+      { slug: 'article-evaluation', title: 'Article evaluation', status: 'done', awaiting_close: false, phase_progress: { done: 0, total: 0 }, tasks: [] },
+    ],
+  }
+}
+
+test('NEEDS YOU is numbered, slug-prefixed, last, and wraps under its text to three lines', ONLY, async ($, on) => {
+  const title = "Judge the trims' quality over the first 20 PRs after the install, and decide any revert"
+  const w = world(needSnap(title))
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED + 60000 })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = await rowsOf(ui)
+  expect(rows).toEqual([
+    'example · 2 need you' + ' '.repeat(16) + '1 min ago',
+    '─'.repeat(45),
+    'PROJECTS (3)',
+    ' ',
+    '● leaner-prompts' + ' '.repeat(18) + '1 needs you',
+    '  ░░░░░░░░░░  0/1',
+    ' ',
+    '✓ article-batch-8-hygiene' + ' '.repeat(16) + 'done',
+    '  ██████████  1/1',
+    ' ',
+    '✓ article-evaluation' + ' '.repeat(19) + 'closed',
+    ' ',
+    'WORKING',
+    '  nothing right now',
+    ' ',
+    'NEEDS YOU (2)',
+    '1. unblock  leaner-prompts · Judge the trims\'',
+    "            quality over the first 20 PRs",
+    '            after the install, and decide an…',
+    '2. close    article-batch-8-hygiene',
+    ' ',
+  ])
+  for (const r of rows) expect(cols(r)).toBeLessThanOrEqual(45)
+  await ui.unmount()
+
+  // A row that fits in two lines is not cut, and the header names one need as "needs you".
+  w.files.set(SNAPSHOT, { text: JSON.stringify({ ...needSnap('Judge the trims'), projects: needSnap('Judge the trims').projects.slice(0, 1) }), mtimeMs: 2000 })
+  const ui2 = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  await ui2.press({ key: 'refresh' })
+  const r2 = await rowsOf(ui2)
+  expect(r2[0]).toBe('example · 1 needs you' + ' '.repeat(15) + '1 min ago')
+  expect(r2.slice(-3)).toEqual(['NEEDS YOU (1)', '1. unblock  leaner-prompts · Judge the trims', ' '])
+  await ui2.unmount()
+})
+
+test('with nothing needing you: no header count, no NEEDS YOU section, no zero counts', ONLY, async ($, on) => {
+  const snap = needSnap('x')
+  snap.projects = snap.projects.slice(2)
+  const w = world(snap)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED + 60000 })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = await rowsOf(ui)
+  expect(rows).toEqual(['example' + ' '.repeat(29) + '1 min ago', '─'.repeat(45), 'PROJECTS (1)', ' ',
+    '✓ article-evaluation' + ' '.repeat(19) + 'closed', ' ', 'WORKING', '  nothing right now', ' '])
   await ui.unmount()
 })
 
@@ -430,12 +546,12 @@ test('the poll re-reads only when the mtime moved, and Refresh re-reads regardle
   await clock.advance(5000)
   expect(w.reads).toBe(1)
   // The writer rewrote the file: the next poll reads it and the drawing follows.
-  const moved = JSON.parse(JSON.stringify(SNAP)); moved.projects[0].title = 'Renamed'
+  const moved = JSON.parse(JSON.stringify(SNAP)); moved.projects[0].slug = 'renamed'
   w.files.set(SNAPSHOT, { text: JSON.stringify(moved), mtimeMs: 2000 })
   await clock.advance(5000)
   expect(w.reads).toBe(2)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await shown(ui)).toContain('Renamed')
+  expect(await shown(ui)).toContain('renamed')
   // Refresh reads even with no mtime change.
   await ui.press({ key: 'refresh' })
   expect(w.reads).toBe(3)

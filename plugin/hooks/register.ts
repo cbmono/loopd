@@ -6,7 +6,8 @@
 //              `loopd.usage.<session id>`, and `loopd.usage.<session id>.ended` at session end.
 //              Core's plugin/scripts/session-usage.sh reads that record before the transcript.
 //   · pane   — `/pane`, a pane beside the transcript drawing this bundle's board from
-//              `.loopd/SNAPSHOT.json` (operator mode, with Tick and Refresh), or — `paneMode:
+//              `.loopd/SNAPSHOT.json` (operator mode: projects by folder slug, with Answer
+//              questions, Refresh and Close pane), or — `paneMode:
 //              simple` — an inbox of open questions, stuck tasks and progress read from the
 //              task documents, every button one slash command.
 //   · signal — a role agent's session tells the project-manager's session that its turn is
@@ -139,10 +140,11 @@ function registerUsage(on: any) {
 // ======================================================================== pane
 // TWO MODES, decided by the `paneMode` userConfig field alone (register's `options`):
 // operator — the fourth renderer over `.loopd/SNAPSHOT.json` (docs/conventions.md §11), with
-// Tick and Refresh; simple — an inbox of open questions, stuck tasks and progress, read from
-// the task documents, every button one slash command. Untrusted text and types: every string
-// through clean(), every number through toint(); a title may be cut to the pane's width, a
-// number never is (conventions 11d, 11e).
+// Answer questions, Refresh and Close pane, projects named by folder slug, never title;
+// simple — an inbox of open questions, stuck tasks and progress, read from the task
+// documents, every button one slash command. Untrusted text and types: every string through
+// clean(), every number through toint(); a name may be cut to the pane's width, a number
+// never is (conventions 11d, 11e).
 const PANE = 'loopd-board'
 const COMMAND = 'pane'
 const TITLE = 'loopd board'
@@ -150,7 +152,6 @@ const SNAPSHOT = '.loopd/SNAPSHOT.json'
 const POLL_MS = 5000
 const WIDTH = 45        // the operator layout's width where the surface names no bodyColumns
 const BAR = 10          // progress-bar cells, whatever the task count
-const DISPATCH = 'loopd:dispatch'   // the command, without its slash, as $.command.run names it
 // write-snapshot.sh's verb set, minus nothing: the pane names the verb, never the reason.
 const VERBS = ['approve', 'answer', 'merge', 'unblock', 'close'] as const
 const ANSWER = 'loopd:answer'
@@ -202,8 +203,8 @@ let detail = ''          // the one line a non-ok kind shows
 let mtimeMs = -1         // the snapshot's mtime at the last read; -1 = never read
 let reads = 0            // how many times the file was actually read (the poll skips an unchanged one)
 let timer: { cancel: () => void } | null = null
-let tickQueued = false
-let tickRefused = ''     // why the last Tick's submit was refused, drawn in the footer; '' = it was not
+let answerQueued = false
+let answerRefused = ''   // why the last Answer run was refused, drawn in the footer; '' = it was not
 let shownAge = ''        // the age text last drawn; the poll redraws when it would change
 let open = false         // a /pane placed the pane and no ui.close has fired since
 
@@ -310,6 +311,29 @@ function cut(s: string, n: number): string {
   const cp = Array.from(s)
   return cp.length <= n ? s : cp.slice(0, Math.max(0, n - 1)).join('') + '…'
 }
+function wrap(s: string, n: number, max: number): string[] {
+  const out: string[] = []
+  let cur = ''
+  const words = s.split(' ')
+  for (let i = 0; i < words.length; i++) {
+    let w = words[i]
+    while (cols(w) > n) {
+      const room = cur ? n - cols(cur) - 1 : n
+      if (room < 1) { out.push(cur); cur = ''; continue }
+      const cp = Array.from(w)
+      out.push((cur ? cur + ' ' : '') + cp.slice(0, room).join(''))
+      cur = ''; w = cp.slice(room).join('')
+    }
+    if (!cur) cur = w
+    else if (cols(cur) + 1 + cols(w) <= n) cur += ' ' + w
+    else { out.push(cur); cur = w }
+    if (out.length >= max) {
+      return [...out.slice(0, max - 1), cut([...out.slice(max - 1), cur, ...words.slice(i + 1)].filter(Boolean).join(' '), n)]
+    }
+  }
+  if (cur || !out.length) out.push(cur)
+  return out
+}
 function age(now: number, at: string): string {
   const s = (now - (/^\d{4}-\d\d-\d\dT/.test(at) ? Date.parse(at) : NaN)) / 1000
   if (!isFinite(s) || s < 0) return 'age unknown'
@@ -346,54 +370,44 @@ function draw($: any, e: any, now: number): any {
     const gap = (used: number) => ' '.repeat(Math.max(1, W - used))
     const needs = (t: Task) => (VERBS as readonly string[]).includes(t.awaiting)
 
-    shownAge = age(now, b.generated_at)
-    const name = fit(b.group || TITLE, W - cols(shownAge) - 1)
-    rows.push(row(seg(name, { ...TEXT, bold: true }), seg(gap(cols(name) + cols(shownAge))), seg(shownAge, MUTED)))
-    rows.push(line('─'.repeat(W), RULE))
-
     // print-board.sh's need-you rule: a task's AWAITING verb, plus one close per awaiting_close project.
-    const need: { verb: string; title: string }[] = []
+    const need: { verb: string; text: string }[] = []
     const working: Task[] = []
     for (const p of b.rows) {
-      if (p.awaiting_close) need.push({ verb: 'close', title: p.title || p.slug })
+      if (p.awaiting_close) need.push({ verb: 'close', text: p.slug })
       for (const t of p.tasks) {
-        if (needs(t)) need.push({ verb: t.awaiting, title: t.title || t.id })
+        if (needs(t)) need.push({ verb: t.awaiting, text: p.slug + ' · ' + (t.title || t.id) })
         if (t.in_flight) working.push(t)
       }
     }
-    if (need.length) {
-      rows.push(row(seg('NEEDS YOU', { ...NEEDS_YOU, bold: true }), seg('  ' + need.length, NEEDS_YOU)))
-      for (const n of need) {
-        const head = '› ' + n.verb.padEnd(7) + '  '
-        rows.push(row(seg(head, NEEDS_YOU), seg(fit(n.title, W - cols(head)), TEXT)))
-      }
-      rows.push(line(' '))
-    }
+    const needYou = (n: number) => n + (n === 1 ? ' needs you' : ' need you')
+    const heading = (s: string, n: number, look: Record<string, unknown>) =>
+      row(seg(s, { ...look, bold: true }), seg(n ? ' (' + n + ')' : '', look))
 
-    rows.push(line('WORKING', { ...WORK, bold: true }))
-    if (working.length === 0) rows.push(line('  nothing right now', MUTED))
-    for (const t of working) {
-      const head = '  ' + (t.assignee || 'unassigned') + '  '
-      const mark = t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : ''
-      rows.push(row(seg(head, WORK), seg(fit(t.title || t.id, W - cols(head) - cols(mark)), TEXT), seg(mark, MUTED)))
-    }
+    shownAge = age(now, b.generated_at)
+    const count = need.length ? ' · ' + needYou(need.length) : ''
+    const name = fit(b.group || TITLE, W - cols(shownAge) - cols(count) - 1)
+    rows.push(row(seg(name, { ...TEXT, bold: true }), seg(count, NEEDS_YOU), seg(gap(cols(name) + cols(count) + cols(shownAge))), seg(shownAge, MUTED)))
+    rows.push(line('─'.repeat(W), RULE))
 
-    rows.push(line(' '))
-    rows.push(line('PROJECTS', { ...TEXT, bold: true }))
+    rows.push(heading('PROJECTS', b.rows.length, TEXT))
     const ranked = b.rows.map((p, i) => {
-      let n = p.awaiting_close ? 1 : 0
+      let n = 0
       for (const t of p.tasks) if (needs(t)) n += 1
       return { p, n, i, rank: n ? 0 : p.status === 'active' ? 1 : p.status === 'paused' ? 2 : p.status === 'done' ? 3 : 4 }
     }).sort((x, y) => x.rank - y.rank || x.i - y.i)
     for (const { p, n } of ranked) {
+      rows.push(line(' '))
       const active = p.status === 'active'
-      const [glyph, look] = active ? ['●', WORK] : p.status === 'paused' ? ['○', MUTED] : p.status === 'done' ? ['✓', DONE] : ['·', MUTED]
+      // awaiting_close is finished work waiting on /loopd:close-project; status done is a closed, retained folder.
+      const [glyph, look] = p.awaiting_close ? ['✓', DONE] : active ? ['●', WORK] : p.status === 'paused' ? ['○', MUTED] : p.status === 'done' ? ['✓', MUTED] : ['·', MUTED]
       const tail: [string, Record<string, unknown>][] = []
-      if (n) tail.push([n + ' need you', NEEDS_YOU])
-      if (p.status === 'paused') tail.push(['paused', MUTED])
-      if (p.status === 'done') tail.push(['done', DONE])
+      if (n) tail.push([needYou(n), NEEDS_YOU])
+      if (p.awaiting_close) tail.push(['done', DONE])
+      else if (p.status === 'paused') tail.push(['paused', MUTED])
+      else if (p.status === 'done') tail.push(['closed', MUTED])
       const tailCols = cols(tail.map(([s]) => s).join(' · '))
-      const title = fit(p.title || p.slug, W - 2 - (tailCols ? tailCols + 1 : 0))
+      const title = fit(p.slug, W - 2 - (tailCols ? tailCols + 1 : 0))
       const parts = [seg(glyph + ' ', look), seg(title, active || n ? TEXT : MUTED)]
       if (tailCols) parts.push(seg(gap(2 + cols(title) + tailCols)), ...tail.map(([s, c], k) => seg((k ? ' · ' : '') + s, c)))
       rows.push(row(...parts))
@@ -409,32 +423,53 @@ function draw($: any, e: any, now: number): any {
       if (sub.length) rows.push(row(seg('  '), ...sub))
     }
 
-    if (tickQueued) { rows.push(line(' ')); rows.push(line('tick queued', MUTED)) }
+    rows.push(line(' '))
+    rows.push(heading('WORKING', working.length, WORK))
+    if (working.length === 0) rows.push(line('  nothing right now', MUTED))
+    for (const t of working) {
+      const head = '  ' + (t.assignee || 'unassigned') + '  '
+      const mark = t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : ''
+      rows.push(row(seg(head, WORK), seg(fit(t.title || t.id, W - cols(head) - cols(mark)), TEXT), seg(mark, MUTED)))
+    }
+
+    if (need.length) {
+      rows.push(line(' '))
+      rows.push(heading('NEEDS YOU', need.length, NEEDS_YOU))
+      const digits = String(need.length).length
+      need.forEach((n, k) => {
+        const head = String(k + 1).padStart(digits) + '. ' + n.verb.padEnd(7) + '  '
+        const wrapped = wrap(n.text, Math.max(1, W - cols(head)), 3)
+        rows.push(row(seg(head, NEEDS_YOU), seg(wrapped[0], TEXT)))
+        for (const l of wrapped.slice(1)) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
+      })
+    }
+
+    if (answerQueued) { rows.push(line(' ')); rows.push(line('answer queued', MUTED)) }
   }
-  // A refused submit is said, not swallowed: a Tick that silently did nothing is the
+  // A refused submit is said, not swallowed: a button that silently did nothing is the
   // silent wrong answer convention 12 is about.
-  if (tickRefused) rows.push(line('tick refused: ' + tickRefused, { dimColor: true }))
+  if (answerRefused) rows.push(line('answer refused: ' + answerRefused, { dimColor: true }))
 
   rows.push(line(' '))
   rows.push(Box({
     flexDirection: 'row', columnGap: 2, children: [
       Button({
-        key: 'tick', label: 'Tick', hotkey: 't',
-        // The human pressed a key in their own session: one /loopd:dispatch run, queued
+        key: 'answer', label: 'Answer questions', hotkey: 'a',
+        // The human pressed a key in their own session: one /loopd:answer run, queued
         // until the session is idle (the engine's own contract for a plugin's command.run).
         // Not awaited — a handler that waits for the run would block the press. Never on
         // a timer. A COMMAND run, not a prompt: the host refuses a `/` text as a prompt.
         onPress: () => {
-          if (tickQueued) return
-          tickQueued = true
-          tickRefused = ''
+          if (answerQueued) return
+          answerQueued = true
+          answerRefused = ''
           const done = (err?: unknown) => {
-            tickQueued = false
-            if (err !== undefined) tickRefused = clean(err && (err as any).message ? (err as any).message : String(err)) || 'refused'
+            answerQueued = false
+            if (err !== undefined) answerRefused = clean(err && (err as any).message ? (err as any).message : String(err)) || 'refused'
             try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
           }
           let p: any = null
-          try { p = $.command.run({ command: DISPATCH }) } catch (err) { done(err); return }
+          try { p = $.command.run({ command: ANSWER }) } catch (err) { done(err); return }
           if (p && typeof p.then === 'function') p.then(() => done(), (err: unknown) => done(err ?? 'refused')); else done()
           try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
         },
@@ -442,6 +477,12 @@ function draw($: any, e: any, now: number): any {
       Button({
         key: 'refresh', label: 'Refresh', hotkey: 'r',
         onPress: async () => { await refresh($, true); $.ui.invalidate('ui.render') },
+      }),
+      Button({
+        key: 'close', label: 'Close pane', hotkey: 'c',
+        // The same path as `/pane close`. A $.ui.close from a press did not reach this module's
+        // own ui.close hook in the kit (2.1.322), so the poll is stopped here as well.
+        onPress: async () => { try { await $.ui.close({ id: PANE }) } catch { /* already gone */ } stopPoll() },
       }),
     ],
   }))
@@ -941,6 +982,11 @@ function summarySimple(): string {
   return 'loopd: ' + simple.length + ' project(s) · ' + inbox().length + ' question(s) for you · ' + tasks(helps).length + ' blocked'
 }
 
+function stopPoll(): void {
+  open = false
+  if (timer) { try { timer.cancel() } catch { /* already gone */ } timer = null }
+}
+
 // true when what the pane draws may have changed.
 async function reread($: any, force: boolean): Promise<boolean> {
   if (MODE === 'simple') return refreshSimple($)
@@ -993,8 +1039,7 @@ function registerPane(on: any) {
   }).catch(async (_$: any, e: any, next: any) => next(e))   // fail OPEN: a broken pane never eats the command
 
   on('ui.close', { id: PANE }, async (_$: any, e: any, next: any) => {
-    open = false
-    if (timer) { try { timer.cancel() } catch { /* already gone */ } timer = null }
+    stopPoll()
     return next(e)
   }).catch(async (_$: any, e: any, next: any) => next(e))   // fail OPEN: the pane still closes
 

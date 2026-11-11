@@ -45,7 +45,7 @@ does. `paneMode` decides what it draws:
 
 | `paneMode` | Draws | Reads |
 |---|---|---|
-| `operator` (default) | the board below, with Tick and Refresh | the snapshot |
+| `operator` (default) | the board below, with Answer questions, Refresh and Close pane | the snapshot |
 | `simple` | an inbox — questions, stuck tasks, progress — and a form to start a project; nothing else | the task documents and the form |
 
 ### operator mode
@@ -57,16 +57,18 @@ re-implemented: nothing this pane shows is anything the file does not already ca
 
 | Section | From the snapshot's fields |
 |---|---|
-| header | `group` and the snapshot's age off `generated_at`: `just now`, `N min ago`, `N h ago` under 48 h, then `N d ago`; `age unknown` when it is unparseable or in the future |
-| NEEDS YOU | one row per task whose `awaiting` is an AWAITING verb — `approve · answer · merge · unblock` — and one `close` per project with `awaiting_close` (print-board.sh's rule): the verb, then the `title`, in snapshot order. Hidden when empty |
-| WORKING | each task with `in_flight`: `assignee` (a **role**, never a person) and `title`, plus `PR <pr_mergeable>` when `prs` is non-empty and it is not `MERGEABLE`; else `nothing right now` |
-| PROJECTS | one line per project, by `title`: `●` active, `○` paused, `✓` done; `N need you` only when N > 0. Needs-you first, then active, paused, done, snapshot order within each. Under each active project a 10-cell bar and `done/total` off its tasks' `status` (`cancelled` not counted; none, no bar), and `phase_progress` only when it has phases |
-| footer | `tick queued` while a Tick is waiting for the session to go idle |
+| header | `group`, then `· N need you` (`1 needs you`, here and in PROJECTS) when NEEDS YOU has rows (so the count shows when that section is below the fold), and the snapshot's age off `generated_at`: `just now`, `N min ago`, `N h ago` under 48 h, then `N d ago`; `age unknown` when it is unparseable or in the future |
+| PROJECTS (N) | one line per project, by folder `slug` (never `title`), a blank line between projects: `●` active, `○` paused; `✓ … done` in green for a project with `awaiting_close` (its close is a NEEDS YOU row, not counted here); `✓ … closed` in grey for `status: done` (only a retained folder is in the snapshot). `N need you` counts its tasks' AWAITING verbs, only when N > 0. Needs-you first, then active, paused, done, snapshot order within each. Under each active project a 10-cell bar and `done/total` off its tasks' `status` (`cancelled` not counted; none, no bar), and `phase_progress` only when it has phases |
+| WORKING (N) | each task with `in_flight`: `assignee` (a **role**, never a person) and `title`, plus `PR <pr_mergeable>` when `prs` is non-empty and it is not `MERGEABLE`; else `nothing right now` and no count |
+| NEEDS YOU (N) | last, next to the buttons: rows numbered `1.`–`N.`, one per task whose `awaiting` is an AWAITING verb — `approve · answer · merge · unblock` — as `<slug> · <title>`, and one `close <slug>` per project with `awaiting_close` (print-board.sh's rule), in snapshot order. Hidden when empty |
+| footer | `answer queued` while an Answer run waits for the session to go idle |
 
-Width is the pane's `bodyColumns` (45 when the surface gives none). No row wraps: a title is
-cut by code point with `…`; a count and the `paused`/`done` word never are. Colours are
-`plugin/themes/loopd.json` tokens — pink needs you, blue work, green done, grey quiet; the
-kit's `Button` takes no colour, so the two buttons are uncoloured.
+Width is the pane's `bodyColumns` (45 when the surface gives none). A NEEDS YOU row wraps,
+continuation lines under its text, at most 3 lines, the third cut with `…`; every other row
+is one line, its name cut by code point with `…`. A count and the `paused`/`done`/`closed`
+word are never cut, and a zero count is not drawn. Colours are `plugin/themes/loopd.json`
+tokens — pink needs you, blue work, green done, grey quiet; the kit's `Button` takes no
+colour, so the buttons are uncoloured.
 
 Not drawn, because the snapshot does not carry it: a round number, a session id, a usage
 line, a `continue` verb, any question or blocker **text**, any document body, any author
@@ -86,8 +88,9 @@ the pane opens and stops when it closes.
 
 | Button | Does |
 |---|---|
-| **Tick** (`t`) | `$.command.run({ command: 'loopd:dispatch' })` — runs `/loopd:dispatch` once in **this** session, as if you had typed it. The engine queues a plugin's command run until the session is idle, so this is idle-only by contract. (Not `$.prompt.submit`: the host refuses a prompt text that begins with `/`, measured on 2.1.293.) A refused run is drawn in the footer as `tick refused: <reason>`, never swallowed. **It is the human pressing a key at their own prompt, not automation**: nothing here runs on a timer, and no message goes to another session. One press, one queued tick; a second press while one is queued is ignored and the footer says `tick queued`. |
+| **Answer questions** (`a`) | `$.command.run({ command: 'loopd:answer' })` — runs `/loopd:answer` once in **this** session, as if you had typed it. The engine queues a plugin's command run until the session is idle, so this is idle-only by contract. (Not `$.prompt.submit`: the host refuses a prompt text that begins with `/`, measured on 2.1.293.) A refused run is drawn in the footer as `answer refused: <reason>`, never swallowed. **It is the human pressing a key at their own prompt, not automation**: nothing here runs on a timer, and no message goes to another session. One press, one queued run; a second press while one is queued is ignored and the footer says `answer queued`. |
 | **Refresh** (`r`) | re-read the snapshot now, mtime or not. |
+| **Close pane** (`c`) | `$.ui.close({ id: 'loopd-board' })`, the path `/pane close` takes; the poll stops. |
 
 Where no surface places the pane (a terminal under the width floor, a `claude -p` run),
 `/pane` prints one dim `● loopd:` line with the header counts instead.
@@ -111,7 +114,7 @@ test asserts their absence against task documents that carry all of them.
 are drawn `#ff7ac2`; a sent answer and the finished line `#76d6a4` (Text's `color` prop);
 every other line keeps the theme default or `dimColor`.
 
-**Every button is one slash command** (`$.command.run`, as Tick is), and every hotkey is
+**Every button is one slash command** (`$.command.run`, as operator mode's Answer questions is), and every hotkey is
 unique on the screen:
 
 | Key | Button | Runs |
