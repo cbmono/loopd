@@ -78,7 +78,7 @@ echo "== update available =="
 registry "$REG" "$U_OLD" "$Y" "$P_HERE" "$OTHER"; registry "$AFTER" "$U_NEW" "$Y" "$P_HERE" "$OTHER"
 run
 ok "exit 0"                                     "$RC" 0
-ok "the marketplace update is the first call"   "$(printf '%s\n' "$LOG" | head -1)" "claude plugin marketplace update $PMK"
+ok "the marketplace update is the first call"   "$(sed -n 1p <<<"$LOG")" "claude plugin marketplace update $PMK"
 ok "core updated at user scope"                 "$(has "claude plugin update $PN@$PMK -s user" "$LOG")" yes
 ok "…and the companion"                         "$(has "claude plugin update $PN-yolo@$PMK -s user" "$LOG")" yes
 ok "another marketplace's plugin is not touched" "$(has 'lsp@elsewhere' "$LOG")" no
