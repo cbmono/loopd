@@ -2,6 +2,8 @@
 # stop-ids`: reads one `claude agents --json --all` listing and prints that mode's rows.
 #   python3 agent-sessions-classify.py <listing-json> <root> <wtroot> <terminal> <summary> <tasks>
 #                                      <skip> <recs> <self-ids> <bounds> <projects-dir>
+# <summary> `counts`: `<working> <idle> <dead>`, then `<word> TAB <json task path>` per task whose
+# worktree holds a session, the path relative to <root>.
 # Exit 0 answered · 2 unreadable listing, or no row carries a pid (dead-ids, stop-ids).
 # Reasoning: docs/pm-design.md#step-3-background.
 import glob, json, os, re, sys, time, unicodedata
@@ -31,8 +33,8 @@ for line in tasks.splitlines():
         stem = os.path.basename(path)[:-3]
         m = re.match(r"(task-[0-9]+)-", stem)
         label = os.path.basename(os.path.dirname(os.path.dirname(path))) + "/" + (m.group(1) if m else stem)
-        by_wt.append((canon(wt), label))
-scope = [canon(root), canon(wtroot) if not dead else ""] + [w for w, _ in by_wt]
+        by_wt.append((canon(wt), label, path))
+scope = [canon(root), canon(wtroot) if not dead else ""] + [w for w, _, _ in by_wt]
 rec = {}
 for line in recs.splitlines():
     s_, st_, path = (line.split("\t") + ["", ""])[:3]
@@ -88,7 +90,8 @@ def age(ms):
             return "%d%s" % (s // n, unit)
     return "%ds" % s
 
-out, working, idle, ghost, ended, cands, busy = [], 0, 0, 0, 0, [], []
+out, working, idle, ghost, ended, cands, busy, per_task = [], 0, 0, 0, 0, [], [], {}
+WORDS = ["working", "idle", "dead", "none"]
 for r in rows:
     if not isinstance(r, dict) or r.get("kind", "background" if not dead else None) != "background":
         continue
@@ -104,7 +107,7 @@ for r in rows:
         elif hit is None and state in terminal:
             c = canon(r.get("cwd") if isinstance(r.get("cwd"), str) else "")
             if (under(c, canon(root)) and not under(c, canon(wtroot))
-                    and not any(under(c, w) for w, _ in by_wt)):
+                    and not any(under(c, w) for w, _, _ in by_wt)):
                 cls = "finished"
         elif hit and hit[0] not in ("done", "cancelled") and state not in terminal and state != "blocked":
             st, now = r.get("status"), time.time()
@@ -123,7 +126,7 @@ for r in rows:
     # is shown as unattributed rather than assumed to be someone else's.
     if c and not any(under(c, d) for d in scope):
         continue
-    labels = sorted({l for w, l in by_wt if under(c, w)})
+    labels = sorted({l for w, l, _ in by_wt if under(c, w)})
     task = clean(",".join(labels) if labels else "unattributed")
     state = str(r.get("state") or r.get("status") or "?")
     pid = r.get("pid")
@@ -131,16 +134,22 @@ for r in rows:
         proc, rank = "pid %d" % pid, 0
         st = r.get("status")
         if st == "busy" or (st is None and state == "working"):
-            working += 1
+            working, word = working + 1, "working"
             busy.append(str(r.get("sessionId") or ""))
         else:
-            idle += 1
+            idle, word = idle + 1, "idle"
     elif state in terminal:
         ended += 1
         continue
     else:
-        proc, rank = "none", 1
+        proc, rank, word = "none", 1, "dead"
         ghost += 1
+    # Two sessions on one task: the busiest word wins.
+    for w_, _, path in by_wt:
+        if under(c, w_):
+            k = path[len(root.rstrip("/")) + 1:] if path.startswith(root.rstrip("/") + "/") else path
+            if WORDS.index(word) < WORDS.index(per_task.get(k, "none")):
+                per_task[k] = word
     if dead:
         sid, s = str(r.get("sessionId") or ""), secs(r.get("startedAt"))
         if (proc == "none" and not labels and c and s is not None
@@ -159,6 +168,11 @@ if dead:
     sys.exit(0)
 if summary == "1":
     print(working, idle, ghost)
+    sys.exit(0)
+if summary == "counts":
+    print(working, idle, ghost)
+    for k in sorted(per_task):
+        print(per_task[k] + "\t" + json.dumps(k))
     sys.exit(0)
 if summary == "working":
     open_rec = {}

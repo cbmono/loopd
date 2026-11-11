@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# status-line.sh — one line for Claude Code's `statusLine`: what is in progress, how many
-# bg sessions are working, idle or dead, what waits on the human, a held lock, when the last
-# tick was.
+# status-line.sh — one line for Claude Code's `statusLine`: what is in progress and in
+# review, how many bg sessions are working, idle or dead, what waits on the human, a held
+# lock, when the last tick was. Each run also writes those numbers to AB_COUNTS (counts.sh).
 #
 #   status-line.sh [--instance DIR] [--color auto|always|never]
 #
@@ -80,75 +80,12 @@ paint() { printf '%s%s%s' "$1" "$2" "$C_OFF"; }
 
 UNKNOWN='?'
 
-# --- in flight: the task frontmatter, directly ------------------------------------------
-# Not SNAPSHOT.json: its absence is the BOARD's off switch, and it carries in-flight only
-# as a per-task boolean. One awk pass, first frontmatter block of each task document.
-inflight="$UNKNOWN"
-if [ -d "$root/projects" ]; then
-  set -- "$root"/projects/*/tasks/*.md
-  if [ -e "$1" ]; then
-    inflight="$(awk '
-      FNR == 1 { fm = 0; hit = 0; if ($0 == "---") { fm = 1; next } }
-      fm && $0 == "---" { fm = 0; next }
-      fm && !hit && $0 ~ /^status:[[:space:]]*in-progress[[:space:]]*$/ { n++; hit = 1 }
-      END { print n + 0 }
-    ' "$@" 2>/dev/null)" || inflight="$UNKNOWN"
-    [ -n "$inflight" ] || inflight="$UNKNOWN"
-  else
-    inflight=0
-  fi
-fi
-
-# --- agents: PROCESSES behind this bundle's background sessions, not the registry's word ---
-# The one segment that is not a file read: `agent-sessions.sh view --summary` runs
-# `claude agents --json` (~150 ms), so its answer is cached per bundle for AGENTS_TTL
-# seconds and every open session shares it. A failed read caches `?`, never `0 working`.
-# The `v2` tag is the cache format: a fresh line in any other (an older version's two counts,
-# sharing this file) is unknown, never re-read as three.
-AGENTS_TTL=10
-agents="$UNKNOWN"
-a_cache="${XDG_CACHE_HOME:-$HOME/.cache}/loopd/agents-$(printf '%s' "$root" | cksum | cut -d' ' -f1)"
-now="$(date +%s)"
-a_ep=""; a_rest=""
-[ -r "$a_cache" ] && read -r a_ep a_rest < "$a_cache" 2>/dev/null
-case "$a_ep" in ''|*[!0-9]*) a_ep=0 ;; esac
-if [ $((now - a_ep)) -ge 0 ] && [ $((now - a_ep)) -lt "$AGENTS_TTL" ]; then
-  case "$a_rest" in "v2 "*) agents="${a_rest#v2 }" ;; esac
-else
-  agents="$(bash "$(dirname "${BASH_SOURCE[0]:-$0}")/agent-sessions.sh" view "$root" --summary \
-            </dev/null 2>/dev/null)" || agents="$UNKNOWN"
-  if mkdir -p "${a_cache%/*}" 2>/dev/null; then
-    printf '%s v2 %s\n' "$now" "$agents" > "$a_cache.$$" 2>/dev/null && mv -f "$a_cache.$$" "$a_cache" 2>/dev/null
-    rm -f "$a_cache.$$" 2>/dev/null
-  fi
-fi
-# Anything but three counts — a stale format, a truncated write — is unknown.
-a_work=""; a_idle=""; a_dead=""; a_more=""
-read -r a_work a_idle a_dead a_more <<<"$agents"
-case "$a_work:$a_idle:$a_dead:$a_more" in
-  *[!0-9:]*|:*|*::*|*[0-9]) agents="$UNKNOWN" ;;
-esac
-
-# --- need you: AWAITING.md's own items, counted the way the banner counts them -----------
-# THREE STATES, THREE RENDERINGS, and `[ -r ]` alone cannot tell the first two apart.
-# OFF IS CHOSEN — `awaiting: false`, or the file deleted (build-awaiting.sh never recreates
-# it) — and a state the human typed is not an error: the segment goes.
-# UNREADABLE IS ARRIVED AT, so it speaks, and it names its own repair in the line.
-awaiting=""
-queue=off
-if ab_awaiting_on "$root" && [ -e "$root/$AB_AWAITING" ]; then
-  queue=unreadable
-  if [ -r "$root/$AB_AWAITING" ]; then
-    queue=on
-    awaiting="$(awk '
-      /^##[[:space:]].*Awaiting you/ { inblk = 1; next }
-      inblk && /^##[[:space:]]/      { exit }
-      inblk && /^[[:space:]]*\* /    { n++ }
-      END { print n + 0 }
-    ' "$root/$AB_AWAITING" 2>/dev/null)" || awaiting="$UNKNOWN"
-    [ -n "$awaiting" ] || awaiting="$UNKNOWN"
-  fi
-fi
+# Every number comes from counts.sh, which also writes them to AB_COUNTS for the pane. Not
+# SNAPSHOT.json: its absence is the BOARD's off switch, and only a tick writes it.
+# shellcheck source=counts.sh
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/counts.sh" || exit 0
+ab_counts "$root"
+ab_write_counts "$root"
 
 # --- the lock: one `[ -f ]`, never a call into tick-lock.sh ------------------------------
 lock=free
@@ -156,7 +93,7 @@ lock=free
 
 # --- last tick: log.md's last `* TICK` line ---------------------------------------------
 # NOT `.tick-state`: tick-delta.sh refuses to stamp it while any task is in-progress, so it
-# is guaranteed stale exactly while `in flight` is non-zero. An `open:` line counts — a tick
+# is guaranteed stale exactly while `in progress` is non-zero. An `open:` line counts — a tick
 # that started and has not closed is still the last tick.
 last="$UNKNOWN"
 if [ -r "$root/$AB_LEDGER" ]; then
@@ -176,16 +113,18 @@ n_colour() { case "$1" in "$UNKNOWN") printf '%s' "$C_PINK" ;; 0) printf '%s' "$
 SEP="$(paint "$C_DIM" ' · ')"
 
 printf '%s' "$(paint "$C_B" 'loopd')"
-printf '%s%s' "$SEP" "$(paint "$(n_colour "$inflight" "$C_BLUE")" "$inflight in progress")"
-if [ "$agents" = "$UNKNOWN" ]; then
+printf '%s%s' "$SEP" "$(paint "$(n_colour "$CNT_IN_PROGRESS" "$C_BLUE")" "$CNT_IN_PROGRESS in progress")"
+[ "$CNT_IN_REVIEW" = 0 ] || \
+  printf '%s%s' "$SEP" "$(paint "$(n_colour "$CNT_IN_REVIEW" "$C_BLUE")" "$CNT_IN_REVIEW in review")"
+if [ "$CNT_WORKING" = "$UNKNOWN" ]; then
   printf '%s%s' "$SEP" "$(paint "$C_PINK" "$UNKNOWN working · $UNKNOWN idle · $UNKNOWN dead")"
 else
-  printf '%s%s' "$SEP" "$(paint "$(n_colour "$a_work" "$C_GREEN")" "$a_work working")"
-  printf '%s%s' "$SEP" "$(paint "$(n_colour "$a_idle" "")" "$a_idle idle")"
-  printf '%s%s' "$SEP" "$(paint "$(n_colour "$a_dead" "$C_PINK")" "$a_dead dead")"
+  printf '%s%s' "$SEP" "$(paint "$(n_colour "$CNT_WORKING" "$C_GREEN")" "$CNT_WORKING working")"
+  printf '%s%s' "$SEP" "$(paint "$(n_colour "$CNT_IDLE" "")" "$CNT_IDLE idle")"
+  printf '%s%s' "$SEP" "$(paint "$(n_colour "$CNT_DEAD" "$C_PINK")" "$CNT_DEAD dead")"
 fi
-case "$queue" in
-  on)         printf '%s%s' "$SEP" "$(paint "$(n_colour "$awaiting" "$C_PINK")" "$awaiting need you")" ;;
+case "$CNT_QUEUE" in
+  on)         printf '%s%s' "$SEP" "$(paint "$(n_colour "$CNT_NEED_YOU" "$C_PINK")" "$CNT_NEED_YOU need you")" ;;
   unreadable) printf '%s%s' "$SEP" \
                 "$(paint "$C_PINK" "${AB_AWAITING##*/} unreadable — chmod +r $AB_AWAITING")" ;;
 esac

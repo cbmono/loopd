@@ -797,7 +797,7 @@ else
   ' "$SL_SETTINGS" > "$sl_tmp" 2>/dev/null
   if [ -s "$sl_tmp" ] && grep -q '"statusLine"' "$sl_tmp"; then
     mv "$sl_tmp" "$SL_SETTINGS"
-    echo "  wrote statusLine into .claude/settings.json (loopd · in progress · working · idle · dead · need you · lock held · last tick)"
+    echo "  wrote statusLine into .claude/settings.json (loopd · in progress · in review · working · idle · dead · need you · lock held · last tick)"
     sl_user="$CONFIG_DEST/settings.json"
     if [ -f "$sl_user" ] && grep -q '"statusLine"' "$sl_user"; then
       echo "  note  PROJECT settings win, so this shadows the statusLine in $sl_user"
@@ -1160,6 +1160,16 @@ if ! grep -qE "^/?${AB_BOARD_OTHERS//./\\.}$" "$gi"; then
 # read from the tracked documents at HEAD and stored against the SHA it was computed for.
 # Derived and per-machine. Delete it freely; the next render rebuilds it.
 /__AB_BOARD_OTHERS__
+GI
+fi
+
+# The status line's counts file (counts.sh) — its OWN guard, the .tick-lock.claim lesson.
+if ! grep -qE "^/?${AB_COUNTS//./\\.}$" "$gi"; then
+  gi_add <<'GI'
+
+# The status line's numbers (counts.sh), rewritten on every redraw and read by the pane.
+# Per clone and derived; delete freely.
+/__AB_COUNTS__
 GI
 fi
 
@@ -2595,7 +2605,7 @@ if [ "$FIRST_STAMP" = no ] && [ -z "${LOOPD_INIT_PASS:-}${AI_BRIDGE_INIT_PASS:-}
   # its trailing copy must outrank an older `!/board.html`, so dropping it would un-ignore.
   if [ -f "$gi" ]; then
     gi_managed="/$AB_LOCK /$AB_LOCK_CLAIM /$AB_STATE_DIR /$AB_ANSWER_LATER /$AB_BOARD_OTHERS"
-    gi_managed="$gi_managed /$AB_BOARD_DIR/ /$AB_AWAITING /$AB_SNAPSHOT /$AB_DIR/kb.git/ /$AB_DIR/kb-src/"
+    gi_managed="$gi_managed /$AB_BOARD_DIR/ /$AB_AWAITING /$AB_SNAPSHOT /$AB_COUNTS /$AB_DIR/kb.git/ /$AB_DIR/kb-src/"
     gi_managed="$gi_managed /$AB_KB_STAMP* /$AB_RECEIPTS/ /$AB_DIR/refresh/ /repos/ .env instance.config.local.json"
     tmp="$gi.tmp.$$"
     if awk -v managed="$gi_managed" '

@@ -184,9 +184,16 @@ OUT="$(FAIL=1 PATH="$P" bash "$SESS" working "$B" 2>/dev/null)"; RC=$?
 ok "working: a failing read ⇒ exit 2, no line" "$RC:${OUT:-<empty>}" "2:<empty>"
 rm -f "$B/projects/p/tasks/task-00[456]-"*.md
 
+CT="$(FIXTURE="$FIX" PATH="$P" bash "$SESS" view "$B" --counts 2>/dev/null)"
+ok "--counts: first line is --summary's" "$(head -1 <<<"$CT")" \
+   "$(FIXTURE="$FIX" PATH="$P" bash "$SESS" view "$B" --summary 2>/dev/null)"
+ok "…then <word> TAB <json task path>, relative to the bundle" "$(sed 1d <<<"$CT" | cut -f2 | sort | tr '\n' ';')" \
+   '"projects/p/tasks/task-001-working.md";"projects/p/tasks/task-002-ghost.md";"projects/p/tasks/task-003-merged.md";'
+ok "…each word working, idle or dead" "$(sed 1d <<<"$CT" | cut -f1 | grep -cvE '^(working|idle|dead)$' | tr -d ' ')" 0
+
 echo "== 5. the status line's agents segment =="
 sl() { rm -rf "$XDG_CACHE_HOME"; PATH="$P" bash "$SL" --instance "$B" --color "${C:-never}" </dev/null 2>/dev/null; }
-seg() { awk -F ' · ' '{ print $3 " · " $4 " · " $5 }'; }
+seg() { grep -oE '[0-9?]+ working · [0-9?]+ idle · [0-9?]+ dead'; }
 ok "working, idle and dead, side by side" "$(sl | seg)" "1 working · 1 idle · 3 dead"
 ok "a failing read renders ?, never 0"    "$(FAIL=1 sl | seg)" "? working · ? idle · ? dead"
 ok "…and so does malformed JSON"          "$(FIXTURE="$TMP/bad.json" sl | seg)" "? working · ? idle · ? dead"
@@ -200,22 +207,25 @@ echo "== 6. the read is cached and shared, so N sessions do not each pay for it 
 rm -rf "$XDG_CACHE_HOME"; : > "$CALLS"
 for _ in 1 2 3; do PATH="$P" bash "$SL" --instance "$B" --color never </dev/null >/dev/null 2>&1; done
 ok "three renders inside the TTL ⇒ one claude call" "$(wc -l < "$CALLS" | tr -d ' ')" 1
-CF="$(head -1 <<<"$(ls "$XDG_CACHE_HOME"/loopd/agents-* 2>/dev/null)")"
-ok "the cache line is tagged v2" "$(awk '{print $2, NF}' "$CF")" "v2 5"
-printf '1 v2 9 9 9\n' > "$CF"; : > "$CALLS"
+CF="$(head -1 <<<"$(ls "$XDG_CACHE_HOME"/loopd/counts-* 2>/dev/null)")"
+ok "the cache's first line is tagged v3" "$(awk 'NR == 1 {print $2, NF}' "$CF")" "v3 5"
+printf '1 v3 9 9 9\n' > "$CF"; : > "$CALLS"
 ok "a stale cache is re-read, not shown" \
    "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "1 working · 1 idle · 3 dead"
 printf '%s 2 3\n' "$(date +%s)" > "$CF"
 ok "a fresh two-count line from an older version is unknown" \
    "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "? working · ? idle · ? dead"
 printf '%s 2 3 4\n' "$(date +%s)" > "$CF"
-ok "…and three untagged counts are not read as v2" \
+ok "…and three untagged counts are not read as v3" \
    "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "? working · ? idle · ? dead"
 printf '%s garbage\n' "$(date +%s)" > "$CF"
 ok "a fresh but malformed cache is unknown, not a number" \
    "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "? working · ? idle · ? dead"
-printf '%s v2 1 2 3 4\n' "$(date +%s)" > "$CF"
-ok "a v2 line with four counts is unknown" \
+printf '%s v2 1 2 3\n' "$(date +%s)" > "$CF"
+ok "a fresh v2 line (no per-task words) is unknown" \
+   "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "? working · ? idle · ? dead"
+printf '%s v3 1 2 3 4\n' "$(date +%s)" > "$CF"
+ok "a v3 line with four counts is unknown" \
    "$(PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" "? working · ? idle · ? dead"
 ok "an unwritable cache still renders" \
    "$(XDG_CACHE_HOME=/dev/null/x PATH="$P" bash "$SL" --instance "$B" --color never </dev/null 2>/dev/null | seg)" \

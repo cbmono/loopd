@@ -62,7 +62,7 @@ run() { SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" "$@" </dev/null 2>/dev
 plain() { run --instance "$1" --color never; }
 
 # ------------------------------------------------------------------- the fixture bundle
-mk() { # <dir> — a bundle with 2 in-flight tasks, 3 awaiting items, a closed tick, no lock
+mk() { # <dir> — a bundle with 2 in-progress tasks, 1 in review, 3 awaiting items, an open tick, no lock
   local d="$1"
   mkdir -p "$d/projects/proj-a/tasks" "$d/$AB_DIR" || return 1
   printf '{ "org": "acme" }\n' > "$d/instance.config.json"
@@ -73,6 +73,7 @@ mk() { # <dir> — a bundle with 2 in-flight tasks, 3 awaiting items, a closed t
   done
   printf -- '---\nstatus: ready\n---\n'  > "$d/projects/proj-a/tasks/task-003.md"
   printf -- '---\nstatus: done\n---\n'   > "$d/projects/proj-a/tasks/task-004.md"
+  printf -- '---\nstatus: in-review\n---\n' > "$d/projects/proj-a/tasks/task-005.md"
   cat > "$d/$AB_AWAITING" <<'EOF'
 # Awaiting you
 
@@ -106,10 +107,10 @@ else                  HM="$(date -d 2026-09-13T16:41:05Z '+%H:%M' 2>/dev/null)";
 echo
 echo "== 1. the whole line, character for character =="
 ok "the healthy bundle" "$(plain "$INST")" \
-   "loopd · 2 in progress · 0 working · 0 idle · 0 dead · 3 need you · last tick $HM"
+   "loopd · 2 in progress · 1 in review · 0 working · 0 idle · 0 dead · 3 need you · last tick $HM"
 : > "$INST/$AB_LOCK"
 ok "…and with a tick holding the lock" "$(plain "$INST")" \
-   "loopd · 2 in progress · 0 working · 0 idle · 0 dead · 3 need you · lock held · last tick $HM"
+   "loopd · 2 in progress · 1 in review · 0 working · 0 idle · 0 dead · 3 need you · lock held · last tick $HM"
 rm -f "$INST/$AB_LOCK"
 ok "exactly one line of output" "$(plain "$INST" | wc -l | tr -d ' ')" 1
 
@@ -120,7 +121,7 @@ ok 'an `open:` TICK is still the last tick (it is the newest)' \
 printf '{"counts":{"awaiting":99}}\n' > "$INST/$AB_SNAPSHOT"
 printf 'recorded: 2001-01-01T00:00:00Z\n'    > "$INST/$AB_STATE_DIR"
 ok "SNAPSHOT.json and .tick-state change nothing" "$(plain "$INST")" \
-   "loopd · 2 in progress · 0 working · 0 idle · 0 dead · 3 need you · last tick $HM"
+   "loopd · 2 in progress · 1 in review · 0 working · 0 idle · 0 dead · 3 need you · last tick $HM"
 ok "…and neither is named in the source" \
    "$(grep -c 'SNAPSHOT\.json\|\.tick-state' "$SL" | tr -d ' ')" 2
 ok "…which is twice, in comments saying why not" \
@@ -133,10 +134,10 @@ D="$TMP/d1"; mk "$D"; rm -f "$D/$AB_AWAITING"
 ok "no AWAITING.md ⇒ the queue is off, so the segment is GONE" \
    "$(plain "$D" | grep -c 'need you\|AWAITING' | tr -d ' ')" 0
 ok "…and the rest of the line is untouched" "$(plain "$D")" \
-   "loopd · 2 in progress · 0 working · 0 idle · 0 dead · last tick $HM"
+   "loopd · 2 in progress · 1 in review · 0 working · 0 idle · 0 dead · last tick $HM"
 D="$TMP/d1b"; mk "$D"; printf '{ "org": "acme", "awaiting":\n false }\n' > "$D/instance.config.json"
 ok "awaiting: false ⇒ the segment is GONE, as for an absent file" "$(plain "$D")" \
-   "loopd · 2 in progress · 0 working · 0 idle · 0 dead · last tick $HM"
+   "loopd · 2 in progress · 1 in review · 0 working · 0 idle · 0 dead · last tick $HM"
 D="$TMP/d2"; mk "$D"; rm -f "$D/$AB_LEDGER"
 ok "no log.md ⇒ the time is unknown"       "$(plain "$D" | sed 's/.*· //')" "last tick ?"
 D="$TMP/d3"; mk "$D"; printf '# Log\n\nnothing yet\n' > "$D/$AB_LEDGER"
@@ -165,7 +166,7 @@ fi
 chmod 644 "$D/projects/proj-a/tasks/task-001.md"
 D="$TMP/d10"; mk "$D"
 if unreadable "$D/$AB_AWAITING"; then
-  UNREAD="$(plain "$D" | awk -F ' · ' '{ print $6 }')"
+  UNREAD="$(plain "$D" | awk -F ' · ' '{ print $7 }')"
   ok "an unreadable AWAITING.md SPEAKS — it is arrived at, not chosen" \
      "$UNREAD" "${AB_AWAITING##*/} unreadable — chmod +r $AB_AWAITING"
   ok "…and the repair is in the LINE, not in a doc the operator must go find" \
@@ -242,30 +243,32 @@ ok "an off queue paints nothing, because it is not a fault" \
    "$(printf '%s' "$(run --instance "$TMP/d1" --color always)" | grep -c 'need you\|unreadable' | tr -d ' ')" 0
 
 # RUNNING AGENTS ARE THE BRAND'S GREEN, 24-bit whatever tier (owner, 2026-10-18). The agents
-# cache is seeded directly: `<epoch> v2 <working> <idle> <dead>`, keyed as status-line.sh keys it.
+# cache is seeded directly: `<epoch> v3 <working> <idle> <dead>`, keyed as counts.sh keys it.
 GREEN='38;2;118;214;164'
 seed_agents() { # <bundle> <cache line after the epoch>
-  local f; f="$XDG_CACHE_HOME/loopd/agents-$(printf '%s' "$1" | cksum | cut -d' ' -f1)"
+  local f; f="$XDG_CACHE_HOME/loopd/counts-$(printf '%s' "$1" | cksum | cut -d' ' -f1)"
   mkdir -p "${f%/*}"; printf '%s %s\n' "$(date +%s)" "$2" > "$f"
 }
 agents_sgr() { sgr_of "$(run --instance "$1" --color always)" "${2:-working}"; }
 D="$TMP/g1"; mk "$D"
-seed_agents "$D" "v2 2 0 0";  ok "working agents are the brand's green"       "$(agents_sgr "$D")" "$GREEN"
+seed_agents "$D" "v3 2 0 0";  ok "working agents are the brand's green"       "$(agents_sgr "$D")" "$GREEN"
 ok "…and that is the only segment wearing it" \
    "$(run --instance "$D" --color always | grep -oF "$GREEN" | wc -l | tr -d ' ')" 1
-seed_agents "$D" "v2 0 0 0";  ok "zero working stays dim, not green"           "$(agents_sgr "$D")" 2
+seed_agents "$D" "v3 0 0 0";  ok "zero working stays dim, not green"           "$(agents_sgr "$D")" 2
 ok "…and so do zero idle and zero dead" "$(agents_sgr "$D" '0 idle')/$(agents_sgr "$D" '0 dead')" 2/2
-seed_agents "$D" "v2 2 1 3";  ok "working agents stay green beside dead ones" "$(agents_sgr "$D")" "$GREEN"
+seed_agents "$D" "v3 2 1 3";  ok "working agents stay green beside dead ones" "$(agents_sgr "$D")" "$GREEN"
 ok "…and a session with no process is its own pink \`dead\`" \
    "$(sgr_of "$(run --instance "$D" --color always)" '3 dead')" 95
 ok "the counts are working · idle · dead, in that order" \
-   "$(run --instance "$D" --color never | awk -F ' · ' '{print $3 " · " $4 " · " $5}')" "2 working · 1 idle · 3 dead"
+   "$(run --instance "$D" --color never | awk -F ' · ' '{print $4 " · " $5 " · " $6}')" "2 working · 1 idle · 3 dead"
 seed_agents "$D" "garbage";   ok "an unknown count stays pink"                 "$(agents_sgr "$D" '? working')" 95
 seed_agents "$D" "2 3";       ok "an older version's two counts read ?, never three" \
-   "$(run --instance "$D" --color never | awk -F ' · ' '{print $3}')" "? working"
+   "$(run --instance "$D" --color never | awk -F ' · ' '{print $4}')" "? working"
+seed_agents "$D" "v2 2 0 0";  ok "…and so does the v2 format, which carries no per-task words" \
+   "$(run --instance "$D" --color never | awk -F ' · ' '{print $4}')" "? working"
 NG="$TMP/no-green"; cp -R "$REPO/plugin/scripts" "$NG"
-sed 's/"\$C_GREEN")" "\$a_work working/"$C_BLUE")" "$a_work working/' "$SL" > "$NG/status-line.sh"
-seed_agents "$D" "v2 2 0 0"
+sed 's/"\$C_GREEN")" "\$CNT_WORKING working/"$C_BLUE")" "$CNT_WORKING working/' "$SL" > "$NG/status-line.sh"
+seed_agents "$D" "v3 2 0 0"
 ok "…mutant: painting it blue again is caught" \
    "$(sgr_of "$(SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NG/status-line.sh" --instance "$D" --color always </dev/null 2>/dev/null)" 'working')" 94
 
@@ -276,7 +279,7 @@ echo "== 8. 3/4-bit but the green, all codes from cli-theme.sh, no terminfo prob
 ok "the theme's basic tier is asked for by name" "$(grep -c 'ab_theme "\$use_color" basic' "$SL" | tr -d ' ')" 1
 ok "…and this file builds no escape of its own"  "$(grep -v '^[[:space:]]*#' "$SL" | grep -c '033' | tr -d ' ')" 0
 NT="$TMP/no-theme"; mkdir -p "$NT"
-cp "$SL" "$REPO/plugin/scripts/bundle-paths.sh" "$NT/"
+cp "$SL" "$REPO/plugin/scripts/bundle-paths.sh" "$REPO/plugin/scripts/counts.sh" "$NT/"
 # Its own cache: this copy has no agent-sessions.sh, so it caches `agents ?` for $INST.
 ok "an unsourceable theme means no colour, never no line" \
    "$(XDG_CACHE_HOME="$TMP/nt-cache" SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NT/status-line.sh" --instance "$INST" --color always </dev/null 2>/dev/null)" \
@@ -298,7 +301,7 @@ echo "== 10. the session JSON on stdin: drained, and read only for a directory =
 SJ="$(printf '{"session_id":"x","workspace":{"current_dir":"%s"},"cost":{"total_cost_usd":1.5}}' "$INST")"
 ok "\`current_dir\` locates the bundle" \
    "$(printf '%s' "$SJ" | SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" --color never 2>/dev/null)" \
-   "loopd · 2 in progress · 0 working · 0 idle · 0 dead · 3 need you · last tick $HM"
+   "loopd · 2 in progress · 1 in review · 0 working · 0 idle · 0 dead · 3 need you · last tick $HM"
 ok "…and --instance wins over it" \
    "$(printf '%s' "$SJ" | SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$SL" --instance "$TMP/d5" --color never 2>/dev/null \
       | sed 's/.*loopd · \([^·]*in progress\) ·.*/\1/')" "0 in progress"
@@ -332,6 +335,91 @@ D="$TMP/m3"; mk "$D"
 printf '* TICK 2026-09-13T18:00:00Z by cbmono open: newer\n' >> "$D/$AB_LEDGER"
 ok "a newer TICK line moves the clock" \
    "$([ "$(plain "$D" | sed 's/.*· //')" != "last tick $HM" ] && echo yes || echo no)" yes
+
+echo
+echo "== 13. one definition, one counts file, the same numbers on both =="
+CS="$REPO/plugin/scripts/counts.sh"
+ok "ab_counts is defined exactly once in the repo" \
+   "$(cd "$REPO" && git grep --untracked -n '^ab_counts()' -- . | wc -l | tr -d ' ')" 1
+ok "…in counts.sh" "$(cd "$REPO" && git grep --untracked -l '^ab_counts()' -- .)" plugin/scripts/counts.sh
+ok "status-line.sh counts nothing itself (no task, AWAITING or session read)" \
+   "$(grep -v '^[[:space:]]*#' "$SL" | grep -cE 'in-progress|in-review|Awaiting you|agent-sessions|projects/' | tr -d ' ')" 0
+ok "counts.sh never reads SNAPSHOT.json either" \
+   "$(grep -v '^[[:space:]]*#' "$CS" | grep -c 'SNAPSHOT' | tr -d ' ')" 0
+
+S="$TMP/same"; mk "$S"
+SENT="SENTINEL-$$-NEVER-IN-COUNTS"
+printf -- '---\ntitle: "%s"\nstatus: in-progress\nworktree: %s\n---\n' "$SENT" "$S/wt/t1" > "$S/projects/proj-a/tasks/task-001.md"
+printf -- '---\ntitle: "%s"\nstatus: in-progress\nworktree: %s\n---\n' "$SENT" "$S/wt/t2" > "$S/projects/proj-a/tasks/task-002.md"
+printf -- '---\ntitle: "%s"\nstatus: in-review\nworktree: %s\n---\n'   "$SENT" "$S/wt/t5" > "$S/projects/proj-a/tasks/task-005.md"
+mkdir -p "$S/wt/t1" "$S/wt/t2" "$S/wt/t5"
+cat >> "$S/$AB_AWAITING.new" <<EOF
+# Awaiting you
+
+## 🔴 Awaiting you (4)
+* 🔀 **merge** — [a](/projects/proj-a/tasks/task-001.md)
+* ❓ **answer** — [c](/projects/proj-a/tasks/task-004.md) $SENT
+* 👉 **do** — $SENT run the migration by hand
+* 👀 **review** — [e](/projects/proj-a/tasks/task-005.md) $SENT
+EOF
+mv "$S/$AB_AWAITING.new" "$S/$AB_AWAITING"
+LIVE=$$; sleep 0 & DEAD=$!; wait "$DEAD" 2>/dev/null
+cat > "$TMP/listing.json" <<EOF
+[ {"id":"s1","sessionId":"s1-x","kind":"background","cwd":"$S/wt/t1","pid":$LIVE,"status":"busy","state":"working"},
+  {"id":"s2","sessionId":"s2-x","kind":"background","cwd":"$S/wt/t2","pid":$LIVE,"status":"idle","state":"blocked"},
+  {"id":"s3","sessionId":"s3-x","kind":"background","cwd":"$S/wt/t5","pid":$DEAD,"state":"working"},
+  {"id":"s4","sessionId":"s4-x","kind":"background","cwd":"$S/wt/t1","pid":$LIVE,"status":"idle","state":"blocked"} ]
+EOF
+BAR="$(AB_SESSIONS_LISTING="$TMP/listing.json" plain "$S")"
+CJ="$S/$AB_COUNTS"
+ok "the run wrote $AB_COUNTS" "$([ -s "$CJ" ] && echo yes || echo no)" yes
+ok "…through a temp file and mv, leaving no temp behind" \
+   "$(ls "$S/$AB_DIR" | grep -c 'counts\.json\.' | tr -d ' ')" 0
+ok "…and it is JSON" "$(python3 -c 'import json,sys; json.load(open(sys.argv[1])); print("yes")' "$CJ" 2>/dev/null || echo no)" yes
+J() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); v=eval(sys.argv[2], {"d": d}); print("null" if v is None else v)' "$CJ" "$1" 2>/dev/null; }
+ok "the bar, on this fixture" "$BAR" \
+   "loopd · 2 in progress · 1 in review · 1 working · 2 idle · 1 dead · 4 need you · last tick $HM"
+bar_n() { printf '%s' "$BAR" | sed -n "s/.* · \([0-9?]*\) $1\( · .*\)*$/\1/p"; }
+ok "in progress: bar = counts.json"  "$(bar_n 'in progress')" "$(J 'd["in_progress"]')"
+ok "in review: bar = counts.json"    "$(bar_n 'in review')"   "$(J 'd["in_review"]')"
+ok "working: bar = counts.json"      "$(bar_n working)"       "$(J 'd["sessions"]["working"]')"
+ok "idle: bar = counts.json"         "$(bar_n idle)"          "$(J 'd["sessions"]["idle"]')"
+ok "dead: bar = counts.json"         "$(bar_n dead)"          "$(J 'd["sessions"]["dead"]')"
+ok "need you: bar = counts.json"     "$(bar_n 'need you')"    "$(J 'd["need_you"]')"
+ok "per-task words, keyed by task path (two sessions on one task: the busier word)" \
+   "$(J '",".join("%s=%s" % kv for kv in sorted(d["task_sessions"].items()))')" \
+   "projects/proj-a/tasks/task-001.md=working,projects/proj-a/tasks/task-002.md=idle,projects/proj-a/tasks/task-005.md=dead"
+ok "a task with no session is absent" "$(J '"projects/proj-a/tasks/task-003.md" in d["task_sessions"]')" False
+ok "written_at is a UTC stamp" "$(J 'd["written_at"]' | grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$')" 1
+ok "the keys are exactly the contract" "$(J '",".join(sorted(d))')" \
+   "in_progress,in_review,need_you,queue,sessions,task_sessions,written_at"
+ok "no AWAITING text and no task title reaches it (planted sentinel)" "$(grep -c "$SENT" "$CJ" | tr -d ' ')" 0
+ok "…while the sentinel IS in the fixtures it was read from" \
+   "$(cat "$S/$AB_AWAITING" "$S"/projects/proj-a/tasks/*.md | grep -c "$SENT" | tr -d ' ')" 6
+
+echo
+echo "== 14. a number the bar shows as ? is null in counts.json =="
+plain "$TMP/d4" >/dev/null
+CJ="$TMP/d4/$AB_COUNTS"
+ok "no projects/ ⇒ in_progress and in_review null" "$(J 'd["in_progress"], d["in_review"]')" "(None, None)"
+D="$TMP/q1"; mk "$D"; seed_agents "$D" "garbage"; plain "$D" >/dev/null; CJ="$D/$AB_COUNTS"
+ok "unknown sessions ⇒ every session count and the per-task map null" \
+   "$(J '[d["sessions"][k] for k in ("working","idle","dead")] + [d["task_sessions"]]')" "[None, None, None, None]"
+plain "$TMP/d1" >/dev/null; CJ="$TMP/d1/$AB_COUNTS"
+ok "queue off ⇒ need_you null and queue \"off\"" "$(J 'd["need_you"], d["queue"]')" "(None, 'off')"
+CJ="$INST/$AB_COUNTS"; plain "$INST" >/dev/null
+ok "a readable queue ⇒ \"on\" with its count" "$(J 'd["need_you"], d["queue"]')" "(3, 'on')"
+D="$TMP/g-old"; mk "$D"; mkdir -p "$D/.git"; printf '/%s\n' "$AB_SNAPSHOT" > "$D/.gitignore"
+plain "$D" >/dev/null
+ok "a git bundle whose .gitignore lacks the line gets NO counts.json" "$([ -e "$D/$AB_COUNTS" ] && echo yes || echo no)" no
+printf '/%s\n' "$AB_COUNTS" >> "$D/.gitignore"; plain "$D" >/dev/null
+ok "…and gets it once /loopd:init has added the line" "$([ -s "$D/$AB_COUNTS" ] && echo yes || echo no)" yes
+ok "…while the line itself is unchanged by it" \
+   "$(plain "$D")" "loopd · 2 in progress · 1 in review · 0 working · 0 idle · 0 dead · 3 need you · last tick $HM"
+D="$TMP/q2"; mk "$D"; rm -f "$D"/projects/proj-a/tasks/task-005.md
+ok "0 in review hides the segment, as the line's other zero-is-quiet segments" \
+   "$(plain "$D" | grep -c 'in review' | tr -d ' ')" 0
+ok "…and a ? in review still shows, in pink" "$(sgr_of "$(run --instance "$TMP/d4" --color always)" '? in review')" 95
 
 printf '\npass=%d fail=%d skip=%d\n' "$pass" "$fail" "$skip"
 [ "$fail" -eq 0 ]
