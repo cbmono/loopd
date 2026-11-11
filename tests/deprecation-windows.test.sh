@@ -21,6 +21,7 @@ ok() { # <name> <actual> <expected>
   else printf '  FAIL  %-60s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi
 }
 rc() { bash "$DW" "$@" >/dev/null 2>&1; echo $?; }
+scanrc() { { bash "$DW" "$@"; echo "rc=$?"; } 2>&1 | tr '\n' ' ' | sed 's/ $//'; }
 fixture() { # <dir> <version> <line> — a root whose plugin/ carries one line
   mkdir -p "$1/plugin" "$1/docs"
   printf '%s\n' "$2" > "$1/VERSION"
@@ -48,9 +49,11 @@ ok "…and another docs/ file is not"    "$(rc --root "$TMP/ops")" 0
 
 echo "== the version wording is a window too, and bare 'one version' is not =="
 fixture "$TMP/fov" 4.9.1 'It shipped for one version as this stub.'
-ok "a bare 'for one version' exits 1"  "$(bash "$DW" --root "$TMP/fov")" "BARE plugin/doc.md:2"
+ok "a bare 'for one version' is BARE, exit 1" "$(scanrc --root "$TMP/fov")" "BARE plugin/doc.md:2 rc=1"
 fixture "$TMP/nv" 4.9.1 'Delete it at the next version.'
-ok "a bare 'next version' exits 1"     "$(bash "$DW" --root "$TMP/nv")" "BARE plugin/doc.md:2"
+ok "a bare 'next version' is BARE, exit 1" "$(scanrc --root "$TMP/nv")" "BARE plugin/doc.md:2 rc=1"
+fixture "$TMP/omv" 4.9.1 'Accepted for one more version.'
+ok "a bare 'one more version' is BARE, exit 1" "$(scanrc --root "$TMP/omv")" "BARE plugin/doc.md:2 rc=1"
 fixture "$TMP/fovu" 4.9.1 'Kept for one version, until 4.10.0.'
 ok "…and with an until still ahead, 0" "$(rc --root "$TMP/fovu")" 0
 fixture "$TMP/ov" 4.9.1 'One version, in FOUR files, and they move together.'
@@ -58,7 +61,7 @@ ok "bare 'one version' is not a window" "$(rc --root "$TMP/ov")" 0
 for p in README.md .claude/rules/r.md docs/conventions.md; do
   d="$TMP/scope-$(printf '%s' "$p" | tr '/.' '__')"; fixture "$d" 4.9.1 'nothing here'
   mkdir -p "$d/$(dirname "$p")"; printf 'Accepted for one version.\n' > "$d/$p"
-  ok "$p is scanned"                   "$(bash "$DW" --root "$d")" "BARE $p:1"
+  ok "$p is scanned"                   "$(scanrc --root "$d")" "BARE $p:1 rc=1"
 done
 
 echo "== an until the version has reached fails, one ahead of it passes =="

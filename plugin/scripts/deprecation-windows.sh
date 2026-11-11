@@ -27,7 +27,7 @@ vcmp() { # <a> <b> -> lt|eq|gt
 }
 
 # Spelled with [[:space:]] so this file never matches the phrases it looks for.
-WINDOW='one[[:space:]]+release|next[[:space:]]+release|one[[:space:]]+more[[:space:]]+release|for[[:space:]]+one[[:space:]]+version|next[[:space:]]+version'
+WINDOW='one[[:space:]]+release|next[[:space:]]+release|one[[:space:]]+more[[:space:]]+release|for[[:space:]]+one[[:space:]]+version|next[[:space:]]+version|one[[:space:]]+more[[:space:]]+version'
 UNTIL='until[[:space:]]+`?v?[0-9]+\.[0-9]+\.[0-9]+'
 PATHS=(plugin README.md .claude/rules docs/operations.md docs/conventions.md)
 
