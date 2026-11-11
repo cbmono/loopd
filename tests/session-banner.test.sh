@@ -1253,6 +1253,7 @@ echo "== 12. NON-VACUITY: the blank line, and the section order, each with its o
 MUTTPL="$TMP/muttpl"
 mkdir -p "$MUTTPL/plugin/hooks"
 ln -s "$SCRIPTS" "$MUTTPL/plugin/scripts"
+ln -s "${HOOK%/*}/register.ts" "$MUTTPL/plugin/hooks/register.ts"   # the mark's one source
 cp "$HOOK" "$MUTTPL/plugin/hooks/control.sh"
 tracked_cfg
 mut_run() { CLAUDE_PROJECT_DIR="$INST" bash "$MUTTPL/plugin/hooks/$1" 2>/dev/null; }

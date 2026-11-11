@@ -1991,6 +1991,36 @@ assert "…as many entries as counts.sh counts need-you items" "$(yes_if bash -c
 [ "$CNT_NEED_YOU" = "$(python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))[\"awaiting_items\"]))" "$2/$AB_SNAPSHOT")" ]' _ "$TPL" "$AWI")"
 assert "…the fixture does carry the sentinels the scan reads past" "$(fhas 'SENTINEL-TITLE' "$AWI/$AB_AWAITING")"
 assert "…and not one SENTINEL reaches the snapshot" "$(fhasnt 'SENTINEL' "$AWJ")"
+# Agent text in the verb slot is not a verb: only build-awaiting.sh's nine survive.
+# A task part that fails its shape blanks the row, never falls back to the project.
+cat > "$AWI/$AB_AWAITING" <<'AW'
+## 🔴 Awaiting you (3)
+* 👉 **rm** — [x](/projects/alpha/tasks/task-001.md) · s
+* ⛔ **unblock** — [x](/projects/beta/tasks/-bad.md) · s
+* ✅ **approve** — [x](/projects/alpha/tasks/task-001.md) · s
+AW
+( cd "$AWI" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
+assert "an unknown verb (\`**rm**\`) is written empty; a bad task target blanks slug and task" \
+  "$([ "$(items)" = ',alpha,task-001;unblock,,;approve,alpha,task-001' ] && echo 0 || echo 1)"
+# A link inside a title is escaped by build-awaiting.sh, so the row's own target is read.
+printf -- '---\ntype: Task\ntitle: "see [x](/projects/beta/project.md) **rm**"\nstatus: blocked\nacceptance_criteria: [ "c" ]\n---\n' > "$AWI/projects/alpha/tasks/task-002.md"
+: > "$AWI/$AB_AWAITING"; bash "$TPL/plugin/scripts/build-awaiting.sh" --instance "$AWI" >/dev/null 2>&1
+( cd "$AWI" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
+assert "…a title embedding [x](/projects/beta/project.md) keeps the row's own target" \
+  "$([ "$(items)" = 'unblock,alpha,task-002' ] && echo 0 || echo 1)"
+rm -f "$AWI/projects/alpha/tasks/task-002.md"
+# Unreadable is UNKNOWN (D7): null, never [] and never the key left out.
+nullitems() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if "awaiting_items" in d and d["awaiting_items"] is None else 1)' "$AWJ"; }
+mv "$AWI/$AB_AWAITING" "$AWI/aw.md"; mkdir "$AWI/$AB_AWAITING"
+( cd "$AWI" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
+assert "AWAITING.md there but not a readable file ⇒ \`\"awaiting_items\": null\`" "$(yes_if nullitems)"
+rmdir "$AWI/$AB_AWAITING"; mv "$AWI/aw.md" "$AWI/$AB_AWAITING"
+_shim="$TMP/awkfail"; mkdir -p "$_shim"
+printf '#!/bin/sh\nfor a; do last=$a; done\ncase "$last" in *AWAITING.md) exit 2 ;; esac\nexec %s "$@"\n' "$(command -v awk)" > "$_shim/awk"; chmod +x "$_shim/awk"
+( cd "$AWI" && PATH="$_shim:$PATH" bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
+assert "…and so is an awk that exits non-zero on it" "$(yes_if nullitems)"
+( cd "$AWI" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
+assert "…while a readable file writes a list again" "$(yes_if python3 -c 'import json,sys; sys.exit(0 if isinstance(json.load(open(sys.argv[1]))["awaiting_items"], list) else 1)' "$AWJ")"
 sed 's/^{/{"awaiting": false,/' "$AWI/instance.config.json" > "$AWI/c" && mv "$AWI/c" "$AWI/instance.config.json"
 ( cd "$AWI" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
 assert "the queue off (\`awaiting: false\`) ⇒ no \`awaiting_items\` key"    "$([ "$(items)" = absent ] && echo 0 || echo 1)"

@@ -676,21 +676,25 @@ say() { local c="$1"; shift; printf '%s%s%s\n' "$c" "$*" "$C_OFF"; }
 # is byte-for-byte `say`.
 say_strong() { local c="$1"; shift; printf '%s%s%s%s\n' "$EMPH_MARK" "$c" "$*" "$C_OFF"; }
 
-# THE LOOPD MARK — the loop with its gate, kept ONCE and as data, copied glyph for glyph
-# from the design source's `cli-banner.sh`. Three rows, each `indent|pink|blue`: a leading
-# run that carries no colour at all, then the human's span, then the machine's. `|` is the
-# separator because no glyph of the mark is one, and the split is POSITIONAL rather than by
-# glyph class — row 1's first `▄` is the gate and its other three are tube, so the same
-# character is pink in one column and blue in the next.
-#
-# THE TWO PINK SPANS ARE THE WHOLE POINT AND THERE ARE NEVER MORE: the gate on the top edge
-# and the `◀━` exit arrow leaving to the left. Every pink pixel is a decision waiting, so a
-# third one would be a decision that is not there.
-#
-# `◀━` MUST LAND IN A TRUE MONOSPACE FONT or the three rows shear — the arrow is two cells
-# wide and the tube walls below it are aligned to that. Nothing here can check it; it is
-# checked by eye in a real terminal.
-LOGO_ROWS=('   |▄|▄▄▄' '|◀━|▐    ▌' '  ||▝▄▄▄▄▘')
+# THE LOOPD MARK — the loop with its gate, copied glyph for glyph from the design source's
+# `cli-banner.sh`, and kept ONCE: `const LOGO_ROWS` in hooks/register.ts, because the pane
+# draws it too and a mod cannot read outside the bundle, so this side reads that line. Three
+# rows, each `indent|pink|blue`: a run with no colour, the human's span, the machine's. `|`
+# is the separator because no glyph of the mark is one; the split is POSITIONAL, so row 1's
+# first `▄` is pink and the next three blue. Why two pink spans, never more, and the
+# monospace caveat for `◀━`: the comment above that line. No line to read ⇒ the plain header.
+LOGO_ROWS=(); n_logo=0
+if [ -n "$plugin_root" ] && [ -r "$plugin_root/hooks/register.ts" ]; then
+  raw="$(sed -n "s/^const LOGO_ROWS = \['\(.*\)'\]\$/\1/p" "$plugin_root/hooks/register.ts" 2>/dev/null)"
+  while [ -n "$raw" ]; do
+    case "$raw" in
+      *"', '"*) LOGO_ROWS+=("${raw%%"', '"*}"); raw="${raw#*"', '"}" ;;
+      *) LOGO_ROWS+=("$raw"); raw="" ;;
+    esac
+    n_logo=$((n_logo + 1))
+  done
+fi
+[ "$n_logo" -eq 3 ] || LOGO=0
 
 # logo [<row-2 span>] [<row-3 span>] — the three rows; each span given is appended after the
 # mark, padded to its widest row and one space. With colour off every name below is empty;

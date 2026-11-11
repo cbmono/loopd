@@ -94,13 +94,23 @@ assert "the header and the rule start in the same column" \
   "$(eq "$(chars "${r2%"$HDR"}")" "$(chars "${r3%"$RULE"}")")"
 assert "…one past the mark's widest row" "$(eq "$(chars "${r2%"$HDR"}")" "$(( $(chars "$L2") + 1 ))")"
 assert "…and nothing follows the block but a blank line" "$(eq "$(nth "$OUT" "$((n+3))")" "")"
-# KEPT ONCE, AS DATA. Three inline printf fragments would satisfy every assertion above and
-# be three places to edit; the hook holds one array and this counts it.
+# KEPT ONCE, AS DATA, in hooks/register.ts — the pane draws the mark too, and a mod cannot
+# read outside the bundle — so the hook reads that one line and spells no row itself.
+MOD="$TPL/plugin/hooks/register.ts"
 for l in "$D1" "$D2" "$D3"; do
-  assert "the hook carries that row exactly once" "$(eq "$(grep -cF -- "$l" "$HOOK")" 1)"
+  assert "the plugin carries that row exactly once, in register.ts" \
+    "$(eq "$(grep -rcF -- "$l" "$TPL/plugin" | awk -F: '{ n += $NF } END { print n }')/$(grep -cF -- "$l" "$MOD")" 1/1)"
 done
-assert "…on one line, as an array rather than three printfs" \
-  "$(eq "$(grep -cF -- "LOGO_ROWS=(" "$HOOK")" 1)"
+assert "…on one line, as an array the hook reads" \
+  "$(eq "$(grep -c "^const LOGO_ROWS = \[" "$MOD")/$(grep -c 'sed -n "s/^const LOGO_ROWS' "$HOOK")" 1/1)"
+# No line to read is the plain header, never a broken mark: a plugin root whose register.ts
+# lacks it (scripts/ and VERSION linked from the real one).
+FAKE="$TMP/plugin-nologo"; mkdir -p "$FAKE/hooks"
+ln -s "$TPL/plugin/scripts" "$FAKE/scripts"; ln -s "$TPL/plugin/VERSION" "$FAKE/VERSION"
+grep -v '^const LOGO_ROWS = ' "$MOD" > "$FAKE/hooks/register.ts"
+NL="$(runenv CLAUDE_PLUGIN_ROOT="$FAKE" -- "$HOOK")"; h="$(head_no "$NL")"
+assert "register.ts without the line ⇒ no mark, the header line first" \
+  "$(grep -qE '^loopd v[0-9][^ ]* · ' <<<"$(nth "$NL" "$h")" && ! grep -qF '◀━' <<<"$NL" && echo 0 || echo 1)"
 # THE DOCS SAMPLE IS A SAMPLE OF THIS OUTPUT, so it carries the same three rows.
 SAMPLE="$(cat "$DOC")"
 for l in "$L1" "$L2" "$L3"; do

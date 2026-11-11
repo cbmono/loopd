@@ -194,10 +194,12 @@ $(entries "$1" open_questions || true)
 EOF
 }
 
+# Escaped with the trailers' set, so a link or `**` in a title cannot pose as the row's own.
 title_of() { # <file>
   local t; t="$(fmfirst "$1" title)"
   t="${t%\"}"; t="${t#\"}"
-  [ -n "$t" ] && printf '%s' "$t" || basename "$1" .md
+  [ -n "$t" ] || t="$(basename "$1" .md)"
+  printf '%s' "$t" | LC_ALL=C sed 's/[][\\`*_()<>|~!#]/\\&/g'
 }
 
 # THE GLYPH IS NEVER THE MODEL'S. A question asking for a tool, an install, a credential or
