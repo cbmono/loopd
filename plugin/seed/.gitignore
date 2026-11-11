@@ -17,6 +17,10 @@ node_modules/
 # writer never recreates it).
 /.loopd/SNAPSHOT.json
 
+# The status line's numbers (scripts/counts.sh), rewritten on every redraw and read by the
+# pane. Per clone and derived; delete freely. /loopd:init appends this line too.
+/.loopd/counts.json
+
 # The board page is DERIVED and never tracked. It used to be committed on every tick that
 # changed something — which made one path contended by every clone of a shared bundle, for
 # a file both of them regenerate in a second. The board is served locally instead:

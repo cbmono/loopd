@@ -1163,6 +1163,16 @@ if ! grep -qE "^/?${AB_BOARD_OTHERS//./\\.}$" "$gi"; then
 GI
 fi
 
+# The status line's counts file (counts.sh) — its OWN guard, the .tick-lock.claim lesson.
+if ! grep -qE "^/?${AB_COUNTS//./\\.}$" "$gi"; then
+  gi_add <<'GI'
+
+# The status line's numbers (counts.sh), rewritten on every redraw and read by the pane.
+# Per clone and derived; delete freely.
+/__AB_COUNTS__
+GI
+fi
+
 # The PM dispatch lock (tick-lock.sh), appended for the third time for exactly the
 # same reason: every instance in existence was stamped before this file existed, and a lock
 # that got committed would stop being per-clone — which is the one property it has.
@@ -2595,7 +2605,7 @@ if [ "$FIRST_STAMP" = no ] && [ -z "${LOOPD_INIT_PASS:-}${AI_BRIDGE_INIT_PASS:-}
   # its trailing copy must outrank an older `!/board.html`, so dropping it would un-ignore.
   if [ -f "$gi" ]; then
     gi_managed="/$AB_LOCK /$AB_LOCK_CLAIM /$AB_STATE_DIR /$AB_ANSWER_LATER /$AB_BOARD_OTHERS"
-    gi_managed="$gi_managed /$AB_BOARD_DIR/ /$AB_AWAITING /$AB_SNAPSHOT /$AB_DIR/kb.git/ /$AB_DIR/kb-src/"
+    gi_managed="$gi_managed /$AB_BOARD_DIR/ /$AB_AWAITING /$AB_SNAPSHOT /$AB_COUNTS /$AB_DIR/kb.git/ /$AB_DIR/kb-src/"
     gi_managed="$gi_managed /$AB_KB_STAMP* /$AB_RECEIPTS/ /$AB_DIR/refresh/ /repos/ .env instance.config.local.json"
     tmp="$gi.tmp.$$"
     if awk -v managed="$gi_managed" '

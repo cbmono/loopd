@@ -28,10 +28,11 @@
 #   agent-sessions.sh in-flight <bundle-root> -> how many recorded sessions still hold a
 #                                                slot, on stdout; one line per recorded
 #                                                session on stderr
-#   agent-sessions.sh view <bundle-root> [--summary]
+#   agent-sessions.sh view <bundle-root> [--summary|--counts]
 #                                             -> this bundle's background sessions, one
 #                                                row each: task, state, process, age, id;
-#                                                `--summary` prints `<working> <idle> <dead>`
+#                                                `--summary` prints `<working> <idle> <dead>`,
+#                                                `--counts` adds `<word> TAB <json task path>` rows
 #   agent-sessions.sh working <bundle-root>   -> `<short> <task-stem|unrecorded>` per session
 #                                                `view` counts as working
 #   agent-sessions.sh dead-ids <bundle-root>  -> `<uuid> <short> <age>` per session the tick
@@ -59,7 +60,7 @@
 # tests/resume-full-id.test.sh, tests/blocked-recorded.test.sh and tests/dead-session-sweep.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,53p' "$0" >&2; exit 2; }
+usage() { sed -n '3,54p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 here="$(dirname "${BASH_SOURCE[0]:-$0}")"
@@ -335,7 +336,9 @@ PY
       *) [ $# -eq 2 ] || usage; summary=dead ;;
     esac
     [ "$mode" = stop-ids ] && summary=stop
-    if [ $# -eq 3 ]; then [ "$3" = "--summary" ] || usage; summary=1; fi
+    if [ $# -eq 3 ]; then
+      case "$3" in --summary) summary=1 ;; --counts) summary=counts ;; *) usage ;; esac
+    fi
     [ -d "$root" ] || { echo "agent-sessions: no such bundle root: $root" >&2; exit 2; }
     json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
     # dead-ids leaves worktreeRoot out of scope: it is shared by every bundle on the machine.
@@ -444,6 +447,6 @@ PY
     echo "copy $uuid"
     ;;
 
-  -h|--help) sed -n '3,53p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,54p' "$0"; exit 0 ;;
   *) usage ;;
 esac
