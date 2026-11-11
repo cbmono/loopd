@@ -51,32 +51,33 @@ does. `paneMode` decides what it draws:
 ### operator mode
 
 The **fourth renderer** over the one board contract, `plugin/scripts/write-snapshot.sh` →
-`.loopd/SNAPSHOT.json` (`docs/conventions.md` §11 in `cbmono/loopd`). It reads the snapshot,
-never the bundle, so the snapshot writer's field allowlist holds here without being
-re-implemented: nothing this pane shows is anything the file does not already carry. Its
-numbers — in progress, in review, sessions by state, need you — come from
+`.loopd/SNAPSHOT.json` (`docs/conventions.md` §11 in `cbmono/loopd`). It reads two files,
+the snapshot and `.loopd/counts.json`, and never the rest of the bundle, so the snapshot
+writer's field allowlist holds here without being re-implemented: nothing this pane shows
+is anything those files do not already carry. Its numbers — in progress, in review, sessions by state, need you — come from
 `.loopd/counts.json`, which `status-line.sh` writes on every redraw through `counts.sh`, the
 one definition; the pane computes none of them, so it agrees with the bar.
 
 | Section | From |
 |---|---|
-| header | `group`, then `· N need you` (`1 needs you`, here and in PROJECTS), N counts.json's `need_you` (hidden at 0 and with the queue off, as on the bar), and under the rule one grey line while a number is `?`: `no .loopd/counts.json yet`, `.loopd/counts.json unreadable · <its mtime's age>`, or `.loopd/counts.json · <written_at's age>`. Then and the snapshot's age off `generated_at`: `just now`, `N min ago`, `N h ago` under 48 h, then `N d ago`; `age unknown` when it is unparseable or in the future |
+| header | `group`, then `· N need you` (`1 needs you`, here and in PROJECTS), N counts.json's `need_you` (hidden at 0 and with the queue off, as on the bar), then an age: counts.json's `written_at` when the file parses and that is a valid timestamp (the bar rewrites it on every redraw, so it is live), else the snapshot's `generated_at`, which an idle tick leaves old: `just now`, `N min ago`, `N h ago` under 48 h, then `N d ago`; `age unknown` when it is unparseable or in the future. With counts.json absent or unparseable the layout stays, every number from it is `?`, and the info line under the buttons reads `counts unavailable — run /loopd:init` |
 | PROJECTS (N) | one line per project, by folder `slug` (never `title`), a blank line between projects; pressing a name copies its slug: `●` active, `○` paused; `✓ … done` in green for a project with `awaiting_close` (its close is a NEEDS YOU row, not counted here); `✓ … closed` in grey for `status: done` (only a retained folder is in the snapshot). `N need you` counts its `awaiting_items` other than `close` (an older snapshot: its tasks' AWAITING verbs), only when N > 0. Needs-you first, then active, paused, done, snapshot order within each. Under each active project a 10-cell bar and `done/total` off its tasks' `status` (`cancelled` not counted; none, no bar), and `phase_progress` only when it has phases |
-| IN PROGRESS (N) | N is counts.json's `in_progress`; under it `W working · I idle · D dead` from its `sessions`. One row per `status: in-progress` task: `assignee` (a **role**, never a person), `title`, and its session word from `task_sessions` — `working`, `idle`, `dead`, or `—` when none is recorded; else `nothing right now` |
-| IN REVIEW (N) | N is counts.json's `in_review`; one row per `status: in-review` task, `assignee` and `title`, plus `PR <pr_mergeable>` when `prs` is non-empty and it is not `MERGEABLE`. Hidden at 0 |
-| NEEDS YOU (N) | last, next to the buttons. N is counts.json's `need_you`; rows numbered `1.`–`N.`, one per `awaiting_items` entry in AWAITING.md's order — every verb, `👉 do` and `👀 review` included — as `<slug> · <title>` (the title looked up by task id), or `<slug>` on a project row. An older snapshot without `awaiting_items`: one row per task whose `awaiting` is a verb, and one `close <slug>` per project with `awaiting_close` (print-board.sh's rule). Pressing a row's verb copies `projects/<slug>/tasks/<id>.md`, or `<slug>` on a project row. Hidden at 0 and with the queue off |
-| footer | one line, the latest of: `answer queued` while an Answer run waits for the session to go idle; `copied <ref>`, `copy sent <ref>` (the copy's result did not say), `copy failed: <reason>` or `copy refused: bad ref`. A copy line is cut to the width and cleared by the next re-read |
+| IN PROGRESS (N) | N is counts.json's `in_progress`, `(0)` drawn; a blank line, then `W working · I idle · D dead` from its `sessions`. One row per `status: in-progress` task: `assignee` (a **role**, never a person), `title`, and its session word from `task_sessions` — `working`, `idle`, `dead`, or `—` when none is recorded; else `nothing right now`. Body rows indent 3 columns |
+| IN REVIEW (N) | N is counts.json's `in_review`; one row per `status: in-review` task, `assignee` and `title`, plus `PR <pr_mergeable>` when `prs` is non-empty and it is not `MERGEABLE`, else `none`. Drawn at `(0)`; rows indent 3 columns |
+| NEEDS YOU (N) | last, next to the buttons. N is counts.json's `need_you`; rows numbered `1.`–`N.`, one per `awaiting_items` entry in AWAITING.md's order — every verb, `👉 do` and `👀 review` included — as `<slug> · <title>` (the title looked up by task id), or `<slug>` on a project row. An older snapshot without `awaiting_items`: one row per task whose `awaiting` is a verb, and one `close <slug>` per project with `awaiting_close` (print-board.sh's rule). Pressing a row's verb copies `projects/<slug>/tasks/<id>.md` (a task with no snapshot row too), or `<slug>` on a project row; none is `none`. `awaiting_items: null` (AWAITING.md unreadable) is unknown: `(?)`, no rows, no fallback. Hidden at 0 and with the queue off, which also drops every PROJECTS `N need you` |
+| buttons | a blank line, a `─` rule of the pane's width, a blank line, the three buttons (plain, no `[ ]`), a blank line |
+| info line | under the buttons, so they never move; the latest of `copied <ref>`, `copy sent <ref>` (the copy's result did not say), `copy failed: <reason>`, `copy refused: bad ref` or `answer refused: <reason>`, for 10 s after it is set (the poll redraws it away) and until the next re-read; else `answer queued` while an Answer run waits for the session to go idle; else the counts-unavailable hint. Cut to the width |
 
 Width is the pane's `bodyColumns` (45 when the surface gives none). A NEEDS YOU row wraps,
 continuation lines under its text, at most 3 lines, the third cut with `…`; every other row
 is one line, its name cut by code point with `…`. A count and the `paused`/`done`/`closed`
-word are never cut, and a zero count is not drawn; a count counts.json does not give — the file absent, unparseable, or the value `null` — is drawn `?`, never `0`. Colours are a pastel trial palette
+word are never cut, and a zero count is not drawn (`(0)` on IN PROGRESS and IN REVIEW is); a count counts.json does not give — the file absent, unparseable, or the value `null` — is drawn `?`, never `0`. Colours are a pastel trial palette
 (2026-11-11, before the rest of loopd adopts it): rose `#DA627D` needs you, peach `#FCA17D`
 the bundle name and PROJECTS, sky `#86BBD8` work, teal `#06969A` a bar's done part, deep
 blue `#33658A` the rule, green `#76d6a4` done, grey quiet. The kit's `Button` drops a
 `color` prop, so each button's label is a coloured `Text` child in a muted tone: teal
 `✎ Answer questions`, deep blue `↻ Refresh`, plum `#9A348E` `✕ Close pane`, each leading with
-a monochrome symbol, the row indented 2 columns.
+a monochrome symbol, the row indented 2 columns. Hover on a `plain` button was not measured: the kit's test mount draws no frame.
 
 Not drawn, because the snapshot does not carry it: a round number, a session id, a usage
 line, any question or blocker **text**, any document body, any author
@@ -96,7 +97,7 @@ and runs nothing; the poll starts when the pane opens and stops when it closes.
 
 | Button | Does |
 |---|---|
-| **Answer questions** (`a`) | `$.command.run({ command: 'loopd:answer' })` — runs `/loopd:answer` once in **this** session, as if you had typed it. The engine queues a plugin's command run until the session is idle, so this is idle-only by contract. (Not `$.prompt.submit`: the host refuses a prompt text that begins with `/`, measured on 2.1.293.) A refused run is drawn in the footer as `answer refused: <reason>`, never swallowed. **It is the human pressing a key at their own prompt, not automation**: nothing here runs on a timer, and no message goes to another session. One press, one queued run; a second press while one is queued is ignored and the footer says `answer queued`. |
+| **Answer questions** (`a`) | `$.command.run({ command: 'loopd:answer' })` — runs `/loopd:answer` once in **this** session, as if you had typed it. The engine queues a plugin's command run until the session is idle, so this is idle-only by contract. (Not `$.prompt.submit`: the host refuses a prompt text that begins with `/`, measured on 2.1.293.) A refused run is drawn on the info line as `answer refused: <reason>`, never swallowed. **It is the human pressing a key at their own prompt, not automation**: nothing here runs on a timer, and no message goes to another session. One press, one queued run; a second press while one is queued is ignored and the info line says `answer queued`. |
 | **Refresh** (`r`) | re-read the snapshot and `counts.json` now, mtime or not; it runs nothing. |
 | **Close pane** (`c`) | `$.ui.close({ id: 'loopd-board' })`, the path `/pane close` takes; the poll stops. |
 | a PROJECTS name, a NEEDS YOU verb (no hotkey) | `$.ui.copy({ text, surface })` — the pane's **one outward action**: the slug or task path, built from the snapshot's `slug` and `id`, onto the clipboard of the surface the press came from, so you can paste it into the session with your reply. A slug or id that is not a folder-name shape (empty, `/`, `..`, whitespace) is never copied. |

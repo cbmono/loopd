@@ -205,15 +205,16 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRE
     ' ',
     ' ',
     'IN PROGRESS (2)',
-    '  1 working · 1 idle · 0 dead',
     ' ',
-    '  software-engineer  Ship the widget  working',
-    '  unassigned  G3' + ' '.repeat(28) + '—',
+    '   1 working · 1 idle · 0 dead',
+    ' ',
+    '   software-engineer  Ship the widg…  working',
+    '   unassigned  G3' + ' '.repeat(27) + '—',
     ' ',
     ' ',
     'IN REVIEW (1)',
     ' ',
-    '  software-engineer  Merge me',
+    '   software-engineer  Merge me',
     ' ',
     ' ',
     'NEEDS YOU (3)',
@@ -222,12 +223,14 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRE
     '2. merge    alpha · Merge me',
     '3. close    beta',
     ' ',
+    '─'.repeat(45),
     ' ',
+    ' ',                               // the buttons' Box sits between these two
   ])
   for (const r of rows) expect(cols(r)).toBeLessThanOrEqual(45)
   const text = await shown(ui)
   // No zero counts, no project titles, no ISO timestamp.
-  expect(text).not.toMatch(/\b0 need you|approve 0|phases 0\/0|\(0\)/)
+  expect(text).not.toMatch(/\b0 need you|approve 0|phases 0\/0|PROJECTS \(0\)/)
   for (const title of ['Alpha project', 'Beta research', 'Gamma steady', 'Zeta empty', 'Delta on hold', 'Epsilon shipped']) expect(text).not.toContain(title)
   expect(text).not.toContain('2026-10-08')
   // The allowlist, from the other side: nothing the snapshot carries that the board must
@@ -242,10 +245,14 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRE
   expect(buttons.map((b: any) => [b.key, b.props.label, b.props.hotkey, b.props.plain, b.props.autoFocus])).toEqual([
     ...['alpha', 'beta', 'gamma', 'zeta', 'delta', 'epsilon'].map((s, i) => ['copy-project-' + i, s, undefined, true, undefined]),
     ...['answer', 'merge', 'close'].map((s, i) => ['copy-need-' + i, s, undefined, true, undefined]),
-    ['answer', '✎ Answer questions', 'a', undefined, undefined], ['refresh', '↻ Refresh', 'r', undefined, undefined],
-    ['close', '✕ Close pane', 'c', undefined, undefined]])
+    ['answer', '✎ Answer questions', 'a', true, undefined], ['refresh', '↻ Refresh', 'r', true, undefined],
+    ['close', '✕ Close pane', 'c', true, undefined]])
+  // A blank line, a rule of the pane's width and a blank line above the buttons; one blank line under them.
+  const drawn = (await ui.drawn()).children
+  const at = drawn.findIndex((c: any) => c.type === 'Box' && c.props.key === 'buttons')
+  expect(drawn.slice(at - 3, at).map(flat).concat(drawn.slice(at + 1).map(flat))).toEqual([' ', '─'.repeat(45), ' ', ' '])
   // The operator row sits 2 columns in from where it was.
-  const row = (await ui.drawn()).children.find((c: any) => c.type === 'Box' && c.props.key === 'buttons')
+  const row = drawn[at]
   expect([row.props.paddingLeft, row.props.flexDirection, row.props.columnGap]).toEqual([2, 'row', 2])
   expect(text).not.toMatch(/tick/i)
   await ui.unmount()
@@ -262,7 +269,7 @@ test('the layout is coloured with the pastel palette; the buttons take the muted
   expect(colour('example')).toEqual(['#FCA17D'])
   expect(segs.find((el: any) => el.text === 'example').props.bold).toBe(true)
   expect(colour('3 min ago')).toEqual(['#6c7488'])
-  expect(colour('─'.repeat(45))).toEqual(['#33658A'])
+  expect(colour('─'.repeat(45))).toEqual(['#33658A', '#33658A'])   // under the header and above the buttons
   expect(colour(' · 3 need you')).toEqual(['#DA627D'])
   expect(colour('NEEDS YOU')).toEqual(['#DA627D'])
   expect(colour(' (3)')).toEqual(['#DA627D'])
@@ -301,8 +308,9 @@ test('the layout is coloured with the pastel palette; the buttons take the muted
   await ui.unmount()
 })
 
-test('the age reads off the snapshot and the clock, and the poll redraws it as it changes', ONLY, async ($, on) => {
-  const w = world(SNAP)
+test('HEADER AGE: counts.json with no written_at, so the age reads off the snapshot, and the poll redraws it as it changes', ONLY, async ($, on) => {
+  const { written_at: _, ...noStamp } = countsOf(SNAP) as any
+  const w = world(SNAP, true, noStamp)
   stubs(on, w)
   const clock = mock.clock(on, { now: GENERATED + 59 * 1000 })
   await open($)
@@ -328,6 +336,20 @@ test('the age reads off the snapshot and the clock, and the poll redraws it as i
     await ui.press({ key: 'refresh' })
     expect(await head()).toMatch(new RegExp(' ' + want + '$'))
   }
+  await ui.unmount()
+})
+
+test('HEADER AGE: a fresh counts.json written_at wins over an old snapshot; an invalid one falls back to the snapshot', ONLY, async ($, on) => {
+  const now = GENERATED + 2 * 3600000
+  const w = world(SNAP, true, { ...FIXTURE_COUNTS, written_at: new Date(now - 30000).toISOString() })
+  stubs(on, w)
+  mock.clock(on, { now })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  expect((await rowsOf(ui))[0]).toMatch(/ just now$/)
+  w.files.set(COUNTS, { text: JSON.stringify({ ...FIXTURE_COUNTS, written_at: 'yesterday' }), mtimeMs: 900 })
+  await ui.press({ key: 'refresh' })
+  expect((await rowsOf(ui))[0]).toMatch(/ 2 h ago$/)
   await ui.unmount()
 })
 
@@ -428,9 +450,9 @@ test('malformed JSON is one error line and no throw; wrong types draw as 0', ONL
   w.files.set(SNAPSHOT, { text: JSON.stringify({ counts: { projects: 'many', tasks: null, awaiting: -3 }, projects: 'nope', group: 7 }), mtimeMs: 2000 })
   await ui.press({ key: 'refresh' })
   text = await shown(ui)
-  expect(await rowsOf(ui)).toEqual(['loopd board · ? need you' + ' '.repeat(65) + 'age unknown', '─'.repeat(100), 'no .loopd/counts.json yet', 'PROJECTS', ' ', ' ',
-    'IN PROGRESS (?)', '  ? working · ? idle · ? dead', ' ', '  nothing right now', ' ', ' ', 'IN REVIEW (?)', ' ', '  none in the snapshot', ' ', ' ',
-    'NEEDS YOU (?)', ' ', '  none in the snapshot', ' ', ' '])
+  expect(await rowsOf(ui)).toEqual(['loopd board · ? need you' + ' '.repeat(65) + 'age unknown', '─'.repeat(100), 'PROJECTS', ' ', ' ',
+    'IN PROGRESS (?)', ' ', '   ? working · ? idle · ? dead', ' ', '   nothing right now', ' ', ' ', 'IN REVIEW (?)', ' ', '   none', ' ', ' ',
+    'NEEDS YOU (?)', ' ', '   none', ' ', '─'.repeat(100), ' ', ' ', 'counts unavailable — run /loopd:init'])
   await ui.unmount()
 })
 
@@ -454,7 +476,7 @@ test('a title carrying a newline, a tab, ESC and a bidi override is drawn withou
   expect(text).toContain('alphaproject')
   expect(text).not.toContain('\u001b')
   expect(text).not.toContain('\u202e')
-  expect((await rowsOf(ui)).filter(r => r.startsWith('  software-engineer  Ship the[2Jwidget now please '))).toHaveLength(1)   // one row, not a forged second
+  expect((await rowsOf(ui)).filter(r => r.startsWith('   software-engineer  Ship the[2Jwidget now please '))).toHaveLength(1)   // one row, not a forged second
   expect(text).toContain('phases 1234567890/1234567891')
   await ui.unmount()
 })
@@ -693,10 +715,16 @@ test('NEEDS YOU is numbered, slug-prefixed, last, and wraps under its text to th
     '✓ article-evaluation' + ' '.repeat(19) + 'closed',
     ' ',
     ' ',
-    'IN PROGRESS',
-    '  1 working · 1 idle · 0 dead',
+    'IN PROGRESS (0)',
     ' ',
-    '  nothing right now',
+    '   1 working · 1 idle · 0 dead',
+    ' ',
+    '   nothing right now',
+    ' ',
+    ' ',
+    'IN REVIEW (0)',
+    ' ',
+    '   none',
     ' ',
     ' ',
     'NEEDS YOU (2)',
@@ -705,6 +733,8 @@ test('NEEDS YOU is numbered, slug-prefixed, last, and wraps under its text to th
     "            quality over the first 20 PRs",
     '            after the install, and decide an…',
     '2. close    article-batch-8-hygiene',
+    ' ',
+    '─'.repeat(45),
     ' ',
     ' ',
   ])
@@ -719,11 +749,11 @@ test('NEEDS YOU is numbered, slug-prefixed, last, and wraps under its text to th
   await ui2.press({ key: 'refresh' })
   const r2 = await rowsOf(ui2)
   expect(r2[0]).toBe('example · 1 needs you' + ' '.repeat(15) + '1 min ago')
-  expect(r2.slice(-5)).toEqual(['NEEDS YOU (1)', ' ', '1. unblock  leaner-prompts · Judge the trims', ' ', ' '])
+  expect(r2.slice(-7)).toEqual(['NEEDS YOU (1)', ' ', '1. unblock  leaner-prompts · Judge the trims', ' ', '─'.repeat(45), ' ', ' '])
   await ui2.unmount()
 })
 
-test('with nothing needing you: no header count, no NEEDS YOU section, no zero counts', ONLY, async ($, on) => {
+test('with nothing needing you: no header count and no NEEDS YOU; the two session sections show (0) and IN REVIEW stays', ONLY, async ($, on) => {
   const snap = needSnap('x')
   snap.projects = snap.projects.slice(2)
   const w = world(snap)
@@ -733,7 +763,9 @@ test('with nothing needing you: no header count, no NEEDS YOU section, no zero c
   const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
   const rows = await rowsOf(ui)
   expect(rows).toEqual(['example' + ' '.repeat(29) + '1 min ago', '─'.repeat(45), 'PROJECTS (1)', ' ',
-    '✓ article-evaluation' + ' '.repeat(19) + 'closed', ' ', ' ', 'IN PROGRESS', '  1 working · 1 idle · 0 dead', ' ', '  nothing right now', ' ', ' '])
+    '✓ article-evaluation' + ' '.repeat(19) + 'closed', ' ', ' ', 'IN PROGRESS (0)', ' ', '   1 working · 1 idle · 0 dead', ' ', '   nothing right now', ' ', ' ',
+    'IN REVIEW (0)', ' ', '   none', ' ', '─'.repeat(45), ' ', ' '])
+  expect(await shown(ui)).not.toMatch(/PROJECTS \(0\)|NEEDS YOU|none in /)
   await ui.unmount()
 })
 
@@ -1498,12 +1530,12 @@ test('SAME NUMBERS: every section count is the value counts.json gives, and NEED
   expect(countOf(rows, 'IN REVIEW')).toBe(String(c.in_review))
   expect(countOf(rows, 'NEEDS YOU')).toBe(String(c.need_you))
   expect(rows[0]).toMatch(new RegExp('^example · ' + c.need_you + ' need you '))
-  expect(rows).toContain('  ' + c.sessions.working + ' working · ' + c.sessions.idle + ' idle · ' + c.sessions.dead + ' dead')
+  expect(rows).toContain('   ' + c.sessions.working + ' working · ' + c.sessions.idle + ' idle · ' + c.sessions.dead + ' dead')
   expect(rows.slice(rows.indexOf('IN PROGRESS (2)'))).toEqual([
-    'IN PROGRESS (2)', '  2 working · 1 idle · 1 dead', ' ',
-    '  software-engineer  Ship the widget  working',
-    '  unassigned  G3' + ' '.repeat(25) + 'dead',
-    ' ', ' ', 'IN REVIEW (1)', ' ', '  software-engineer  Merge me',
+    'IN PROGRESS (2)', ' ', '   2 working · 1 idle · 1 dead', ' ',
+    '   software-engineer  Ship the widg…  working',
+    '   unassigned  G3' + ' '.repeat(24) + 'dead',
+    ' ', ' ', 'IN REVIEW (1)', ' ', '   software-engineer  Merge me',
     ' ', ' ', 'NEEDS YOU (7)', ' ',
     '1. grant     alpha · Decide the colour',
     '2. do        alpha · Ship the widget',
@@ -1512,13 +1544,13 @@ test('SAME NUMBERS: every section count is the value counts.json gives, and NEED
     '5. merge     alpha · Merge me',
     '6. close     beta',
     '7. continue  gamma',
-    ' ', ' ',
+    ' ', '─'.repeat(45), ' ', ' ',
   ])
   // A project's count is its AWAITING items; a close is its `done`, not a count.
   expect(rows).toContain('● alpha' + ' '.repeat(28) + '4 need you')
   expect(rows).toContain('✓ beta' + ' '.repeat(21) + '1 needs you · done')
   expect(rows).toContain('● gamma' + ' '.repeat(27) + '1 needs you')
-  expect(rows).not.toContain('no .loopd/counts.json yet')
+  expect(rows).not.toContain('counts unavailable — run /loopd:init')
   expect(await shown(ui)).not.toContain('SENTINEL')
   // A task row copies its task path, a project row its slug.
   await ui.press({ key: 'copy-need-1' })
@@ -1528,39 +1560,46 @@ test('SAME NUMBERS: every section count is the value counts.json gives, and NEED
   await ui.unmount()
 })
 
-test('FALLBACK: no counts.json draws every number as ?, never 0, and an older snapshot\'s NEEDS YOU as today', ONLY, async ($, on) => {
+const HINT = 'counts unavailable — run /loopd:init'
+
+test('COUNTS UNAVAILABLE: no counts.json keeps the layout with ? and one hint under the buttons; an older snapshot\'s NEEDS YOU as today', ONLY, async ($, on) => {
   const w = world(SNAP, true, null)
   stubs(on, w)
   mock.clock(on, { now: GENERATED + 3 * 60000 })
   await open($)
   const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
   const rows = await rowsOf(ui)
-  expect(rows.slice(0, 3)).toEqual(['example · ? need you' + ' '.repeat(16) + '3 min ago', '─'.repeat(45), 'no .loopd/counts.json yet'])
+  expect(rows.slice(0, 3)).toEqual(['example · ? need you' + ' '.repeat(16) + '3 min ago', '─'.repeat(45), 'PROJECTS (6)'])
   for (const h of ['IN PROGRESS', 'IN REVIEW', 'NEEDS YOU']) expect(countOf(rows, h)).toBe('?')
-  expect(rows).toContain('  ? working · ? idle · ? dead')
-  expect(rows).toContain('  software-engineer  Ship the widget' + ' '.repeat(8) + '?')
+  expect(rows).toContain('   ? working · ? idle · ? dead')
+  expect(rows).toContain('   software-engineer  Ship the widget' + ' '.repeat(7) + '?')
+  expect(rows).toContain('● alpha' + ' '.repeat(28) + '2 need you')      // labels stay with no counts.json, as the bar's
   expect(rows.slice(rows.indexOf('NEEDS YOU (?)'))).toEqual(['NEEDS YOU (?)', ' ',
-    '1. answer   alpha · Decide the colour', '2. merge    alpha · Merge me', '3. close    beta', ' ', ' '])
+    '1. answer   alpha · Decide the colour', '2. merge    alpha · Merge me', '3. close    beta', ' ', '─'.repeat(45), ' ', ' ', HINT])
+  expect(rows.filter(r => r === HINT)).toHaveLength(1)
+  expect(rows.join('\n')).not.toContain('.loopd/counts.json')
   await ui.unmount()
 })
 
-test('FALLBACK: an unparseable counts.json is ? with the file\'s age; a null count is ? with written_at\'s age', ONLY, async ($, on) => {
+test('COUNTS UNAVAILABLE: an unparseable counts.json is the same ? and hint; a null count is ? with no hint', ONLY, async ($, on) => {
   const w = world(SNAP, true, '{ not json')
-  w.files.set(COUNTS, { text: '{ not json', mtimeMs: GENERATED - 60 * 60000 })
   stubs(on, w)
   mock.clock(on, { now: GENERATED + 3 * 60000 })
   await open($)
   const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
   let rows = await rowsOf(ui)
-  expect(rows[2]).toBe('.loopd/counts.json unreadable · 1 h ago')
-  expect(countOf(rows, 'IN PROGRESS')).toBe('?')
+  expect(rows[2]).toBe('PROJECTS (6)')
+  expect([countOf(rows, 'IN PROGRESS'), countOf(rows, 'IN REVIEW')]).toEqual(['?', '?'])
+  expect(rows).toContain('   ? working · ? idle · ? dead')
+  expect(rows[rows.length - 1]).toBe(HINT)
 
   w.files.set(COUNTS, { text: JSON.stringify({ ...FIXTURE_COUNTS, in_review: null, sessions: { working: 2, idle: null, dead: 1 } }), mtimeMs: GENERATED })
   await ui.press({ key: 'refresh' })
   rows = await rowsOf(ui)
-  expect(rows[2]).toBe('.loopd/counts.json · 3 min ago')
+  expect(rows[2]).toBe('PROJECTS (6)')
   expect([countOf(rows, 'IN PROGRESS'), countOf(rows, 'IN REVIEW'), countOf(rows, 'NEEDS YOU')]).toEqual(['2', '?', '7'])
-  expect(rows).toContain('  2 working · ? idle · 1 dead')
+  expect(rows).toContain('   2 working · ? idle · 1 dead')
+  expect(rows).not.toContain(HINT)
   await ui.unmount()
 })
 
@@ -1577,12 +1616,96 @@ test('QUEUE OFF: the bar prints no need-you segment, so the pane draws no header
   await ui.unmount()
 })
 
-test('a zero in_review hides IN REVIEW, though the snapshot still lists a task in review', ONLY, async ($, on) => {
+test('QUEUE OFF: no project carries a need-you label, on the task-verb fallback or off awaiting_items', ONLY, async ($, on) => {
+  // awaiting: false — write-snapshot.sh leaves awaiting_items out, and alpha's tasks still carry their verbs.
+  const w = world(SNAP, true, { ...FIXTURE_COUNTS, need_you: null, queue: 'off' })
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED + 3 * 60000 })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  expect(SNAP.projects[0].tasks.some(t => t.awaiting === 'answer')).toBe(true)
+  let rows = await rowsOf(ui)
+  expect(rows).toContain('● alpha')
+  expect(rows.join('\n')).not.toMatch(/need(s)? you/)
+  w.files.set(SNAPSHOT, { text: JSON.stringify(ITEMS_SNAP), mtimeMs: 2000 })
+  await ui.press({ key: 'refresh' })
+  rows = await rowsOf(ui)
+  expect(rows).toContain('● alpha')
+  expect(rows.join('\n')).not.toMatch(/need(s)? you/)
+  await ui.unmount()
+})
+
+test('AWAITING READ FAILURE: awaiting_items null is unknown — NEEDS YOU (?) with no rows and no task-verb fallback', ONLY, async ($, on) => {
+  const w = world({ ...SNAP, awaiting_items: null }, true, FIXTURE_COUNTS)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED + 3 * 60000 })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = await rowsOf(ui)
+  expect(rows.slice(rows.indexOf('NEEDS YOU (?)'))).toEqual(['NEEDS YOU (?)', ' ', ' ', '─'.repeat(45), ' ', ' '])
+  expect(rows).toContain('● alpha')                      // no fallback count either
+  expect(await ui.findAll({ type: 'Button' }).then((b: any[]) => b.filter(x => String(x.key).startsWith('copy-need-')))).toEqual([])
+  await ui.unmount()
+})
+
+test('COPY TARGET: a validated AWAITING task with no snapshot row still copies its task path', ONLY, async ($, on) => {
+  const w = world({ ...SNAP, awaiting_items: [{ verb: 'answer', slug: 'alpha', task: 'task-009' }] }, true, { ...FIXTURE_COUNTS, need_you: 1 })
+  stubs(on, w)
+  const got = copies(on)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  expect(await rowsOf(ui)).toContain('1. answer   alpha · task-009')
+  await ui.press({ key: 'copy-need-0' })
+  expect(got.map(g => g.text)).toEqual(['projects/alpha/tasks/task-009.md'])
+  expect(await footer(ui)).toEqual(['copied projects/alpha/tasks/task-009.md'])
+  await ui.unmount()
+})
+
+test('INFO LINE: a note is drawn under the buttons, which never move; it is gone after the poll at +10 s, and the hint returns', ONLY, async ($, on) => {
+  const w = world(SNAP, true, null)
+  stubs(on, w)
+  copies(on)
+  const clock = mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const place = async () => {
+    const d = (await ui.drawn()).children
+    const at = d.findIndex((c: any) => c.type === 'Box' && c.props.key === 'buttons')
+    return [at, d.slice(at + 1).map(flat)]
+  }
+  const [at] = await place()
+  expect(await place()).toEqual([at, [' ', HINT]])
+  await ui.press({ key: 'copy-project-1' })
+  expect(await place()).toEqual([at, [' ', 'copied beta']])
+  await clock.advance(9000)
+  expect(await place()).toEqual([at, [' ', 'copied beta']])
+  await clock.advance(1000)
+  expect(await place()).toEqual([at, [' ', HINT]])
+  await ui.unmount()
+})
+
+test('INFO LINE: answer queued does not expire while the run is in flight', ONLY, async ($, on) => {
+  const w = world(SNAP)
+  const clock = mock.clock(on, { now: GENERATED })
+  stubs(on, w, true, () => clock.sleep(30000))
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  await ui.press({ key: 'answer' })
+  await clock.advance(15000)
+  expect(await footer(ui)).toEqual(['answer queued'])
+  await clock.advance(15000)
+  expect(await footer(ui)).toEqual([])
+  await ui.unmount()
+})
+
+test('a zero in_review still draws IN REVIEW (0)', ONLY, async ($, on) => {
   const w = world(SNAP, true, { ...FIXTURE_COUNTS, in_review: 0 })
   stubs(on, w)
   mock.clock(on, { now: GENERATED })
   await open($)
   const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
-  expect(countOf(await rowsOf(ui), 'IN REVIEW')).toBe('absent')
+  expect(countOf(await rowsOf(ui), 'IN REVIEW')).toBe('0')
+  expect(await rowsOf(ui)).toContain('IN REVIEW (0)')
   await ui.unmount()
 })
