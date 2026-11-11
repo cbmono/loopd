@@ -38,6 +38,8 @@ project() { # [<extra frontmatter line>] [<status>]
 # Every surface that reads a project.md and runs offline, concatenated. Generated-at lines
 # move by design and are pinned or dropped; nothing else is normalised.
 render() {
+  # write-snapshot.sh reads AWAITING.md, which the previous render's build-awaiting.sh wrote.
+  : > "$INST/$AB_AWAITING"
   ( cd "$INST" || exit 2
     echo "## validate-bundle"; bash "$S/validate-bundle.sh" --strict projects/exp/project.md projects/exp/tasks/*.md 2>&1; echo "rc=$?"
     echo "## project-paused";  bash "$S/project-paused.sh" projects/exp/tasks/task-001-a.md 2>&1; echo "rc=$?"

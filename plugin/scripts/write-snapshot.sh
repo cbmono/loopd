@@ -68,6 +68,11 @@
 #   HANDLE INTO the document ("the second question in this task"), the same class of
 #   thing as `depends_on`'s task IDs; the question it names is still only in the task
 #   doc and in AWAITING.md.
+#     awaiting_items: one {verb, slug, task} per AWAITING.md item, in its order — the
+#              row's `**verb**` and the slug and task id of its link target, each kept only
+#              when it has a label's shape and names a file in this bundle (task `""` on a
+#              project row). Never a byte of the row's title or sentence: that text is
+#              agent-written (task-005, D5). Left OUT when the queue is off or unreadable.
 #   NEVER CARRIED:
 #     · task `description:` and every document BODY (`# Context`, `# Notes`,
 #       `# Result`) — free prose, the likeliest place a logged-in page or a customer
@@ -824,6 +829,39 @@ if [[ $any_design -eq 1 ]]; then
   "
 fi
 
+# ---------------------------------------------------------------- awaiting items
+# Only `**verb**` and the link target are read off a row; everything else on it is skipped.
+AWAITING_BLOCK=""
+if ab_awaiting_on . && [[ -f "$AB_AWAITING" && -r "$AB_AWAITING" ]]; then
+  items=""
+  while IFS=$'\037' read -r a_row a_verb a_slug a_task; do
+    [[ "$a_row" == R ]] || continue
+    [[ "$a_verb" =~ ^[a-z]+$ ]] || a_verb=""
+    [[ "$a_slug" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && "$a_slug" != *..* ]] || a_slug=""
+    [[ "$a_task" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && "$a_task" != *..* ]] || a_task=""
+    if [[ -n "$a_task" ]]; then [[ -n "$a_slug" && -f "projects/$a_slug/tasks/$a_task.md" ]] || { a_slug=""; a_task=""; }
+    elif [[ -n "$a_slug" && ! -f "projects/$a_slug/project.md" ]]; then a_slug=""; fi
+    [[ -n "$items" ]] && items="$items, "
+    items="$items{\"verb\": $(jstr "$a_verb"), \"slug\": $(jstr "$a_slug"), \"task\": $(jstr "$a_task")}"
+  done <<EOF
+$(awk '
+  /^##[[:space:]].*Awaiting you/ { inblk = 1; next }
+  inblk && /^##[[:space:]]/      { exit }
+  inblk && /^[[:space:]]*\* / {
+    v = ""; sl = ""; tk = ""
+    if (match($0, /\*\*[a-z]+\*\*/)) v = substr($0, RSTART + 2, RLENGTH - 4)
+    if (match($0, /\]\(\/projects\/[A-Za-z0-9._-]+\/(tasks\/[A-Za-z0-9._-]+\.md|project\.md)\)/)) {
+      n = split(substr($0, RSTART + 12, RLENGTH - 13), seg, "/")
+      sl = seg[1]; if (n == 3) { tk = seg[3]; sub(/\.md$/, "", tk) }
+    }
+    print "R\037" v "\037" sl "\037" tk
+  }
+' "$AB_AWAITING" 2>/dev/null)
+EOF
+  AWAITING_BLOCK="\"awaiting_items\": [$items],
+  "
+fi
+
 # ---------------------------------------------------------------- write
 # Temp file BESIDE the target, never $TMPDIR: a cross-filesystem `mv` degrades to
 # copy-and-remove, where an interruption leaves a half-written snapshot that the
@@ -834,11 +872,11 @@ cat > "$tmp" <<JSON
 {
   "_schema": "loopd board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
-  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); design (the PATH of projects/<slug>/design.md when it exists, never its body) and, only then, repo (this bundle's own GitHub org/repo); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/pr_mergeable (MERGEABLE|CONFLICTING|UNKNOWN, the tick's last host read)/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links. Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
+  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); design (the PATH of projects/<slug>/design.md when it exists, never its body) and, only then, repo (this bundle's own GitHub org/repo); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/pr_mergeable (MERGEABLE|CONFLICTING|UNKNOWN, the tick's last host read)/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links; awaiting_items (one verb + project slug + task id per AWAITING.md item, never its title or sentence). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
   "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},
-  ${CLOSED_BLOCK}${REPO_LINE}"projects": [$projects_json]
+  ${CLOSED_BLOCK}${REPO_LINE}${AWAITING_BLOCK}"projects": [$projects_json]
 }
 JSON
 
