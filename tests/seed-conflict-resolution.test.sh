@@ -44,6 +44,7 @@ for f in init-bundle.sh refresh-seeds.sh validate-bundle.sh welcome.sh build-kb-
   cp "$REPO/plugin/scripts/$f" "$TPL/plugin/scripts/"
 done
 cp -R "$REPO/plugin/seed" "$TPL/plugin/seed"
+cp "$REPO/plugin/RETIRED_ROLES" "$TPL/plugin/"
 cp -R "$REPO/plugin/hooks" "$TPL/plugin/hooks"
 cp "$REPO/VERSION" "$TPL/plugin/VERSION"
 cp "$REPO/VERSION" "$TPL/VERSION"

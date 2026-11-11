@@ -833,19 +833,16 @@ check_config_layers() {
 # hand-copied deployment, a moved checkout — degrades to a reported non-answer, never a
 # guess in either direction.
 #
-# ONE LEVEL DOWN, THE SAME FACT FOR A RETIRED ROLE. `roles` and `roleTiers` are known
+# ONE LEVEL DOWN, THE SAME FACT FOR A RETIRED ROLE. `roles` and the role maps are known
 # top-level keys, so a retired agent's name inside either one is invisible to the key scan
 # above while being exactly the state it exists to name: `roleTiers.advisor` sat in every
 # live bundle's per-machine file after the `advisor` was retired (2026-10-08; enabled in no
 # bundle, so no dispatch ever read it), looking like a spend decision for an agent nothing
-# can dispatch. The retired names live HERE and nowhere else — no validator reads them, no
-# installer rewrites them, `resolve-model.sh` still answers for one (an inert key is not an
-# error), and this row reports each occurrence once with the edit that removes it. Same
-# tier, same no-fixer, same single headline: a retired role joins the unknown-key line when
-# there is one and takes the headline when there is not. Never prune this list — a bundle
-# stamped before the retirement still carries the key, and a pruned entry stops answering for
-# exactly the bundles that need it.
-RETIRED_ROLES="advisor"
+# can dispatch. The retired names live in `RETIRED_ROLES` at the plugin root, which
+# `normalise-config.sh` reads too: `resolve-model.sh` still answers for one (an inert key is
+# not an error), this row reports each occurrence once, and `/init --normalise-config`
+# removes them on the human's yes. Same tier, same no-fixer, same single headline: a retired
+# role joins the unknown-key line when there is one and takes the headline when there is not.
 # The same row names a bad `roleEffort` entry: a level resolve-effort.sh refuses (the spawn
 # then passes none), or a role with no `roleTiers` twin and no plugin agent of that name.
 EFFORT_LEVELS="low medium high xhigh max"
@@ -911,13 +908,15 @@ boardArtifactUrl"
     done <<EOF
 $fkeys
 EOF
-    # The retired-role scan, one level down (see RETIRED_ROLES above). Only a string entry
-    # counts — a `roleTiers` map key, or a `roles` array element — so a malformed value
-    # (`"roles": "advisor"`, `"roleTiers": null`) names nothing here rather than guessing.
+    # The retired-role scan, one level down. Only a string entry counts — a role-map key, or
+    # a `roles` array element — so a malformed value (`"roles": "advisor"`, `"roleTiers":
+    # null`) names nothing here rather than guessing; normalise-config.sh skips the same.
     for r in $RETIRED_ROLES; do
-      if jq -e --arg r "$r" '(.roleTiers // {}) | type == "object" and has($r)' "$ROOT/$f" >/dev/null 2>&1; then
-        retired="${retired:+$retired }$f:roleTiers.$r"
-      fi
+      for m in roleTiers roleEffort roleMinutes; do
+        if jq -e --arg r "$r" --arg m "$m" '(.[$m] // {}) | type == "object" and has($r)' "$ROOT/$f" >/dev/null 2>&1; then
+          retired="${retired:+$retired }$f:$m.$r"
+        fi
+      done
       if jq -e --arg r "$r" '(.roles // []) | type == "array" and index($r) != null' "$ROOT/$f" >/dev/null 2>&1; then
         retired="${retired:+$retired }$f:roles[$r]"
       fi
@@ -927,6 +926,7 @@ EOF
       lv=""; for l in $EFFORT_LEVELS; do [ "$v" = "$l" ] && lv=1; done
       [ -n "$lv" ] || { effort="${effort:+$effort }$f:roleEffort.$e=$v"; continue; }
       grep -qFx -- "$e" <<<"$tiers" && continue
+      case " $RETIRED_ROLES " in *" $e "*) continue ;; esac
       case "$agents " in *" $e.md "*) continue ;; esac
       effort="${effort:+$effort }$f:roleEffort.$e(no roleTiers twin)"
     done <<EOF
@@ -947,7 +947,7 @@ EOF
   if [ -n "$unknown" ]; then
     warn "config carries key(s) nothing reads: $unknown"
     [ -n "$unparsed" ] && note "(and no answer for $unparsed — not parseable as JSON)"
-    [ -n "$retired" ] && note "(and names retired role(s) nothing dispatches: $retired — remove each entry)"
+    [ -n "$retired" ] && note "(and names retired role(s) nothing dispatches: $retired — /${PLUGIN_NAME}:init --normalise-config removes them)"
     [ -n "$effort" ] && note "(and roleEffort entries no spawn uses: $effort — levels: $EFFORT_LEVELS)"
     note "a retired or typo'd key looks authoritative and configures nothing; the known set"
     note "is the template seed's key list, plus ownerGithubUser in either file and"
@@ -970,8 +970,8 @@ EOF
   [ -n "$effort" ] && note "(and roleEffort entries no spawn uses: $effort — levels: $EFFORT_LEVELS)"
   [ -n "$unparsed" ] && note "(and no answer for $unparsed — not parseable as JSON)"
   note "the agent was retired from the plugin, so the entry is inert — it configures nothing"
-  note "and errors nowhere; remove it to stop this line. fix will not touch it"
-  hint "yours, not fix's: delete the entry from the file named above (roles and/or roleTiers)"
+  note "and errors nowhere; fix will not touch it, the normaliser removes it on your yes"
+  hint "run /${PLUGIN_NAME}:init --normalise-config to remove every retired-role entry"
   return "$_warned"
 }
 
@@ -1354,6 +1354,14 @@ EOF
   exit 2
 }
 assert_list_is_wired
+
+# A missing list would scan nothing and print a clean bill, so it refuses like the guard above.
+RETIRED_ROLES="$(awk -F'\t' '!/^#/ && $1 != "" {print $1}' "$BIN/../RETIRED_ROLES" 2>/dev/null | tr '\n' ' ')"
+if [ -z "${RETIRED_ROLES// /}" ]; then
+  echo "${PLUGIN_NAME}: REFUSING TO RUN — no retired-role list at $BIN/../RETIRED_ROLES" >&2
+  echo "           (missing, unreadable or empty). That is a broken plugin install." >&2
+  exit 2
+fi
 
 # rows_for <mode> — the one list, filtered. `banner` keeps only the rows that declare
 # themselves fit for the SessionStart path. Every consumer below reads THIS list: `check`

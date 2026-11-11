@@ -101,8 +101,10 @@ ok "…marked retired-for-the-advisor in place, with the date" \
   "$(grep -c 'advisor_notes:.*RETIRED on 2026-10-08' "$SCHEMA" | tr -d ' ')" 1
 ok "…and the approach critique still writes it" \
   "$(grep -c '`advisor_notes`' "$STEP2" | tr -d ' ' | awk '{print ($1 > 0 ? "yes" : "no")}')" yes
-ok "welcome.sh keeps the retired-roles list, naming advisor" \
-  "$(grep -c '^RETIRED_ROLES=.*advisor' "$WELCOME" | tr -d ' ')" 1
+ok "the one retired-roles list still names advisor" \
+  "$(grep -c '^advisor	' "$REPO/plugin/RETIRED_ROLES" | tr -d ' ')" 1
+ok "…and welcome.sh reads it rather than keeping its own" \
+  "$(grep -cE '^RETIRED_ROLES="[a-z]' "$WELCOME" | tr -d ' ')" 0
 
 # =======================================================================================
 echo "== 2. STILL WORKING: a bundle with the old configuration validates and stamps clean =="
@@ -185,7 +187,7 @@ ok "ONE headline names the retired role"                                "$(print
 ok "…as a warn (it survives --only-problems and reaches the banner)"    "$(printf '%s\n' "$HEAD" | grep -c '^⚠' | tr -d ' ')" 1
 ok "…naming the tracked roles entry, by file"                           "$(count "$HEAD" 'instance.config.json:roles[advisor]')" 1
 ok "…and the local roleTiers entry, by file"                            "$(count "$HEAD" 'instance.config.local.json:roleTiers.advisor')" 1
-ok "…with the edit that removes it"                                     "$(count "$OUT" 'delete the entry from the file named above')" 1
+ok "…with the command that removes it"                                  "$(count "$OUT" "run /${PN}:init --normalise-config")" 1
 ok "…and the unknown-key headline is NOT also printed (one headline)"    "$(count "$OUT" 'config carries key(s) nothing reads:')" 0
 ok "the row's tier is ambiguous: fix will not touch a config file" \
   "$(bash "$SH" check --list | awk -F'\t' '$1=="config-unknown-keys"{print $2}')" "ambiguous"

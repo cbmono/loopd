@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# normalise-config.test.sh — `normalise-config.sh` reports the three finding kinds, moves
-# and adds without ever changing a value, and `/<plugin>:init` runs it on every stamp.
+# normalise-config.test.sh — `normalise-config.sh` reports the four finding kinds, moves
+# and adds without changing a value but a retired role's, and `/<plugin>:init` runs it.
 #
 # WHY. Measured 2026-09-07 across the owner's three bundles: absolute paths in the TRACKED
 # `instance.config.json`, `defaultOwner` duplicated into a per-machine file, every key
@@ -20,13 +20,16 @@
 #      `$` key is kept and travels with the key it annotates.
 #   3. ORDER, and the ROUND TRIP: a normalised pair reports nothing on a second run, which
 #      is the property that makes this safe to run on every stamp.
-#   4. NO VALUE EVER CHANGES — asserted over every key of a deliberately mangled pair,
+#   4. NO OTHER VALUE CHANGES — asserted over every key of a deliberately mangled pair,
 #      the one rule whose violation would be silent and unrecoverable.
 #   5. `/<plugin>:init` — silent about config on a clean pair, reports on a dirty one,
 #      applies with `--normalise-config` and at an interactive yes, and leaves the tracked
 #      file STAGED rather than committed.
 #   6. The stamp leaves NO per-machine path in the tracked file and invents none in the
 #      local one — criterion 7, and the defect the whole task was opened for.
+#   7. RETIRED — a role in plugin/RETIRED_ROLES is reported, removed on --apply and nothing
+#      else changes; the guard still refuses any other value change (exit 3); a missing
+#      list is exit 2 in both readers (loopd-retirement-followups/task-001).
 #
 # THE FIXTURE TEMPLATE IS A PLAIN DIRECTORY COPY of `git ls-files`, never this checkout,
 # for the reason local-tier-seed.test.sh states: an uncommitted edit under review is what
@@ -350,6 +353,96 @@ PY
 bash "$INIT" "$I" --normalise-config >"$TMP/out" 2>&1
 ok "a real tracked path is moved, not replaced" "$(jget "$I/$LCFG" reposRoot)" /real/path/here
 ok "…and the tracked file is clean"             "$(jget "$I/$TCFG" reposRoot)" -
+
+# =========================================================================== #
+echo
+echo "-- 7. RETIRED roles: reported, removed on --apply, and nothing else changes"
+I="$(newinst 11)"
+jedit "$I/$TCFG" <<'PY'
+d["roles"] = d["roles"] + ["auditor", "advisor"]
+d["roleTiers"]["auditor"] = "light"
+d["roleEffort"]["auditor"] = "medium"
+d["roleMinutes"] = {"auditor": 30, "software-engineer": 90}
+PY
+jedit "$I/$LCFG" <<'PY'
+d["roleTiers"] = {"auditor": "deep", "explorer": "light"}
+d["roleEffort"] = {"auditor": "low"}
+d["roleMinutes"] = {"auditor": 10}
+PY
+git -C "$I" add -A >/dev/null 2>&1
+git -C "$I" -c user.email=t@example.com -c user.name=t commit -qm retired >/dev/null 2>&1
+cp "$I/$TCFG" "$TMP/t.in"; cp "$I/$LCFG" "$TMP/l.in"
+RC="$(norm "$I")"
+ok "retired entries exit 1 in report mode"     "$RC" 1
+for f in 'roles\[auditor\]' 'roles\[advisor\]' roleTiers.auditor roleEffort.auditor roleMinutes.auditor; do
+  ok "RETIRED $f is reported"                  "$(finding RETIRED "$f")" yes
+done
+ok "…eight in the two files together"          "$(grep -cE '^ +RETIRED ' "$TMP/out" | tr -d ' ')" 8
+ok "…and no other kind (the fixture is otherwise clean)" \
+   "$(grep -cE '^ +(MISSING|ORDER|MISPLACED) ' "$TMP/out" | tr -d ' ')" 0
+ok "report mode wrote neither file" \
+   "$(cmp -s "$TMP/t.in" "$I/$TCFG" && cmp -s "$TMP/l.in" "$I/$LCFG" && echo same)" same
+RC="$(norm "$I" --apply)"
+ok "--apply exits 0"                           "$RC" 0
+jq -S '.roles -= ["auditor", "advisor"] | del(.roleTiers.auditor, .roleEffort.auditor, .roleMinutes.auditor)' \
+  "$TMP/t.in" > "$TMP/t.want"
+jq -S 'del(.roleTiers.auditor, .roleEffort.auditor, .roleMinutes.auditor)' "$TMP/l.in" > "$TMP/l.want"
+ok "tracked: jq -S equals the input minus exactly the retired paths" \
+   "$(jq -S . "$I/$TCFG" | cmp -s - "$TMP/t.want" && echo equal)" equal
+ok "…and so does the local file" \
+   "$(jq -S . "$I/$LCFG" | cmp -s - "$TMP/l.want" && echo equal)" equal
+ok "an emptied role map is left {}"            "$(jget "$I/$LCFG" roleMinutes)" "{}"
+ok "the tracked file is STAGED"                "$(git -C "$I" diff --cached --name-only)" instance.config.json
+ok "…and the apply line names the exception"   "$(said 'no value was changed but the retired-role entries removed')" yes
+RC="$(norm "$I")"
+ok "round trip: a second run exits 0"          "$RC" 0
+WOUT="$(bash "$TPL/plugin/scripts/welcome.sh" check --instance "$I" --template "$TPL" 2>&1)"
+ok "…and welcome check names no retired role"  "$(printf '%s\n' "$WOUT" | grep -c 'retired role' | tr -d ' ')" 0
+
+echo
+echo "-- 7b. the guard still refuses any OTHER value change (exit 3)"
+# The real code changes no other value, so the guard is reached through a copy with one
+# change injected after normalisation: a top-level value, and a non-retired role-map entry.
+inject() { # <file> <python statement>
+  awk -v stmt="$2" '{ print } /^new_tracked, new_local = ordered\[TRACKED\], ordered\[LOCAL\]$/ { print stmt }' \
+    "$NORM" > "$TPL/plugin/scripts/$1"
+}
+inject norm-top.sh 'new_tracked["maxPrLoc"] = 1'
+inject norm-map.sh 'new_tracked["roleTiers"] = dict(new_tracked["roleTiers"], explorer="apex")'
+for v in top map; do
+  ok "the $v injection landed" "$(grep -c 'maxPrLoc"\] = 1\|explorer="apex"' "$TPL/plugin/scripts/norm-$v.sh" | tr -d ' ')" 1
+  I="$(newinst "g$v")"
+  jedit "$I/$TCFG" <<'PY'
+d["roleTiers"]["auditor"] = "light"
+PY
+  cp "$I/$TCFG" "$TMP/g.in"
+  RC="$(cd "$I" && bash "$TPL/plugin/scripts/norm-$v.sh" . --apply >"$TMP/out" 2>&1; echo $?)"
+  ok "an injected $v-level change exits 3"     "$RC" 3
+  ok "…naming the refusal"                     "$(said 'refusing to write')" yes
+  ok "…and writes nothing"                     "$(cmp -s "$TMP/g.in" "$I/$TCFG" && echo same)" same
+done
+rm -f "$TPL/plugin/scripts/norm-top.sh" "$TPL/plugin/scripts/norm-map.sh"
+
+echo
+echo "-- 7c. one list for both readers, and a missing or empty one fails loudly"
+I="$(newinst 12)"
+jedit "$I/$TCFG" <<'PY'
+d["roleTiers"]["auditor"] = "light"
+PY
+L="$TPL/plugin/RETIRED_ROLES"
+ok "normalise-config.sh names no role literal" "$(grep -cE '"(advisor|auditor)"' "$NORM" | tr -d ' ')" 0
+wcheck() { ( bash "$TPL/plugin/scripts/welcome.sh" check --instance "$1" >"$TMP/out" 2>&1; echo $? ); }
+mv "$L" "$L.away"
+ok "no list: normalise-config exits 2"         "$(norm "$I")" 2
+ok "…saying why"                               "$(said 'no retired-role list')" yes
+ok "…and welcome check exits 2"                "$(wcheck "$I")" 2
+ok "…saying why"                               "$(said 'no retired-role list')" yes
+printf '# only a comment\n\n' > "$L"
+ok "an empty list: normalise-config exits 2"   "$(norm "$I")" 2
+ok "…and welcome check exits 2"                "$(wcheck "$I")" 2
+mv "$L.away" "$L"
+ok "list restored: the finding is back"        "$(norm "$I")" 1
+ok "…and welcome check runs again"             "$(wcheck "$I")" 0
 
 echo
 echo "pass=$pass fail=$fail"

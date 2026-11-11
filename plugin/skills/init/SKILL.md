@@ -33,7 +33,7 @@ and a plugin update is what updates it.
 | **Converts** | a bundle stamped by the old `install.sh`: every machinery symlink into a template checkout is removed, the managed `.gitignore` machinery block is retired, and the data is untouched |
 | **Creates on request** | `objectives/`, with `--with-objectives`. It is an optional layer (`SCHEMA.md` → type: Objective) — a project normally carries its own `success_criteria` — so a plain stamp makes no such directory, and an existing one is data and never touched |
 | **Brings up to date** | an existing bundle, by running the welcome check-and-fix pass after the stamp — the idempotent tier only, and the same refusals: config files and tick locks are reported, never written. Seed drift is 3-way merged, decidable conflicts are resolved on the rule that decides them, and anything else is reported for you |
-| **Reports** | config findings across `instance.config.json` and `instance.config.local.json` — a key in the wrong file, a seed key missing, keys out of order. Report-only unless you say yes at the prompt or pass `--normalise-config`, and then it moves, adds and reorders without ever changing a value, and leaves the tracked file **staged** |
+| **Reports** | config findings across `instance.config.json` and `instance.config.local.json` — a key in the wrong file, a seed key missing, keys out of order, a retired role still configured. Report-only unless you say yes at the prompt or pass `--normalise-config`, and then it removes the retired-role entries and moves, adds and reorders without changing any other value, and leaves the tracked file **staged** |
 
 **The only symlinks a stamped bundle holds are under `repos/`**, and those point at the
 group's product repos, never at a checkout of this repo.

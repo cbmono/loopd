@@ -211,7 +211,7 @@ ok "…and says nothing about a range any more"              "$(printf '%s\n' "$
 # its own), so the fixture is a plugin directory with the helper removed.
 NOVER="$TMP/nover/plugin"
 mkdir -p "$NOVER/scripts"; printf '0.0.1\n' > "$TMP/nover/VERSION"
-cp "$TPL/plugin/scripts/"*.sh "$NOVER/scripts/"
+cp "$TPL/plugin/scripts/"*.sh "$NOVER/scripts/"; cp "$TPL/plugin/RETIRED_ROLES" "$NOVER/"
 rm -f "$NOVER/scripts/check-template-version.sh"
 SNV="$(bash "$NOVER/scripts/welcome.sh" check --instance "$INST1" --template "$RTPL" 2>&1)"
 ok "an unavailable version checker is REPORTED, not skipped" \
@@ -577,6 +577,7 @@ ok "no CHECKOUT at all -> the row still answers, from the plugin's seed" \
 # again and nobody would know.
 NOSEED="$TMP/noseed/plugin"; mkdir -p "$NOSEED/scripts"
 cp "$TPL"/plugin/scripts/*.sh "$NOSEED/scripts/" 2>/dev/null || true
+cp "$TPL/plugin/RETIRED_ROLES" "$NOSEED/"
 OUT6c2="$(bash "$NOSEED/scripts/welcome.sh" check --instance "$INST6" --template "$SRC" 2>&1)"; rc6c2=$?
 ok "a plugin with no seed -> reported as not resolvable, exit 0" \
   "$(printf '%s\n' "$OUT6c2" | grep -c 'config keys: not resolvable here' | tr -d ' '):$rc6c2" "1:0"
@@ -613,11 +614,11 @@ ok "…a plugin agent with no roleTiers entry is NOT an orphan" \
   "$(printf '%s\n' "$WARN6H" | grep -c 'failure-analyst' | tr -d ' ')" 0
 ok "…and check still exits 0" "$rc6h" 0
 # Equality, never substring: a multi-word or partial value is named too.
-printf '{\n  "org": "example-org",\n  "roleTiers": { "auditor": "deep", "cataloguer": "standard", "explorer": "light" },\n  "roleEffort": { "auditor": "low medium", "cataloguer": "med", "explorer": "low" }\n}\n' > "$INST6/instance.config.json"
+printf '{\n  "org": "example-org",\n  "roleTiers": { "devops-engineer": "deep", "cataloguer": "standard", "explorer": "light" },\n  "roleEffort": { "devops-engineer": "low medium", "cataloguer": "med", "explorer": "low" }\n}\n' > "$INST6/instance.config.json"
 printf '{\n  "ownerGithubUser": "example-user-007"\n}\n' > "$INST6/instance.config.local.json"
 WARN6M="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1 | grep 'roleEffort entries no spawn uses:')"
 ok "a multi-word level ('low medium') is named" \
-  "$(printf '%s\n' "$WARN6M" | grep -c 'roleEffort\.auditor=low medium' | tr -d ' ')" 1
+  "$(printf '%s\n' "$WARN6M" | grep -c 'roleEffort\.devops-engineer=low medium' | tr -d ' ')" 1
 ok "…a partial level ('med') too" \
   "$(printf '%s\n' "$WARN6M" | grep -c 'roleEffort\.cataloguer=med' | tr -d ' ')" 1
 ok "…while a valid level beside them is not" \
@@ -626,6 +627,29 @@ mkinstance "$TMP/inst6s"; cp "$TPL/plugin/seed/instance.config.json" "$TMP/inst6
 OUT6s="$(bash "$SH" check --instance "$TMP/inst6s" --template "$SRC" 2>&1)"
 ok "the seed's own roleEffort reports neither" \
   "$(printf '%s\n' "$OUT6s" | grep -c 'roleEffort entries no spawn uses' | tr -d ' ')" 0
+
+# Retired roles, in all four role-bearing keys of both files; plugin/RETIRED_ROLES is the list.
+printf '{\n  "org": "example-org",\n  "roles": ["auditor", "cataloguer"],\n  "roleTiers": { "auditor": "deep" },\n  "roleEffort": { "auditor": "medium" },\n  "roleMinutes": { "auditor": 30 }\n}\n' > "$INST6/instance.config.json"
+printf '{\n  "roleTiers": { "auditor": "light", "advisor": "light" },\n  "roleEffort": { "auditor": "low" },\n  "roleMinutes": { "auditor": 10 }\n}\n' > "$INST6/instance.config.local.json"
+OUT6r="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"; rc6r=$?
+HEAD6R="$(printf '%s\n' "$OUT6r" | grep 'config names retired role(s) nothing dispatches:')"
+for occ in instance.config.json:roles[auditor] instance.config.json:roleTiers.auditor \
+           instance.config.json:roleEffort.auditor instance.config.json:roleMinutes.auditor \
+           instance.config.local.json:roleTiers.auditor instance.config.local.json:roleEffort.auditor \
+           instance.config.local.json:roleMinutes.auditor instance.config.local.json:roleTiers.advisor; do
+  ok "retired role named: $occ" "$(printf '%s\n' "$HEAD6R" | grep -cF "$occ" | tr -d ' ')" 1
+done
+ok "…the hint names /${PN}:init --normalise-config" \
+  "$(printf '%s\n' "$OUT6r" | grep -c "↳ run /${PN}:init --normalise-config" | tr -d ' ')" 1
+ok "…and no longer says hand-delete" "$(printf '%s\n' "$OUT6r" | grep -c 'delete the entry from the file' | tr -d ' ')" 0
+ok "…and check still exits 0" "$rc6r" 0
+printf '{\n  "org": "example-org",\n  "roleEffort": { "auditor": "low" }\n}\n' > "$INST6/instance.config.json"
+printf '{\n  "ownerGithubUser": "example-user-007"\n}\n' > "$INST6/instance.config.local.json"
+OUT6t="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"
+ok "a twinless retired roleEffort is named as retired" \
+  "$(printf '%s\n' "$OUT6t" | grep -c 'retired role(s) nothing dispatches: instance\.config\.json:roleEffort\.auditor' | tr -d ' ')" 1
+ok "…and not ALSO as a missing-twin orphan" \
+  "$(printf '%s\n' "$OUT6t" | grep -c 'roleEffort\.auditor(no roleTiers twin)' | tr -d ' ')" 0
 
 # =======================================================================================
 echo "== 10. it ships like every other script here =="

@@ -133,9 +133,11 @@ since 1.x absent, and three different key orders, with nothing anywhere calling 
 error. So every stamp now runs `normalise-config.sh` in **report** mode over both files
 and prints what is out of place: **MISPLACED** (a per-machine key in the tracked file, or
 a tracked-only key such as `defaultOwner` or `people` in the local one), **MISSING** (a
-seed key the tracked file lacks) and **ORDER**. It writes only when you ask — a yes at the
-prompt, or `/loopd:init <dir> --normalise-config` — and then it moves, adds and
-reorders but **never changes a value**: a move carries the value across, a duplicate is
+seed key the tracked file lacks), **ORDER** and **RETIRED** (a role named in
+`plugin/RETIRED_ROLES` still in `roles`, `roleTiers`, `roleEffort` or `roleMinutes`). It
+writes only when you ask — a yes at the prompt, or `/loopd:init <dir> --normalise-config`
+— and then it removes the retired-role entries (an emptied map stays `{}`), and moves,
+adds and reorders but **changes no other value**: a move carries the value across, a duplicate is
 dropped in favour of the one already in the destination file, and a seed default is only
 ever used for a key that is absent. The tracked file is left **staged**, never committed,
 because whether those keys belong in a commit is yours to decide; the gitignored

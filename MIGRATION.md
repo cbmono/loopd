@@ -1,5 +1,21 @@
 # Migrating
 
+## 2026-11-11 — drop the retired `auditor` role from your config
+
+The `auditor` agent was retired on 2026-11-10 (#516). A bundle stamped before that still
+names it in `roles`, `roleTiers`, `roleEffort` or `roleMinutes`, in either config file —
+inert, and reported by `/loopd:welcome check`. After `/plugin update loopd@loopd`, in
+**each bundle**:
+
+```text
+/loopd:init --normalise-config
+```
+
+It removes every retired-role entry (`advisor` too) and applies the other config findings
+it reports; `instance.config.json` is left staged for you to commit. Run from a terminal,
+`init-bundle.sh` asks `Apply them now?` instead — the slash command never prompts, so pass
+the flag.
+
 ## 2026-10-28 — two plugins: the mods are core, seven entries retired
 
 The marketplace now lists exactly two plugins, `loopd` and `loopd-yolo`. The three mods live
