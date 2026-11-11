@@ -270,8 +270,7 @@ root installer did that a plugin genuinely could not — seeding `plugin/seed/` 
 `.gitignore`, the `repos/` links, the first-stamp roster prompt — moved into
 `plugin/scripts/init-bundle.sh` and is reached as `/loopd:init`.
 
-The two retired root scripts stay in the repo as one-screen stubs: each prints the
-command that replaced it and exits 2.
+The two retired root scripts shipped as one-screen stubs for a while and are deleted.
 
 ---
 

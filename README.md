@@ -141,8 +141,7 @@ stamped; a hand-diverged file is reported, never forced.
 > cannot stamp absolute symlinks into a plugin cache whose path changes on every update —
 > every one of them would dangle. The symlinks existed so a `git pull` of this repo
 > propagated into every bundle; `claude plugin update` gives that property for the whole
-> tree, so they lost their reason to exist. The replaced `install.sh` and `upgrade.sh` ship
-> for one version as stubs that print the command to run instead.
+> tree, so they lost their reason to exist.
 
 #### It also asks who the team is — once
 
@@ -674,7 +673,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `question-sweep.sh` | `[--instance DIR] [--apply] [<task-doc>...]` — evaluates each open question's trailing ` check: <kind> <arg>` (`pr-merged`, `file`, `decision`) from GitHub or the committed bundle and prints `true`/`false`/`unknown`/`refused` per entry; `--apply` appends ` · sweep: <predicate> true @ <evidence>` through `fold-answers.sh --sweep` and never answers. Run by every full tick (`project-manager.md` step 2.6); `SCHEMA.md` → "Evidence sweep" | `--apply` only, one open entry per true predicate |
 | `kb-words.sh` | sourced, never run — the content-word key `kb-compare.sh` and `kb-select.sh` share | no |
 | `release-bump.sh` | `<minor\|patch>` — moves the version in the **five** places that carry it (`VERSION`, `plugin/VERSION`, both manifests, and the banner sample, whose `─` rule is re-cut to the new header's width), on the **default branch, after a merge**. Refuses on a feature branch, a dirty tree, or a new version that reaches an open deprecation `until`; commits and prints the push, never pushes | yes, those five |
-| `deprecation-windows.sh` | `[--root DIR] [--version X.Y.Z]` — lists each deprecation window under `plugin/` and in `docs/operations.md` with no `until <x.y.z>` on its line (`BARE`) or whose `until` the version has reached (`EXPIRED`); `--cmp A B` is the per-field comparator. Run by `tests/deprecation-windows.test.sh` and `release-bump.sh`. 0 none · 1 listed · 2 usage | no |
+| `deprecation-windows.sh` | `[--root DIR] [--version X.Y.Z]` — lists each deprecation window under `plugin/`, `.claude/rules/` and in `README.md`, `docs/operations.md` and `docs/conventions.md` with no `until <x.y.z>` on its line (`BARE`) or whose `until` the version has reached (`EXPIRED`); `--cmp A B` is the per-field comparator. Run by `tests/deprecation-windows.test.sh` and `release-bump.sh`. 0 none · 1 listed · 2 usage | no |
 | `check-template-version.sh` | is the plugin on this machine older than the remote's default branch — prints a line **only when behind**, silence on every failure | not the instance — `--fetch` (opt-in) updates the template checkout's remote-tracking refs, nothing else |
 | `close-project-folder.sh` | closeout's folder step — `git rm -r` the project, or freeze and keep it on `retain: true` | only with `--apply` |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |

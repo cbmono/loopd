@@ -4,8 +4,8 @@
 # `symlink/` in the shipped surface is DECLARED, nothing may tell a reader to run either
 # retired script, and the retired `/pm-loop` command name appears nowhere at all.
 #
-# WHY THIS IS A TEST AND NOT A ONE-OFF SWEEP. `install.sh` and `upgrade.sh` are refusal
-# stubs that exit 2, and `symlink/` is a directory that no longer exists — so a sentence
+# WHY THIS IS A TEST AND NOT A ONE-OFF SWEEP. `install.sh` and `upgrade.sh` are deleted
+# (refusal stubs first), and `symlink/` is a directory that no longer exists — so a sentence
 # naming one of them is either HISTORY, which is fine and often load-bearing, or a stale
 # instruction, which is a defect. The two look identical to a grep, and they read
 # identically to a reviewer who already knows which is which. That is exactly the class
@@ -53,9 +53,8 @@
 # SCOPE IS THE TRACKED SHIPPED SURFACE: `README.md`, `docs/`, `plugin/` and `.claude/`.
 # Two exclusions, both deliberate and both the task's: `docs/migrating.md` is the
 # conversion guide, whose entire job is to name the old commands, and `docs/releases/` is a
-# frozen record of what shipped. The repo ROOT `install.sh` / `upgrade.sh` stubs are out of
-# scope too — they are the retirement, not a mention of it. `tests/` is out of scope, which
-# is what lets this file quote the tokens it looks for.
+# frozen record of what shipped. `tests/` is out of scope, which is what lets this file
+# quote the tokens it looks for.
 #
 # `.claude/` JOINED THE SCOPE IN task-031, and it cost one collision, fixed rather than
 # excluded: `.claude/rules/installer.md` declares `- "/install.sh"` in its YAML `paths:`
@@ -101,7 +100,7 @@ ERA_RE='install\.sh|upgrade\.sh|symlink/'
 RUN_RE='(\./|/)(install|upgrade)\.sh|(bash|sh|zsh|exec|source) +(install|upgrade)\.sh|(run|Run|RUN|running|re-run|Re-run) +`?(install|upgrade)\.sh'
 
 # A YAML FRONTMATTER PATH GLOB IS NOT AN IMPERATIVE, and that is a real collision rather
-# than a hypothetical one: `.claude/rules/installer.md` opens with
+# than a hypothetical one: `.claude/rules/installer.md` opened with, while the stubs shipped,
 #
 #     paths:
 #       - "/install.sh"       # the deprecation stub; delete this entry when the stub goes
@@ -134,8 +133,8 @@ body_lines() { # <file>
 # sentence instead; that is what this table is for.
 # =========================================================================================
 ALLOWED='
-.claude/rules/installer.md	4	the paths: globs that load this rule for the two stubs, the sentence naming them AS the stubs, and the conversion sweep /symlink/ target test
-README.md	4	the three lines naming install.sh as the thing /'"${PN}:"'init replaced or converts a bundle from, past tense, and the Scripts row for init-bundle.sh
+.claude/rules/installer.md	2	the sentence saying the two root scripts are deleted, and the conversion sweep /symlink/ target test
+README.md	3	the two lines naming install.sh as the thing /'"${PN}:"'init replaced or converts a bundle from, past tense, and the Scripts row for init-bundle.sh
 docs/conventions.md	2	the relocation History blockquote, and the retired unstamped-machinery row, both past tense
 docs/operations.md	2	the /symlink/ target test the conversion sweep STILL applies, and the eight commands that became skills
 docs/pm-design.md	1	where the two step files moved FROM, past tense
@@ -215,20 +214,23 @@ ok "the scope is non-empty" \
 echo
 echo "== 2. nothing in scope tells a reader to RUN install.sh or upgrade.sh =="
 # =======================================================================================
-# No allowlist here on purpose. Both scripts exit 2, so an instruction to run either is a
+# No allowlist here on purpose. Both scripts are gone, so an instruction to run either is a
 # defect wherever it is, and a reader who has only ever known the plugin cannot tell that
 # from the sentence.
 found="$(imperatives "$REPO")"
 ok "no surviving instruction to run either retired script" \
    "$([ -z "$found" ] && echo none || head -3 <<<"$found" | tr '\n' ' ')" none
 
-# The frontmatter carve-out, both directions, on the real file that motivated it. Without
-# `body_lines` the first of these is 2 — the `paths:` globs — and adding `.claude/` to the
-# scope would have had to buy that with an exclusion instead of a fix.
+# The frontmatter carve-out, both directions, on a copy of the frontmatter that motivated
+# it (the real file lost those globs when the stubs were deleted). Without `body_lines`
+# the first of these is 2.
+FMFIX="$TMP/fm-installer.md"
+printf '%s\n' '---' 'paths:' '  - "/plugin/scripts/init-bundle.sh"' \
+  '  - "/install.sh"       # the deprecation stub' '  - "/upgrade.sh"' '---' 'Body.' > "$FMFIX"
 ok "a paths: glob naming the stubs is not read as an imperative" \
-   "$(imperatives "$REPO" | grep -c '^\.claude/rules/installer\.md' | tr -d ' ')" 0
-blanked="$(diff <(body_lines "$REPO/.claude/rules/installer.md") \
-                "$REPO/.claude/rules/installer.md" | grep '^> ' | sed 's/^> //')"
+   "$(body_lines "$FMFIX" | grep -cE "$RUN_RE" | tr -d ' ')" 0
+ok "…which the raw file would have been"     "$(grep -cE "$RUN_RE" "$FMFIX" | tr -d ' ')" 2
+blanked="$(diff <(body_lines "$FMFIX") "$FMFIX" | grep '^> ' | sed 's/^> //')"
 ok "…the carve-out blanked something, so the two above are not vacuous" \
    "$([ -n "$blanked" ] && echo yes || echo no)" yes
 ok "…and every line it blanked was a frontmatter path glob" \
@@ -298,7 +300,7 @@ echo "== 4. the retired /pm-loop command name is gone from the shipped surface =
 # a command the installed plugin does not have. `grep` found ~60 more across `plugin/`.
 #
 # WHY IT NEEDS NO ALLOWLIST, WHICH IS THE DIFFERENCE FROM PROPERTY 1. `install.sh` is a
-# refusal stub that still exists, so naming it can be legitimate history; `/pm-loop` is a
+# retired script with a history, so naming it can be legitimate history; `/pm-loop` is a
 # command the runtime cannot resolve at all, so every mention inside the shipped surface
 # reads as an instruction whatever the sentence around it intends. The two documents where
 # naming it IS the job — `docs/migrating.md`, the conversion guide, and `docs/releases/`,

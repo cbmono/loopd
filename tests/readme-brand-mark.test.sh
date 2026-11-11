@@ -63,11 +63,11 @@ rows() { sed -n '2,4p' "$1"; }
 mark_matches() { diff -q "$TMP/mark.txt" <(rows "$1") >/dev/null 2>&1 && echo yes || echo no; }
 
 # Every tracked path a reader is shipped: the docs plus CLAUDE.md's closed `core` list —
-# the companion plugin and both deprecation stubs carry slugs too.
+# the companion plugin carries slugs too.
 # Minus docs/releases/: a release note records what that version shipped under.
 shipped_surface() {
   ( cd "$REPO" && git ls-files -- README.md docs .claude plugin 'plugin-*' config \
-      install.sh upgrade.sh ':!docs/releases' 2>/dev/null )
+      ':!docs/releases' 2>/dev/null )
 }
 in_surface() { grep -qxF -- "$1" <<<"$(shipped_surface)" && echo yes || echo no; }
 
@@ -113,8 +113,6 @@ ok "the README names every command as /${PN}:<cmd>" "$(undocumented "$README")" 
 ok "no slug under another name in the README" "$(foreign "$README")" 0
 ok "…nor anywhere on the shipped surface" \
    "$(shipped_surface | tr '\n' '\0' | (cd "$REPO" && xargs -0 grep -ohE "/[a-z][a-z0-9-]*:(${CMD_ALT})([^a-z-]|\$)" 2>/dev/null) | grep -vc "^/${PN}:" | tr -d ' ')" 0
-ok "the sweep covers the install.sh stub"   "$(in_surface install.sh)" yes
-ok "the sweep covers the upgrade.sh stub"   "$(in_surface upgrade.sh)" yes
 ok "the sweep covers the plugin-yolo companion" "$(in_surface plugin-yolo/companion/AUTONOMY.md)" yes
 ok "the marketplace line names this repo" \
    "$([ "$(count "$README" "/plugin marketplace add $GH")" -gt 0 ] && echo yes || echo no)" yes
@@ -203,10 +201,10 @@ echo "== 6. the title-case brand is gone from everything that ships =="
 # § 5 sweeps the lowercase spelling. The display name — `AI Bridge`, `AI-Bridge` — reached a
 # skill description a human reads in every command list, the status-line note init prints
 # and the plugin README's title, none of which § 5 could see. What ships is the core plugin,
-# its one companion and the two stubs (the `plugin-alias/` stub, which WAS the old name on
+# and its one companion (the `plugin-alias/` stub, which WAS the old name on
 # purpose, was retired 2026-10-28). One survivor: plugin/RETIRED records the 2.0 migration
 # under the name it shipped as.
-titlecase() { ( cd "$1" && grep -rIlE 'AI[ -]Bridge' plugin plugin-yolo install.sh upgrade.sh 2>/dev/null ) \
+titlecase() { ( cd "$1" && grep -rIlE 'AI[ -]Bridge' plugin plugin-yolo 2>/dev/null ) \
                  | sort | tr '\n' ' ' | sed 's/ $//'; }
 ok "only plugin/RETIRED's history still says AI Bridge" "$(titlecase "$REPO")" plugin/RETIRED
 MUT6="$TMP/mut6"; mkdir -p "$MUT6/plugin/skills/welcome"
