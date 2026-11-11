@@ -2,8 +2,9 @@
 # stop-ids`: reads one `claude agents --json --all` listing and prints that mode's rows.
 #   python3 agent-sessions-classify.py <listing-json> <root> <wtroot> <terminal> <summary> <tasks>
 #                                      <skip> <recs> <self-ids> <bounds> <projects-dir>
-# <summary> `counts`: `<working> <idle> <dead>`, then `<word> TAB <json task path>` per task whose
-# worktree holds a session, the path relative to <root>.
+# <summary> `counts`: `<working> <idle> <dead>`, `tick TAB <n>` (working sessions among
+# <self-ids>, the tick's), then `<word> TAB <json task path>` per task whose worktree holds a
+# session, the path relative to <root>.
 # Exit 0 answered · 2 unreadable listing, or no row carries a pid (dead-ids, stop-ids).
 # Reasoning: docs/pm-design.md#step-3-background.
 import glob, json, os, re, sys, time, unicodedata
@@ -90,7 +91,7 @@ def age(ms):
             return "%d%s" % (s // n, unit)
     return "%ds" % s
 
-out, working, idle, ghost, ended, cands, busy, per_task = [], 0, 0, 0, 0, [], [], {}
+out, working, idle, ghost, ended, cands, busy, per_task, tick = [], 0, 0, 0, 0, [], [], {}, 0
 WORDS = ["working", "idle", "dead", "none"]
 for r in rows:
     if not isinstance(r, dict) or r.get("kind", "background" if not dead else None) != "background":
@@ -136,6 +137,7 @@ for r in rows:
         if st == "busy" or (st is None and state == "working"):
             working, word = working + 1, "working"
             busy.append(str(r.get("sessionId") or ""))
+            tick += bool(self_ids & {busy[-1], busy[-1].split("-")[0]} - {""})
         else:
             idle, word = idle + 1, "idle"
     elif state in terminal:
@@ -171,6 +173,7 @@ if summary == "1":
     sys.exit(0)
 if summary == "counts":
     print(working, idle, ghost)
+    print("tick\t%d" % tick)
     for k in sorted(per_task):
         print(per_task[k] + "\t" + json.dumps(k))
     sys.exit(0)

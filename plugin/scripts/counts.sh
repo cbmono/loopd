@@ -3,7 +3,8 @@
 # counts.sh — THE one definition of the bundle's numbers: in progress, in review, sessions
 # working/idle/dead, need you. Sourced, after bundle-paths.sh:
 #   ab_counts <root>        sets CNT_IN_PROGRESS CNT_IN_REVIEW CNT_WORKING CNT_IDLE CNT_DEAD
-#                           CNT_NEED_YOU (`?` unknown), CNT_QUEUE (on|off|unreadable) and
+#                           CNT_TICK (working sessions that are the tick) CNT_NEED_YOU (`?`
+#                           unknown), CNT_QUEUE (on|off|unreadable) and
 #                           CNT_TASKS (`<word> TAB <json task path>` lines, or `?`)
 #   ab_write_counts <root>  writes them to AB_COUNTS (temp + mv), `?` as null, no free text
 # status-line.sh prints them and the pane reads AB_COUNTS. No `gh`, no network, no `jq`.
@@ -13,7 +14,7 @@ ab_counts() {
   local root="$1" out a_cache a_ep a_rest agents l t
   local here; here="$(dirname "${BASH_SOURCE[0]:-$0}")"
   CNT_IN_PROGRESS='?'; CNT_IN_REVIEW='?'; CNT_NEED_YOU='?'; CNT_QUEUE=off
-  CNT_WORKING='?'; CNT_IDLE='?'; CNT_DEAD='?'; CNT_TASKS='?'
+  CNT_WORKING='?'; CNT_IDLE='?'; CNT_DEAD='?'; CNT_TICK='?'; CNT_TASKS='?'
   read -r CNT_EPOCH CNT_AT <<<"$(date -u '+%s %Y-%m-%dT%H:%M:%SZ')"
 
   # Task frontmatter, directly — never SNAPSHOT.json, which only a tick writes. One awk pass,
@@ -66,7 +67,11 @@ ab_counts() {
   if [ "$CNT_TASKS" != '?' ]; then
     while IFS= read -r l; do
       t="${l#*$'\t'}"
-      case "${l%%$'\t'*}" in working|idle|dead) ;; *) continue ;; esac
+      case "${l%%$'\t'*}" in
+        working|idle|dead) ;;
+        tick) case "$t" in ''|*[!0-9]*) ;; *) CNT_TICK="$t" ;; esac; continue ;;
+        *) continue ;;
+      esac
       case "$t" in \"*\") CNT_TASKS="$CNT_TASKS$l"$'\n' ;; esac
     done <<<"$agents"
   fi
@@ -92,13 +97,13 @@ ab_counts() {
 _ab_jnum() { case "$2" in ''|*[!0-9]*) printf -v "$1" null ;; *) printf -v "$1" '%s' "$2" ;; esac; }
 
 ab_write_counts() {
-  local f="$1/$AB_COUNTS" tasks="null" sep="" l p r w i d n
+  local f="$1/$AB_COUNTS" tasks="null" sep="" l p r w i d k n
   [ -d "${f%/*}" ] || return 0
   # Until /loopd:init adds the ignore line, a broad `git add` would commit this per-clone file.
   # Read .gitignore rather than ask git: the status line never runs git.
   if [ -e "$1/.git" ] && ! grep -qxE "/?${AB_COUNTS//./\\.}" "$1/.gitignore" 2>/dev/null; then return 0; fi
   _ab_jnum p "$CNT_IN_PROGRESS"; _ab_jnum r "$CNT_IN_REVIEW"; _ab_jnum n "$CNT_NEED_YOU"
-  _ab_jnum w "$CNT_WORKING"; _ab_jnum i "$CNT_IDLE"; _ab_jnum d "$CNT_DEAD"
+  _ab_jnum w "$CNT_WORKING"; _ab_jnum i "$CNT_IDLE"; _ab_jnum d "$CNT_DEAD"; _ab_jnum k "$CNT_TICK"
   if [ "$CNT_TASKS" != '?' ]; then
     tasks="{"
     while IFS= read -r l; do
@@ -107,8 +112,8 @@ ab_write_counts() {
     done <<<"$CNT_TASKS"
     tasks="$tasks}"
   fi
-  printf '{"in_progress":%s,"in_review":%s,"sessions":{"working":%s,"idle":%s,"dead":%s},"need_you":%s,"queue":"%s","task_sessions":%s,"written_at":"%s"}\n' \
-    "$p" "$r" "$w" "$i" "$d" "$n" "$CNT_QUEUE" "$tasks" "$CNT_AT" > "$f.$$" 2>/dev/null && mv -f "$f.$$" "$f" 2>/dev/null
+  printf '{"in_progress":%s,"in_review":%s,"sessions":{"working":%s,"idle":%s,"dead":%s,"tick_working":%s},"need_you":%s,"queue":"%s","task_sessions":%s,"written_at":"%s"}\n' \
+    "$p" "$r" "$w" "$i" "$d" "$k" "$n" "$CNT_QUEUE" "$tasks" "$CNT_AT" > "$f.$$" 2>/dev/null && mv -f "$f.$$" "$f" 2>/dev/null
   rm -f "$f.$$" 2>/dev/null
   return 0
 }

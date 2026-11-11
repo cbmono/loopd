@@ -166,6 +166,7 @@ const WORDS = ['working', 'idle', 'dead']
 const POLL_MS = 5000
 const NOTE_MS = 10000
 const WIDTH = 45        // the operator layout's width where the surface names no bodyColumns
+const PAD = 2           // the operator pane's padding, left and right; every row is drawn inside it
 const BAR = 10          // progress-bar cells, whatever the task count
 // write-snapshot.sh's verb set, minus nothing: the pane names the verb, never the reason.
 const VERBS = ['approve', 'answer', 'merge', 'unblock', 'close'] as const
@@ -217,12 +218,12 @@ type N = number | null     // null is drawn `?`
 type Counts = {
   state: 'absent' | 'unreadable' | 'ok'
   mtimeMs: number
-  in_progress: N; in_review: N; working: N; idle: N; dead: N; need_you: N
+  in_progress: N; in_review: N; working: N; idle: N; dead: N; tick: N; need_you: N
   queue: string
   tasks: Record<string, string> | null
   written_at: string
 }
-const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, need_you: null, queue: '', tasks: null, written_at: '' }
+const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, queue: '', tasks: null, written_at: '' }
 
 // Module state. A reload starts it over, and the next poll or /pane fills it again.
 let kind: Kind = 'unread'
@@ -317,7 +318,7 @@ function readCounts(text: unknown, m: number): Counts {
   if (ts) { tasks = {}; for (const [k, v] of Object.entries(ts)) if (typeof v === 'string' && WORDS.includes(v)) tasks[k] = v }
   return {
     state: 'ok', mtimeMs: m, in_progress: nint(o.in_progress), in_review: nint(o.in_review),
-    working: nint(se.working), idle: nint(se.idle), dead: nint(se.dead), need_you: nint(o.need_you),
+    working: nint(se.working), idle: nint(se.idle), dead: nint(se.dead), tick: nint(se.tick_working), need_you: nint(o.need_you),
     queue: str(o.queue), tasks, written_at: str(o.written_at),
   }
 }
@@ -454,7 +455,7 @@ async function copyRef($: any, ref: string, surface: unknown): Promise<void> {
   else {
     let r: any = null
     try { r = await $.ui.copy(surface ? { text: ref, surface } : { text: ref }) } catch (err) { r = { isCopied: false, reason: why(err) } }
-    note = r && r.isCopied === true ? 'copied ' + ref
+    note = r && r.isCopied === true ? 'copied: ' + ref
       : r && r.isCopied === false ? 'copy failed: ' + (clean(r.reason) || 'refused')
       : 'copy sent ' + ref
   }
@@ -475,7 +476,7 @@ function draw($: any, e: any, now: number): any {
   const copyButton = (key: string, s: string, look: Record<string, unknown>, ref: string) =>
     Button({ key, plain: true, children: [Text({ ...look, children: [s] })], onPress: (press: any) => copyRef($, ref, press && press.surface) })
   const rows: any[] = []
-  const W = toint(e && e.props ? e.props.bodyColumns : 0) || WIDTH
+  const W = (toint(e && e.props ? e.props.bodyColumns : 0) || WIDTH) - 2 * PAD
   const fit = (s: string, room: number) => cut(s, Math.max(1, room))
   shownAge = ageKey(now)
 
@@ -522,7 +523,7 @@ function draw($: any, e: any, now: number): any {
     const showNeed = !queueOff() && (counts.need_you !== 0 || b.itemsUnknown)
 
     // The banner's mark, the brand line beside row 2 and a rule beside row 3 to the edge;
-    // the need-you count and the age on their own line under it.
+    // the age right-aligned on its own line under it.
     const marks = LOGO_ROWS.map(r => r.split('|'))
     const lw = Math.max(...marks.map(m => cols(m.join(''))))
     const brandLine = ['loopd' + (brand.version ? ' v' + brand.version : ''), b.group, brand.org ? 'org: ' + brand.org : ''].filter(Boolean).join(' · ')
@@ -532,8 +533,7 @@ function draw($: any, e: any, now: number): any {
         ...(i === 1 ? [pad, seg(fit(brandLine, W - lw - 1), { ...TEXT, bold: true })] : i === 2 ? [pad, seg('─'.repeat(Math.max(1, W - lw - 1)), RULE)] : [])))
     })
     const snapAge = headAge(now, b)
-    const count = showNeed ? needYou(counts.need_you === null ? '?' : counts.need_you) : ''
-    rows.push(row(seg(count, NEEDS_YOU), seg(gap(cols(count) + cols(snapAge))), seg(snapAge, MUTED)))
+    rows.push(row(seg(gap(cols(snapAge))), seg(snapAge, MUTED)))
     rows.push(line(' '))
 
     rows.push(heading('PROJECTS', b.rows.length, HEAD))
@@ -577,9 +577,12 @@ function draw($: any, e: any, now: number): any {
     const c = counts
     rows.push(heading('IN PROGRESS', c.in_progress, WORK, true))
     rows.push(line(' '))
-    rows.push(row(seg('   '), seg(nstr(c.working) + ' working', WORK), seg(' · ', MUTED), seg(nstr(c.idle) + ' idle', MUTED), seg(' · ', MUTED), seg(nstr(c.dead) + ' dead', NEEDS_YOU)))
+    // The tick is a working session but no task, so it is named apart: `1 working (tick)`, `2 working (1 tick)`.
+    const tick = c.tick !== null && c.tick > 0 && c.working !== null && c.tick <= c.working ? c.tick : 0
+    const ticks = tick ? (tick === c.working ? ' (tick)' : ' (' + tick + ' tick)') : ''
+    rows.push(row(seg('   '), seg(nstr(c.working) + ' working' + ticks, WORK), seg(' · ', MUTED), seg(nstr(c.idle) + ' idle', MUTED), seg(' · ', MUTED), seg(nstr(c.dead) + ' dead', NEEDS_YOU)))
     rows.push(line(' '))
-    if (progress.length === 0) rows.push(line('   nothing right now', MUTED))
+    if (progress.length === 0) rows.push(line(tick ? '   no task in progress — tick running' : '   nothing right now', MUTED))
     for (const [p, t] of progress) {
       const head = '   ' + (t.assignee || 'unassigned') + '  '
       const word = c.tasks === null ? '?' : c.tasks[taskPath(p, t)] || '—'
@@ -623,10 +626,11 @@ function draw($: any, e: any, now: number): any {
   // A Button drops `color`; a coloured Text child is the kit's route to a coloured label.
   const label = (s: string, look: Record<string, unknown>) => ({ label: s, plain: true, children: [Text({ ...look, children: [s] })] })
   rows.push(Box({
-    key: 'buttons', flexDirection: 'row', columnGap: 2, paddingLeft: 2, children: [
+    // A gap of 1 under 43 columns, where 2 would push the three labels past the padding.
+    key: 'buttons', flexDirection: 'row', columnGap: W >= 43 ? 2 : 1, children: [
       Button({
-        key: 'answer', ...label('✎ Answer Questions', FILL), hotkey: 'a',
-        // The human pressed a key in their own session: one /loopd:answer run, queued
+        key: 'answer', ...label('✎ Answer Questions', FILL),
+        // The human pressed a button in their own session: one /loopd:answer run, queued
         // until the session is idle (the engine's own contract for a plugin's command.run).
         // Not awaited — a handler that waits for the run would block the press. Never on
         // a timer. A COMMAND run, not a prompt: the host refuses a `/` text as a prompt.
@@ -646,11 +650,11 @@ function draw($: any, e: any, now: number): any {
         },
       }),
       Button({
-        key: 'refresh', ...label('↻ Refresh', RULE), hotkey: 'r',
+        key: 'refresh', ...label('↻ Refresh', RULE),
         onPress: async () => { await refresh($, true); $.ui.invalidate('ui.render') },
       }),
       Button({
-        key: 'close', ...label('✕ Close Pane', PLUM), hotkey: 'c',
+        key: 'close', ...label('✕ Close Pane', PLUM),
         // The same path as `/pane close`. A $.ui.close from a press did not reach this module's
         // own ui.close hook in the kit (2.1.322), so the poll is stopped here as well.
         onPress: async () => { try { await $.ui.close({ id: PANE }) } catch { /* already gone */ } stopPoll() },
@@ -662,7 +666,7 @@ function draw($: any, e: any, now: number): any {
   const info = noteLive(now) ? note : answerQueued ? 'answer queued' : kind === 'ok' && countsGone() ? 'counts unavailable — run /loopd:init' : ''
   if (info) rows.push(line(fit(info, W), MUTED))
 
-  return Box({ flexDirection: 'column', children: rows })
+  return Box({ flexDirection: 'column', paddingLeft: PAD, paddingRight: PAD, children: rows })
 }
 
 // ---------------------------------------------------------------- simple mode
