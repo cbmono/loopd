@@ -358,17 +358,30 @@ async function readBrand($: any, root: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------- the read
+// The session's start directory first: a Bash `cd` moves `$.session.cwd()` but never
+// `$.session.root()`, and a pane that followed the cwd lost its bundle (2026-11-11).
+async function paneRoot($: any): Promise<{ root: string; cwd: string | null }> {
+  let start: unknown = null
+  try { start = await $.session.root() } catch { start = null }
+  if (typeof start === 'string' && start.startsWith('/')) {
+    const r = start.replace(/\/+$/, '')
+    if (await exists($, r + '/' + CONFIG)) return { root: r, cwd: r }
+  }
+  let cwd: unknown = null
+  try { cwd = await $.session.cwd() } catch { cwd = null }
+  if (typeof cwd !== 'string' || !cwd) return { root: '', cwd: null }
+  const c = cwd.replace(/\/+$/, '')
+  return { root: await exists($, c + '/' + CONFIG) ? c : '', cwd: c }
+}
+
 // `force` re-reads regardless of mtime (Refresh, the first open); the poll passes false and
 // reads only when stat says the file moved. Every `$` call is caught: a missing or renamed
 // field, a vanished file or a refused call costs one line in the pane, never a throw.
 async function refresh($: any, force: boolean): Promise<void> {
-  let cwd: unknown = null
-  try { cwd = await $.session.cwd() } catch { cwd = null }
-  if (typeof cwd !== 'string' || !cwd) { kind = 'malformed'; board = null; detail = 'cannot read the working directory'; return }
-  const root = cwd.replace(/\/+$/, '')
-  let isBundle = false
-  try { isBundle = (await $.fs.exists(root + '/' + CONFIG)) === true } catch { isBundle = false }
-  if (!isBundle) { kind = 'not-bundle'; board = null; detail = 'not a loopd bundle — no ' + CONFIG + ' in ' + clean(root); mtimeMs = -1; return }
+  const at = await paneRoot($)
+  if (at.cwd === null) { kind = 'malformed'; board = null; detail = 'cannot read the working directory'; return }
+  if (!at.root) { kind = 'not-bundle'; board = null; detail = 'not a loopd bundle — no ' + CONFIG + ' in ' + clean(at.cwd); mtimeMs = -1; return }
+  const root = at.root
   await refreshCounts($, root, force)
   const path = root + '/' + SNAPSHOT
   let st: any = null
@@ -885,13 +898,10 @@ async function doc($: any, path: string, mtimeMs: number): Promise<Doc> {
 }
 
 async function refreshSimple($: any): Promise<boolean> {
-  let cwd: unknown = null
-  try { cwd = await $.session.cwd() } catch { cwd = null }
-  if (typeof cwd !== 'string' || !cwd) { const was = kind; kind = 'malformed'; detail = 'cannot read the working directory'; return was !== kind }
-  const root = cwd.replace(/\/+$/, '')
-  let isBundle = false
-  try { isBundle = (await $.fs.exists(root + '/' + CONFIG)) === true } catch { isBundle = false }
-  if (!isBundle) { const was = kind; kind = 'not-bundle'; detail = 'not a loopd bundle — no ' + CONFIG + ' in ' + clean(root); simple = []; return was !== kind }
+  const at = await paneRoot($)
+  if (at.cwd === null) { const was = kind; kind = 'malformed'; detail = 'cannot read the working directory'; return was !== kind }
+  if (!at.root) { const was = kind; kind = 'not-bundle'; detail = 'not a loopd bundle — no ' + CONFIG + ' in ' + clean(at.cwd); simple = []; return was !== kind }
+  const root = at.root
   const next: Simple[] = []
   const seen = new Map<string, { mtimeMs: number; doc: Doc }>()
   let s = ''
