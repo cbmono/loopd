@@ -22,9 +22,9 @@ None of them resolving means it is not installed here. Install once, then restar
 /plugin install loopd@loopd
 ```
 
-**After every plugin update, run `/loopd:init` here** — it stamps the seed, then runs
-the check-and-fix pass (idempotent repairs only; config files and tick locks are reported,
-never written). **`/loopd:welcome` is the banner and `check`** — facts, no repairs.
+**To update, run `/loopd:update` here, then `/reload-plugins`** — plugin, seed stamp,
+check-and-fix (config, tick locks: reported only); another bundle: `/loopd:init` there.
+**`/loopd:welcome` is the banner and `check`** — facts, no repairs.
 
 **A bare `scripts/<x>.sh` means the plugin's scripts directory, `<scripts>` below
 (agents: `${CLAUDE_PLUGIN_ROOT}/scripts/<x>.sh`) — unless `<bundle>/scripts/<x>.sh`

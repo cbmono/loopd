@@ -58,7 +58,7 @@ body() { # <skill> — everything after the closing `---`
     "$SK/$1/SKILL.md"
 }
 
-STATE_CHANGING="dispatch handoff answer fanout new-project close-project board init prune-wt"
+STATE_CHANGING="dispatch handoff answer fanout new-project close-project board init prune-wt update"
 READ_ONLY="welcome whats-up"
 REFERENCE=""
 ALL="$STATE_CHANGING $READ_ONLY $REFERENCE"

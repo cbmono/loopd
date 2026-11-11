@@ -289,6 +289,7 @@ Run these inside an instance.
 | `/loopd:prune-wt` | (plugin) remove the worktrees `prune-worktrees.sh` reports `REMOVABLE`, after one yes — each re-checked at removal time, skipped on any doubt; refuses while a tick holds the lock. [→](docs/operations.md#4-worktrees-two-scripts-delete-the-pruner-still-reports) |
 
 | `/loopd:init <dir>` | (plugin) create a bundle or refresh one, then run the check-and-fix pass |
+| `/loopd:update` | (plugin) update the marketplace and every user-scope plugin installed from it, re-stamp the bundle it runs in with the new version's init, then tells you to `/reload-plugins` |
 
 `/pane` is a mod, not a skill: the board, or an inbox of questions and stuck tasks, beside the
 session ([`plugin/hooks/MODS.md`](plugin/hooks/MODS.md)).
@@ -621,6 +622,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `project-paused.sh` | answers whether a project is paused, as one predicate with a three-value exit | no |
 | `prune-worktrees.sh` | classifies worktrees, prints the `remove` commands | **never** |
 | `prune-wt.sh` | `[--yes]` — behind `/loopd:prune-wt`: previews, then removes the pruner's `REMOVABLE` set, re-checking each path with `reclaim-worktree.sh`'s guards (unlocked, clean, pushed, no non-cache ignored file, no live process) and running `git worktree prune` per repo. Refuses while the tick lock is held; never forces | `--yes` only — those worktrees |
+| `update-plugin.sh` | no arguments — behind `/loopd:update`: `claude plugin marketplace update`, then `claude plugin update <p>@<marketplace> -s user` per user-scope plugin of it (never an install, never a project-scope entry), then the new version's `init-bundle.sh` on the bundle in the cwd, resolved from the registry's user entry; ends with the `/reload-plugins` line. Exit 0 · 1 a plugin failed · 2 nothing stamped · else init's |
 | `reclaim-worktree.sh` | `<task-path>` — removes the ONE worktree that task recorded, with no scan. 0 removed (`--dry-run`: every guard passed) · 1 REFUSED · 2 cannot answer · 3 nothing to do · 4 REFUSED only by the task's own recorded session, a retry. Exit 0 needs `status: done` **and** every `pr:` URL MERGED, so closed-unmerged and an empty `pr:` both refuse, as do a dirty or unpushed tree, a detached HEAD, ignored content outside the cache allowlist (`node_modules`, husky's `.husky/_/`, build caches — never `.env`), and a live process in the tree | yes — that one worktree |
 | `commit-as.sh` | commits as the right agent identity | yes |
 | `required-checks.sh` | resolves a PR's required checks | no |

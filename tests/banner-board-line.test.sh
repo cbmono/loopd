@@ -536,7 +536,7 @@ fi
 
 echo "== the Update row: three states, off a fixture marketplace clone (no network) =="
 # THE THIRD ROW IS THE ONE COMMAND THAT FETCHES A NEWER AI BRIDGE AND INSTALLS IT, and the
-# restart, which is the only part left with the human. It owes a distinguishable line in all
+# reload, which is the only part left with the human. It owes a distinguishable line in all
 # three states, for the same reason the Board row does: a row that vanishes when the check
 # cannot answer reads as a row that was dropped in a merge.
 #
@@ -564,7 +564,7 @@ if command -v git >/dev/null 2>&1; then
   assert "the marketplace carries the installed version: the row says up to date" \
     "$(line_is 'Update  up to date (9.9.9)' "$OUT")"
   assert "…and it offers no command, because there is nothing to run" \
-    "$(hasnt 'claude plugin update' "$OUT")"
+    "$(hasnt ':update ' "$OUT")"
 
   # THE STAMP RECORD. /<plugin>:init writes the plugin version it ran with; a record that
   # trails the installed plugin means seed edits are waiting on a re-stamp. All off the
@@ -587,13 +587,14 @@ if command -v git >/dev/null 2>&1; then
 
   mkt_version 9.9.10
   rm -f "$CACHE"; run
-  # ONE ROW CARRIES ALL THREE FACTS — the command, both versions, and the restart. The
-  # restart is the only step left with the human, and a second line for it is the wrapped
+  # ONE ROW CARRIES ALL THREE FACTS — the command, both versions, and the reload. The
+  # reload is the only step left with the human, and a second line for it is the wrapped
   # sentence the two rows above were split to remove.
-  assert "a newer VERSION on the default branch: the row is the command, both versions and the restart" \
-    "$(line_is 'Update  claude plugin update '"$PN"'  (9.9.9 → 9.9.10) — restart to apply it' "$OUT")"
-  assert "…and the restart is not a second line"  \
-    "$(eq "$(printf '%s\n' "$OUT" | grep -cF 'restart to apply it')" 1)"
+  assert "a newer VERSION on the default branch: the row is /update, both versions and the reload" \
+    "$(line_is 'Update  /'"$PN"':update  (9.9.9 → 9.9.10), then /reload-plugins' "$OUT")"
+  assert "…and the reload is not a second line"  \
+    "$(eq "$(printf '%s\n' "$OUT" | grep -cF 'reload-plugins')" 1)"
+  assert "…and it says no restart"               "$(hasnt 'restart' "$OUT")"
   assert "…and the section is still three rows" "$(eq "$(section | grep -c .)" 3)"
   # ONE SURFACE, NOT TWO. §2b's `TEMPLATE UPDATE` block is the CHECKOUT's rendering of the
   # same fact; on a plugin install it would put two spellings of one command in one banner.
@@ -608,7 +609,7 @@ if command -v git >/dev/null 2>&1; then
   mkt_version 9.9.20
   run
   assert "a fresh cache is not re-fetched: the row still names 9.9.10" \
-    "$(has 'Update  claude plugin update '"$PN"'  (9.9.9 → 9.9.10)' "$OUT")"
+    "$(has 'Update  /'"$PN"':update  (9.9.9 → 9.9.10)' "$OUT")"
   rm -f "$CACHE"; run
   assert "…and a cleared one picks the new version up" "$(has '(9.9.9 → 9.9.20)' "$OUT")"
 
@@ -618,7 +619,7 @@ if command -v git >/dev/null 2>&1; then
   rm -f "$CACHE"; run
   assert "unreachable marketplace, cold cache: unknown, never behind" \
     "$(line_is 'Update  unknown (offline)' "$OUT")"
-  assert "…and it claims no update"              "$(hasnt 'claude plugin update' "$OUT")"
+  assert "…and it claims no update"              "$(hasnt ':update ' "$OUT")"
   assert "…and the rest of the board section is untouched" \
     "$(has "Board   file://$PAGE" "$OUT")"
   rm -rf "$MKT"; rm -f "$CACHE"

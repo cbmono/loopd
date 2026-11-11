@@ -61,6 +61,7 @@ setup and nothing on a machine needs a clone. A stale link an older `--config` l
 | `/board` | Serve the board on a local URL, or publish it as a private artifact. |
 | `/fanout <task>` | Parallel work across several repos. |
 | `/prune-wt` | Remove the worktrees `prune-worktrees.sh` reports `REMOVABLE`, after one yes. |
+| `/update` | Update the marketplace and every user-scope plugin installed from it, re-stamp the current bundle with the new version's init, then tell you to `/reload-plugins`. |
 
 Each also answers to its namespaced form (`/loopd:whats-up`, `/loopd:dispatch`).
 **`ai-bridge-v2` was the transition name** — its one-version deprecation stub was

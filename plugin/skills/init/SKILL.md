@@ -120,8 +120,8 @@ without your yes`, followed by the rules still missing. When you see that note:
 `instance.config.json` needs the group's `org` before anything else works;
 `instance.config.local.json` is written for you, from what the machine already knows.
 Then `/loopd:welcome` for the banner, and `/loopd:dispatch` for the loop.
-**Run this command again after every plugin update** — it is the one that brings a
-bundle up to the installed plugin. The banner's `Update` row says when: `bundle stamped at
+**`/loopd:update` runs this for you** on the bundle it is run from, after updating the
+plugin; run this one on any other bundle. The banner's `Update` row says when: `bundle stamped at
 <old> — run /loopd:init`.
 
 If the directory is not a bundle and was not meant to be one, say which directory it is

@@ -417,7 +417,7 @@ check_template_behind() {
     IFS="$(printf '\t')" read -r st here there pname <<<"$state"
     case "${st:-}" in
       behind)  warn "plugin ${here} is behind the marketplace, which carries ${there}"
-               hint "claude plugin update ${pname:-$PLUGIN_NAME}   (then restart Claude Code)" ;;
+               hint "/${pname:-$PLUGIN_NAME}:update, then /reload-plugins" ;;
       current) good "plugin version: ${here} is what the marketplace's default branch carries" ;;
       *)       good "plugin version: the marketplace could not be read, so drift is not judged"
                note "a plugin installed from a marketplace has one; a vendored copy may not" ;;
@@ -495,7 +495,7 @@ fix_template_behind() {
     return 0
   fi
   note "the pull did not fast-forward — the checkout is unchanged. The supported route is"
-  note "/plugin update ${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}, then restart Claude Code."
+  note "/${PLUGIN_NAME}:update, then /reload-plugins."
   return 0
 }
 

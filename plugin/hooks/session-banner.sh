@@ -1421,8 +1421,8 @@ if [ "$board_on" -eq 1 ]; then
     echo "Board   enabled, but never rendered — no $AB_BOARD_DIR/board.html here yet"
     say "$C_DIM" "        run /${PLUGIN_NAME}:board serve; otherwise an /${PLUGIN_NAME}:dispatch tick renders it, or build-board.sh"
   fi
-  # THE UPDATE ROW — the one command that fetches a newer loopd and installs it, and
-  # the restart, which is the only part left with the human.
+  # THE UPDATE ROW — the one command that fetches a newer loopd, installs it and re-stamps
+  # the bundle, and the reload, which is the only part left with the human.
   #
   # THE VERDICT IS NOT COMPUTED HERE, exactly as §2b does not compute its own: the same
   # `check-template-version.sh` answers both, so this row and `/<plugin>:welcome check`
@@ -1442,7 +1442,7 @@ if [ "$board_on" -eq 1 ]; then
     fi
     IFS="$TAB" read -r u_state u_here u_there u_name <<<"${_upd:-}"
     case "${u_state:-}" in
-      behind)  echo "$(pad Update "$BOARD_LW")claude plugin update ${u_name:-loopd}  (${u_here} → ${u_there}) — restart to apply it" ;;
+      behind)  echo "$(pad Update "$BOARD_LW")/${u_name:-loopd}:update  (${u_here} → ${u_there}), then /reload-plugins" ;;
       current)
         # `$AB_DIR/seed-base/VERSION` is the plugin version the bundle was last stamped
         # with; trailing the installed one means seed edits are waiting on /<plugin>:init.
