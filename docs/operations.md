@@ -1394,7 +1394,7 @@ owner asked three times in one session, for three different instances.
 ```text
 
    ▄▄▄▄
-◀━▐    ▌ loopd v4.11.2 · _loopd-example · org: cbmono
+◀━▐    ▌ loopd v4.12.0 · _loopd-example · org: cbmono
   ▝▄▄▄▄▘ ────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
