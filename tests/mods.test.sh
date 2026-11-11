@@ -62,6 +62,8 @@ CHECK="tool\.check"
 REACH='\$\.(process|http|env)\.'
 FSWRITE='\$\.fs\.(write|ancestors)'
 FSREAD='\$\.fs\.(read|stat|exists|list)'
+# The pane's one outward action, a clipboard write on a press, is admitted in copyRef() only.
+COPY='\$\.ui\.copy\('
 # The same three on a `claude plugin validate` calls: line, where the `$.` prefix may or may
 # not be printed — prefix-optional, so an absent prefix cannot turn the check vacuous.
 REACH_CALLS='(^|[^A-Za-z0-9_])(process|http|env)\.'
@@ -104,6 +106,11 @@ reads_declared() { # <module> <doc>
 without_reads_section() { awk '/^## What it reads/ { p = 1; next } /^## / { p = 0 } !p' "$1"; }
 # The module's source minus its comment lines, for the pins that count a spelling.
 code() { grep -vE '^[[:space:]]*//' "$1"; }
+# Clipboard calls inside copyRef() (up to its closing `}` at column 0), and outside it.
+copy_calls() { # <module> in|out
+  code "$1" | awk -v want="$2" '/^async function copyRef\(/ { f = 1 } { if ((f ? "in" : "out") == want) print } f && /^}/ { f = 0 }' \
+    | grep -cE "$COPY" | tr -d ' '
+}
 
 echo
 echo "== the module ships in core, registered beside the shell hooks =="
@@ -129,6 +136,7 @@ ok "the module never calls \$.model."              "$(count "$MODEL" "$MOD")" 0
 ok "…never hooks the permission event"             "$(count "$CHECK" "$MOD")" 0
 ok "…never spawns, fetches or reads the env"       "$(count "$REACH" "$MOD")" 0
 ok "…never writes a file or walks up from the cwd" "$(count "$FSWRITE" "$MOD")" 0
+ok "…writes the clipboard once, in copyRef(), and nowhere else" "$(copy_calls "$MOD" in)/$(copy_calls "$MOD" out)" 1/0
 ok "…reads a file, so MODS.md's 'What it reads' names every path it spells" \
    "$(reads_declared "$MOD" "$DOC")" yes
 ok "…lists a directory, so it spells its walk as a quoted glob" \
@@ -227,6 +235,8 @@ ok "…a switch read off a file (a second .mode) is caught" "$(code "$TMP/switch
 { cat "$MOD"; printf '\nasync function save2($: any) { await $.fs.write("/tmp/x.json", "{}") }\n'; } > "$TMP/write.ts"
 { cat "$MOD"; printf '\nasync function up($: any) { return $.fs.ancestors({ names: ["CLAUDE.md"] }) }\n'; } > "$TMP/ancestors.ts"
 ok "…a planted \$.fs.write is caught"          "$(count "$FSWRITE" "$TMP/write.ts")" 1
+{ cat "$MOD"; printf '\nasync function grab($: any) { return $.ui.copy({ text: "x" }) }\n'; } > "$TMP/copy.ts"
+ok "…a planted clipboard call outside copyRef() is caught" "$(copy_calls "$TMP/copy.ts" in)/$(copy_calls "$TMP/copy.ts" out)" 1/1
 ok "…a planted \$.fs.ancestors is caught"      "$(count "$FSWRITE" "$TMP/ancestors.ts")" 1
 ok "…and neither is admitted by the read pattern" "$(( $(count "$FSREAD" "$TMP/write.ts") - $(count "$FSREAD" "$MOD") ))" 0
 # A read of a path the doc does not name is refused, and the FAIL names the path.

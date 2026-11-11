@@ -58,10 +58,10 @@ re-implemented: nothing this pane shows is anything the file does not already ca
 | Section | From the snapshot's fields |
 |---|---|
 | header | `group`, then `· N need you` (`1 needs you`, here and in PROJECTS) when NEEDS YOU has rows (so the count shows when that section is below the fold), and the snapshot's age off `generated_at`: `just now`, `N min ago`, `N h ago` under 48 h, then `N d ago`; `age unknown` when it is unparseable or in the future |
-| PROJECTS (N) | one line per project, by folder `slug` (never `title`), a blank line between projects: `●` active, `○` paused; `✓ … done` in green for a project with `awaiting_close` (its close is a NEEDS YOU row, not counted here); `✓ … closed` in grey for `status: done` (only a retained folder is in the snapshot). `N need you` counts its tasks' AWAITING verbs, only when N > 0. Needs-you first, then active, paused, done, snapshot order within each. Under each active project a 10-cell bar and `done/total` off its tasks' `status` (`cancelled` not counted; none, no bar), and `phase_progress` only when it has phases |
+| PROJECTS (N) | one line per project, by folder `slug` (never `title`), a blank line between projects; pressing a name copies its slug: `●` active, `○` paused; `✓ … done` in green for a project with `awaiting_close` (its close is a NEEDS YOU row, not counted here); `✓ … closed` in grey for `status: done` (only a retained folder is in the snapshot). `N need you` counts its tasks' AWAITING verbs, only when N > 0. Needs-you first, then active, paused, done, snapshot order within each. Under each active project a 10-cell bar and `done/total` off its tasks' `status` (`cancelled` not counted; none, no bar), and `phase_progress` only when it has phases |
 | WORKING (N) | each task with `in_flight`: `assignee` (a **role**, never a person) and `title`, plus `PR <pr_mergeable>` when `prs` is non-empty and it is not `MERGEABLE`; else `nothing right now` and no count |
-| NEEDS YOU (N) | last, next to the buttons: rows numbered `1.`–`N.`, one per task whose `awaiting` is an AWAITING verb — `approve · answer · merge · unblock` — as `<slug> · <title>`, and one `close <slug>` per project with `awaiting_close` (print-board.sh's rule), in snapshot order. Hidden when empty |
-| footer | `answer queued` while an Answer run waits for the session to go idle |
+| NEEDS YOU (N) | last, next to the buttons: rows numbered `1.`–`N.`, one per task whose `awaiting` is an AWAITING verb — `approve · answer · merge · unblock` — as `<slug> · <title>`, and one `close <slug>` per project with `awaiting_close` (print-board.sh's rule), in snapshot order. Pressing a row's verb copies `projects/<slug>/tasks/<id>.md`, or `<slug>` on a `close` row. Hidden when empty |
+| footer | one line, the latest of: `answer queued` while an Answer run waits for the session to go idle; `copied <ref>`, `copy sent <ref>` (the copy's result did not say), `copy failed: <reason>` or `copy refused: bad ref`. A copy line is cut to the width and cleared by the next re-read |
 
 Width is the pane's `bodyColumns` (45 when the surface gives none). A NEEDS YOU row wraps,
 continuation lines under its text, at most 3 lines, the third cut with `…`; every other row
@@ -69,9 +69,10 @@ is one line, its name cut by code point with `…`. A count and the `paused`/`do
 word are never cut, and a zero count is not drawn. Colours are a pastel trial palette
 (2026-11-11, before the rest of loopd adopts it): rose `#DA627D` needs you, peach `#FCA17D`
 the bundle name and PROJECTS, sky `#86BBD8` work, teal `#06969A` a bar's done part, deep
-blue `#33658A` the rule, green `#76d6a4` done, grey quiet. The kit's `Button` takes no
-colour, so the buttons are uncoloured; each label leads with a monochrome symbol
-(`✎ Answer questions`, `↻ Refresh`, `✕ Close pane`).
+blue `#33658A` the rule, green `#76d6a4` done, grey quiet. The kit's `Button` drops a
+`color` prop, so each button's label is a coloured `Text` child in a muted tone: teal
+`✎ Answer questions`, deep blue `↻ Refresh`, plum `#9A348E` `✕ Close pane`, each leading with
+a monochrome symbol, the row indented 2 columns.
 
 Not drawn, because the snapshot does not carry it: a round number, a session id, a usage
 line, a `continue` verb, any question or blocker **text**, any document body, any author
@@ -94,6 +95,7 @@ the pane opens and stops when it closes.
 | **Answer questions** (`a`) | `$.command.run({ command: 'loopd:answer' })` — runs `/loopd:answer` once in **this** session, as if you had typed it. The engine queues a plugin's command run until the session is idle, so this is idle-only by contract. (Not `$.prompt.submit`: the host refuses a prompt text that begins with `/`, measured on 2.1.293.) A refused run is drawn in the footer as `answer refused: <reason>`, never swallowed. **It is the human pressing a key at their own prompt, not automation**: nothing here runs on a timer, and no message goes to another session. One press, one queued run; a second press while one is queued is ignored and the footer says `answer queued`. |
 | **Refresh** (`r`) | re-read the snapshot now, mtime or not. |
 | **Close pane** (`c`) | `$.ui.close({ id: 'loopd-board' })`, the path `/pane close` takes; the poll stops. |
+| a PROJECTS name, a NEEDS YOU verb (no hotkey) | `$.ui.copy({ text, surface })` — the pane's **one outward action**: the slug or task path, built from the snapshot's `slug` and `id`, onto the clipboard of the surface the press came from, so you can paste it into the session with your reply. A slug or id that is not a folder-name shape (empty, `/`, `..`, whitespace) is never copied. |
 
 Where no surface places the pane (a terminal under the width floor, a `claude -p` run),
 `/pane` prints one dim `● loopd:` line with the header counts instead.
@@ -234,9 +236,9 @@ source and on what `claude plugin validate` reads out of it:
 - **No model call** — nothing here spends the plan.
 - **No permission decision** — it never hooks `tool.check`; every event it sees is handed on.
 - **No process, no network, no environment** — `$.process`, `$.http` and `$.env` are never called.
-- **No write** — `$.fs.write` is never called, and `$.fs.ancestors` (which walks UP from the cwd) is never called either. The reads above are the whole file-system footprint; the plugin store is the only thing it writes.
+- **No write** — `$.fs.write` is never called, and `$.fs.ancestors` (which walks UP from the cwd) is never called either. The reads above are the whole file-system footprint; the plugin store is the only thing it writes, save the clipboard: `$.ui.copy`, on your press, of a slug or a task path and nothing else, in one function `tests/mods.test.sh` pins.
 - **No decision about a task** — it reads no task document to decide anything, decides no status, re-dispatches nothing. `check-dispatch.sh` is report-only because a checker that acted on its own reading would automate the loop's most expensive failure (`seed/CONVENTIONS.md`); a signal that advanced a task would be that checker.
-- **No prompt, no consumption** — `session.receive` passes every message through unchanged: a `loopd-signal:` line reaches Claude in the PM session as plain text, the tick decides what it is worth, and `$.prompt.submit` is never called. Nothing here starts a tick; every button is a `$.command.run` the human pressed.
+- **No prompt, no consumption** — `session.receive` passes every message through unchanged: a `loopd-signal:` line reaches Claude in the PM session as plain text, the tick decides what it is worth, and `$.prompt.submit` is never called. Nothing here starts a tick; every button that runs anything is a `$.command.run` the human pressed, and a copy button only copies.
 - **No timer-driven run** — the pane's poll reads files; only a press runs a command.
 - **More than one message per turn, or any message after two refusals** — never.
 - **A store write without a session id** — an unattributable record is worse than none.
