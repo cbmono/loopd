@@ -524,8 +524,8 @@ function draw($: any, e: any, now: number): any {
         for (const t of p.tasks) if (needs(t)) need.push({ verb: t.awaiting, text: p.slug + ' · ' + (t.title || t.id), ref: taskPath(p, t) })
       }
     }
-    // A row's section is counts.json's task_status, the source of the section's count: the
-    // snapshot is written at tick close and can be stale. The snapshot only names the row.
+    // A row is placed by task_status in counts.json, the source of the heading count; the
+    // snapshot, written at tick close and so possibly stale, only names the row.
     type Live = { path: string; head: string; title: string; mark: string }
     const live = (t: Task | undefined, slug: string, id: string, path: string): Live => t
       ? { path, head: '   ' + (t.assignee || 'unassigned') + '  ', title: t.title || t.id, mark: t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : '' }
