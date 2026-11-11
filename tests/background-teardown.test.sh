@@ -653,6 +653,7 @@ ok "…and never the child's own argv"                "$(saw "$CHK" 'sleep 240')
 mkdir -p "$TMP/mutplugin/plugin"
 ln -sfn "$REPO/plugin/scripts" "$TMP/mutplugin/plugin/scripts-real" 2>/dev/null || true
 cp -R "$REPO/plugin/scripts" "$TMP/mutplugin/plugin/scripts"
+cp "$REPO/plugin/RETIRED_ROLES" "$TMP/mutplugin/plugin/"
 cp "$REPO/VERSION" "$TMP/mutplugin/VERSION"
 MUTAIB="$TMP/mutplugin/plugin/scripts/welcome.sh"
 # The row is the last line of the CHECKS string, so a plain line delete takes the closing
