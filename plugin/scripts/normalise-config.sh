@@ -5,9 +5,10 @@
 #   Usage: normalise-config.sh [<bundle>] [--apply] [--quiet]
 #
 # MISPLACED a per-machine key in the tracked file, or a tracked-only key in the local one ·
-# MISSING a seed key the tracked file lacks · ORDER keys not in seed order. Values are
-# never changed: only placed, ordered, or added when absent. With --apply the tracked file
-# is left STAGED, never committed. Exit 0 clean/applied · 1 findings · 2 usage · 3 write.
+# MISSING a seed key the tracked file lacks · ORDER keys not in seed order · RETIRED a
+# role in ../RETIRED_ROLES. Values are never changed but for RETIRED, which is removed;
+# else placed, ordered, added. --apply leaves the tracked file STAGED, never committed.
+# Exit 0 clean/applied · 1 findings · 2 usage or no retired-role list · 3 write.
 # The overridable set has one source, SCHEMA.md → "Per-machine config overrides"; the
 # reasoning lives in docs/operations.md § 1.
 set -uo pipefail
@@ -15,6 +16,7 @@ _pn="$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh"; if [ -r "$_pn" ]; then 
 
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 SEED="$BIN_DIR/../seed/instance.config.json"
+RETIRED_LIST="$BIN_DIR/../RETIRED_ROLES"
 TARGET="."
 APPLY=0
 QUIET=0
@@ -23,7 +25,7 @@ for arg in "$@"; do
     --apply) APPLY=1 ;;
     # For a caller that has already printed the report and only wants the outcome line.
     --quiet) QUIET=1 ;;
-    -h|--help) sed -n '3,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '3,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "normalise-config: unknown flag '$arg'" >&2; exit 2 ;;
     *) TARGET="$arg" ;;
   esac
@@ -33,6 +35,10 @@ done
 [ -f "$TARGET/instance.config.json" ] || {
   echo "normalise-config: $TARGET is not a bundle (no instance.config.json)." >&2; exit 2; }
 [ -f "$SEED" ] || { echo "normalise-config: seed config not found at $SEED" >&2; exit 2; }
+retired_roles="$(awk -F'\t' '!/^#/ && $1 != "" {print $1}' "$RETIRED_LIST" 2>/dev/null)"
+[ -n "$retired_roles" ] || {
+  echo "normalise-config: no retired-role list at $RETIRED_LIST (missing, unreadable or empty); nothing was checked." >&2
+  exit 2; }
 command -v python3 >/dev/null 2>&1 || {
   echo "normalise-config: python3 is needed to read these files; nothing was checked." >&2
   exit 2; }
@@ -40,12 +46,14 @@ command -v python3 >/dev/null 2>&1 || {
 STATUS="$(mktemp "${TMPDIR:-/tmp}/normalise-config.XXXXXX")" || exit 2
 trap 'rm -f "$STATUS"' EXIT
 rc=0
-python3 - "$TARGET" "$SEED" "$APPLY" "$STATUS" "$QUIET" <<'PY' || rc=$?
+python3 - "$TARGET" "$SEED" "$APPLY" "$STATUS" "$QUIET" "$retired_roles" <<'PY' || rc=$?
 import json, os, sys
 
 target, seed_path, status_path = sys.argv[1], sys.argv[2], sys.argv[4]
 apply_mode, quiet = sys.argv[3] == "1", sys.argv[5] == "1"
 TRACKED, LOCAL = "instance.config.json", "instance.config.local.json"
+RETIRED = set(sys.argv[6].split())
+ROLE_MAPS = ("roleTiers", "roleEffort", "roleMinutes")
 
 # SCHEMA.md → "Per-machine config overrides", in that table's order: the local file's key
 # order and the membership test for what may live there, in one list.
@@ -103,10 +111,39 @@ tracked = load(os.path.join(target, TRACKED), TRACKED)
 local = load(os.path.join(target, LOCAL), LOCAL)
 before = {TRACKED: dict(tracked), LOCAL: dict(local or {})}
 
-new_tracked = dict(tracked)
-new_local = dict(local or {})
 findings = {TRACKED: [], LOCAL: []}
 dropped = []
+
+
+def strip_retired(key, value):
+    """`value` without its retired-role entries — the shapes welcome.sh reports and no
+    other: a string element of a `roles` list, a key of a role map. A new object, so
+    `before` keeps the original."""
+    if key == "roles" and isinstance(value, list):
+        return [r for r in value if not (isinstance(r, str) and r in RETIRED)]
+    if key in ROLE_MAPS and isinstance(value, dict):
+        return {r: v for r, v in value.items() if r not in RETIRED}
+    return value
+
+
+def retire(name, data):
+    out = {}
+    for key, value in data.items():
+        out[key] = strip_retired(key, value)
+        if out[key] == value:
+            continue
+        if key == "roles":
+            gone = sorted({r for r in value if isinstance(r, str) and r in RETIRED})
+            what = ["roles[%s]" % r for r in gone]
+        else:
+            what = ["%s.%s" % (key, r) for r in value if r in RETIRED]
+        for w in what:
+            findings[name].append(("RETIRED", w, "removed: the role is retired"))
+    return out
+
+
+new_tracked = retire(TRACKED, tracked)
+new_local = retire(LOCAL, local or {})
 
 
 def misplace(src, dst, key, src_map, dst_map):
@@ -160,8 +197,8 @@ for name, data, order in ((TRACKED, new_tracked, seed_order), (LOCAL, new_local,
 
 new_tracked, new_local = ordered[TRACKED], ordered[LOCAL]
 
-# NO VALUE MAY CHANGE. Every key that was there is still there with the value it had,
-# somewhere, unless it was dropped as a duplicate of one the destination already held.
+# NO VALUE MAY CHANGE but by losing a retired-role entry. Every key that was there is still
+# there with the value it had, somewhere, unless dropped as a duplicate the destination held.
 after = {TRACKED: new_tracked, LOCAL: new_local}
 for name, was in before.items():
     other = after[LOCAL if name == TRACKED else TRACKED]
@@ -170,7 +207,7 @@ for name, was in before.items():
         if value is None or (name, key) in dropped:
             continue
         here = after[name][key] if key in after[name] else other.get(key, ())
-        if here != value:
+        if here != strip_retired(key, value):
             print("normalise-config: refusing to write — %s.%s would change value." % (name, key),
                   file=sys.stderr)
             raise SystemExit(3)
@@ -221,7 +258,7 @@ def write(name, data):
 for name, data in ((TRACKED, new_tracked), (LOCAL, new_local)):
     if changed[name]:
         write(name, data)
-print("  applied %d finding(s); no value was changed." % total)
+print("  applied %d finding(s); no value was changed but the retired-role entries removed." % total)
 PY
 
 tracked_written=0

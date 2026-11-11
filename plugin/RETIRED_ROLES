@@ -1,0 +1,11 @@
+# Retired role agents — names a bundle's config may still carry, inert since the retirement.
+#
+# One `<role>\t<reason>` per line; blank lines and `#` comments are ignored. Read by
+# welcome.sh (reports each `roles[]`, `roleTiers`, `roleEffort`, `roleMinutes` entry) and
+# normalise-config.sh (removes them on consent). A missing, unreadable or empty list is a
+# broken install and both exit 2 — an empty scan would read as a clean bill.
+#
+# Append only: a bundle stamped before a retirement still carries the entry, and a pruned
+# name stops answering for exactly the bundles that need it.
+advisor	retired 2026-10-08 (v3.4.0)
+auditor	retired 2026-11-10 (#516)
