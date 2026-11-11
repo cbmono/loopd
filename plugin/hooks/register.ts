@@ -166,6 +166,7 @@ const WORDS = ['working', 'idle', 'dead']
 const POLL_MS = 5000
 const NOTE_MS = 10000
 const WIDTH = 45        // the operator layout's width where the surface names no bodyColumns
+const INDENT = 2        // the operator buttons' left padding, which the info line under them shares
 const BAR = 10          // progress-bar cells, whatever the task count
 // write-snapshot.sh's verb set, minus nothing: the pane names the verb, never the reason.
 const VERBS = ['approve', 'answer', 'merge', 'unblock', 'close'] as const
@@ -454,7 +455,7 @@ async function copyRef($: any, ref: string, surface: unknown): Promise<void> {
   else {
     let r: any = null
     try { r = await $.ui.copy(surface ? { text: ref, surface } : { text: ref }) } catch (err) { r = { isCopied: false, reason: why(err) } }
-    note = r && r.isCopied === true ? 'copied ' + ref
+    note = r && r.isCopied === true ? 'copied: ' + ref
       : r && r.isCopied === false ? 'copy failed: ' + (clean(r.reason) || 'refused')
       : 'copy sent ' + ref
   }
@@ -522,7 +523,7 @@ function draw($: any, e: any, now: number): any {
     const showNeed = !queueOff() && (counts.need_you !== 0 || b.itemsUnknown)
 
     // The banner's mark, the brand line beside row 2 and a rule beside row 3 to the edge;
-    // the need-you count and the age on their own line under it.
+    // the age right-aligned on its own line under it.
     const marks = LOGO_ROWS.map(r => r.split('|'))
     const lw = Math.max(...marks.map(m => cols(m.join(''))))
     const brandLine = ['loopd' + (brand.version ? ' v' + brand.version : ''), b.group, brand.org ? 'org: ' + brand.org : ''].filter(Boolean).join(' · ')
@@ -532,8 +533,7 @@ function draw($: any, e: any, now: number): any {
         ...(i === 1 ? [pad, seg(fit(brandLine, W - lw - 1), { ...TEXT, bold: true })] : i === 2 ? [pad, seg('─'.repeat(Math.max(1, W - lw - 1)), RULE)] : [])))
     })
     const snapAge = headAge(now, b)
-    const count = showNeed ? needYou(counts.need_you === null ? '?' : counts.need_you) : ''
-    rows.push(row(seg(count, NEEDS_YOU), seg(gap(cols(count) + cols(snapAge))), seg(snapAge, MUTED)))
+    rows.push(row(seg(gap(cols(snapAge))), seg(snapAge, MUTED)))
     rows.push(line(' '))
 
     rows.push(heading('PROJECTS', b.rows.length, HEAD))
@@ -623,10 +623,10 @@ function draw($: any, e: any, now: number): any {
   // A Button drops `color`; a coloured Text child is the kit's route to a coloured label.
   const label = (s: string, look: Record<string, unknown>) => ({ label: s, plain: true, children: [Text({ ...look, children: [s] })] })
   rows.push(Box({
-    key: 'buttons', flexDirection: 'row', columnGap: 2, paddingLeft: 2, children: [
+    key: 'buttons', flexDirection: 'row', columnGap: 2, paddingLeft: INDENT, children: [
       Button({
-        key: 'answer', ...label('✎ Answer Questions', FILL), hotkey: 'a',
-        // The human pressed a key in their own session: one /loopd:answer run, queued
+        key: 'answer', ...label('✎ Answer Questions', FILL),
+        // The human pressed a button in their own session: one /loopd:answer run, queued
         // until the session is idle (the engine's own contract for a plugin's command.run).
         // Not awaited — a handler that waits for the run would block the press. Never on
         // a timer. A COMMAND run, not a prompt: the host refuses a `/` text as a prompt.
@@ -646,11 +646,11 @@ function draw($: any, e: any, now: number): any {
         },
       }),
       Button({
-        key: 'refresh', ...label('↻ Refresh', RULE), hotkey: 'r',
+        key: 'refresh', ...label('↻ Refresh', RULE),
         onPress: async () => { await refresh($, true); $.ui.invalidate('ui.render') },
       }),
       Button({
-        key: 'close', ...label('✕ Close Pane', PLUM), hotkey: 'c',
+        key: 'close', ...label('✕ Close Pane', PLUM),
         // The same path as `/pane close`. A $.ui.close from a press did not reach this module's
         // own ui.close hook in the kit (2.1.322), so the poll is stopped here as well.
         onPress: async () => { try { await $.ui.close({ id: PANE }) } catch { /* already gone */ } stopPoll() },
@@ -660,7 +660,7 @@ function draw($: any, e: any, now: number): any {
   rows.push(line(' '))
   // Below the buttons, so they never move. A refused submit is said, not swallowed (convention 12).
   const info = noteLive(now) ? note : answerQueued ? 'answer queued' : kind === 'ok' && countsGone() ? 'counts unavailable — run /loopd:init' : ''
-  if (info) rows.push(line(fit(info, W), MUTED))
+  if (info) rows.push(line(' '.repeat(INDENT) + fit(info, W - INDENT), MUTED))
 
   return Box({ flexDirection: 'column', children: rows })
 }

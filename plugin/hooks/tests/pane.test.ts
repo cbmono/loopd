@@ -193,7 +193,7 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRE
   const rows = await rowsOf(ui)
   expect(rows).toEqual([
     ...header(45),
-    '3 need you' + ' '.repeat(26) + '3 min ago',
+    ' '.repeat(36) + '3 min ago',     // the age alone: the count is NEEDS YOU's
     ' ',
     'PROJECTS (6)',
     ' ',
@@ -254,8 +254,10 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRE
   expect(buttons.map((b: any) => [b.key, b.props.label, b.props.hotkey, b.props.plain, b.props.autoFocus])).toEqual([
     ...['alpha', 'beta', 'gamma', 'zeta', 'delta', 'epsilon'].map((s, i) => ['copy-project-' + i, s, undefined, true, undefined]),
     ...['answer', 'merge', 'close'].map((s, i) => ['copy-need-' + i, s, undefined, true, undefined]),
-    ['answer', '✎ Answer Questions', 'a', true, undefined], ['refresh', '↻ Refresh', 'r', true, undefined],
-    ['close', '✕ Close Pane', 'c', true, undefined]])
+    ['answer', '✎ Answer Questions', undefined, true, undefined], ['refresh', '↻ Refresh', undefined, true, undefined],
+    ['close', '✕ Close Pane', undefined, true, undefined]])
+  // No hotkey on any button, so the kit draws no `a:`/`r:`/`c:` hint.
+  expect(text).not.toMatch(/\b[arc]:/)
   // A blank line, a rule of the pane's width and a blank line above the buttons; one blank line under them.
   const drawn = (await ui.drawn()).children
   const at = drawn.findIndex((c: any) => c.type === 'Box' && c.props.key === 'buttons')
@@ -283,7 +285,7 @@ test('the layout is coloured with the pastel palette; the buttons take the muted
   expect(colour('3 min ago')).toEqual(['#6c7488'])
   expect(colour('─'.repeat(36))).toEqual(['#33658A'])              // beside the mark's row 3
   expect(colour('─'.repeat(45))).toEqual(['#33658A'])              // above the buttons
-  expect(colour('3 need you')).toEqual(['#DA627D'])
+  expect(colour('3 need you')).toEqual([])                 // no header count
   expect(colour('NEEDS YOU')).toEqual(['#DA627D'])
   expect(colour(' (3)')).toEqual(['#DA627D'])
   expect(colour('2. ')).toEqual(['#DA627D'])
@@ -352,14 +354,14 @@ test('HEADER AGE: counts.json with no written_at, so the age reads off the snaps
   await ui.unmount()
 })
 
-test('HEADER LOGO: the banner mark, the brand line cut to the width, the rule to the edge, then count and age', ONLY, async ($, on) => {
+test('HEADER LOGO: the banner mark, the brand line cut to the width, the rule to the edge, then the age alone', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w)
   mock.clock(on, { now: GENERATED + 3 * 60000 })
   await open($)
   let ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
   let rows = await rowsOf(ui)
-  expect(rows.slice(0, 5)).toEqual([LOGO[0], LOGO[1] + ' loopd v4.11.0 · example · org: fixt…', LOGO[2] + ' ' + '─'.repeat(36), '3 need you' + ' '.repeat(26) + '3 min ago', ' '])
+  expect(rows.slice(0, 5)).toEqual([LOGO[0], LOGO[1] + ' loopd v4.11.0 · example · org: fixt…', LOGO[2] + ' ' + '─'.repeat(36), ' '.repeat(36) + '3 min ago', ' '])
   for (const r of rows.slice(1, 4)) expect(cols(r)).toBe(45)
   await ui.unmount()
   ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
@@ -488,9 +490,9 @@ test('malformed JSON is one error line and no throw; wrong types draw as 0', ONL
   w.files.set(SNAPSHOT, { text: JSON.stringify({ counts: { projects: 'many', tasks: null, awaiting: -3 }, projects: 'nope', group: 7 }), mtimeMs: 2000 })
   await ui.press({ key: 'refresh' })
   text = await shown(ui)
-  expect(await rowsOf(ui)).toEqual([...header(100, 'loopd v4.11.0 · org: fixture-org'), '? need you' + ' '.repeat(79) + 'age unknown', ' ', 'PROJECTS', ' ', ' ',
+  expect(await rowsOf(ui)).toEqual([...header(100, 'loopd v4.11.0 · org: fixture-org'), ' '.repeat(89) + 'age unknown', ' ', 'PROJECTS', ' ', ' ',
     'IN PROGRESS (?)', ' ', '   ? working · ? idle · ? dead', ' ', '   nothing right now', ' ', ' ', 'IN REVIEW (?)', ' ', '   none', ' ', ' ',
-    'NEEDS YOU (?)', ' ', '   none', ' ', '─'.repeat(100), ' ', ' ', 'counts unavailable — run /loopd:init'])
+    'NEEDS YOU (?)', ' ', '   none', ' ', '─'.repeat(100), ' ', ' ', '  counts unavailable — run /loopd:init'])
   await ui.unmount()
 })
 
@@ -582,7 +584,8 @@ function copies(on: any, answer: (e: any) => any = () => ({ value: { isCopied: t
   on('ui.copy', (_$: any, e: any) => { got.push({ text: e.text, surface: e.surface }); return answer(e) })
   return got
 }
-const footer = async (ui: any) => (await shown(ui)).split('\n').filter(l => /^(copied|copy |answer )/.test(l))
+// The info line sits at the buttons' padding, 2 columns in; footer() returns it without them.
+const footer = async (ui: any) => (await shown(ui)).split('\n').filter(l => /^ {2}(copied|copy |answer )/.test(l)).map(l => l.slice(2))
 
 test('COPY FROM NEEDS YOU: a verb copies the task path or the close row\'s slug, from the snapshot, not the cut text', ONLY, async ($, on) => {
   const snap = JSON.parse(JSON.stringify(SNAP))
@@ -597,10 +600,10 @@ test('COPY FROM NEEDS YOU: a verb copies the task path or the close row\'s slug,
   await ui.press({ key: 'copy-need-0' })
   expect(got).toEqual([{ text: path, surface: 'terminal' }])
   const [line] = await footer(ui)
-  expect(line).toBe(('copied ' + path).slice(0, 44) + '…')     // fit to 45 columns, the ref whole on the clipboard
+  expect(line).toBe(('copied: ' + path).slice(0, 42) + '…')    // fit to 43 columns after the padding, the ref whole on the clipboard
   await ui.press({ key: 'copy-need-2' })
   expect(got[1]).toEqual({ text: 'beta', surface: 'terminal' })
-  expect(await footer(ui)).toEqual(['copied beta'])              // replaced, not stacked
+  expect(await footer(ui)).toEqual(['copied: beta'])              // replaced, not stacked
   expect(w.submitted).toEqual([])
   await ui.unmount()
 })
@@ -614,7 +617,7 @@ test('COPY FROM PROJECTS: a name copies its slug, with the same footer line', ON
   const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
   await ui.press({ key: 'copy-project-3' })
   expect(got).toEqual([{ text: 'zeta', surface: 'terminal' }])
-  expect(await footer(ui)).toEqual(['copied zeta'])
+  expect(await footer(ui)).toEqual(['copied: zeta'])
   await ui.unmount()
 })
 
@@ -698,17 +701,17 @@ test('FOOTER: a copy replaces the Answer line and an Answer the copy line; a re-
   await ui.press({ key: 'answer' })
   expect(await footer(ui)).toEqual(['answer queued'])
   await ui.press({ key: 'copy-project-1' })
-  expect(await footer(ui)).toEqual(['copied beta'])
+  expect(await footer(ui)).toEqual(['copied: beta'])
   await clock.advance(1000)
   w.onRun = () => { throw new Error('busy') }
   await ui.press({ key: 'answer' })
   expect(await footer(ui)).toEqual(['answer queued'])
   await ui.press({ key: 'copy-project-1' })
-  expect(await footer(ui)).toEqual(['copied beta'])
+  expect(await footer(ui)).toEqual(['copied: beta'])
   await clock.advance(1000)
   expect((await footer(ui)).map(l => l.replace(/:.*/, ':'))).toEqual(['answer refused:'])
   await ui.press({ key: 'copy-project-1' })
-  expect(await footer(ui)).toEqual(['copied beta'])
+  expect(await footer(ui)).toEqual(['copied: beta'])
   await ui.press({ key: 'refresh' })
   expect(await footer(ui)).toEqual([])
   confirm = false
@@ -741,7 +744,7 @@ test('NEEDS YOU is numbered, slug-prefixed, last, and wraps under its text to th
   const rows = await rowsOf(ui)
   expect(rows).toEqual([
     ...header(45),
-    '2 need you' + ' '.repeat(26) + '1 min ago',
+    ' '.repeat(36) + '1 min ago',
     ' ',
     'PROJECTS (3)',
     ' ',
@@ -780,14 +783,14 @@ test('NEEDS YOU is numbered, slug-prefixed, last, and wraps under its text to th
   for (const r of rows) expect(cols(r)).toBeLessThanOrEqual(45)
   await ui.unmount()
 
-  // A row that fits in two lines is not cut, and the header names one need as "needs you".
+  // A row that fits in two lines is not cut; the header carries the age alone.
   const one = { ...needSnap('Judge the trims'), projects: needSnap('Judge the trims').projects.slice(0, 1) }
   w.files.set(SNAPSHOT, { text: JSON.stringify(one), mtimeMs: 2000 })
   w.files.set(COUNTS, { text: JSON.stringify(countsOf(one)), mtimeMs: 2000 })
   const ui2 = await $.ui.mount({ ...NARROW, surface: 'terminal' })
   await ui2.press({ key: 'refresh' })
   const r2 = await rowsOf(ui2)
-  expect(r2[3]).toBe('1 needs you' + ' '.repeat(25) + '1 min ago')
+  expect(r2[3]).toBe(' '.repeat(36) + '1 min ago')
   expect(r2.slice(-7)).toEqual(['NEEDS YOU (1)', ' ', '1. unblock  leaner-prompts · Judge the trims', ' ', '─'.repeat(45), ' ', ' '])
   await ui2.unmount()
 })
@@ -1568,7 +1571,7 @@ test('SAME NUMBERS: every section count is the value counts.json gives, and NEED
   expect(countOf(rows, 'IN PROGRESS')).toBe(String(c.in_progress))
   expect(countOf(rows, 'IN REVIEW')).toBe(String(c.in_review))
   expect(countOf(rows, 'NEEDS YOU')).toBe(String(c.need_you))
-  expect(rows[3]).toMatch(new RegExp('^' + c.need_you + ' need you '))
+  expect(rows[3]).toMatch(/^ +3 min ago$/)
   expect(rows).toContain('   ' + c.sessions.working + ' working · ' + c.sessions.idle + ' idle · ' + c.sessions.dead + ' dead')
   expect(rows.slice(rows.indexOf('IN PROGRESS (2)'))).toEqual([
     'IN PROGRESS (2)', ' ', '   2 working · 1 idle · 1 dead', ' ',
@@ -1589,17 +1592,17 @@ test('SAME NUMBERS: every section count is the value counts.json gives, and NEED
   expect(rows).toContain('● alpha' + ' '.repeat(28) + '4 need you')
   expect(rows).toContain('✓ beta' + ' '.repeat(21) + '1 needs you · done')
   expect(rows).toContain('● gamma' + ' '.repeat(27) + '1 needs you')
-  expect(rows).not.toContain('counts unavailable — run /loopd:init')
+  expect(rows.join('\n')).not.toContain('counts unavailable')
   expect(await shown(ui)).not.toContain('SENTINEL')
   // A task row copies its task path, a project row its slug.
   await ui.press({ key: 'copy-need-1' })
-  expect(await footer(ui)).toEqual(['copied projects/alpha/tasks/task-001.md'])
+  expect(await footer(ui)).toEqual(['copied: projects/alpha/tasks/task-001.md'])
   await ui.press({ key: 'copy-need-3' })
-  expect(await footer(ui)).toEqual(['copied beta'])
+  expect(await footer(ui)).toEqual(['copied: beta'])
   await ui.unmount()
 })
 
-const HINT = 'counts unavailable — run /loopd:init'
+const HINT = '  counts unavailable — run /loopd:init'
 
 test('COUNTS UNAVAILABLE: no counts.json keeps the layout with ? and one hint under the buttons; an older snapshot\'s NEEDS YOU as today', ONLY, async ($, on) => {
   const w = world(SNAP, true, null)
@@ -1608,7 +1611,7 @@ test('COUNTS UNAVAILABLE: no counts.json keeps the layout with ? and one hint un
   await open($)
   const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
   const rows = await rowsOf(ui)
-  expect(rows.slice(0, 6)).toEqual([...header(45), '? need you' + ' '.repeat(26) + '3 min ago', ' ', 'PROJECTS (6)'])
+  expect(rows.slice(0, 6)).toEqual([...header(45), ' '.repeat(36) + '3 min ago', ' ', 'PROJECTS (6)'])
   for (const h of ['IN PROGRESS', 'IN REVIEW', 'NEEDS YOU']) expect(countOf(rows, h)).toBe('?')
   expect(rows).toContain('   ? working · ? idle · ? dead')
   expect(rows).toContain('   software-engineer  Ship the widget' + ' '.repeat(7) + '?')
@@ -1697,7 +1700,7 @@ test('COPY TARGET: a validated AWAITING task with no snapshot row still copies i
   expect(await rowsOf(ui)).toContain('1. answer   alpha · task-009')
   await ui.press({ key: 'copy-need-0' })
   expect(got.map(g => g.text)).toEqual(['projects/alpha/tasks/task-009.md'])
-  expect(await footer(ui)).toEqual(['copied projects/alpha/tasks/task-009.md'])
+  expect(await footer(ui)).toEqual(['copied: projects/alpha/tasks/task-009.md'])
   await ui.unmount()
 })
 
@@ -1716,9 +1719,12 @@ test('INFO LINE: a note is drawn under the buttons, which never move; it is gone
   const [at] = await place()
   expect(await place()).toEqual([at, [' ', HINT]])
   await ui.press({ key: 'copy-project-1' })
-  expect(await place()).toEqual([at, [' ', 'copied beta']])
+  expect(await place()).toEqual([at, [' ', '  copied: beta']])
+  // It starts where the buttons do: its indent is their paddingLeft.
+  const pad = (await ui.drawn()).children[at].props.paddingLeft
+  expect(((await place())[1] as string[])[1].search(/\S/)).toBe(pad)
   await clock.advance(9000)
-  expect(await place()).toEqual([at, [' ', 'copied beta']])
+  expect(await place()).toEqual([at, [' ', '  copied: beta']])
   await clock.advance(1000)
   expect(await place()).toEqual([at, [' ', HINT]])
   await ui.unmount()
