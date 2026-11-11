@@ -222,9 +222,11 @@ type Counts = {
   in_progress: N; in_review: N; working: N; idle: N; dead: N; tick: N; need_you: N
   queue: string
   tasks: Record<string, string> | null
+  status: Record<string, string> | null   // task path → in-progress | in-review, off the task documents
   written_at: string
 }
-const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, queue: '', tasks: null, written_at: '' }
+const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, queue: '', tasks: null, status: null, written_at: '' }
+const TASK_KEY = /^projects\/([^/]+)\/tasks\/([^/]+)\.md$/
 
 // Module state. A reload starts it over, and the next poll or /pane fills it again.
 let kind: Kind = 'unread'
@@ -317,10 +319,19 @@ function readCounts(text: unknown, m: number): Counts {
   const se = obj(o.sessions) || {}, ts = obj(o.task_sessions)
   let tasks: Record<string, string> | null = null
   if (ts) { tasks = {}; for (const [k, v] of Object.entries(ts)) if (typeof v === 'string' && WORDS.includes(v)) tasks[k] = v }
+  const tst = obj(o.task_status)
+  let status: Record<string, string> | null = null
+  if (tst) {
+    status = {}
+    for (const [k, v] of Object.entries(tst)) {
+      const m = k.match(TASK_KEY)
+      if (m && okRef(m[1]) && okRef(m[2]) && (v === 'in-progress' || v === 'in-review')) status[k] = v
+    }
+  }
   return {
     state: 'ok', mtimeMs: m, in_progress: nint(o.in_progress), in_review: nint(o.in_review),
     working: nint(se.working), idle: nint(se.idle), dead: nint(se.dead), tick: nint(se.tick_working), need_you: nint(o.need_you),
-    queue: str(o.queue), tasks, written_at: str(o.written_at),
+    queue: str(o.queue), tasks, status, written_at: str(o.written_at),
   }
 }
 // Stat every poll, read when the mtime moved, as for the snapshot. Reading never clears a
@@ -513,17 +524,30 @@ function draw($: any, e: any, now: number): any {
         for (const t of p.tasks) if (needs(t)) need.push({ verb: t.awaiting, text: p.slug + ' · ' + (t.title || t.id), ref: taskPath(p, t) })
       }
     }
-    const progress: [Project, Task][] = []
-    const review: [Project, Task][] = []
-    for (const p of b.rows) for (const t of p.tasks) {
-      if (t.status === 'in-progress') progress.push([p, t])
-      else if (t.status === 'in-review') review.push([p, t])
+    // A row's section is counts.json's task_status, the source of the section's count: the
+    // snapshot is written at tick close and can be stale. The snapshot only names the row.
+    type Live = { path: string; head: string; title: string; mark: string }
+    const live = (t: Task | undefined, slug: string, id: string, path: string): Live => t
+      ? { path, head: '   ' + (t.assignee || 'unassigned') + '  ', title: t.title || t.id, mark: t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : '' }
+      : { path, head: '   ', title: clean(slug) + ' · ' + clean(id), mark: '' }
+    const progress: Live[] = []
+    const review: Live[] = []
+    const st = counts.state === 'ok' ? counts.status : null
+    if (st) {
+      for (const [path, s] of Object.entries(st)) {
+        const [, slug, id] = path.match(TASK_KEY) || []
+        const p = b.rows.find(r => r.ref === slug)
+        ;(s === 'in-progress' ? progress : review).push(live(p && p.tasks.find(x => x.ref === id), slug, id, path))
+      }
+    } else for (const p of b.rows) for (const t of p.tasks) {
+      if (t.status === 'in-progress') progress.push(live(t, p.ref, t.ref, taskPath(p, t)))
+      else if (t.status === 'in-review') review.push(live(t, p.ref, t.ref, taskPath(p, t)))
     }
     const needYou = (n: number | string) => n + (n === 1 ? ' needs you' : ' need you')
-    // `?` is drawn, never taken for a zero; PROJECTS and NEEDS YOU hide a known zero, the two session sections show it.
+    // `?` is drawn, never taken for a zero; PROJECTS hides a known zero, the three sections under it show it.
     const heading = (s: string, v: N, look: Record<string, unknown>, zero = false) =>
       row(seg(s, { ...look, bold: true }), seg(v === 0 && !zero ? '' : ' (' + nstr(v) + ')', look))
-    const showNeed = !queueOff() && (counts.need_you !== 0 || b.itemsUnknown)
+    const showNeed = !queueOff()
 
     // The banner's mark, the brand line beside row 2 and a rule beside row 3 to the edge;
     // the age right-aligned on its own line under it.
@@ -586,10 +610,9 @@ function draw($: any, e: any, now: number): any {
     rows.push(row(seg('   '), seg(nstr(c.working) + ' working' + ticks, WORK), seg(' · ', MUTED), seg(nstr(c.idle) + ' idle', MUTED), seg(' · ', MUTED), seg(nstr(c.dead) + ' dead', NEEDS_YOU)))
     rows.push(line(' '))
     if (progress.length === 0) rows.push(line(tick ? '   no task in progress — tick running' : '   nothing right now', MUTED))
-    for (const [p, t] of progress) {
-      const head = '   ' + (t.assignee || 'unassigned') + '  '
-      const word = c.tasks === null ? '?' : c.tasks[taskPath(p, t)] || '—'
-      const [title, ...more] = wrap(t.title || t.id, Math.max(1, W - cols(head)), ROW_LINES, Math.max(1, W - cols(head) - cols(word) - 2))
+    for (const { path, head, title: text } of progress) {
+      const word = c.tasks === null ? '?' : c.tasks[path] || '—'
+      const [title, ...more] = wrap(text, Math.max(1, W - cols(head)), ROW_LINES, Math.max(1, W - cols(head) - cols(word) - 2))
       rows.push(row(seg(head, WORK), seg(title, TEXT), seg(gap(cols(head) + cols(title) + cols(word))), seg(word, LOOK[word] || MUTED)))
       for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
     }
@@ -599,10 +622,8 @@ function draw($: any, e: any, now: number): any {
     rows.push(heading('IN REVIEW', c.in_review, WORK, true))
     rows.push(line(' '))
     if (review.length === 0) rows.push(line('   none', MUTED))
-    for (const [, t] of review) {
-      const head = '   ' + (t.assignee || 'unassigned') + '  '
-      const mark = t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : ''
-      const [title, ...more] = wrap(t.title || t.id, Math.max(1, W - cols(head)), ROW_LINES, Math.max(1, W - cols(head) - cols(mark)))
+    for (const { head, title: text, mark } of review) {
+      const [title, ...more] = wrap(text, Math.max(1, W - cols(head)), ROW_LINES, Math.max(1, W - cols(head) - cols(mark)))
       rows.push(row(seg(head, WORK), seg(title, TEXT), seg(mark, MUTED)))
       for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
     }
@@ -610,9 +631,9 @@ function draw($: any, e: any, now: number): any {
     if (showNeed) {
       rows.push(line(' '))
       rows.push(line(' '))
-      rows.push(heading('NEEDS YOU', b.itemsUnknown ? null : counts.need_you, NEEDS_YOU))
+      rows.push(heading('NEEDS YOU', b.itemsUnknown ? null : counts.need_you, NEEDS_YOU, true))
       rows.push(line(' '))
-      if (need.length === 0 && !b.itemsUnknown) rows.push(line('   none', MUTED))
+      if (need.length === 0 && !b.itemsUnknown) rows.push(line('   nothing', MUTED))
       const digits = String(need.length).length
       const vw = Math.max(7, ...need.map(x => cols(x.verb)))
       need.forEach((x, k) => {

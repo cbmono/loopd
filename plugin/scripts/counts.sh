@@ -5,7 +5,8 @@
 #   ab_counts <root>        sets CNT_IN_PROGRESS CNT_IN_REVIEW CNT_WORKING CNT_IDLE CNT_DEAD
 #                           CNT_TICK (working sessions that are the tick) CNT_NEED_YOU (`?`
 #                           unknown), CNT_QUEUE (on|off|unreadable) and
-#                           CNT_TASKS (`<word> TAB <json task path>` lines, or `?`)
+#                           CNT_TASKS (`<word> TAB <json task path>` lines, or `?`) and
+#                           CNT_STATUS (the same, `in-progress`/`in-review`, or `?`)
 #   ab_write_counts <root>  writes them to AB_COUNTS (temp + mv), `?` as null, no free text
 # status-line.sh prints them and the pane reads AB_COUNTS. No `gh`, no network, no `jq`.
 # Reasoning: loopd-retirement-followups/task-004 (D4, D6).
@@ -14,7 +15,7 @@ ab_counts() {
   local root="$1" out a_cache a_ep a_rest agents l t
   local here; here="$(dirname "${BASH_SOURCE[0]:-$0}")"
   CNT_IN_PROGRESS='?'; CNT_IN_REVIEW='?'; CNT_NEED_YOU='?'; CNT_QUEUE=off
-  CNT_WORKING='?'; CNT_IDLE='?'; CNT_DEAD='?'; CNT_TICK='?'; CNT_TASKS='?'
+  CNT_WORKING='?'; CNT_IDLE='?'; CNT_DEAD='?'; CNT_TICK='?'; CNT_TASKS='?'; CNT_STATUS='?'
   read -r CNT_EPOCH CNT_AT <<<"$(date -u '+%s %Y-%m-%dT%H:%M:%SZ')"
 
   # Task frontmatter, directly — never SNAPSHOT.json, which only a tick writes. One awk pass,
@@ -22,16 +23,19 @@ ab_counts() {
   if [ -d "$root/projects" ]; then
     set -- "$root"/projects/*/tasks/*.md
     if [ -e "$1" ]; then
+      # A path is listed only in a shape that is JSON as it stands — nothing to escape.
       out="$(awk '
+        function at(w) { if (match(FILENAME, /projects\/[A-Za-z0-9][A-Za-z0-9._-]*\/tasks\/[A-Za-z0-9][A-Za-z0-9._-]*\.md$/)) s = s w "\t\"" substr(FILENAME, RSTART) "\"\n" }
         FNR == 1 { fm = 0; hit = 0; if ($0 == "---") { fm = 1; next } }
         fm && $0 == "---" { fm = 0; next }
-        fm && !hit && $0 ~ /^status:[[:space:]]*in-progress[[:space:]]*$/ { p++; hit = 1 }
-        fm && !hit && $0 ~ /^status:[[:space:]]*in-review[[:space:]]*$/   { r++; hit = 1 }
-        END { print p + 0, r + 0 }
-      ' "$@" 2>/dev/null)" && read -r CNT_IN_PROGRESS CNT_IN_REVIEW <<<"$out"
-      [ -n "$CNT_IN_PROGRESS" ] && [ -n "$CNT_IN_REVIEW" ] || { CNT_IN_PROGRESS='?'; CNT_IN_REVIEW='?'; }
+        fm && !hit && $0 ~ /^status:[[:space:]]*in-progress[[:space:]]*$/ { p++; hit = 1; at("in-progress") }
+        fm && !hit && $0 ~ /^status:[[:space:]]*in-review[[:space:]]*$/   { r++; hit = 1; at("in-review") }
+        END { printf "%d %d\n%s", p, r, s }
+      ' "$@" 2>/dev/null)" && { read -r CNT_IN_PROGRESS CNT_IN_REVIEW <<<"${out%%$'\n'*}"
+        CNT_STATUS=""; case "$out" in *$'\n'*) CNT_STATUS="${out#*$'\n'}" ;; esac; }
+      [ -n "$CNT_IN_PROGRESS" ] && [ -n "$CNT_IN_REVIEW" ] || { CNT_IN_PROGRESS='?'; CNT_IN_REVIEW='?'; CNT_STATUS='?'; }
     else
-      CNT_IN_PROGRESS=0; CNT_IN_REVIEW=0
+      CNT_IN_PROGRESS=0; CNT_IN_REVIEW=0; CNT_STATUS=""
     fi
   fi
 
@@ -96,24 +100,28 @@ ab_counts() {
 
 _ab_jnum() { case "$2" in ''|*[!0-9]*) printf -v "$1" null ;; *) printf -v "$1" '%s' "$2" ;; esac; }
 
+# `<word> TAB <json path>` lines to a JSON object; `?` is null.
+_ab_jmap() {
+  local l sep="" m="{"
+  if [ "$2" = '?' ]; then printf -v "$1" null; return; fi
+  while IFS= read -r l; do
+    [ -n "$l" ] || continue
+    m="$m$sep${l#*$'\t'}:\"${l%%$'\t'*}\""; sep=","
+  done <<<"$2"
+  printf -v "$1" '%s}' "$m"
+}
+
 ab_write_counts() {
-  local f="$1/$AB_COUNTS" tasks="null" sep="" l p r w i d k n
+  local f="$1/$AB_COUNTS" tasks status p r w i d k n
   [ -d "${f%/*}" ] || return 0
   # Until /loopd:init adds the ignore line, a broad `git add` would commit this per-clone file.
   # Read .gitignore rather than ask git: the status line never runs git.
   if [ -e "$1/.git" ] && ! grep -qxE "/?${AB_COUNTS//./\\.}" "$1/.gitignore" 2>/dev/null; then return 0; fi
   _ab_jnum p "$CNT_IN_PROGRESS"; _ab_jnum r "$CNT_IN_REVIEW"; _ab_jnum n "$CNT_NEED_YOU"
   _ab_jnum w "$CNT_WORKING"; _ab_jnum i "$CNT_IDLE"; _ab_jnum d "$CNT_DEAD"; _ab_jnum k "$CNT_TICK"
-  if [ "$CNT_TASKS" != '?' ]; then
-    tasks="{"
-    while IFS= read -r l; do
-      [ -n "$l" ] || continue
-      tasks="$tasks$sep${l#*$'\t'}:\"${l%%$'\t'*}\""; sep=","
-    done <<<"$CNT_TASKS"
-    tasks="$tasks}"
-  fi
-  printf '{"in_progress":%s,"in_review":%s,"sessions":{"working":%s,"idle":%s,"dead":%s,"tick_working":%s},"need_you":%s,"queue":"%s","task_sessions":%s,"written_at":"%s"}\n' \
-    "$p" "$r" "$w" "$i" "$d" "$k" "$n" "$CNT_QUEUE" "$tasks" "$CNT_AT" > "$f.$$" 2>/dev/null && mv -f "$f.$$" "$f" 2>/dev/null
+  _ab_jmap tasks "$CNT_TASKS"; _ab_jmap status "$CNT_STATUS"
+  printf '{"in_progress":%s,"in_review":%s,"sessions":{"working":%s,"idle":%s,"dead":%s,"tick_working":%s},"need_you":%s,"queue":"%s","task_sessions":%s,"task_status":%s,"written_at":"%s"}\n' \
+    "$p" "$r" "$w" "$i" "$d" "$k" "$n" "$CNT_QUEUE" "$tasks" "$status" "$CNT_AT" > "$f.$$" 2>/dev/null && mv -f "$f.$$" "$f" 2>/dev/null
   rm -f "$f.$$" 2>/dev/null
   return 0
 }

@@ -517,7 +517,7 @@ test('malformed JSON is one error line and no throw; wrong types draw as 0', ONL
   text = await shown(ui)
   expect(await rowsOf(ui)).toEqual([...header(96, 'loopd v4.11.0 · org: fixture-org'), ' '.repeat(85) + 'age unknown', ' ', 'PROJECTS', ' ', ' ',
     'IN PROGRESS (?)', ' ', '   ? working · ? idle · ? dead', ' ', '   nothing right now', ' ', ' ', 'IN REVIEW (?)', ' ', '   none', ' ', ' ',
-    'NEEDS YOU (?)', ' ', '   none', ' ', '─'.repeat(96), ' ', ' ', 'counts unavailable — run /loopd:init'])
+    'NEEDS YOU (?)', ' ', '   nothing', ' ', '─'.repeat(96), ' ', ' ', 'counts unavailable — run /loopd:init'])
   await ui.unmount()
 })
 
@@ -875,7 +875,26 @@ test('IN PROGRESS and IN REVIEW wrap like NEEDS YOU: under the title, the right 
   }
 })
 
-test('with nothing needing you: no header count and no NEEDS YOU; the two session sections show (0) and IN REVIEW stays', ONLY, async ($, on) => {
+test('STALE SNAPSHOT: a row sits under the section counts.json counts it in, not the one the snapshot says', ONLY, async ($, on) => {
+  const path = 'projects/loopd-update-command/tasks/task-001.md'
+  const snap = { ...SNAP, projects: [{ slug: 'loopd-update-command', title: 'Update command', status: 'active', awaiting_close: false, phase_progress: { done: 0, total: 0 },
+    tasks: [{ id: 'task-001', title: 'Add /loopd:update', status: 'in-progress', assignee: 'software-engineer', in_flight: true, pr_mergeable: 'MERGEABLE', awaiting: '', prs: [] }] }] }
+  const counts = { ...(countsOf(snap) as any), in_progress: 0, in_review: 2, sessions: { working: 0, idle: 1, dead: 0, tick_working: 0 },
+    task_sessions: { [path]: 'idle' },
+    task_status: { [path]: 'in-review', 'projects/gone/tasks/task-009.md': 'in-review', 'projects/x/tasks/task-1.md': 'done', 'projects/../tasks/t.md': 'in-review' } }
+  const w = world(snap, true, counts)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = await rowsOf(ui)
+  expect(rows.slice(rows.indexOf('IN PROGRESS (0)'), rows.indexOf('IN PROGRESS (0)') + 6)).toEqual(['IN PROGRESS (0)', ' ', '   0 working · 1 idle · 0 dead', ' ', '   nothing right now', ' '])
+  // The snapshot names the row it has; one it lacks is `<slug> · <task id>`; a bad key or word is dropped.
+  expect(section(rows, 'IN REVIEW (2)')).toEqual(['   software-engineer  Add /loopd:update', '   gone · task-009'])
+  await ui.unmount()
+})
+
+test('with nothing needing you: NEEDS YOU (0) and a dim nothing, never hidden; the two session sections show (0) too', ONLY, async ($, on) => {
   const snap = needSnap('x')
   snap.projects = snap.projects.slice(2)
   const w = world(snap)
@@ -886,8 +905,12 @@ test('with nothing needing you: no header count and no NEEDS YOU; the two sessio
   const rows = await rowsOf(ui)
   expect(rows).toEqual([...header(45), ' '.repeat(36) + '1 min ago', ' ', 'PROJECTS (1)', ' ',
     '✓ article-evaluation' + ' '.repeat(19) + 'closed', ' ', ' ', 'IN PROGRESS (0)', ' ', '   1 working · 1 idle · 0 dead', ' ', '   nothing right now', ' ', ' ',
-    'IN REVIEW (0)', ' ', '   none', ' ', '─'.repeat(45), ' ', ' '])
-  expect(await shown(ui)).not.toMatch(/PROJECTS \(0\)|NEEDS YOU|none in /)
+    'IN REVIEW (0)', ' ', '   none', ' ', ' ', 'NEEDS YOU (0)', ' ', '   nothing', ' ', '─'.repeat(45), ' ', ' '])
+  expect(await shown(ui)).not.toMatch(/PROJECTS \(0\)|none in /)
+  const all = await ui.findAll({ type: 'Text' })
+  const look = (t: string) => all.filter((el: any) => el.text === t).map((el: any) => el.props.color)
+  expect(look('   nothing')).toEqual(look('   none'))              // the same dim grey
+  expect(look('   nothing')).toEqual(['#6c7488'])
   await ui.unmount()
 })
 
