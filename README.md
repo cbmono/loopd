@@ -289,6 +289,7 @@ Run these inside an instance.
 | `/loopd:prune-wt` | (plugin) remove the worktrees `prune-worktrees.sh` reports `REMOVABLE`, after one yes — each re-checked at removal time, skipped on any doubt; refuses while a tick holds the lock. [→](docs/operations.md#4-worktrees-two-scripts-delete-the-pruner-still-reports) |
 
 | `/loopd:init <dir>` | (plugin) create a bundle or refresh one, then run the check-and-fix pass |
+| `/loopd:update` | (plugin) update the marketplace and every user-scope plugin installed from it, re-stamp the bundle it runs in with the new version's init, then tells you to `/reload-plugins` |
 
 `/pane` is a mod, not a skill: the board, or an inbox of questions and stuck tasks, beside the
 session ([`plugin/hooks/MODS.md`](plugin/hooks/MODS.md)).

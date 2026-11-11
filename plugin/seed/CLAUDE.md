@@ -22,7 +22,8 @@ None of them resolving means it is not installed here. Install once, then restar
 /plugin install loopd@loopd
 ```
 
-**After every plugin update, run `/loopd:init` here** — it stamps the seed, then runs
+**To update, run `/loopd:update` here, then `/reload-plugins`** — it updates the plugin and
+runs the new `/loopd:init` (another bundle: `/loopd:init` there), which stamps the seed and runs
 the check-and-fix pass (idempotent repairs only; config files and tick locks are reported,
 never written). **`/loopd:welcome` is the banner and `check`** — facts, no repairs.
 

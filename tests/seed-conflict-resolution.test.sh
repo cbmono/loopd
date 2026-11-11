@@ -195,8 +195,10 @@ assert "operations.md names init as that command" \
 assert "…and says what welcome is for"          "$(has 'the banner, and' "$OPS")"
 assert "…and carries the decidable table"       "$(has 'decidable conflict classes' "$OPS")"
 SEEDCM="$(cat "$REPO/plugin/seed/CLAUDE.md")"
-assert "the seed CLAUDE.md names init after a plugin update" \
-  "$(has 'After every plugin update, run ..'"${PN}:"'init' "$SEEDCM")"
+assert "the seed CLAUDE.md names update, then the reload" \
+  "$(has 'To update, run ..'"${PN}:"'update. here, then ./reload-plugins' "$SEEDCM")"
+assert "…and init for another bundle" \
+  "$(has 'another bundle: ..'"${PN}:"'init. there' "$SEEDCM")"
 assert "…and says what welcome is for"          "$(has 'is the banner and' "$SEEDCM")"
 
 # Driven by the table's CLASS, not by a path: the next derived file added as a row is

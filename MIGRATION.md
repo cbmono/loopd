@@ -4,7 +4,7 @@
 
 The `auditor` agent was retired on 2026-11-10 (#516). A bundle stamped before that still
 names it in `roles`, `roleTiers`, `roleEffort` or `roleMinutes`, in either config file —
-inert, and reported by `/loopd:welcome check`. After `/plugin update loopd@loopd`, in
+inert, and reported by `/loopd:welcome check`. After `/loopd:update` and `/reload-plugins`, in
 **each bundle**:
 
 ```text
@@ -24,7 +24,8 @@ The marketplace now lists exactly two plugins, `loopd` and `loopd-yolo`. The thr
 nothing). Everything else is retired, so on **each machine**:
 
 ```text
-/plugin update loopd@loopd
+claude plugin marketplace update loopd
+claude plugin update loopd@loopd -s user
 /plugin uninstall loopd-mod-usage@loopd
 /plugin uninstall loopd-mod-pane@loopd
 /plugin uninstall loopd-mod-signal@loopd

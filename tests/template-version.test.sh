@@ -469,11 +469,12 @@ ok "…and the version on the default branch" \
 # uses those two numbers rather than 1.0.0 and 2.0.0.
 ok "…so the compare is numeric per field, not lexicographic" \
   "$(grep -qF 'UPDATE' <<<"$OUT" && echo yes || echo no)" yes
-# THE REPAIR IS TWO COMMANDS AND THE SECOND ONE IS STILL THE POINT: updating the plugin
-# refreshes the machinery, but a SEED change reaches a bundle only through a stamp. It was
-# `install.sh`; it is `/<plugin>:init` since the bundle stopped carrying machinery.
-ok "…and it names the RE-STAMP, not just the update" \
-  "$(grep -qF '/'"${PN}:"'init' <<<"$OUT" && echo yes || echo no)" yes
+# THE RE-STAMP IS STILL THE POINT: a SEED change reaches a bundle only through a stamp, and
+# /<plugin>:update is the one command that updates AND re-stamps — then the reload.
+ok "…and it names the command that updates and re-stamps" \
+  "$(grep -qxF "        /${PN}:update" <<<"$OUT" && echo yes || echo no)" yes
+ok "…then the reload, never a restart" \
+  "$(grep -qxF '        /reload-plugins' <<<"$OUT" && ! grep -q 'restart' <<<"$OUT" && echo yes || echo no)" yes
 
 equal="$(mkfixture equal 1.2.3 1.2.3)"
 run_check "$equal"
@@ -718,7 +719,7 @@ rm -f "$PCACHE"; abcheck
 ok "welcome check agrees it is behind, with both versions" \
   "$(grep -qF 'plugin 1.0.0 is behind the marketplace, which carries 1.0.1' <<<"$AOUT" && echo yes || echo no)" yes
 ok "…and names the one command that fixes it"       \
-  "$(grep -qF "claude plugin update $PN" <<<"$AOUT" && echo yes || echo no)" yes
+  "$(grep -qF "/$PN:update, then /reload-plugins" <<<"$AOUT" && echo yes || echo no)" yes
 
 # THE CACHE IS THE REASON A SESSION MAKES NO NETWORK CALL. With a fresh stamp the remote may
 # move as far as it likes and the answer does not — and `--fetch` is what forces past it.

@@ -265,9 +265,9 @@ newer "$THERE" "$HERE" || exit 0
 # a pipe into Claude Code rather than a terminal; escape codes on that path land in the
 # transcript as literal bytes. The banner owns presentation, this file owns the verdict.
 #
-# THE REPAIR IS TWO COMMANDS AND THE SECOND ONE IS THE POINT: pulling the template updates
-# every file already linked, but a file that is NEW in that pull reaches this instance only
-# when the bundle is re-stamped. Someone who updates and stops is exactly the state this check
+# THE REPAIR RE-STAMPS, AND THAT IS THE POINT: /<plugin>:update runs init after the update,
+# because a file that is NEW in the update reaches this instance only when the bundle is
+# re-stamped. Someone who updates and stops is exactly the state this check
 # exists to end.
 #
 # THE NAME IS DERIVED, NEVER A LITERAL — `plugin/**` carries no org, repo or path literals
@@ -275,8 +275,8 @@ newer "$THERE" "$HERE" || exit 0
 label="TEMPLATE UPDATE"
 [ -n "$LABEL" ] && label="TEMPLATE UPDATE ($LABEL)"
 printf '%s\n' "⬆️  $label — this machine runs ${HERE}, ${REF_NAME} has ${THERE}"
-echo "    Update the plugin, then re-stamp this bundle (a seed change reaches a bundle"
-echo "    only through a stamp, and only that way):"
-echo "        /plugin update ${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}      (then restart Claude Code)"
-printf '        /%s:init %q\n' "$PLUGIN_NAME" "$INSTANCE"
+printf '    Update the plugin and re-stamp this bundle in one command, run from %q\n' "$INSTANCE"
+echo "    (a seed change reaches a bundle only through a stamp, and only that way):"
+printf '        /%s:update\n' "$PLUGIN_NAME"
+echo "        /reload-plugins"
 exit 0

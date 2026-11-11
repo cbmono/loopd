@@ -90,7 +90,7 @@ echo
 echo "== 3. every command is documented, and only under /${PN}: =="
 # The baseline is EXPLICIT, never derived from plugin/skills/: a derived list would let a
 # deleted skill take its README line with it and stay green. The first check keeps it honest.
-COMMANDS="answer board close-project dispatch fanout handoff init new-project prune-wt welcome whats-up"
+COMMANDS="answer board close-project dispatch fanout handoff init new-project prune-wt update welcome whats-up"
 # A REFERENCE skill (`user-invocable: false` — the model opens it, nobody types it) is not a
 # command and has no /$PN: line to document; it is listed here by name so a new one is a
 # decision, not a silent widening of the baseline.

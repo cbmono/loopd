@@ -75,7 +75,7 @@ on *what* changed — and exactly one of the five needs nothing from you.
 
 | What changed in the pull | Reaches a bundle how | You must |
 |---|---|---|
-| **Any** `plugin/` file — a skill, an agent, a script, a hook, new or edited | Not at all from this checkout. The plugin is installed from the marketplace | update the plugin, on **each machine**, then restart Claude Code |
+| **Any** `plugin/` file — a skill, an agent, a script, a hook, new or edited | Not at all from this checkout. The plugin is installed from the marketplace | `/loopd:update` on **each machine**, then `/reload-plugins` |
 | A **`plugin/seed/`** file (`CLAUDE.md`, `README.md`, `SCHEMA.md`, `CONVENTIONS.md`, `index.md`, …) | Never by itself — seed is copied only when absent, so bundle data is never clobbered | `/loopd:init <dir>`, which 3-way merges what merges cleanly, resolves the decidable conflicts and reports the rest |
 | A **schema** change | The validator updates with the plugin; the *data* does not | `/loopd:welcome check`, then `migrate-bundle.sh` (report), then `--apply` |
 
@@ -86,8 +86,13 @@ tree at once, and there is no per-bundle step for any of it.
 
 ### `/loopd:init` is the one command to run after every plugin update
 
-The plugin row is the one no script here can touch: it is per machine and installed by
-Claude Code. Everything downstream of it is one command.
+The plugin row is per machine and installed by Claude Code. **`/loopd:update`**, run from
+a bundle root, does it all: `claude plugin marketplace update`, `claude plugin update
+<p>@<marketplace> -s user` for each plugin of that marketplace already installed at user
+scope (project, local and managed installs are listed, never touched), then the **new**
+version's init on that bundle — its path read from the registry's user-scope entry, since
+the session's plugin root is still the old one. It ends `Now run /reload-plugins` and `If a
+command is missing, restart Claude Code`. Another bundle on the machine still needs:
 
 ```
 /loopd:init <dir>
@@ -1404,7 +1409,7 @@ software-engineer     deep     → opus                     local
 
 Board   http://localhost:41234/loopd/board
 Run     /loopd:board --help to see the options
-Update  claude plugin update loopd  (2.0.3 → 2.0.4) — restart to apply it
+Update  /loopd:update  (2.0.3 → 2.0.4), then /reload-plugins
 ```
 
 **`owner` and `claudeAccount` are two different people, and the banner prints both.**
@@ -1419,13 +1424,13 @@ no file, no key or no `python3` prints no row at all. Nothing else from that obj
 account and organisation UUIDs beside the address — ever reaches the banner.
 
 **The `Update` row is the third row of the board block, and it is one command.** It names
-what fetches a newer loopd and installs it — `claude plugin update <plugin>` — plus the
-restart, which is the only step left with you. Four states, one row (the numbers above are
+what fetches a newer loopd, installs it and re-stamps the bundle — `/loopd:update` — plus
+`/reload-plugins`, which is the only step left with you. Four states, one row (the numbers above are
 illustrative):
 
 | The check found | The row reads |
 |---|---|
-| the marketplace is ahead | `claude plugin update loopd  (2.0.3 → 2.0.4) — restart to apply it` |
+| the marketplace is ahead | `/loopd:update  (2.0.3 → 2.0.4), then /reload-plugins` |
 | nothing newer | `up to date (2.0.3)` |
 | nothing newer, but this bundle was last stamped by an older plugin | `up to date (2.0.4) · bundle stamped at 2.0.3 — run /loopd:init` |
 | no answer — offline, no clone, no git | `unknown (offline)` |
