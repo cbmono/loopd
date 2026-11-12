@@ -346,29 +346,29 @@ export RUN_OUT_DIR
 shim="" sandbox=""
 trap 'rm -rf "$RUN_OUT_DIR" ${shim:+"$shim"} ${sandbox:+"$sandbox"}' EXIT
 
-# Every harness runs with a throwaway HOME and no CLAUDE_CONFIG_DIR, so the config dir is
-# $HOME/.claude: a harness that sandboxes HOME gets its own, one that does not gets this
-# one, and none reaches the real profile. Before this a harness setting HOME alone still
-# inherited CLAUDE_CONFIG_DIR, and init-bundle.sh re-pointed the real profile's
-# plugins/<plugin>/bin link at a fixture (no-bg-grant, 2026-11-12). The canary below is
-# the proof: the real profile's bin links and its plugins/ and agents/ names, before and
-# after; a difference fails the run.
-real_cfg="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
+# Every harness inherits a throwaway CLAUDE_CONFIG_DIR. Before this a harness that set HOME
+# alone still inherited the real one, and init-bundle.sh re-pointed the real profile's
+# plugins/<plugin>/bin link at a fixture (no-bg-grant, 2026-11-12). HOME stays real: a
+# sandboxed one hangs git's macOS osxkeychain helper, and kb-mount fails on it. The canary
+# is the proof — the bin links and the plugins/ and agents/ names of both real config dirs,
+# before and after; a difference fails the run.
+real_cfgs=("${HOME:-}/.claude")
+[ -z "${CLAUDE_CONFIG_DIR:-}" ] || real_cfgs+=("$CLAUDE_CONFIG_DIR")
 canary() {
-  local d l
-  for d in plugins agents; do
-    [ -d "$real_cfg/$d" ] && (cd "$real_cfg/$d" && ls -A) | sed "s|^|$d/|"
-  done
-  for l in "$real_cfg"/plugins/*/bin; do
-    [ -e "$l" ] || [ -L "$l" ] || continue
-    printf '%s -> %s\n' "$l" "$(readlink "$l" 2>/dev/null)"
+  local c d l
+  for c in "${real_cfgs[@]}"; do
+    for d in plugins agents; do
+      [ -d "$c/$d" ] && (cd "$c/$d" && ls -A) | sed "s|^|$c/$d/|"
+    done
+    for l in "$c"/plugins/*/bin; do
+      [ -e "$l" ] || [ -L "$l" ] || continue
+      printf '%s -> %s\n' "$l" "$(readlink "$l" 2>/dev/null)"
+    done
   done
 }
 canary_before="$(canary)"
-sandbox="$(mktemp -d "${TMPDIR:-/tmp}/run-home.XXXXXX")" || { fatal "mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}"; exit 2; }
-mkdir -p "$sandbox/.claude"
-export HOME="$sandbox"
-unset CLAUDE_CONFIG_DIR
+sandbox="$(mktemp -d "${TMPDIR:-/tmp}/run-cfg.XXXXXX")" || { fatal "mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}"; exit 2; }
+export CLAUDE_CONFIG_DIR="$sandbox"
 
 # The merge gate must not be able to spend a paid `claude` run. AB_TIER tells a harness
 # which tier it is in (absent, it is a by-hand run and deep), and the shim makes a spawn
@@ -488,7 +488,7 @@ fi
 
 canary_after="$(canary)"
 if [ "$canary_before" != "$canary_after" ]; then
-  fatal "a harness wrote into the real Claude profile $real_cfg — it must sandbox CLAUDE_CONFIG_DIR. Changed:"
+  fatal "a harness wrote into a real Claude config dir — it must set its own CLAUDE_CONFIG_DIR. Changed:"
   diff <(printf '%s\n' "$canary_before") <(printf '%s\n' "$canary_after") | grep '^[<>]' | sed 's/^/  /'
   bad+=("the real Claude profile (canary)")
 fi
