@@ -387,7 +387,7 @@ echo "== no harness inherits the real CLAUDE_CONFIG_DIR, and a write into it fai
 C="$TMP/c"; mkdir -p "$C" "$TMP/realcfg/plugins"; build "$C"
 printf '#!/usr/bin/env bash\necho "cfg=$CLAUDE_CONFIG_DIR"\necho "pass=1 fail=0"\n' > "$C/work/tests/fp-cfg.test.sh"
 C_OUT="$( cd "$C/work" && CLAUDE_CONFIG_DIR="$TMP/realcfg" bash tests/run.sh --all 2>&1 )"; C_RC=$?
-C_CFG="$(sed -n 's/^cfg=//p' <<<"$C_OUT" | head -1)"
+C_CFG="$(sed -n 's/^cfg=//p' <<<"$C_OUT")"
 assert "a clean run passes"                            "$([ "$C_RC" -eq 0 ] && echo 0 || echo 1)"
 assert "…and the harness saw a temp config dir, not the caller's" \
   "$([ -n "$C_CFG" ] && [ "$C_CFG" != "$TMP/realcfg" ] && echo 0 || echo 1)"
