@@ -90,12 +90,13 @@ while IFS="$TAB" read -r key sc ve ip pp; do
     elsewhere=$((elsewhere + 1))
     case "/$scopes/" in *"/$sc/"*) ;; *) scopes="${scopes:+$scopes/}$sc" ;; esac
   fi
+  [ "$this" = 1 ] || continue
   uv="$(printf '%s\n' "$after" | awk -F "$TAB" -v k="$key" '$1 == k && $2 == "user" { print $3; exit }')"
-  if [ "$this" = 1 ] && [ -n "$uv" ] && ver_lt "$ve" "$uv"; then
+  if [ -n "$uv" ] && ver_lt "$ve" "$uv"; then
     echo "  warn  this bundle's $sc-scope ${key%@*} is $ve, older than the user-scope $uv it is stamped from" >&2
   fi
 done <<<"$after"
-[ "$elsewhere" -eq 0 ] || echo "$elsewhere $scopes-scope installs elsewhere — not touched (--verbose lists them)"
+[ "$elsewhere" -eq 0 ] || echo "$elsewhere $scopes-scope install$([ "$elsewhere" -eq 1 ] || echo s) elsewhere — not touched (--verbose lists them)"
 
 if ! ab_is_bundle "$here"; then
   echo "init: skipped — $here is not a bundle root"
