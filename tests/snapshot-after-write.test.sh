@@ -32,14 +32,14 @@ for f in new-project-file answer unblock; do
      "$(( $(wc -l < "$S/$f.sh") - $(wc -l < "$MUT/scripts/$f.sh") ))" 1
 done
 
+# One committed fixture bundle, on the board; every case works on its own copy.
+BASE="$TMP/base"
+bash "$REPO/tests/fixtures/simple-board/mk.sh" "$BASE" >/dev/null 2>&1 || { echo "fixture failed"; exit 2; }
+printf '%s\n' "/$AB_SNAPSHOT" > "$BASE/.gitignore"
+( cd "$BASE" && git init -q -b main && git config user.name "Example Human" && git config user.email t@example.com &&
+  git add -A && git commit -qm fixture ) || { echo "fixture failed"; exit 2; }
 N=0
-fresh() { # -> a committed fixture bundle in $D, on the board, its snapshot stamped in the past
-  D="$TMP/b$((++N))"
-  bash "$REPO/tests/fixtures/simple-board/mk.sh" "$D" >/dev/null 2>&1 || { echo "fixture failed"; exit 2; }
-  printf '%s\n' "/$AB_SNAPSHOT" > "$D/.gitignore"
-  ( cd "$D" && git init -q -b main && git config user.name "Example Human" && git config user.email t@example.com &&
-    git add -A && git commit -qm fixture ) || { echo "fixture failed"; exit 2; }
-}
+fresh() { D="$TMP/b$((++N))"; cp -R "$BASE" "$D" || { echo "fixture failed"; exit 2; }; }
 # snap <python expression over d> — read off the bundle's SNAPSHOT.json; `unreadable` when it is not JSON.
 # The expression is always a literal of this file, never fixture or bundle text.
 snap() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2], {"d": d}))' "$D/$AB_SNAPSHOT" "$1" 2>/dev/null || echo unreadable; }
