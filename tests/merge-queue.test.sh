@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # plugin/scripts/merge-queue.sh against a `gh` stub: hold, clear and unknown, loopd's own
-# tests.yml, every false clear QA found on #493, the D2 bound under --pr, the reason the mark
+# tests.yml, every false clear QA found on #493, the D3 bound under --pr, the reason the mark
 # keeps (stripped and bounded), tick-delta.sh's DELTA for a held mark and the merge-row warning
 # build-awaiting.sh renders.
 set -uo pipefail
@@ -156,7 +156,7 @@ ok "…and is unknown when its file cannot be read"           "$(rc)" 2
 fixture requested; run requested 74 push main
 ok "a requested main run holds"                             "$(rc)" 1
 
-echo "== --pr: a mark per PR and head, and D2's bound =="
+echo "== --pr: a mark per PR and head, and D3's bound of 2 unknowns =="
 B="$TMP/bundle"; mkdir -p "$B/projects/demo/tasks" "$B/$AB_DIR"; printf '{}\n' > "$B/instance.config.json"
 H1=1111111111111111111111111111111111111111; H2=2222222222222222222222222222222222222222
 M="$B/$AB_MERGE_HOLDS/example-org_example-repo_7"
@@ -172,10 +172,14 @@ ok "unknown, tick 1: exit 2"                                "$(rc --pr 7 --head 
 WHY='gh could not list requested runs of example-org/example-repo'
 ok "…and the mark's 6th field is the reason"                "$(cut -f3,6 "$M")" "unknown	$WHY"
 ok "…after the five fields every reader takes by position"  "$(cut -f1-5 "$M")" "$H1	1	unknown	example-org/example-repo	7"
-ok "unknown, tick 2: exit 2"                                "$(rc --pr 7 --head "$H1" --instance "$B")" 2
-ok "unknown, tick 3: exit 3, the merge is the human's"      "$(rc --pr 7 --head "$H1" --instance "$B")" 3
-ok "…and the human mark keeps the last reason"              "$(cut -f3,6 "$M")" "human	$WHY"
-ok "…and stays the human's at that head"                    "$(rc --pr 7 --head "$H1" --instance "$B")" 3
+out="$(mq --pr 7 --head "$H1" --instance "$B")"; c=$?
+ok "unknown, tick 2: exit 3, the merge is the human's"      "$c" 3
+ok "…printing the owner's merge-row token"                  "$(grep -cxF "merge-row: ##mq2 $WHY" <<<"$out")" 1
+ok "…and the human mark keeps the last reason"              "$(cut -f2,3,6 "$M")" "2	human	$WHY"
+out="$(mq --pr 7 --head "$H1" --instance "$B")"; c=$?
+ok "…and a re-run at that head stays exit 3"                "$c" 3
+ok "…with the token again"                                  "$(grep -cxF "merge-row: ##mq2 $WHY" <<<"$out")" 1
+ok "…and no increment"                                      "$(cut -f2,3 "$M")" "2	human"
 ok "a new head starts the count again"                      "$(rc --pr 7 --head "$H2" --instance "$B")" 2
 ok "usage: --pr without a 40-hex head is exit 4"            "$(rc --pr 7 --head abc --instance "$B")" 4
 
