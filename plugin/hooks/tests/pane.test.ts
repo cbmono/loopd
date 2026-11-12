@@ -88,6 +88,8 @@ type World = {
   registered: string[]
   onRun?: (e: any) => void
   failReads?: Set<string>
+  root?: string
+  cwd?: string
 }
 
 // Every stub the mod's hooks can reach, registered before the first call on `$`.
@@ -96,7 +98,8 @@ type World = {
 function stubs(on: any, w: World, placed = true, hold?: () => Promise<void>) {
   on('session.start', () => ({ cwd: CWD }))
   on('command.register', (_$: any, e: any) => { w.registered.push(e.name); return { value: undefined } })
-  on('session.cwd', () => ({ value: CWD }))
+  on('session.cwd', () => ({ value: w.cwd ?? CWD }))
+  on('session.root', () => ({ value: w.root ?? CWD }))
   on('ui.log', (_$: any, e: any) => { w.logged.push(e.text); return { value: undefined } })
   on('ui.open', () => { w.opened += 1; return { value: placed ? { isPlaced: true } : { isPlaced: false, reason: 'the terminal is 80 columns' } } })
   on('ui.close', () => { w.closed += 1; return { value: undefined } })
@@ -483,6 +486,46 @@ test('outside a loopd bundle the pane says so and draws nothing else', ONLY, asy
   expect(text).not.toContain('awaiting you')
   expect(text).not.toContain('need you')
   // Never read the snapshot when the cwd is not a bundle: no walk up, no second path.
+  expect(w.reads).toBe(0)
+  await ui.unmount()
+})
+
+// A Bash `cd` moves the session's cwd but not the directory it started in (2026-11-11).
+test('started in the bundle, cd-ed elsewhere: the pane still draws the bundle', ONLY, async ($, on) => {
+  const w = world(SNAP)
+  w.cwd = '/work/loopd'
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = await shown(ui)
+  expect(text).not.toContain('not a loopd bundle')
+  expect(text).toContain('PROJECTS')
+  await ui.unmount()
+})
+
+test('started outside a bundle, cd-ed into one: the pane draws the cwd bundle', ONLY, async ($, on) => {
+  const w = world(SNAP)
+  w.root = '/work/loopd'
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = await shown(ui)
+  expect(text).not.toContain('not a loopd bundle')
+  expect(text).toContain('PROJECTS')
+  await ui.unmount()
+})
+
+test('neither the start directory nor the cwd is a bundle: the message names the cwd', ONLY, async ($, on) => {
+  const w = world(SNAP, false)
+  w.root = '/work/elsewhere'
+  stubs(on, w)
+  mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const text = await shown(ui)
+  expect(text).toContain('not a loopd bundle — no instance.config.json in ' + CWD)
   expect(w.reads).toBe(0)
   await ui.unmount()
 })

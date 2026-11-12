@@ -214,7 +214,10 @@ PR that exists, so nothing is advanced on the message itself.
 
 Only under the session's working directory as `$.session.cwd()` gives it, or along git's
 own worktree layout from there — never a parent directory walked, never a path a config
-file names. Every path literal the module spells is in this table; `tests/mods.test.sh` in
+file names. The pane alone looks first in the directory the session started in,
+`$.session.root()`, which a Bash `cd` does not move (`status-line.sh`'s `CLAUDE_PROJECT_DIR`),
+and uses the cwd only when that holds no `instance.config.json`; `<cwd>` below is whichever
+of the two it chose. Every path literal the module spells is in this table; `tests/mods.test.sh` in
 `cbmono/loopd` asserts it, and that a module which lists a directory spells its walk as a
 quoted glob. The `.loopd/SNAPSHOT.json`, `.loopd/counts.json`, `.loopd/.answer-later` and
 `.loopd/.new-project/form.json` spellings are `AB_SNAPSHOT`, `AB_COUNTS`, `AB_ANSWER_LATER` and
@@ -223,7 +226,7 @@ are git's and `link-repos.sh`'s.
 
 | Path | Mod | Call | Why |
 |---|---|---|---|
-| `<cwd>/instance.config.json` | pane, signal | `exists`; pane (`operator`) also `read` on open and Refresh | the cwd is a loopd bundle. Pane: absent ⇒ *not a loopd bundle* and nothing else; its `org` is the header's `org:`. Signal: present ⇒ this is the PM side; a `turn.complete` here signals nothing |
+| `<cwd>/instance.config.json` | pane, signal | `exists` (pane: the start directory's, then the cwd's); pane (`operator`) also `read` on open and Refresh | the cwd is a loopd bundle. Pane: absent ⇒ *not a loopd bundle* and nothing else; its `org` is the header's `org:`. Signal: present ⇒ this is the PM side; a `turn.complete` here signals nothing |
 | `.loopd/SNAPSHOT.json` | pane (`operator`) | `stat` every poll, `read` when the mtime moved | the board. Absent ⇒ *board OFF* with the `touch` that turns it on (absence is the off switch — conventions 3 and 11) and nothing else. Unparseable ⇒ one line, and the next `write-snapshot.sh` run overwrites it |
 | `.loopd/counts.json` | pane (`operator`) | `stat` every poll, `read` when the mtime moved | the four numbers, session totals, per-task session words and per-task `in-progress`/`in-review` status `status-line.sh` writes on every redraw. Absent or unparseable ⇒ those numbers draw `?` |
 | `.loopd/seed-base/VERSION` | pane (`operator`) | `read` on open and Refresh | the version `/loopd:init` last stamped (`$AB_DIR/seed-base/VERSION`), shown as the header's `v<version>` — a mod cannot read the plugin's own `VERSION`. Absent or not `x.y.z` ⇒ left out |
