@@ -48,7 +48,7 @@ ls -d ~/.claude/plugins/cache/*/loopd/*/scripts | sort -V | tail -1
 | Fan ad-hoc asks out to background agents | **`/loopd:fanout`** — or give ≥2 independent asks at once |
 | Remove finished worktrees | **`/loopd:prune-wt`** |
 
-`/loopd-pane` (a mod) draws the board beside the session.
+`/pane` (a mod) draws the board beside the session.
 
 Research has no PR: your second gate is approving the deliverable. When a request
 matches a command above, **invoke it** — don't improvise its steps.

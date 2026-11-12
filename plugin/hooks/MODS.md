@@ -11,7 +11,7 @@ existed, never an error.
 | Switch | Default | On | Off |
 |---|---|---|---|
 | `usage` | on | records what the session spent in the plugin store after every turn | `session-usage.sh` reads the transcript, as before |
-| `pane` | on | `/loopd-pane` draws this bundle's board, or an inbox, in a pane beside the transcript | the three core renderers are all there is |
+| `pane` | on | `/pane` draws this bundle's board, or an inbox, in a pane beside the transcript | the three core renderers are all there is |
 | `paneMode` | `operator` | `operator` draws the board from the snapshot; `simple` draws an inbox from the task documents | — |
 | `signal` | on | a role agent's session tells the project-manager's session its turn is over, the moment it is | step 4 reads every session exactly as before |
 
@@ -39,10 +39,9 @@ unattributable number is worse than none.
 
 ## pane — the board in a pane
 
-`/loopd-pane` opens a pane drawing this bundle's board beside the transcript (or above the prompt
-in a narrow terminal); `/loopd-pane` while it is open, or `/loopd-pane close`, closes it the way its `×`
-does. Not `/loopd:pane`: the kit refuses a `:` in a mod's command name. `/pane` is an alias until 4.14.0,
-the same command, which says so in one dim line the first time it is used. `paneMode` decides what it draws:
+`/pane` opens a pane drawing this bundle's board beside the transcript (or above the prompt
+in a narrow terminal); `/pane` while it is open, or `/pane close`, closes it the way its `×`
+does. `paneMode` decides what it draws:
 
 | `paneMode` | Draws | Reads |
 |---|---|---|
@@ -107,11 +106,11 @@ its label (owner, 2026-11-11: no hints), so each is pressed, never keyed.
 |---|---|
 | **Answer Questions** | `$.command.run({ command: 'loopd:answer' })` — runs `/loopd:answer` once in **this** session, as if you had typed it. The engine queues a plugin's command run until the session is idle, so this is idle-only by contract. (Not `$.prompt.submit`: the host refuses a prompt text that begins with `/`, measured on 2.1.293.) A refused run is drawn on the info line as `answer refused: <reason>`, never swallowed. **It is the human pressing a key at their own prompt, not automation**: nothing here runs on a timer, and no message goes to another session. One press, one queued run; a second press while one is queued is ignored and the info line says `answer queued`. |
 | **Refresh** | re-read the snapshot and `counts.json` now, mtime or not; it runs nothing. |
-| **Close Pane** | `$.ui.close({ id: 'loopd-board' })`, the path `/loopd-pane close` takes; the poll stops. |
+| **Close Pane** | `$.ui.close({ id: 'loopd-board' })`, the path `/pane close` takes; the poll stops. |
 | a PROJECTS name, a NEEDS YOU verb | `$.ui.copy({ text, surface })` — the pane's **one outward action**: the slug or task path, built from the snapshot's `slug` and `id`, onto the clipboard of the surface the press came from, so you can paste it into the session with your reply. A slug or id that is not a folder-name shape (empty, `/`, `..`, whitespace) is never copied. |
 
 Where no surface places the pane (a terminal under the width floor, a `claude -p` run),
-`/loopd-pane` prints one dim `● loopd:` line with the header counts instead.
+`/pane` prints one dim `● loopd:` line with the header counts instead.
 
 ### simple mode
 

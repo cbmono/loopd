@@ -85,7 +85,7 @@ inside every session, each doing one thing and nothing else, each a switch in `/
 | Mod | What it does | Switch |
 |---|---|---|
 | usage | records what a session spent, so `session-usage.sh` can read it back | `usage` |
-| pane | adds `/loopd-pane` (`/pane` is an alias until 4.14.0): opens the board in a pane beside the transcript, or a simple view of projects, questions and blocks, with a form to start a project | `pane`, `paneMode` |
+| pane | adds `/pane`: opens the board in a pane beside the transcript, or a simple view of projects, questions and blocks, with a form to start a project | `pane`, `paneMode` |
 | signal | lets a role agent's session tell the PM's session its turn is over, the moment it is | `signal` |
 
 The one companion plugin, [`loopd-yolo`](plugin-yolo/README.md), is a separate install on
@@ -291,7 +291,7 @@ Run these inside an instance.
 | `/loopd:init <dir>` | (plugin) create a bundle or refresh one, then run the check-and-fix pass |
 | `/loopd:update` | (plugin) update the marketplace and every user-scope plugin installed from it, re-stamp the bundle it runs in with the new version's init, then tells you to `/reload-plugins` |
 
-`/loopd-pane` is a mod, not a skill: the board, or an inbox of questions and stuck tasks, beside the
+`/pane` is a mod, not a skill: the board, or an inbox of questions and stuck tasks, beside the
 session ([`plugin/hooks/MODS.md`](plugin/hooks/MODS.md)).
 
 Flags `/loopd:new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
