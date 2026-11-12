@@ -203,6 +203,8 @@ type Project = {
   awaiting_close: boolean
   phase_done: number
   phase_total: number
+  mine: boolean          // write-snapshot.sh's task-owner.sh verdict; absent (an older snapshot) is mine
+  owner: string
   tasks: Task[]
 }
 type Need = { verb: string; slug: string; task: string }
@@ -271,6 +273,8 @@ function obj(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
 }
 function arr(v: unknown): unknown[] { return Array.isArray(v) ? v : [] }
+// task-owner.sh's valid_user(): a value of any other shape is drawn as no tag at all.
+function login(v: unknown): string { const s = str(v); return s.length <= 39 && /^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$/.test(s) ? s : '' }
 
 // Presentation over the parsed JSON: shape it once, cleanly, so the render hook is a pure
 // function of `board`. Nothing here is derived from the bundle — only from the snapshot.
@@ -296,7 +300,7 @@ function shape(json: unknown): Board | null {
     rows.push({
       slug: str(po.slug), ref: raw(po.slug), title: str(po.title), status: str(po.status),
       awaiting_close: po.awaiting_close === true,
-      phase_done: toint(pp.done), phase_total: toint(pp.total), tasks,
+      phase_done: toint(pp.done), phase_total: toint(pp.total), mine: po.mine !== false, owner: login(po.owner), tasks,
     })
   }
   const items = Array.isArray(top.awaiting_items) ? top.awaiting_items.map(i => {
@@ -539,10 +543,16 @@ function draw($: any, e: any, now: number): any {
     }
     // A row is placed by task_status in counts.json, the source of the heading count; the
     // snapshot, written at tick close and so possibly stale, only names the row.
-    type Live = { path: string; head: string; title: string; mark: string }
-    const live = (t: Task | undefined, slug: string, id: string, path: string): Live => t
-      ? { path, head: '   ' + (t.assignee || 'unassigned') + '  ', title: t.title || t.id, mark: t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : '' }
-      : { path, head: '   ', title: clean(slug) + ' · ' + clean(id), mark: '' }
+    // Another owner's task (its project's owner; task `owner:` is not in the snapshot) is
+    // dimmed whole, `@login` riding on the title so it wraps with it.
+    type Live = { path: string; head: string; title: string; mark: string; other: boolean }
+    const live = (p: Project | undefined, t: Task | undefined, slug: string, id: string, path: string): Live => {
+      const other = !!p && !p.mine
+      const tag = other && p.owner ? ' @' + p.owner : ''
+      return t
+        ? { path, head: '   ' + (t.assignee || 'unassigned') + '  ', title: (t.title || t.id) + tag, mark: t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : '', other }
+        : { path, head: '   ', title: clean(slug) + ' · ' + clean(id) + tag, mark: '', other }
+    }
     const progress: Live[] = []
     const review: Live[] = []
     const st = counts.state === 'ok' ? counts.status : null
@@ -550,11 +560,11 @@ function draw($: any, e: any, now: number): any {
       for (const [path, s] of Object.entries(st)) {
         const [, slug, id] = path.match(TASK_KEY) || []
         const p = b.rows.find(r => r.ref === slug)
-        ;(s === 'in-progress' ? progress : review).push(live(p && p.tasks.find(x => x.ref === id), slug, id, path))
+        ;(s === 'in-progress' ? progress : review).push(live(p, p && p.tasks.find(x => x.ref === id), slug, id, path))
       }
     } else for (const p of b.rows) for (const t of p.tasks) {
-      if (t.status === 'in-progress') progress.push(live(t, p.ref, t.ref, taskPath(p, t)))
-      else if (t.status === 'in-review') review.push(live(t, p.ref, t.ref, taskPath(p, t)))
+      if (t.status === 'in-progress') progress.push(live(p, t, p.ref, t.ref, taskPath(p, t)))
+      else if (t.status === 'in-review') review.push(live(p, t, p.ref, t.ref, taskPath(p, t)))
     }
     const needYou = (n: number | string) => n + (n === 1 ? ' needs you' : ' need you')
     // `?` is drawn, never taken for a zero; PROJECTS hides a known zero, the three sections under it show it.
@@ -582,11 +592,23 @@ function draw($: any, e: any, now: number): any {
       if (queueOff()) { /* the bar draws no need-you count, so no project does */ }
       else if (b.items) { for (const it of b.items) if (it.slug === p.ref && it.verb !== 'close') n += 1 }
       else if (!b.itemsUnknown) for (const t of p.tasks) if (needs(t)) n += 1
-      return { p, n, i, rank: n ? 0 : p.status === 'active' ? 1 : p.status === 'paused' ? 2 : p.status === 'done' ? 3 : 4 }
-    }).sort((x, y) => x.rank - y.rank || x.i - y.i)
-    ranked.forEach(({ p, n }, k) => {
-      rows.push(line(' '))
+      // Own work, then other owners' (one dim line each), then closed whoever owns it.
+      const group = p.status === 'done' ? 2 : p.mine ? 0 : 1
+      return { p, n, i, group, rank: n ? 0 : p.status === 'active' ? 1 : p.status === 'paused' ? 2 : p.status === 'done' ? 3 : 4 }
+    }).sort((x, y) => x.group - y.group || x.rank - y.rank || x.i - y.i)
+    ranked.forEach(({ p, n, group }, k) => {
       const active = p.status === 'active'
+      if (group === 1) {
+        if (k === 0 || ranked[k - 1].group !== 1) rows.push(line(' '))
+        const live = p.tasks.filter(t => t.status !== 'cancelled')
+        const state = p.awaiting_close ? 'done' : p.status === 'paused' ? 'paused' : active && live.length ? live.filter(t => t.status === 'done').length + '/' + live.length : ''
+        const right = [p.owner ? '@' + p.owner : '', state].filter(Boolean).join('  ')
+        const title = fit(p.slug, W - 2 - (right ? cols(right) + 1 : 0))
+        rows.push(pressRow(seg((p.awaiting_close ? '✓' : active ? '●' : p.status === 'paused' ? '○' : '·') + ' ', MUTED),
+          copyButton('copy-project-' + k, title, MUTED, okRef(p.ref) ? p.ref : ''), right ? seg(gap(2 + cols(title) + cols(right)) + right, MUTED) : null))
+        return
+      }
+      rows.push(line(' '))
       // awaiting_close is finished work waiting on /loopd:close-project; status done is a closed, retained folder.
       const [glyph, look] = p.awaiting_close ? ['✓', DONE] : active ? ['●', WORK] : p.status === 'paused' ? ['○', MUTED] : p.status === 'done' ? ['✓', MUTED] : ['·', MUTED]
       const tail: [string, Record<string, unknown>][] = []
@@ -623,11 +645,11 @@ function draw($: any, e: any, now: number): any {
     rows.push(row(seg('   '), seg(nstr(c.working) + ' working' + ticks, WORK), seg(' · ', MUTED), seg(nstr(c.idle) + ' idle', MUTED), seg(' · ', MUTED), seg(nstr(c.dead) + ' dead', NEEDS_YOU)))
     rows.push(line(' '))
     if (progress.length === 0) rows.push(line(tick ? '   no task in progress — tick running' : '   nothing right now', MUTED))
-    for (const { path, head, title: text } of progress) {
+    for (const { path, head, title: text, other } of progress) {
       const word = c.tasks === null ? '?' : c.tasks[path] || '—'
       const [title, ...more] = wrap(text, Math.max(1, W - cols(head)), ROW_LINES, Math.max(1, W - cols(head) - cols(word) - 2))
-      rows.push(row(seg(head, WORK), seg(title, TEXT), seg(gap(cols(head) + cols(title) + cols(word))), seg(word, LOOK[word] || MUTED)))
-      for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
+      rows.push(row(seg(head, other ? MUTED : WORK), seg(title, other ? MUTED : TEXT), seg(gap(cols(head) + cols(title) + cols(word))), seg(word, other ? MUTED : LOOK[word] || MUTED)))
+      for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, other ? MUTED : TEXT)))
     }
 
     rows.push(line(' '))
@@ -635,10 +657,10 @@ function draw($: any, e: any, now: number): any {
     rows.push(heading('IN REVIEW', c.in_review, WORK, true))
     rows.push(line(' '))
     if (review.length === 0) rows.push(line('   none', MUTED))
-    for (const { head, title: text, mark } of review) {
+    for (const { head, title: text, mark, other } of review) {
       const [title, ...more] = wrap(text, Math.max(1, W - cols(head)), ROW_LINES, Math.max(1, W - cols(head) - cols(mark)))
-      rows.push(row(seg(head, WORK), seg(title, TEXT), seg(mark, MUTED)))
-      for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
+      rows.push(row(seg(head, other ? MUTED : WORK), seg(title, other ? MUTED : TEXT), seg(mark, MUTED)))
+      for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, other ? MUTED : TEXT)))
     }
 
     if (showNeed) {

@@ -34,7 +34,7 @@
 #
 #   CARRIED (the whole allowlist):
 #     project: slug, title, description, kind, status, autonomy, owner (a GitHub
-#              username — see the reversal below before you remove it),
+#              username — see the reversal below before you remove it), mine (a boolean),
 #              deliverable_paths (bundle-relative paths, VERBATIM from project.md —
 #              closeout stamps these, this file only forwards them; see task-007's
 #              board panel and the shape check build-board.sh applies before render)
@@ -117,6 +117,8 @@
 #   · the value is copied VERBATIM from the project document and resolved nowhere here.
 #     The board applies SCHEMA.md's resolution (project `owner:` → `defaultOwner` →
 #     unowned), so this file gains no config reader and no second copy of that rule;
+#     `mine` (a boolean, for the /pane) is task-owner.sh's verdict on project.md, the
+#     dispatch gate's own copy of that rule, not a third;
 #   · nothing else moves. Task `owner:` is not carried: the board partitions by PROJECT,
 #     and a per-task override is a dispatch concern, not a rendering one.
 #
@@ -145,6 +147,7 @@
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/lib/critique-receipt.sh" || exit 2
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
 QUIET=0
 while [[ $# -gt 0 ]]; do
@@ -566,6 +569,7 @@ project_stanza() { # <awaiting_close> <ph_done> <ph_total> <phases_json> <tasks_
       \"status\": $(jstr "$p_status"),
       \"autonomy\": $(jstr "$p_autonomy"),
       \"owner\": $(jstr "$p_owner"),
+      \"mine\": $p_mine,
       \"awaiting_close\": $1,
       \"phase_progress\": {\"done\": $2, \"total\": $3},
       \"phases\": [$4],
@@ -600,6 +604,10 @@ while IFS= read -r pfile; do
   # Identity, carried on purpose — see the reversal in the header. Verbatim and
   # unresolved: `defaultOwner` is the board's to apply, not this file's.
   p_owner="$(fmfield "$pfm" owner)"
+  # The one resolved ownership field: task-owner.sh's verdict on project.md (exit 0 only),
+  # build-awaiting.sh's mine() — so the pane dims other owners' work without a config read.
+  p_mine=false
+  bash "$HERE/task-owner.sh" "$pfile" >/dev/null 2>&1 && p_mine=true
   # Same frontmatter, same cost as every other project field above — read here so
   # BOTH exits below carry it, not just the done one. A live project rarely has the
   # key at all (closeout is what stamps it), so this is `[]` for almost every
@@ -878,7 +886,7 @@ cat > "$tmp" <<JSON
 {
   "_schema": "loopd board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
-  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); design (the PATH of projects/<slug>/design.md when it exists, never its body) and, only then, repo (this bundle's own GitHub org/repo); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/pr_mergeable (MERGEABLE|CONFLICTING|UNKNOWN, the tick's last host read)/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links; awaiting_items (one verb + project slug + task id per AWAITING.md item, never its title or sentence). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
+  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md) and mine (true when task-owner.sh clears the project for this clone); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); design (the PATH of projects/<slug>/design.md when it exists, never its body) and, only then, repo (this bundle's own GitHub org/repo); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/pr_mergeable (MERGEABLE|CONFLICTING|UNKNOWN, the tick's last host read)/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links; awaiting_items (one verb + project slug + task id per AWAITING.md item, never its title or sentence). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
   "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},
