@@ -117,7 +117,7 @@
 #   · the value is copied VERBATIM from the project document and resolved nowhere here.
 #     The board applies SCHEMA.md's resolution (project `owner:` → `defaultOwner` →
 #     unowned), so this file gains no config reader and no second copy of that rule;
-#     `mine` (a boolean, for /loopd-pane) is task-owner.sh's verdict on project.md, the
+#     `mine` (a boolean, for the /pane) is task-owner.sh's verdict on project.md, the
 #     dispatch gate's own copy of that rule, not a third;
 #   · nothing else moves. Task `owner:` is not carried: the board partitions by PROJECT,
 #     and a per-task override is a dispatch concern, not a rendering one.
