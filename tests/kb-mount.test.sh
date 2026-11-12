@@ -37,7 +37,10 @@ ok() {
 }
 has() { grep -qF -- "$2" <<<"$1" && echo yes || echo no; }
 
-export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
+# NOSYSTEM, not only SYSTEM=/dev/null: Apple Git still reads Xcode's own gitconfig, whose
+# osxkeychain helper stored a `u`@127.0.0.1 password in the owner's login keychain on every
+# run (323 of them, 2026-10-03 to 2026-11-12).
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_NOSYSTEM=1
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com
 export GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 export LOOPD_KB_TIMEOUT=3
@@ -559,6 +562,11 @@ out="$(bash "$SYNC" --instance "$TMP/qs" --timeout 20 mount 2>&1)"
 ok "a secret in a query string is dropped from the printed URL" "$(has "$out" 's3cr3tQUERY')" no
 unset GIT_SSL_NO_VERIFY
 reap
+ok "no credential helper is configured but the test's own" "$(git config --get-all credential.helper)" ""
+if command -v security >/dev/null 2>&1; then
+  ok "…and the login keychain holds no u@127.0.0.1 password" \
+    "$(security find-internet-password -s 127.0.0.1 -a u >/dev/null 2>&1 && echo present || echo absent)" absent
+fi
 
 echo "== what the remote says decides the phrase; it is never the phrase =="
 

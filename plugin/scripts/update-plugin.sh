@@ -2,13 +2,20 @@
 #
 # update-plugin.sh — behind /<plugin>:update: refresh the marketplace, update every plugin of
 # it installed at user scope, stamp the bundle in the cwd with the NEW version's init-bundle.sh
-# (read from the registry's user entry), then say to reload. No arguments.
-#
+# (read from the registry's user entry), then say to reload. --verbose lists every install
+# at another scope; by default they are one summary line, bar the cwd bundle's own.
 # Exit: 0 done · 1 a plugin update failed (the rest, and init, still ran) · 2 the marketplace
-# update failed, or no usable registry entry (no init ran) · else init-bundle.sh's own exit.
+# update failed, no usable registry entry, or an unknown argument (no init ran) · else
+# init-bundle.sh's own exit.
 # Never installs, never touches a project/local/managed install, never passes init a flag.
 # Reasoning: loopd-update-command/task-001, decisions D1-D5.
 set -uo pipefail
+verbose=0
+case "${1:-}" in
+  "") ;;
+  --verbose) verbose=1 ;;
+  *) echo "update: unknown argument $1 (only --verbose)" >&2; exit 2 ;;
+esac
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
 MKT="$PLUGIN_MARKETPLACE" CORE="$PLUGIN_NAME"
@@ -16,8 +23,7 @@ MKT="$PLUGIN_MARKETPLACE" CORE="$PLUGIN_NAME"
 REGISTRY="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/plugins/installed_plugins.json"
 TAB="$(printf '\t')"
 
-reload_lines() { echo "Now run /reload-plugins"; echo "If a command is missing, restart Claude Code"; }
-finish() { reload_lines; exit "$1"; }
+finish() { echo "Now run /reload-plugins"; exit "$1"; }
 
 # One line per registry entry: key TAB scope TAB version TAB installPath TAB projectPath.
 # The registry is pretty-printed one key per line, the same assumption resolve-autonomy.sh makes.
@@ -74,14 +80,23 @@ for key in $users; do
 done
 
 here="$(pwd -P)" here_l="$(pwd)"
+elsewhere=0 scopes=""
 while IFS="$TAB" read -r key sc ve ip pp; do
   [ -n "$key" ] && [ "$sc" != user ] || continue
-  echo "${key%@*} $ve ($sc scope${pp:+, $pp}) — listed, not updated"
+  if [ -n "$pp" ] && { [ "$pp" = "$here" ] || [ "$pp" = "$here_l" ]; }; then this=1; else this=0; fi
+  if [ "$this" = 1 ] || [ "$verbose" = 1 ]; then
+    echo "${key%@*} $ve ($sc scope${pp:+, $pp}) — listed, not updated"
+  else
+    elsewhere=$((elsewhere + 1))
+    case "/$scopes/" in *"/$sc/"*) ;; *) scopes="${scopes:+$scopes/}$sc" ;; esac
+  fi
+  [ "$this" = 1 ] || continue
   uv="$(printf '%s\n' "$after" | awk -F "$TAB" -v k="$key" '$1 == k && $2 == "user" { print $3; exit }')"
-  if [ -n "$pp" ] && { [ "$pp" = "$here" ] || [ "$pp" = "$here_l" ]; } && [ -n "$uv" ] && ver_lt "$ve" "$uv"; then
+  if [ -n "$uv" ] && ver_lt "$ve" "$uv"; then
     echo "  warn  this bundle's $sc-scope ${key%@*} is $ve, older than the user-scope $uv it is stamped from" >&2
   fi
 done <<<"$after"
+[ "$elsewhere" -eq 0 ] || echo "$elsewhere $scopes-scope install$([ "$elsewhere" -eq 1 ] || echo s) elsewhere — not touched (--verbose lists them)"
 
 if ! ab_is_bundle "$here"; then
   echo "init: skipped — $here is not a bundle root"

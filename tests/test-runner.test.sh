@@ -383,4 +383,20 @@ assert "…with the KILLED line naming the bound"        "$(has "$K_OUT" 'KILLED
 assert "…and the process-substitution hint"            "$(has "$K_OUT" 'At 100% CPU, look first for an endless reader such as tr </dev/urandom | head, which never ends when SIGPIPE is ignored — bound the read (od -N); else one <(…) per scoped file, which spins past ~256 files on bash 3.2')"
 assert "…while the harnesses that returned stay green" "$(lacks "$K_OUT" 'fp-names-nothing.test.sh never returned')"
 
+echo "== no harness inherits the real CLAUDE_CONFIG_DIR, and a write into it fails the run =="
+C="$TMP/c"; mkdir -p "$C" "$TMP/realcfg/plugins"; build "$C"
+printf '#!/usr/bin/env bash\necho "cfg=$CLAUDE_CONFIG_DIR"\necho "pass=1 fail=0"\n' > "$C/work/tests/fp-cfg.test.sh"
+C_OUT="$( cd "$C/work" && CLAUDE_CONFIG_DIR="$TMP/realcfg" bash tests/run.sh --all 2>&1 )"; C_RC=$?
+C_CFG="$(sed -n 's/^cfg=//p' <<<"$C_OUT")"
+assert "a clean run passes"                            "$([ "$C_RC" -eq 0 ] && echo 0 || echo 1)"
+assert "…and the harness saw a temp config dir, not the caller's" \
+  "$([ -n "$C_CFG" ] && [ "$C_CFG" != "$TMP/realcfg" ] && echo 0 || echo 1)"
+assert "…which is gone after the run"                  "$([ -n "$C_CFG" ] && [ ! -e "$C_CFG" ] && echo 0 || echo 1)"
+printf '#!/usr/bin/env bash\nmkdir -p "$LEAK/plugins/loopd" && ln -s /nowhere "$LEAK/plugins/loopd/bin"\necho "pass=1 fail=0"\n' \
+  > "$C/work/tests/fp-leak.test.sh"
+C_OUT="$( cd "$C/work" && LEAK="$TMP/realcfg" CLAUDE_CONFIG_DIR="$TMP/realcfg" bash tests/run.sh --all 2>&1 )"; C_RC=$?
+assert "a harness writing a bin link into it fails the run" "$([ "$C_RC" -eq 1 ] && echo 0 || echo 1)"
+assert "…saying so"                                    "$(has "$C_OUT" 'wrote into a real Claude config dir')"
+assert "…naming the link"                              "$(has "$C_OUT" "> $TMP/realcfg/plugins/loopd/bin -> /nowhere")"
+
 summary
