@@ -97,5 +97,6 @@ echo "created projects/$slug (autonomy gated)"
 root="$(git -C "$inst" rev-parse --show-toplevel 2>/dev/null)" || exit 0
 ( cd "$root" && bash "$HERE/commit-as.sh" human "feat: add $slug project" --stage -- "$base" "$inst/$AB_LEDGER" >/dev/null ) ||
   { echo "new-project-file: created, but the commit failed" >&2; exit 4; }
-bash "$HERE/push-commit.sh" "$root" >/dev/null
-case $? in 0|3) exit 0 ;; *) exit 4 ;; esac
+bash "$HERE/push-commit.sh" "$root" >/dev/null; rc=$?
+( cd "$inst" && bash "$HERE/write-snapshot.sh" --quiet >/dev/null )
+case $rc in 0|3) exit 0 ;; *) exit 4 ;; esac

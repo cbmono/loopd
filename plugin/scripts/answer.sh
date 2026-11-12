@@ -173,8 +173,9 @@ dir="$(cd "$(dirname "$doc")" && pwd -P)"
 root="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || { echo "not a git work tree: nothing committed"; exit 0; }
 ( cd "$root" && bash "$HERE/commit-as.sh" human "docs: answer ${qlabel:-a question} on $task" --stage -- "$dir/$(basename "$doc")" >/dev/null ) ||
   { echo "answer: recorded, but the commit failed — commit it by hand" >&2; exit 4; }
-bash "$HERE/push-commit.sh" "$root"
-case $? in
+bash "$HERE/push-commit.sh" "$root"; rc=$?
+[ ! -f "$inst/instance.config.json" ] || ( cd "$inst" && bash "$HERE/write-snapshot.sh" --quiet >/dev/null )
+case $rc in
   0) echo "committed and pushed" ;;
   3) echo "committed; no upstream, so not pushed" ;;
   *) exit 4 ;;

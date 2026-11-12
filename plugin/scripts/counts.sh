@@ -7,7 +7,8 @@
 #                           unknown), CNT_QUEUE (on|off|unreadable) and
 #                           CNT_TASKS (`<word> TAB <json task path>` lines, or `?`) and
 #                           CNT_STATUS (the same, `in-progress`/`in-review`, or `?`)
-#   ab_write_counts <root>  writes them to AB_COUNTS (temp + mv), `?` as null, no free text
+#   ab_write_counts <root>  writes them to AB_COUNTS (temp + mv), `?` as null, no free text,
+#                           plus plugin_version (this plugin's VERSION; omitted unless x.y.z)
 # status-line.sh prints them and the pane reads AB_COUNTS. No `gh`, no network, no `jq`.
 # Reasoning: loopd-retirement-followups/task-004 (D4, D6).
 
@@ -18,7 +19,7 @@ ab_counts() {
   CNT_WORKING='?'; CNT_IDLE='?'; CNT_DEAD='?'; CNT_TICK='?'; CNT_TASKS='?'; CNT_STATUS='?'
   read -r CNT_EPOCH CNT_AT <<<"$(date -u '+%s %Y-%m-%dT%H:%M:%SZ')"
 
-  # Task frontmatter, directly — never SNAPSHOT.json, which only a tick writes. One awk pass,
+  # Task frontmatter, directly — never SNAPSHOT.json, which no redraw writes. One awk pass,
   # first frontmatter block of each task document.
   if [ -d "$root/projects" ]; then
     set -- "$root"/projects/*/tasks/*.md
@@ -112,7 +113,7 @@ _ab_jmap() {
 }
 
 ab_write_counts() {
-  local f="$1/$AB_COUNTS" tasks status p r w i d k n
+  local f="$1/$AB_COUNTS" tasks status p r w i d k n v="" ver=""
   [ -d "${f%/*}" ] || return 0
   # Until /loopd:init adds the ignore line, a broad `git add` would commit this per-clone file.
   # Read .gitignore rather than ask git: the status line never runs git.
@@ -120,8 +121,10 @@ ab_write_counts() {
   _ab_jnum p "$CNT_IN_PROGRESS"; _ab_jnum r "$CNT_IN_REVIEW"; _ab_jnum n "$CNT_NEED_YOU"
   _ab_jnum w "$CNT_WORKING"; _ab_jnum i "$CNT_IDLE"; _ab_jnum d "$CNT_DEAD"; _ab_jnum k "$CNT_TICK"
   _ab_jmap tasks "$CNT_TASKS"; _ab_jmap status "$CNT_STATUS"
-  printf '{"in_progress":%s,"in_review":%s,"sessions":{"working":%s,"idle":%s,"dead":%s,"tick_working":%s},"need_you":%s,"queue":"%s","task_sessions":%s,"task_status":%s,"written_at":"%s"}\n' \
-    "$p" "$r" "$w" "$i" "$d" "$k" "$n" "$CNT_QUEUE" "$tasks" "$status" "$CNT_AT" > "$f.$$" 2>/dev/null && mv -f "$f.$$" "$f" 2>/dev/null
+  { IFS= read -r v < "$(dirname "${BASH_SOURCE[0]:-$0}")/../VERSION"; } 2>/dev/null
+  [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && ver="\"plugin_version\":\"$v\","
+  printf '{"in_progress":%s,"in_review":%s,"sessions":{"working":%s,"idle":%s,"dead":%s,"tick_working":%s},"need_you":%s,"queue":"%s","task_sessions":%s,"task_status":%s,%s"written_at":"%s"}\n' \
+    "$p" "$r" "$w" "$i" "$d" "$k" "$n" "$CNT_QUEUE" "$tasks" "$status" "$ver" "$CNT_AT" > "$f.$$" 2>/dev/null && mv -f "$f.$$" "$f" 2>/dev/null
   rm -f "$f.$$" 2>/dev/null
   return 0
 }

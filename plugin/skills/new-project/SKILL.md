@@ -3,7 +3,7 @@ name: new-project
 disable-model-invocation: true
 description: Scaffold a new project under projects/<slug>/ — schema-valid files, registered in the bundle index/log and linked to its objective, with seed draft tasks. Supports build (code/PRs) and research (in-bundle deliverables) projects.
 argument-hint: <one-line project description> | <1-5> <text> | submit | cancel  [kind=build|research] [objective=<slug>] [repo=<name|owner/name>] [deliverables="a; b"] [autonomy=<mode>] [title="…"] [need="…"] [success_criteria="a; b"] [timebox=<N>d|<N>w] [--no-ask] [--no-commit]
-allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
+allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
 ---
 
 Scaffold a new **Project** in this bundle: the `projects/<slug>/` folder and its
@@ -490,6 +490,12 @@ never an option.
    does; an uncommitted verdict record doesn't survive. Without it, the next reviewer
    re-raises the same by-design findings and someone eventually "fixes" them — deleting the PM's refine step or filling empty
    `acceptance_criteria` with invented content.
+
+9. **Refresh the board's snapshot — last, on every run.** From the bundle root:
+   `bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet` — after step 7's push and
+   any step 8 commit, and under `--no-commit` too, so `/pane` shows the project without
+   waiting for a tick. It writes nothing where `SNAPSHOT.json` is absent (the board's off
+   switch). A non-zero exit never fails this command: relay its one line and carry on.
 
 ## Notes
 - This repo commits straight to `main` — that's intended (see `CLAUDE.md`); the

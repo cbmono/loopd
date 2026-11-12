@@ -81,7 +81,8 @@ paint() { printf '%s%s%s' "$1" "$2" "$C_OFF"; }
 UNKNOWN='?'
 
 # Every number comes from counts.sh, which also writes them to AB_COUNTS for the pane. Not
-# SNAPSHOT.json: its absence is the BOARD's off switch, and only a tick writes it.
+# SNAPSHOT.json: its absence is the BOARD's off switch, and no redraw writes it — a tick,
+# /loopd:board and the in-session writers do.
 # shellcheck source=counts.sh
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/counts.sh" || exit 0
 ab_counts "$root"
