@@ -5,7 +5,7 @@
 //   · usage  — what this session spent, written to the plugin store after every turn under
 //              `loopd.usage.<session id>`, and `loopd.usage.<session id>.ended` at session end.
 //              Core's plugin/scripts/session-usage.sh reads that record before the transcript.
-//   · pane   — `/pane`, a pane beside the transcript drawing this bundle's board from
+//   · pane   — `/loopd-pane`, a pane beside the transcript drawing this bundle's board from
 //              `.loopd/SNAPSHOT.json`, its numbers from the status line's `.loopd/counts.json`
 //              (operator mode: projects by folder slug, with Answer
 //              questions, Refresh and Close Pane), or — `paneMode:
@@ -149,7 +149,10 @@ function registerUsage(on: any) {
 // clean(), every number through toint(); a name may be cut to the pane's width, a number
 // never is (conventions 11d, 11e).
 const PANE = 'loopd-board'
-const COMMAND = 'pane'
+// The kit refuses a `:` in a registered name (letters, digits, _ or -), so not `loopd:pane`.
+const COMMAND = 'loopd-pane'
+// The bare name: an alias until 4.14.0 — delete ALIAS and everything naming it before then.
+const ALIAS = 'pane'
 const TITLE = 'loopd board'
 const SNAPSHOT = '.loopd/SNAPSHOT.json'
 // AB_COUNTS: the status line writes it on every redraw, so these numbers are the bar's.
@@ -230,7 +233,7 @@ type Counts = {
 const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, queue: '', tasks: null, status: null, written_at: '' }
 const TASK_KEY = /^projects\/([^/]+)\/tasks\/([^/]+)\.md$/
 
-// Module state. A reload starts it over, and the next poll or /pane fills it again.
+// Module state. A reload starts it over, and the next poll or /loopd-pane fills it again.
 let kind: Kind = 'unread'
 let board: Board | null = null
 let detail = ''          // the one line a non-ok kind shows
@@ -242,7 +245,7 @@ let answerQueued = false
 let note = ''            // the info line: a copy's result or a refused Answer; replaced by the next, cleared by a re-read
 let noteAt = NaN         // the clock when `note` was set; it is drawn for NOTE_MS after
 let shownAge = ''        // the age text last drawn; the poll redraws when it would change
-let open = false         // a /pane placed the pane and no ui.close has fired since
+let open = false         // a /loopd-pane placed the pane and no ui.close has fired since
 let brand = { version: '', org: '' }   // read on open and Refresh: neither changes between stamps
 
 // ---------------------------------------------------------------- untrusted input
@@ -717,7 +720,7 @@ function draw($: any, e: any, now: number): any {
       }),
       Button({
         key: 'close', ...label('✕ Close Pane', PLUM),
-        // The same path as `/pane close`. A $.ui.close from a press did not reach this module's
+        // The same path as `/loopd-pane close`. A $.ui.close from a press did not reach this module's
         // own ui.close hook in the kit (2.1.322), so the poll is stopped here as well.
         onPress: async () => { try { await $.ui.close({ id: PANE }) } catch { /* already gone */ } stopPoll() },
       }),
@@ -1240,13 +1243,19 @@ async function reread($: any, force: boolean): Promise<boolean> {
   const before = reads; await refresh($, force); return reads !== before
 }
 
-// session.start: `immediate` so /pane opens while a turn is streaming. A taken name throws
+// session.start: `immediate` so the pane opens while a turn is streaming. A taken name throws
 // and would skip the rest of the hook, so it is caught and said once, where someone can see it.
 async function paneStart($: any, e: any): Promise<void> {
-  try {
-    await $.command.register({ name: COMMAND, description: 'Draw this bundle\'s loopd board in a pane', immediate: true })
-  } catch (err: any) {
-    if (e && e.isInteractive === true) $.ui.log('/' + COMMAND + ' not registered: ' + clean(err && err.message ? err.message : String(err)))
+  const names: [string, string][] = [
+    [COMMAND, 'Draw this bundle\'s loopd board in a pane'],
+    [ALIAS, 'Alias of /' + COMMAND + ' until 4.14.0'],
+  ]
+  for (const [name, description] of names) {
+    try {
+      await $.command.register({ name, description, immediate: true })
+    } catch (err: any) {
+      if (e && e.isInteractive === true) $.ui.log('/' + name + ' not registered: ' + clean(err && err.message ? err.message : String(err)))
+    }
   }
 }
 // turn.complete: release a held answer whose own turn ended with its document unmoved.
@@ -1254,36 +1263,46 @@ async function paneTurn($: any, e: any): Promise<void> {
   try { await settle($, e) } catch { /* the next poll reads again */ }
 }
 
-function registerPane(on: any) {
-  on('command.run', { command: COMMAND }, async ($: any, e: any) => {
-    // A toggle. Closing goes through $.ui.close, so the ui.close hook below cancels the
-    // poll exactly as the pane's own × does.
-    const close = clean(e && e.args).toLowerCase() === 'close'
-    if (open || close) {
-      if (open) { try { await $.ui.close({ id: PANE }) } catch { /* already gone */ } }
-      return {}
-    }
-    await reread($, true)
-    let placed = false
-    try { const r = await $.ui.open({ id: PANE, title: TITLE }); placed = !!(r && r.isPlaced === true) } catch { placed = false }
-    open = placed
-    if (!timer) {
-      // The poll redraws when a file it reads moved, or when the age the header shows
-      // would change; it never runs or submits anything. It starts with the pane and ends
-      // with it (ui.close below).
-      try {
-        timer = $.clock.every(POLL_MS, async () => {
-          const moved = await reread($, false)
-          if (moved || (MODE === 'operator' && ageKey(await nowMs($)) !== shownAge)) {
-            try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
-          }
-        })
-      } catch { timer = null }
-    }
-    // Where no surface draws a pane (a narrow terminal, a `-p` run), one transcript line.
-    if (!placed) $.ui.log(MODE === 'simple' ? summarySimple() : summary())
+// The canonical command's hook, and the alias's.
+async function togglePane($: any, e: any): Promise<any> {
+  // A toggle. Closing goes through $.ui.close, so registerPane's ui.close hook cancels the
+  // poll exactly as the pane's own × does.
+  const close = clean(e && e.args).toLowerCase() === 'close'
+  if (open || close) {
+    if (open) { try { await $.ui.close({ id: PANE }) } catch { /* already gone */ } }
     return {}
-  }).catch(async (_$: any, e: any, next: any) => next(e))   // fail OPEN: a broken pane never eats the command
+  }
+  await reread($, true)
+  let placed = false
+  try { const r = await $.ui.open({ id: PANE, title: TITLE }); placed = !!(r && r.isPlaced === true) } catch { placed = false }
+  open = placed
+  if (!timer) {
+    // The poll redraws when a file it reads moved, or when the age the header shows
+    // would change; it never runs or submits anything. It starts with the pane and ends
+    // with it (registerPane's ui.close).
+    try {
+      timer = $.clock.every(POLL_MS, async () => {
+        const moved = await reread($, false)
+        if (moved || (MODE === 'operator' && ageKey(await nowMs($)) !== shownAge)) {
+          try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
+        }
+      })
+    } catch { timer = null }
+  }
+  // Where no surface draws a pane (a narrow terminal, a `-p` run), one transcript line.
+  if (!placed) $.ui.log(MODE === 'simple' ? summarySimple() : summary())
+  return {}
+}
+
+let aliasSaid = false
+
+function registerPane(on: any) {
+  on('command.run', { command: COMMAND }, togglePane)
+    .catch(async (_$: any, e: any, next: any) => next(e))   // fail OPEN: a broken pane never eats the command
+  on('command.run', { command: ALIAS }, async ($: any, e: any) => {
+    if (!aliasSaid) { aliasSaid = true; $.ui.log('/' + ALIAS + ' is now /' + COMMAND + ' (alias until 4.14.0)') }
+    return togglePane($, e)
+  }).catch(async (_$: any, e: any, next: any) => next(e))
 
   on('ui.close', { id: PANE }, async (_$: any, e: any, next: any) => {
     stopPoll()
@@ -1292,7 +1311,7 @@ function registerPane(on: any) {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($: any, e: any) => {
     if (kind === 'unread') {
-      // Drawn before /pane ran (a reload while the pane stayed up): read, then redraw.
+      // Drawn before the command ran (a reload while the pane stayed up): read, then redraw.
       reread($, true).then(() => $.ui.invalidate('ui.render'), () => $.ui.invalidate('ui.render'))
     }
     return MODE === 'simple' ? drawSimple($, e) : draw($, e, await nowMs($))

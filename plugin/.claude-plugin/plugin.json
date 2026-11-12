@@ -13,7 +13,7 @@
     "pane": {
       "type": "boolean",
       "title": "Pane mod",
-      "description": "Register /pane, which draws this bundle's board (or, in simple mode, an inbox of questions, stuck tasks and progress) in a pane beside the session. Off = the three core renderers are all there is.",
+      "description": "Register /loopd-pane, which draws this bundle's board (or, in simple mode, an inbox of questions, stuck tasks and progress) in a pane beside the session. Off = the three core renderers are all there is.",
       "default": true
     },
     "paneMode": {

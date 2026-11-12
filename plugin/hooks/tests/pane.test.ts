@@ -86,6 +86,7 @@ type World = {
   opened: number
   closed: number
   registered: string[]
+  described?: Record<string, string>
   onRun?: (e: any) => void
   failReads?: Set<string>
   root?: string
@@ -97,7 +98,7 @@ type World = {
 // `hold` makes the dispatch run stay in flight until the test lets it go (a mock-clock sleep).
 function stubs(on: any, w: World, placed = true, hold?: () => Promise<void>) {
   on('session.start', () => ({ cwd: CWD }))
-  on('command.register', (_$: any, e: any) => { w.registered.push(e.name); return { value: undefined } })
+  on('command.register', (_$: any, e: any) => { w.registered.push(e.name); (w.described ??= {})[e.name] = e.description; return { value: undefined } })
   on('session.cwd', () => ({ value: w.cwd ?? CWD }))
   on('session.root', () => ({ value: w.root ?? CWD }))
   on('ui.log', (_$: any, e: any) => { w.logged.push(e.text); return { value: undefined } })
@@ -159,7 +160,7 @@ function world(snapshot: unknown | null, withConfig = true, counts: unknown = co
 
 async function open($: any) {
   await $.session.start({ surface: 'terminal', isInteractive: true, cwd: CWD })
-  const out = await $.command.run({ command: 'pane', args: '' })
+  const out = await $.command.run({ command: 'loopd-pane', args: '' })
   return out
 }
 
@@ -183,7 +184,7 @@ function header(w: number, brand = 'loopd v4.11.0 · example · org: fixture-org
   return [LOGO[0], LOGO[1] + ' ' + (cols(brand) <= room ? brand : Array.from(brand).slice(0, room - 1).join('') + '…'), LOGO[2] + ' ' + '─'.repeat(room)]
 }
 
-test('/pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRESS, IN REVIEW, NEEDS YOU, buttons', ONLY, async ($, on) => {
+test('/loopd-pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRESS, IN REVIEW, NEEDS YOU, buttons', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w)
   mock.clock(on, { now: GENERATED + 3 * 60000 })
@@ -445,33 +446,50 @@ test('PADDING: every row, the buttons and the info line start at column 2 and en
   }
 })
 
-test('/pane toggles: open, /pane closes through $.ui.close and stops the poll, /pane close on a closed pane does nothing', ONLY, async ($, on) => {
+test('/loopd-pane toggles: open, /loopd-pane closes through $.ui.close and stops the poll, /loopd-pane close on a closed pane does nothing', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w)
   const clock = mock.clock(on)
   await open($)
   expect([w.opened, w.closed]).toEqual([1, 0])
-  await $.command.run({ command: 'pane', args: '' })
+  await $.command.run({ command: 'loopd-pane', args: '' })
   expect([w.opened, w.closed]).toEqual([1, 1])
   // The ui.close hook ran, so the poll is gone: a moved snapshot is not read.
   w.files.set(SNAPSHOT, { text: JSON.stringify(SNAP), mtimeMs: 2000 })
   await clock.advance(5000)
   expect(w.reads).toBe(4)   // the open's four reads: the snapshot, counts.json, the config, the stamped VERSION
-  await $.command.run({ command: 'pane', args: 'close' })
+  await $.command.run({ command: 'loopd-pane', args: 'close' })
   expect([w.opened, w.closed]).toEqual([1, 1])
-  await $.command.run({ command: 'pane', args: '' })
+  await $.command.run({ command: 'loopd-pane', args: '' })
   expect([w.opened, w.closed]).toEqual([2, 1])
-  await $.command.run({ command: 'pane', args: ' close ' })
+  await $.command.run({ command: 'loopd-pane', args: ' close ' })
   expect([w.opened, w.closed]).toEqual([2, 2])
   expect(w.logged).toEqual([])
 })
 
-test('/pane after an unplaced open opens again rather than closing', ONLY, async ($, on) => {
+test('/pane is an alias until 4.14.0: its help names /loopd-pane, it opens and closes the same pane, and says so once', ONLY, async ($, on) => {
+  const w = world(SNAP)
+  stubs(on, w)
+  mock.clock(on)
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: CWD })
+  expect(w.registered).toEqual(['loopd-pane', 'pane'])
+  expect(w.described).toEqual({ 'loopd-pane': 'Draw this bundle\'s loopd board in a pane', pane: 'Alias of /loopd-pane until 4.14.0' })
+  await $.command.run({ command: 'pane', args: '' })
+  expect([w.opened, w.closed]).toEqual([1, 0])
+  await $.command.run({ command: 'loopd-pane', args: '' })
+  expect([w.opened, w.closed]).toEqual([1, 1])
+  await $.command.run({ command: 'pane', args: '' })
+  await $.command.run({ command: 'pane', args: 'close' })
+  expect([w.opened, w.closed]).toEqual([2, 2])
+  expect(w.logged).toEqual(['/pane is now /loopd-pane (alias until 4.14.0)'])
+})
+
+test('/loopd-pane after an unplaced open opens again rather than closing', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w, false)
   mock.clock(on)
   await open($)
-  await $.command.run({ command: 'pane', args: '' })
+  await $.command.run({ command: 'loopd-pane', args: '' })
   expect([w.opened, w.closed]).toEqual([2, 0])
 })
 
@@ -629,7 +647,7 @@ test('a refused Answer run is drawn in the footer, not swallowed', ONLY, async (
   await ui.unmount()
 })
 
-test('Close pane closes through $.ui.close, the way /pane close does, and the poll stops', ONLY, async ($, on) => {
+test('Close pane closes through $.ui.close, the way /loopd-pane close does, and the poll stops', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w)
   const clock = mock.clock(on)
@@ -641,8 +659,8 @@ test('Close pane closes through $.ui.close, the way /pane close does, and the po
   w.files.set(SNAPSHOT, { text: JSON.stringify(SNAP), mtimeMs: 2000 })
   await clock.advance(5000)
   expect(w.reads).toBe(4)   // the open's four reads: the snapshot, counts.json, the config, the stamped VERSION
-  // Closed, so the next /pane opens again rather than closing.
-  await $.command.run({ command: 'pane', args: '' })
+  // Closed, so the next /loopd-pane opens again rather than closing.
+  await $.command.run({ command: 'loopd-pane', args: '' })
   expect([w.opened, w.closed]).toEqual([2, 1])
 })
 
@@ -1002,7 +1020,7 @@ test('a non-interactive session registers the command and says nothing', ONLY, a
   stubs(on, w)
   mock.clock(on)
   await $.session.start({ surface: 'terminal', isInteractive: false, cwd: CWD })
-  expect(w.registered).toEqual(['pane'])
+  expect(w.registered).toEqual(['loopd-pane', 'pane'])
   expect(w.logged).toEqual([])
   expect(w.reads).toBe(0)
   expect(w.submitted).toEqual([])
