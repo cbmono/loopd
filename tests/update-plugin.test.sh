@@ -63,16 +63,19 @@ U_OLD="$PN@$PMK|user|1.0.0|$CACHE/$PN/1.0.0|"
 U_NEW="$PN@$PMK|user|1.0.1|$CACHE/$PN/1.0.1|"
 Y="$PN-yolo@$PMK|user|4.4.0|$CACHE/$PN-yolo/4.4.0|"
 P_HERE="$PN@$PMK|project|1.0.0|$CACHE/$PN/1.0.0|$BUNDLE"
+P_WT1="$PN@$PMK|project|1.0.0|$CACHE/$PN/1.0.0|$TMP/wt1"
+P_WT2="$PN-yolo@$PMK|project|4.4.0|$CACHE/$PN-yolo/4.4.0|$TMP/wt2"
+L_WT3="$PN@$PMK|local|1.0.0|$CACHE/$PN/1.0.0|$TMP/wt3"
 OTHER="lsp@elsewhere|user|1.0.0|$TMP/elsewhere|"
 
 run() { # [dir] — runs the script there; OUT, RC, LOG
   : > "$CALLS"
   OUT="$(cd "${1:-$BUNDLE}" && PATH="$BIN:$PATH" CLAUDE_CONFIG_DIR="$CFG" \
-         CLAUDE_PLUGIN_ROOT="$CACHE/$PN/1.0.0" bash "$SCRIPT" 2>&1)"; RC=$?
+         CLAUDE_PLUGIN_ROOT="$CACHE/$PN/1.0.0" bash "$SCRIPT" ${ARGS:-} 2>&1)"; RC=$?
   LOG="$(cat "$CALLS")"
 }
-last2() { printf '%s\n' "$OUT" | tail -2 | tr '\n' '|'; }
-RELOAD='Now run /reload-plugins|If a command is missing, restart Claude Code|'
+last1() { printf '%s\n' "$OUT" | tail -1; }
+RELOAD='Now run /reload-plugins'
 
 echo "== update available =="
 registry "$REG" "$U_OLD" "$Y" "$P_HERE" "$OTHER"; registry "$AFTER" "$U_NEW" "$Y" "$P_HERE" "$OTHER"
@@ -92,7 +95,28 @@ ok "init runs from the NEW user-scope version"  "$(grep '^init ' <<<"$LOG")" "in
 ok "…never from CLAUDE_PLUGIN_ROOT"             "$(has "$CACHE/$PN/1.0.0/scripts" "$LOG")" no
 ok "…and hands init the NEW root as CLAUDE_PLUGIN_ROOT" "$(grep '^root ' <<<"$LOG")" "root $CACHE/$PN/1.0.1"
 ok "…with no flag"                              "$(grep -c -- '--spawn-grant\|--normalise-config\|--owner\|--email\|--repos-root' <<<"$LOG")" 0
-ok "the last two lines are reload, then restart" "$(last2)" "$RELOAD"
+ok "the last line is the reload, no restart line" "$(last1)" "$RELOAD"
+ok "no summary line with no install elsewhere"  "$(has 'installs elsewhere' "$OUT")" no
+
+echo "== installs elsewhere: one summary line, --verbose lists them =="
+registry "$REG" "$U_OLD" "$P_HERE" "$P_WT1" "$P_WT2" "$L_WT3" "$Y"
+registry "$AFTER" "$U_NEW" "$P_HERE" "$P_WT1" "$P_WT2" "$L_WT3" "$Y"
+run
+ok "exit 0"                                     "$RC" 0
+ok "one summary line for the three elsewhere"   "$(grep -c 'installs elsewhere' <<<"$OUT")" 1
+ok "…naming the count and both scopes"          "$(has '3 project/local-scope installs elsewhere — not touched (--verbose lists them)' "$OUT")" yes
+ok "only this bundle's install is listed"       "$(grep -c -- '— listed, not updated' <<<"$OUT")" 1
+ok "…and still warned about"                    "$(has "this bundle's project-scope $PN is 1.0.0, older than the user-scope 1.0.1" "$OUT")" yes
+ok "no elsewhere path is printed"               "$(has "$TMP/wt" "$OUT")" no
+ARGS=--verbose run
+ok "--verbose: exit 0"                          "$RC" 0
+ok "--verbose lists all four"                   "$(grep -c -- '— listed, not updated' <<<"$OUT")" 4
+ok "…the local one with its dir"                "$(has "$PN 1.0.0 (local scope, $TMP/wt3) — listed, not updated" "$OUT")" yes
+ok "…and prints no summary"                     "$(has 'installs elsewhere' "$OUT")" no
+ok "…warns only for this bundle"                "$(grep -c 'warn' <<<"$OUT")" 1
+ARGS=--bogus run
+ok "an unknown argument: exit 2"                "$RC" 2
+ok "…and nothing ran"                           "$LOG" ""
 
 echo "== already up to date =="
 registry "$REG" "$U_OLD" "$Y"; rm -f "$AFTER"
@@ -101,7 +125,7 @@ ok "exit 0"                                     "$RC" 0
 ok "core up to date"                            "$(has "$PN up to date" "$OUT")" yes
 ok "init from the version installed"            "$(grep '^init ' <<<"$LOG")" "init $CACHE/$PN/1.0.0/scripts/init-bundle.sh $BUNDLE"
 ok "no warning without a project install"       "$(has 'warn' "$OUT")" no
-ok "reload lines last"                          "$(last2)" "$RELOAD"
+ok "reload line last"                           "$(last1)" "$RELOAD"
 
 echo "== the marketplace update fails =="
 MKT_FAIL=1 run
@@ -117,7 +141,7 @@ ok "exit 1"                                     "$RC" 1
 ok "the other plugin still updated"             "$(has "$PN 1.0.0 → 1.0.1" "$OUT")" yes
 ok "the failure is named"                       "$(has "$PN-yolo update failed: update of $PN-yolo@$PMK broke" "$OUT")" yes
 ok "init still ran, from the new version"       "$(grep '^init ' <<<"$LOG")" "init $CACHE/$PN/1.0.1/scripts/init-bundle.sh $BUNDLE"
-ok "reload lines last"                          "$(last2)" "$RELOAD"
+ok "reload line last"                           "$(last1)" "$RELOAD"
 
 echo "== outside a bundle =="
 registry "$REG" "$U_OLD"; rm -f "$AFTER"
@@ -125,13 +149,13 @@ run "$BUNDLE/sub"
 ok "exit 0"                                     "$RC" 0
 ok "a subdirectory is outside: no init"         "$(grep -c '^init ' <<<"$LOG")" 0
 ok "one skip line"                              "$(grep -c '^init: skipped' <<<"$OUT")" 1
-ok "reload lines last"                          "$(last2)" "$RELOAD"
+ok "reload line last"                           "$(last1)" "$RELOAD"
 
 echo "== no usable registry (D5) =="
 rm -f "$REG"; run
 ok "missing registry: exit 2"                   "$RC" 2
 ok "…no init"                                   "$(grep -c '^init ' <<<"$LOG")" 0
-ok "…reload lines still last"                   "$(last2)" "$RELOAD"
+ok "…reload line still last"                    "$(last1)" "$RELOAD"
 echo 'not json at all' > "$REG"; run
 ok "unparseable registry: exit 2"               "$RC" 2
 ok "…no init"                                   "$(grep -c '^init ' <<<"$LOG")" 0
@@ -144,7 +168,7 @@ echo "== init's own exit propagates =="
 registry "$REG" "$U_OLD"
 INIT_RC=3 run
 ok "exit 3"                                     "$RC" 3
-ok "reload lines last"                          "$(last2)" "$RELOAD"
+ok "reload line last"                           "$(last1)" "$RELOAD"
 
 echo
 echo "update-plugin.test: $pass passed, $fail failed"
