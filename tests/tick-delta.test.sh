@@ -100,14 +100,21 @@ jq -r "$filter" "$GHDIR/$n"
 EOS
 chmod +x "$BIN/gh"
 NOREV='{"totalCount":0,"nodes":[]}'; NOCOM='{"nodes":[]}'
-prj() { # <n> <state> <head> <decision|NONE> [reviews-json] [rollup-nodes-json] [comments-json] [mergeStateStatus]
+prj() { # <n> <state> <head> <decision|NONE> [reviews-json] [rollup-nodes-json] [comments-json] [mergeStateStatus] [reviewThreads-json]
   local dec=null roll=null; [ "$4" = NONE ] || dec="\"$4\""
   [ -n "${6:-}" ] && roll="{\"contexts\":{\"totalCount\":$(jq length <<<"$6"),\"nodes\":$6}}"
-  printf '{"data":{"repository":{"pullRequest":{"state":"%s","headRefOid":"%s","reviewDecision":%s,"mergeable":"MERGEABLE","mergeStateStatus":"%s","reviews":%s,"comments":%s,"commits":{"nodes":[{"commit":{"statusCheckRollup":%s}}]}}}}}\n' \
-    "$2" "$3" "$dec" "${8:-CLEAN}" "${5:-$NOREV}" "${7:-$NOCOM}" "$roll" > "$GHDIR/$1"
+  printf '{"data":{"repository":{"pullRequest":{"state":"%s","headRefOid":"%s","reviewDecision":%s,"mergeable":"MERGEABLE","mergeStateStatus":"%s","reviewThreads":%s,"reviews":%s,"comments":%s,"commits":{"nodes":[{"commit":{"statusCheckRollup":%s}}]}}}}}\n' \
+    "$2" "$3" "$dec" "${8:-CLEAN}" "${9:-$NOREV}" "${5:-$NOREV}" "${7:-$NOCOM}" "$roll" > "$GHDIR/$1"
 }
 prj 7 OPEN abc1234 NONE
-WITH() { PATH="$BIN:$PATH" GHDIR="$GHDIR" "$SH" "$@" --instance "$INST"; }
+# A bare `record` here stands for a whole tick: its first read (a digest), then the record.
+# RAW runs exactly the one command, for the fixtures about what lands between the two.
+TD() {
+  [ "$*" = record ] && { rm -rf "$INST/$AB_TICK_START"; "$SH" digest --instance "$INST" >/dev/null 2>&1; }
+  "$SH" "$@" --instance "$INST"
+}
+WITH() { PATH="$BIN:$PATH" GHDIR="$GHDIR" TD "$@"; }
+RAW() { PATH="$BIN:$PATH" GHDIR="$GHDIR" "$SH" "$@" --instance "$INST"; }
 
 run() { # <check|record> -> "rc:<n> first-line"
   local out rc
@@ -212,7 +219,7 @@ ok "a new issue comment, nothing else moved, is a DELTA" "$(run check)" "rc:1 DE
 prj 7 OPEN abc1234 NONE "" "" "$(com IC_one coderabbitai)"
 ok "…a placeholder created then deleted leaves it IDLE" "$(run check)" "rc:0 IDLE: finger"
 prj 7 OPEN abc1234 NONE "" "" "$(com IC_tick cbmono)"; WITH record
-ok "a comment posted BEFORE record is not a DELTA next check" "$(run check)" "rc:0 IDLE: finger"
+ok "a comment posted BEFORE the tick's read is not a DELTA next check" "$(run check)" "rc:0 IDLE: finger"
 prj 7 OPEN abc1234 NONE "" "" '{"nodes":[{"author":{"login":"x"}}]}'
 ok "a comment with no id makes check exit 2"    "$(run check)" "rc:2 CANNOT ANSWE"
 prj 7 OPEN abc1234 NONE; WITH record
@@ -237,7 +244,7 @@ printf 'session: %s\n' "$S1" >> "$INST/projects/proj-a/tasks/t2.md"
 printf 'session: %s\n' "$S0" >> "$INST/projects/proj-a/tasks/t1.md"
 printf -- '---\ntype: Task\nkind: build\nstatus: blocked\nsession: "%s"\r\npr: []\n---\n' "$S2" > "$INST/projects/proj-a/tasks/t4.md"
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm sessions
-CLW() { PATH="$BIN:$PATH" GHDIR="$GHDIR" CLDIR="$CLDIR" "$SH" "$@" --instance "$INST"; }
+CLW() { PATH="$BIN:$PATH" GHDIR="$GHDIR" CLDIR="$CLDIR" TD "$@"; }
 crun() { local out rc; out="$(CLW "$1" 2>&1)"; rc=$?; printf 'rc:%s %s' "$rc" "$(head -1 <<<"$out" | cut -c1-12)"; }
 CLW record
 ok "a working session on in-review and blocked tasks is recorded" "$(grep -cx "session $S1 working\|session $S2 working" "$INST/$AB_STATE_DIR")" 2
@@ -270,9 +277,10 @@ ok "a claude agents listing past its bound is exit 2" \
    "$(PATH="$BIN:$PATH" CLDIR="$CLDIR" bash "$INST/scripts/agent-sessions.sh" states --timeout 1 "$S1" >/dev/null 2>&1; echo $?)" 2
 rm -f "$CLDIR/hang"
 NOCL="$TMP/nocl"; mkdir -p "$NOCL"
-for t in bash sh git sed grep sort date mv rm diff head cut env tr awk cat dirname basename jq wc gh mktemp; do
+for t in bash sh git sed grep sort date mv rm diff head cut env tr awk cat dirname basename jq wc gh mktemp mkdir; do
   tp="$(PATH="$BIN:$PATH" command -v "$t" 2>/dev/null)" && ln -s "$tp" "$NOCL/$t"
 done
+rm -rf "$INST/$AB_TICK_START"; PATH="$NOCL" GHDIR="$GHDIR" "$SH" check --instance "$INST" >/dev/null 2>&1
 PATH="$NOCL" GHDIR="$GHDIR" "$SH" record --instance "$INST"
 ok "no claude on PATH records one 'sessions unavailable' line" "$(grep -cx 'sessions unavailable' "$INST/$AB_STATE_DIR")" 1
 ok "…and keeps the fast path: check is IDLE" \
@@ -281,20 +289,26 @@ GIT -C "$INST" checkout -q HEAD~1 -- projects; rm -f "$INST/projects/proj-a/task
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm unsessions
 WITH record
 
-echo "== an unreadable new value is no answer: exit 2, and record refuses =="
-before="$(cat "$INST/$AB_STATE_DIR")"
+echo "== an unreadable new value is no answer: exit 2, and the record is never a match =="
+T100="$(jq -nc '{totalCount: 100, nodes: [range(100) | {isResolved: true}]}')"
+prj 7 OPEN abc1234 NONE "" "" "" "" "$T100"
+ok "100 threads, all fetched, are readable (control)" "$(WITH digest | grep -c '^pr .* threads=0 ')" 1
 for bad in 'reviews missing|null|'"$DONE_ST" \
            'a counted review with no node|{"totalCount":1,"nodes":[]}|'"$DONE_ST" \
            'a review with no state|{"totalCount":1,"nodes":[{"id":"PRR_one"}]}|'"$DONE_ST" \
            'a status context with no state|'"$REV1"'|[{"__typename":"StatusContext","context":"CodeRabbit","description":"x"}]' \
-           'a head with no commit object|'"$REV1"'|null'; do
-  IFS='|' read -r what revs stat <<<"$bad"
-  prj 7 OPEN abc1234 NONE "$revs" "$stat"
+           'a head with no commit object|'"$REV1"'|null' \
+           'reviewThreads missing|'"$REV1"'|'"$DONE_ST"'|null' \
+           'a thread with no isResolved|'"$REV1"'|'"$DONE_ST"'|{"totalCount":1,"nodes":[{}]}' \
+           '101 threads, 100 fetched (D2)|'"$REV1"'|'"$DONE_ST"'|'"$(jq -c '.totalCount = 101' <<<"$T100")"; do
+  IFS='|' read -r what revs stat thr <<<"$bad"
+  prj 7 OPEN abc1234 NONE "$revs" "$stat" "" "" "$thr"
   [ "$what" = 'a head with no commit object' ] && sed -i.bak 's/{"commit":{"statusCheckRollup":[^}]*}}}*/{}/' "$GHDIR/7"
   ok "$what makes check exit 2"                 "$(run check)" "rc:2 CANNOT ANSWE"
-  WITH record 2>/dev/null; ok "…and record refuses, record untouched" "$?:$([ "$(cat "$INST/$AB_STATE_DIR")" = "$before" ] && echo same)" "2:same"
+  WITH record 2>/dev/null; ok "…and a tick that never read it records it unread" "$?:$(grep -c '^pr .*/pull/7 unread$' "$INST/$AB_STATE_DIR")" "0:1"
 done
 prj 7 OPEN abc1234 NONE
+ok "…which no readable answer matches: DELTA"   "$(run check)" "rc:1 DELTA: the f"
 WITH record
 
 touch "$INST/$AB_AWAITING"
@@ -315,14 +329,42 @@ bash "$(dirname "$SRC")/init-bundle.sh" "$R" >/dev/null 2>&1
 ok "rm + a stamp that recreates AWAITING.md is NOT IDLE" \
    "$([ -f "$R/$AB_AWAITING" ] && echo recreated) $(INST="$R" run check)" "recreated rc:2 CANNOT ANSWE"
 
-echo "== a poisoned fingerprint is no answer at all — and record refuses to write it =="
+echo "== a poisoned fingerprint is no answer at all — and its record is never a match =="
 touch "$GHDIR/7.fail"
 ok "an unreadable PR makes check exit 2"         "$(run check)" "rc:2 CANNOT ANSWE"
-before="$(cat "$INST/$AB_STATE_DIR")"
-WITH record 2>/dev/null; rc=$?
-ok "…and record refuses (exit 2)"               "$rc" 2
-ok "…leaving the previous record untouched"     "$([ "$(cat "$INST/$AB_STATE_DIR")" = "$before" ] && echo yes || echo no)" yes
+WITH record 2>/dev/null
+ok "…and the tick that could not read it records it unread" "$(grep -c '^pr .*/pull/7 unread$' "$INST/$AB_STATE_DIR")" 1
 rm -f "$GHDIR/7.fail"
+ok "…so the next check is a DELTA, never IDLE"  "$(run check)" "rc:1 DELTA: the f"
+WITH record
+
+echo "== a thread resolved with no new head, and what lands between a tick's read and its record =="
+THR1='{"totalCount":1,"nodes":[{"isResolved":false}]}'; THR0='{"totalCount":1,"nodes":[{"isResolved":true}]}'
+prj 7 OPEN abc1234 NONE "" "" "" "" "$THR1"; WITH record
+ok "a recorded open thread is IDLE"             "$(run check)" "rc:0 IDLE: finger"
+ok "…recorded as a count"                       "$(grep -c '^pr .* OPEN abc1234 NONE merge=MERGEABLE/CLEAN threads=1 ' "$INST/$AB_STATE_DIR")" 1
+prj 7 OPEN abc1234 NONE "" "" "" "" "$THR0"
+ok "the thread resolved, same head and decision, is a DELTA" "$(run check)" "rc:1 DELTA: the f"
+ok "…naming the count that moved"               "$(WITH check | grep -c '^  now: *pr .* threads=0 ')" 1
+WITH record; ok "…healed by the next tick's record" "$(run check)" "rc:0 IDLE: finger"
+
+prj 7 OPEN abc1234 NONE "" "" "" "" "$THR1"; WITH record
+RAW check >/dev/null
+prj 7 OPEN abc1234 NONE "" "" "" "" "$THR0"
+: > "$GHDIR/calls"; RAW record
+ok "record makes no gh call"                    "$(wc -l < "$GHDIR/calls" | tr -d ' ')" 0
+ok "…and baselines what the tick read, not the host now" "$(grep -c '^pr .* threads=1 ' "$INST/$AB_STATE_DIR")" 1
+ok "a thread resolved after check, before record, is the next DELTA" "$(run check)" "rc:1 DELTA: the f"
+RAW record
+ok "…and that tick's record heals it: IDLE, not DELTA forever" "$(run check)" "rc:0 IDLE: finger"
+prj 7 OPEN abc1234 NONE "" "" "" "" "$THR1"
+RAW digest >/dev/null; RAW record
+ok "a later read in one tick never replaces its first" "$(grep -c '^pr .* threads=0 ' "$INST/$AB_STATE_DIR")" 1
+prj 7 OPEN abc1234 NONE; WITH record
+ok "…and a record with no read of its own is unread, never a host read" \
+   "$(: > "$GHDIR/calls"; RAW record; grep -c '^pr .*/pull/7 unread$' "$INST/$AB_STATE_DIR"):$(wc -l < "$GHDIR/calls" | tr -d ' ')" "1:0"
+ok "the start-of-tick read ignores itself"      "$(cat "$INST/$AB_TICK_START/.gitignore")" '*'
+WITH record
 
 # HERMETIC: a bin dir holding every tool the script needs and NOTHING else — a bare
 # system PATH could still carry a real gh (and would let this test touch the network).

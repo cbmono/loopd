@@ -8,7 +8,8 @@
 # Exit: 0 clear · 1 hold (names the group and run) · 2 unknown (names the reason) · 3 with --pr,
 # unknown for the MQ_BOUND-th time at this head: the merge is the human's · 4 usage.
 # With --pr, 1-3 keep a mark under AB_MERGE_HOLDS (tick-delta.sh reports 1 and 2 as a DELTA); 0
-# drops it. Why: AUTONOMY.md → "Merge under `yolo`", precondition 5.
+# drops it. The mark is `head n status repo pr`, tab-separated, plus the reason on 2 and 3.
+# Why: AUTONOMY.md → "Merge under `yolo`", precondition 5.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 4
 
@@ -42,7 +43,7 @@ trap 'rm -rf "$TMP"' EXIT
 US=$'\037'; UNK=$'\001'
 
 # Keeps the D2 count per PR and head; a new head starts again at 0.
-finish() { # <exit> <merge-row token>
+finish() { # <exit> <merge-row token> [<reason>]
   local rc="$1" dir m h="" n=0 st=""
   if [ -n "$pr" ]; then
     dir="$inst/$AB_MERGE_HOLDS"; m="$dir/$(printf '%s' "$repo" | tr '/' '_')_$pr"
@@ -58,14 +59,19 @@ finish() { # <exit> <merge-row token>
         else st=unknown; fi
       else st=hold; fi
       mkdir -p "$dir" && { [ -e "$dir/.gitignore" ] || printf '*\n' > "$dir/.gitignore"; } \
-        && printf '%s\t%s\t%s\t%s\t%s\n' "$head" "$n" "$st" "$repo" "$pr" > "$m" \
+        && printf '%s\t%s\t%s\t%s\t%s%s\n' "$head" "$n" "$st" "$repo" "$pr" "${3:+$'\t'$3}" > "$m" \
         || { echo "unknown: cannot write $m"; rc=2; }
     fi
   fi
   [ -n "${2:-}" ] && echo "merge-row: $2"
   exit "$rc"
 }
-unknown() { echo "unknown: $1"; finish 2 "##mq2 $1"; }
+# The reason embeds workflow text the PR author controls, and it reaches the mark, AWAITING.md
+# and the tick's close line: one line, no control characters, 200 characters.
+unknown() {
+  local r; r="$(printf '%s' "$1" | LC_ALL=C tr '\t\n' '  ' | LC_ALL=C tr -d '[:cntrl:]')"; r="${r:0:200}"
+  echo "unknown: $r"; finish 2 "##mq2 $r" "$r"
+}
 
 # One `path<TAB>value` per scalar of a block-style YAML file; a list item is `path[]`. What this
 # cannot read (a block scalar, a flow mapping, an unclosed `[` or quote, an anchor, alias or tag)
