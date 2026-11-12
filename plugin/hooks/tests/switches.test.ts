@@ -35,12 +35,12 @@ async function session($: any) {
   await $.turn.complete({ turnId: 't1', answer: 'ok', durationMs: 10, isAborted: false, usage: { input_tokens: 1, output_tokens: 1 }, reason: 'answer' })
 }
 
-test('with no option stored, all three mods are on: usage logs and records, pane registers /pane, signal records the PM', async ($, on) => {
+test('with no option stored, all three mods are on: usage logs and records, pane registers /loopd-pane and /pane, signal records the PM', async ($, on) => {
   const w = world()
   stubs(on, w)
   await session($)
   expect(w.logged).toEqual(['recording this session\'s usage in the plugin store as loopd.usage.<session id>'])
-  expect(w.registered).toEqual(['pane'])
+  expect(w.registered).toEqual(['loopd-pane', 'pane'])
   expect([...w.store.keys()].sort()).toEqual(['loopd.pm.' + BUNDLE, 'loopd.usage.' + SID])
   expect((w.store.get('loopd.usage.' + SID) as any).turns).toBe(1)
   expect((w.store.get('loopd.pm.' + BUNDLE) as any).sessionId).toBe(SID)
@@ -51,11 +51,11 @@ test('usage off: no line, no usage record; the other two still run', { options: 
   stubs(on, w)
   await session($)
   expect(w.logged).toEqual([])
-  expect(w.registered).toEqual(['pane'])
+  expect(w.registered).toEqual(['loopd-pane', 'pane'])
   expect([...w.store.keys()]).toEqual(['loopd.pm.' + BUNDLE])
 })
 
-test('pane off: /pane is never registered; the other two still run', { options: { pane: false } }, async ($, on) => {
+test('pane off: neither /loopd-pane nor /pane is registered; the other two still run', { options: { pane: false } }, async ($, on) => {
   const w = world()
   stubs(on, w)
   await session($)
@@ -68,7 +68,7 @@ test('signal off: no PM record; the other two still run', { options: { signal: f
   const w = world()
   stubs(on, w)
   await session($)
-  expect(w.registered).toEqual(['pane'])
+  expect(w.registered).toEqual(['loopd-pane', 'pane'])
   expect([...w.store.keys()]).toEqual(['loopd.usage.' + SID])
 })
 
