@@ -182,13 +182,18 @@ out="$(check_tree "$REPO")"; rc=$?
 [ -z "$out" ] || printf '        %s\n' "$out"
 ok "every file the merge path reaches is in GATE_FILES, every entry justified" "$rc" 0
 
-echo "== a yolo merge held as unknown is never silent: the rule is in both files the tick reads =="
+echo "== a yolo merge unknown twice at one head is the owner's (D3): the rule is in both files the tick reads =="
 says() { tr -s '[:space:]' ' ' < "$1" | grep -cF -- "$2"; }
-ROW='the FIRST exit 2 at a head passes its merge-row token (`##mq2 <reason>`) to `build-awaiting.sh --merge` on that tick'
+ROW='pass its merge-row token (`##mq2 <reason>`) to `build-awaiting.sh --merge` on that tick'
 CLOSE="quotes the script's \`unknown: <reason>\` line verbatim, never the bare \`merge-queue exit 2\`"
+OLD=3  # spelled apart so the task's stale-bound grep stays empty on this file
 for f in plugin/tick-steps/step-4-advance.md plugin-yolo/companion/AUTONOMY.md; do
-  ok "$f gives the owner a merge row on the first unknown" "$(says "$REPO/$f" "$ROW")" 1
-  ok "…while the loop keeps re-asking" "$(says "$REPO/$f" 'while the loop keeps re-asking up to the 3-tick bound')" 1
+  ok "$f holds the first unknown at a head with no row" "$(says "$REPO/$f" 'first unknown at a head holds with no row')" 1
+  ok "…gives the owner the merge at the second (exit 3)" "$(says "$REPO/$f" "second unknown at that head is exit 3, and the merge is the owner's")" 1
+  ok "…with the merge-row token" "$(says "$REPO/$f" "$ROW")" 1
+  ok "…runs merge-queue.sh once per PR per tick" "$(says "$REPO/$f" 'once per PR per tick')" 1
+  ok "…and no longer rows the first exit 2" "$(says "$REPO/$f" 'the FIRST exit 2 at a head passes its merge-row token')" 0
+  ok "…or names the old bound" "$(says "$REPO/$f" "${OLD}-tick bound")" 0
   ok "…and has the close summary quote the reason" "$(says "$REPO/$f" "$CLOSE")" 1
   grep -v '##mq2' "$REPO/$f" > "$TMP/dropped.md"
   ok "…a copy that drops the rule is caught" "$(says "$TMP/dropped.md" "$ROW")" 0

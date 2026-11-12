@@ -6,14 +6,14 @@
 #   Usage: merge-queue.sh <owner>/<repo> <branch> [--pr <n> --head <sha>] [--instance <bundle>]
 #
 # Exit: 0 clear · 1 hold (names the group and run) · 2 unknown (names the reason) · 3 with --pr,
-# unknown for the MQ_BOUND-th time at this head: the merge is the human's · 4 usage.
+# the 2nd unknown at this head (MQ_BOUND, 2 unknowns per head, D3): the merge is the human's · 4 usage.
 # With --pr, 1-3 keep a mark under AB_MERGE_HOLDS (tick-delta.sh reports 1 and 2 as a DELTA); 0
 # drops it. The mark is `head n status repo pr`, tab-separated, plus the reason on 2 and 3.
 # Why: AUTONOMY.md → "Merge under `yolo`", precondition 5.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 4
 
-MQ_BOUND=3
+MQ_BOUND=2
 usage() { sed -n '6p' "$0" | sed 's/^# *//' >&2; exit 4; }
 
 repo="${1:-}"; branch="${2:-}"; [ $# -ge 2 ] && shift 2 || usage
@@ -42,7 +42,7 @@ TMP="$(mktemp -d)" || { echo "unknown: mktemp failed"; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 US=$'\037'; UNK=$'\001'; TAB=$'\t'
 
-# Keeps the D2 count per PR and head; a new head starts again at 0.
+# Keeps the D3 count per PR and head; a new head starts again at 0.
 finish() { # <exit> <merge-row token> [<reason>]
   local rc="$1" dir m h="" n=0 st=""
   if [ -n "$pr" ]; then
@@ -55,7 +55,7 @@ finish() { # <exit> <merge-row token> [<reason>]
       if [ "$rc" = 2 ]; then
         [ "$st" = human ] || n=$((n + 1))
         if [ "$st" = human ] || [ "$n" -ge "$MQ_BOUND" ]; then
-          rc=3; st=human; echo "bound: unknown $n time(s) at $head — the merge is the human's (D2)"
+          rc=3; st=human; echo "bound: unknown $n time(s) at $head — the merge is the human's (D3)"
         else st=unknown; fi
       else st=hold; fi
       mkdir -p "$dir" && { [ -e "$dir/.gitignore" ] || printf '*\n' > "$dir/.gitignore"; } \

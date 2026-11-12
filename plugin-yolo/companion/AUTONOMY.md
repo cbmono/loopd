@@ -236,14 +236,14 @@ not be able to talk the loop into a merge. Confirm all five and **abort if any f
    `.loopd/.merge-holds/`, and `tick-delta.sh check` reports that mark as a DELTA, so the next
    tick asks again rather than idling. **Exit 2 is unknown, and unknown holds** — a trigger or
    group expression bash cannot read, a job calling a reusable workflow, a branch or workflow
-   file the host does not return, or `gh` failing — but for **at most 3 ticks at one head**
-   (the project's D2): the third unknown answer is **exit 3**, and the merge is the human's.
-   **The owner's row does not wait for the third**:
-   the FIRST exit 2 at a head passes its merge-row token (`##mq2 <reason>`) to `build-awaiting.sh --merge` on that tick,
-   so `AWAITING.md` carries a 🔀 merge row saying `concurrency unknown: <reason>` and the owner
-   can merge at once, while the loop keeps re-asking up to the 3-tick bound and a later exit 0
-   still merges. On exit 3 keep the row and do not ask again at that head. A new head starts
-   the count again. **The tick's close summary
+   file the host does not return, or `gh` failing — but for **at most 2 unknowns at one head**
+   (D3). The script counts calls, so it runs **once per PR per tick**.
+   **The first unknown at a head holds with no row** and is retried next tick.
+   **The second unknown at that head is exit 3, and the merge is the owner's**: pass its merge-row token (`##mq2 <reason>`) to `build-awaiting.sh --merge` on that tick,
+   so `AWAITING.md` carries a 🔀 merge row saying `concurrency unknown: <reason>`. A later
+   tick at that head re-runs it as usual: it stays exit 3 with the same token and no
+   increment, so pass the token again and the row survives step 8's rewrite; a later exit 0
+   still merges. A new head starts the count again. **The tick's close summary
    quotes the script's `unknown: <reason>` line verbatim, never the bare `merge-queue exit 2`**
    — a hold nobody can read is one nobody can act on; the mark keeps the same reason, bounded
    to one line of 200 characters, and `tick-delta.sh check` names it in its DELTA.
