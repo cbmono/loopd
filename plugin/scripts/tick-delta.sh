@@ -42,10 +42,12 @@
 #   task <path> <status>    every task's status — a move to/from any status is a delta.
 #   unmonitored <path> <why>  an `in-progress` task with no `session:`, or one not
 #                           `working`/`blocked`: an immediate DELTA, step 4 owes its recovery.
-#   pr <url> <state> <head> <decision> merge=<mergeable>/<mss> reviews=<n>:<id>:<state> comments=<id>:<login> status=<json>
+#   pr <url> <state> <head> <decision> merge=<mergeable>/<mss> threads=<n> reviews=<n>:<id>:<state> comments=<id>:<login> status=<json>
 #                           every PR on an `in-progress`/`in-review` task, from the host: a
 #                           pushed head, a merge, a close, a review decision, mergeability
-#                           (UNKNOWN as-is), a new review (a COMMENTED one moves no decision), a
+#                           (UNKNOWN as-is), its unresolved review threads (a thread resolved
+#                           with no new head; past the 100 fetched it is unreadable, never a
+#                           truncated count), a new review (a COMMENTED one moves no decision), a
 #                           new issue comment (a reviewer's rate-limit reply is one), or a
 #                           check run's or status context's state (a status's description too:
 #                           a rate-limited reviewer still says SUCCESS).
@@ -98,6 +100,11 @@
 # `record` writes `.tick-state` (gitignored, per clone — the same class as
 # `.tick-lock`) and refuses (exit 2, file untouched) when it cannot compute the full
 # fingerprint: a partial record would turn the next check's "match" into a lie.
+#
+# `record` NEVER READS THE HOST. Its `pr` lines are the ones this tick's FIRST `check` or
+# `digest` saved under AB_TICK_START, so a thread an agent the tick woke resolves, or a
+# merge a human makes, between that read and `record` is the next tick's DELTA instead of
+# its baseline. A PR the tick never read is recorded `unread`, which no host answer matches.
 #
 # GENERIC PLUGIN FILE — ships inside the `loopd` plugin; no org, repo or path literals.
 # Verified by tests/tick-delta.test.sh.
@@ -315,6 +322,7 @@ steps_line() {
 
 PR_QUERY='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
   state headRefOid reviewDecision mergeable mergeStateStatus reviews(last:1){totalCount nodes{id state}}
+  reviewThreads(first:100){totalCount nodes{isResolved}}
   comments(last:1){nodes{id author{login}}}
   commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){totalCount nodes{__typename
     ... on CheckRun{name status conclusion} ... on StatusContext{context state description}}}}}}}}}}'
@@ -324,6 +332,7 @@ PR_JQ='.data.repository.pullRequest as $p
 | ($p.comments.nodes // [] | last) as $k
 | ($c.commit.statusCheckRollup.contexts // {totalCount: 0, nodes: []}) as $x
 | ($x.nodes // []) as $s
+| $p.reviewThreads as $t
 | if ($p | type) != "object" or ($p.reviews.totalCount | type) != "number" or ($c.commit | type) != "object"
      or ($p.reviews.totalCount > 0 and (($r.id // "") == "" or ($r.state // "") == ""))
      or ($p.mergeable | type) != "string" or ($p.mergeStateStatus | type) != "string"
@@ -331,13 +340,19 @@ PR_JQ='.data.repository.pullRequest as $p
      or any($s[]; if .__typename == "CheckRun" then (.name | type) != "string" or (.status | type) != "string"
                   elif .__typename == "StatusContext" then (.state | type) != "string" else true end)
      or ($p.comments.nodes | type) != "array" or ($k != null and ($k.id // "") == "")
+     or ($t.totalCount | type) != "number" or ($t.nodes | type) != "array" or $t.totalCount > ($t.nodes | length)
+     or any($t.nodes[]; (.isResolved | type) != "boolean")
   then "UNREADABLE"
   else [$p.state, $p.headRefOid, ($p.reviewDecision // "NONE"), "merge=\($p.mergeable)/\($p.mergeStateStatus)",
+        "threads=\([$t.nodes[] | select(.isResolved | not)] | length)",
         "reviews=\($p.reviews.totalCount):\($r.id // "-"):\($r.state // "-")",
         "comments=\($k.id // "-"):\($k.author.login // "-")",
         "status=\([$s[] | if .__typename == "CheckRun" then [.name, .status, (.conclusion // "-")]
                           else [.context, .state, .description] end] | sort | tojson)"] | join(" ")
   end'
+
+PR_RE='[A-Z]+ [0-9a-f]+ [A-Z_]+ merge=[A-Z_]+/[A-Z_]+ threads=[0-9]+ reviews=[0-9]+:[^ ]+:([A-Z_]+|-) comments=[^ :]+:[^ :]+ status=\[.*\]'
+START="$inst/$AB_TICK_START/pr"
 
 fingerprint() { # <probe|digest>
   local mode="$1"
@@ -464,6 +479,12 @@ $prs"
   # built on a hole.
   local u line host owner repo num
   for u in $(printf '%s\n' "$urls" | grep . | sort -u); do
+    if [ "$cmd" = record ]; then
+      line="$(U="$u" awk '$1 == "pr" && $2 == ENVIRON["U"] { print; exit }' "$START" 2>/dev/null)"
+      printf '%s\n' "${line#pr "$u" }" | grep -Eqx -- "$PR_RE" || line="pr $u unread"
+      printf '%s\n' "$line"
+      continue
+    fi
     command -v gh >/dev/null 2>&1 || return 1
     IFS=/ read -r host owner repo _ num <<<"${u#https://}"
     case "$num" in ''|*[!0-9]*) return 1 ;; esac
@@ -472,7 +493,7 @@ $prs"
     line="$(gh api graphql --hostname "$host" -f o="$owner" -f r="$repo" -F n="$num" \
             -f query="$PR_QUERY" --jq "$PR_JQ" 2>/dev/null)" || return 1
     case "$line" in *$'\n'*) return 1 ;; esac
-    printf '%s\n' "$line" | grep -Eqx '[A-Z]+ [0-9a-f]+ [A-Z_]+ merge=[A-Z_]+/[A-Z_]+ reviews=[0-9]+:[^ ]+:([A-Z_]+|-) comments=[^ :]+:[^ :]+ status=\[.*\]' || return 1
+    printf '%s\n' "$line" | grep -Eqx -- "$PR_RE" || return 1
     printf 'pr %s %s\n' "$u" "$line"
   done
   # Emitted from INSIDE the walk: the caller reads this function through a command
@@ -542,6 +563,14 @@ LISTING="$(mktemp "${TMPDIR:-/tmp}/tick-delta-sessions.XXXXXX")" || fail2 "mktem
 trap 'rm -f "$LISTING"' EXIT
 FP="$(fingerprint "$mode")" || fail2 "could not complete the fingerprint (an unreadable task file, gh missing or offline, a bad PR URL, or \`claude agents\` failing)"
 
+# The FIRST read of a tick wins and `record` consumes it: a later read replacing it would
+# move the baseline past what the tick acted on. Unwritable ⇒ `unread` ⇒ a full next tick.
+if [ "$cmd" != record ] && [ ! -e "$START" ]; then
+  sd="$(dirname "$START")"
+  mkdir -p "$sd" 2>/dev/null && { [ -e "$sd/.gitignore" ] || printf '*\n' > "$sd/.gitignore"; } 2>/dev/null \
+    && { printf '%s\n' "$FP" | grep '^pr ' > "$START.$$"; mv "$START.$$" "$START"; } 2>/dev/null
+fi
+
 case "$cmd" in
   digest)
     # The enumeration for an orienting tick, nothing more: no record is read or written,
@@ -555,12 +584,13 @@ case "$cmd" in
     tmp="$STATE.tmp.$$"
     {
       printf '# tick-delta fingerprint — written by tick-delta.sh record at the END\n'
-      printf '# of a FULL tick. Read by `check` on the next tick; a byte-for-byte match is\n'
+      printf '# of a tick, with the PR facts that tick read FIRST. Read by the next `check`; a byte-for-byte match is\n'
       printf '# the idle fast-path. Gitignored, per clone. Delete freely: absence = full tick.\n'
       printf 'recorded: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       printf '%s\n' "$FP"
     } > "$tmp" || { rm -f "$tmp" 2>/dev/null; fail2 "cannot write $STATE"; }
     mv "$tmp" "$STATE" || { rm -f "$tmp" 2>/dev/null; fail2 "cannot write $STATE"; }
+    rm -f "$START"
     exit 0
     ;;
   check)
@@ -584,10 +614,10 @@ case "$cmd" in
     fi
     for m in "$inst/$AB_MERGE_HOLDS"/*; do
       [ -f "$m" ] || continue
-      IFS=$'\t' read -r _ _ mst mrepo mpr _ < "$m" || continue
+      IFS=$'\t' read -r _ _ mst mrepo mpr mwhy < "$m" || continue
       [ "$mst" = human ] && continue
       if printf '%s\n' "$FP" | grep '^pr ' | grep -qiF "/$mrepo/pull/$mpr "; then
-        echo "DELTA: merge-queue.sh holds the delegated merge of $mrepo#$mpr ($mst) — step 4 re-checks it."
+        echo "DELTA: merge-queue.sh holds the delegated merge of $mrepo#$mpr ($mst${mwhy:+: $mwhy}) — step 4 re-checks it."
         exit 1
       fi
     done

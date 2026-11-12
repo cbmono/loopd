@@ -64,13 +64,13 @@ export CLAUDE_CODE_SESSION_ID="$(u 5e1f0001)" PATH="$TMP/bin:$PATH"
 
 run() { : > "$CALLS"; local out rc; out="$(bash "$TD" check --instance "$B" 2>&1)"; rc=$?
         printf 'rc:%s %s' "$rc" "$(head -1 <<<"$out" | cut -c1-12)"; }
-rec() { bash "$TD" record --instance "$B" >/dev/null 2>&1; }
+rec() { rm -rf "$B/$AB_TICK_START"; bash "$TD" digest --instance "$B" >/dev/null 2>&1; bash "$TD" record --instance "$B" >/dev/null 2>&1; }
 # <n> [head] [check-run conclusion] [mergeable] [mergeStateStatus] [reviews]
 prj() {
   local runs='[{"__typename":"CheckRun","name":"harness suite","status":"COMPLETED","conclusion":"'"${3:-SUCCESS}"'"},{"__typename":"StatusContext","context":"CodeRabbit","state":"SUCCESS","description":"Review completed"}]'
   local revs='{"totalCount":0,"nodes":[]}'
   [ "${6:-0}" -gt 0 ] && revs='{"totalCount":'"$6"',"nodes":[{"id":"PRR_'"$6"'","state":"COMMENTED"}]}'
-  printf '{"data":{"repository":{"pullRequest":{"state":"OPEN","headRefOid":"%s","reviewDecision":null,"mergeable":"%s","mergeStateStatus":"%s","reviews":%s,"comments":{"nodes":[]},"commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"totalCount":2,"nodes":%s}}}}]}}}}}\n' \
+  printf '{"data":{"repository":{"pullRequest":{"state":"OPEN","headRefOid":"%s","reviewDecision":null,"mergeable":"%s","mergeStateStatus":"%s","reviewThreads":{"totalCount":0,"nodes":[]},"reviews":%s,"comments":{"nodes":[]},"commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"totalCount":2,"nodes":%s}}}}]}}}}}\n' \
     "${2:-abc1234}" "${4:-MERGEABLE}" "${5:-CLEAN}" "$revs" "$runs" > "$GHDIR/$1"
 }
 # <short> <cwd|-> <state|-> <status|-> <kind|-> <age h> [<assistant m ago> <user-text m ago>]
@@ -86,7 +86,7 @@ ok "…from ONE claude agents call" "$(grep -cx 'agents --json --all' "$CALLS")"
 ok "…and one gh call per PR (two PRs)" "$(grep -c '^gh api graphql' "$CALLS")" 2
 ok "…the record carries the session's state and status" "$(grep -cx "session $(u a1a10001) working busy" "$B/$AB_STATE_DIR")" 1
 ok "…the in-progress task's PR, head and checks included" \
-   "$(grep -c "^pr $URL/1 OPEN abc1234 NONE merge=MERGEABLE/CLEAN reviews=0:-:- .*harness suite" "$B/$AB_STATE_DIR")" 1
+   "$(grep -c "^pr $URL/1 OPEN abc1234 NONE merge=MERGEABLE/CLEAN threads=0 reviews=0:-:- .*harness suite" "$B/$AB_STATE_DIR")" 1
 ok "…and no moving age column in the record" "$(grep -c '^due ' "$B/$AB_STATE_DIR")" 0
 ok "a second check is IDLE too" "$(run)" "rc:0 IDLE: finger"
 

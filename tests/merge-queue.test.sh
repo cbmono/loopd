@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # plugin/scripts/merge-queue.sh against a `gh` stub: hold, clear and unknown, loopd's own
-# tests.yml, every false clear QA found on #493, the D2 bound under --pr, tick-delta.sh's DELTA
-# for a held mark and the merge-row warning build-awaiting.sh renders.
+# tests.yml, every false clear QA found on #493, the D2 bound under --pr, the reason the mark
+# keeps (stripped and bounded), tick-delta.sh's DELTA for a held mark and the merge-row warning
+# build-awaiting.sh renders.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -162,16 +163,33 @@ M="$B/$AB_MERGE_HOLDS/example-org_example-repo_7"
 fixture bound; run in_progress 61 push main
 ok "a hold with --pr is exit 1"                             "$(rc --pr 7 --head "$H1" --instance "$B")" 1
 ok "…and writes a hold mark"                                "$(cut -f3 "$M")" hold
+ok "…of five fields: a hold carries no reason"              "$(awk -F'\t' '{ print NF }' "$M")" 5
 ok "…in a directory that ignores itself"                    "$(cat "$B/$AB_MERGE_HOLDS/.gitignore")" '*'
 rm -f "$FIX/runs.in_progress.json"
 ok "clear drops the mark"                                   "$(rc --pr 7 --head "$H1" --instance "$B")$([ -e "$M" ] && echo kept || echo gone)" "0gone"
 : > "$FIX/runs.fail"
 ok "unknown, tick 1: exit 2"                                "$(rc --pr 7 --head "$H1" --instance "$B")" 2
+WHY='gh could not list requested runs of example-org/example-repo'
+ok "…and the mark's 6th field is the reason"                "$(cut -f3,6 "$M")" "unknown	$WHY"
+ok "…after the five fields every reader takes by position"  "$(cut -f1-5 "$M")" "$H1	1	unknown	example-org/example-repo	7"
 ok "unknown, tick 2: exit 2"                                "$(rc --pr 7 --head "$H1" --instance "$B")" 2
 ok "unknown, tick 3: exit 3, the merge is the human's"      "$(rc --pr 7 --head "$H1" --instance "$B")" 3
+ok "…and the human mark keeps the last reason"              "$(cut -f3,6 "$M")" "human	$WHY"
 ok "…and stays the human's at that head"                    "$(rc --pr 7 --head "$H1" --instance "$B")" 3
 ok "a new head starts the count again"                      "$(rc --pr 7 --head "$H2" --instance "$B")" 2
 ok "usage: --pr without a 40-hex head is exit 4"            "$(rc --pr 7 --head abc --instance "$B")" 4
+
+echo "== the reason is one line, free of control characters, at most 200 characters =="
+# A branch name is the one reason input this harness can fill with every byte it wants.
+fixture dirty; : > "$FIX/branch.missing"
+BR="$(printf 'ma\tin\nx\033[31m\001%0300d' 0)"
+out="$(PATH="$BIN:$PATH" bash "$SH" example-org/example-repo "$BR" --pr 7 --head "$H2" --instance "$B" 2>&1)"
+WANT="$(printf 'branch ma in x[31m%0300d' 0 | cut -c1-200)"
+ok "a tab and a newline become a space, ESC and ^A go"      "$(cut -f6 "$M")" "$WANT"
+ok "…cut to 200 characters"                                 "$(cut -f6 "$M" | tr -d '\n' | wc -c | tr -d ' ')" 200
+ok "…leaving a one-line mark of six fields"                 "$(wc -l < "$M" | tr -d ' ') $(awk -F'\t' '{ print NF }' "$M")" "1 6"
+ok "…and the same reason on the line the tick quotes"       "$(grep -cxF "unknown: $WANT" <<<"$out")" 1
+ok "…and in the merge-row token"                            "$(grep -cxF "merge-row: ##mq2 $WANT" <<<"$out")" 1
 
 echo "== tick-delta.sh check: a held mark is a DELTA =="
 STUB2="$TMP/bin2"; mkdir -p "$STUB2"
@@ -179,7 +197,7 @@ cat > "$STUB2/gh" <<'EOS'
 #!/usr/bin/env bash
 f="."; while [ $# -gt 0 ]; do [ "$1" = --jq ] && f="$2"; shift; done
 jq -r "$f" <<'J'
-{"data":{"repository":{"pullRequest":{"state":"OPEN","headRefOid":"abc1234","reviewDecision":null,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviews":{"totalCount":0,"nodes":[]},"comments":{"nodes":[]},"commits":{"nodes":[{"commit":{"statusCheckRollup":null}}]}}}}}
+{"data":{"repository":{"pullRequest":{"state":"OPEN","headRefOid":"abc1234","reviewDecision":null,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewThreads":{"totalCount":0,"nodes":[]},"reviews":{"totalCount":0,"nodes":[]},"comments":{"nodes":[]},"commits":{"nodes":[{"commit":{"statusCheckRollup":null}}]}}}}}
 J
 EOS
 chmod +x "$STUB2/gh"
@@ -188,9 +206,11 @@ printf -- '---\ntype: Project\nstatus: active\nautonomy: yolo\n---\n' > "$B/proj
 printf '/%s\n' "$AB_STATE_DIR" > "$B/.gitignore"
 git -C "$B" init -q && git -C "$B" add -A && git -C "$B" -c user.name=t -c user.email=t@example.com commit -qm init
 TD() { PATH="$STUB2:$PATH" bash "$REPO/plugin/scripts/tick-delta.sh" "$@" --instance "$B" 2>&1; }
-TD record >/dev/null
+TD digest >/dev/null; TD record >/dev/null
 printf '%s\t0\thold\texample-org/example-repo\t7\n' "$H2" > "$M"
 ok "a hold mark on an in-review PR is a DELTA"              "$(TD check | grep -c '^DELTA: merge-queue.sh holds the delegated merge of example-org/example-repo#7 (hold)')" 1
+printf '%s\t1\tunknown\texample-org/example-repo\t7\tgh could not list the workflows of example-org/example-repo\n' "$H2" > "$M"
+ok "an unknown mark's DELTA names its reason"               "$(TD check | grep -cxF 'DELTA: merge-queue.sh holds the delegated merge of example-org/example-repo#7 (unknown: gh could not list the workflows of example-org/example-repo) — step 4 re-checks it.')" 1
 printf '%s\t3\thuman\texample-org/example-repo\t7\n' "$H2" > "$M"
 ok "a mark handed to the human is not: IDLE"                "$(TD check | cut -c1-5)" "IDLE:"
 printf '%s\t1\tunknown\texample-org/example-repo\t8\n' "$H2" > "$M"
