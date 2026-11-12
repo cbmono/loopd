@@ -5,6 +5,7 @@
 # write-snapshot.test.sh — the snapshot's `awaiting` verbs agree with AWAITING.md on a
 # paused project: `merge` survives, every other verb is emptied, and `counts.awaiting` falls
 # by exactly the rows suppressed. The board's `N need you` rail reads these verbs directly.
+# And each project's `mine` resolves as build-board.sh's owner_of()/is_mine() do.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -54,6 +55,29 @@ ok "active: answer unchanged"                 "$(verb live t2)" answer
 ok "active: unblock unchanged"                "$(verb live t3)" unblock
 ok "active: merge unchanged"                  "$(verb live t4)" merge
 ok "counts.awaiting falls by exactly the 3 suppressed" "$(total)" 5
+
+mine() { python3 -c 'import json,sys
+d = json.load(open(sys.argv[1]))
+print(str([p for p in d["projects"] if p["slug"] == sys.argv[2]][0]["mine"]).lower())' "$INST/$AB_SNAPSHOT" "$1"; }
+own() { printf -- '---\ntype: Project\ntitle: %s\nstatus: active\n%b---\n' "$1" "$2" > "$INST/projects/$1/project.md"; }
+own live ''; own held ''
+snap
+ok "no owner, no defaultOwner: mine"             "$(mine live)" true
+own held 'owner: jdoe\n'
+snap
+ok "owner set, no ownerGithubUser: not mine"     "$(mine held)" false
+printf '{ "ownerGithubUser": "JDoe" }\n' > "$INST/instance.config.local.json"
+snap
+ok "owner matches ownerGithubUser, any case"     "$(mine held)" true
+printf '{ "ownerGithubUser": "alice" }\n' > "$INST/instance.config.local.json"
+snap
+ok "another owner: not mine"                     "$(mine held)" false
+printf '{ "org": "o", "defaultOwner": "jdoe" }\n' > "$INST/instance.config.json"
+snap
+ok "no owner, defaultOwner another: not mine"    "$(mine live)" false
+own live 'owner: alice\n'
+snap
+ok "own owner: beats defaultOwner: mine"         "$(mine live)" true
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

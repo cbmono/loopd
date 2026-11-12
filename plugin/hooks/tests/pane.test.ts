@@ -1925,3 +1925,118 @@ test('a zero in_review still draws IN REVIEW (0)', ONLY, async ($, on) => {
   expect(await rowsOf(ui)).toContain('IN REVIEW (0)')
   await ui.unmount()
 })
+
+// Two owners on one bundle: `mine` is write-snapshot.sh's task-owner.sh verdict per project.
+function ownersSnap() {
+  const t = (id: string, title: string, status: string) =>
+    ({ id, title, status, assignee: 'software-engineer', in_flight: false, pr_mergeable: 'MERGEABLE', awaiting: '', prs: [] })
+  const p = (slug: string, status: string, owner: string, mine: boolean | undefined, tasks: any[], awaiting_close = false) =>
+    ({ slug, title: slug, status, owner, ...(mine === undefined ? {} : { mine }), awaiting_close, phase_progress: { done: 0, total: 0 }, tasks })
+  return {
+    ...SNAP, counts: { projects: 7, tasks: 12, awaiting: 1 },
+    projects: [
+      p('agent-identity', 'paused', 'jdoe', false, [t('task-001', 'Wait', 'draft')]),
+      p('leadership-offsite', 'done', 'jdoe', false, []),
+      p('billing-export-v2', 'active', 'jdoe', false, [t('task-001', 'Export ledger rows as CSV', 'in-progress'), t('task-002', 'Invoice PDF footer', 'in-review'),
+        t('task-003', LONG, 'in-progress'), ...[4, 5, 6].map(i => t('task-00' + i, 'x', 'done')), t('task-007', 'y', 'draft')]),
+      p('smartphone', 'active', 'me', true, [t('task-001', 'Own work', 'in-progress'), t('task-002', 'z', 'done')]),
+      p('claims', 'active', '', undefined, [t('task-001', 'z', 'done')], true),
+      p('no-tag', 'active', 'not a login!', false, [t('task-001', 'Shaped badly', 'in-review')]),
+      p('dashed', 'active', 'jdoe--x', false, []),
+    ],
+  }
+}
+function ownersCounts(snap: any): unknown {
+  const status: Record<string, string> = {}
+  for (const p of snap.projects) for (const t of p.tasks) if (t.status === 'in-progress' || t.status === 'in-review') status['projects/' + p.slug + '/tasks/' + t.id + '.md'] = t.status
+  return { ...(countsOf(snap) as any), task_status: status, task_sessions: { 'projects/billing-export-v2/tasks/task-001.md': 'working' } }
+}
+
+test('OTHER OWNERS: own projects first, then a blank line and one dim line each with @login, closed last; their task rows dim and tagged', ONLY, async ($, on) => {
+  const snap = ownersSnap()
+  const w = world(snap, true, ownersCounts(snap))
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = await rowsOf(ui)
+  const at = rows.indexOf('PROJECTS (7)')
+  expect(rows.slice(at, rows.indexOf('IN PROGRESS (3)') - 2)).toEqual([
+    'PROJECTS (7)',
+    ' ',
+    '● smartphone',
+    '  █████░░░░░  1/2',
+    ' ',
+    '✓ claims' + ' '.repeat(33) + 'done',          // no `mine` key: an older snapshot, drawn as mine
+    '  ██████████  1/1',
+    ' ',
+    '● billing-export-v2' + ' '.repeat(16) + '@jdoe  3/7',
+    '● no-tag' + ' '.repeat(34) + '0/1',          // an owner that is not a login: no tag
+    '● dashed',                                    // `jdoe--x` fails the shape; no tasks, no fraction
+    '○ agent-identity' + ' '.repeat(16) + '@jdoe  paused',
+    ' ',
+    '✓ leadership-offsite' + ' '.repeat(19) + 'closed',
+  ])
+  const prog = rows.slice(rows.indexOf('   1 working · 1 idle · 0 dead') + 2)
+  expect(prog.slice(0, prog.indexOf(' '))).toEqual([
+    '   software-engineer  Export ledger   working',
+    '                      rows as CSV @jdoe',
+    '   software-engineer  iPhone capability     —',   // cut at three lines, so the tag with it; the row stays dim
+    '                      proof: real text',
+    '                      recognition and App At…',
+    '   software-engineer  Own work' + ' '.repeat(14) + '—',
+  ])
+  expect(section(rows, 'IN REVIEW (2)')).toEqual([
+    '   software-engineer  Invoice PDF footer',
+    '                      @jdoe',
+    '   software-engineer  Shaped badly',
+  ])
+  for (const r of rows) expect(cols(r)).toBeLessThanOrEqual(45)
+
+  // Every segment of another owner's row is the closed grey; own rows keep their colours.
+  const texts = await ui.findAll({ type: 'Text' })
+  const look = (s: string) => texts.filter((el: any) => el.text === s).map((el: any) => el.props.color)
+  for (const s of ['billing-export-v2', 'agent-identity', '○ ', 'Export ledger', 'rows as CSV @jdoe', 'Invoice PDF footer'])
+    expect([s, look(s)]).toEqual([s, ['#6c7488']])
+  expect(look('● ')).toEqual(['#86BBD8', '#6c7488', '#6c7488', '#6c7488'])
+  const tagged = texts.filter((el: any) => el.props.color !== undefined && el.text.includes('@jdoe'))
+  expect(tagged.map((el: any) => el.props.color)).toEqual(Array(4).fill('#6c7488'))   // two project tails, two task rows
+  expect(look('working')).toEqual(['#6c7488'])
+  expect(look('closed')).toEqual(['#6c7488'])
+  expect(look('smartphone')).toEqual(['#f5f5f5'])
+  expect(look('Own work')).toEqual(['#f5f5f5'])
+  expect(look('   software-engineer  ')).toContain('#86BBD8')
+  const text = await shown(ui)
+  expect(text).not.toContain('@me')
+  expect(text).not.toContain('not a login')
+  expect(text).not.toContain('jdoe--x')
+  // Counts include everyone: the headings are counts.json's, which counts every task.
+  expect([countOf(rows, 'IN PROGRESS'), countOf(rows, 'IN REVIEW'), countOf(rows, 'PROJECTS')]).toEqual(['3', '2', '7'])
+  await ui.unmount()
+
+  for (const body of [45, 100]) {
+    const u = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: body }, surface: 'terminal' })
+    const r = await rowsOf(u)
+    for (const x of r) expect(2 + cols(x)).toBeLessThanOrEqual(body - 2)
+    expect(r.join('\n')).toContain('@jdoe')
+    await u.unmount()
+  }
+})
+
+test('OTHER OWNERS: a bundle with no owner anywhere draws as today — no blank group, no tag, nothing dim', ONLY, async ($, on) => {
+  const snap = ownersSnap()
+  snap.projects = snap.projects.map((p: any) => ({ ...p, owner: '', mine: true }))
+  const w = world(snap, true, ownersCounts(snap))
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const text = await shown(ui)
+  expect(text).not.toContain('@')
+  const rows = await rowsOf(ui)
+  expect(rows.filter(r => r.startsWith('● ') || r.startsWith('○ ') || r.startsWith('✓ ')).length).toBe(7)
+  for (let i = 1; i < rows.length; i++) if (/^[●○✓] /.test(rows[i])) expect(rows[i - 1]).toBe(' ')
+  const own = (await ui.findAll({ type: 'Text' })).filter((el: any) => ['Own work', 'Export ledger', 'rows as CSV', 'billing-export-v2'].includes(el.text))
+  expect(own.map((el: any) => el.props.color)).toEqual(Array(4).fill('#f5f5f5'))
+  await ui.unmount()
+})
