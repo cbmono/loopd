@@ -546,15 +546,15 @@ function draw($: any, e: any, now: number): any {
     }
     // A row is placed by task_status in counts.json, the source of the heading count; the
     // snapshot, written at tick close and so possibly stale, only names the row.
-    // Another owner's task (its project's owner; task `owner:` is not in the snapshot) is
-    // dimmed whole, `@login` riding on the title so it wraps with it.
-    type Live = { path: string; head: string; title: string; mark: string; other: boolean }
+    // Another owner's task (its project's owner; task `owner:` is not in the snapshot) is not
+    // listed: it counts into one dim `+N by @login` line under its section.
+    type Live = { path: string; head: string; title: string; mark: string; other: boolean; owner: string }
     const live = (p: Project | undefined, t: Task | undefined, slug: string, id: string, path: string): Live => {
       const other = !!p && !p.mine
-      const tag = other && p.owner ? ' @' + p.owner : ''
+      const owner = other ? p.owner : ''
       return t
-        ? { path, head: '   ' + (t.assignee || 'unassigned') + '  ', title: (t.title || t.id) + tag, mark: t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : '', other }
-        : { path, head: '   ', title: clean(slug) + ' · ' + clean(id) + tag, mark: '', other }
+        ? { path, head: '   ' + (t.assignee || 'unassigned') + '  ', title: t.title || t.id, mark: t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : '', other, owner }
+        : { path, head: '   ', title: clean(slug) + ' · ' + clean(id), mark: '', other, owner }
     }
     const progress: Live[] = []
     const review: Live[] = []
@@ -568,6 +568,22 @@ function draw($: any, e: any, now: number): any {
     } else for (const p of b.rows) for (const t of p.tasks) {
       if (t.status === 'in-progress') progress.push(live(p, t, p.ref, t.ref, taskPath(p, t)))
       else if (t.status === 'in-review') review.push(live(p, t, p.ref, t.ref, taskPath(p, t)))
+    }
+    const mine = (xs: Live[]) => xs.filter(x => !x.other)
+    // A heading with another owner among its rows counts only those listed; else it is the number counts.json gives, as the bar.
+    const own = (v: N, xs: Live[]) => v === null || xs.every(x => !x.other) ? v : mine(xs).length
+    const othersLine = (xs: Live[]) => {
+      const by = new Map<string, number>()
+      for (const x of xs) if (x.other) by.set(x.owner, (by.get(x.owner) || 0) + 1)
+      // Packed whole entries, never ROW_LINES: a clipped count is a wrong count.
+      const room = Math.max(1, W - 3), out: string[] = []
+      let open = false
+      for (const [o, n] of by) {
+        const x = '+' + n + ' by ' + (o ? '@' + o : 'another owner')
+        if (open && cols(out[out.length - 1]) + 3 + cols(x) <= room) out[out.length - 1] += ' · ' + x
+        else { const w = wrap(x, room, Infinity); out.push(...w); open = w.length === 1 }
+      }
+      for (const l of out) rows.push(line('   ' + l, MUTED))
     }
     const needYou = (n: number | string) => n + (n === 1 ? ' needs you' : ' need you')
     // `?` is drawn, never taken for a zero; PROJECTS hides a known zero, the three sections under it show it.
@@ -643,31 +659,33 @@ function draw($: any, e: any, now: number): any {
     rows.push(line(' '))
     const LOOK: Record<string, Record<string, unknown>> = { working: WORK, idle: MUTED, dead: NEEDS_YOU }
     const c = counts
-    rows.push(heading('IN PROGRESS', c.in_progress, WORK, true))
+    rows.push(heading('IN PROGRESS', own(c.in_progress, progress), WORK, true))
     rows.push(line(' '))
     // The tick is a working session but no task, so it is named apart: `1 working (tick)`, `2 working (1 tick)`.
     const tick = c.tick !== null && c.tick > 0 && c.working !== null && c.tick <= c.working ? c.tick : 0
     const ticks = tick ? (tick === c.working ? ' (tick)' : ' (' + tick + ' tick)') : ''
     rows.push(row(seg('   '), seg(nstr(c.working) + ' working' + ticks, WORK), seg(' · ', MUTED), seg(nstr(c.idle) + ' idle', MUTED), seg(' · ', MUTED), seg(nstr(c.dead) + ' dead', NEEDS_YOU)))
     rows.push(line(' '))
-    if (progress.length === 0) rows.push(line(tick ? '   no task in progress — tick running' : '   nothing right now', MUTED))
-    for (const { path, head, title: text, other } of progress) {
+    if (mine(progress).length === 0) rows.push(line(tick ? '   no task in progress — tick running' : '   nothing right now', MUTED))
+    for (const { path, head, title: text } of mine(progress)) {
       const word = c.tasks === null ? '?' : c.tasks[path] || '—'
       const [title, ...more] = wrap(text, Math.max(1, W - cols(head)), ROW_LINES, Math.max(1, W - cols(head) - cols(word) - 2))
-      rows.push(row(seg(head, other ? MUTED : WORK), seg(title, other ? MUTED : TEXT), seg(gap(cols(head) + cols(title) + cols(word))), seg(word, other ? MUTED : LOOK[word] || MUTED)))
-      for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, other ? MUTED : TEXT)))
+      rows.push(row(seg(head, WORK), seg(title, TEXT), seg(gap(cols(head) + cols(title) + cols(word))), seg(word, LOOK[word] || MUTED)))
+      for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
     }
+    othersLine(progress)
 
     rows.push(line(' '))
     rows.push(line(' '))
-    rows.push(heading('IN REVIEW', c.in_review, WORK, true))
+    rows.push(heading('IN REVIEW', own(c.in_review, review), WORK, true))
     rows.push(line(' '))
-    if (review.length === 0) rows.push(line('   none', MUTED))
-    for (const { head, title: text, mark, other } of review) {
+    if (mine(review).length === 0) rows.push(line('   none', MUTED))
+    for (const { head, title: text, mark } of mine(review)) {
       const [title, ...more] = wrap(text, Math.max(1, W - cols(head)), ROW_LINES, Math.max(1, W - cols(head) - cols(mark)))
-      rows.push(row(seg(head, other ? MUTED : WORK), seg(title, other ? MUTED : TEXT), seg(mark, MUTED)))
-      for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, other ? MUTED : TEXT)))
+      rows.push(row(seg(head, WORK), seg(title, TEXT), seg(mark, MUTED)))
+      for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
     }
+    othersLine(review)
 
     if (showNeed) {
       rows.push(line(' '))
