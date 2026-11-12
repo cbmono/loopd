@@ -36,7 +36,7 @@ integer records that option's **text** from the `### Q<n>` block (`SCHEMA.md` â†
 details"), `--text <words>` records the words even when they are a number or `more`, and
 any other words are the answer. It moves the entry exactly as step 3 does, commits it as
 you through `commit-as.sh human`, then pushes it through `push-commit.sh` when the clone has
-an upstream. It bakes nothing into the body: the moved line and the `### Q<n>` block are
+an upstream, and refreshes `SNAPSHOT.json` (`write-snapshot.sh --quiet`, best-effort) so `/pane` shows it. It bakes nothing into the body: the moved line and the `### Q<n>` block are
 the record. `more` prints the next stored depth (1, then 2, then 3) and changes no tracked file.
 `later` sends `Q<n>` to the end of the pane's inbox (one line in this clone's untracked
 `AB_ANSWER_LATER` file) and changes no tracked file either; only a numbered question can wait.

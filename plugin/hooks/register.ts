@@ -226,8 +226,10 @@ type Counts = {
   tasks: Record<string, string> | null
   status: Record<string, string> | null   // task path → in-progress | in-review, off the task documents
   written_at: string
+  plugin_version: string   // the plugin whose status line wrote the file; '' when absent or not x.y.z
 }
-const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, queue: '', tasks: null, status: null, written_at: '' }
+const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, queue: '', tasks: null, status: null, written_at: '', plugin_version: '' }
+const SEMVER = /^\d+\.\d+\.\d+$/
 const TASK_KEY = /^projects\/([^/]+)\/tasks\/([^/]+)\.md$/
 
 // Module state. A reload starts it over, and the next poll or /pane fills it again.
@@ -336,6 +338,7 @@ function readCounts(text: unknown, m: number): Counts {
     state: 'ok', mtimeMs: m, in_progress: nint(o.in_progress), in_review: nint(o.in_review),
     working: nint(se.working), idle: nint(se.idle), dead: nint(se.dead), tick: nint(se.tick_working), need_you: nint(o.need_you),
     queue: str(o.queue), tasks, status, written_at: str(o.written_at),
+    plugin_version: SEMVER.test(str(o.plugin_version)) ? str(o.plugin_version) : '',
   }
 }
 // Stat every poll, read when the mtime moved, as for the snapshot. Reading never clears a
@@ -357,7 +360,7 @@ async function refreshCounts($: any, root: string, force: boolean): Promise<void
 async function readBrand($: any, root: string): Promise<void> {
   let org = '', version = ''
   try { const o = obj(JSON.parse(await $.fs.read(root + '/' + CONFIG))); org = o ? str(o.org) : '' } catch { org = '' }
-  try { const v = String(await $.fs.read(root + '/' + STAMPED)).trim(); version = /^\d+\.\d+\.\d+$/.test(v) ? v : '' } catch { version = '' }
+  try { const v = String(await $.fs.read(root + '/' + STAMPED)).trim(); version = SEMVER.test(v) ? v : '' } catch { version = '' }
   brand = { version, org }
 }
 
@@ -576,11 +579,14 @@ function draw($: any, e: any, now: number): any {
     // the age right-aligned on its own line under it.
     const marks = LOGO_ROWS.map(r => r.split('|'))
     const lw = Math.max(...marks.map(m => cols(m.join(''))))
-    const brandLine = ['loopd' + (brand.version ? ' v' + brand.version : ''), b.group, brand.org ? 'org: ' + brand.org : ''].filter(Boolean).join(' · ')
+    const pv = counts.plugin_version, room = W - lw - 1
+    const versions = (pv ? [brand.version ? 'bundle ' + brand.version : '', 'plugin ' + pv] : ['loopd' + (brand.version ? ' v' + brand.version : '')]).filter(Boolean).join(' · ')
+    // Group and org are what the width takes; they go whole when under two of their characters would show.
+    const brandLine = room - cols(versions) < 5 ? versions : [versions, b.group, brand.org ? 'org: ' + brand.org : ''].filter(Boolean).join(' · ')
     marks.forEach(([indent, pink, blue], i) => {
       const pad = seg(' '.repeat(lw - cols(indent + pink + blue) + 1))
       rows.push(row(seg(indent), seg(pink, GATE), seg(blue, TUBE),
-        ...(i === 1 ? [pad, seg(fit(brandLine, W - lw - 1), { ...TEXT, bold: true })] : i === 2 ? [pad, seg('─'.repeat(Math.max(1, W - lw - 1)), RULE)] : [])))
+        ...(i === 1 ? [pad, seg(fit(brandLine, room), { ...TEXT, bold: true })] : i === 2 ? [pad, seg('─'.repeat(Math.max(1, room)), RULE)] : [])))
     })
     const snapAge = headAge(now, b)
     rows.push(row(seg(gap(cols(snapAge))), seg(snapAge, MUTED)))

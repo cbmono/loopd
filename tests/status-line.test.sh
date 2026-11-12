@@ -407,6 +407,20 @@ ok "a lock naming an idle session (a lingering lock) ⇒ tick_working 0" "$(J 'd
 rm -f "$S/$AB_LOCK"
 ok "written_at is a UTC stamp" "$(J 'd["written_at"]' | grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$')" 1
 ok "the keys are exactly the contract" "$(J '",".join(sorted(d))')" \
+   "in_progress,in_review,need_you,plugin_version,queue,sessions,task_sessions,task_status,written_at"
+ok "plugin_version is the plugin's own VERSION" "$(J 'd["plugin_version"]')" "$(cat "$REPO/plugin/VERSION")"
+# A copy of the plugin, so its VERSION can differ, be junk or be gone without touching the checkout.
+mkdir -p "$TMP/plug" && cp -R "$REPO/plugin/scripts" "$REPO/plugin/.claude-plugin" "$TMP/plug/"
+alt() { AB_SESSIONS_LISTING="$TMP/listing.json" SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$TMP/plug/scripts/status-line.sh" --instance "$S" --color never </dev/null >/dev/null 2>&1; }
+printf '9.8.7\n' > "$TMP/plug/VERSION"; alt
+ok "…read beside the script that ran, never from the bundle" "$(J 'd.get("plugin_version")')" 9.8.7
+for junk in 4.12 v4.12.1 '4.12.1 "x"' '4.12.1-rc1'; do
+  printf '%s\n' "$junk" > "$TMP/plug/VERSION"; alt
+  ok "a VERSION that is not x.y.z ($junk) ⇒ the key is omitted, the file still JSON" "$(J '"plugin_version" in d')" False
+done
+rm -f "$TMP/plug/VERSION"; alt
+ok "no VERSION ⇒ the key is omitted" "$(J '"plugin_version" in d')" False
+ok "…and the rest of the contract is unchanged" "$(J '",".join(sorted(d))')" \
    "in_progress,in_review,need_you,queue,sessions,task_sessions,task_status,written_at"
 ok "no AWAITING text and no task title reaches it (planted sentinel)" "$(grep -c "$SENT" "$CJ" | tr -d ' ')" 0
 ok "…while the sentinel IS in the fixtures it was read from" \
