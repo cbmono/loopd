@@ -2091,3 +2091,26 @@ test('OTHER OWNERS: two named owners share one +N line per section, in the order
   for (const r of rows) expect(cols(r)).toBeLessThanOrEqual(45)
   await ui.unmount()
 })
+
+test('OTHER OWNERS: eight owners wrap at entry boundaries past three lines, every owner and count drawn, nothing cut', ONLY, async ($, on) => {
+  const snap = ownersSnap()
+  const t = (id: string, status: string) =>
+    ({ id, title: id, status, assignee: 'software-engineer', in_flight: false, pr_mergeable: 'MERGEABLE', awaiting: '', prs: [] })
+  const owners = [1, 2, 3, 4, 5, 6, 7, 8].map(i => 'loopd-test-owner-0' + i)
+  snap.projects = [
+    snap.projects.find((p: any) => p.slug === 'smartphone'),
+    ...owners.map((o, i) => ({ ...snap.projects[0], slug: 'p' + i, owner: o, mine: false, status: 'active',
+      tasks: Array.from({ length: i + 1 }, (_, k) => t('task-0' + (10 + k), 'in-review')) })),
+  ]
+  const w = world(snap, true, ownersCounts(snap))
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = await rowsOf(ui)
+  const sum = section(rows, 'IN REVIEW (0)').slice(1)
+  expect(sum.length).toBeGreaterThan(3)
+  for (const r of sum) expect([r, cols(r) <= 45, r.includes('…')]).toEqual([r, true, false])
+  expect(sum.map(r => r.trim()).join(' · ').split(' · ')).toEqual(owners.map((o, i) => '+' + (i + 1) + ' by @' + o))
+  await ui.unmount()
+})

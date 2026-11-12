@@ -575,8 +575,15 @@ function draw($: any, e: any, now: number): any {
     const othersLine = (xs: Live[]) => {
       const by = new Map<string, number>()
       for (const x of xs) if (x.other) by.set(x.owner, (by.get(x.owner) || 0) + 1)
-      const s = [...by].map(([o, n]) => '+' + n + ' by ' + (o ? '@' + o : 'another owner')).join(' · ')
-      if (s) for (const l of wrap(s, Math.max(1, W - 3), ROW_LINES)) rows.push(line('   ' + l, MUTED))
+      // Packed whole entries, never ROW_LINES: a clipped count is a wrong count.
+      const room = Math.max(1, W - 3), out: string[] = []
+      let open = false
+      for (const [o, n] of by) {
+        const x = '+' + n + ' by ' + (o ? '@' + o : 'another owner')
+        if (open && cols(out[out.length - 1]) + 3 + cols(x) <= room) out[out.length - 1] += ' · ' + x
+        else { const w = wrap(x, room, Infinity); out.push(...w); open = w.length === 1 }
+      }
+      for (const l of out) rows.push(line('   ' + l, MUTED))
     }
     const needYou = (n: number | string) => n + (n === 1 ? ' needs you' : ' need you')
     // `?` is drawn, never taken for a zero; PROJECTS hides a known zero, the three sections under it show it.
