@@ -40,7 +40,7 @@ fi
 
 TMP="$(mktemp -d)" || { echo "unknown: mktemp failed"; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
-US=$'\037'; UNK=$'\001'
+US=$'\037'; UNK=$'\001'; TAB=$'\t'
 
 # Keeps the D2 count per PR and head; a new head starts again at 0.
 finish() { # <exit> <merge-row token> [<reason>]
@@ -59,7 +59,7 @@ finish() { # <exit> <merge-row token> [<reason>]
         else st=unknown; fi
       else st=hold; fi
       mkdir -p "$dir" && { [ -e "$dir/.gitignore" ] || printf '*\n' > "$dir/.gitignore"; } \
-        && printf '%s\t%s\t%s\t%s\t%s%s\n' "$head" "$n" "$st" "$repo" "$pr" "${3:+$'\t'$3}" > "$m" \
+        && printf '%s\t%s\t%s\t%s\t%s%s\n' "$head" "$n" "$st" "$repo" "$pr" "${3:+$TAB$3}" > "$m" \
         || { echo "unknown: cannot write $m"; rc=2; }
     fi
   fi

@@ -436,7 +436,9 @@ untracked file under `projects/` — resolves to the full tick, and the fingerpr
 exactly the facts whose movement creates tick work: bundle HEAD, per-task status, each
 PR on an `in-progress` or `in-review` task's head SHA, state, review decision,
 `mergeable`/`mergeStateStatus` (UNKNOWN as-is: a push costs one extra full tick while the
-host computes it), review count with the latest review's id and
+host computes it), its unresolved review-thread count (a thread resolved with no new head
+moves nothing else here; past the 100 fetched the line is unreadable, never a truncated
+count), review count with the latest review's id and
 state (a COMMENTED review moves no decision), the latest issue comment's id and author
 (a reviewer's rate-limit reply is one; a review-thread reply already mints a review),
 every `statusCheckRollup` check run and status context (a status's description too: a
@@ -483,7 +485,14 @@ The record is written by a FULL tick as its last derived act (after the commit, 
 sync, the queue and the board), through a temp-file rename so a crash cannot leave a
 torn record for the next check to "match" — and `record` refuses to write at all when
 it cannot compute the complete fingerprint, because a partial record would turn the
-next "match" into a lie. An idle tick leaves the record alone: it just proved it
+next "match" into a lie. **Its PR lines are not read then.** They are the ones the tick's
+first `check` or `digest` saved under `.loopd/.tick-start/` (per clone, self-ignoring),
+which `record` consumes: what an agent the tick woke, or a human, does to a PR between
+that read and the record is the next tick's DELTA instead of its baseline. On 2026-11-12
+a thread resolved two minutes into a tick was baselined by that tick's own record, and
+five ticks idled on a merge-ready PR. The first read of a tick wins, so a later one
+cannot move the baseline past what the tick acted on, and a PR the tick never read is
+recorded `unread`, which no host answer matches. An idle tick leaves the record alone: it just proved it
 current, and rewriting it would only move a timestamp nothing judges.
 
 **Moved out of the prompt (2026-11-08).**
