@@ -409,7 +409,7 @@ fi
 # ---- 2. prune. Every candidate is produced by an explicit expression below; nothing
 # else in the folder is even enumerated.
 protected() { # <path> — is this a declared deliverable?
-  [[ -n "$KEEP" ]] && printf '%s\n' "$KEEP" | grep -qxF -- "$1"
+  [[ -n "$KEEP" ]] && grep -qxF -- "$1" <<<"$KEEP"
 }
 
 # tmp/ and temp/, any depth, case-insensitive, `deliverables/` pruned out of the walk.

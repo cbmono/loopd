@@ -1074,7 +1074,7 @@ review_object_logins="$(while IFS= read -r l; do norm "$l"; echo; done < "$TMPD/
                         | sort -u)"
 
 has_review_object() { # <login>
-  printf '%s\n' "$review_object_logins" | grep -Fqx "$(norm "$1")"
+  grep -Fqx -- "$(norm "$1")" <<<"$review_object_logins"
 }
 
 # The verified head the caller pinned must still be the PR's head; if it is not, every

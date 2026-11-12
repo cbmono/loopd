@@ -233,7 +233,7 @@ if [ -z "$required" ]; then
     # A PR that rewrites the gate must not be cleared by the gate it rewrites. The
     # list is read from BASE, so an open PR cannot weaken its own merge — but merging
     # it would weaken every later one, and that is the human's decision to take.
-    if printf '%s\n' "$changed" | grep -Fxq "$DECLARED_PATH"; then
+    if grep -Fxq -- "$DECLARED_PATH" <<<"$changed"; then
       echo "refuse: PR $pr edits $DECLARED_PATH — a change to the merge gate itself is" >&2
       echo "        a human decision. Surface it; do not auto-merge." >&2
       exit 4
@@ -259,7 +259,7 @@ while IFS= read -r name; do
   if [ -z "$buckets" ]; then
     problems="${problems}  - ${name}: not reported on this PR (renamed, or never ran)
 "
-  elif printf '%s\n' "$buckets" | grep -qv '^pass$'; then
+  elif grep -qv '^pass$' <<<"$buckets"; then
     problems="${problems}  - ${name}: $(printf '%s' "$buckets" | tr '\n' ',' | sed 's/,$//')
 "
   fi

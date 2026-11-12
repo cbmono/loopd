@@ -192,7 +192,7 @@ case "$CMD" in
     [ -n "$NEW" ] || { echo "do-not-repeat: --line is empty after folding — nothing to record" >&2; exit 2; }
     # An identical entry is a no-op rather than a second copy: a re-run of the same round
     # must not spend one of the ten slots on a line already there.
-    if [ -n "$ENTRIES" ] && printf '%s\n' "$ENTRIES" | grep -qxF -- "$NEW"; then
+    if [ -n "$ENTRIES" ] && grep -qxF -- "$NEW" <<<"$ENTRIES"; then
       printf 'KEPT      %s/%s — already recorded\n' "$COUNT" "$MAX_ENTRIES"
       exit 0
     fi

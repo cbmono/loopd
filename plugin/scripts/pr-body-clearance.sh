@@ -574,7 +574,7 @@ has_verified() { # <rendered-body>
     seen=1
     while IFS= read -r lpat; do
       [ -n "$lpat" ] || continue
-      printf '%s\n' "$lines" | grep -Eq "$lpat" 2>/dev/null; rc=$?
+      grep -Eq "$lpat" <<<"$lines" 2>/dev/null; rc=$?
       [ "$rc" -eq 0 ] && return 0
       [ "$rc" -eq 1 ] || return 2
     done <<EOF

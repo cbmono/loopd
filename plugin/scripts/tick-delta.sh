@@ -303,7 +303,7 @@ answered_open() { # <file>
   fmlist "$1" open_questions text 2>/dev/null | grep -qF -- ' --- ' && return 0
   local parsed
   parsed="$(bash "$FOLD" --list "$1" open_questions 2>/dev/null)" || return 2
-  printf '%s\n' "$parsed" | grep -qF -- ' --- '
+  grep -qF -- ' --- ' <<<"$parsed"
 }
 
 # NO DIRECTORY IS NOT AN EMPTY LINE. `steps:` with nothing after it means "this tick has
@@ -543,7 +543,7 @@ owed_work() {
   done <<EOF
 $(printf '%s\n' "$FP" | sed -n 's/^task \(.*\) draft$/\1/p')
 EOF
-  printf '%s\n' "$FP" | grep -q '^task .* ready$' || return 0
+  grep -q '^task .* ready$' <<<"$FP" || return 0
   p="$(bash "$DREADY" --instance "$inst" --first 2>/dev/null)" || fail2 "dispatchable-ready.sh could not read the tasks"
   [ -n "$p" ] || return 0
   crc=0; cap="$(bash "$MAXA" --instance "$inst" 2>/dev/null)" || crc=$?
@@ -608,7 +608,7 @@ case "$cmd" in
       echo "DELTA: $wq web board entr$([ "$wq" = 1 ] && echo y || echo ies) waiting in the queue — step 0.95 consumes them."
       exit 1
     fi
-    if printf '%s\n' "$FP" | grep -q '^decision answered '; then
+    if grep -q '^decision answered ' <<<"$FP"; then
       echo "DELTA: a project's \`decisions:\` carries an answered entry — step 2 owes its fold."
       exit 1
     fi
@@ -616,12 +616,12 @@ case "$cmd" in
       [ -f "$m" ] || continue
       IFS=$'\t' read -r _ _ mst mrepo mpr mwhy < "$m" || continue
       [ "$mst" = human ] && continue
-      if printf '%s\n' "$FP" | grep '^pr ' | grep -qiF "/$mrepo/pull/$mpr "; then
+      if grep '^pr ' <<<"$FP" | grep -iF "/$mrepo/pull/$mpr " >/dev/null; then
         echo "DELTA: merge-queue.sh holds the delegated merge of $mrepo#$mpr ($mst${mwhy:+: $mwhy}) — step 4 re-checks it."
         exit 1
       fi
     done
-    if printf '%s\n' "$FP" | grep -q '^reclaim owed '; then
+    if grep -q '^reclaim owed ' <<<"$FP"; then
       echo "DELTA: a done task's worktree is still on disk — step 5 owes its reclaim a retry."
       exit 1
     fi
