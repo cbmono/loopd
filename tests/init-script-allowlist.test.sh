@@ -29,7 +29,7 @@ copy_plugin "$TMP/checkout/plugin"
 
 STUB="$TMP/bin"; mkdir -p "$STUB"; printf '#!/bin/sh\nexit 1\n' > "$STUB/gh"; chmod +x "$STUB/gh"
 stamp() { # <plugin root> <instance> [PATH]
-  PATH="${3:-$STUB:$PATH}" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" \
+  PATH="${3:-$STUB:$PATH}" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" CLAUDE_CONFIG_DIR="$TMP/home/.claude" \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" \
     bash "$1/scripts/init-bundle.sh" "$2" </dev/null >"$TMP/out" 2>&1
 }

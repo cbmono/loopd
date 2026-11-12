@@ -128,7 +128,7 @@ guard and leave its harness behind, with the required check green.
 - **Compare resolved paths.** `mktemp` hands back `/var/...` while git reports `/private/var/...` on macOS, so an unresolved grep fails on a correct message. This trap has appeared three times in this codebase.
 - **`rule-globs-anchored.test.sh` asserts a measured fact the official docs contradict** — a `paths:` pattern is only root-anchored with a leading `/`. It is a test rather than a convention precisely because a convention that contradicts the documentation gets "corrected" back.
 - **An operator-facing "run this" notice emits through `ab_say_run <lead> <script> [arg...]`** (`plugin/scripts/bundle-paths.sh`), so `printed-commands.test.sh` can execute what it prints; a `<slot>` or variable in it needs a stated dummy in that harness, or it goes red. A command welded into a sentence is invisible to it, and the sentence is what shipped `migrate-bundle.sh --layout --apply` against a parser that accepts only `--apply`.
-- **Fixtures must not touch the user's real `~/.claude` or a real instance.** Build a throwaway repo under `mktemp -d` and copy the script under test into it.
+- **Fixtures must not touch the user's real `~/.claude` or a real instance.** Build a throwaway repo under `mktemp -d` and copy the script under test into it. **A harness that sets `HOME` sets `CLAUDE_CONFIG_DIR` beside it** — scripts honour the second first, so `HOME` alone still reached the real profile (`no-bg-grant`, `init-script-allowlist`, 2026-11-12). `run.sh` backs this up: a throwaway `HOME`, `CLAUDE_CONFIG_DIR` unset, and a canary that fails the run when the real profile's `plugins/`/`agents/` names or `plugins/*/bin` links changed.
 
 ## The suite runs from a worktree
 

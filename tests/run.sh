@@ -343,8 +343,32 @@ verify_checkout || { fatal "checkout is not intact before the suite even started
 
 RUN_OUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/run-out.XXXXXX")" || { fatal "mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}"; exit 2; }
 export RUN_OUT_DIR
-shim=""
-trap 'rm -rf "$RUN_OUT_DIR" ${shim:+"$shim"}' EXIT
+shim="" sandbox=""
+trap 'rm -rf "$RUN_OUT_DIR" ${shim:+"$shim"} ${sandbox:+"$sandbox"}' EXIT
+
+# Every harness runs with a throwaway HOME and no CLAUDE_CONFIG_DIR, so the config dir is
+# $HOME/.claude: a harness that sandboxes HOME gets its own, one that does not gets this
+# one, and none reaches the real profile. Before this a harness setting HOME alone still
+# inherited CLAUDE_CONFIG_DIR, and init-bundle.sh re-pointed the real profile's
+# plugins/<plugin>/bin link at a fixture (no-bg-grant, 2026-11-12). The canary below is
+# the proof: the real profile's bin links and its plugins/ and agents/ names, before and
+# after; a difference fails the run.
+real_cfg="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
+canary() {
+  local d l
+  for d in plugins agents; do
+    [ -d "$real_cfg/$d" ] && (cd "$real_cfg/$d" && ls -A) | sed "s|^|$d/|"
+  done
+  for l in "$real_cfg"/plugins/*/bin; do
+    [ -e "$l" ] || [ -L "$l" ] || continue
+    printf '%s -> %s\n' "$l" "$(readlink "$l" 2>/dev/null)"
+  done
+}
+canary_before="$(canary)"
+sandbox="$(mktemp -d "${TMPDIR:-/tmp}/run-home.XXXXXX")" || { fatal "mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}"; exit 2; }
+mkdir -p "$sandbox/.claude"
+export HOME="$sandbox"
+unset CLAUDE_CONFIG_DIR
 
 # The merge gate must not be able to spend a paid `claude` run. AB_TIER tells a harness
 # which tier it is in (absent, it is a by-hand run and deep), and the shim makes a spawn
@@ -460,6 +484,13 @@ done
 if [ -n "$destroyed" ] || [ -n "$first_notrun" ]; then
   fatal "the checkout was destroyed while running ${destroyed:-$first_notrun} — stopping immediately. See knowledge/findings/suite-cleanup-can-delete-its-own-checkout.md in the control panel."
   exit 2
+fi
+
+canary_after="$(canary)"
+if [ "$canary_before" != "$canary_after" ]; then
+  fatal "a harness wrote into the real Claude profile $real_cfg — it must sandbox CLAUDE_CONFIG_DIR. Changed:"
+  diff <(printf '%s\n' "$canary_before") <(printf '%s\n' "$canary_after") | grep '^[<>]' | sed 's/^/  /'
+  bad+=("the real Claude profile (canary)")
 fi
 
 echo "== ${#files[@]} harness(es) in $((end_ts - start_ts))s — pass=$total_pass fail=$total_fail =="

@@ -41,12 +41,12 @@ copy_plugin "$MK"; copy_plugin "$TMP/checkout/plugin"
 STUB="$TMP/bin"; mkdir -p "$STUB"; printf '#!/bin/sh\nexit 1\n' > "$STUB/gh"; chmod +x "$STUB/gh"
 stamp() { # <plugin root> <instance> [flags…] — stdin is /dev/null: no terminal
   local p="$1" i="$2"; shift 2
-  PATH="$STUB:$PATH" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" \
+  PATH="$STUB:$PATH" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" CLAUDE_CONFIG_DIR="$TMP/home/.claude" \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" \
     bash "$p/scripts/init-bundle.sh" "$i" "$@" </dev/null >"$TMP/out" 2>&1
 }
 tty_stamp() { # <answer> <instance> — the answer piped, the TTY test forced open
-  PATH="$STUB:$PATH" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" \
+  PATH="$STUB:$PATH" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" CLAUDE_CONFIG_DIR="$TMP/home/.claude" \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" BG_GRANT_STDIN=1 \
     bash "$MK/scripts/init-bundle.sh" "$2" <<<"$1" >"$TMP/out" 2>&1
 }
@@ -100,7 +100,7 @@ ok "no question was printed" "$(cnt -F "$PROMPT" "$TMP/out")" 0
 ok "no trust key anywhere" "$(trust_written "$I")" 0
 # A piped `y` with the TTY test NOT forced is still "no terminal": nothing asked, nothing written.
 I="$TMP/i1b"; mkdir -p "$I"; set_rules "$I"
-PATH="$STUB:$PATH" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" \
+PATH="$STUB:$PATH" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" CLAUDE_CONFIG_DIR="$TMP/home/.claude" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" \
   bash "$MK/scripts/init-bundle.sh" "$I" <<<"y" >"$TMP/out" 2>&1
 ok "a piped y with no terminal writes nothing" "$(grants "$I")" 0
 ok "…and asks nothing" "$(cnt -F "$PROMPT" "$TMP/out")" 0
