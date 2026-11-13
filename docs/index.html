@@ -324,6 +324,7 @@ footer nav{gap:16px;font-size:13px}
       <div class="label">The retry edge · a round cap per reviewer, then you decide</div>
       <p>Review sends the PR back to its agent: the reviewer reports, the agent fixes and replies once. Each reviewer gets one round by default — <code>coderabbitRounds</code> and <code>qaRounds</code> raise it. When CodeRabbit refuses to review, out of quota or credits, a QA reviewer takes the round instead. After the last round a <code>yolo</code> project merges the fix on green with no re-review, if it changes at most <code>reviewFixMaxLines</code> lines (300 by default). Anything bigger, or still disputed, comes to you in one short block. <a href="https://github.com/cbmono/loopd/blob/main/docs/autonomy.md#a-round-cap-per-reviewer-then-the-human-decides">docs/autonomy.md</a></p>
     </div>
+    <p style="margin-top:16px">Not every project is code. A <code>kind=research</code> project produces documents inside the bundle — no repo, no PR — and its second gate is you approving the deliverable.</p>
   </section>
 
   <section id="crew">
@@ -342,8 +343,9 @@ footer nav{gap:16px;font-size:13px}
     <div class="needs" aria-label="Example of an AWAITING.md block">
       <div class="head">▸ Needs you</div>
       <div class="item"><b>1</b> ◆ promote <code>task-004</code> draft → ready</div>
-      <div class="item"><b>2</b> ◆ merge PR <code>#42</code> — criteria 6 ✓ / 0 ✗</div>
+      <div class="item"><b>2</b> ◆ merge <code>api#42</code> — criteria 6 ✓ / 0 ✗</div>
     </div>
+    <p style="margin-top:16px">Day to day: <code>/pane</code> keeps the board beside your session, <code>/loopd:whats-up</code> lists what needs you, numbered, and <code>/loopd:update</code> brings the plugin current.</p>
   </section>
 
   <section id="install">
@@ -359,9 +361,14 @@ footer nav{gap:16px;font-size:13px}
 <span class="cmd">/plugin install loopd@loopd</span>
 <span class="c"># optional: let a project delegate its gates</span>
 <span class="cmd">/plugin install loopd-yolo@loopd</span>
+<span class="c"># then restart Claude Code</span>
 
 <span class="c"># once per group of repositories</span>
 <span class="cmd">/loopd:init ~/workspace/&lt;group&gt;/_loopd-&lt;group&gt;</span>
+<span class="c"># in the bundle: org + defaultRepo in instance.config.json,</span>
+<span class="c"># reposRoot in instance.config.local.json — then, from a</span>
+<span class="c"># session started inside the bundle, stamp it once more</span>
+<span class="cmd">/loopd:init</span>
 
 <span class="c"># then, every time</span>
 <span class="cmd">/loopd:new-project</span> add rate limiting to the public API
@@ -381,7 +388,6 @@ footer nav{gap:16px;font-size:13px}
       <div class="card"><h3>Done means a PR exists</h3><p>An agent's "done" is not evidence. The dispatch check asks whether the status moved and the PR resolves — and only reports.</p></div>
       <div class="card"><h3>One tick at a time</h3><p>A lock refuses a second orchestrator. Stale or unattributable means ask the human — never delete, never adopt.</p></div>
       <div class="card"><h3>Never deletes on a guess</h3><p>The worktree pruner only reports. A worktree goes when its task is done with every PR merged, or when you say yes to <code>/loopd:prune-wt</code>. The bundle repair is report-only by default.</p></div>
-      <div class="card"><h3>QA on the top tier</h3><p>A new install runs the QA reviewer on the apex model tier, where it weighs a cheap review's findings itself instead of handing them to a weaker model.</p></div>
       <div class="card"><h3>Every comment is signed</h3><p>Each agent comment and review on a PR ends with <code>— &lt;login&gt;-&lt;role&gt;</code>, so you can tell who wrote it. A label for people; no gate reads it.</p></div>
       <div class="card"><h3>Credential stores stay shut</h3><p>Agents cannot write, move or delete <code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.config/gh</code>, key files or credential files outside their own worktree.</p></div>
       <div class="card human"><h3>The gates can be delegated</h3><p>Only through the separate <code>loopd-yolo</code> companion plugin, never by default; each project stays gated until it opts in. Uninstall it and every project is gated again, with no other edits.</p></div>
@@ -397,7 +403,8 @@ footer nav{gap:16px;font-size:13px}
     <nav aria-label="Documentation">
       <a href="https://github.com/cbmono/loopd#readme">README</a>
       <a href="https://github.com/cbmono/loopd/blob/main/docs/autonomy.md">Autonomy</a>
-      <a href="https://github.com/cbmono/loopd/blob/main/docs/operations.md">Operations</a>
+      <a href="https://github.com/cbmono/loopd/blob/main/docs/getting-started.md">Getting started</a>
+      <a href="https://github.com/cbmono/loopd/blob/main/docs/reference.md">Reference</a>
       <a href="assets/fonts/inter/LICENSE.txt">Inter OFL</a>
       <a href="assets/fonts/jetbrains-mono/OFL.txt">JetBrains Mono OFL</a>
     </nav>

@@ -1734,7 +1734,7 @@ assert "…and no machinery still tells anyone to run it" "$(yes_if bash -c "! g
 # rule for these three trees is the simple one: don't name it.
 # install.sh is deliberately NOT in this list — tests/retire-machinery.test.sh owns that
 # file, beside the sweep behaviour it is about.
-for tree in docs README.md seed; do
+for tree in docs README.md CONTRIBUTING.md seed; do
   assert "no retired renderer named in $tree" \
     "$(yes_if bash -c "! grep -rlF build-artifact-board '$REPO/$tree' >/dev/null 2>&1")"
 done

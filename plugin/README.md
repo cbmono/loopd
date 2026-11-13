@@ -19,7 +19,7 @@ default and each a `/config` switch ([`hooks/MODS.md`](hooks/MODS.md)). The one 
 autonomy is a choice, never a default.
 
 Updates ship by version bump (no ambient auto-update): `/plugin` → Marketplaces.
-Joining somebody's bundle and running two commands, no more: [`docs/onboarding.md`](../docs/onboarding.md).
+Joining somebody's bundle and running two commands, no more: [`docs/getting-started.md`](../docs/getting-started.md#joining-someone-elses-bundle).
 
 **It also ships a colour theme.** `themes/loopd.json`, declared by `experimental.themes`
 and listed in `/theme` as `custom:loopd:loopd` — select it there, because nothing

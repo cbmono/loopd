@@ -63,8 +63,9 @@ echo
 echo "== 2. no file claims an absent key grants the browser =="
 # The drift this section exists for: a document left behind saying the capability arrives
 # by default, which would grant it to every project that never answered the question.
-for pair in "SCHEMA:$SCHEMA" "SKILL:$SKILL" "CONV:$CONV" "README:$REPO/README.md"; do
+for pair in "SCHEMA:$SCHEMA" "SKILL:$SKILL" "CONV:$CONV" "README:$REPO/README.md" "REFERENCE:$REPO/docs/reference.md" "GETTING:$REPO/docs/getting-started.md" "CONTRIB:$REPO/CONTRIBUTING.md"; do
   name="${pair%%:*}"; file="${pair#*:}"
+  [ -f "$file" ] || { echo "browser-default-off-disclosure.test: no $file" >&2; exit 2; }
   ok "$name: no \"default claude-for-chrome\" claim" \
      "$(grep -qiE 'default \x60?claude-for-chrome|absent[^.]{0,60}means (on|claude-for-chrome)' "$file" && echo no || echo yes)" yes
 done
@@ -111,7 +112,7 @@ ok "the rung-1 deferral is verbatim"               "$(saw "$CONV" '**rung 1 abov
 ok "…and the one-statement clause with it"         "$(saw_flat "$CONV" 'it is the general one now, stated once, so the two cannot drift')" yes
 ok "…and the missing-browser capability gap"       "$(saw_flat "$CONV" 'that is a capability gap, so take the non-browser route, say so, and carry on')" yes
 ok "no lowercase browser-first was introduced"     \
-   "$(grep -rqF 'browser-first' "$REPO/plugin/seed" "$REPO/docs" "$REPO/README.md" && echo no || echo yes)" yes
+   "$(grep -rqF 'browser-first' "$REPO/plugin/seed" "$REPO/docs" "$REPO/README.md" "$REPO/CONTRIBUTING.md" && echo no || echo yes)" yes
 
 echo
 echo "== 6. THE WRITE GATE, PINNED WHOLE =="

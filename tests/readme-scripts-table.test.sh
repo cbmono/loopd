@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# readme-scripts-table.test.sh — README.md's `## Scripts` section and `plugin/scripts/`
-# account for each other, in both directions.
+# readme-scripts-table.test.sh — docs/reference.md's `## Scripts` section and `plugin/scripts/`
+# account for each other, in both directions. (The section lived in README.md until the
+# README became a front door; the file keeps its name so its history stays in one place.)
 #
 # WHY. A hand-maintained table of scripts drifts the moment a PR adds one, silently, and
 # nothing read it. Measured 2026-09-01 on `origin/main` (55088f8): the section carried
@@ -42,7 +43,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-README="$REPO/README.md"
+README="$REPO/docs/reference.md"
 SCRIPTS="$REPO/plugin/scripts"
 [ -f "$README" ] || { echo "readme-scripts-table.test: missing $README" >&2; exit 2; }
 [ -d "$SCRIPTS" ] || { echo "readme-scripts-table.test: missing $SCRIPTS" >&2; exit 2; }
@@ -73,13 +74,13 @@ stale_rows()   { comm -13 <(shipped) <(documented "$1"); }   # row, no script
 
 echo
 echo "== 1. the section selector is unique =="
-ok "exactly one '## Scripts' heading in the README" \
+ok "exactly one '## Scripts' heading in docs/reference.md" \
    "$(grep -c '^## Scripts$' "$README" | tr -d ' ')" 1
 ok "…and it yields rows"      "$([ -n "$(documented "$README")" ] && echo yes || echo no)" yes
 ok "…and the directory ships scripts" "$([ -n "$(shipped)" ] && echo yes || echo no)" yes
 
 echo
-echo "== 2. the real README accounts for every script, and names no ghost =="
+echo "== 2. the real docs/reference.md accounts for every script, and names no ghost =="
 ok "no script ships undocumented ($(undocumented "$README" | tr '\n' ' '))" \
    "$(undocumented "$README" | wc -l | tr -d ' ')" 0
 ok "no row names a script that does not exist ($(stale_rows "$README" | tr '\n' ' '))" \

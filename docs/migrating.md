@@ -81,7 +81,7 @@ for it with the history. If you cannot name why you want that, you want A.
 **Either way, the plugin is `loopd`.** `ai-bridge-v2` was the transition name; its
 stub shipped for one version and was removed in 1.0.0, so install the bare name.
 Every command is namespaced — `/loopd:dispatch`, `/loopd:welcome`,
-`/loopd:new-project`, and the [rest](../README.md#commands) — and so is every role agent
+`/loopd:new-project`, and the [rest](reference.md#commands) — and so is every role agent
 (`loopd:software-engineer`), because a bare name does not resolve.
 
 ---
@@ -140,8 +140,8 @@ git bundle verify ~/backups/_ai-bridge-<group>.bundle
 
 ### 2. Install the plugin — once per MACHINE
 
-The two lines are in [README § Install step
-1](../README.md#1-install-the-plugin--once-per-machine). Per machine, not per instance:
+The two lines are in [README §
+Install](../README.md#install). Per machine, not per instance:
 if this machine already has `loopd`, skip the step. If it has `ai-bridge-v2`, install
 `loopd`, uninstall the old one from `/plugin` → Manage, and relaunch Claude Code.
 
@@ -152,7 +152,7 @@ if this machine already has `loopd`, skip the step. If it has `ai-bridge-v2`, in
 ```
 
 It creates the directory too. Name it `_loopd-<group>` unless you are deliberately
-renaming ([README § 2](../README.md#2-make-the-bundle-directory)).
+renaming ([getting-started.md § 1](getting-started.md#1-install)).
 
 **Answer the roster prompt.** A first stamp at a terminal offers to collect
 `<github-login> <commit-email>` pairs, and the same prompt writes this clone's
@@ -329,7 +329,7 @@ can look at what remains and confirm every last file of it is yours.
 machine uses it, so do not uninstall `loopd`. Uninstall `ai-bridge-v2` if it is still
 listed. The optional `~/.claude` config layer is retired (2026-10-28): a link it left in
 `~/.claude/agents/` is reported by `/loopd:init` with the `rm`
-([README § The config layer](../README.md#the-config-layer)).
+([MIGRATION.md → The config layer](../MIGRATION.md#the-config-layer)).
 
 ## The Brief output style (3.17.0 onward)
 

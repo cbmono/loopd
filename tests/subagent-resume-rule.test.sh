@@ -110,7 +110,7 @@ ok "…exactly once"                       "$(count "$CONV" "$CANON")" 1
 # the two will disagree. Every shipped tree is scanned, not a list somebody remembers.
 # path-scan: absent symlink — retired in #122; the four other roots on this line resolve
 copies="$(grep -rlF -- 'DISPATCH FRESH.' "$REPO/symlink" "$REPO/plugin/seed" "$REPO/docs" \
-  "$REPO/README.md" "$REPO/CLAUDE.md" 2>/dev/null | sort | sed "s|^$REPO/||" | tr '\n' ' ' | sed 's/ *$//')"
+  "$REPO/README.md" "$REPO/CONTRIBUTING.md" "$REPO/CLAUDE.md" 2>/dev/null | sort | sed "s|^$REPO/||" | tr '\n' ' ' | sed 's/ *$//')"
 ok "…and exactly one shipped file carries the table" "$copies" "plugin/seed/conventions/rounds.md"
 
 echo

@@ -39,7 +39,7 @@ ANSWER="$REPO/plugin/skills/answer/SKILL.md"
 CLOSE="$REPO/plugin/skills/close-project/SKILL.md"
 DISPATCH="$REPO/plugin/skills/dispatch/tick-brief.md"  # the guardrails, since tick-as-bg-session/task-002
 SHARING="$REPO/docs/sharing.md"
-README="$REPO/README.md"
+REFERENCE="$REPO/docs/reference.md"   # the Scripts table, since the README became a front door
 
 [ -x "$STAMP" ] || { echo "decision-stamp.test: $STAMP is missing or not executable" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || {
@@ -275,8 +275,8 @@ ok "…only the owner's loop dispatches" \
    "$(hasf "$SHARING" "only the owner's loop dispatches")" yes
 ok "…named as the approve/continue split" \
    "$(hasf "$SHARING" 'which is the approve/continue split')" yes
-ok "README documents the script where this repo documents scripts" \
-   "$(hasf "$README" '| `decision-stamp.sh` |')" yes
+ok "docs/reference.md documents the script where this repo documents scripts" \
+   "$(hasf "$REFERENCE" '| `decision-stamp.sh` |')" yes
 
 echo
 TOTAL=$((pass + fail))

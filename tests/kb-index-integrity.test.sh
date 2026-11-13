@@ -395,7 +395,7 @@ ok "…and rebuilds the index"             "$(has "$CLOSE" 'scripts/build-kb-ind
 ok "seed CLAUDE.md: grep, never the whole index" "$(has "$SEED_CLAUDE" 'grep, never the whole index; at most three; superseded rows are history')" yes
 ok "…and it drops the old 1–3 wording"   "$(has "$SEED_CLAUDE" 'open only the 1–3')" no
 ok "the KB rule repeats the three points" "$(has "$KB_RULE" 'history, not guidance')" yes
-ok "the README row names the link check" "$(has "$REPO/README.md" 'bundle-relative link in `knowledge/**`')" yes
+ok "the reference.md row names the link check" "$(has "$REPO/docs/reference.md" 'bundle-relative link in `knowledge/**`')" yes
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

@@ -134,9 +134,9 @@ body_lines() { # <file>
 # =========================================================================================
 ALLOWED='
 .claude/rules/installer.md	2	the sentence saying the two root scripts are deleted, and the conversion sweep /symlink/ target test
-README.md	3	the two lines naming install.sh as the thing /'"${PN}:"'init replaced or converts a bundle from, past tense, and the Scripts row for init-bundle.sh
 docs/conventions.md	2	the relocation History blockquote, and the retired unstamped-machinery row, both past tense
 docs/operations.md	2	the /symlink/ target test the conversion sweep STILL applies, and the eight commands that became skills
+docs/reference.md	1	the Scripts row for init-bundle.sh, naming install.sh as what it converts a bundle from (the row moved here with the Scripts section of README.md, whose two install-history lines went with its rewrite)
 docs/pm-design.md	1	where the two step files moved FROM, past tense
 plugin/README.md	2	names the retired install.sh as the thing /'"${PN}:"'init converts a bundle from
 plugin/RETIRED	2	the plugin-migration audit: sixteen machinery paths, none of them seed content

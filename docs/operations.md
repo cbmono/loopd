@@ -33,8 +33,8 @@ mirror of `VERSION` ship inside `plugin/` now, and the root is derived one direc
 linked three advisory agent files into `${CLAUDE_CONFIG_DIR:-~/.claude}` by absolute path
 from a clone's `config/`. Those agents (`code-architect`, `deep-bug-scan`, `plan-architect`)
 ship in the plugin now, dispatched `loopd:<name>`, so the flag refuses by name and a stamp
-only reports a dangling link an older run left ([README § The config
-layer](../README.md#the-config-layer)).
+only reports a dangling link an older run left ([MIGRATION.md → The config
+layer](../MIGRATION.md#the-config-layer)).
 
 **Install is therefore the plugin first, the stamp second.** A machine with the plugin and
 no bundle has commands and nothing for them to read; a bundle with no plugin has the data
@@ -1359,11 +1359,10 @@ banner sample below, whose `─` rule it re-cuts to the new header's width) — 
 commit it makes. That bump commit goes **straight to main**: the merger pushes it directly,
 bypassing the required check as an admin (`enforce_admins` is off on this repo), and
 **main's suite on the push is the check**. There is no second, trivially-green PR, and the
-script refuses to run anywhere but the default branch on a clean tree. **Write the release
-note first.** `docs/releases/v<new>.md` is the one path the script forgives on an otherwise
-clean tree, so an uncommitted note rides into the bump commit and the release arrives with
-the note that explains it; a note that already shipped is a record, and neither the bump nor
-`tests/template-version.test.sh` touches `docs/releases/` again. **`major` moves the
+script refuses to run anywhere but the default branch on a clean tree. **There are no
+release notes:** git history and each PR's description are the record of what shipped
+(`docs/releases/` is retired — [CONTRIBUTING.md](../CONTRIBUTING.md#versioning-and-drift)).
+**`major` moves the
 companions too** — every non-core marketplace entry and its own `plugin.json` go to the same
 new major, because a companion tracks core's MAJOR, and a 2.0.0 core beside a 1.x companion
 fails main's own suite. The reason is
@@ -1380,8 +1379,8 @@ bash harness stays green — and a release is the only recurring event correlate
 evals (`plugin/evals/README.md` → "Running it") are read here, by the human. It is a check, never
 a gate: `release-bump.sh` does not run it and no workflow does. **Then ask one question, for each
 hook, gate and script: which assumption has this model generation made unnecessary?** Answer it in
-prose in `docs/releases/v<new>.md`, report-only — "none" is an answer, written down — and never
-as an inventory file, because a hand-kept table drifts the day after it is written
+prose, report-only, in the description of the PR that acts on the answer — "none" is an answer,
+and needs no file — and never as an inventory file, because a hand-kept table drifts the day after it is written
 ([conventions #18](conventions.md#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure)).
 
 ### The session banner
