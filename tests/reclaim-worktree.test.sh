@@ -552,6 +552,98 @@ run "projects/demo/tasks/task-husky.md"
 assert "G12 .husky/_ and node_modules/ only: removed (exit 0)" "$(eq "$RC" 0)"
 assert "G12 …and the husky tree is gone" "$(no_if test -e "$WT_HUSKY")"
 
+# A monorepo nests its caches: `ls-files --directory` prints `apps/x/node_modules/`, whose
+# FIRST component is `apps`. Reported 2026-11-13: matched on that alone, every merged
+# worktree of such a repo refused, and /loopd:prune-wt skipped all 43 on one bundle.
+printf 'certs/\n.turbo/\n**/out/*\n' >> "$REPO/.git/info/exclude"
+WT_MONO="$WTROOT/proj-demo-mono"
+wt_pushed "$WT_MONO" okf/demo-mono
+# Each package's own directory is TRACKED, as in a real monorepo. An untracked parent is
+# printed as an entry of its own (`apps/`, `apps/x/`) and still refuses: refusing more.
+for d in apps/x packages/y apps/.private; do mkdir -p "$WT_MONO/$d"; printf '{}\n' > "$WT_MONO/$d/package.json"; done
+git -C "$WT_MONO" add . && git -C "$WT_MONO" commit -qm packages && git -C "$WT_MONO" push -q
+mkdir -p "$WT_MONO/apps/x/node_modules/pkg" "$WT_MONO/packages/y/dist"
+printf 'x\n' > "$WT_MONO/apps/x/node_modules/pkg/index.js"
+printf 'x\n' > "$WT_MONO/packages/y/dist/index.js"
+write_task task-mono done "$WT_MONO" okf/demo-mono fixture-org/proj "$PR1"
+run --dry-run "projects/demo/tasks/task-mono.md"
+assert "G12 nested apps/x/node_modules/ and packages/y/dist/: clears" "$(eq "$RC" 0)"
+# A `.env*` anywhere in the path refuses, whatever surrounds it.
+printf 'TOKEN=shape-only\n' > "$WT_MONO/apps/x/.env"
+run --dry-run "projects/demo/tasks/task-mono.md"
+assert "G12 …plus an ignored apps/x/.env refuses" "$(eq "$RC" 1)"
+assert "G12 …and names it" "$(has 'apps/x/\.env')"
+rm -f "$WT_MONO/apps/x/.env"
+# A directory that is not a cache refuses at any depth: `apps` is no allowance.
+mkdir -p "$WT_MONO/apps/x/certs"; printf 'x\n' > "$WT_MONO/apps/x/certs/key.pem"
+run --dry-run "projects/demo/tasks/task-mono.md"
+assert "G12 …plus an ignored apps/x/certs/ refuses" "$(eq "$RC" 1)"
+assert "G12 …and names it" "$(has 'apps/x/certs/')"
+rm -rf "$WT_MONO/apps/x/certs"
+# A cache below a HIDDEN directory refuses: `.aws`, `.ssh`, `.git` are where state lives,
+# and no reported monorepo shape needs one.
+mkdir -p "$WT_MONO/apps/.private/dist"; printf 'x\n' > "$WT_MONO/apps/.private/dist/a.js"
+run --dry-run "projects/demo/tasks/task-mono.md"
+assert "G12 …plus apps/.private/dist/ refuses (a hidden directory is not plain)" "$(eq "$RC" 1)"
+rm -rf "$WT_MONO/apps/.private/dist"
+# `out/*` ignores the contents, not the directory, so git lists each file and a `.env`
+# INSIDE a cache directory reaches the matcher on its own line.
+mkdir -p "$WT_MONO/apps/x/out"; printf 'x\n' > "$WT_MONO/apps/x/out/a.js"
+run --dry-run "projects/demo/tasks/task-mono.md"
+assert "G12 …plus apps/x/out/a.js clears (out is a cache)" "$(eq "$RC" 0)"
+printf 'TOKEN=shape-only\n' > "$WT_MONO/apps/x/out/.env.local"
+run --dry-run "projects/demo/tasks/task-mono.md"
+assert "G12 …but apps/x/out/.env.local refuses: the .env check runs before the allowlist" \
+  "$(eq "$RC" 1)"
+# A reclaimIgnoreOk name is matched the same way, at any depth. `.turbo` is built in, so
+# the configured name here is one that is not.
+mkdir -p "$WT_MONO/apps/x/.turbo" "$WT_MONO/packages/y/certs"
+printf 'x\n' > "$WT_MONO/apps/x/.turbo/log"; printf 'x\n' > "$WT_MONO/packages/y/certs/c.pem"
+rm -f "$WT_MONO/apps/x/out/.env.local"
+run --dry-run "projects/demo/tasks/task-mono.md"
+assert "G12 nested .turbo/ beside a nested certs/: refuses with no config" "$(eq "$RC" 1)"
+printf '{ "reclaimIgnoreOk": ["certs"] }\n' > "$INSTANCE/instance.config.local.json"
+run --dry-run "projects/demo/tasks/task-mono.md"
+assert "G12 a nested reclaimIgnoreOk name (certs) clears" "$(eq "$RC" 0)"
+rm -rf "$WT_MONO/packages/y/certs" "$INSTANCE/instance.config.local.json"
+
+# THE MUTANTS. Each swaps one statement of the matcher; the fixture that statement exists
+# for must then come out the other way, or the assertion above it proves nothing.
+mutant() { # <name> <statement> <replacement> → $TMP/<name>.sh
+  awk -v from="$2" -v to="$3" '{ i = index($0, from)
+    if (i) $0 = substr($0, 1, i - 1) to substr($0, i + length(from)); print }' \
+    "$RECLAIM" > "$TMP/$1.sh"
+}
+ENV_STMT='case "/$p" in */.env*) return 1 ;; esac'
+PLAIN_STMT='case "$c" in ""|.*|*[!A-Za-z0-9._@+-]*) return 1 ;; esac'
+NEXT_STMT='[ "$c" != "$p" ] || return 1'
+mutant reclaim-first-only  "$NEXT_STMT"  'return 1'
+mutant reclaim-no-envcheck "$ENV_STMT"   ':'
+mutant reclaim-no-plain    "$PLAIN_STMT" ':'
+for m in "$NEXT_STMT:first-only" "$ENV_STMT:no-envcheck" "$PLAIN_STMT:no-plain"; do
+  assert "mutant ${m##*:}: the statement occurs once in the script, and not in the mutant" \
+    "$(eq "$(grep -cF -- "${m%:*}" "$RECLAIM") $(grep -cF -- "${m%:*}" "$TMP/reclaim-${m##*:}.sh")" "1 0")"
+done
+SCRIPT="$TMP/reclaim-first-only.sh"; rm -rf "$WT_MONO/apps/x/out"
+run --dry-run "projects/demo/tasks/task-mono.md"
+assert "MUTANT first-component-only (the 4.12.4 matcher): the nested tree refuses" "$(eq "$RC" 1)"
+SCRIPT="$TMP/reclaim-no-envcheck.sh"
+mkdir -p "$WT_MONO/apps/x/out"; printf 'TOKEN=shape-only\n' > "$WT_MONO/apps/x/out/.env.local"
+run --dry-run "projects/demo/tasks/task-mono.md"
+assert "MUTANT without the .env-first check: apps/x/out/.env.local passes" "$(eq "$RC" 0)"
+rm -rf "$WT_MONO/apps/x/out"
+SCRIPT="$TMP/reclaim-no-plain.sh"
+mkdir -p "$WT_MONO/apps/.private/dist"; printf 'x\n' > "$WT_MONO/apps/.private/dist/a.js"
+run --dry-run "projects/demo/tasks/task-mono.md"
+assert "MUTANT without the plain-prefix check: apps/.private/dist/ passes" "$(eq "$RC" 0)"
+SCRIPT=""
+run --dry-run "projects/demo/tasks/task-mono.md"
+assert "…and the real script refuses that same tree" "$(eq "$RC" 1)"
+rm -rf "$WT_MONO/apps/.private/dist"
+run "projects/demo/tasks/task-mono.md"
+assert "G12 nested caches only: removed (exit 0)" "$(eq "$RC" 0)"
+assert "G12 …and the monorepo tree is gone" "$(no_if test -e "$WT_MONO")"
+
 WT_BUILD="$WTROOT/proj-demo-build"
 wt_pushed "$WT_BUILD" okf/demo-build
 mkdir -p "$WT_BUILD/dist/assets"; printf 'x\n' > "$WT_BUILD/dist/assets/app.js"

@@ -41,7 +41,7 @@
   "minFreeMemGb": null,
   "$minFreeMemGb": "Available-memory floor in decimal GB (macOS free + inactive + purgeable pages, Linux MemAvailable), on the same terms as minFreeDiskGb: ABSENT (or null, as here) => no gate. PER-MACHINE OVERRIDABLE -- SCHEMA.md, 'Per-machine config overrides'.",
   "reclaimIgnoreOk": [],
-  "$reclaimIgnoreOk": "Extra first-path-component names scripts/reclaim-worktree.sh treats as build output when it reclaims a merged task's worktree, added to its built-in cache list. Empty (as here) or absent => the built-in list alone. A name starting with `.env` is warned about and never added. PER-MACHINE OVERRIDABLE -- SCHEMA.md, 'Per-machine config overrides'.",
+  "$reclaimIgnoreOk": "Extra path-component names (matched at any depth below plain directories) scripts/reclaim-worktree.sh treats as build output when it reclaims a merged task's worktree, added to its built-in cache list. Empty (as here) or absent => the built-in list alone. A name starting with `.env` is warned about and never added. PER-MACHINE OVERRIDABLE -- SCHEMA.md, 'Per-machine config overrides'.",
   "kbStaleCommits": 20,
   "$kbStaleCommits": "How many commits on a Service's repo (its `path:`, else the whole repo) since the doc's `timestamp:` make scripts/kb-stale.sh list it as stale. Absent => 20; 0 or a non-integer => 20 with a warning. Report-only: the list rides along in a cataloguer brief the tick already sends and never dispatches one (step 7).",
   "kbSweepIntervalHours": 24,
