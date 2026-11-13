@@ -201,7 +201,9 @@ ledger, `AWAITING.md` or the transcript itself. The decisions it carries:
 | close committed | not `working` | release; print the close line, Needs-you, `COST:` |
 | close committed | `working`, turn running | hold — the tick is still pushing and rendering |
 | close committed | `working`, `status: idle` | `claude stop` it, then release — the turn is over |
-| open, or none | `working` | hold; the fire is dropped, never queued |
+| open, or none | `working`, turn running | hold; the fire is dropped, never queued |
+| open | `working`, `status: idle` | hold — a full walk may be waiting on background work |
+| none, the id nowhere in the ledger, past 120s | `working`, `status: idle` | `claude stop` it, append the `ended with no ledger entry` close, then release |
 | open, or none | `blocked` | `BLOCKED`, lock kept — neither idle nor done |
 | open | ended or gone | write the `close: dead …` line beside it, then release |
 | none | ended or gone | append a `close: … ended with no ledger entry` line, then release |

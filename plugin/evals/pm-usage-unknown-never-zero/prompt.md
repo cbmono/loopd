@@ -250,6 +250,8 @@ state, and act only on deltas.
      ledger line — never append it yourself:**
      `${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh record --idle --tick-id <the tick id from your brief>`,
      plus `--swept "<its lines, `; `-joined>"` when it printed any (no id ⇒ drop `--tick-id`).
+     Exit 1 on a refused `--swept` (ledger grammar or a home path): run it again with the
+     sweep's `stopped <short> (<age>) <class>` tokens only; on any other exit 1, say so.
      Then step 8 commits `.loopd/log.md` by that path and syncs it, reporting `noop: true`.
      **Then stop — your entire report is that one line, the probe's own, verbatim.**
      Rewrite no queue, no snapshot, no board — **then re-record the fingerprint**,

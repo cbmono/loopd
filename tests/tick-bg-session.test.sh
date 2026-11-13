@@ -225,10 +225,18 @@ spawned; backdate 300; rm -f "$ST/stopped"; chmod 000 "$B/.loopd/log.md"; STATUS
 ok "an unreadable ledger, turn over ⇒ exit 2, lock kept, nothing stopped" "$RC:$(locked):$(cat "$ST/stopped" 2>/dev/null)" "2:yes:"
 spawned; printf '* TICK %s by me close: dispatched x; quoting %s in free text\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"; state done; reap
 ok "an id in free text is not a close for it" "$(has "$OUT" "reaped: $ID · ended")" yes
-for forged in "close: dispatched x · $ID" "close: x idle — fingerprint unchanged (tick-delta) · $ID" "close: x open: $ID"; do
-  spawned; printf '* TICK %s by me %s\n' "$TS" "$forged" >> "$B/.loopd/log.md"; commit "$B"; state done; reap
+for forged in "close: dispatched x · @ID" "close: x idle — fingerprint unchanged (tick-delta) · @ID" "close: x open: @ID"; do
+  spawned; printf '* TICK %s by me %s\n' "$TS" "${forged//@ID/$ID}" >> "$B/.loopd/log.md"; commit "$B"; state done; reap
   ok "forged summary is not its close: ${forged:0:28}…" "$(has "$OUT" "reaped: $ID · ended")" yes
 done
+spawned; backdate 300; rm -f "$ST/stopped"; printf '* TICK %s by me open:  `%s`, x\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"
+STATUS=idle state working; reap
+ok "a malformed open line naming the id, turn over ⇒ held, not stopped" "$RC:$(locked):$(cat "$ST/stopped" 2>/dev/null)" "1:yes:"
+spawned; backdate 300; rm -f "$B/.loopd/log.md"; commit "$B"; STATUS=idle state working; reap
+ok "a missing ledger, turn over ⇒ exit 2 naming it missing" "$RC:$(locked):$(has "$OUT" 'is missing')" "2:yes:yes"
+spawned; bash "$SC/tick-delta.sh" record --idle --instance "$B" --tick-id "$ID" --swept "stopped 1234abcd (3m) finished" >/dev/null; commit "$B"
+STATUS=idle state working; reap
+ok "a real record --idle line with --swept closes the tick" "$RC:$(has "$OUT" "reaped: $ID · closed")" "0:yes"
 
 echo "== no plugin prompt tells a tick to write the ledger at the root =="
 stray="$(grep -rnE --include='*.md' 'root `log\.md`|>> ?log\.md|-- log\.md| log\.md objectives' "$REPO/plugin" | sed "s|^$REPO/||")"

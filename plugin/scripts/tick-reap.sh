@@ -127,10 +127,14 @@ assess() {
   # Turn over, no line for the id anywhere in the ledger: it wrote its close elsewhere (a
   # hand-typed root `log.md`) or not at all. Still `working` only because a bg session stays
   # resident, so stop it before closing — never on age alone, a full walk can run past 45m.
+  # The id anywhere at all (a malformed hand-typed open line) holds: only total absence stops.
   if [ "$state" = working ] && [ "$(turn_status)" = idle ] && past_grace; then
     case "$disk" in
-      none) claude stop "$short" >/dev/null 2>&1 </dev/null; state=turn-over; ended ;;
-      unread) echo "UNKNOWN: cannot read $LOG for tick $tick — the lock stays; nothing stopped." >&2; exit 2 ;;
+      none) grep -qF -- "$tick" "$LOG" && return 1
+            claude stop "$short" >/dev/null 2>&1 </dev/null; state=turn-over; ended ;;
+      unread)
+        [ -e "$LOG" ] && why="cannot read $LOG" || why="$LOG is missing, so no entry can be ruled out"
+        echo "UNKNOWN: $why for tick $tick — the lock stays; nothing stopped." >&2; exit 2 ;;
     esac
   fi
   case "$state" in

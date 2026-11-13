@@ -407,7 +407,7 @@ is, while the log entry still names the human who decided.
    **Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh` after the folder step and before committing** —
    validating beforehand cannot see a reference that only dangles once the folder is
    gone, which is the whole failure class step 6 exists to prevent. Zero errors is the
-   gate. Print the closing commit SHA and the `log.md` entry. For a removal, remind the
+   gate. Print the closing commit SHA and the `.loopd/log.md` entry. For a removal, remind the
    user the full record stays recoverable via `git log -- projects/<slug>/`; for a
    retention, that the folder is deliberately partial and the log entry says how.
 
@@ -438,7 +438,7 @@ is, while the log entry still names the human who decided.
    where `SNAPSHOT.json` is absent (the board's off switch), and a non-zero exit never
    fails the closeout: name it in your report and carry on.
 
-**Report back** — one tight summary: what the cataloguer folded in, the `log.md` entry,
+**Report back** — one tight summary: what the cataloguer folded in, the `.loopd/log.md` entry,
 the closing commit SHA, this project's worktree lines, and anything you skipped. You never
 promoted a task and you never merged a pull request; say so if either was ever in
 question.
