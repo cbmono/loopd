@@ -307,7 +307,8 @@ LA="$(bash "$MIGRATE" --layout-only --apply 2>&1)"
 assert "apply: MERGED"                     "$(grep -q "MERGED   log.md into $AB_LEDGER — 2 line(s)" <<<"$LA" && echo 0 || echo 1)"
 assert "…in timestamp order, each line once, prose untouched" "$([[ "$(cat "$AB_LEDGER")" == "$WANT" ]] && echo 0 || echo 1)"
 assert "…and the root file is gone, its delete staged" "$([[ ! -e log.md && "$(git diff --cached --name-status -- log.md)" == "D"*log.md ]] && echo 0 || echo 1)"
-assert "a second run has no layout left"   "$(bash "$MIGRATE" --layout-only 2>&1 | grep -q 'pre-3.0 layout' && echo 1 || echo 0)"
+L2="$(bash "$MIGRATE" --layout-only 2>&1)"
+assert "a second run has no layout left"   "$(grep -q 'pre-3.0 layout' <<<"$L2" && echo 1 || echo 0)"
 git checkout -q HEAD -- log.md "$AB_LEDGER"; printf 'hand-written note\n' >> log.md
 LP="$(bash "$MIGRATE" --layout-only --apply 2>&1)"
 assert "a root line that is not a TICK line still STOPS" \
