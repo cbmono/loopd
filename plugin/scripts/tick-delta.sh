@@ -217,6 +217,9 @@ if [ "$close_set" -eq 1 ]; then
   case "$close" in
     '') echo "tick-delta: --close needs a summary" >&2; exit 3 ;;
     *"~/"*) echo "REFUSED: a ledger line carries no path under \`~\` — rewrite the summary." >&2; exit 1 ;;
+    # tick-reap.sh reads a close's first token as a tick id, so a summary never forges one.
+    *"* TICK"*|*"open:"*|*"close:"*|*"idle — fingerprint"*|tick-[0-9]*)
+      echo "REFUSED: the summary carries ledger grammar or opens with a tick id — rewrite the summary." >&2; exit 1 ;;
   esac
   # Whichever marker comes FIRST decides the line. A summary is free prose and may quote
   # the other word, so a plain substring test misfiles the entry it is reading.

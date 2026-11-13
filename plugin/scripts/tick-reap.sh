@@ -29,18 +29,19 @@ NO_ENTRY_GRACE_S=120
 
 field() { awk -v k="$1" '!/^#/ && index($0, k ":") == 1 { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$LOCK" 2>/dev/null; }
 
-# <ledger text on stdin> -> "closed <line>" | "open <ts>" | "none". The id counts only in its
-# slot — `open: <id>`, the reaper's `close: <id>`, or the idle line's ` · <id>` — never in
-# free text. A line carrying it whose first marker is not ` open: ` is already closed.
+# <ledger text on stdin> -> "closed <line>" | "open <ts>" | "none". The id counts only as the
+# token right after the line's FIRST marker, or in the exact `record --idle` grammar — never
+# in free text, which agents write. A line carrying it whose first marker is not ` open: ` is closed.
 scan() {
   ID="$tick" awk '
-    function word_after(m,   i, r) { i = index($0, m); if (i == 0) return ""; r = substr($0, i + length(m)); sub(/[[:space:]].*/, "", r); return r }
-    function slot(   s1, rest, i) {
-      if (word_after(" open: ") == ENVIRON["ID"] || word_after(" close: ") == ENVIRON["ID"]) return 1
-      i = index($0, " · "); if (i == 0) return 0
-      s1 = substr($0, 1, i - 1); rest = substr($0, i + length(" · "))
-      sub(/ · .*/, "", rest)
-      return index(s1, " idle") > 0 && rest == ENVIRON["ID"]
+    function tok(at,   r) { r = substr($0, at); sub(/[[:space:]].*/, "", r); return r }
+    function slot(   o, c, r) {
+      o = index($0, " open: "); c = index($0, " close: ")
+      if (o > 0 && (c == 0 || o < c)) return tok(o + 7) == ENVIRON["ID"]
+      if (c > 0) return tok(c + 8) == ENVIRON["ID"]
+      if (!match($0, /^\* TICK [^ ]+ by [^ ]+ idle — fingerprint unchanged \(tick-delta\) · /)) return 0
+      r = substr($0, RSTART + RLENGTH)
+      return r == ENVIRON["ID"] || index(r, ENVIRON["ID"] " · swept: ") == 1
     }
     /^\* TICK / {
       o = index($0, " open: "); c = index($0, " close: ")

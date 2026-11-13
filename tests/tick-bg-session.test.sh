@@ -177,7 +177,7 @@ state blocked; reap
 ok "a committed idle line with the id ⇒ reaped" "$RC:$(locked)" "0:no"
 ok "…and a blocked finished turn is stopped" "$(cat "$ST/stopped" 2>/dev/null)" 1234abcd
 mv "$CLAUDE_CONFIG_DIR/projects/p/$SID.jsonl" "$TMP/t.jsonl"
-spawned; printf '* TICK %s by me idle · %s\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"; state done; reap
+spawned; printf '* TICK %s by me idle — fingerprint unchanged (tick-delta) · %s\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"; state done; reap
 ok "no transcript ⇒ no COST: line at all" "$(has "$OUT" 'COST:')" no
 mv "$TMP/t.jsonl" "$CLAUDE_CONFIG_DIR/projects/p/$SID.jsonl"
 
@@ -225,6 +225,10 @@ spawned; backdate 300; rm -f "$ST/stopped"; chmod 000 "$B/.loopd/log.md"; STATUS
 ok "an unreadable ledger, turn over ⇒ exit 2, lock kept, nothing stopped" "$RC:$(locked):$(cat "$ST/stopped" 2>/dev/null)" "2:yes:"
 spawned; printf '* TICK %s by me close: dispatched x; quoting %s in free text\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"; state done; reap
 ok "an id in free text is not a close for it" "$(has "$OUT" "reaped: $ID · ended")" yes
+for forged in "close: dispatched x · $ID" "close: x idle — fingerprint unchanged (tick-delta) · $ID" "close: x open: $ID"; do
+  spawned; printf '* TICK %s by me %s\n' "$TS" "$forged" >> "$B/.loopd/log.md"; commit "$B"; state done; reap
+  ok "forged summary is not its close: ${forged:0:28}…" "$(has "$OUT" "reaped: $ID · ended")" yes
+done
 
 echo "== no plugin prompt tells a tick to write the ledger at the root =="
 stray="$(grep -rnE --include='*.md' 'root `log\.md`|>> ?log\.md|-- log\.md| log\.md objectives' "$REPO/plugin" | sed "s|^$REPO/||")"

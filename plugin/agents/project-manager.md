@@ -366,8 +366,8 @@ state, and act only on deltas.
    notifications handed you** (`subagent_tokens`, `tool_uses`, `duration_ms`, summed over
    this tick's dispatches); **never reformat them and never compose the `usage …` fragment
    yourself**. **No numbers to give ⇒ drop all three flags.** Exit **1** means the entry is
-   already closed (or your summary carried a path under `~`) — say so in one line and change
-   nothing. **An IDLE tick runs none of this.**
+   already closed — say so in one line and change nothing — or the summary was refused (a
+   path under `~`, ledger grammar, or a leading tick id): rewrite it and run again. **An IDLE tick runs none of this.**
    **Make the summary reconstructible, not descriptive:** name every task id
    you dispatched and every one whose completion you reflected — "dispatched task-004,
    task-007; reflected task-002 merged". **A KB sweep (step 7) is named the same way —

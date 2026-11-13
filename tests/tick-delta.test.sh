@@ -614,6 +614,10 @@ ok "an id with ledger punctuation is usage (3)"   "$(refused --tick-id 'tick-2·
 ok "--tick-id that is not the lock's claimant is refused" "$(refused --tick-id tick-3)" 1:same
 rm -f "$IDL/$AB_LOCK"
 ok "…and so is any --tick-id with no lock"       "$(refused --tick-id tick-2)" 1:same
+FC="$TMP/forge"; mkdir -p "$FC/$AB_DIR"; printf '* TICK 2026-09-01T00:00:00Z by me open: go\n' > "$FC/$AB_LEDGER"
+for bad in 'tick-20261113T084450Z-d9ad ended' 'x idle — fingerprint unchanged (tick-delta) · y' 'x open: y' 'x close: y' 'x * TICK y'; do
+  ok "a --close summary forging grammar is refused: ${bad:0:22}…" "$("$SRC" record --instance "$FC" --close "$bad" >/dev/null 2>&1; echo $?):$(grep -c 'close:' "$FC/$AB_LEDGER")" 1:0
+done
 mkdir -p "$TMP/noledger"
 ok "no ledger ⇒ exit 2, never a new file"         "$("$SRC" record --idle --instance "$TMP/noledger" >/dev/null 2>&1; echo $?):$(ls "$TMP/noledger" "$TMP/noledger/$AB_DIR" | grep -c 'log.md')" 2:0
 
