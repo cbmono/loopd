@@ -1248,7 +1248,7 @@ any of that and are untouched, so an HTTPS bundle that has one still authenticat
 
 **The KB journals shard per month once shared** — `knowledge/log/<YYYY-MM>.md` and
 `knowledge/papercuts/<YYYY-MM>.md`; readers take the flat file and the shards both, so an
-unmounted bundle keeps `knowledge/papercuts.md`. The **bundle-root `log.md`** — the PM's
+unmounted bundle keeps `knowledge/papercuts.md`. The **`.loopd/log.md`** — the PM's
 tick ledger — is **not** a KB artifact and is never sharded.
 
 **`.loopd/upstream-proposals.md` holds the papercut proposals for loopd PLUGIN surfaces**,

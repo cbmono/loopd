@@ -24,17 +24,29 @@ done
 [ -d "$inst" ] || { echo "tick-reap: no such instance directory: $inst" >&2; exit 3; }
 LOCK="$inst/$AB_LOCK"; LOG="$inst/$AB_LEDGER"
 TERMINAL=" done gone stopped completed cancelled failed error exited "
+# A turn that ended this long after spawn with no ledger line for its id will never write one.
+NO_ENTRY_GRACE_S=120
 
 field() { awk -v k="$1" '!/^#/ && index($0, k ":") == 1 { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$LOCK" 2>/dev/null; }
 
-# <ledger text on stdin> -> "closed <line>" | "open <ts>" | "none". A line carrying the id
-# whose first marker is not ` open: ` (the idle line, a close) is already closed.
+# <ledger text on stdin> -> "closed <line>" | "open <ts>" | "none". The id counts only as the
+# token right after the line's FIRST marker, or in the exact `record --idle` grammar — never
+# in free text, which agents write. A line carrying it whose first marker is not ` open: ` is closed.
 scan() {
   ID="$tick" awk '
+    function tok(at,   r) { r = substr($0, at); sub(/[[:space:]].*/, "", r); return r }
+    function slot(   o, c, r) {
+      o = index($0, " open: "); c = index($0, " close: ")
+      if (o > 0 && (c == 0 || o < c)) return tok(o + 7) == ENVIRON["ID"]
+      if (c > 0) return tok(c + 8) == ENVIRON["ID"]
+      if (!match($0, /^\* TICK [^ ]+ by [^ ]+ idle — fingerprint unchanged \(tick-delta\) · /)) return 0
+      r = substr($0, RSTART + RLENGTH)
+      return r == ENVIRON["ID"] || index(r, ENVIRON["ID"] " · swept: ") == 1
+    }
     /^\* TICK / {
       o = index($0, " open: "); c = index($0, " close: ")
       if (c > 0 && (o == 0 || c < o)) { cl[$3] = $0 }
-      if (index($0, ENVIRON["ID"]) == 0) next
+      if (!slot()) next
       if (o > 0 && (c == 0 || o < c)) ots = $3; else done = $0
     }
     END {
@@ -77,6 +89,20 @@ turn_status() {
     | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
 }
 
+ended() { # the tick left no ledger line for its id: close it here, then release
+  local login line
+  login="$(cd "$inst" && bash "$HERE/decision-stamp.sh" --self 2>/dev/null)" || login="<unknown>"
+  line="* TICK $(date -u +%Y-%m-%dT%H:%M:%SZ) by ${login:-<unknown>} close: $tick ended with no ledger entry — session $short $state (tick-reap)"
+  printf '%s\n' "$line" >> "$LOG" || { echo "tick-reap: cannot append to $LOG — the lock stays." >&2; exit 2; }
+  release ended "$line"
+}
+
+past_grace() {
+  local t; t="$(field spawned)"; case "$t" in ''|*[!0-9]*) t="$(field epoch)" ;; esac
+  case "$t" in ''|*[!0-9]*) return 1 ;; esac
+  [ $(( $(date +%s) - t )) -ge "$NO_ENTRY_GRACE_S" ]
+}
+
 # -> exits on every outcome but "live" (returns 1) and "finishing" (returns 2)
 assess() {
   [ -e "$LOCK" ] || exit 0
@@ -85,7 +111,7 @@ assess() {
   [ -n "$tick" ] || { echo "tick-reap: $LOCK records a session and no claimant — leaving it for a human" >&2; exit 2; }
   short="${session%%-*}"
   state="$(bash "$HERE/agent-sessions.sh" state "$session" 2>/dev/null)" || state=unknown
-  disk="$(scan < "$LOG" 2>/dev/null)" || disk=none
+  disk=unread; [ -r "$LOG" ] && { disk="$(scan < "$LOG")" || disk=unread; }
   head="$(git -C "$inst" show "HEAD:$AB_LEDGER" 2>/dev/null | scan)" || head=none
   case "$head" in
     closed\ *)
@@ -98,6 +124,19 @@ assess() {
       fi
       release closed "${head#closed }" ;;
   esac
+  # Turn over, no line for the id anywhere in the ledger: it wrote its close elsewhere (a
+  # hand-typed root `log.md`) or not at all. Still `working` only because a bg session stays
+  # resident, so stop it before closing — never on age alone, a full walk can run past 45m.
+  # The id anywhere at all (a malformed hand-typed open line) holds: only total absence stops.
+  if [ "$state" = working ] && [ "$(turn_status)" = idle ] && past_grace; then
+    case "$disk" in
+      none) grep -qF -- "$tick" "$LOG" && return 1
+            claude stop "$short" >/dev/null 2>&1 </dev/null; state=turn-over; ended ;;
+      unread)
+        [ -e "$LOG" ] && why="cannot read $LOG" || why="$LOG is missing, so no entry can be ruled out"
+        echo "UNKNOWN: $why for tick $tick — the lock stays; nothing stopped." >&2; exit 2 ;;
+    esac
+  fi
   case "$state" in
     working|idle) return 1 ;;
     blocked)
@@ -117,10 +156,7 @@ assess() {
         || { echo "tick-reap: could not close the dead tick's entry at $ts — the lock stays." >&2; exit 2; }
       release dead "$(scan < "$LOG" | sed 's/^closed //')" ;;
   esac
-  login="$(cd "$inst" && bash "$HERE/decision-stamp.sh" --self 2>/dev/null)" || login="<unknown>"
-  line="* TICK $(date -u +%Y-%m-%dT%H:%M:%SZ) by ${login:-<unknown>} close: $tick ended with no ledger entry — session $short $state (tick-reap)"
-  printf '%s\n' "$line" >> "$LOG" || { echo "tick-reap: cannot append to $LOG — the lock stays." >&2; exit 2; }
-  release ended "$line"
+  ended
 }
 
 if [ "$wait" = no ]; then

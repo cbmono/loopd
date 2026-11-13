@@ -201,7 +201,9 @@ ledger, `AWAITING.md` or the transcript itself. The decisions it carries:
 | close committed | not `working` | release; print the close line, Needs-you, `COST:` |
 | close committed | `working`, turn running | hold — the tick is still pushing and rendering |
 | close committed | `working`, `status: idle` | `claude stop` it, then release — the turn is over |
-| open, or none | `working` | hold; the fire is dropped, never queued |
+| open, or none | `working`, turn running | hold; the fire is dropped, never queued |
+| open | `working`, `status: idle` | hold — a full walk may be waiting on background work |
+| none, the id nowhere in the ledger, past 120s | `working`, `status: idle` | `claude stop` it, append the `ended with no ledger entry` close, then release |
 | open, or none | `blocked` | `BLOCKED`, lock kept — neither idle nor done |
 | open | ended or gone | write the `close: dead …` line beside it, then release |
 | none | ended or gone | append a `close: … ended with no ledger entry` line, then release |
@@ -225,7 +227,7 @@ still gets the result — from the ledger and `AWAITING.md`, never the transcrip
 The loop is long-lived and its context gets summarised; the in-flight set is answered
 from session history, which is exactly what compaction discards. That is what
 `.tick-lock` is for. Re-deriving the in-flight set from disk is one of the tick's
-opening steps — the root `log.md` tick ledger (whose open-with-no-close entry is the
+opening steps — the `.loopd/log.md` tick ledger (whose open-with-no-close entry is the
 only thing on disk that distinguishes "dispatched, waiting" from "never ran"), then the
 task documents' own `status:`, then `git log` / `gh pr list`, each outranking anything
 anyone remembers. A tick that finds an open entry reports it and holds rather than

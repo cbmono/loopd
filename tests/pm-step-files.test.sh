@@ -166,7 +166,7 @@ ok "…whether or not the step file is read" "$(has <(ptr5) 'whether or not it r
 ok "…never twice after an IDLE hand-off" \
    "$(has <(ptr5) 'unless step 0.9 already ran it this tick and handed off')" yes
 ok "…and its lines reach the log.md close summary" \
-   "$(has <(ptr5) 'line, from whichever run, onto your `log.md` close summary')" yes
+   "$(has <(ptr5) 'line, from whichever run, onto your `.loopd/log.md` close summary')" yes
 
 echo
 echo "== the core tells a tick what to do when the digest cannot answer =="

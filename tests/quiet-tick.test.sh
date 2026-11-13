@@ -51,7 +51,7 @@ task() { printf 'type: Task\nkind: build\nstatus: %s\npr: []\n' "$2" > "$1"; }
 printf 'type: Project\nstatus: active\nautonomy: gated\n' > "$INST/projects/quiet-proj/project.md"
 task "$INST/projects/quiet-proj/tasks/t1.md" draft
 task "$INST/projects/quiet-proj/tasks/t2.md" "done"
-printf '* TICK 2026-09-06T08:00:00Z closed — nothing to do\n' > "$INST/log.md"
+printf '* TICK 2026-09-06T08:00:00Z closed — nothing to do\n' > "$INST/$AB_LEDGER"
 printf '# Awaiting you\n\nLast refreshed: 2026-09-06T08:00:00Z.\n\n## 🔴 Awaiting you (0)\n_None._\n' \
   > "$INST/$AB_AWAITING"
 printf '/.tick-state\n/AWAITING.md\n' > "$INST/.gitignore"
@@ -82,8 +82,8 @@ echo "== AWAITING.md is untouched by the whole idle path, not just by the probe 
 before="$(stamp)"; before_m="$(mtime)"
 # Step 0.9's idle path, in its own order: probe, one-line ledger append, commit, re-record.
 "$SH" check --gap 10m --instance "$INST" >/dev/null 2>&1
-printf '* TICK 2026-09-06T08:10:00Z idle — fingerprint unchanged (tick-delta)\n' >> "$INST/log.md"
-GIT -C "$INST" add log.md && GIT -C "$INST" commit -qm "chore: idle tick"
+"$SH" record --idle --instance "$INST" >/dev/null
+GIT -C "$INST" add "$AB_LEDGER" && GIT -C "$INST" commit -qm "chore: idle tick"
 "$SH" record --instance "$INST"
 ok "AWAITING.md content unchanged across the idle tick" "$(stamp)" "$before"
 ok "…and its mtime never moved (no rewrite of identical text)" "$(mtime)" "$before_m"

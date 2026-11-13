@@ -382,8 +382,8 @@ ok "…and every reader sees the flat file AND the shards" \
 ok "…with report grouping the three across two surfaces" \
   "$( cd "$J" && bash "$PC" report --all 2>/dev/null | sed -n 's/^== \(.*\) · all time$/\1/p')" \
   "3 entries · 2 surfaces · 0 malformed"
-ok "the bundle-root log.md is NOT sharded by any of this" \
-  "$(grep -c 'bundle-root `log.md`' "$SEED/SCHEMA.md" | tr -d ' ')" 1
+ok "the .loopd/log.md ledger is NOT sharded by any of this" \
+  "$(grep -c '`.loopd/log.md`\*\* — the PM' "$SEED/SCHEMA.md" | tr -d ' ')" 1
 mkdir -p "$J/knowledge/log"; : > "$J/knowledge/log/2026-09.md"
 ok "the index footer follows the journal that exists" \
   "$( cd "$J" && bash "$REPO/plugin/scripts/build-kb-index.sh" --print | grep -c '/knowledge/log/' | tr -d ' ')" 1

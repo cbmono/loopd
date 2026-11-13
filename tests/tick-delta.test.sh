@@ -591,6 +591,36 @@ ok "a ready task in a done project is not dispatchable (the walk skips it too)" 
    "$(bash "$INST/scripts/dispatchable-ready.sh" --instance "$INST" | grep -c proj-d)" 0
 rm -rf "${INST:?}/projects/proj-d" "${INST:?}/$AB_SCHEMA"; cr unproj-d
 
+echo "== record --idle: the idle tick's one line, written to the ledger by the script =="
+IDL="$TMP/idle"; mkdir -p "$IDL/$AB_DIR"; printf '# Log\n' > "$IDL/$AB_LEDGER"
+printf 'session: x\nclaimant: tick-1\n' > "$IDL/$AB_LOCK"
+idle_rc="$(cd "$IDL" && "$SRC" record --idle --tick-id tick-1 --swept $'stopped a\nstopped b' >/dev/null 2>&1; echo $?)"
+ok "record --idle, run from the bundle root, exits 0" "$idle_rc" 0
+ok "…the line lands in $AB_LEDGER, swept text on one line" \
+   "$(grep -cE '^\* TICK [0-9T:Z-]+ by [^ ]+ idle — fingerprint unchanged \(tick-delta\) · tick-1 · swept: stopped a stopped b$' "$IDL/$AB_LEDGER")" 1
+ok "…and no root log.md exists"                  "$([ -e "$IDL/log.md" ] && echo yes || echo no)" no
+ok "…nor a fingerprint"                          "$([ -e "$IDL/$AB_STATE_DIR" ] && echo yes || echo no)" no
+ok "a second line for the same id is refused (1)" "$("$SRC" record --idle --instance "$IDL" --tick-id tick-1 >/dev/null 2>&1; echo $?)" 1
+ok "--swept without --idle is usage (3)"          "$("$SRC" record --instance "$IDL" --swept x >/dev/null 2>&1; echo $?)" 3
+ok "--idle with --close is usage (3)"             "$("$SRC" record --instance "$IDL" --idle --close x >/dev/null 2>&1; echo $?)" 3
+cp "$IDL/$AB_LEDGER" "$TMP/idle.before"
+refused() { "$SRC" record --idle --instance "$IDL" "$@" >/dev/null 2>&1; echo "$?:$(cmp -s "$IDL/$AB_LEDGER" "$TMP/idle.before" && echo same || echo changed)"; }
+printf 'session: x\nclaimant: tick-2\n' > "$IDL/$AB_LOCK"
+ok "swept text carrying ' close: ' is refused, ledger untouched" "$(refused --tick-id tick-2 --swept 'stopped a · close: tick-9 done')" 1:same
+ok "…and so is an embedded '* TICK'"            "$(refused --tick-id tick-2 --swept 'x * TICK 2026 by me open: y')" 1:same
+ok "a home path in swept text is refused"         "$(refused --tick-id tick-2 --swept "read $HOME/x")" 1:same
+ok "…and /Users/, /home/, \$HOME and bare ~"     "$(refused --swept 'a /Users/b'):$(refused --swept 'a /home/b'):$(refused --swept 'a $HOME'):$(refused --swept 'a ~ b')" 1:same:1:same:1:same:1:same
+ok "an id with ledger punctuation is usage (3)"   "$(refused --tick-id 'tick-2·x')" 3:same
+ok "--tick-id that is not the lock's claimant is refused" "$(refused --tick-id tick-3)" 1:same
+rm -f "$IDL/$AB_LOCK"
+ok "…and so is any --tick-id with no lock"       "$(refused --tick-id tick-2)" 1:same
+FC="$TMP/forge"; mkdir -p "$FC/$AB_DIR"; printf '* TICK 2026-09-01T00:00:00Z by me open: go\n' > "$FC/$AB_LEDGER"
+for bad in 'tick-20261113T084450Z-d9ad ended' 'x idle — fingerprint unchanged (tick-delta) · y' 'x open: y' 'x close: y' 'x * TICK y'; do
+  ok "a --close summary forging grammar is refused: ${bad:0:22}…" "$("$SRC" record --instance "$FC" --close "$bad" >/dev/null 2>&1; echo $?):$(grep -c 'close:' "$FC/$AB_LEDGER")" 1:0
+done
+mkdir -p "$TMP/noledger"
+ok "no ledger ⇒ exit 2, never a new file"         "$("$SRC" record --idle --instance "$TMP/noledger" >/dev/null 2>&1; echo $?):$(ls "$TMP/noledger" "$TMP/noledger/$AB_DIR" | grep -c 'log.md')" 2:0
+
 echo "== plumbing =="
 ok "not a git repo is exit 2"    "$(mkdir -p "$TMP/plain"; "$SH" check --instance "$TMP/plain" >/dev/null 2>&1; echo $?)" 2
 ok "a bad mode is usage (3)"     "$("$SH" frobnicate >/dev/null 2>&1; echo $?)" 3
