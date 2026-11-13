@@ -9,6 +9,8 @@
 #                           CNT_STATUS (the same, `in-progress`/`in-review`, or `?`)
 #   ab_write_counts <root>  writes them to AB_COUNTS (temp + mv), `?` as null, no free text,
 #                           plus plugin_version (this plugin's VERSION; omitted unless x.y.z)
+#                           and latest_version (check-template-version.sh's last marketplace
+#                           answer, from the plugin's data dir; omitted unless x.y.z)
 # status-line.sh prints them and the pane reads AB_COUNTS. No `gh`, no network, no `jq`.
 # Reasoning: loopd-retirement-followups/task-004 (D4, D6).
 
@@ -113,7 +115,7 @@ _ab_jmap() {
 }
 
 ab_write_counts() {
-  local f="$1/$AB_COUNTS" tasks status p r w i d k n v="" ver=""
+  local f="$1/$AB_COUNTS" tasks status p r w i d k n v="" ver="" pr pd mk ca pl
   [ -d "${f%/*}" ] || return 0
   # Until /loopd:init adds the ignore line, a broad `git add` would commit this per-clone file.
   # Read .gitignore rather than ask git: the status line never runs git.
@@ -123,6 +125,12 @@ ab_write_counts() {
   _ab_jmap tasks "$CNT_TASKS"; _ab_jmap status "$CNT_STATUS"
   { IFS= read -r v < "$(dirname "${BASH_SOURCE[0]:-$0}")/../VERSION"; } 2>/dev/null
   [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && ver="\"plugin_version\":\"$v\","
+  # <plugins>/cache/<mkt>/<name>/<version> ⇒ <plugins>/data/<name>-<mkt>, as check-template-version.sh derives it.
+  pr="$(cd -P "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)"; pd="${pr%/*}"; mk="${pd%/*}"; ca="${mk%/*}"; pl="${ca%/*}"
+  if [ -n "$pr" ] && [ "${ca##*/}" = cache ] && [ "${pl##*/}" = plugins ]; then
+    v=""; { IFS= read -r v < "$pl/data/${pd##*/}-${mk##*/}/latest-version"; } 2>/dev/null
+    [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && ver="$ver\"latest_version\":\"$v\","
+  fi
   printf '{"in_progress":%s,"in_review":%s,"sessions":{"working":%s,"idle":%s,"dead":%s,"tick_working":%s},"need_you":%s,"queue":"%s","task_sessions":%s,"task_status":%s,%s"written_at":"%s"}\n' \
     "$p" "$r" "$w" "$i" "$d" "$k" "$n" "$CNT_QUEUE" "$tasks" "$status" "$ver" "$CNT_AT" > "$f.$$" 2>/dev/null && mv -f "$f.$$" "$f" 2>/dev/null
   rm -f "$f.$$" 2>/dev/null

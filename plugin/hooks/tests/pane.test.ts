@@ -722,6 +722,62 @@ test('COPY FROM PROJECTS: a name copies its slug, with the same footer line', ON
   await ui.unmount()
 })
 
+const UPDATE_LINE = 'Update available! Run: /loopd:update, then /reload-plugins'
+const versions = (plugin: unknown, latest: unknown, m = 600) =>
+  ({ text: JSON.stringify({ ...(countsOf(SNAP) as any), plugin_version: plugin, latest_version: latest }), mtimeMs: m })
+
+test('UPDATE LINE: a newer latest_version draws one pink line last, the commands bold; equal, older, missing or junk draws none', ONLY, async ($, on) => {
+  const w = world(SNAP)
+  w.files.set(COUNTS, versions('4.12.1', '4.12.3'))
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  let rows = await rowsOf(ui)
+  expect(rows.slice(-2)).toEqual([' ', UPDATE_LINE])                 // directly under the buttons' blank line
+  const last = (await ui.drawn()).children.at(-1)
+  expect(last.children.map((t: any) => [flat(t), t.props.color, t.props.bold])).toEqual([
+    ['Update available! Run: ', '#ff7ac2', undefined], ['/loopd:update', '#ff7ac2', true],
+    [', then ', '#ff7ac2', undefined], ['/reload-plugins', '#ff7ac2', true]])
+  // Numeric per field: 4.10.0 is newer than 4.9.0.
+  w.files.set(COUNTS, versions('4.9.0', '4.10.0', 700))
+  await ui.press({ key: 'refresh' })
+  expect((await rowsOf(ui)).at(-1)).toBe(UPDATE_LINE)
+  let m = 800
+  for (const [plugin, latest] of [['4.12.3', '4.12.3'], ['4.12.3', '4.12.1'], ['4.10.0', '4.9.0'], ['4.12.1', undefined], [undefined, '4.12.3'], ['4.12.1', '4.13'], ['4.12.1', '4.13.0\u001b[2J']]) {
+    w.files.set(COUNTS, versions(plugin, latest, m++))
+    await ui.press({ key: 'refresh' })
+    rows = await rowsOf(ui)
+    expect(rows.at(-1)).toBe(' ')
+    expect(rows.join('\n')).not.toContain('Update available')
+  }
+  await ui.unmount()
+})
+
+test('UPDATE LINE: below a transient note, and wrapped between the two commands at narrow widths, never inside one', ONLY, async ($, on) => {
+  const w = world(SNAP)
+  w.files.set(COUNTS, versions('4.12.1', '4.12.3'))
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  copies(on)
+  await open($)
+  let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'copy-project-3' })
+  expect((await rowsOf(ui)).slice(-3)).toEqual([' ', 'copied: zeta', UPDATE_LINE])
+  await ui.unmount()
+  for (const [body, want] of [
+    [66, [UPDATE_LINE]],
+    [49, ['Update available! Run: /loopd:update,', 'then /reload-plugins']],
+    [0, ['Update available! Run: /loopd:update,', 'then /reload-plugins']],
+    [30, ['Update available! Run:', '/loopd:update,', 'then /reload-plugins']],
+  ] as const) {
+    ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: body }, surface: 'terminal' })
+    const rows = await rowsOf(ui)
+    expect(rows.slice(-want.length - 1)).toEqual(['copied: zeta', ...want])
+    await ui.unmount()
+  }
+})
+
 test('SHAPE GUARD: an empty slug or id, or one with /, .. or whitespace, is never copied; keys stay unique', ONLY, async ($, on) => {
   const bad = ['', 'a/b', '..', 'a..b', 'a b', ' alpha', 'alpha\n']
   const snap = { ...SNAP, projects: [
