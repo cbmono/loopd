@@ -221,6 +221,10 @@ spawned; backdate 300; rm -f "$ST/stopped"; STATUS=working state working; reap
 ok "turn still working, no entry, past the grace ⇒ held" "$RC:$(locked):$(cat "$ST/stopped" 2>/dev/null)" "1:yes:"
 spawned; backdate 300; state working; reap
 ok "…and an unreadable turn status ⇒ held" "$RC:$(locked)" "1:yes"
+spawned; backdate 300; rm -f "$ST/stopped"; chmod 000 "$B/.loopd/log.md"; STATUS=idle state working; reap; chmod 644 "$B/.loopd/log.md"
+ok "an unreadable ledger, turn over ⇒ exit 2, lock kept, nothing stopped" "$RC:$(locked):$(cat "$ST/stopped" 2>/dev/null)" "2:yes:"
+spawned; printf '* TICK %s by me close: dispatched x; quoting %s in free text\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"; state done; reap
+ok "an id in free text is not a close for it" "$(has "$OUT" "reaped: $ID · ended")" yes
 
 echo "== no plugin prompt tells a tick to write the ledger at the root =="
 stray="$(grep -rnE --include='*.md' 'root `log\.md`|>> ?log\.md|-- log\.md| log\.md objectives' "$REPO/plugin" | sed "s|^$REPO/||")"

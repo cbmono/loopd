@@ -29,14 +29,23 @@ NO_ENTRY_GRACE_S=120
 
 field() { awk -v k="$1" '!/^#/ && index($0, k ":") == 1 { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$LOCK" 2>/dev/null; }
 
-# <ledger text on stdin> -> "closed <line>" | "open <ts>" | "none". A line carrying the id
-# whose first marker is not ` open: ` (the idle line, a close) is already closed.
+# <ledger text on stdin> -> "closed <line>" | "open <ts>" | "none". The id counts only in its
+# slot — `open: <id>`, the reaper's `close: <id>`, or the idle line's ` · <id>` — never in
+# free text. A line carrying it whose first marker is not ` open: ` is already closed.
 scan() {
   ID="$tick" awk '
+    function word_after(m,   i, r) { i = index($0, m); if (i == 0) return ""; r = substr($0, i + length(m)); sub(/[[:space:]].*/, "", r); return r }
+    function slot(   s1, rest, i) {
+      if (word_after(" open: ") == ENVIRON["ID"] || word_after(" close: ") == ENVIRON["ID"]) return 1
+      i = index($0, " · "); if (i == 0) return 0
+      s1 = substr($0, 1, i - 1); rest = substr($0, i + length(" · "))
+      sub(/ · .*/, "", rest)
+      return index(s1, " idle") > 0 && rest == ENVIRON["ID"]
+    }
     /^\* TICK / {
       o = index($0, " open: "); c = index($0, " close: ")
       if (c > 0 && (o == 0 || c < o)) { cl[$3] = $0 }
-      if (index($0, ENVIRON["ID"]) == 0) next
+      if (!slot()) next
       if (o > 0 && (c == 0 || o < c)) ots = $3; else done = $0
     }
     END {
@@ -101,7 +110,7 @@ assess() {
   [ -n "$tick" ] || { echo "tick-reap: $LOCK records a session and no claimant — leaving it for a human" >&2; exit 2; }
   short="${session%%-*}"
   state="$(bash "$HERE/agent-sessions.sh" state "$session" 2>/dev/null)" || state=unknown
-  disk="$(scan < "$LOG" 2>/dev/null)" || disk=none
+  disk=unread; [ -r "$LOG" ] && { disk="$(scan < "$LOG")" || disk=unread; }
   head="$(git -C "$inst" show "HEAD:$AB_LEDGER" 2>/dev/null | scan)" || head=none
   case "$head" in
     closed\ *)
@@ -117,10 +126,11 @@ assess() {
   # Turn over, no line for the id anywhere in the ledger: it wrote its close elsewhere (a
   # hand-typed root `log.md`) or not at all. Still `working` only because a bg session stays
   # resident, so stop it before closing — never on age alone, a full walk can run past 45m.
-  if [ "$state" = working ] && [ "$disk" = none ] && [ "$(turn_status)" = idle ] && past_grace; then
-    claude stop "$short" >/dev/null 2>&1 </dev/null
-    state=turn-over
-    ended
+  if [ "$state" = working ] && [ "$(turn_status)" = idle ] && past_grace; then
+    case "$disk" in
+      none) claude stop "$short" >/dev/null 2>&1 </dev/null; state=turn-over; ended ;;
+      unread) echo "UNKNOWN: cannot read $LOG for tick $tick — the lock stays; nothing stopped." >&2; exit 2 ;;
+    esac
   fi
   case "$state" in
     working|idle) return 1 ;;

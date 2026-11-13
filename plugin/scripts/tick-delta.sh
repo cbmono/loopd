@@ -186,11 +186,20 @@ if [ "$idle" -eq 1 ]; then
   [ "$close_set" -eq 0 ] || { echo "tick-delta: --idle and --close are two different lines" >&2; exit 3; }
   LOG="$inst/$AB_LEDGER"
   [ -f "$LOG" ] && [ -w "$LOG" ] || fail2 "no writable $LOG"
-  tick_id="$(oneline "$tick_id")"; swept="$(oneline "$swept")"
-  case "$tick_id" in *" "*) echo "tick-delta: --tick-id takes one word" >&2; exit 3 ;; esac
-  case "$swept" in *"~/"*) echo "REFUSED: a ledger line carries no path under \`~\` — rewrite the swept text." >&2; exit 1 ;; esac
-  if [ -n "$tick_id" ] && grep -F -- "$tick_id" "$LOG" | grep -q '^\* TICK '; then
-    echo "REFUSED: $LOG already has a TICK line for $tick_id — not double-writing." >&2; exit 1
+  swept="$(oneline "$swept")"
+  case "$tick_id" in *[!A-Za-z0-9._-]*) echo "tick-delta: --tick-id takes a minted id, [A-Za-z0-9._-] only" >&2; exit 3 ;; esac
+  # The swept text is agent-relayed, and the reaper parses this line: no ledger grammar, no home path.
+  case "$swept" in
+    *"* TICK"*|*"open:"*|*"close:"*) echo "REFUSED: --swept carries a ledger marker — pass the sweep's own lines only." >&2; exit 1 ;;
+    *"~"*|*'$HOME'*|*/Users/*|*/home/*|*"${HOME:-/Users/}"*) echo "REFUSED: a ledger line carries no home path — rewrite the swept text." >&2; exit 1 ;;
+  esac
+  if [ -n "$tick_id" ]; then
+    claimant="$(awk 'index($0, "claimant:") == 1 { sub(/^claimant:[[:space:]]*/, ""); print; exit }' "$inst/$AB_LOCK" 2>/dev/null)"
+    [ "$claimant" = "$tick_id" ] || {
+      echo "REFUSED: --tick-id $tick_id is not the claimant on $AB_LOCK (${claimant:-none}) — not closing another tick." >&2; exit 1; }
+    if grep -F -- "$tick_id" "$LOG" | grep -q '^\* TICK '; then
+      echo "REFUSED: $LOG already has a TICK line for $tick_id — not double-writing." >&2; exit 1
+    fi
   fi
   by="$(bash "$(dirname "$0")/decision-stamp.sh" --instance "$inst" --self 2>/dev/null)"
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
