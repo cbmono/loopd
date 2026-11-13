@@ -1326,5 +1326,30 @@ bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
 ok "…and a third stamp adds no duplicate" "$(grep -cxF "/$AB_LOCK_CLAIM" "$INST/.gitignore" | tr -d ' ')" 1
 
 echo
+echo "== FINISHED: status reports a committed close; acquire never reads it =="
+# status exits 5 when the claimant's close is committed (lib/tick-close.sh, the reaper's own
+# reader). That is a REPORT: every acquire mode must still refuse the lock, because only
+# tick-reap.sh may release it. tests/tick-bg-session.test.sh holds the reaper-agreement half.
+FN="$TMP/finished"; mkdir -p "$FN/$AB_DIR"
+FID=tick-20261113T214257Z-69e4
+printf '/%s\n/%s\n' "$AB_LOCK" "$AB_LOCK_CLAIM" > "$FN/.gitignore"
+printf '* TICK 2026-11-13T21:43:39Z by someone idle — fingerprint unchanged (tick-delta) · %s\n' "$FID" > "$FN/$AB_LEDGER"
+{ git -C "$FN" init -q && git -C "$FN" add -A && git -C "$FN" -c user.name=t -c user.email=t@example.com commit -qm l; } >/dev/null 2>&1
+bash "$LOCKSH" acquire --instance "$FN" --claimant "$FID" >/dev/null 2>&1
+printf 'session: 00000000-0000-4000-8000-000000000000\n' >> "$FN/$AB_LOCK"
+FBEFORE="$(cat "$FN/$AB_LOCK")"
+OUT="$(bash "$LOCKSH" status --instance "$FN" 2>&1)"; RC=$?
+ok "status: committed close for the claimant ⇒ 5"   "$RC" 5
+ok "…FINISHED, with the reap command"               "$(grep -c "^FINISHED: tick $FID" <<<"$OUT" | tr -d ' '):$(grep -c 'Reap it with: tick-reap.sh --instance ' <<<"$OUT" | tr -d ' ')" 1:1
+for mode in launcher loop; do
+  bash "$LOCKSH" acquire --as "$mode" --instance "$FN" >/dev/null 2>&1; RC=$?
+  ok "acquire --as $mode still refuses it (1)"      "$RC" 1
+done
+ok "…and the lock is byte-identical"                "$([ "$(cat "$FN/$AB_LOCK")" = "$FBEFORE" ] && echo yes || echo no)" yes
+sed -i.bak '/^session:/d' "$FN/$AB_LOCK"
+bash "$LOCKSH" status --instance "$FN" >/dev/null 2>&1; RC=$?
+ok "no session recorded ⇒ HELD (1), as the reaper frees nothing" "$RC" 1
+
+echo
 printf '%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

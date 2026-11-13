@@ -29,11 +29,22 @@ ab_is_bundle "." || fatal "run from a control-panel bundle root (no instance.con
 ROOT="$(pwd -P)"
 
 lock_free() {
-  LOCK_MSG="$(bash "$HERE/tick-lock.sh" status --instance "$ROOT" 2>&1)"
+  LOCK_MSG="$(bash "$HERE/tick-lock.sh" status --instance "$ROOT" 2>&1)"; LOCK_RC=$?
+  return "$LOCK_RC"
 }
-lock_free || refuse "a tick holds the dispatch lock and may be dispatching into a worktree
+lock_free
+# FINISHED (5) still refuses, with the reap command: a committed close does not prove the
+# session's turn is over, and only tick-reap.sh can tell — it releases, or keeps the lock
+# while the tick is still ending. Removing worktrees here instead could race that tick.
+case "$LOCK_RC" in
+  0) ;;
+  5) refuse "the last tick closed its ledger entry, but its lock is not reaped yet.
+        Nothing was removed. Reap it with the command below, then run this again.
+        $LOCK_MSG" ;;
+  *) refuse "a tick holds the dispatch lock and may be dispatching into a worktree
         right now. Nothing was removed. Run this again once the tick ends.
-        $LOCK_MSG"
+        $LOCK_MSG" ;;
+esac
 
 report="$(bash "$PRUNER" 2>&1)" || fatal "prune-worktrees.sh failed:
 $report"

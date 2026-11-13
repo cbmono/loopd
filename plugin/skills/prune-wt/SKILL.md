@@ -18,7 +18,8 @@ Run from a control-panel instance root — confirm `instance.config.json` in the
 ## Steps
 1. **Preview.** Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-wt.sh` and relay its output:
    the pruner's report, then one `would remove:` or `skip:` line per REMOVABLE path. It
-   touches nothing. Exit 1 means a tick holds the lock — relay that and stop. No
+   touches nothing. Exit 1 means a tick holds the lock — relay that and stop. When it says
+   the last tick closed, relay its `Reap it with:` line for the human; never run it here. No
    `would remove:` line ⇒ say so and stop.
 2. **Ask once.** "Remove these N worktrees?" Anything but a clear yes ends here.
 3. **Remove.** `bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-wt.sh --yes`. It re-runs the pruner

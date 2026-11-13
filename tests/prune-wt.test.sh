@@ -117,6 +117,28 @@ ok "…and removed nothing" "$(all_there)" yes
 ok "…and pruned nothing" "$(wc -l < "$GITLOG" | tr -d ' ')" 0
 ( cd "$INSTANCE" && bash "$TPL/plugin/scripts/tick-lock.sh" release --instance "$INSTANCE" >/dev/null 2>&1 )
 
+echo "== a FINISHED lock refuses too, printing the exact reap command =="
+# Its claimant's close is committed (tick-lock.sh status exit 5). Refused, not proceeded: only
+# tick-reap.sh can tell the session's turn is over, and only it may release the lock.
+FIN="$TMP/finished"; mkdir -p "$FIN/.loopd"; cp "$INSTANCE/instance.config.json" "$FIN/"
+FID=tick-20261113T214257Z-69e4
+printf '/.loopd/.tick-lock\n/.loopd/.tick-lock.claim\n' > "$FIN/.gitignore"
+printf '* TICK 2026-11-13T21:43:39Z by someone idle — fingerprint unchanged (tick-delta) · %s\n' "$FID" > "$FIN/.loopd/log.md"
+{ git -C "$FIN" init -q && git -C "$FIN" add -A && git -C "$FIN" -c user.name=t -c user.email=t@example.com commit -qm l; } >/dev/null 2>&1
+bash "$TPL/plugin/scripts/tick-lock.sh" acquire --instance "$FIN" --claimant "$FID" >/dev/null 2>&1
+printf 'session: 1234abcd-0000-4000-8000-00000000000a\n' >> "$FIN/.loopd/.tick-lock"
+FBEFORE="$(cat "$FIN/.loopd/.tick-lock")"
+runfin() { : > "$GITLOG"; OUT="$(cd "$FIN" && PATH="$BIN:$PATH" GH_FIXTURES="$FIXTURES" PRUNE_ACTIVE_MINUTES=0 bash "$SCRIPT" --yes 2>&1)"; RC=$?; }
+runfin
+ok "--yes under a FINISHED lock exits 1" "$RC" 1
+ok "…naming it closed, not running" "$(grep -c 'the last tick closed its ledger entry' <<<"$OUT" | tr -d ' ')" 1
+ok "…with the exact reap command" "$(grep -c "Reap it with: tick-reap.sh --instance $FIN\$" <<<"$OUT" | tr -d ' ')" 1
+ok "…removed nothing, pruned nothing" "$(all_there):$(wc -l < "$GITLOG" | tr -d ' ')" "yes:0"
+ok "…and left the lock byte-identical" "$([ "$(cat "$FIN/.loopd/.tick-lock")" = "$FBEFORE" ] && echo yes || echo no)" yes
+sed -i.bak "s/^claimant: .*/claimant: tick-20261113T220000Z-0000/" "$FIN/.loopd/.tick-lock"; runfin
+ok "no close for the claimant ⇒ the in-flight refusal, no reap command" \
+   "$RC:$(grep -c 'may be dispatching' <<<"$OUT" | tr -d ' '):$(grep -c 'tick-reap.sh' <<<"$OUT" | tr -d ' ')" "1:1:0"
+
 echo "== the preview touches nothing =="
 run "$PRUNER"
 ok "preview exits 0" "$RC" 0

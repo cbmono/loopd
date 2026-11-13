@@ -75,6 +75,7 @@ plugin/scripts/refresh-seeds.sh|\"\$SELF\" \"'\$TARGET'\" --apply
 plugin/scripts/tick-lock.sh|tick-lock.sh release
 plugin/scripts/tick-lock.sh|tick-lock.sh release
 plugin/scripts/tick-lock.sh|tick-lock.sh release
+plugin/scripts/tick-lock.sh|tick-reap.sh --instance \"\$REAP_ROOT\"
 plugin/scripts/validate-bundle.sh|build-kb-index.sh
 plugin/scripts/validate-bundle.sh|build-kb-index.sh --check"
 # plugin/scripts/build-kb-index.sh is probed as a target above; named so a move selects this.
@@ -138,7 +139,8 @@ message=probe message
 SLUG=probe-slug
 BIN_DIR=$SCRIPTS
 SELF=$SCRIPTS/refresh-seeds.sh
-TARGET=$OUTSIDE"
+TARGET=$OUTSIDE
+REAP_ROOT=$ABSENT"
 SLOTS="<agent-id>=probe-agent-0001
 <message>=probe message
 <why>=probe reason

@@ -143,6 +143,24 @@ ok "…the lock is left in place"              "$([ -e "$B/.loopd/.tick-lock" ] 
 out="$(cd "$B" && TICK_LOCK_STALE_MINUTES=x PATH="$TMP/stub:$PATH" bash "$S" 2>&1)"
 ok "status cannot answer: unknown, not a lock problem" "$(has "$out" 'Whether a tick is in flight is unknown')" yes
 
+# FINISHED (status exit 5): the claimant's close is committed. Its own git bundle, and the real
+# git on PATH — only the ledger read needs it; the stubbed one above stays for every other case.
+BF="$TMP/bf"; mkdir -p "$BF/.loopd"; echo '{}' > "$BF/instance.config.json"; cp "$B/.loopd/AWAITING.md" "$BF/.loopd/"
+FID=tick-20261113T214257Z-69e4
+printf '/.loopd/.tick-lock\n/.loopd/.tick-lock.claim\n/.loopd/AWAITING.md\n' > "$BF/.gitignore"
+printf '* TICK 2026-11-13T21:43:39Z by someone idle — fingerprint unchanged (tick-delta) · %s\n' "$FID" > "$BF/.loopd/log.md"
+{ git -C "$BF" init -q && git -C "$BF" add -A && git -C "$BF" -c user.name=t -c user.email=t@example.com commit -qm l; } >/dev/null 2>&1
+fin_lock() { printf 'timestamp: %s\nagent: project-manager\nepoch: %s\nclaimant: %s\nsession: 1234abcd-0000-4000-8000-00000000000a\n' \
+               "$(iso "$NOW")" "$NOW" "$1" > "$BF/.loopd/.tick-lock"; }
+mkdir -p "$TMP/stub-nogit"; cp "$TMP/stub/claude" "$TMP/stub/gh" "$TMP/stub-nogit/"
+runf() { (cd "$BF" && PATH="$TMP/stub-nogit:$PATH" bash "$S" 2>&1); }
+fin_lock "$FID"; out="$(runf)"
+ok "finished lock: not a tick in flight"     "$(has "$out" 'A tick is in flight')" no
+ok "…says the last one closed"               "$(has "$out" 'No tick is in flight: the last one closed')" yes
+ok "…with the exact reap command"            "$(has "$out" "run tick-reap.sh --instance $(cd "$BF" && pwd -P)")" yes
+fin_lock tick-20261113T220000Z-0000; out="$(runf)"
+ok "no close for the claimant: in flight"    "$(has "$out" 'A tick is in flight'):$(has "$out" 'tick-reap.sh')" "yes:no"
+
 echo "== local doc links open: bundle-relative targets become absolute, URLs stay =="
 rm -f "$B/.loopd/.tick-lock"
 mkdir -p "$B/projects/p/tasks"; : > "$B/projects/p/tasks/task-001-x.md"

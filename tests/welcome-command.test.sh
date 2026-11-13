@@ -385,6 +385,21 @@ arc=0; bash "$INST3/scripts/tick-lock.sh" acquire --instance "$INST3" >/dev/null
 ok "…and the lock still refuses an acquire, so fix did not defeat it" \
   "$([ "$arc" -ne 0 ] && echo yes || echo no)" yes
 
+# FINISHED (tick-lock.sh status exit 5): the claimant's close is committed, so the row says so
+# and prints the reap command — never "in flight", and still nothing is released for you.
+INST4="$TMP/inst4"; mkinstance "$INST4"
+FID=tick-20261113T214257Z-69e4
+printf '* TICK 2026-11-13T21:43:39Z by someone idle — fingerprint unchanged (tick-delta) · %s\n' "$FID" > "$INST4/$AB_LEDGER"
+GIT -C "$INST4" add -A; GIT -C "$INST4" commit -qm ledger
+printf 'timestamp: %s\nagent: project-manager\nclaimant: %s\nsession: 1234abcd-0000-4000-8000-00000000000a\n' \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$FID" > "$INST4/$AB_LOCK"
+lock4="$(sha "$INST4/$AB_LOCK")"
+CHK4="$(bash "$SH" check --instance "$INST4" --template "$SRC" 2>&1)"
+ok "check: a committed close reads FINISHED"               "$(printf '%s\n' "$CHK4" | grep -c 'dispatch tick FINISHED' | tr -d ' ')" 1
+ok "…with the exact reap command"                          "$(printf '%s\n' "$CHK4" | grep -c "reap it: tick-reap.sh --instance $(cd "$INST4" && pwd -P)\$" | tr -d ' ')" 1
+ok "…never as in flight"                                   "$(printf '%s\n' "$CHK4" | grep -c 'tick is in flight' | tr -d ' ')" 0
+ok "…and the lock is byte-identical"                       "$(sha "$INST4/$AB_LOCK")" "$lock4"
+
 # =======================================================================================
 echo "== 6. the non-action is STRUCTURAL — the script refuses to carry a rogue fixer =="
 # =======================================================================================

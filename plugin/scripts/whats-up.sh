@@ -77,6 +77,7 @@ case "$rc" in
   0) tick="No tick is in flight." ;;
   1) tick="A tick is in flight — this list may be about to change." ;;
   2) tick="No tick is known to be in flight; the lock needs a look: $(printf '%s\n' "$lock" | head -1)" ;;
+  5) tick="No tick is in flight: the last one closed, and its lock waits for the reaper —$(printf '%s\n' "$lock" | sed -n 's/^ *Reap it with:/ run/p' | head -1)" ;;
   *) tick="Whether a tick is in flight is unknown: tick-lock.sh status could not answer (exit $rc): $(printf '%s\n' "$lock" | head -1)" ;;
 esac
 

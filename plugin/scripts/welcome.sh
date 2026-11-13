@@ -1069,6 +1069,8 @@ check_tick_lock() {
     1) good "an /${PLUGIN_NAME}:dispatch tick is in flight (this is a live lock, not a fault)"
        printf '%s\n' "$out" | sed -n '1,3p' | sed 's/^/    /'
        case "$out" in *"No tick has claimed it yet"*) note "unclaimed: taken for a dispatch that is starting" ;; esac ;;
+    5) good "the last /${PLUGIN_NAME}:dispatch tick FINISHED (its close is committed); its lock waits for the reaper"
+       note "$(printf '%s\n' "$out" | sed -n 's/^ *Reap it with: */reap it: /p' | head -1)" ;;
     *) warn "the tick lock needs YOUR decision — this is not repaired for you"
        printf '%s\n' "$out" | sed -n '1,4p' | sed 's/^/    /'
        note "a long tick is not a dead one. If you decide it is dead, YOU release it:"
