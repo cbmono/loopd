@@ -1,7 +1,7 @@
 {
   "name": "loopd",
   "displayName": "loopd",
-  "version": "4.12.2",
+  "version": "4.12.3",
   "description": "The OKF control panel as a Claude Code plugin: run the gated loop (/dispatch), open and close projects (/new-project, /close-project), stamp a bundle (/init) and see what needs you (/whats-up) — plus three mods (usage, pane, signal), each a /config switch.",
   "userConfig": {
     "usage": {
