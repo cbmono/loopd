@@ -152,3 +152,63 @@ A later sweep renamed what the plugin wrote or read under the old name. You run 
 the renamed `.gitignore`.** An older `/loopd:init` does not know the `loopd` pair, splices
 its own back in, and the two versions then flip the tracked file on every stamp. No rule is
 lost either way; the churn stops once every clone runs this version.
+
+---
+
+*The two sections below are history. They moved here from the README, which no longer
+carries them; nothing in them needs doing on a current install.*
+
+## Relationship to `ai-setup`
+
+loopd used to live as an `ai-bridge/` subtree inside
+[`ai-setup`](https://github.com/cbmono/ai-setup), the Claude Code defaults repo. **This
+repo is now the canonical copy** — every instance's machinery ships from *this* repo as
+the `loopd` plugin, and `/loopd:init` here is the one to run.
+
+`ai-setup` **no longer carries the subtree** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69)
+removed it, because a stale second copy that documentation still described as live was
+inviting edits that would reach nobody. The pre-split version is therefore in git history,
+not in any checkout: `git -C ai-setup show f8b09a4:ai-bridge/` is the last state it had
+(`ai-setup` commit `f8b09a4`, "fix: refuse to install from a git worktree (#68)").
+
+Nothing here needs it. That measurement is why it went: `diff -rq` found **nothing** that
+existed only in the subtree, while this repo was ahead by 4 scripts, 1 hook, 9 tests and
+22 changed files.
+
+The two repos are independent by design: `ai-setup`'s user-wide installer is scoped to
+`.claude` and never touched this template.
+
+**`~/.claude` belongs to that repo**, not this one — this repo writes nothing there but
+the operator's `plugins/loopd/bin` link ([The config layer](#the-config-layer) below says
+what it used to write, and why it stopped). The
+`@~/.claude/claude-defaults.md` import that every instance used to inherit is gone: that
+section is inlined in `plugin/seed/CLAUDE.md`, so nothing can dangle.
+
+## The config layer
+
+**Retired on 2026-10-28.** Until then this repo linked three advisory agents —
+`code-architect`, `deep-bug-scan`, `plan-architect` — from a clone's `config/required/`
+into `${CLAUDE_CONFIG_DIR:-~/.claude}/agents/` with `init-bundle.sh --config`, because they
+were not plugin agents and the role agents probed for them with `test -f`. That was the
+last thing on a machine that needed a clone of this repo, and a dependency on a second
+repo: [`cbmono/ai-setup`](https://github.com/cbmono/ai-setup) owns `~/.claude` and shipped
+byte-identical copies, so two installers claimed the same three paths.
+
+They ship in the plugin now, under `plugin/agents/` beside the role agents, dispatched
+**namespaced** — `loopd:code-architect`, `loopd:deep-bug-scan`, `loopd:plan-architect`; a
+bare name does not resolve — and unrestricted by design (no `tools:` allowlist, so a
+dispatched one can reach skills without widening any role agent's list). `install the
+plugin, stamp a bundle` is the whole setup. The `roleTiers` / `roleEffort` row for the
+plan critic keeps its bare key, `plan-architect`; only the dispatch string carries the
+namespace.
+
+What is left for an existing machine:
+
+- `init-bundle.sh --config` (and `--config --uninstall`) **refuse by name**, exit 2, and
+  say where the agents went.
+- `/loopd:init <bundle>` **reports** a dangling link an older `--config` left in
+  `~/.claude/agents/` — only one whose target was `…/config/required/agents/<name>.md` — with
+  the `rm` to run. It never removes it; a live link, a real file or a link elsewhere is
+  not even named.
+- A copy ai-setup installed is untouched and harmless: the plugin agents resolve under
+  their namespace, the bare name was never what loopd dispatched after this change.

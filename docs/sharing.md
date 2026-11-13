@@ -6,7 +6,7 @@ OKF knowledge bundle: a single repo, cloned once per person, each clone running 
 anyone can hand a project or a single task across.
 
 This is sized for **two or three people**. Past that, give each person their own bundle
-and share only the knowledge base: [README → Larger teams](../README.md#larger-teams).
+and share only the knowledge base: [reference.md → Larger teams](reference.md#larger-teams).
 
 ## Step 0 — the bundle is the org's repo
 
@@ -50,7 +50,7 @@ own owner at the next login, and the whole path was deleted.)
 every step — never an error.
 
 **The second human's own first hour — install, the skills, the two gates — is
-[first-hour.md](first-hour.md).** This page is only the shared-instance half that goes on
+[getting-started.md](getting-started.md).** This page is only the shared-instance half that goes on
 top of it: steps 1, 2 and 5 of the table below are the same steps they read there.
 
 ---

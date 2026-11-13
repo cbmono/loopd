@@ -18,17 +18,13 @@
 # § 5 compares it per file, because a file already listed is otherwise free to gain one.
 #
 # <reason(s)><TAB><path>[<TAB><count of .ai-bridge>]
-prov,instdir,fname,frozen	README.md
+prov	README.md
 prov,fname	docs/conventions.md
 frozen	docs/index.html
 prov,bundle,instdir,frozen	docs/migrating.md	3
 prov,instdir,fname,frozen	docs/operations.md
 prov	docs/pm-design.md
-frozen	docs/releases/v1.0.0.md
-frozen	docs/releases/v3.0.0.md	2
-frozen	docs/releases/v3.1.0.md	3
-bundle,frozen	docs/releases/v3.3.0.md	6
-bundle,frozen	docs/releases/v3.3.1.md	2
+instdir	docs/reference.md
 prov	plugin/README.md
 fname	plugin/RETIRED
 prov	plugin/evals/README.md

@@ -30,7 +30,7 @@ BUILD="$REPO/plugin/scripts/build-kb-index.sh"
 PM="$REPO/plugin/tick-steps/step-7-knowledge-base.md"
 CAT="$REPO/plugin/agents/cataloguer.md"
 DESIGN="$REPO/docs/pm-design.md"
-README="$REPO/README.md"
+REFERENCE="$REPO/docs/reference.md"   # the Scripts table, since the README became a front door
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/kb-sweep.XXXXXX")" || {
   echo "kb-sweep-trigger.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -74,7 +74,7 @@ age_stamp() { # <stamp> <seconds ago> — moves the epoch inside it, keeping its
 }
 
 echo "== the files exist at all (or every assertion below is vacuous) =="
-for f in "$DUE" "$BUILD" "$PM" "$CAT" "$DESIGN" "$README"; do
+for f in "$DUE" "$BUILD" "$PM" "$CAT" "$DESIGN" "$REFERENCE"; do
   ok "$(basename "$f") exists" "$([ -f "$f" ] && echo yes || echo no)" yes
 done
 ok "kb-sweep-due.sh is executable" "$([ -x "$DUE" ] && echo yes || echo no)" yes
@@ -354,7 +354,7 @@ ok "  warnings are reported, not chased" "$(hasf "$CAT" "Warnings are reported i
 
 echo
 echo "== the script is documented where this repo documents scripts =="
-ok "README's Scripts section carries a row" "$(hasf "$README" "| \`kb-sweep-due.sh\` |")" yes
+ok "docs/reference.md's Scripts section carries a row" "$(hasf "$REFERENCE" "| \`kb-sweep-due.sh\` |")" yes
 ok "pm-design.md carries the reasoning" "$(hasf "$DESIGN" "### Step 7 — why an idle tick sweeps the knowledge base")" yes
 ok "  and the step-7 anchor step 7 would link to" "$(hasf "$DESIGN" '<a id="step-7"></a>')" yes
 

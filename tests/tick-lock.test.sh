@@ -923,7 +923,7 @@ echo "== the contract in prose says what the code does, in all four places =="
 # path-scan: absent — $TPL/symlink is the retired directory this sweep must still cover;
 # the other two roots on the line resolve, so the grep is a scan that WAS able to act.
 ok "no file still calls existence the whole signal" \
-  "$(grep -rlF 'EXISTENCE is the' "$TPL/symlink" "$TPL/docs" "$TPL/README.md" 2>/dev/null | wc -l | tr -d ' ')" 0
+  "$(grep -rlF 'EXISTENCE is the' "$TPL/symlink" "$TPL/docs" "$TPL/README.md" "$TPL/CONTRIBUTING.md" 2>/dev/null | wc -l | tr -d ' ')" 0
 ok "the header says the claim records whose it is" \
   "$(has "$LOCKSH" 'It records WHOSE it is')" yes
 ok "…and the claim it writes says so too"  "$(has "$LOCKSH" 'It records WHOSE the claim is')" yes
@@ -1043,8 +1043,8 @@ ok "…and that the runtime's id names a session" "$(has "$OPS" 'it names the *s
 ok "…and the exit 2 that follows from it"    "$(has "$OPS" 'CANNOT ATTRIBUTE')" yes
 ok "…and the drift failure mode it leaves open" "$(has "$OPS" 'gets a new id mid-tick')" yes
 ok "…and release's two-rm window"            "$(has "$OPS" 'removes two files with two')" yes
-ok "the README summary carries the asymmetry too" \
-  "$(has "$TPL/README.md" 'may refuse a claim but never clears one')" yes
+ok "the reference.md safety-rails summary carries the asymmetry too" \
+  "$(has "$TPL/docs/reference.md" 'may refuse a claim but never clears one')" yes
 
 echo
 echo "== the tick's own ledger still exists — it moved to step 0.9, it was not deleted =="

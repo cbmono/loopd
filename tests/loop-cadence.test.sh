@@ -196,7 +196,7 @@ ok "…(control: the phrase is findable)"   "$(saw 'Serial, gated on completion,
 ok "…a clock may ASK, not overlap"        "$(saw "$D" 'A clock is allowed to ASK — it is not allowed to overlap')" yes
 ok "…and pm-design.md agrees"             "$(saw "$(flatten "$REPO/docs/pm-design.md")" 'A clock is allowed to *ask*; it is not allowed to *overlap*')" yes
 ok "…README shows the bare form"          "$(saw "$(flatten "$REPO/README.md")" '```text /'"${PN}:"'dispatch ```')" yes
-ok "…and still names the /loop form as the same loop" "$(saw "$(flatten "$REPO/README.md")" '`/loop 10m /'"${PN}:"'dispatch` creates, which still works and is the same loop')" yes
+ok "…and reference.md still names the /loop form as the same loop" "$(saw "$(flatten "$REPO/docs/reference.md")" '`/loop 10m /'"${PN}:"'dispatch` creates, which still works and is the same loop')" yes
 
 # =======================================================================================
 echo "== 3. MEASURED: a remote routine's clone has none of a bundle's operating inputs =="
