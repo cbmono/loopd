@@ -279,6 +279,41 @@ assert "it names the occupied destination" \
 assert "and moved nothing at all"          "$([[ -f SCHEMA.md && -d .board-live && ! -e $AB_SCHEMA ]] && echo 0 || echo 1)"
 assert "no source was nested inside it"    "$([[ ! -e $AB_BOARD_DIR/.board-live ]] && echo 0 || echo 1)"
 
+echo "== both ledgers: TICK lines merge by timestamp instead of stopping =="
+# Measured 2026-11-13: a tick kept writing the pre-3.0 root log.md, and the occupied
+# destination then STOPPED this script. An append-only ledger has one right merge.
+L="$TMP/ledgers"; mkdir -p "$L/$AB_DIR"; cd "$L"
+echo '{ "org": "x" }' > instance.config.json; echo '# Schema' > "$AB_SCHEMA"
+T1='* TICK 2026-11-12T21:23:30Z by me idle — fingerprint unchanged (tick-delta) · tick-a'
+T2='* TICK 2026-11-12T21:33:29Z by me idle — fingerprint unchanged (tick-delta) · tick-b'
+T3='* TICK 2026-11-12T22:42:49Z by me close: tick-b ended with no ledger entry'
+T4='* TICK 2026-11-13T11:33:29Z by me idle — fingerprint unchanged (tick-delta) · tick-z'
+printf '%s\n' '# Activity Log' '' '* **2026-11-12 — Project added** by x.' "$T1" "$T3" > "$AB_LEDGER"
+printf '%s\n' "$T4" "$T2" "$T1" > log.md
+git init -q -b main . && git add -A && git -c user.email=a@b -c user.name=a commit -qm init
+WANT="$(printf '%s\n' '# Activity Log' '' '* **2026-11-12 — Project added** by x.' "$T1" "$T2" "$T3" "$T4")"
+BEFORE_L="$(cat "$AB_LEDGER")"
+LR="$(bash "$MIGRATE" --layout-only 2>&1)"
+assert "report: WOULD MERGE, naming the two lines it lacks" "$(grep -q "WOULD MERGE log.md into $AB_LEDGER — 2 line(s)" <<<"$LR" && echo 0 || echo 1)"
+assert "…and not STOPPED"                  "$(grep -q STOPPED <<<"$LR" && echo 1 || echo 0)"
+assert "…and changed nothing"              "$([[ -f log.md && "$(cat "$AB_LEDGER")" == "$BEFORE_L" ]] && echo 0 || echo 1)"
+mkdir -p "$(dirname "$AB_LOCK")"; : > "$AB_LOCK"
+LK="$(bash "$MIGRATE" --layout-only --apply 2>&1)"
+assert "a held lock still REFUSES, merging nothing" \
+  "$(grep -q REFUSED <<<"$LK" && [[ -f log.md && "$(cat "$AB_LEDGER")" == "$BEFORE_L" ]] && echo 0 || echo 1)"
+assert "…and prints no git mv onto the occupied ledger" "$(grep -q 'mv log.md' <<<"$LK" && echo 1 || echo 0)"
+rm -f "$AB_LOCK"
+LA="$(bash "$MIGRATE" --layout-only --apply 2>&1)"
+assert "apply: MERGED"                     "$(grep -q "MERGED   log.md into $AB_LEDGER — 2 line(s)" <<<"$LA" && echo 0 || echo 1)"
+assert "…in timestamp order, each line once, prose untouched" "$([[ "$(cat "$AB_LEDGER")" == "$WANT" ]] && echo 0 || echo 1)"
+assert "…and the root file is gone, its delete staged" "$([[ ! -e log.md && "$(git diff --cached --name-status -- log.md)" == "D"*log.md ]] && echo 0 || echo 1)"
+assert "a second run has no layout left"   "$(bash "$MIGRATE" --layout-only 2>&1 | grep -q 'pre-3.0 layout' && echo 1 || echo 0)"
+git checkout -q HEAD -- log.md "$AB_LEDGER"; printf 'hand-written note\n' >> log.md
+LP="$(bash "$MIGRATE" --layout-only --apply 2>&1)"
+assert "a root line that is not a TICK line still STOPS" \
+  "$(grep -q STOPPED <<<"$LP" && grep -q "log.md -> $AB_LEDGER" <<<"$LP" && echo 0 || echo 1)"
+assert "…touching neither file"            "$([[ -f log.md && "$(cat "$AB_LEDGER")" == "$BEFORE_L" ]] && echo 0 || echo 1)"
+
 # =========================================================================================
 # THE .loopd RENAME — `.ai-bridge/` moves whole, with its ignore lines, its statusline pin
 # and a mounted KB. The fixture is mounted through a copy of the scripts with AB_DIR set back
