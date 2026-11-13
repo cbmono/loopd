@@ -129,7 +129,7 @@ Or run it with **no slug**: it offers a picker of the projects with their task c
 takes more than one, asks whether to `--force` or `--dry-run`, and closes them one after
 another.
 Closeout does a final `knowledge/` consolidation (durable learnings live on in the
-KB), records a **Project closed** entry in `log.md` (with the merged PRs and the
+KB), records a **Project closed** entry in `.loopd/log.md` (with the merged PRs and the
 removing commit), rolls the project to `status: done`, and then **removes the
 project folder**. There is **no `archive/`** — git history + the KB are the record,
 and a done folder left live would only cost context on every PM tick. Recover the

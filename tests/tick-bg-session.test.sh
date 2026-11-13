@@ -177,7 +177,7 @@ state blocked; reap
 ok "a committed idle line with the id ⇒ reaped" "$RC:$(locked)" "0:no"
 ok "…and a blocked finished turn is stopped" "$(cat "$ST/stopped" 2>/dev/null)" 1234abcd
 mv "$CLAUDE_CONFIG_DIR/projects/p/$SID.jsonl" "$TMP/t.jsonl"
-spawned; printf '* TICK %s by me idle · %s\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"; state done; reap
+spawned; printf '* TICK %s by me idle — fingerprint unchanged (tick-delta) · %s\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"; state done; reap
 ok "no transcript ⇒ no COST: line at all" "$(has "$OUT" 'COST:')" no
 mv "$TMP/t.jsonl" "$CLAUDE_CONFIG_DIR/projects/p/$SID.jsonl"
 
@@ -204,6 +204,45 @@ ok "no entry at all, session ended ⇒ released" "$RC:$(locked)" "0:no"
 ok "…after a close: line naming the id" "$(grep -c "close: $ID ended with no ledger entry" "$B/.loopd/log.md" | tr -d ' ')" 1
 spawned; reap
 ok "no entry yet, session working ⇒ held" "$RC:$(locked)" "1:yes"
+
+echo "== a turn that ended with no ledger line for its id (the hand-typed root log.md) =="
+backdate() { sed -i.bak "s/^spawned: .*/spawned: $(( $(date +%s) - $1 ))/" "$B/.loopd/.tick-lock"; }
+spawned; printf '* TICK %s by me idle — fingerprint unchanged (tick-delta) · %s\n' "$TS" "$ID" > "$B/log.md"; commit "$B"
+cp "$B/log.md" "$TMP/root-log"
+STATUS=idle state working; reap
+ok "turn over, no entry, inside the grace ⇒ held" "$RC:$(locked)" "1:yes"
+backdate 300; rm -f "$ST/stopped"; STATUS=idle state working; reap
+ok "…past the grace ⇒ reaped, exit 0" "$RC:$(locked)" "0:no"
+ok "…its session stopped" "$(cat "$ST/stopped" 2>/dev/null)" 1234abcd
+ok "…with the ended-with-no-ledger-entry close" \
+   "$(grep -c "close: $ID ended with no ledger entry — session 1234abcd turn-over (tick-reap)\$" "$B/.loopd/log.md" | tr -d ' ')" 1
+ok "…and the root log.md is neither read nor written" "$(cmp -s "$B/log.md" "$TMP/root-log" && echo same || echo changed):$(has "$OUT" 'fingerprint unchanged')" "same:no"
+spawned; backdate 300; rm -f "$ST/stopped"; STATUS=working state working; reap
+ok "turn still working, no entry, past the grace ⇒ held" "$RC:$(locked):$(cat "$ST/stopped" 2>/dev/null)" "1:yes:"
+spawned; backdate 300; state working; reap
+ok "…and an unreadable turn status ⇒ held" "$RC:$(locked)" "1:yes"
+spawned; backdate 300; rm -f "$ST/stopped"; chmod 000 "$B/.loopd/log.md"; STATUS=idle state working; reap; chmod 644 "$B/.loopd/log.md"
+ok "an unreadable ledger, turn over ⇒ exit 2, lock kept, nothing stopped" "$RC:$(locked):$(cat "$ST/stopped" 2>/dev/null)" "2:yes:"
+spawned; printf '* TICK %s by me close: dispatched x; quoting %s in free text\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"; state done; reap
+ok "an id in free text is not a close for it" "$(has "$OUT" "reaped: $ID · ended")" yes
+for forged in "close: dispatched x · @ID" "close: x idle — fingerprint unchanged (tick-delta) · @ID" "close: x open: @ID"; do
+  spawned; printf '* TICK %s by me %s\n' "$TS" "${forged//@ID/$ID}" >> "$B/.loopd/log.md"; commit "$B"; state done; reap
+  ok "forged summary is not its close: ${forged:0:28}…" "$(has "$OUT" "reaped: $ID · ended")" yes
+done
+spawned; backdate 300; rm -f "$ST/stopped"; printf '* TICK %s by me open:  `%s`, x\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"
+STATUS=idle state working; reap
+ok "a malformed open line naming the id, turn over ⇒ held, not stopped" "$RC:$(locked):$(cat "$ST/stopped" 2>/dev/null)" "1:yes:"
+spawned; backdate 300; rm -f "$B/.loopd/log.md"; commit "$B"; STATUS=idle state working; reap
+ok "a missing ledger, turn over ⇒ exit 2 naming it missing" "$RC:$(locked):$(has "$OUT" 'is missing')" "2:yes:yes"
+spawned; bash "$SC/tick-delta.sh" record --idle --instance "$B" --tick-id "$ID" --swept "stopped 1234abcd (3m) finished" >/dev/null; commit "$B"
+STATUS=idle state working; reap
+ok "a real record --idle line with --swept closes the tick" "$RC:$(has "$OUT" "reaped: $ID · closed")" "0:yes"
+
+echo "== no plugin prompt tells a tick to write the ledger at the root =="
+stray="$(grep -rnE --include='*.md' 'root `log\.md`|>> ?log\.md|-- log\.md| log\.md objectives' "$REPO/plugin" | sed "s|^$REPO/||")"
+ok "no prompt names a root log.md ledger" "${stray:-none}" none
+ok "the idle path calls the script" "$(has "$(cat "$PM")" 'tick-delta.sh record --idle --tick-id <the tick id from your brief>')" yes
+ok "…and never spells the line for a hand append" "$(has "$(cat "$PM")" '`* TICK <ISO-8601> by <login> idle')" no
 
 echo "== criterion 8: once / DRY RUN wait through the reaper; stop releases nothing =="
 spawned; printf '* TICK %s by me open: %s · x\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"

@@ -48,7 +48,7 @@ knowledge base") means several people write this KB. Absent the key nothing belo
   produce.
 - **The journals shard per month** once mounted — `knowledge/log/<YYYY-MM>.md` and
   `knowledge/papercuts/<YYYY-MM>.md`. `papercuts.sh` picks the right file itself and reads
-  both forms. The bundle-root `log.md` is the PM's ledger, not yours.
+  both forms. `.loopd/log.md` is the PM's ledger, not yours.
 
 ## What you do
 

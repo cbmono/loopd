@@ -180,7 +180,7 @@ closeout agent with a message** — dispatch a fresh one.
 idempotent, and it takes **no tick lock** — the tick's entry-time ledger/lock dance is
 skipped, because a closeout that adopted the tick's re-entry logic would either deadlock
 behind a live tick or re-run a removal that already happened. For the same reason, do not
-start a closeout while a tick is in flight: both write `log.md`, the KB and task
+start a closeout while a tick is in flight: both write `.loopd/log.md`, the KB and task
 documents in one working tree. Wait for the loop's notification, or stop the loop first.
 
 **Two decisions never leave this thread.** They are the agent's escalation path and never
@@ -290,7 +290,7 @@ is, while the log entry still names the human who decided.
 
 3. **Record the closeout.** Get a timestamp (`date -u +%Y-%m-%dT%H:%M:%SZ`) and the
    login closing it (`bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`). Prepend
-   a dated **Project closed** entry to the root `log.md` (newest-first), stamped
+   a dated **Project closed** entry to `.loopd/log.md` (newest-first), stamped
    `by <login>`, naming the
    project, its merged PR(s) as `[<repo>#<n>](url)`, the `Finding`(s) it produced
    (KB links), a one-line outcome, and `papercuts pass refused: <surfaces>` when step 2's
@@ -302,7 +302,7 @@ is, while the log entry still names the human who decided.
    commit — reference it as "removed in the closing commit".)
 
    **For a retained project, say so and name what was pruned** — step 7's command
-   prints a ready-made `log.md fragment` line for exactly this: which directories went
+   prints a ready-made `.loopd/log.md fragment` line for exactly this: which directories went
    and what was kept. Without it a reader six months out cannot tell a deliberately
    partial folder from a damaged one. Run step 7 first if you want the fragment in
    hand; the entry is committed in step 7's commit either way.
@@ -383,12 +383,12 @@ is, while the log entry still names the human who decided.
    never `sources/**/*.md`. It also writes the project's stanza into `projects/CLOSED.md`,
    which is how a closed project's deliverables stay findable. Under `--dry-run`, run it
    **without** `--apply`: it reports the
-   exact removal or prune and changes nothing. Keep its `log.md fragment` line for
+   exact removal or prune and changes nothing. Keep its `.loopd/log.md fragment` line for
    step 3's entry.
 
    Then stage and commit:
 
-   * **removed** — the `git rm` already staged the deletion; add the `log.md` /
+   * **removed** — the `git rm` already staged the deletion; add the `.loopd/log.md` /
      objective / KB edits by explicit path.
    * **retained** — `git add -A -- projects/<slug>` (explicit path), so the prune's
      deletions, `status: done`, the `deliverable_paths:` stamp and the refreshed
@@ -407,7 +407,7 @@ is, while the log entry still names the human who decided.
    **Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh` after the folder step and before committing** —
    validating beforehand cannot see a reference that only dangles once the folder is
    gone, which is the whole failure class step 6 exists to prevent. Zero errors is the
-   gate. Print the closing commit SHA and the `log.md` entry. For a removal, remind the
+   gate. Print the closing commit SHA and the `.loopd/log.md` entry. For a removal, remind the
    user the full record stays recoverable via `git log -- projects/<slug>/`; for a
    retention, that the folder is deliberately partial and the log entry says how.
 
@@ -438,7 +438,7 @@ is, while the log entry still names the human who decided.
    where `SNAPSHOT.json` is absent (the board's off switch), and a non-zero exit never
    fails the closeout: name it in your report and carry on.
 
-**Report back** — one tight summary: what the cataloguer folded in, the `log.md` entry,
+**Report back** — one tight summary: what the cataloguer folded in, the `.loopd/log.md` entry,
 the closing commit SHA, this project's worktree lines, and anything you skipped. You never
 promoted a task and you never merged a pull request; say so if either was ever in
 question.

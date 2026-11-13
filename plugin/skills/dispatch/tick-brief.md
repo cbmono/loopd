@@ -13,9 +13,10 @@ Three rules this spawn adds, each because the launcher reads nothing but your le
 - **Pass the tick id verbatim** to the lock acquire: `tick-lock.sh acquire --as tick --agent project-manager --claimant {{TICK_ID}}`.
 - **Write it into your ledger line.** Step 0.9's open line is
   `* TICK <ISO-8601 timestamp> by <login> open: {{TICK_ID}} · <what you are about to do>`;
-  the idle line ends ` · {{TICK_ID}}`. That id on a **committed** line is the only way the
+  the idle line is `tick-delta.sh record --idle --tick-id {{TICK_ID}}`, never hand-typed. That id on a **committed** line is the only way the
   launcher learns you finished: an entry still open when your session ends is closed as
-  dead by `tick-reap.sh`, and nothing else releases the lock.
+  dead by `tick-reap.sh`, and a turn that ends with no line naming the id is stopped and
+  closed the same way two minutes after spawn.
 - **Your own usage is not yours to report.** The launcher prints it from your transcript
   once your session has ended; step 8's usage flags stay what they were. Release nothing.
 

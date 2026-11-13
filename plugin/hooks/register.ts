@@ -604,10 +604,10 @@ function draw($: any, e: any, now: number): any {
     // the age right-aligned on its own line under it.
     const marks = LOGO_ROWS.map(r => r.split('|'))
     const lw = Math.max(...marks.map(m => cols(m.join(''))))
-    const pv = counts.plugin_version, room = W - lw - 1
-    const versions = (pv ? [brand.version ? 'bundle ' + brand.version : '', 'plugin ' + pv] : ['loopd' + (brand.version ? ' v' + brand.version : '')]).filter(Boolean).join(' · ')
+    const v = counts.plugin_version || brand.version, room = W - lw - 1
+    const named = 'loopd' + (v ? ' v' + v : '')
     // Group and org are what the width takes; they go whole when under two of their characters would show.
-    const brandLine = room - cols(versions) < 5 ? versions : [versions, b.group, brand.org ? 'org: ' + brand.org : ''].filter(Boolean).join(' · ')
+    const brandLine = room - cols(named) < 5 ? named : [named, b.group, brand.org ? 'org: ' + brand.org : ''].filter(Boolean).join(' · ')
     marks.forEach(([indent, pink, blue], i) => {
       const pad = seg(' '.repeat(lw - cols(indent + pink + blue) + 1))
       rows.push(row(seg(indent), seg(pink, GATE), seg(blue, TUBE),

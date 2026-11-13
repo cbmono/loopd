@@ -210,7 +210,7 @@ state, and act only on deltas.
    acquire too — a resume never passes through the launcher: `docs/pm-design.md#step-0-5`.
 
    **Read the in-flight set from disk, never from your brief and never from anyone's
-   memory.** In this order, each outranking anything you were told: the root `log.md`
+   memory.** In this order, each outranking anything you were told: the `.loopd/log.md`
    **tick ledger** (an `open:` line with no `close:` at the same timestamp), the task
    documents' own `status:`, then `git log` and `gh pr list`. If the ledger and a task's
    `status:` disagree, **the task document wins** — re-dispatching a finished task sequence
@@ -225,7 +225,7 @@ state, and act only on deltas.
    by evidence**. A non-empty list holds `done`/`cancelled` (`validate-bundle.sh` errors on that write).
 
    **Do NOT open the tick ledger entry here — step 0.9 does, on the paths that own one**:
-   the append dirties `log.md`, which `tick-delta.sh check` would read as a `DELTA`.
+   the append dirties `.loopd/log.md`, which `tick-delta.sh check` would read as a `DELTA`.
 
    **On finding an open entry: orient first, then report, then hold** — task statuses,
    `worktree:`/`branch:` keys, PR state, so the report says *which* tasks claim in-flight;
@@ -246,10 +246,13 @@ state, and act only on deltas.
      `* <ISO 8601> triage:` line. **Skip steps 1–7.**
      Except one: run `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` (step 5's
      sweep — an IDLE tick still stops finished and idle sessions). A `handed-off` line means it
-     edited a task: run the full tick instead. Append ONE already-closed line to the root `log.md` —
-     `* TICK <ISO-8601> by <login> idle — fingerprint unchanged (tick-delta) · <the tick id from your brief>`,
-     followed by ` · swept: <its lines, `; `-joined>` when it printed any — then step 8
-     commits and syncs it, reporting `noop: true`.
+     edited a task: run the full tick instead. **The script writes the one already-closed
+     ledger line — never append it yourself:**
+     `${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh record --idle --tick-id <the tick id from your brief>`,
+     plus `--swept "<its lines, `; `-joined>"` when it printed any (no id ⇒ drop `--tick-id`).
+     Exit 1 on a refused `--swept` (ledger grammar or a home path): run it again with the
+     sweep's `stopped <short> (<age>) <class>` tokens only; on any other exit 1, say so.
+     Then step 8 commits `.loopd/log.md` by that path and syncs it, reporting `noop: true`.
      **Then stop — your entire report is that one line, the probe's own, verbatim.**
      Rewrite no queue, no snapshot, no board — **then re-record the fingerprint**,
      `${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh record`, **after** the commit and the push.
@@ -257,7 +260,7 @@ state, and act only on deltas.
      hint for your report, never the orientation.
    - **Script missing**: run the full tick and say `TICK DELTA: absent — re-stamp this instance`.
 
-   **On every path but IDLE, open your tick ledger entry NOW.** Append one line to the root `log.md`:
+   **On every path but IDLE, open your tick ledger entry NOW.** Append one line to `.loopd/log.md`:
    `* TICK <ISO-8601 timestamp> by <login> open: <the tick id from your brief> · <what you are about to do>`
    (no id in your brief ⇒ drop the id and the `·`), first thing in the full walk — here
    because the probe reads a tree that append would have dirtied.
@@ -268,7 +271,7 @@ state, and act only on deltas.
    **`by <login>` names the login this tick RAN as** —
    `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`, `<unknown>` written as-is on a
    clone that configures none (`SCHEMA.md` → "Decisions name the human"). Resolve it once
-   and reuse it for the idle line and for step 8's close.
+   for the open line; `record --idle` and `record --close` stamp theirs themselves.
 
 0.95. **Consume the web board's answer queue — blind.** Run
    `${CLAUDE_PLUGIN_ROOT}/scripts/web-queue.sh consume` once, under the lock step 0.5 took. It
@@ -337,7 +340,7 @@ state, and act only on deltas.
    runs `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` once, here, whether
    or not it reads that file — unless step 0.9 already ran it this tick and handed off.**
    Carry every `stopped`, `handed-off`, `stop-failed` and `deferred` line, from whichever
-   run, onto your `log.md` close summary; a `stop-failed` is not retried this tick and never
+   run, onto your `.loopd/log.md` close summary; a `stop-failed` is not retried this tick and never
    stopped by hand. Exit 2 stopped nothing: one line in the tick report. What it selects is
    in that file.
 
@@ -356,7 +359,7 @@ state, and act only on deltas.
    into the report as is, with no dispatch.
 
 8. **Curate.** Keep `projects/<p>/project.md`, each project's `index.md`, and the
-   `log.md` files current — **for the projects you actually read this tick**. **The
+   `projects/<p>/log.md` files current — **for the projects you actually read this tick**. **The
    `index.md` files — root and per-project — are derived and gitignored: rewrite them, but
    never stage or commit them** (same rule as `AWAITING.md` and `SNAPSHOT.json`); a retained
    project's `index.md` is committed once, at closeout (step 6). `knowledge/index.md` is
@@ -377,8 +380,8 @@ state, and act only on deltas.
    notifications handed you** (`subagent_tokens`, `tool_uses`, `duration_ms`, summed over
    this tick's dispatches); **never reformat them and never compose the `usage …` fragment
    yourself**. **No numbers to give ⇒ drop all three flags.** Exit **1** means the entry is
-   already closed (or your summary carried a path under `~`) — say so in one line and change
-   nothing. **An IDLE tick runs none of this.**
+   already closed — say so in one line and change nothing — or the summary was refused (a
+   path under `~`, ledger grammar, or a leading tick id): rewrite it and run again. **An IDLE tick runs none of this.**
    **Make the summary reconstructible, not descriptive:** name every task id
    you dispatched and every one whose completion you reflected — "dispatched task-004,
    task-007; reflected task-002 merged". **A KB sweep (step 7) is named the same way —

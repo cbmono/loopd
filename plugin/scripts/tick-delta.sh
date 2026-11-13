@@ -5,6 +5,7 @@
 #   Usage: tick-delta.sh check  [--instance DIR] [--gap TEXT]
 #          tick-delta.sh record [--instance DIR]
 #          tick-delta.sh record --close TEXT [--tick ISO] [--tokens N] [--tools N] [--duration-ms N]
+#          tick-delta.sh record --idle [--tick-id ID] [--swept TEXT]
 #          tick-delta.sh digest [--instance DIR]
 #
 # `record --close TEXT` IS THE LEDGER HALF, AND IT TOUCHES NO FINGERPRINT. It appends
@@ -15,6 +16,8 @@
 # `--tick <ISO>` names WHICH entry to close, matched exactly; without it a close is taken
 # only when exactly one entry is open. Two racing ticks are refused, never guessed —
 # guessing closes the other tick's entry under your summary and leaves yours open.
+# `record --idle` appends the IDLE tick's one already-closed line, offline too: a tick that
+# composed it by hand wrote a root `log.md` the reaper never reads, and held the lock ~70m.
 #
 # WHY THIS EXISTS. A tick re-derives everything every time — full task walk, a live
 # read of every open PR — which is correct and stays the default. But measured on a
@@ -117,6 +120,7 @@ STATE_NAME="$AB_STATE_DIR"
 usage() {
   echo "Usage: $(basename "$0") check|record|digest [--instance DIR] [--gap TEXT]" >&2
   echo "       $(basename "$0") record --close TEXT [--tick ISO] [--tokens N] [--tools N] [--duration-ms N]" >&2
+  echo "       $(basename "$0") record --idle [--tick-id ID] [--swept TEXT]" >&2
   exit 3
 }
 
@@ -126,8 +130,17 @@ case "$cmd" in check|record|digest) ;; *) usage ;; esac
 inst="."
 gap=""
 close=""; close_set=0; tick=""; tokens=""; tools=""; ms=""
+idle=0; tick_id=""; swept=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    --idle)
+      [ "$cmd" = record ] || { echo "tick-delta: --idle is a \`record\` flag" >&2; exit 3; }
+      idle=1; shift ;;
+    --tick-id|--swept)
+      [ "$cmd" = record ] || { echo "tick-delta: $1 is a \`record\` flag" >&2; exit 3; }
+      [ $# -ge 2 ] || { echo "tick-delta: $1 needs a value" >&2; exit 3; }
+      case "$1" in --tick-id) tick_id="$2" ;; --swept) swept="$2" ;; esac
+      shift 2 ;;
     --close|--tick|--tokens|--tools|--duration-ms)
       [ "$cmd" = record ] || { echo "tick-delta: $1 is a \`record\` flag" >&2; exit 3; }
       [ $# -ge 2 ] || { echo "tick-delta: $1 needs a value" >&2; exit 3; }
@@ -165,6 +178,38 @@ fail2() { echo "CANNOT ANSWER: $1 — run the full tick." >&2; exit 2; }
 if [ "$close_set" -eq 0 ] && { [ -n "$tick" ] || [ -n "$tokens" ] || [ -n "$tools" ] || [ -n "$ms" ]; }; then
   echo "tick-delta: the usage flags go on --close, so they need one" >&2; exit 3
 fi
+oneline() { printf '%s' "$1" | tr '\n\t' '  ' | sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//'; }
+if [ "$idle" -eq 0 ] && { [ -n "$tick_id" ] || [ -n "$swept" ]; }; then
+  echo "tick-delta: --tick-id and --swept go on --idle, so they need it" >&2; exit 3
+fi
+if [ "$idle" -eq 1 ]; then
+  [ "$close_set" -eq 0 ] || { echo "tick-delta: --idle and --close are two different lines" >&2; exit 3; }
+  LOG="$inst/$AB_LEDGER"
+  [ -f "$LOG" ] && [ -w "$LOG" ] || fail2 "no writable $LOG"
+  swept="$(oneline "$swept")"
+  case "$tick_id" in *[!A-Za-z0-9._-]*) echo "tick-delta: --tick-id takes a minted id, [A-Za-z0-9._-] only" >&2; exit 3 ;; esac
+  # The swept text is agent-relayed, and the reaper parses this line: no ledger grammar, no home path.
+  case "$swept" in
+    *"* TICK"*|*"open:"*|*"close:"*) echo "REFUSED: --swept carries a ledger marker — pass the sweep's own lines only." >&2; exit 1 ;;
+    *"~"*|*'$HOME'*|*/Users/*|*/home/*|*"${HOME:-/Users/}"*) echo "REFUSED: a ledger line carries no home path — rewrite the swept text." >&2; exit 1 ;;
+  esac
+  if [ -n "$tick_id" ]; then
+    claimant="$(awk 'index($0, "claimant:") == 1 { sub(/^claimant:[[:space:]]*/, ""); print; exit }' "$inst/$AB_LOCK" 2>/dev/null)"
+    [ "$claimant" = "$tick_id" ] || {
+      echo "REFUSED: --tick-id $tick_id is not the claimant on $AB_LOCK (${claimant:-none}) — not closing another tick." >&2; exit 1; }
+    if grep -F -- "$tick_id" "$LOG" | grep -q '^\* TICK '; then
+      echo "REFUSED: $LOG already has a TICK line for $tick_id — not double-writing." >&2; exit 1
+    fi
+  fi
+  by="$(bash "$(dirname "$0")/decision-stamp.sh" --instance "$inst" --self 2>/dev/null)"
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  line="* TICK $ts by ${by:-<unknown>} idle — fingerprint unchanged (tick-delta)"
+  [ -n "$tick_id" ] && line="$line · $tick_id"
+  [ -n "$swept" ] && line="$line · swept: $swept"
+  printf '%s\n' "$line" >> "$LOG" || fail2 "cannot append to $LOG"
+  echo "idle: $ts — commit $AB_LEDGER"
+  exit 0
+fi
 if [ "$close_set" -eq 1 ]; then
   LOG="$inst/$AB_LEDGER"
   [ -f "$LOG" ] && [ -w "$LOG" ] || fail2 "no writable $LOG"
@@ -172,6 +217,9 @@ if [ "$close_set" -eq 1 ]; then
   case "$close" in
     '') echo "tick-delta: --close needs a summary" >&2; exit 3 ;;
     *"~/"*) echo "REFUSED: a ledger line carries no path under \`~\` — rewrite the summary." >&2; exit 1 ;;
+    # tick-reap.sh reads a close's first token as a tick id, so a summary never forges one.
+    *"* TICK"*|*"open:"*|*"close:"*|*"idle — fingerprint"*|tick-[0-9]*)
+      echo "REFUSED: the summary carries ledger grammar or opens with a tick id — rewrite the summary." >&2; exit 1 ;;
   esac
   # Whichever marker comes FIRST decides the line. A summary is free prose and may quote
   # the other word, so a plain substring test misfiles the entry it is reading.
