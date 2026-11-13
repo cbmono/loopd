@@ -63,7 +63,7 @@ echo
 echo "== 2. no file claims an absent key grants the browser =="
 # The drift this section exists for: a document left behind saying the capability arrives
 # by default, which would grant it to every project that never answered the question.
-for pair in "SCHEMA:$SCHEMA" "SKILL:$SKILL" "CONV:$CONV" "README:$REPO/README.md" "REFERENCE:$REPO/docs/reference.md"; do
+for pair in "SCHEMA:$SCHEMA" "SKILL:$SKILL" "CONV:$CONV" "README:$REPO/README.md" "REFERENCE:$REPO/docs/reference.md" "GETTING:$REPO/docs/getting-started.md" "CONTRIB:$REPO/CONTRIBUTING.md"; do
   name="${pair%%:*}"; file="${pair#*:}"
   ok "$name: no \"default claude-for-chrome\" claim" \
      "$(grep -qiE 'default \x60?claude-for-chrome|absent[^.]{0,60}means (on|claude-for-chrome)' "$file" && echo no || echo yes)" yes
