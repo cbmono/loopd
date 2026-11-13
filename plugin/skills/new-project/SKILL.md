@@ -247,7 +247,7 @@ never an option.
 
 6. **Register the project** (keep the bundle navigable). The root `index.md` is
    **derived and gitignored** — edit it so the bundle reads correctly now, but it is
-   not committed; `log.md` and the objective are the tracked registration:
+   not committed; `.loopd/log.md` and the objective are the tracked registration:
    - Add a bullet under `## Projects` in the root `index.md`. For build:
      `[<title>](/projects/<slug>/project.md) - target: \`<target_repo>\` · <n> seed task(s)`.
      For research: `[<title>](/projects/<slug>/project.md) - research · <n> deliverable(s)`.
@@ -255,7 +255,7 @@ never an option.
      serving this objective" list; if you created a new objective in step 3, also add
      it under `## Objectives` in the root `index.md`. A project with no objective skips
      this bullet entirely.
-   - Prepend a dated **Project added** bullet to the root `log.md` (newest-first:
+   - Prepend a dated **Project added** bullet to `.loopd/log.md` (newest-first:
      reuse today's `## <date>` heading if present, else add it at the top of the
      dated entries), stamped `Added <ISO 8601> by <login>` from
      `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`. The continue checkpoint
@@ -267,7 +267,7 @@ never an option.
    the per-agent helper, naming **every** path steps 5 and 6 touched — the scaffold
    and its registration belong in one commit, or the tree records a project that
    nothing links to:
-   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human "feat: add <slug> project" --stage -- projects/<slug> log.md objectives/<objective>.md`
+   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human "feat: add <slug> project" --stage -- projects/<slug> .loopd/log.md objectives/<objective>.md`
    (drop `objectives/<objective>.md` where there is no objective, or where step 3 left
    it untouched). The root and
    per-project `index.md` are **not** in that list — they are derived and gitignored,

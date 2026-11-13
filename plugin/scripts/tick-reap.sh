@@ -24,6 +24,8 @@ done
 [ -d "$inst" ] || { echo "tick-reap: no such instance directory: $inst" >&2; exit 3; }
 LOCK="$inst/$AB_LOCK"; LOG="$inst/$AB_LEDGER"
 TERMINAL=" done gone stopped completed cancelled failed error exited "
+# A turn that ended this long after spawn with no ledger line for its id will never write one.
+NO_ENTRY_GRACE_S=120
 
 field() { awk -v k="$1" '!/^#/ && index($0, k ":") == 1 { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$LOCK" 2>/dev/null; }
 
@@ -77,6 +79,20 @@ turn_status() {
     | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
 }
 
+ended() { # the tick left no ledger line for its id: close it here, then release
+  local login line
+  login="$(cd "$inst" && bash "$HERE/decision-stamp.sh" --self 2>/dev/null)" || login="<unknown>"
+  line="* TICK $(date -u +%Y-%m-%dT%H:%M:%SZ) by ${login:-<unknown>} close: $tick ended with no ledger entry — session $short $state (tick-reap)"
+  printf '%s\n' "$line" >> "$LOG" || { echo "tick-reap: cannot append to $LOG — the lock stays." >&2; exit 2; }
+  release ended "$line"
+}
+
+past_grace() {
+  local t; t="$(field spawned)"; case "$t" in ''|*[!0-9]*) t="$(field epoch)" ;; esac
+  case "$t" in ''|*[!0-9]*) return 1 ;; esac
+  [ $(( $(date +%s) - t )) -ge "$NO_ENTRY_GRACE_S" ]
+}
+
 # -> exits on every outcome but "live" (returns 1) and "finishing" (returns 2)
 assess() {
   [ -e "$LOCK" ] || exit 0
@@ -98,6 +114,14 @@ assess() {
       fi
       release closed "${head#closed }" ;;
   esac
+  # Turn over, no line for the id anywhere in the ledger: it wrote its close elsewhere (a
+  # hand-typed root `log.md`) or not at all. Still `working` only because a bg session stays
+  # resident, so stop it before closing — never on age alone, a full walk can run past 45m.
+  if [ "$state" = working ] && [ "$disk" = none ] && [ "$(turn_status)" = idle ] && past_grace; then
+    claude stop "$short" >/dev/null 2>&1 </dev/null
+    state=turn-over
+    ended
+  fi
   case "$state" in
     working|idle) return 1 ;;
     blocked)
@@ -117,10 +141,7 @@ assess() {
         || { echo "tick-reap: could not close the dead tick's entry at $ts — the lock stays." >&2; exit 2; }
       release dead "$(scan < "$LOG" | sed 's/^closed //')" ;;
   esac
-  login="$(cd "$inst" && bash "$HERE/decision-stamp.sh" --self 2>/dev/null)" || login="<unknown>"
-  line="* TICK $(date -u +%Y-%m-%dT%H:%M:%SZ) by ${login:-<unknown>} close: $tick ended with no ledger entry — session $short $state (tick-reap)"
-  printf '%s\n' "$line" >> "$LOG" || { echo "tick-reap: cannot append to $LOG — the lock stays." >&2; exit 2; }
-  release ended "$line"
+  ended
 }
 
 if [ "$wait" = no ]; then

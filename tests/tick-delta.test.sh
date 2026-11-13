@@ -591,6 +591,20 @@ ok "a ready task in a done project is not dispatchable (the walk skips it too)" 
    "$(bash "$INST/scripts/dispatchable-ready.sh" --instance "$INST" | grep -c proj-d)" 0
 rm -rf "${INST:?}/projects/proj-d" "${INST:?}/$AB_SCHEMA"; cr unproj-d
 
+echo "== record --idle: the idle tick's one line, written to the ledger by the script =="
+IDL="$TMP/idle"; mkdir -p "$IDL/$AB_DIR"; printf '# Log\n' > "$IDL/$AB_LEDGER"
+idle_rc="$(cd "$IDL" && "$SRC" record --idle --tick-id tick-1 --swept $'stopped a\nstopped b' >/dev/null 2>&1; echo $?)"
+ok "record --idle, run from the bundle root, exits 0" "$idle_rc" 0
+ok "…the line lands in $AB_LEDGER, swept text on one line" \
+   "$(grep -cE '^\* TICK [0-9T:Z-]+ by [^ ]+ idle — fingerprint unchanged \(tick-delta\) · tick-1 · swept: stopped a stopped b$' "$IDL/$AB_LEDGER")" 1
+ok "…and no root log.md exists"                  "$([ -e "$IDL/log.md" ] && echo yes || echo no)" no
+ok "…nor a fingerprint"                          "$([ -e "$IDL/$AB_STATE_DIR" ] && echo yes || echo no)" no
+ok "a second line for the same id is refused (1)" "$("$SRC" record --idle --instance "$IDL" --tick-id tick-1 >/dev/null 2>&1; echo $?)" 1
+ok "--swept without --idle is usage (3)"          "$("$SRC" record --instance "$IDL" --swept x >/dev/null 2>&1; echo $?)" 3
+ok "--idle with --close is usage (3)"             "$("$SRC" record --instance "$IDL" --idle --close x >/dev/null 2>&1; echo $?)" 3
+mkdir -p "$TMP/noledger"
+ok "no ledger ⇒ exit 2, never a new file"         "$("$SRC" record --idle --instance "$TMP/noledger" >/dev/null 2>&1; echo $?):$(ls "$TMP/noledger" "$TMP/noledger/$AB_DIR" | grep -c 'log.md')" 2:0
+
 echo "== plumbing =="
 ok "not a git repo is exit 2"    "$(mkdir -p "$TMP/plain"; "$SH" check --instance "$TMP/plain" >/dev/null 2>&1; echo $?)" 2
 ok "a bad mode is usage (3)"     "$("$SH" frobnicate >/dev/null 2>&1; echo $?)" 3

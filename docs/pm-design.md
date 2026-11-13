@@ -225,7 +225,7 @@ still gets the result — from the ledger and `AWAITING.md`, never the transcrip
 The loop is long-lived and its context gets summarised; the in-flight set is answered
 from session history, which is exactly what compaction discards. That is what
 `.tick-lock` is for. Re-deriving the in-flight set from disk is one of the tick's
-opening steps — the root `log.md` tick ledger (whose open-with-no-close entry is the
+opening steps — the `.loopd/log.md` tick ledger (whose open-with-no-close entry is the
 only thing on disk that distinguishes "dispatched, waiting" from "never ran"), then the
 task documents' own `status:`, then `git log` / `gh pr list`, each outranking anything
 anyone remembers. A tick that finds an open entry reports it and holds rather than

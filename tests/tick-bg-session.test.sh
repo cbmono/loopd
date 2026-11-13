@@ -205,6 +205,29 @@ ok "…after a close: line naming the id" "$(grep -c "close: $ID ended with no l
 spawned; reap
 ok "no entry yet, session working ⇒ held" "$RC:$(locked)" "1:yes"
 
+echo "== a turn that ended with no ledger line for its id (the hand-typed root log.md) =="
+backdate() { sed -i.bak "s/^spawned: .*/spawned: $(( $(date +%s) - $1 ))/" "$B/.loopd/.tick-lock"; }
+spawned; printf '* TICK %s by me idle — fingerprint unchanged (tick-delta) · %s\n' "$TS" "$ID" > "$B/log.md"; commit "$B"
+cp "$B/log.md" "$TMP/root-log"
+STATUS=idle state working; reap
+ok "turn over, no entry, inside the grace ⇒ held" "$RC:$(locked)" "1:yes"
+backdate 300; rm -f "$ST/stopped"; STATUS=idle state working; reap
+ok "…past the grace ⇒ reaped, exit 0" "$RC:$(locked)" "0:no"
+ok "…its session stopped" "$(cat "$ST/stopped" 2>/dev/null)" 1234abcd
+ok "…with the ended-with-no-ledger-entry close" \
+   "$(grep -c "close: $ID ended with no ledger entry — session 1234abcd turn-over (tick-reap)\$" "$B/.loopd/log.md" | tr -d ' ')" 1
+ok "…and the root log.md is neither read nor written" "$(cmp -s "$B/log.md" "$TMP/root-log" && echo same || echo changed):$(has "$OUT" 'fingerprint unchanged')" "same:no"
+spawned; backdate 300; rm -f "$ST/stopped"; STATUS=working state working; reap
+ok "turn still working, no entry, past the grace ⇒ held" "$RC:$(locked):$(cat "$ST/stopped" 2>/dev/null)" "1:yes:"
+spawned; backdate 300; state working; reap
+ok "…and an unreadable turn status ⇒ held" "$RC:$(locked)" "1:yes"
+
+echo "== no plugin prompt tells a tick to write the ledger at the root =="
+stray="$(grep -rnE --include='*.md' 'root `log\.md`|>> ?log\.md|-- log\.md| log\.md objectives' "$REPO/plugin" | sed "s|^$REPO/||")"
+ok "no prompt names a root log.md ledger" "${stray:-none}" none
+ok "the idle path calls the script" "$(has "$(cat "$PM")" 'tick-delta.sh record --idle --tick-id <the tick id from your brief>')" yes
+ok "…and never spells the line for a hand append" "$(has "$(cat "$PM")" '`* TICK <ISO-8601> by <login> idle')" no
+
 echo "== criterion 8: once / DRY RUN wait through the reaper; stop releases nothing =="
 spawned; printf '* TICK %s by me open: %s · x\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"
 ( sleep 2; printf '* TICK %s by me close: z\n' "$TS" >> "$B/.loopd/log.md"; commit "$B"; state done ) &
