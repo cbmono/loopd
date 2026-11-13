@@ -1691,7 +1691,7 @@ team_verify() { # <file> <owner> <roster-file>
   while read -r l e; do
     [ -n "$l" ] || continue
     pair="\"$l\": \"$e\""
-    printf '%s' "$seg" | grep -qF -- "$pair" || return 1
+    grep -qF -- "$pair" <<<"$seg" || return 1
   done < "$rf"
   return 0
 }
@@ -1724,7 +1724,7 @@ fi
 if [ "$team_ask" = yes ]; then
   team_seg="$(team_people_segment "$TEAM_CFG")"
   team_rest="$(printf '%s' "$team_seg" | sed 's/"\([A-Za-z0-9-]\{1,\}\)"[[:space:]]*:[[:space:]]*"\1@example\.com"//g')"
-  if [ -n "$(team_read_owner "$TEAM_CFG")" ] || printf '%s' "$team_rest" | grep -q '"'; then
+  if [ -n "$(team_read_owner "$TEAM_CFG")" ] || grep -q '"' <<<"$team_rest"; then
     team_ask=no
     echo "  keep  team roster in instance.config.json (already set — left alone)"
   fi

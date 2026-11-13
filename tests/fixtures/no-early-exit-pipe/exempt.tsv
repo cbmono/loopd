@@ -2,3 +2,4 @@
 deny-baseline.test.sh	'rg TODO build/out | head -5'	a command string handed to the deny hook to judge, never run
 kb-index-integrity.test.sh	`grep | head | cut`	a Finding title written into a fixture
 kb-index-integrity.test.sh	'grep \| head \| cut'	the same title, escaped as the index renders it
+stale-qa-fail.test.sh	| grep -qx "$r" |/	the old piped form, written into a mutant to prove the test catches it

@@ -175,6 +175,20 @@ fresh_bundle solo-proved; serve solo solo "$A" "$(mint_old "$A")"
 ok "a dispatch at the trailer head: exit 1" "$(rc_of "$PVC" 42 --repo acme/widgets)" 1
 ok "…the fail line keeps createdAt"        "$(fail_at)" "$CREATED"
 ok "…verify clears"                        "$(verify)" 0
+
+echo
+echo "== a pass line on line 1 of a long receipt is found (no SIGPIPE under pipefail) =="
+fresh_bundle long
+f="$("$RCPT" path --repo acme/widgets --pr 42 --head "$H")"
+awk 'BEGIN { for (i = 0; i < 20000; i++) printf "pass filler-%d.sh 2020-01-01T00:00:00Z\n", i }' >> "$f"
+for n in 1 2 3 4 5; do ok "run $n: verify clears" "$(verify)" 0; done
+sed 's/^      grep -qxF -- "\$r" <<<"\$got" |/      printf "%s\\n" "$got" | grep -qx "$r" |/' "$RCPT" > "$TMP/s/clearance-receipt.sh"
+ok "the piped mutant differs" "$(cmp -s "$RCPT" "$TMP/s/clearance-receipt.sh" && echo same || echo differs)" differs
+m=0; for n in 1 2 3 4 5; do
+  [ "$(rc_of "$TMP/s/clearance-receipt.sh" verify --unreviewed --repo acme/widgets --pr 42 --head "$H")" = 0 ] || m=$((m+1))
+done
+ok "MUTANT: the piped form refuses at least once in 5" "$([ "$m" -gt 0 ] && echo refused || echo cleared)" refused
+cp "$RCPT" "$TMP/s/clearance-receipt.sh"
 unset CLAUDE_PROJECT_DIR
 
 echo

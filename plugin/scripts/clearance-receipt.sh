@@ -128,7 +128,7 @@ EOF
     fi
     missing=""
     for r in $need; do
-      printf '%s\n' "$got" | grep -qx "$r" || missing="${missing:+$missing }$r"
+      grep -qxF -- "$r" <<<"$got" || missing="${missing:+$missing }$r"
     done
     [ -z "$missing" ] || {
       echo "clearance-receipt: $repo#$pr at $head has not passed: $missing" >&2
