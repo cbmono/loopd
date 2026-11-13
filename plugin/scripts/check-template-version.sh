@@ -245,7 +245,9 @@ elif [ -n "$PLUGIN" ]; then resolve_plugin
 fi
 # counts.sh reads this for the pane's update line; it may not fetch or spawn git itself.
 if [ -n "$LATEST" ]; then
-  if [ -n "$THERE" ]; then mkdir -p "${LATEST%/*}" && printf '%s\n' "$THERE" > "$LATEST"
+  if [ -n "$THERE" ]; then
+    mkdir -p "${LATEST%/*}" && printf '%s\n' "$THERE" > "$LATEST.$$" && mv -f "$LATEST.$$" "$LATEST"
+    rm -f "$LATEST.$$"
   else rm -f "$LATEST"; fi
 fi 2>/dev/null || true
 
