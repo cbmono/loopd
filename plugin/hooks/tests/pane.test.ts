@@ -385,24 +385,28 @@ test('HEADER LOGO: the banner mark, the brand line cut to the width, the rule to
   await ui.unmount()
 })
 
-test('HEADER VERSIONS: counts.json plugin_version draws bundle <stamp> · plugin <version>, whole at the default width; absent or junk, the stamp alone', ONLY, async ($, on) => {
+test('HEADER VERSION: loopd v<plugin_version> from counts.json, else v<stamp>, else bare; group and org go whole when the room is short', ONLY, async ($, on) => {
   const withPlugin = (v: unknown, m: number) => ({ text: JSON.stringify({ ...(countsOf(SNAP) as any), plugin_version: v }), mtimeMs: m })
   const w = world(SNAP)
   w.files.set(COUNTS, withPlugin('4.12.1', 600))
   stubs(on, w)
   mock.clock(on, { now: GENERATED + 3 * 60000 })
   await open($)
-  // The default width leaves 32 columns beside the mark: both versions whole, group and org gone, nothing cut.
-  let ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 0 }, surface: 'terminal' })
-  expect((await rowsOf(ui)).slice(0, 3)).toEqual(header(41, 'bundle 4.11.0 · plugin 4.12.1'))
+  let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await rowsOf(ui))[1]).toBe(LOGO[1] + ' loopd v4.12.1 · example · org: fixture-org')
   await ui.unmount()
-  // 36 columns: the group is what gets cut, never a version.
-  ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
-  expect((await rowsOf(ui))[1]).toBe(LOGO[1] + ' bundle 4.11.0 · plugin 4.12.1 · exa…')
+  ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 0 }, surface: 'terminal' })
+  expect((await rowsOf(ui)).slice(0, 3)).toEqual(header(41, 'loopd v4.12.1 · example · org: fixture-org'))
+  await ui.unmount()
+  // 17 columns beside the mark leave 4 after the name: group and org go whole; 18 leave 5 and the group is cut.
+  ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
+  expect((await rowsOf(ui))[1]).toBe(LOGO[1] + ' loopd v4.12.1')
+  await ui.unmount()
+  ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 31 }, surface: 'terminal' })
+  expect((await rowsOf(ui))[1]).toBe(LOGO[1] + ' loopd v4.12.1 · e…')
   await ui.unmount()
   ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await rowsOf(ui))[1]).toBe(LOGO[1] + ' bundle 4.11.0 · plugin 4.12.1 · example · org: fixture-org')
-  // An older status line writes no plugin_version, and a junk one is not a version: the stamp alone, as before.
+  // An older status line writes no plugin_version, and a junk one is not a version: the stamp, as before.
   w.files.set(COUNTS, { text: JSON.stringify(countsOf(SNAP)), mtimeMs: 700 })
   await ui.press({ key: 'refresh' })
   expect((await rowsOf(ui))[1]).toBe(LOGO[1] + ' loopd v4.11.0 · example · org: fixture-org')
@@ -411,11 +415,14 @@ test('HEADER VERSIONS: counts.json plugin_version draws bundle <stamp> · plugin
     await ui.press({ key: 'refresh' })
     expect((await rowsOf(ui))[1]).toBe(LOGO[1] + ' loopd v4.11.0 · example · org: fixture-org')
   }
-  // No stamp: the plugin version stands alone.
+  // No stamp: the plugin version alone; neither: no version at all.
   w.files.delete(STAMPED)
   w.files.set(COUNTS, withPlugin('4.12.1', 900))
   await ui.press({ key: 'refresh' })
-  expect((await rowsOf(ui))[1]).toBe(LOGO[1] + ' plugin 4.12.1 · example · org: fixture-org')
+  expect((await rowsOf(ui))[1]).toBe(LOGO[1] + ' loopd v4.12.1 · example · org: fixture-org')
+  w.files.set(COUNTS, { text: JSON.stringify(countsOf(SNAP)), mtimeMs: 1000 })
+  await ui.press({ key: 'refresh' })
+  expect((await rowsOf(ui))[1]).toBe(LOGO[1] + ' loopd · example · org: fixture-org')
   await ui.unmount()
 })
 
