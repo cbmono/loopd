@@ -2,8 +2,8 @@
 name: new-project
 disable-model-invocation: true
 description: Scaffold a new project under projects/<slug>/ — schema-valid files, registered in the bundle index/log and linked to its objective, with seed draft tasks. Supports build (code/PRs) and research (in-bundle deliverables) projects.
-argument-hint: <one-line project description> | <1-5> <text> | submit | cancel  [kind=build|research] [objective=<slug>] [repo=<name|owner/name>] [deliverables="a; b"] [autonomy=<mode>] [title="…"] [need="…"] [success_criteria="a; b"] [timebox=<N>d|<N>w] [--no-ask] [--no-commit]
-allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
+argument-hint: "<description> [kind=research] [autonomy=<mode>] [inputs=later]"
+allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent, AskUserQuestion
 ---
 
 Scaffold a new **Project** in this bundle: the `projects/<slug>/` folder and its
@@ -25,49 +25,54 @@ build projects.
 
 ## Inputs
 `$ARGUMENTS` = a one-line description of the project (in double quotes when a caller such as
-the web board shows it, so nothing in it reads as a token), plus optional tokens:
-- `kind=build|research` — project kind (default `build`).
-- `objective=<slug>` — link to `objectives/<slug>.md` instead of inferring one. Optional:
-  `objectives/` is an opt-in layer, and a project's own `success_criteria` are the default anchor.
-- `repo=<name|owner/name>` — **build only.** `target_repo` (bare name is qualified
-  with `org` from `instance.config.json`). Omitted → `<org>/<defaultRepo>` from
-  config; if there's no `defaultRepo`, ask. Ignored for research.
-- `deliverables="a; b; …"` — **research only.** What the project produces. If
-  omitted, infer from the description or ask.
+the web board shows it, so nothing in it reads as a token), plus optional tokens. **At most
+three things are ever asked** — `kind`, `autonomy` (only where `AUTONOMY.md` exists) and
+`inputs` — in one batched question (step 4), and only those not given as a flag. Every
+other value below is a flag or a default, never a question:
+- `kind=build|research` — project kind (default `build`). Asked when absent.
 - `autonomy=<mode>` — how much the loop may do without you (default `gated`). The
   available modes, and any shorthand flag for one, are defined in `AUTONOMY.md` at the
   bundle root; **if that file doesn't exist, `gated` is the only mode** — don't offer or
   accept another. A flag naming a mode this bundle doesn't define (any mode when
   `AUTONOMY.md` is absent) is **downgraded to `gated` and reported**, not honoured and not
   treated as an error. Captured now; enforced by later machinery.
+- `inputs=later|now` — `later` means you will drop files into the project's `sources/`
+  before work should start: the PM refines nothing and AWAITING.md shows one `📥 inputs` row
+  until a file lands there (or you set `inputs: now`). Default `now`. Asked when absent.
+- `repo=<name|owner/name>` — **build only.** `target_repo` (bare name is qualified
+  with `org` from `instance.config.json`). Omitted → `<org>/<defaultRepo>` from
+  config; if there's no `defaultRepo`, ask — the one question no default can answer.
+  Ignored for research.
+- `deliverables="a; b; …"` — **research only.** What the project produces. Omitted ⇒
+  inferred from the description, never asked.
+- `objective=<slug>` — link to `objectives/<slug>.md`. Omitted ⇒ none: never asked, never
+  inferred, never minted. `objectives/` is an opt-in layer, and a project's own
+  `success_criteria` are the default anchor.
 - `clis="a; b"` (shorthand `/cli a, b`) — external CLIs/integrations this project's
-  agents may use (e.g. `render`, `supabase`). **Build-shaped**: research projects
-  dispatch no agents, so it is never *asked* for one — but an explicit flag is still
-  honoured (the in-session escape hatch for a research project that queries a datasource).
+  agents may use (e.g. `render`, `supabase`). Never asked: omitted ⇒ `clis:` is left out
+  (an empty list). Honoured on either kind — the in-session escape hatch for a research
+  project that queries a datasource.
 - `browser=off|claude-for-chrome` (shorthand `/claudeforchrome`) — let agents drive the
-  browser via the claude-in-chrome MCP when present (default `off`).
+  browser via the claude-in-chrome MCP when present (default `off`). Never asked; the
+  flag is the only grant, and granting it carries the disclosure in step 4.
 - `owner=<github-username>` — **only for a bundle shared by more than one human**:
-  whose project this is. A GitHub username, never an email. Like `clis`, it is
-  **never asked for** — an instance with one human has no use for it and the question
-  would be noise — but an explicit flag is recorded. Omitted ⇒ the key is left out
-  entirely (no placeholder, no empty value), which resolves to this clone's human. The
-  form's `submit` (below) is the one caller that always passes it: the creating clone's login.
-  See `SCHEMA.md` → "Ownership on a shared instance".
+  whose project this is. A GitHub username, never an email. **Never asked for** — an
+  instance with one human has no use for it — but an explicit flag is recorded. Omitted ⇒
+  the key is left out entirely (no placeholder, no empty value), which resolves to this
+  clone's human. The form's `submit` (below) is the one caller that always passes it: the
+  creating clone's login. See `SCHEMA.md` → "Ownership on a shared instance".
 - `timebox=<N>d|<N>w` — this project is an experiment, and stopping it when the box runs
   out is the plan (`SCHEMA.md` → "Time-boxed projects"). **Never asked, on either kind**,
-  and never suggested: most projects have no time-box, and none should pay a question for
-  it. Recorded verbatim from the flag. A value outside the grammar is refused in one line
-  and left out. Omitted ⇒ the key is left out entirely, never written empty.
+  and never suggested. Recorded verbatim from the flag. A value outside the grammar is
+  refused in one line and left out. Omitted ⇒ the key is left out entirely, never empty.
 - `title="…"`, `need="…"`, `success_criteria="a; b"` — the project's `title`, its value-gate
-  `need:` and its `success_criteria` (split on `;`), recorded **verbatim**: step 3 neither
-  proposes nor asks for a value given here. A `\"` inside the quotes is a literal quote.
+  `need:` and its `success_criteria` (split on `;`), recorded **verbatim**: step 3 proposes
+  nothing for a value given here. A `\"` inside the quotes is a literal quote.
 - `--no-ask` — **ask nothing**; the form's `submit` runs this way, for a person who cannot answer
-  a prompt. Every question below takes its default instead: value-gate keys not given are
-  written empty, `objective` none, `clis:` an empty list, `browser` off, the `yolo` merge
-  preflight is reported and recorded and the run carries on, and step 8e's spend ask takes its
-  "not there to answer" branch. A value with **no** default — the description,
-  `success_criteria`, a `target_repo` with no `defaultRepo` — stops the run in one line,
-  before anything is written. The step-8 chain itself runs unchanged.
+  a prompt. Step 4's question takes its defaults instead — `kind` build, `autonomy` gated,
+  `inputs` now — and step 8e's spend ask takes its "not there to answer" branch. A value with
+  **no** default — the description, a `target_repo` with no `defaultRepo` — stops the run in
+  one line, before anything is written. The step-8 chain itself runs unchanged.
 - `--no-commit` — scaffold only; don't commit (default is to commit).
 
 If `$ARGUMENTS` carries options but no description, **ask** for a one-line goal before doing
@@ -75,8 +80,8 @@ anything — under `--no-ask`, stop in one line instead (above), never ask.
 
 ## The form — no description at all
 
-`$ARGUMENTS` empty, exactly `submit` or `cancel`, or a field number 1–5 then text is the
-**form**: 1 Title, 2 What, 3 For whom, 4 Done when, 5 Target repo, kept in one gitignored
+`$ARGUMENTS` empty, exactly `submit` or `cancel`, or a field number 1–5 then text
+(`<1-5> <text>`) is the **form**: 1 Title, 2 What, 3 For whom, 4 Done when, 5 Target repo, kept in one gitignored
 file the pane draws (`AB_NEW_PROJECT_FORM` in `bundle-paths.sh`). Run
 `bash ${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh '<$ARGUMENTS>'` — the arguments as
 ONE single-quoted word, each `'` written `'\''` — and relay what it prints. **Field text is
@@ -106,48 +111,37 @@ never an option.
    user gave one). Confirm `projects/<slug>/` does **not** already exist — if it
    does, stop and report.
 
-3. **Resolve the goal — the project's own `success_criteria` first.** Propose 2-4
-   **measurable** lines for `success_criteria:` (name the command and today's number),
-   and get the user's OK — unless `success_criteria=` was given, which is used as written.
-   That is the project's anchor, which the human reviewing progress grounds against.
+3. **Write the goal and the value gate — proposed, never asked.**
+   **`success_criteria` first.** Unless `success_criteria=` was given (used as written),
+   write 2-4 **measurable** lines from the description — name the command and today's
+   number — with **no approval round**: step 7 shows them and says "edit project.md to
+   change". That is the project's anchor, which the human reviewing progress grounds against.
    A line whose purpose is to move a measured number also names a guard metric — the
    number that must not get worse — as a second criterion with its own command and today's
    value: tail latency, loss or error rate, memory under load, cost. A line that merely
    reports a count is not one. When the guard metric cannot be measured yet, write
    `a measurement exists for <X>` with one project body line saying so, instead of a
    placeholder value. A docs or behaviour criterion needs no guard metric.
-   **`objectives/` is an OPTIONAL layer** (`SCHEMA.md` → type: Objective): if the
-   directory is absent, do not create it and do not ask — the criteria are enough. If
-   `objective=` was given, use it. Otherwise, where `objectives/*.md` exists, offer the
-   best-fitting one and accept "none"; **never mint an objective silently**, and only
-   propose a new one for a goal that outlives this project.
+   **`objective:` only from `objective=`** — `objectives/` is an OPTIONAL layer
+   (`SCHEMA.md` → type: Objective); never offer one, never mint one, never create the
+   directory.
 
-   **Then the value gate — three questions, asked HERE and on BOTH kinds.** Ask for
-   `need:` (who needs this, and what breaks for them if it never exists),
-   `cost_of_not_doing:` (what that need costs if it never ships) and `no_owner:` (who is
-   allowed to say no — a decision with no owner is a trap). They are **not**
+   **Then the value gate — written on BOTH kinds, never asked.** `need:` (who needs this,
+   and what breaks for them if it never exists), `cost_of_not_doing:` (what that need costs
+   if it never ships) and `no_owner:` (who is allowed to say no). Take `need=` as written;
+   otherwise fill a key only where the description itself says it, in its words, and leave
+   it empty where it does not — never invent a stakeholder. They are **not**
    `success_criteria` and never merge into them: the criteria answer *how will we know it
-   worked*, these answer *should it exist at all* (`SCHEMA.md` → the value gate). Asked in
-   this step, **before `kind` is settled in step 4** — they describe no machinery, so the
-   build/research asymmetry at the end of this file does not reach them, and a speculative
-   research project is where they bite hardest. **Present is required, filled is not**:
-   *"nobody needs this yet, it is an experiment"* is a good answer — record it verbatim and
-   never press for a stakeholder. An empty value is legal too; an omitted key is not.
+   worked*, these answer *should it exist at all* (`SCHEMA.md` → the value gate). **Present
+   is required, filled is not**: an empty value is legal; an omitted key is not.
 
-4. **Resolve capabilities & kind-specific fields (capabilities first).**
+4. **Settle kind, autonomy and inputs — ONE question, at most three parts.**
 
-   **a. Capabilities (flags-first, else ask).** Settle `kind`, `autonomy`, `clis`, and
-   `browser` **before** the kind-specific fields below — otherwise a project could be
-   asked build-only questions on a research project, or vice versa. For any supplied as
-   a flag (`kind=`, `autonomy=` or a mode's shorthand, `/cli …` / `clis=`,
-   `/claudeforchrome` / `browser=`), use it and **don't** ask — with one exception, the
-   `autonomy` bullet below: a flag never grants a mode this bundle doesn't have. For those NOT supplied,
-   ask the missing ones in **one batched `AskUserQuestion`** — except that **`kind` is
-   settled first**, because it decides whether `clis` is offered at all: no `kind=` flag ⇒
-   ask kind on its own, then batch the rest. One extra round-trip, and only when the flag
-   was omitted; batching kind alongside a question its own answer suppresses is what puts
-   `render` and `supabase` in front of a research project.
-   - **kind** — build / research.
+   **a. Flags first, then one batched `AskUserQuestion`** for whichever of these three
+   were not given as a flag (`kind=`, `autonomy=` or a mode's shorthand, `inputs=`). All
+   given ⇒ ask nothing. `--no-ask` ⇒ take each default. Never add a fourth part:
+   - **kind** — "Build — code shipped as PRs" (default) / "Research — docs, decks or
+     assets in this bundle".
    - **autonomy** — resolve `AUTONOMY.md` first, with
      `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-autonomy.sh --bundle <bundle>` (bundle root,
      then an installed companion — exit 1 means absent). **Absent ⇒ don't ask at
@@ -159,23 +153,21 @@ never an option.
      the delegation they typed. Present ⇒ offer `gated` (default) plus the modes it
      defines, described in that file's own terms; a flag naming a mode that file **does**
      define is used as given, without asking.
-   - **clis** (multi-select) — **build only; on `kind=research`, don't ask and don't
-     probe.** `clis` declares what this project's *agents* may use (`SCHEMA.md`), and a
-     research project dispatches none — offering the machine's whole MCP/CLI menu there
-     asks the human to authorise tools nothing will ever run. An explicit `clis=` flag is
-     still recorded on a research project; the *question* is what's build-only. On a build
-     project, **pre-populate from what's actually available**: run `claude mcp list` for
-     connected MCP servers and probe `PATH` for likely CLIs; show each with a ✓/✗ on
-     whether it looks authenticated, plus "other" for free entry. Declarations — agents
-     still verify a CLI works before relying on it.
-   - **browser** — off (default) / claude-for-chrome. **Asked on both kinds** — web
-     research is the clearest case for it, so don't skip it the way `clis` is skipped.
-     Ask it as the opt-IN it is ("grant browser access to this project?"), and **state
-     in one line what granting it means before they answer**: agents get **read access to
-     every site this human is logged into** in their browser, and browser **writes** ask
-     first unless the chosen `autonomy` mode delegates them (below), which is what makes
-     granting it defensible. Where the answer is `claude-for-chrome`, record **why** in
-     `# Context` beside the key.
+   - **inputs** — "Ready now — start refining" (default) / "I'll add files to `sources/`
+     first — hold refinement until they land".
+
+   **Never asked, whatever the kind** — each takes its flag or its default: `clis` (left
+   out), `browser` (`off`), `objective` (none), `owner`, `timebox`, the value gate and
+   `success_criteria` (step 3), `deliverables` (step 4c).
+   - **browser** — off (default) / claude-for-chrome. **Never asked**; `browser=` is the
+     only grant, and it is **Honoured on both kinds** — web research is the clearest case
+     for it. Treat the flag as the opt-IN it is, and **state in one line what granting it
+     means before you write the key**: agents get **read access to every site this human
+     is logged into** in their browser, and browser **writes** ask first unless the chosen
+     `autonomy` mode delegates them (below), which is what makes granting it defensible.
+     Where the flag grants `claude-for-chrome`, record **why** in `# Context` beside the key.
+
+   **b. What the chosen mode implies — reported, never asked.**
    If **browser = claude-for-chrome** and the chosen mode **delegates browser writes**,
    don't block it — that combination is supported and deliberate. State once what it means
    so the choice is informed: agents may **write** in the human's logged-in browser
@@ -186,20 +178,21 @@ never an option.
    If the chosen mode **delegates merging** on a build project, **run that mode's
    preflight now** (`AUTONOMY.md`) rather than letting the loop discover mid-run that the
    authority isn't exercisable: check whether the repo has an external PR reviewer, and
-   whether it has any required status checks. Report the result in one line and record it
-   in `# Context` — if either is missing, say plainly that every PR will still be surfaced
-   for the human, and offer to fix it (configure the reviewer / branch protection) or to
-   proceed knowing merges stay manual. Also flag at scaffold time that the project will
-   otherwise **self-merge**, so the human knows before work starts.
+   whether it has any required status checks. Report the result in **one line** and record
+   it in `# Context` — not a question: if either is missing, say plainly that every PR will
+   still be surfaced for the human. Otherwise say once that the project will **self-merge**,
+   so the human knows before work starts.
 
-   **b. Kind-specific fields.** Now that `kind` is settled: for `build`, resolve
-   `target_repo` per the Inputs rules; for `research`, resolve the `deliverables` list
-   (from `deliverables=`, the description, or ask) — no repo. Get an ISO timestamp once:
-   `date -u +%Y-%m-%dT%H:%M:%SZ` — reuse it for every file's `timestamp`.
+   **c. Kind-specific fields.** Now that `kind` is settled: for `build`, resolve
+   `target_repo` per the Inputs rules — with no `repo=` and no `defaultRepo`, ask for it in
+   one line after the batch (`--no-ask`: stop); for `research`, resolve the `deliverables`
+   list from `deliverables=` or the description — never asked — and no repo. Get an ISO
+   timestamp once: `date -u +%Y-%m-%dT%H:%M:%SZ` — reuse it for every file's `timestamp`.
 
    These capability fields are **captured now, enforced later** (`autonomy` by the PM
-   loop, per `AUTONOMY.md`; `browser` by the claude-in-chrome integration): creating a
-   project never itself promotes, merges, or drives a browser.
+   loop, per `AUTONOMY.md`; `browser` by the claude-in-chrome integration; `inputs` by the
+   tick's refine step, through `project-inputs.sh`): creating a project never itself
+   promotes, merges, or drives a browser.
 
 5. **Scaffold `projects/<slug>/`**, matching the schema/example exactly:
    - `project.md` — `type: Project` frontmatter (`title`, `description`,
@@ -210,12 +203,12 @@ never an option.
      `title`, `description` and `# Context` are what you *made* of the ask and this is
      the ask itself — `kind`, `success_criteria: [...]` from step 3, the step-3 value gate `need:`,
      `cost_of_not_doing:` and `no_owner:` — **all three, always, on both kinds**, empty
-     where the answer was empty and never omitted — `status: active`, `timestamp`; plus
+     where step 3 found nothing and never omitted — `status: active`, `timestamp`; plus
      `objective: /objectives/<slug>.md` only where step 3 resolved one) — plus
      `target_repo` for **build**, or `deliverables: [...]` for **research**; plus the
-     capabilities from step 4: `autonomy:` (always; default `gated`), and `clis:` /
-     `browser:` / `owner:` only when non-default or explicitly given (omit them
-     otherwise); plus `timebox:` only from a valid `timebox=` flag — and a `# Context` body
+     capabilities from step 4: `autonomy:` (always; default `gated`), `inputs: later` only
+     when that was chosen, and `clis:` / `browser:` / `owner:` only when non-default or
+     explicitly given (omit them otherwise); plus `timebox:` only from a valid `timebox=` flag — and a `# Context` body
      that states what the project does and why, ending by linking its `index.md` and
      `log.md`.
    - `index.md` — `# <title> — tasks`, one bullet per seed task with its status.
@@ -242,8 +235,10 @@ never an option.
      task (a title + a one-line "TODO: …" so the path exists and is committable).
    - `sources/` — always create it, with a short `sources/README.md` explaining that
      the user can drop any raw context here (images, transcripts, spreadsheets, PDFs,
-     etc.) that serves as background or raw data for the project. The README makes the
-     otherwise-empty folder committable.
+     etc.) that serves as background or raw data for the project, and that on
+     `inputs: later` the first file other than this README releases the project: the next
+     tick sets `inputs: now` and refines from what is here (or set it yourself). The README
+     makes the otherwise-empty folder committable.
 
 6. **Register the project** (keep the bundle navigable). The root `index.md` is
    **derived and gitignored** — edit it so the bundle reads correctly now, but it is
@@ -252,24 +247,24 @@ never an option.
      `[<title>](/projects/<slug>/project.md) - target: \`<target_repo>\` · <n> seed task(s)`.
      For research: `[<title>](/projects/<slug>/project.md) - research · <n> deliverable(s)`.
    - **Where the project has an `objective:`**, add it to that objective's "Projects
-     serving this objective" list; if you created a new objective in step 3, also add
-     it under `## Objectives` in the root `index.md`. A project with no objective skips
-     this bullet entirely.
+     serving this objective" list. A project with no objective skips this bullet
+     entirely.
    - Prepend a dated **Project added** bullet to `.loopd/log.md` (newest-first:
      reuse today's `## <date>` heading if present, else add it at the top of the
      dated entries), stamped `Added <ISO 8601> by <login>` from
      `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`. The continue checkpoint
      names that login when `no_owner:` is empty.
 
-7. **Show & commit.** Print the created tree, the `project.md` frontmatter, and the
-   seed task titles. Then (unless `--no-commit`) stage and
+7. **Show & commit.** Print the created tree, the `project.md` frontmatter, the seed task
+   titles, and the `success_criteria` step 3 wrote, under one line: "edit project.md to
+   change". On `inputs: later`, end with one line: add your files to
+   `projects/<slug>/sources/` — the next tick after one lands refines from them. Then (unless `--no-commit`) stage and
    commit to this repo via
    the per-agent helper, naming **every** path steps 5 and 6 touched — the scaffold
    and its registration belong in one commit, or the tree records a project that
    nothing links to:
    `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human "feat: add <slug> project" --stage -- projects/<slug> .loopd/log.md objectives/<objective>.md`
-   (drop `objectives/<objective>.md` where there is no objective, or where step 3 left
-   it untouched). The root and
+   (drop `objectives/<objective>.md` where there is no objective). The root and
    per-project `index.md` are **not** in that list — they are derived and gitignored,
    so `git add` skips them and naming them would only produce a confusing "nothing
    staged" refusal.
@@ -511,9 +506,9 @@ never an option.
   never gates creation — it produces findings you triage. Treat a rejected finding as a
   decision worth recording (in the project's `log.md`), not as something to argue with the
   tool about.
-- **A research project asks fewer questions on purpose.** No `target_repo`, no `clis`
-  prompt, no CodeRabbit pass — each was dropped because it describes machinery a research
-  project never runs (agents, PRs, code), not to save a click. Don't restore one for
-  symmetry with `build`; the two kinds are deliberately asymmetric. **The value gate is
-  not one of them**: `need:`, `cost_of_not_doing:` and `no_owner:` describe no machinery,
-  so step 3 asks all three on both kinds and step 5 writes all three keys.
+- **One question, at most three parts, on purpose.** The owner decides `kind`, `autonomy`
+  (where a mode exists to choose) and whether input files come first; everything else is a
+  flag or a default the scaffold writes and the owner edits in `project.md`. Don't restore a
+  question for completeness — a value with a sane default never earns a round-trip. The two
+  kinds stay asymmetric where machinery differs (`target_repo`, the step-8 review are
+  build-only); `clis` and the value gate are never asked on either.

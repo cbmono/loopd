@@ -49,9 +49,13 @@ ok "SCHEMA: the field's default is off" \
    "$(saw "$SCHEMA" 'browser: off | claude-for-chrome      # optional (default off).')" yes
 ok "SCHEMA: § Browser access says opt IN" \
    "$(saw_flat "$SCHEMA" 'Opt in per project with `browser: claude-for-chrome` on `project.md` (default `off`).')" yes
-ok "SKILL: the question is asked off-first" \
+ok "SKILL: the key is stated off-first" \
    "$(saw "$SKILL" '- **browser** — off (default) / claude-for-chrome.')" yes
-ok "SKILL: it is asked on BOTH kinds"              "$(saw_flat "$SKILL" '**Asked on both kinds**')" yes
+# Since the one-question new-project, browser is never ASKED: the flag is the only grant,
+# so the default can only be left by typing it. The flag is still honoured on both kinds.
+ok "SKILL: never asked — the flag is the only grant" \
+   "$(saw_flat "$SKILL" '**Never asked**; `browser=` is the only grant')" yes
+ok "SKILL: the flag is honoured on BOTH kinds"     "$(saw_flat "$SKILL" '**Honoured on both kinds**')" yes
 ok "SKILL: the flag line names the default off"    \
    "$(saw_flat "$SKILL" 'browser via the claude-in-chrome MCP when present (default `off`).')" yes
 ok "CONV: the agent-facing rule is opt-in" \
@@ -82,14 +86,16 @@ ok "SCHEMA § Browser access discloses read access" \
    "$(saw_flat "$SCHEMA" '**read access to every site this human is logged into in that browser**')" yes
 ok "…and says why the grant is defensible"         \
    "$(saw_flat "$SCHEMA" "defensible because **browser writes ask first unless the project's \`autonomy\` delegates them** (rule 4)")" yes
-ok "SKILL: the question is put as the opt-IN"      \
-   "$(saw_flat "$SKILL" 'Ask it as the opt-IN it is ("grant browser access to this project?")')" yes
-ok "SKILL: it discloses before the human answers"  \
+ok "SKILL: the flag is treated as the opt-IN"      \
+   "$(saw_flat "$SKILL" 'Treat the flag as the opt-IN it is')" yes
+ok "SKILL: …and discloses before the key is written" \
+   "$(saw_flat "$SKILL" 'state in one line what granting it means before you write the key')" yes
+ok "SKILL: it discloses what read access means"    \
    "$(saw_flat "$SKILL" 'agents get **read access to every site this human is logged into** in their browser')" yes
 ok "SKILL: the writes clause carries its exception" \
    "$(saw_flat "$SKILL" 'browser **writes** ask first unless the chosen `autonomy` mode delegates them (below)')" yes
 ok "SKILL: and the grant records its WHY"          \
-   "$(saw_flat "$SKILL" 'Where the answer is `claude-for-chrome`, record **why** in `# Context`')" yes
+   "$(saw_flat "$SKILL" 'Where the flag grants `claude-for-chrome`, record **why** in `# Context`')" yes
 
 echo
 echo "== 4. nothing retroactive, and no script writes browser: into a project =="

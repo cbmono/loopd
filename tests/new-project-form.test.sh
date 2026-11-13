@@ -105,7 +105,7 @@ ok "ownerGithubUser set: owner is that login"       "$(key "$(run "$B4" submit)"
 
 echo "== THE SKILL CALLS IT =="
 ok "new-project may run the script"                 "$(grep -m1 '^allowed-tools:' "$SKILL" | grep -cF 'Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh:*)' | tr -d ' ')" 1
-ok "its argument-hint names the form commands"      "$(grep -m1 '^argument-hint:' "$SKILL" | grep -cE '<1-5> <text>.*submit.*cancel' | tr -d ' ')" 1
+ok "its form section names the form commands"      "$(awk '/^## The form/{f=1; next} /^## /{f=0} f' "$SKILL" | tr '\n' ' ' | grep -cE '`submit` or `cancel`.*`<1-5> <text>`' | tr -d ' ')" 1
 
 echo
 echo "new-project-form: $pass passed, $fail failed"

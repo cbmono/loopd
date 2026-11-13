@@ -296,7 +296,9 @@ state, and act only on deltas.
    **Script missing**: same fallback, plus the one-line
    `TICK DELTA: absent — re-stamp this instance` you already owe from step 0.9.
 
-2. **Refine drafts** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-2-refine-drafts.md`. Every
+2. **Refine drafts** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-2-refine-drafts.md`. A
+   project on `inputs: later` (`project-inputs.sh` exit 1) is not refined and gets no
+   `open_questions` until its `sources/` holds a file; then the step releases it. Every
    `Q<n>:` question you raise there gets its `### Q<n>` block — recommendation, options,
    three depths of context — written in the same edit (`SCHEMA.md` → "Question details").
 

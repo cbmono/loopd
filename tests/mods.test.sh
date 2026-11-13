@@ -167,16 +167,19 @@ ok "…and the module reads paneMode off the options exactly once" \
 ok "the options object is the only source: no \`mode\` read anywhere else" \
    "$(code "$MOD" | grep -cE '\.mode\b')" 0
 # The form is /loopd:new-project runs: every shape the pane passes is one the skill takes.
+# The form's shapes live in the skill's `## The form` section, not its argument-hint: the
+# hint is the short line a human types against (`<description> [kind=…] …`), and the form
+# commands are what the pane sends.
 NP="$PLUGIN/skills/new-project/SKILL.md"
-hint="$(grep -m1 '^argument-hint:' "$NP")"
-ok "the pane runs /loopd:new-project, whose argument-hint the check reads" \
+hint="$(awk '/^## The form/{f=1; next} /^## /{f=0} f' "$NP")"
+ok "the pane runs /loopd:new-project, whose form section the check reads" \
    "$(count "'loopd:new-project'" "$MOD")/$([ -n "$hint" ] && echo hint)" 1/hint
 for tok in "'submit'" "'cancel'"; do
-  ok "…passes $tok, and new-project's argument-hint names it" \
-     "$(grep -cF -- "$tok" "$MOD" | tr -d ' ' | sed 's/^[1-9][0-9]*$/yes/')/$(grep -cF -- "${tok//\'/}" <<<"$hint")" yes/1
+  ok "…passes $tok, and new-project's form section names it" \
+     "$(grep -cF -- "$tok" "$MOD" | tr -d ' ' | sed 's/^[1-9][0-9]*$/yes/')/$(grep -cF -- "\`${tok//\'/}\`" <<<"$hint" | sed 's/^[1-9][0-9]*$/1/')" yes/1
 done
-ok "…passes <n> \"<text>\", and the argument-hint names <1-5> <text>" \
-   "$(grep -cF "m[1] + ' ' + q(m[2])" "$MOD")/$(grep -cF '<1-5> <text>' <<<"$hint")" 1/1
+ok "…passes <n> \"<text>\", and the form section names <1-5> <text>" \
+   "$(grep -cF "m[1] + ' ' + q(m[2])" "$MOD")/$(grep -cF '`<1-5> <text>`' <<<"$hint")" 1/1
 ok "…the form's submit asks for yolo, a mode loopd-yolo's AUTONOMY.md defines" \
    "$(grep -cF '"autonomy": "yolo"' "$PLUGIN/scripts/new-project-form.sh")/$(grep -cE '^# Mode: `yolo`$' "$REPO/plugin-yolo/companion/AUTONOMY.md")" 1/1
 

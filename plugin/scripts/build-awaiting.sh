@@ -25,7 +25,7 @@
 #
 # ROW ORDER IS AN EXECUTION ORDER, read top to bottom, so it is sorted after the walk rather
 # than left in glob order: (1) a task's blocker above it, via `depends_on`, transitively
-# through tasks that have no row; (2) then grant, unblock, do, answer, review, approve, merge, close, continue;
+# through tasks that have no row; (2) then grant, unblock, do, answer, review, approve, merge, close, continue, inputs;
 # (3) then glob order, so an unchanged bundle renders the same page. A cycle or a reference
 # to no live task drops only that edge. The sort reorders `row()`'s output and never
 # composes or drops a row: a failed sort renders glob order.
@@ -227,6 +227,16 @@ paused() { # <path under projects/<slug>/>
   [ $? -eq 1 ]
 }
 
+# A project still waiting for its input files (project-inputs.sh exit 1) renders ONE
+# `📥 inputs` row and none of its task rows but `merge`, exactly as a pause holds them: its
+# drafts are not refined yet, so nothing there is the human's to decide. Any other exit
+# renders it as before — an unreadable `inputs:` must never hide a project's work.
+waiting_inputs() { # <project.md>
+  [ -f "$HERE/project-inputs.sh" ] || return 1
+  ( cd "$inst" && bash "$HERE/project-inputs.sh" "$1" ) >/dev/null 2>&1
+  [ $? -eq 1 ]
+}
+
 lookup() { # <path> <"trailer"|"merge"|"facts">  -> prints the value, or nothing
   local p="$1" kind="$2" i n
   if [ "$kind" = facts ]; then
@@ -278,7 +288,8 @@ row() { printf '* %s **%s** — [%s](%s) · %s\n' "$1" "$2" "$3" "$4" "$5"; }
 row_txt=(); row_node=(); row_sev=(); row_design=(); cur_design=""
 node_lines=""; node=0
 sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; do) echo 2 ;; answer) echo 3 ;; review) echo 4 ;;
-                        approve) echo 5 ;; merge) echo 6 ;; close) echo 7 ;; continue) echo 8 ;; *) echo 9 ;; esac; }
+                        approve) echo 5 ;; merge) echo 6 ;; close) echo 7 ;; continue) echo 8 ;; inputs) echo 9 ;;
+                        *) echo 10 ;; esac; }
 add() { row_txt+=("$(row "$@")"); row_node+=("$node"); row_sev+=("$(sev_of "$2")")
         [ "$2" = approve ] && row_design+=("$cur_design") || row_design+=(""); }
 # A live task becomes a sort node whether or not it renders a row, so an edge through an
@@ -316,6 +327,11 @@ for pm in "$inst"/projects/*/project.md; do
   slug="$(basename "$(dirname "$pm")")"
   ntask=0; nterm=0; owed=0
   held=0; paused "$pm" && held=1
+  if [ "$held" = 0 ] && waiting_inputs "$pm" && mine "$pm"; then
+    held=1; add_node "$pm" "${pm#"$inst"}" "$slug"
+    add "📥" inputs "$(title_of "$pm")" "${pm#"$inst"}" \
+      "add your files to \`projects/$slug/sources/\` — the next tick releases it and refines from them · no files after all ⇒ set \`inputs: now\` in project.md"
+  fi
   cur_design=""; [ -f "$(dirname "$pm")/design.md" ] && cur_design="${pm%project.md}design.md" && cur_design="${cur_design#"$inst"}"
 
   for f in "$(dirname "$pm")"/tasks/*.md; do

@@ -82,7 +82,8 @@
 # `digest` IS THE SAME WALK, ENRICHED, FOR THE TICK THAT MUST NOW ORIENT. One command
 # prints every live project (slug, status, autonomy, owner), every task under them
 # (path, status, kind, assignee, dependency/open-question counts, criteria filled or
-# not, worktree recorded or not) and every open PR's host facts — so step 1's N
+# not, worktree recorded or not), an `inputs waiting|arrived <project.md>` line for a project
+# on `inputs: later` (project-inputs.sh), and every open PR's host facts — so step 1's N
 # frontmatter reads and per-PR `gh` round-trips become one read. It changes NOTHING
 # about what the tick may act on: the digest is the enumeration, never the judgement,
 # and the tick still opens every document it acts on. A `status: done` project is
@@ -346,6 +347,16 @@ step2=0 step3=0 step4=0 step5=0 step6=0
 FOLD="$(dirname "${BASH_SOURCE[0]}")/fold-answers.sh"
 DESIGN_INPUTS="$(dirname "${BASH_SOURCE[0]}")/design-inputs.sh"
 CKPT="$(dirname "${BASH_SOURCE[0]}")/continue-checkpoint.sh"
+INPUTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/project-inputs.sh"   # absolute: it runs from the instance root
+# `inputs: later` (project-inputs.sh): 1 WAITING keeps the project's drafts from naming step 2
+# — refine has nothing to do until its files land — and 3 ARRIVED names step 2, which owes
+# the release. The grep is the cheap pre-filter: a project without the key forks nothing,
+# and a missing script or any other exit reads as ready, the behaviour before the key.
+inputs_state() { # <project.md> -> waiting | arrived | ready
+  grep -qE "^inputs:[[:space:]]*[\"']?later" "$1" 2>/dev/null && [ -f "$INPUTS" ] || { echo ready; return; }
+  ( cd "$inst" && bash "$INPUTS" "$1" ) >/dev/null 2>&1
+  case $? in 1) echo waiting ;; 3) echo arrived ;; *) echo ready ;; esac
+}
 SESS="$(dirname "${BASH_SOURCE[0]}")/agent-sessions.sh"
 answered_open() { # <file>
   fmlist "$1" open_questions text 2>/dev/null | grep -qF -- ' --- ' && return 0
@@ -409,7 +420,7 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs urls="" ntask nterm wtp sid sids="" ipsids="" dl redraw mapped b
+  local p d pst f st prs urls="" ntask nterm wtp sid sids="" ipsids="" dl redraw mapped b inw
   for d in "$inst"/projects/*/; do
     [ -d "$d" ] || continue
     p="$d/project.md"
@@ -426,6 +437,9 @@ fingerprint() { # <probe|digest>
     # tick and write-snapshot.sh already apply: nothing in a done project can need a
     # tick, and the point is the read that never happens.
     [ "$pst" = "done" ] && continue
+    inw="$(inputs_state "$p")"
+    [ "$mode" = digest ] && [ "$inw" != ready ] && printf 'inputs %s projects/%s/project.md\n' "$inw" "$(basename "$d")"
+    [ "$inw" = arrived ] && step2=1
     if grep -q '^decisions:' "$p"; then
       dl="$(bash "$FOLD" --list "$p" decisions 2>/dev/null)" || return 1
       # The text after the FINAL ` --- ` must have content, as fold-answers.sh decides.
@@ -459,7 +473,7 @@ fingerprint() { # <probe|digest>
       if [ "$mode" = digest ]; then
         ntask=$((ntask + 1))
         case "${st:-unset}" in
-          draft)       step2=1 ;;
+          draft)       [ "$inw" = waiting ] || step2=1 ;;
           ready)       step3=1 ;;
           in-progress) step4=1 ;;
           in-review)   step4=1; step5=1 ;;
