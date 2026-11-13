@@ -711,10 +711,16 @@ ok "welcome check agrees it is current" \
 ok "…and does not claim an update is waiting" \
   "$(grep -qF 'is behind the marketplace' <<<"$AOUT" && echo yes || echo no)" no
 
+# A hard link to the old file keeps the old bytes only if the new ones were renamed into
+# place: a write in place would truncate the inode counts.sh may be reading.
+rm -f "$TMP/latest-held"; ln "${PCACHE%/*}/latest-version" "$TMP/latest-held"
 mkt_at 1.0.1
 rm -f "$PCACHE"; pcheck --state
 ok "the marketplace moved ahead: state is behind"  "$(printf '%s' "$OUT" | cut -f1)" behind
 ok "…naming the version it would install"          "$(printf '%s' "$OUT" | cut -f3)" 1.0.1
+ok "…and leaves it in the data dir for the pane"   "$(cat "${PCACHE%/*}/latest-version" 2>/dev/null)" 1.0.1
+ok "…replaced by a rename, never rewritten in place" "$(cat "$TMP/latest-held" 2>/dev/null)" 1.0.0
+ok "…and no temp file is left beside it"           "$(ls "${PCACHE%/*}" | grep -c '^latest-version\.')" 0
 rm -f "$PCACHE"; abcheck
 ok "welcome check agrees it is behind, with both versions" \
   "$(grep -qF 'plugin 1.0.0 is behind the marketplace, which carries 1.0.1' <<<"$AOUT" && echo yes || echo no)" yes
@@ -754,6 +760,7 @@ ok "…and nothing was left on stderr" \
 GIT -C "$PMKT" remote set-url origin "$TMP/no-such-marketplace.git"
 rm -f "$PCACHE"; pcheck --state
 ok "unreachable marketplace, cold cache: unknown"  "$(printf '%s' "$OUT" | cut -f1)" unknown
+ok "…and removes the pane's latest-version"       "$(yn [ ! -e "${PCACHE%/*}/latest-version" ])" yes
 pcheck
 ok "…and byte-empty on the human line"             "$(printf '%s' "$OUT" | wc -c | tr -d ' ')" 0
 # NO MARKETPLACE CLONE AT ALL — a vendored copy, or a machine that dropped the clone.

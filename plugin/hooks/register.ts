@@ -173,6 +173,7 @@ const ROW_LINES = 3     // a wrapped row's most lines, every section alike; the 
 const VERBS = ['approve', 'answer', 'merge', 'unblock', 'close'] as const
 const ANSWER = 'loopd:answer'
 const NEW_PROJECT = 'loopd:new-project'
+const UPDATE = 'loopd:update'
 // The simple mode's whole walk. The list and read calls below are derived from these two
 // globs, so MODS.md's declaration of them is the declaration of the walk.
 const TASK_DOCS = 'projects/*/tasks/*.md'
@@ -227,8 +228,9 @@ type Counts = {
   status: Record<string, string> | null   // task path → in-progress | in-review, off the task documents
   written_at: string
   plugin_version: string   // the plugin whose status line wrote the file; '' when absent or not x.y.z
+  latest_version: string   // the marketplace's, as the banner's update check last saw it; '' likewise
 }
-const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, queue: '', tasks: null, status: null, written_at: '', plugin_version: '' }
+const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, queue: '', tasks: null, status: null, written_at: '', plugin_version: '', latest_version: '' }
 const SEMVER = /^\d+\.\d+\.\d+$/
 const TASK_KEY = /^projects\/([^/]+)\/tasks\/([^/]+)\.md$/
 
@@ -339,6 +341,7 @@ function readCounts(text: unknown, m: number): Counts {
     working: nint(se.working), idle: nint(se.idle), dead: nint(se.dead), tick: nint(se.tick_working), need_you: nint(o.need_you),
     queue: str(o.queue), tasks, status, written_at: str(o.written_at),
     plugin_version: SEMVER.test(str(o.plugin_version)) ? str(o.plugin_version) : '',
+    latest_version: SEMVER.test(str(o.latest_version)) ? str(o.latest_version) : '',
   }
 }
 // Stat every poll, read when the mtime moved, as for the snapshot. Reading never clears a
@@ -470,6 +473,12 @@ function headAge(now: number, b: Board): string {
 // A NaN on either side keeps the note: a clock that cannot be read never hides it.
 const noteLive = (now: number) => note !== '' && !(now - noteAt >= NOTE_MS)
 const countsGone = () => counts.state !== 'ok'
+function newer(a: string, b: string): boolean {
+  const x = a.split('.').map(Number), y = b.split('.').map(Number)
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]
+  return false
+}
+const updateDue = () => counts.state === 'ok' && !!counts.plugin_version && !!counts.latest_version && newer(counts.latest_version, counts.plugin_version)
 // What the poll compares: an age or a note's expiry changing redraws.
 function ageKey(now: number): string { return (board ? headAge(now, board) : '') + '|' + noteLive(now) }
 
@@ -751,6 +760,16 @@ function draw($: any, e: any, now: number): any {
   // Below the buttons, so they never move. A refused submit is said, not swallowed (convention 12).
   const info = noteLive(now) ? note : answerQueued ? 'answer queued' : kind === 'ok' && countsGone() ? 'counts unavailable — run /loopd:init' : ''
   if (info) rows.push(line(fit(info, W), MUTED))
+  if (updateDue()) {
+    const cmd = (s: string) => seg(s, { ...GATE, bold: true })
+    const head = 'Update available! Run: ', one = '/' + UPDATE, two = '/reload-plugins'
+    if (cols(head + one + ', then ' + two) <= W) rows.push(row(seg(head, GATE), cmd(one), seg(', then ', GATE), cmd(two)))
+    else {
+      if (cols(head + one + ',') <= W) rows.push(row(seg(head, GATE), cmd(one), seg(',', GATE)))
+      else rows.push(line(head.trimEnd(), GATE), row(cmd(one), seg(',', GATE)))
+      rows.push(row(seg('then ', GATE), cmd(two)))
+    }
+  }
 
   return Box({ flexDirection: 'column', paddingLeft: PAD, paddingRight: PAD, children: rows })
 }

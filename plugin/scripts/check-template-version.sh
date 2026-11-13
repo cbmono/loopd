@@ -36,7 +36,7 @@
 # equal the remote's is INVISIBLE here. The version moves when the bump convention says it
 # moves, so this detects drift across a bump and nothing finer.
 #
-# NEVER WRITES, NEVER FETCHES UNLESS ASKED, NEVER REPAIRS. It reports; the human pulls and
+# WRITES ONLY ITS CACHE, NEVER FETCHES UNLESS ASKED, NEVER REPAIRS. It reports; the human pulls and
 # re-stamps. Exit status is 0 on every path, including "behind": the caller is a
 # SessionStart banner, and a non-zero exit there is a failed hook, not a message.
 #
@@ -149,7 +149,7 @@ newer() { # <a> <b>
 # ---------------------------------------------------------------------------------------
 # THE TWO SIDES — a template checkout when there is one, otherwise the plugin install.
 # ---------------------------------------------------------------------------------------
-HERE=""; THERE=""; REF_NAME=""; LABEL=""; PNAME=""
+HERE=""; THERE=""; REF_NAME=""; LABEL=""; PNAME=""; LATEST=""
 
 # A BOUND THAT SURVIVES THIS SHELL, because `timeout` is not on a stock macOS: the watchdog
 # is a detached SIBLING, so it still fires if we are killed, and `sleep` bounds it in turn.
@@ -220,6 +220,7 @@ resolve_plugin() {
   local paths mkt data ref now stamp
   paths="$(plugin_paths)" || return 0
   IFS="$(printf '\t')" read -r mkt data PNAME <<<"$paths"
+  LATEST="$data/latest-version"
   [ -d "$mkt" ] && git -C "$mkt" rev-parse --git-dir >/dev/null 2>&1 || return 0
   now="$(date +%s 2>/dev/null || echo 0)"; stamp=0
   if [ "$FETCH" -eq 0 ] && [ -r "$data/$CACHE_FILE" ]; then
@@ -242,6 +243,13 @@ resolve_plugin() {
 if [ -n "$TEMPLATE" ]; then resolve_checkout
 elif [ -n "$PLUGIN" ]; then resolve_plugin
 fi
+# counts.sh reads this for the pane's update line; it may not fetch or spawn git itself.
+if [ -n "$LATEST" ]; then
+  if [ -n "$THERE" ]; then
+    mkdir -p "${LATEST%/*}" && printf '%s\n' "$THERE" > "$LATEST.$$" && mv -f "$LATEST.$$" "$LATEST"
+    rm -f "$LATEST.$$"
+  else rm -f "$LATEST"; fi
+fi 2>/dev/null || true
 
 # ---------------------------------------------------------------------------------------
 # THE ANSWER. `--state` is the machine-readable one, and it is the only mode that speaks
