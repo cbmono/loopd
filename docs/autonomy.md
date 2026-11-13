@@ -16,7 +16,7 @@ defines the clearance predicate. This page is orientation — don't implement fr
 companion plugin** carries, and core finds it by presence:
 
 ```
-/plugin install loopd-yolo@loopd     # on
+/plugin install loopd-yolo@loopd     # on (user scope, then /reload-plugins)
 /plugin  ->  Manage  ->  uninstall           # off
 ```
 

@@ -15,7 +15,8 @@ You steer; background agents do the work. **The core loop — memorise this:**
 > tells you what needs *you*.
 
 **The commands are the `loopd` plugin — per machine, not per instance.**
-None of them resolving means it is not installed here. Install once, then restart:
+None of them resolving means it is not installed here. Install once, user scope, then
+`/reload-plugins`:
 
 ```text
 /plugin marketplace add cbmono/loopd

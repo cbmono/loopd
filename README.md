@@ -53,7 +53,10 @@ About ten minutes. **Needs:** Claude Code, `git`, the GitHub CLI `gh` (logged in
 /plugin install loopd@loopd
 ```
 
-Then restart Claude Code.
+In the panel that opens, choose **Install for you (user scope)**: `/loopd:update` updates
+only user-scope installs, so a project- or local-scope install silently stays on its old
+version. From a shell, `claude plugin install loopd@loopd` installs at user scope by
+default. Then run `/reload-plugins` (or restart Claude Code).
 
 **2. Create a bundle** — once per group of repos. Put it in the folder that holds those repos:
 

@@ -74,7 +74,8 @@ gitignored file on their machine, which `/loopd:init` writes there.
 ```sh
 # in Claude Code, once per machine:
 #   /plugin marketplace add cbmono/loopd
-#   /plugin install loopd@loopd
+#   /plugin install loopd@loopd      (choose user scope — the one /loopd:update updates)
+#   /reload-plugins                  (or restart Claude Code)
 /loopd:init ~/workspace/<group>/_loopd-<group> --org <org>
 ```
 
