@@ -159,6 +159,14 @@ They too are dispatched namespaced (`loopd:plan-architect`), and they are unrest
 design: no `tools:` allowlist, so a dispatched one can reach skills without widening any
 role agent's list.
 
+**Three agents have no `roleTiers` row and run on their frontmatter model:**
+`failure-analyst` (`sonnet`, effort `high`), `code-architect` and `deep-bug-scan` (`opus`,
+`high`). Their dispatches pass no `model:`, so the Agent tool falls back to the frontmatter.
+A row for one is read only where the caller runs `resolve-model.sh` for it — `/loopd:fanout`
+does; the main session's ad-hoc `failure-analyst` dispatch does not, and the
+`qa-reviewer`'s escalation to the other two names no such call
+([model routing](operations.md#model-routing)).
+
 Role dispatches are routed to a cost-appropriate model per tier
 ([operations.md § model routing](operations.md#model-routing)).
 
@@ -609,7 +617,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `/loopd:dispatch` reports "Unknown command" | the **plugin** is not installed on this machine, or Claude Code has not restarted since — never the bundle, which delivers no commands at all | `/plugin marketplace add cbmono/loopd`, `/plugin install loopd@loopd`, then `/exit` and relaunch |
+| `/loopd:dispatch` reports "Unknown command" | the **plugin** is not installed on this machine, or this session has not reloaded plugins since — never the bundle, which delivers no commands at all | `/plugin marketplace add cbmono/loopd`, `/plugin install loopd@loopd` at user scope, then `/reload-plugins` (or `/exit` and relaunch) |
 | A command or agent is missing after an update | the session still runs the plugin version it started with | `/reload-plugins`, or restart Claude Code |
 | Commands work on one machine and not on another | the plugin is per machine; the bundle carries none of it | install the plugin on that machine, then `/loopd:init` inside its clone of the bundle |
 | A seed change from a plugin update never arrived | seed content is copied once, and refreshed only by a stamp | `/loopd:init` — it 3-way merges the change and reports any file you edited by hand, which you port yourself |

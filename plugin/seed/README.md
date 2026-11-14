@@ -212,7 +212,7 @@ documents live in the **bundle** (per instance). Neither half updates the other.
 
 | Half | Reaches you by | Run |
 |---|---|---|
-| the slash commands (`/loopd:*`) | the plugin, installed once per machine | `/plugin marketplace add cbmono/loopd` then `/plugin install loopd@loopd` — and `/plugin` to update it later |
+| the slash commands (`/loopd:*`) | the plugin, installed once per machine | `/plugin marketplace add cbmono/loopd` then `/plugin install loopd@loopd` at user scope — and `/loopd:update` to update it later |
 | role agents, machinery scripts, the `SessionStart` and `UserPromptSubmit` hooks | the same plugin, per machine — this bundle holds no link into any checkout | nothing per bundle: `/plugin` updates all of it at once |
 | the bundle's own seed docs (`CLAUDE.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`) | copied once, then yours | `/loopd:init` 3-way merges a later change onto your edits |
 

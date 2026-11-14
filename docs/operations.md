@@ -11,7 +11,7 @@ board. Procedures here; the reasoning behind each one is linked.
 
 | Half | What it carries | Scope | Installed / refreshed by |
 |---|---|---|---|
-| the **plugin** (`loopd`) | every slash command — `/loopd:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:board`, `:fanout`, `:pr-review-request`, `:welcome`, `:whats-up`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd` — core with its three mods; `loopd-yolo` is a separate, deliberate install; `/plugin` to update it later |
+| the **plugin** (`loopd`) | every slash command — `/loopd:dispatch`, `:new-project`, `:close-project`, `:answer`, `:board`, `:fanout`, `:handoff`, `:init`, `:update`, `:prune-wt`, `:welcome`, `:whats-up` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd` at **user scope** — core with its three mods; `loopd-yolo` is a separate, deliberate install; `/loopd:update` to update it later |
 | the **bundle** (`plugin/seed/` content + your data) | `projects/`, `knowledge/`, `objectives/`, `instance.config*.json`, the seed docs (`CLAUDE.md`, `README.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, `.claude/settings.json`), the managed `.gitignore` lines, and the `repos/` links | **per bundle** | `/loopd:init <dir>` |
 
 **THE SECOND HALF NO LONGER CARRIES MACHINERY, AND THAT IS THE CHANGE.** A bundle used to
@@ -208,6 +208,8 @@ deliberately.
 # 1. per MACHINE, in any Claude Code session
 /plugin marketplace add cbmono/loopd
 /plugin install loopd@loopd
+#    choose "Install for you (user scope)": /loopd:update updates only user-scope
+#    installs, so a project- or local-scope one silently stays on its old version
 #    (`/plugin install loopd-yolo@loopd` as well, only where a project may delegate its gates)
 #    on ai-bridge-v2 already? uninstall it from /plugin -> Manage. Its stub was
 #    removed in 1.0.0, so the old name no longer resolves from the marketplace.
@@ -864,7 +866,7 @@ Three knobs in `instance.config.json` (all per-machine overridable, and seeded i
 | Key | What it does |
 |---|---|
 | `models` | maps tiers to model aliases: `{ "light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable" }`. Aliases track the latest model in each tier, so you retune per instance without editing agents |
-| `roleTiers` | each role's default tier (e.g. `project-manager` → `deep`, `qa-reviewer` → `apex`, `cataloguer` → `light`, engineers → `standard`) |
+| `roleTiers` | each role's default tier (seed: `project-manager` and the engineers → `deep`, `qa-reviewer` and `plan-architect` → `apex`, `cataloguer` → `standard`, `explorer` → `light`) |
 | `roleEffort` | the second axis: each role's reasoning effort (`low\|medium\|high\|xhigh\|max`), resolved by `resolve-effort.sh` and passed as `--effort` / `effort:` |
 
 **Effort: medium for the orchestration roles, high for the roles that write code or
@@ -913,6 +915,29 @@ To see every role at once, `scripts/resolve-model.sh --all` prints one tab-separ
 per `roleTiers` entry (`role`, which file won, tier, model — the model empty where a role
 resolves to nothing) through the same code path, and exits 1 if any row is empty. It is
 what `/loopd:init` reads, once, instead of one call per role.
+
+**Three shipped agents have no `roleTiers` row, and run on their frontmatter.**
+`failure-analyst` (`model: sonnet`, `effort: high`), `code-architect` and `deep-bug-scan`
+(both `model: opus`, `effort: high`) are never a task's `assignee`, the seed seeds no row
+for them, and the Agent tool takes its model from its `model:` parameter, else the agent's
+frontmatter, else the parent — so a dispatch that passes no `model:` runs them on the
+frontmatter values above. Adding a row is honoured **only by a caller that runs
+`resolve-model.sh` for that agent**, and today none reliably does:
+
+- **`failure-analyst`, dispatched ad hoc from a main session** (the bundle `CLAUDE.md`
+  rule for a red build) — that rule names no `resolve-model.sh` call, and a main session
+  does not read `CONVENTIONS.md`, so a row is **not** read; it runs on `sonnet`.
+- **`failure-analyst` fanned out by `/loopd:fanout`** — the skill resolves every named
+  agent, so here a row **would** be passed as `model:`; without one it prints the
+  missing-row line on stderr and passes nothing, which lands on the frontmatter.
+- **`code-architect` / `deep-bug-scan`, the `qa-reviewer`'s escalation** — the
+  `qa-reviewer` runs `resolve-model.sh` only for **itself** (to tell whether it is at
+  `apex`), and its escalation step reasons on the pair being `opus`. `CONVENTIONS.md`'s
+  general "resolve every dispatch" rule would make a row apply, but nothing in the
+  escalation step asks for it — treat a row there as advisory, not enforced.
+
+So for these three the frontmatter is the only setting that always applies, and a plugin
+update restores it; a `roleTiers` row alone is not a reliable dial for them.
 
 ### Running the loop on a cadence
 

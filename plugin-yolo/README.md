@@ -5,8 +5,12 @@ merges. This companion is the *only* thing that makes any other mode exist.
 
 ```
 /plugin marketplace add cbmono/loopd     # already added? skip
-/plugin install loopd-yolo@loopd
+/plugin install loopd-yolo@loopd         # choose user scope, like core
+/reload-plugins                          # or restart Claude Code
 ```
+
+User scope, because `/loopd:update` updates only the user-scope plugins of the marketplace;
+a project- or local-scope install silently stays on its old version.
 
 Uninstall it and every project is `gated` again, with **no other edits** anywhere. That
 is the whole design — a capability some deployments must not have is one deletable

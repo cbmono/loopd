@@ -17,7 +17,7 @@ and notes. It never holds application code.
 
 | # | Do this | Where |
 |---|---|---|
-| 1 | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd`, then restart Claude Code | any Claude Code session |
+| 1 | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd` and choose **user scope** (the only scope `/loopd:update` updates), then `/reload-plugins` (or restart Claude Code) | any Claude Code session |
 | 2 | `/loopd:init ~/workspace/<group>/_loopd-<group>` | any Claude Code session |
 | 3 | In the bundle, set `org` and `defaultRepo` in `instance.config.json`, and `reposRoot` (the folder your clones live in) in `instance.config.local.json` | your editor |
 | 4 | `/loopd:init` again, from inside the bundle — it links your repos into `repos/` | a session started in the bundle |
@@ -108,7 +108,8 @@ The rest — `fanout`, `handoff`, `prune-wt`, `init` — and every flag are in
 You were given a bundle repo and someone else runs it.
 
 1. **Install the plugin:** `/plugin marketplace add cbmono/loopd`, then
-   `/plugin install loopd@loopd`, then restart Claude Code.
+   `/plugin install loopd@loopd` at **user scope**, then `/reload-plugins` (or restart
+   Claude Code).
 2. **Clone the bundle** next to the repos it works on:
    `git clone <bundle-remote> ~/workspace/<group>/_loopd-<group>`.
 3. **Stamp your copy:** start Claude inside it and run `/loopd:init`. It fills in what your

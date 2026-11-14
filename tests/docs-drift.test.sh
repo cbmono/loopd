@@ -11,8 +11,14 @@
 # file (or a root) so a mutant can be fed to the same code:
 #
 #   (a) every plugin/agents/*.md is named, as `<name>`, in README.md's `## The team` section;
-#   (b) every /<plugin>:<cmd> in README.md and docs/getting-started.md is a real
-#       plugin/skills/<cmd>/SKILL.md;
+#   (b) every /<plugin>:<cmd> — and every `:<cmd>` shorthand for one, the form a list of
+#       commands abbreviates to after its first entry — in README.md, CONTRIBUTING.md and
+#       every docs/*.md is a real plugin/skills/<cmd>/SKILL.md. NO PAGE IS EXCLUDED, the
+#       historical ones (docs/migrating.md) included: none names a retired command today,
+#       and one that must is to spell it without the prefix ("the retired `audit`
+#       command"), so this check never grows an allowlist that a live ghost could hide in.
+#       docs/operations.md once listed four commands that never shipped as skills
+#       (`:audit`, `:pr-review-request`, `:capture`, `:work`) and missed three that did;
 #   (c) every relative markdown link in README.md, docs/getting-started.md,
 #       docs/reference.md and CONTRIBUTING.md resolves — and its #anchor too, by GitHub's
 #       slug rules, when the target is a .md file;
@@ -52,9 +58,10 @@ unnamed_agents() { # <readme> -> each plugin agent its team section never names,
 }
 
 # --- (b) ---------------------------------------------------------------------------------
-ghost_commands() { # <file>... -> each /$PN:<cmd> with no plugin/skills/<cmd>/SKILL.md, or none
+ghost_commands() { # <file>... -> each /$PN:<cmd> or `:<cmd>` with no plugin/skills/<cmd>/SKILL.md, or none
   local c miss=""
-  for c in $(grep -ohE "/${PN}:[a-z][a-z0-9-]*" "$@" 2>/dev/null | sed "s|^/${PN}:||" | sort -u); do
+  for c in $(grep -ohE "/${PN}:[a-z][a-z0-9-]*|\`:[a-z][a-z0-9-]*\`" "$@" 2>/dev/null \
+             | sed -e "s|^/${PN}:||" -e 's|^`:||' -e 's|`$||' | sort -u); do
     [ -f "$REPO/plugin/skills/$c/SKILL.md" ] || miss="${miss:+$miss }$c"
   done
   echo "${miss:-none}"
@@ -131,10 +138,13 @@ ok "…and plugin/agents/ ships agents" "$([ -n "$(agents)" ] && echo yes || ech
 ok "every plugin/agents/*.md is named there" "$(unnamed_agents "$README")" none
 
 echo
-echo "== (b) every /${PN}:<cmd> in README.md and getting-started.md is a real skill =="
-ok "the two pages name at least one command" \
-   "$([ -n "$(grep -ohE "/${PN}:[a-z]" "$README" "$REPO/docs/getting-started.md")" ] && echo yes || echo no)" yes
-ok "no command names a skill that does not exist" "$(ghost_commands "$README" "$REPO/docs/getting-started.md")" none
+echo "== (b) every /${PN}:<cmd> and \`:<cmd>\` in README.md, CONTRIBUTING.md and docs/*.md is a real skill =="
+CMD_PAGES=("$README" "$REPO/CONTRIBUTING.md" "$REPO"/docs/*.md)
+ok "the pages name at least one command" \
+   "$([ -n "$(grep -ohE "/${PN}:[a-z]" "${CMD_PAGES[@]}")" ] && echo yes || echo no)" yes
+ok "…and docs/operations.md is among them" \
+   "$([[ " ${CMD_PAGES[*]} " == *" $REPO/docs/operations.md "* ]] && echo yes || echo no)" yes
+ok "no command names a skill that does not exist" "$(ghost_commands "${CMD_PAGES[@]}")" none
 
 echo
 echo "== (c) every relative link and #anchor in the four pages resolves =="
@@ -157,6 +167,10 @@ ok "mutant A: a dropped team row names the missing agent" "$(unnamed_agents "$TM
 
 printf 'Run `/%s:no-such-command` next.\n' "$PN" > "$TMP/ghost.md"
 ok "mutant B: a command with no skill is named" "$(ghost_commands "$README" "$TMP/ghost.md")" no-such-command
+
+sed 's/`:board`/`:audit`/' "$REPO/docs/operations.md" > "$TMP/ghost-shorthand.md"
+ok "mutant B2: a \`:<cmd>\` shorthand with no skill is named" \
+   "$(ghost_commands "$REPO/docs/operations.md" "$TMP/ghost-shorthand.md")" audit
 
 { cat "$REPO/docs/getting-started.md"; printf '\nSee [nowhere](no-such-page.md).\n'; } > "$TMP/dead-file.md"
 ok "mutant C: a link to a missing file is reported" \
