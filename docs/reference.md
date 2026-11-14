@@ -33,7 +33,7 @@ every agent (`loopd:software-engineer`), because a bare name does not resolve.
 
 | Command | What it does |
 |---|---|
-| `/loopd:new-project <description>` | scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass. With no description, opens a five-field form (in the pane) instead |
+| `/loopd:new-project <description> [kind=research] [autonomy=<mode>] [inputs=later]` | scaffolds a project: phases, draft tasks, success criteria. Asks at most one question — kind, autonomy (only where `AUTONOMY.md` defines a mode) and whether you'll add input files first — for whichever you didn't pass; everything else is a flag or a default. With no description, opens a five-field form (in the pane) instead |
 | `/loopd:dispatch [gap\|once\|dry-run\|stop]` | the serial background loop: dispatch, track, report. Bare, it ticks every ten minutes on its own; a gap such as `30m` sets the cadence, `once` is a single tick, `dry-run` is one tick that only reports, `stop` ends it |
 | `/loopd:answer` | answer the PM's open questions from inside the session — all of them, one project's, or one, as `<task> [Q<n>] <n \| more \| later \| text>`. Given a `blocked` task, shows why it stopped, takes your one decision and sends it back to `ready` with that decision in its `# Notes` |
 | `/loopd:whats-up` | "what do you need from me?" — reprints `AWAITING.md`'s Needs-you rows, numbered, with its last refresh, and ends with the working agents and their tasks. Read-only |
@@ -60,17 +60,18 @@ hooks modules Claude Code runs inside every session, each a switch in `/config`,
 
 | Flag | Means |
 |---|---|
-| `kind=build\|research` | the project kind; `build` when absent |
+| `kind=build\|research` | the project kind; asked when absent (`build` under `--no-ask`) |
+| `inputs=later\|now` | `later`: you'll add files to `projects/<slug>/sources/` first — refinement waits, AWAITING.md shows one `📥 inputs` row, and the first file there releases it; asked when absent (`now` under `--no-ask`) |
 | `repo=<name\|owner/name>` | build only — the `target_repo`; absent, `<org>/<defaultRepo>` |
 | `deliverables="a; b"` | research only — what the project produces |
-| `objective=<slug>` | link to `objectives/<slug>.md` instead of inferring one |
-| `autonomy=<mode>` | `gated` when absent, and the only mode unless `AUTONOMY.md` defines more ([autonomy.md](autonomy.md)); a mode's shorthand such as `/yolo` works the same |
-| `clis="a; b"` · `/cli a, b` | external CLIs or integrations the project's agents may use |
-| `browser=off\|claude-for-chrome` · `/claudeforchrome` | let agents drive the browser; default `off` |
+| `objective=<slug>` | link to `objectives/<slug>.md`; never asked or inferred |
+| `autonomy=<mode>` | asked only when `AUTONOMY.md` defines a mode, else `gated` ([autonomy.md](autonomy.md)); a mode's shorthand such as `/yolo` works the same |
+| `clis="a; b"` · `/cli a, b` | external CLIs or integrations the project's agents may use; never asked |
+| `browser=off\|claude-for-chrome` · `/claudeforchrome` | let agents drive the browser; default `off`, never asked |
 | `owner=<login>` | a shared bundle only — whose project this is |
 | `timebox=<N>d\|<N>w` | an experiment to stop when the box runs out |
-| `title="…"` · `need="…"` · `success_criteria="a; b"` | recorded verbatim, not asked |
-| `--no-ask` | ask nothing; every question takes its default |
+| `title="…"` · `need="…"` · `success_criteria="a; b"` | recorded verbatim. Absent, the criteria are proposed and written (edit `project.md` to change) and the value gate is filled only from what the description says |
+| `--no-ask` | ask nothing; the one question takes its defaults |
 | `--no-commit` | scaffold only; don't commit |
 
 ---
@@ -514,6 +515,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `kb-usage.sh` | `record` — the citation store: runs `cite-check.sh` on a text and stores the slugs it kept, one file per text; `--task` grades the task's citation of its own new Finding `SELF` | one citation file under the bundle directory |
 | `dispatchable-ready.sh` | the one reader of which `ready` tasks step 3 could dispatch (kind, open questions, dependencies, pause, owner — an unanswered gate counts), shared by `tick-delta.sh check` and the session banner | no |
 | `project-paused.sh` | answers whether a project is paused, as one predicate with a three-value exit | no |
+| `project-inputs.sh` | `[--release] <path>` — whether a project on `inputs: later` still waits for its files: 0 ready · 1 waiting · 2 cannot answer · 3 arrived (`sources/` holds a file besides README.md). `--release` flips an arrived one to `inputs: now` and logs it by count. Reads file presence, never contents | `--release` only — that `project.md` and `log.md` |
 | `prune-worktrees.sh` | classifies worktrees, prints the `remove` commands | **never** |
 | `prune-wt.sh` | `[--yes]` — behind `/loopd:prune-wt`: previews, then removes the pruner's `REMOVABLE` set, re-checking each path with `reclaim-worktree.sh`'s guards (unlocked, clean, pushed, no non-cache ignored file, no live process) and running `git worktree prune` per repo. Refuses while the tick lock is held — a lock whose tick already committed its close is refused too, printing the `tick-reap.sh` command that frees it; never forces | `--yes` only — those worktrees |
 | `update-plugin.sh` | `[--verbose]` — behind `/loopd:update`: `claude plugin marketplace update`, then `claude plugin update <p>@<marketplace> -s user` per user-scope plugin of it (never an install, never a project-scope entry — those are one summary line unless `--verbose`), then the new version's `init-bundle.sh` on the bundle in the cwd, resolved from the registry's user entry; ends with the `/reload-plugins` line. Exit 0 · 1 a plugin failed · 2 nothing stamped · else init's | the user-scope plugin installs, then the bundle in the cwd, through init |

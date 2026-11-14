@@ -35,8 +35,9 @@ your editor has open.
 ## 2. Your first project
 
 1. **Pick something small and real** — a change you'd be happy to merge or to throw away.
-2. **Describe it:** `/loopd:new-project <one sentence>`. loopd asks a few questions (which
-   repo, how to tell it worked), then writes a project with draft tasks.
+2. **Describe it:** `/loopd:new-project <one sentence>`. loopd asks at most one question (build
+   or research, and whether you'll add input files first), then writes a project with draft
+   tasks and proposed success criteria you can edit in `project.md`.
 3. **Read the drafts.** Each task is a markdown file under `projects/<slug>/tasks/`. The
    project manager fills in acceptance criteria and lists anything it needs from you as
    numbered `open_questions`.

@@ -24,7 +24,7 @@ task/project/objective/agent constructs — those are producer-defined extension
 | `type` | Lives at | What it is |
 |---|---|---|
 | `Objective` | `objectives/<slug>.md` | **optional** — a goal that outlives one project, with `success_criteria` that the human reviewing progress grounds against |
-| `Project` | `projects/<slug>/project.md` | a `build` or `research` effort; carries its own `success_criteria` and the value gate (`need`, `cost_of_not_doing`, `no_owner`), plus `autonomy`, `owner`, `target_repo`, `clis`, `browser`, `retain`, and an optional `timebox` — permission to stop an experiment |
+| `Project` | `projects/<slug>/project.md` | a `build` or `research` effort; carries its own `success_criteria` and the value gate (`need`, `cost_of_not_doing`, `no_owner`), plus `autonomy`, `owner`, `target_repo`, `clis`, `browser`, `retain`, `inputs` (`later` holds refinement until `sources/` has your files), and an optional `timebox` — permission to stop an experiment |
 | `Phase` | `projects/<slug>/phases/<n>-<slug>.md` | an ordered stage of a project |
 | `Task` | `projects/<slug>/tasks/<id>.md` | the unit a role agent is dispatched on |
 | `Agent` | `agents/index.md` | the role roster |

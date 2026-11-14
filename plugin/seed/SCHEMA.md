@@ -121,8 +121,9 @@ acknowledged_decisions: [ "<ISO 8601> by <login> · <entry verbatim>", ... ]   #
 target_repo: <org>/<repo>             # BUILD only: default repo for this project's tasks (<org> from instance.config.json). Omit for research.
 deliverables: [ "<artifact>", ... ]   # RESEARCH only: what this project produces, e.g. "tech landscape per domain (md)", "exec summary deck (marp)"
 autonomy: gated | <mode>              # optional (default gated). gated = the human promotes `ready` AND merges — both gates absolute. Any other value names a delegated-authority mode defined in `AUTONOMY.md`, and is INERT unless that file exists (absent ⇒ gated). See "Delegated authority" below.
-clis: [ <name>, ... ]                 # optional: external CLIs/integrations this project's agents may use (e.g. render, supabase). A declaration — agents still verify a CLI works before relying on it. BUILD-SHAPED: research projects dispatch no agents, so `/new-project` never asks for it there (an explicit clis= flag is still recorded).
+clis: [ <name>, ... ]                 # optional: external CLIs/integrations this project's agents may use (e.g. render, supabase). A declaration — agents still verify a CLI works before relying on it. `/new-project` never asks for it — an explicit clis= flag is recorded, on either kind.
 browser: off | claude-for-chrome      # optional (default off). claude-for-chrome = agents may drive the browser via the claude-in-chrome tools when present — background role agents included, each with its OWN tab group (not the human's tabs), so navigate explicitly. GRANTING IT GIVES AGENTS READ ACCESS TO EVERY SITE THIS HUMAN IS LOGGED INTO in that browser; browser WRITES ask first unless the project's autonomy delegates them, which is what makes granting it defensible. Absent tools = degrade, don't fail. Writes follow the project's autonomy (AUTONOMY.md). See "Browser access" below.
+inputs: later | now                   # optional (default now). later = the human will add input files to `sources/` before work should start: refine skips the project's drafts and AWAITING.md shows one `📥 inputs` row, until `sources/` holds a file other than README.md — then the next tick sets `inputs: now` and refines from them — or the human sets `now`. Gates REFINEMENT only. Read and written only by project-inputs.sh, which checks file PRESENCE, never contents.
 owner: <github-username>              # optional: which human's work this project is, on an instance shared by more than one. A GitHub USERNAME, never an email. Absent ⇒ nobody in particular, so it is this clone's — see "Ownership on a shared instance" below. Gates DISPATCH only, never promotion.
 retain: true                          # optional (default absent = false). Closeout KEEPS this project's folder instead of `git rm -r`-ing it. Governs the FOLDER ONLY — not the tasks, not the status: a retained project still ends `status: done` with every task terminal. See "Project & objective completion" below.
 deliverable_paths:                    # WRITTEN BY CLOSEOUT, not by hand. Bundle-relative paths, resolved once from each task's `artifacts:` and verified on disk at closeout. `[ ]` means closeout looked and found none.
@@ -136,8 +137,9 @@ timestamp: <ISO 8601>
 `success_criteria` answer *how will we know it worked*; these three answer *should it exist
 at all*. A project can have excellent criteria and no business existing, which is the
 failure these record — so they are never merged into `success_criteria`, and refine never
-rewrites one as the other. `/loopd:new-project` asks all three **on both kinds** and writes
-all three keys every time: they describe no machinery, so the build/research asymmetry does
+rewrites one as the other. `/loopd:new-project` writes all three keys **on both kinds**, every
+time — inferred from the description where it says so, else empty, and never asked unless
+passed as `need=` — because they describe no machinery, so the build/research asymmetry does
 not reach them, and a speculative research project is where they bite hardest.
 
 **Present is required; filled is not.** An empty value is a legal answer and the honest one
@@ -1608,9 +1610,9 @@ claude-for-chrome` gives this project's agents **read access to every site this 
 logged into in that browser** — mail, cloud consoles, admin panels — because the browser
 carries their cookies. It is scoped to a project rather than to a session for exactly that
 reason, and it is defensible because **browser writes ask first unless the project's
-`autonomy` delegates them** (rule 4). A human answering `/loopd:new-project`'s browser
-question needs both halves to answer it, so the scaffold states them there too; a project
-that opts in records **why** in its `# Context`.
+`autonomy` delegates them** (rule 4). A human granting it with `/loopd:new-project`'s
+`browser=` flag needs both halves, so the scaffold states them before it writes the key; a
+project that opts in records **why** in its `# Context`.
 
 **How it's wired: it isn't.** The Chrome extension **injects** the
 `mcp__claude-in-chrome__*` tools into a live paired session. There is no `mcpServers`

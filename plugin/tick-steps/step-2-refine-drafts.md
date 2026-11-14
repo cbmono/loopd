@@ -4,7 +4,18 @@
 it on its `steps:` line (`project-manager.md` → "Step files"). Every rule in the core
 prompt still binds here — both authority gates, the ownership gate, the UNKNOWN rule.
 
-2. **Refine drafts.** For each `draft` whose `acceptance_criteria` are empty/thin
+2. **A project on `inputs: later` waits for its files first.** For each digest line
+   `inputs waiting <project.md>`, refine none of that project's drafts and raise no
+   `open_questions` for it — AWAITING.md already carries its one `📥 inputs` row. For each
+   `inputs arrived <project.md>`, run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/project-inputs.sh --release <project.md>`: it sets
+   `inputs: now` and logs it in the project's `log.md` (commit both), and that project's drafts
+   are refined below, from `sources/`. Report the release by count, never by file name, and
+   quote nothing from a source file into AWAITING.md or the board — sources may hold raw
+   exports. No digest (any exit but 0): run `project-inputs.sh <project.md>` per project on
+   `inputs: later` — exit 1 waiting, 3 arrived, anything else refines as usual.
+
+   **Refine drafts.** For each `draft` whose `acceptance_criteria` are empty/thin
    (not yet refined): enrich it, add concrete `acceptance_criteria`, and record
    reasoning in `# Notes`. For **`kind: build`** also resolve `target_repo` (confirm
    it exists under `<reposRoot>/`), write `target_repo` as `<org>/<repo>` — a bare name
