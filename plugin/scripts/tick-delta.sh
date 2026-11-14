@@ -326,6 +326,12 @@ fmlist() { # <file> <key> <text|count>
   ' "$1"
 }
 fmcount() { fmlist "$1" "$2" count; } # <file> <key>
+# Every PR URL in the first `pr:` — a scalar, `[ … ]` on one line or several, or a `- url`
+# block. The block form read as no PR at all, so its task's merge never reached a tick.
+fmprs() { # <file>
+  { grep -m1 '^pr:' "$1"; fmlist "$1" pr text; } 2>/dev/null \
+    | grep -oE 'https://[^]"'"'"'[:space:],]+/pull/[0-9]+' | sort -u || true
+}
 
 # THE `steps:` LINE. The tick's prompt is split into a core and one file per step under
 # `tick-steps/`; a step file is read only when this tick has work for it, and this is where
@@ -479,7 +485,7 @@ fingerprint() { # <probe|digest>
         fi ;;
       esac
       if [ "$st" = "in-review" ] || [ "$st" = "in-progress" ]; then
-        prs="$(grep -m1 '^pr:' "$f" 2>/dev/null | grep -oE 'https://[^"[:space:]]+/pull/[0-9]+' || true)"
+        prs="$(fmprs "$f")"
         [ -n "$prs" ] && urls="$urls
 $prs"
       fi
@@ -686,6 +692,20 @@ case "$cmd" in
     [ -f "$STATE" ] || fail2 "no $STATE_NAME record yet (first tick, or an upgrade)"
     OLD="$(grep -v '^#' "$STATE" | grep -v '^recorded:' || true)"
     [ -n "$OLD" ] || fail2 "$STATE_NAME is empty or unreadable"
+    # A merge or close the last tick READ but never reflected: the record already holds it,
+    # the host agrees every check after, and the fingerprint never moves again. Unreflected
+    # only when none of the task's PRs is still open — one merged of two is still in flight.
+    while read -r _ t ts; do
+      case "$ts" in in-review|in-progress) ;; *) continue ;; esac
+      shut=""; live=0
+      for u in $(fmprs "$inst/$t"); do
+        ps="$(U="$u" awk '$1 == "pr" && $2 == ENVIRON["U"] { print $3; exit }' <<<"$OLD")"
+        case "$ps" in MERGED|CLOSED) shut="$ps" ;; *) live=1 ;; esac
+      done
+      [ -n "$shut" ] && [ "$live" = 0 ] && { echo "DELTA: $t pr $shut unreflected — the full tick owes it."; exit 1; }
+    done <<EOF
+$(printf '%s\n' "$FP" | grep '^task ')
+EOF
     if [ "$FP" = "$OLD" ]; then
       owed_work
       # Reported verbatim as the whole tick, so it names the next check — else a human
