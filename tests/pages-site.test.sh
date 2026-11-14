@@ -46,20 +46,26 @@ pages() {
   done
   [ "$found" = 1 ]
 }
+# FILES=(those paths), one element each so a path with a space stays whole; fails on no stylesheet.
+load_pages() {
+  local l; FILES=()
+  while IFS= read -r l; do [ -n "$l" ] && FILES+=("$l"); done <<< "$(pages "$1")"
+  [ "${#FILES[@]}" -ge 2 ]
+}
 
 check_hex() {
-  local h bad=0 files
-  files="$(pages "$1")" || { echo "no local stylesheet"; return 1; }
-  for h in $(grep -hoE '#[0-9a-fA-F]{6}' $files | tr 'A-F' 'a-f' | sort -u); do
+  local h bad=0
+  load_pages "$1" || { echo "no local stylesheet"; return 1; }
+  for h in $(grep -hoE '#[0-9a-fA-F]{6}' "${FILES[@]}" | tr 'A-F' 'a-f' | sort -u); do
     case " $(echo $TOKEN_HEXES) " in *" $h "*) ;; *) echo "off-palette $h"; bad=1 ;; esac
   done
   return "$bad"
 }
 
 check_rgba() {
-  local v bad=0 files
-  files="$(pages "$1")" || { echo "no local stylesheet"; return 1; }
-  for v in $(grep -hoE 'rgba\([^)]*\)' $files | tr -d ' ' | sort -u); do
+  local v bad=0
+  load_pages "$1" || { echo "no local stylesheet"; return 1; }
+  for v in $(grep -hoE 'rgba\([^)]*\)' "${FILES[@]}" | tr -d ' ' | sort -u); do
     case " $RGBAS " in *" $v "*) ;; *) echo "unlisted $v"; bad=1 ;; esac
   done
   return "$bad"
@@ -72,19 +78,19 @@ check_slugs() {
 }
 
 # Every src/href/url() that is not a remote URL or a fragment is relative and resolves
-# against the directory of the file that names it.
+# against the directory of the file that names it; url() is read quoted either way or bare.
 check_refs() {
-  local ref path bad=0 n=0 f files
-  files="$(pages "$1")" || { echo "no local stylesheet"; return 1; }
-  for f in $files; do
+  local ref path bad=0 n=0 f
+  load_pages "$1" || { echo "no local stylesheet"; return 1; }
+  for f in "${FILES[@]}"; do
     while IFS= read -r ref; do
-      case "$ref" in https://*|http://*|mailto:*|'#'*) continue ;; esac
+      case "$ref" in ''|https://*|http://*|mailto:*|'#'*) continue ;; esac
       n=$((n+1))
       case "$ref" in /*|//*) echo "root-absolute $ref"; bad=1; continue ;; esac
       path="$(dirname "$f")/${ref%%[#?]*}"
       [ -e "$path" ] || { echo "unresolved $ref in ${f##*/}"; bad=1; }
-    done < <(grep -oE '(src|href)="[^"]*"|url\("[^"]*"\)' "$f" \
-               | sed -E 's/^(src|href)="//; s/^url\("//; s/"\)?$//')
+    done <<< "$(grep -oE "(src|href)=\"[^\"]*\"|url\\([^)]*\\)" "$f" \
+                 | sed -E "s/^(src|href)=\"//; s/\"\$//; s/^url\\([[:space:]]*[\"']?//; s/[\"']?[[:space:]]*\\)\$//")"
   done
   [ "$n" -gt 0 ] || { echo "no local refs found"; bad=1; }
   return "$bad"
@@ -93,26 +99,26 @@ check_refs() {
 check_nojekyll() { [ -f "$1/.nojekyll" ]; }
 
 check_fonts() {
-  local d files
-  files="$(pages "$1")" || return 1
-  ! grep -qiE 'fonts\.(googleapis|gstatic)\.com' $files || return 1
-  grep -qE "@font-face\{font-family:'Inter';" $files || return 1
-  grep -qE "@font-face\{font-family:'JetBrains Mono';" $files || return 1
+  local d
+  load_pages "$1" || return 1
+  ! grep -qiE 'fonts\.(googleapis|gstatic)\.com' "${FILES[@]}" || return 1
+  grep -qE "@font-face\{font-family:'Inter';" "${FILES[@]}" || return 1
+  grep -qE "@font-face\{font-family:'JetBrains Mono';" "${FILES[@]}" || return 1
   for d in "$1/assets/fonts/inter" "$1/assets/fonts/jetbrains-mono"; do
     ls "$d"/*.woff2 >/dev/null 2>&1 || return 1
     grep -lqi 'SIL Open Font License' "$d"/*.txt 2>/dev/null || return 1
   done
 }
 
-# Both renderings of the loop diagram carry the dashed retry: a dashed blue edge in the
-# wide stage's SVG, and the stacked list's dashed fix tag.
+# Both renderings of the loop diagram carry the dashed retry: a blue edge in the wide
+# stage's SVG whose dash array starts with a positive length (not none, not 0), and the
+# stacked list's dashed fix tag.
 check_retry() {
-  local files
-  files="$(pages "$1")" || return 1
-  grep -qE '<path class="edge" [^>]*stroke-dasharray=' "$1/index.html" \
-    && grep -qE '\.flow-svg \.edge\{stroke:var\(--blue\)\}' $files \
+  load_pages "$1" || return 1
+  grep -qE '<path class="edge" [^>]*stroke-dasharray="[0-9.]*[1-9][0-9.]*[ ,"]' "$1/index.html" \
+    && grep -qE '\.flow-svg \.edge\{stroke:var\(--blue\)\}' "${FILES[@]}" \
     && grep -q 'class="fix-tag"' "$1/index.html" \
-    && grep -qE '\.fix-tag\{[^}]*dashed' $files
+    && grep -qE '\.fix-tag\{[^}]*dashed' "${FILES[@]}"
 }
 
 check_c2pa() {
@@ -164,6 +170,12 @@ mutant; edit 'url("fonts/inter/Inter-Medium.woff2")' 'url("assets/fonts/inter/In
 ok "$(rc check_refs "$M")" fail "refs — a stylesheet url() resolved against the page, not the stylesheet, is refused"
 mutant; edit 'url("fonts/inter/Inter-Medium.woff2")' 'url("/fonts/inter/Inter-Medium.woff2")' "$CSS"
 ok "$(rc check_refs "$M")" fail "refs — a root-absolute url() in the stylesheet is refused"
+mutant; edit 'url("fonts/inter/Inter-Medium.woff2")' "url('fonts/inter/Missing.woff2')" "$CSS"
+ok "$(rc check_refs "$M")" fail "refs — a single-quoted url() to a missing file is refused"
+mutant; edit 'url("fonts/inter/Inter-Medium.woff2")' 'url(fonts/inter/Missing.woff2)' "$CSS"
+ok "$(rc check_refs "$M")" fail "refs — an unquoted url() to a missing file is refused"
+mutant; edit 'url("fonts/inter/Inter-Medium.woff2")' "url( 'fonts/inter/Inter-Medium.woff2' )" "$CSS"
+ok "$(rc check_refs "$M")" pass "refs — a single-quoted url() to a real file still resolves"
 mutant; rm -f "$M/.nojekyll"
 ok "$(rc check_nojekyll "$M")" fail "nojekyll — a missing docs/.nojekyll is refused"
 mutant; edit '</head>' '<link href="https://fonts.googleapis.com/css2?family=Inter" rel="stylesheet"></head>'
@@ -180,6 +192,10 @@ p=sys.argv[1]; s=open(p,encoding='utf-8').read()
 open(p,'w',encoding='utf-8').write(re.sub(r' stroke-dasharray="[^"]*"','',s))
 PY
 ok "$(rc check_retry "$M")" fail "retry — a wide diagram with no dashed edge is refused"
+mutant; edit 'stroke-dasharray="5 5"' 'stroke-dasharray="none"'
+ok "$(rc check_retry "$M")" fail "retry — a dash array of none is refused"
+mutant; edit 'stroke-dasharray="5 5"' 'stroke-dasharray="0"'
+ok "$(rc check_retry "$M")" fail "retry — a dash array of 0 is refused"
 mutant; edit '.fix-tag{border:1.5px dashed' '.fix-tag{border:1.5px solid' "$CSS"
 ok "$(rc check_retry "$M")" fail "retry — a stacked list whose fix tag is not dashed is refused"
 mutant; edit '.flow-svg .edge{stroke:var(--blue)}' '.flow-svg .edge{stroke:var(--pink)}' "$CSS"

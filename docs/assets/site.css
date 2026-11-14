@@ -173,7 +173,10 @@ h1,h2,h3,p{margin:0}
 @media (hover:hover){
   .tip-body{display:block;position:absolute;left:50%;bottom:calc(100% + 10px);width:260px;padding:10px 12px;background:var(--tip-bg);border:1px solid var(--border-strong);border-radius:10px;box-shadow:var(--tip-shadow);font:400 13px/1.5 var(--font-ui);letter-spacing:0;color:var(--text);text-align:left;white-space:normal;opacity:0;visibility:hidden;pointer-events:none;transform:translateX(calc(-50% + var(--dx,0px))) translateY(4px);transition:opacity .15s ease,transform .15s ease,visibility .15s;z-index:40}
   .tip-below{top:calc(100% + 10px);bottom:auto}
-  .stop:hover .tip-body,.stop:focus-visible .tip-body,.pill:hover + .tip-body,.pill:focus-visible + .tip-body{opacity:1;visibility:visible;transform:translateX(calc(-50% + var(--dx,0px))) translateY(0)}
+  .tip-body::before{content:"";position:absolute;left:0;right:0;top:100%;height:12px}
+  .tip-below::before{top:auto;bottom:100%}
+  .stop:hover .tip-body,.stop:focus-visible .tip-body,.pill-wrap:hover > .tip-body,.pill:focus-visible + .tip-body{opacity:1;visibility:visible;pointer-events:auto;transform:translateX(calc(-50% + var(--dx,0px))) translateY(0)}
+  :root.tips-off .tip-body{opacity:0;visibility:hidden;pointer-events:none}
 }
 @media (hover:hover) and (prefers-reduced-motion:reduce){.tip-body,.stop,.pill{transition:none}}
 .tip-h{display:block;font-weight:600;color:var(--white);margin-bottom:4px}

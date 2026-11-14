@@ -250,6 +250,15 @@
       if (dx) tip.style.setProperty('--dx', Math.round(dx) + 'px');
     });
   }
+  var root = document.documentElement;
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') root.classList.add('tips-off');
+  });
+  document.querySelectorAll('.stop, .pill-wrap').forEach(function (t) {
+    t.addEventListener('mouseenter', function () { root.classList.remove('tips-off'); });
+    t.addEventListener('focusin', function () { root.classList.remove('tips-off'); });
+  });
+
   keepInside();
   window.addEventListener('resize', keepInside);
   window.addEventListener('load', keepInside);
