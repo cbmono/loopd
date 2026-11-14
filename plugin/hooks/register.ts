@@ -1275,6 +1275,23 @@ function summarySimple(): string {
   return 'loopd: ' + simple.length + ' project(s) · ' + inbox().length + ' question(s) for you · ' + tasks(helps).length + ' blocked'
 }
 
+// The poll redraws when a file it reads moved, or when the age the header shows would
+// change; it never runs or submits anything. It starts with the pane — on /pane, or on the
+// first draw after a reload, which starts this module over with the pane still up — and
+// ends with it (ui.close below). Through 4.13.1 only /pane started it, so a /reload-plugins
+// left a placed pane that never polled again: Refresh was then the only way to move it.
+function startPoll($: any): void {
+  if (timer) return
+  try {
+    timer = $.clock.every(POLL_MS, async () => {
+      const moved = await reread($, false)
+      if (moved || (MODE === 'operator' && ageKey(await nowMs($)) !== shownAge)) {
+        try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
+      }
+    })
+  } catch { timer = null }
+}
+
 function stopPoll(): void {
   open = false
   if (timer) { try { timer.cancel() } catch { /* already gone */ } timer = null }
@@ -1313,19 +1330,7 @@ function registerPane(on: any) {
     let placed = false
     try { const r = await $.ui.open({ id: PANE, title: TITLE }); placed = !!(r && r.isPlaced === true) } catch { placed = false }
     open = placed
-    if (!timer) {
-      // The poll redraws when a file it reads moved, or when the age the header shows
-      // would change; it never runs or submits anything. It starts with the pane and ends
-      // with it (ui.close below).
-      try {
-        timer = $.clock.every(POLL_MS, async () => {
-          const moved = await reread($, false)
-          if (moved || (MODE === 'operator' && ageKey(await nowMs($)) !== shownAge)) {
-            try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
-          }
-        })
-      } catch { timer = null }
-    }
+    startPoll($)
     // Where no surface draws a pane (a narrow terminal, a `-p` run), one transcript line.
     if (!placed) $.ui.log(MODE === 'simple' ? summarySimple() : summary())
     return {}
@@ -1338,8 +1343,11 @@ function registerPane(on: any) {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($: any, e: any) => {
     if (kind === 'unread') {
-      // Drawn before /pane ran (a reload while the pane stayed up): read, then redraw.
+      // Drawn before /pane ran (a reload while the pane stayed up): read, then redraw, and
+      // poll from here on, as /pane would have. The pane is up, so /pane now closes it.
       reread($, true).then(() => $.ui.invalidate('ui.render'), () => $.ui.invalidate('ui.render'))
+      open = true
+      startPoll($)
     }
     return MODE === 'simple' ? drawSimple($, e) : draw($, e, await nowMs($))
   })

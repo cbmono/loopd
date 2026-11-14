@@ -57,7 +57,8 @@ rest of the bundle, so the snapshot
 writer's field allowlist holds here without being re-implemented: nothing this pane shows
 is anything those files do not already carry. Its numbers — in progress, in review, sessions by state, need you — come from
 `.loopd/counts.json`, which `status-line.sh` writes on every redraw through `counts.sh`, the
-one definition; the pane computes none of them, so it agrees with the bar — except where another
+one definition, and `hooks/refresh-state.sh` has rewritten after every turn of a session on the
+bundle (below); the pane computes none of them, so it agrees with the bar — except where another
 owner's task is placed in IN PROGRESS or IN REVIEW: that heading counts only the rows it lists.
 
 | Section | From |
@@ -99,7 +100,20 @@ every number passes one `toint()`, so a `"tasks": "many"` draws as `0` and never
 
 The pane redraws from its two files every **5 seconds**, by `stat` first and `read` only
 when a file's mtime moved, and also when an age it shows would change; Refresh re-reads both
-and runs nothing; the poll starts when the pane opens and stops when it closes.
+and runs nothing; the poll starts when the pane opens — or, after a reload that left the pane
+up, on its first draw — and stops when it closes.
+
+**What keeps the two files current is outside the mod**, which starts no process. The shell
+hook `hooks/refresh-state.sh` runs at a session's Stop, SubagentStop and UserPromptSubmit —
+the main session, the tick's and every role session (a linked worktree reaches its bundle by
+the `loopd-bundle` marker) — and starts `${CLAUDE_PLUGIN_ROOT}/scripts/refresh-state.sh` detached: `counts.json` is
+rewritten through `counts.sh` (its `claude agents` cache skipped, as the session's word just
+changed), and `SNAPSHOT.json` through `write-snapshot.sh`, its one writer, only when a document
+it reads is newer than the snapshot and than the last attempt (`ab_snapshot_stale`, `-nt` with
+no process). `status-line.sh` starts the same run for a stale snapshot, which covers a document
+edited by hand with no turn. One run per bundle at a time; a burst coalesces in a 2-second
+wait. No network: a PR merged on GitHub still reaches the files at the next tick, and
+`AWAITING.md` (NEEDS YOU's rows) is still rebuilt by the tick alone.
 
 No operator button has a hotkey: the kit draws a Button's `hotkey` as an `a:` hint before
 its label (owner, 2026-11-11: no hints), so each is pressed, never keyed.
@@ -107,7 +121,7 @@ its label (owner, 2026-11-11: no hints), so each is pressed, never keyed.
 | Button | Does |
 |---|---|
 | **Answer Questions** | `$.command.run({ command: 'loopd:answer' })` — runs `/loopd:answer` once in **this** session, as if you had typed it. The engine queues a plugin's command run until the session is idle, so this is idle-only by contract. (Not `$.prompt.submit`: the host refuses a prompt text that begins with `/`, measured on 2.1.293.) A refused run is drawn on the info line as `answer refused: <reason>`, never swallowed. **It is the human pressing a key at their own prompt, not automation**: nothing here runs on a timer, and no message goes to another session. One press, one queued run; a second press while one is queued is ignored and the info line says `answer queued`. |
-| **Refresh** | re-read the snapshot and `counts.json` now, mtime or not; it runs nothing. The snapshot is rewritten by each tick, `/loopd:board`, and — right after their commit — `answer.sh`, `unblock.sh`, `new-project-file.sh` and the `new-project`, `close-project` and `handoff` skills, so an in-session change needs no tick to show here. |
+| **Refresh** | re-read the snapshot and `counts.json` now, mtime or not; it runs nothing. The snapshot is rewritten by each tick, `/loopd:board`, `hooks/refresh-state.sh` after any session's turn on the bundle, and — right after their commit — `answer.sh`, `unblock.sh`, `new-project-file.sh` and the `new-project`, `close-project` and `handoff` skills, so an in-session change needs no tick to show here. |
 | **Close Pane** | `$.ui.close({ id: 'loopd-board' })`, the path `/pane close` takes; the poll stops. |
 | a PROJECTS name, a NEEDS YOU verb | `$.ui.copy({ text, surface })` — the pane's **one outward action**: the slug or task path, built from the snapshot's `slug` and `id`, onto the clipboard of the surface the press came from, so you can paste it into the session with your reply. A slug or id that is not a folder-name shape (empty, `/`, `..`, whitespace) is never copied. |
 

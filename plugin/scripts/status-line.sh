@@ -82,11 +82,16 @@ UNKNOWN='?'
 
 # Every number comes from counts.sh, which also writes them to AB_COUNTS for the pane. Not
 # SNAPSHOT.json: its absence is the BOARD's off switch, and no redraw writes it — a tick,
-# /loopd:board and the in-session writers do.
+# /loopd:board, the in-session writers and refresh-state.sh do (the last started below).
 # shellcheck source=counts.sh
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/counts.sh" || exit 0
 ab_counts "$root"
 ab_write_counts "$root"
+# A snapshot behind its documents — a task doc edited by hand, with no turn whose hook would
+# refresh it — is rewritten by refresh-state.sh, detached. The check is `-nt` alone.
+if ab_snapshot_stale "$root"; then
+  nohup bash "$(dirname "${BASH_SOURCE[0]:-$0}")/refresh-state.sh" "$root" </dev/null >/dev/null 2>&1 &
+fi
 
 # --- the lock: one `[ -f ]`, never a call into tick-lock.sh ------------------------------
 lock=free
