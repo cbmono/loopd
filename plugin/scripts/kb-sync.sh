@@ -533,8 +533,20 @@ EOF
     changed="$(kbg status --porcelain --untracked-files=no -- "${KB_PREFIX:-.}" 2>/dev/null)" \
       || die "could not read the state of the KB mount in $KB_MOUNT — it is NOT known to be clean."
     dirty="$(printf '%s' "$changed" | grep -c .)"
+    # New files too under `path: knowledge`: the bundle's ignore line hides every one, so a
+    # new Finding read as clean and pushed. kb_stage's view rooted at knowledge/ sees them,
+    # but its paths miss the index's `knowledge/` prefix, so the tracked files are taken out.
+    fresh=""
+    if [ -n "$KB_SPARSE" ]; then
+      view="$(cd "$KB_MOUNT" && git --git-dir="$KBGIT" --work-tree=. ls-files -o --exclude-standard -- . 2>/dev/null)" \
+        && known="$(cd "$KB_MOUNT" && git --git-dir="$KBGIT" ls-files -- . 2>/dev/null)" \
+        || die "could not list new files in the KB mount in $KB_MOUNT — it is NOT known to be clean."
+      fresh="$(printf '%s\n' "$view" | grep . | sort | comm -23 - <(printf '%s\n' "$known" | sort))"
+    fi
+    fresh="$(printf '%s' "$fresh" | grep -c .)"; dirty=$((dirty + fresh))
     ahead="$(unpushed_count)"
-    [ "$dirty" -eq 0 ] || warn "$dirty tracked KB file(s) have UNCOMMITTED changes in $KB_MOUNT. Commit and push them with:"
+    [ "$fresh" -eq 0 ] || warn "$fresh new KB file(s) are not committed in $KB_MOUNT."
+    [ "$((dirty - fresh))" -eq 0 ] || warn "$((dirty - fresh)) tracked KB file(s) have UNCOMMITTED changes in $KB_MOUNT. Commit and push them with:"
     [ "$ahead" -eq 0 ] || warn "$ahead KB commit(s) are local and UNPUSHED in $KB_MOUNT. Push by hand, or run:"
     if [ "$dirty" -gt 0 ] || [ "$ahead" -gt 0 ]; then
       ab_say_run "kb-sync:  " kb-sync.sh commit --message '"<message>"' -- '<path>...' >&2

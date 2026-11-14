@@ -154,6 +154,23 @@ assert "a bundle with nothing to decide omits the section" "$(hasnt "what.s left
 assert "…and does not print the old 'Nothing.' line"       "$(hasnt 'This bundle is up to date' "$CLEAN")"
 assert "…and is idempotent on the decidable classes"       "$(hasnt 'RESOLVED' "$CLEAN")"
 
+echo "== index drift is the generated index against the file, never a document's lint =="
+[ -f "$INST/knowledge/vocab.md" ] || printf '| Tag | Meaning | Aliases |\n|---|---|---|\n| ci | CI | — |\n' > "$INST/knowledge/vocab.md"
+printf -- '---\ntype: Finding\ntitle: F2\nstatus: current\nlesson: another\ntags: [ zz-not-in-vocab ]\ntimestamp: 2026-01-02T00:00:00Z\n---\nbody\n' \
+  > "$INST/knowledge/findings/f2.md"
+( cd "$INST" && bash "$TPL/plugin/scripts/build-kb-index.sh" >/dev/null 2>&1 )
+assert "the fixture really carries a lint error (--check fails)" \
+  "$( (cd "$INST" && bash "$TPL/plugin/scripts/build-kb-index.sh" --check) >/dev/null 2>&1 && echo 1 || echo 0)"
+LINT="$(bash "$REFRESH" "$INST" 2>&1)"
+assert "a current index with an off-vocab tag is NOT seed drift" "$(hasnt 'knowledge/index.md' "$LINT")"
+printf '| stale | row |\n' >> "$INST/knowledge/index.md"
+LINT="$(bash "$REFRESH" "$INST" 2>&1)"
+assert "…while a stale index still is DECIDABLE" "$(has 'DECIDABLE knowledge/index.md' "$LINT")"
+LINT="$(bash "$REFRESH" "$INST" --apply 2>&1)"
+assert "…and --apply regenerates it"         "$(has 'RESOLVED  knowledge/index.md' "$LINT")"
+LINT="$(bash "$REFRESH" "$INST" 2>&1)"
+assert "…after which it is no drift again"   "$(hasnt 'knowledge/index.md' "$LINT")"
+
 echo "== /${PN}:init runs the check-and-fix pass itself =="
 # Re-diverge one seed-managed .gitignore line so the pass has something to do.
 printf 'node_modules/\n# derived, never tracked\n/board.html\n/%s/\n/%s\n/%s\n' "$AB_BOARD_DIR" "$AB_STATE_DIR" "$AB_LOCK" > "$TPL/plugin/seed/.gitignore"

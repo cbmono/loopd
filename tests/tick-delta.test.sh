@@ -190,6 +190,25 @@ ok "…so is a review decision"                   "$(run check)" "rc:1 DELTA: th
 prj 7 OPEN abc1234 NONE
 ok "…and the original PR facts restore IDLE"    "$(run check)" "rc:0 IDLE: finger"
 
+echo "== a merge the record holds but no tick reflected: never IDLE =="
+# Its own task and PR: nothing depends on t9, so its `done` makes nothing dispatchable.
+T9="$INST/projects/proj-a/tasks/t9.md"; PR9=https://github.com/example-org/example-repo/pull/9
+task "$T9" in-review "$PR9"; prj 9 MERGED aaa9999 NONE
+GIT -C "$INST" add -A && GIT -C "$INST" commit -qm t9; WITH record
+ok "a recorded MERGED pr on an in-review task is a DELTA" "$(run check)" "rc:1 DELTA: proje"
+ok "…naming it unreflected"  "$(WITH check 2>&1 | grep -c "^DELTA: projects/proj-a/tasks/t9.md pr MERGED unreflected")" 1
+prj 9 CLOSED aaa9999 NONE; WITH record
+ok "…so is a recorded CLOSED one"  "$(WITH check 2>&1 | grep -c 'pr CLOSED unreflected')" 1
+task "$T9" done "$PR9"; GIT -C "$INST" add -A && GIT -C "$INST" commit -qm reflect; WITH record
+ok "…and the task reflected done is IDLE"       "$(run check)" "rc:0 IDLE: finger"
+printf -- '---\ntype: Task\nkind: build\nstatus: in-review\npr:\n  - %s\n---\n' "$PR9" > "$T9"
+prj 9 MERGED aaa9999 NONE; GIT -C "$INST" add -A && GIT -C "$INST" commit -qm block-pr; WITH record
+ok "a block-list pr: is read: the digest reports its MERGED PR" \
+   "$(WITH digest | grep -c "^pr $PR9 MERGED aaa9999")" 1
+ok "…and check calls it unreflected"            "$(WITH check 2>&1 | grep -c 'pr MERGED unreflected')" 1
+rm -f "$T9" "$GHDIR/9"; GIT -C "$INST" add -A && GIT -C "$INST" commit -qm rm-t9; WITH record
+ok "…and with it gone, IDLE again"              "$(run check)" "rc:0 IDLE: finger"
+
 echo "== review activity the decision never shows: a COMMENTED review, a reviewer's status =="
 REV1='{"totalCount":1,"nodes":[{"id":"PRR_one","state":"COMMENTED"}]}'
 REV2='{"totalCount":2,"nodes":[{"id":"PRR_two","state":"COMMENTED"}]}'

@@ -547,7 +547,9 @@ while IFS= read -r rel; do
           report "RESOLVED" "$rel"
           detail "rule: $(rule_for knowledge/index.md)"
         fi
-      elif ! ( cd "$TARGET" && bash "$builder" --check ) >/dev/null 2>&1; then
+      # Drift is the generated index against the file, and nothing else: `--check` also
+      # fails on a document's lint error, which no regeneration clears.
+      elif ! cmp -s <(cd "$TARGET" && bash "$builder" --print 2>/dev/null) "$inst_f"; then
         resolved=$((resolved+1))
         report "DECIDABLE" "$rel"
         detail "rule: $(rule_for knowledge/index.md)"

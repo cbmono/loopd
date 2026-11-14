@@ -744,10 +744,13 @@ EOF
 #
 # Three carve-outs kill the realistic false positives: `.env.example`/`.sample`/`.template`
 # are not secrets; a path that is the operand of `-o`/`--output` is a DOWNLOAD, not an
-# upload; and a local target (localhost/127.0.0.1) is not exfiltration.
+# upload; and a local target (localhost/127.0.0.1) is not exfiltration. Two more, each
+# narrow: a heredoc body nothing can run is text (`_data_heredocs`), and a curl/wget GET of
+# a certificate URL (.pem/.crt/.cer/.der) carrying no data, form, upload, config or non-GET
+# method flag is a download of a public file. `env`/`printenv` piped to a sender is refused.
 rule_secret_exfiltration() {
-  case "$1" in *env*|*id_rsa*|*id_ed25519*|*id_ecdsa*|*id_dsa*|*.pem*|*.p12*|*.pfx*|*npmrc*|*netrc*|*pgpass*|*credentials*|*kubeconfig*|*.ssh*|*service-account*) ;; *) return 1 ;; esac
-  local seg w prev sender secret
+  case "$1" in *://*'$'*|*env*|*id_rsa*|*id_ed25519*|*id_ecdsa*|*id_dsa*|*.pem*|*.p12*|*.pfx*|*npmrc*|*netrc*|*pgpass*|*credentials*|*kubeconfig*|*.ssh*|*service-account*) ;; *) return 1 ;; esac
+  local seg w prev sender secret upload st
   while IFS= read -r seg; do
     [ -n "$seg" ] || continue
 
@@ -765,8 +768,36 @@ $(tokens_of "$seg")
 EOT
     [ -n "$sender" ] || continue
 
-    secret=""; prev=""
+    # Any flag that can put a body, a file or a config into the request. Single-dash
+    # bundles fail closed: one carrying d, F, T, K or X counts, whatever else it holds.
+    upload=0; prev=""
     while IFS= read -r w; do
+      case "$prev" in -X|--request) case "$w" in GET|HEAD) ;; *) upload=1 ;; esac ;; esac
+      prev="$w"
+      case "$w" in
+        -X|--request|-XGET|-XHEAD|--request=GET|--request=HEAD) ;;
+        --data*|--form*|--upload*|--json*|--post-*|--body-*|--method*|--config*|--request=*) upload=1 ;;
+        --*) ;;
+        -*[dFTKX]*) upload=1 ;;
+      esac
+    done <<EOT
+$(tokens_of "$seg")
+EOT
+
+    secret=""; prev=""
+    # The environment itself, piped: `env | curl -d @- …`. A stage that is `env` or
+    # `printenv` and nothing but flags and names — `env FOO=1 curl …` is a wrapper, not this.
+    while IFS= read -r st; do
+      case "$(tokens_of "$st" | grep -v '^-' | head -2 | tr '\n' ' ')" in
+        "env "|"printenv "|"printenv "[A-Z_]*) secret="the environment ($(tokens_of "$st" | head -1))"; break ;;
+      esac
+    done <<EOT
+$(printf '%s' "$seg" | tr '|' '\n')
+EOT
+    # …or substituted into the command line: `curl "https://…/x?k=$(env | base64)"`.
+    [ -z "$secret" ] && printf '%s' "$seg" | grep -Eq '(\$\(|`)[[:space:]]*(env|printenv)([^A-Za-z0-9_.-]|$)' \
+      && secret="the environment (a substitution)"
+    [ -z "$secret" ] && while IFS= read -r w; do
       # A KEY PRESENTED TO AUTHENTICATE IS NOT A KEY BEING SENT. `ssh -i ~/.ssh/id_ed25519
       # host` and `curl --cert client.pem …` are ordinary authenticated calls, and refusing
       # them would make this the rule that gets the baseline switched off. The operand of an
@@ -780,6 +811,24 @@ EOT
       prev="$w"
       case "$w" in
         --cert=*|--key=*|--cacert=*|--capath=*|--identity-file=*|--pubkey=*|--proxy-cert=*|--proxy-key=*|--output=*) continue ;;
+      esac
+      case "$w" in
+        http://*|https://*)
+          # THE URL ITSELF CAN CARRY THE SECRET: an expansion of a secret-named variable
+          # in it is the payload. A certificate URL is skipped only when it is a constant —
+          # no expansion, no query or fragment, no secret-looking name — on a bare GET.
+          case "$w" in *'$'*)
+            case "$(lower "${w#*\$}")" in *secret*|*token*|*key*|*passw*|*credential*|*auth*|*env*) secret="$w"; break ;; esac ;;
+          esac
+          case "$sender:$upload:$w" in
+            curl:0:*|wget:0:*)
+              case "$w" in *'$'*|*'`'*|*[?#]*) ;; *)
+                case "$(lower "$w")" in
+                  *env*|*id_rsa*|*id_ed25519*|*id_ecdsa*|*id_dsa*|*npmrc*|*netrc*|*pgpass*|*credentials*|*kubeconfig*|*.ssh*|*service-account*|*token*|*secret*) ;;
+                  *.pem|*.crt|*.cer|*.der) continue ;;
+                esac ;;
+              esac ;;
+          esac ;;
       esac
       w="${w#@}"
       case "$w" in
@@ -800,7 +849,7 @@ EOT
     printf 'This pipeline reads `%s` and hands it to `%s` in the same command — that is credential exfiltration, and it cannot be undone once it lands. Reading the file is allowed, and so is the network call; only the two joined together are refused.' "$secret" "$sender"
     return 0
   done <<EOF
-$(segments "$1")
+$(segments "$(_data_heredocs "$1")")
 EOF
   return 1
 }
@@ -1148,38 +1197,52 @@ merge_permitted() { # <stage> -> 0 when this exact merge is delegated in this bu
   return 1
 }
 
-rule_subagent_merge() {
-  case "$1" in *gh*) ;; *) return 1 ;; esac
-  local stage c sub next cmd="$1" all s seg t
-  case "$cmd" in *'<<'*)
-    cmd="$(_cred_noheredoc "$1")"
-    while IFS= read -r seg; do
-      case "$seg" in *'>('*|*'<('*) cmd="$1"; break ;; *'<<'*) ;; *) continue ;; esac
-      while IFS= read -r stage; do
-        c="$(first_word "$stage")"; t="$(tokens_of "$stage" | head -1)"
-        [ "${t##*/}" = "$c" ] || { cmd="$1"; break 2; }
-        case "$c" in
-          cat|tee) ;;
-          git) has_token "$stage" -c && { cmd="$1"; break 2; }
-               tokens_of "$stage" | grep -Eqx -- '--e|--ed|--edi|--edit|-[^-]*e.*' && { cmd="$1"; break 2; }
-               case "$(word_after "$stage" git)" in commit|tag) ;; *) cmd="$1"; break 2 ;; esac ;;
-          gh) case "$(word_after "$stage" gh)" in pr|issue|api|release|gist) ;; *) cmd="$1"; break 2 ;; esac ;;
-          *) cmd="$1"; break 2 ;;
-        esac
-      done <<EOT
+# A HEREDOC BODY IS DATA, NOT CODE, ONLY WHEN NOTHING CAN RUN IT. Its bodies are blanked
+# (`_cred_noheredoc`) only when every stage of each segment that opens one is a writer of
+# text — cat/tee, `git commit|tag` (no `-c`, no `--edit`), `gh pr|issue|api|release|gist` —
+# with no process substitution anywhere, AND no stage in the command could run a file one
+# may have written: a shell, `source`/`.`/`eval`, an interpreter, `chmod`, `make`, a command
+# named by path. Otherwise the command comes back whole and every body is still judged.
+_data_heredocs() { # <cmd> -> the command, data-only heredoc bodies blanked
+  case "$1" in *'<<'*) ;; *) printf '%s' "$1"; return 0 ;; esac
+  local cmd seg stage c t
+  cmd="$(_cred_noheredoc "$1")"
+  while IFS= read -r seg; do
+    case "$seg" in *'>('*|*'<('*) printf '%s' "$1"; return 0 ;; *'<<'*) ;; *) continue ;; esac
+    while IFS= read -r stage; do
+      c="$(first_word "$stage")"; t="$(tokens_of "$stage" | head -1)"
+      [ "${t##*/}" = "$c" ] || { printf '%s' "$1"; return 0; }
+      case "$c" in
+        cat|tee) ;;
+        git) has_token "$stage" -c && { printf '%s' "$1"; return 0; }
+             tokens_of "$stage" | grep -Eqx -- '--e|--ed|--edi|--edit|-[^-]*e.*' && { printf '%s' "$1"; return 0; }
+             case "$(word_after "$stage" git)" in commit|tag) ;; *) printf '%s' "$1"; return 0 ;; esac ;;
+        gh) case "$(word_after "$stage" gh)" in pr|issue|api|release|gist) ;; *) printf '%s' "$1"; return 0 ;; esac ;;
+        *) printf '%s' "$1"; return 0 ;;
+      esac
+    done <<EOT
 $(printf '%s' "$seg" | tr '|' '\n')
 EOT
-    done <<EOF
+  done <<EOF
 $(segments "$cmd")
 EOF
-    [ "$cmd" = "$1" ] || while IFS= read -r stage; do
-      c="$(first_word "$stage")"
-      case "$c" in bash|sh|zsh|dash|ksh|fish|busybox|source|.|eval|chmod) cmd="$1"; break ;; esac
-      case "$stage" in *"/$c"*) cmd="$1"; break ;; esac
-    done <<EOF
+  while IFS= read -r stage; do
+    c="$(first_word "$stage")"
+    case "$c" in
+      bash|sh|zsh|dash|ksh|fish|busybox|source|.|eval|chmod|make|gmake|python*|node|nodejs|deno|bun|npx|perl|ruby|php|lua|osascript|Rscript|awk|gawk|mawk|nawk)
+        printf '%s' "$1"; return 0 ;;
+    esac
+    case "$stage" in *"/$c"*) printf '%s' "$1"; return 0 ;; esac
+  done <<EOF
 $(stages "$cmd")
 EOF
-  ;; esac
+  printf '%s' "$cmd"
+}
+
+rule_subagent_merge() {
+  case "$1" in *gh*) ;; *) return 1 ;; esac
+  local stage c sub next cmd all s
+  cmd="$(_data_heredocs "$1")"
   all="$(stages "$cmd")"
   case "$cmd" in *'$('*|*'`'*) s="${cmd//\$(/$SEP}"; all="$all
 $(stages "${s//\`/$SEP}")" ;; esac
@@ -1549,6 +1612,7 @@ EOT
 rule_subagent_push_default() {
   [ -n "$AGENT_ID" ] || return 1          # the human's own session is never gated here
   case "$1" in *push*) ;; *) return 1 ;; esac
+  set -- "$(_data_heredocs "$1")"           # a commit message naming a push is text
   local line stage k=0 i p n e dir="$CWD" gd="" amb=0 changed=0 cond=0 defer=0 plain=0
   local -a ops els; ops=(); els=()
   if _push_plain "$1"; then

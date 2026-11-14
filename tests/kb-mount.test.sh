@@ -288,10 +288,15 @@ echo "== status counts uncommitted edits to tracked KB files, and only those =="
 st() { out="$(bash "$SYNC" --instance "$1" status 2>&1)"; rc=$?; }
 printf '# the bundle has its own README\n' > "$SHARED/README.md"
 printf 'not knowledge\n' > "$SHARED/projects/note.md"
-printf 'new, untracked\n' > "$SHARED/knowledge/findings/untracked.md"
 st "$SHARED"
 ok "path: knowledge — bundle files and its own README are not KB edits" "$rc" 0
 ok "…so the mount still says clean" "$(has "$out" 'KB mount is clean and pushed.')" yes
+printf 'new, untracked\n' > "$SHARED/knowledge/findings/untracked.md"
+st "$SHARED"
+ok "path: knowledge — a NEW KB file the bundle ignore hides exits 1" "$rc" 1
+ok "…warning it is not committed" "$(has "$out" '1 new KB file(s) are not committed')" yes
+ok "…never saying clean" "$(has "$out" 'clean and pushed')" no
+rm -f "$SHARED/knowledge/findings/untracked.md"
 printf 'edited\n' >> "$SHARED/knowledge/findings/alpha.md"
 st "$SHARED"
 ok "path: knowledge — an edited tracked document exits 1" "$rc" 1
