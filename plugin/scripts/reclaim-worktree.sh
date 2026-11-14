@@ -327,10 +327,12 @@ EOF
 # measured on git 2.50.1, a tree holding just a `.env` is removed with rc=0 and the file
 # goes with it. G9 cannot see it either — `status --porcelain` skips ignored paths. So
 # the check is explicit, and `--directory` collapses an ignored directory to one entry
-# so a node_modules does not print 40,000 lines. ONE PATH is allowed below the first
-# component: husky's generated, self-ignoring hook shim `.husky/_/` (measured 2026-10-21 as
-# the only entry holding a merged task's worktree back) — never the rest of `.husky/`, and
-# never a `.env*` file even inside the shim.
+# so a node_modules does not print 40,000 lines. An allowlisted name passes at any depth
+# below plain directories — a monorepo prints `apps/x/node_modules/` (2026-11-13: matched on
+# the first component only, every worktree of one refused). Plus ONE path: husky's
+# generated, self-ignoring hook shim `.husky/_/` (measured 2026-10-21 as the only entry
+# holding a merged task's worktree back) — never the rest of `.husky/`. A `.env*` component
+# anywhere refuses before either.
 IGNORE_OK=" node_modules .pnpm-store .pnpm-store-task .bun-cache .venv venv __pycache__ \
 .pytest_cache .mypy_cache .next .nuxt .turbo .cache .gradle tmp temp .DS_Store \
 dist build out coverage "
@@ -359,13 +361,29 @@ ignored="$(git -C "$WT" ls-files -o -i --exclude-standard --directory 2>/dev/nul
 [ "$ignored_rc" -eq 0 ] || refuse "cannot list the ignored content of $WT, so whether
         anything of the human's is in there cannot be established."
 
-# EXACT match on the first path component. A prefix or trailing glob would let `.envrc`
-# ride in on `.env` and `tmp.secrets` ride in on `tmp`.
+# Exit 0 when one `ls-files` entry is a known cache. EXACT match per component — a prefix or
+# trailing glob would let `.envrc` ride in on `.env` and `tmp.secrets` on `tmp`. The first
+# allowlisted component wins only if every one before it is a plain, visible directory name:
+# `apps/x/node_modules/` passes, `apps/x/certs/` and `apps/.private/dist/` do not. Never
+# list `apps` in reclaimIgnoreOk to get here — that would pass everything below it.
+# Must stay identical to prune-wt.sh's copy; tests/prune-wt.test.sh compares them.
+ignored_entry_ok() { # <entry>
+  local p=${1%/} c
+  case "/$p" in */.env*) return 1 ;; esac
+  case "$p/" in .husky/_/*) return 0 ;; esac
+  while :; do
+    c=${p%%/*}
+    case "$IGNORE_OK" in *" $c "*) [ -n "$c" ] && return 0 ;; esac
+    case "$c" in ""|.*|*[!A-Za-z0-9._@+-]*) return 1 ;; esac
+    [ "$c" != "$p" ] || return 1
+    p=${p#*/}
+  done
+}
+
 keepers=""
 while IFS= read -r entry; do
   [ -n "$entry" ] || continue
-  case "$IGNORE_OK" in *" ${entry%%/*} "*) continue ;; esac
-  case "${entry##*/}" in .env*) ;; *) case "$entry" in .husky/_/*) continue ;; esac ;; esac
+  ignored_entry_ok "$entry" && continue
   keepers="$keepers$entry
 "
 done <<EOF

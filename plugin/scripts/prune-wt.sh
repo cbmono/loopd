@@ -62,6 +62,22 @@ IGNORE_OK=" node_modules .pnpm-store .pnpm-store-task .bun-cache .venv venv __py
 .pytest_cache .mypy_cache .next .nuxt .turbo .cache .gradle tmp temp .DS_Store \
 dist build out coverage "
 
+# One `ls-files` entry is a known cache: an allowlisted name at any depth below plain,
+# visible directory names, and never with a `.env*` component anywhere. Reasoning: G12 in
+# reclaim-worktree.sh, whose copy this must stay identical to (tests/prune-wt.test.sh).
+ignored_entry_ok() { # <entry>
+  local p=${1%/} c
+  case "/$p" in */.env*) return 1 ;; esac
+  case "$p/" in .husky/_/*) return 0 ;; esac
+  while :; do
+    c=${p%%/*}
+    case "$IGNORE_OK" in *" $c "*) [ -n "$c" ] && return 0 ;; esac
+    case "$c" in ""|.*|*[!A-Za-z0-9._@+-]*) return 1 ;; esac
+    [ "$c" != "$p" ] || return 1
+    p=${p#*/}
+  done
+}
+
 live_processes_in() { # <worktree> — one line per live process whose cwd or argv is inside it; 1 if ps fails
   local wt=$1 pid cmd line ps_all
   if command -v lsof >/dev/null 2>&1; then
@@ -128,8 +144,7 @@ EOF
     || { WHY="its ignored content cannot be listed"; return 1; }
   while IFS= read -r entry; do
     [ -n "$entry" ] || continue
-    case "$IGNORE_OK" in *" ${entry%%/*} "*) continue ;; esac
-    case "${entry##*/}" in .env*) ;; *) case "$entry" in .husky/_/*) continue ;; esac ;; esac
+    ignored_entry_ok "$entry" && continue
     keepers="$keepers $entry"
   done <<EOF
 $ignored

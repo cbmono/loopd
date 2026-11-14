@@ -182,6 +182,18 @@ ok "…with the unlistable processes named as the reason" "$(grep -c "^skip: .*/
 run "$BIN/ps-pruner.sh" --yes
 ok "ps was the reason: once it works, a-ps is removed and the run exits 0" "$(there a-ps) $RC" "no 0"
 
+echo "== a monorepo's nested caches are caches; a nested .env is not =="
+for n in a-mono a-mono-env; do  # apps/x is tracked, as in a real monorepo
+  wt alpha "$n" MERGED; p="$WTROOT/$n"
+  mkdir -p "$p/apps/x/node_modules/p"; : > "$p/apps/x/node_modules/p/i.js"; printf '{}\n' > "$p/apps/x/package.json"
+  git -C "$p" add apps/x/package.json; git -C "$p" commit -qm pkg; git -C "$p" push -q 2>/dev/null
+done
+printf 'SECRET=1\n' > "$WTROOT/a-mono-env/apps/x/.env"; sleep 1
+run "$PRUNER" --yes
+ok "a-mono (only apps/x/node_modules/ ignored) is removed" "$(there a-mono)" no
+ok "a-mono-env (the same plus apps/x/.env) is spared" "$(there a-mono-env)" yes
+ok "…with the nested .env named as the reason" "$(grep -c "^skip: .*/a-mono-env .*apps/x/\.env" <<<"$OUT")" 1
+
 echo "== the pruner stays report-only; the remover never forces =="
 ok "prune-worktrees.sh still refuses --reclaim with exit 2" \
    "$(cd "$INSTANCE" && bash "$PRUNER" --reclaim >/dev/null 2>&1; echo $?)" 2
@@ -189,6 +201,10 @@ ok "prune-wt.sh never passes a forced-removal flag" "$(grep -cE -- '--force|remo
 allow() { sed -n '/^IGNORE_OK="/,/"$/p' "$1" | tr -s ' \\\n' ' '; }
 ok "its ignored-content allowlist is reclaim-worktree.sh's, exactly" \
    "$(allow "$SCRIPT")" "$(allow "$TPL/plugin/scripts/reclaim-worktree.sh")"
+matcher() { sed -n '/^ignored_entry_ok() {/,/^}/p' "$1"; }
+ok "its ignored-entry matcher is reclaim-worktree.sh's, exactly" \
+   "$(matcher "$SCRIPT" | cksum)" "$(matcher "$TPL/plugin/scripts/reclaim-worktree.sh" | cksum)"
+ok "…and that matcher is not empty" "$([ "$(matcher "$SCRIPT" | wc -l)" -gt 5 ] && echo yes || echo no)" yes
 
 echo
 echo "pass=$pass fail=$fail"
