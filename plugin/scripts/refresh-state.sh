@@ -16,6 +16,9 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)" || exit 0
 
 root="$(ab_board_root "${1:-}")" && cd "$root" 2>/dev/null || exit 0   # never a raw argv
 stamp="$(ab_refresh_stamp "$root")"
+# status-line.sh asks ab_snapshot_stale under ITS spelling of the root, uncanonicalised; a
+# stamp only under this one left a failing writer restarted on every redraw via a symlink.
+astamp="$(ab_refresh_stamp "$1")"
 lock="$stamp.lock"
 mkdir -p "${stamp%/*}" 2>/dev/null || exit 0
 wait_s="${REFRESH_STATE_DEBOUNCE:-2}"
@@ -36,6 +39,6 @@ for _ in 1 2 3; do
     pass=$((pass + 1))
   done
   rmdir "$lock" 2>/dev/null
-  ab_snapshot_stale "$root" "$stamp" || exit 0
+  ab_snapshot_stale "$root" "$stamp" || { [ "$astamp" = "$stamp" ] || : > "$astamp" 2>/dev/null; exit 0; }
 done
 exit 0

@@ -112,6 +112,9 @@ bash "$F/scripts/refresh-state.sh" "$B"; bash "$F/scripts/refresh-state.sh" "$B"
 ok "two runs after one edit call the writer once" "$(wc -l < "$TMP/writer-calls" | tr -d ' ')" 1
 tick; touch "$B/projects/proj-a/tasks/task-002.md"; bash "$F/scripts/refresh-state.sh" "$B"
 ok "…and again after the next edit" "$(wc -l < "$TMP/writer-calls" | tr -d ' ')" 2
+ln -s "$B" "$TMP/alias"; tick; touch "$B/projects/proj-a/tasks/task-002.md"
+bash "$F/scripts/refresh-state.sh" "$TMP/alias"
+ok "…and the status line's symlinked spelling stops asking too" "$(stale "$TMP/alias")" no
 
 echo "== one run at a time"
 bash "$WORKER" "$B"; settle "$B"   # clean again with the real writer
