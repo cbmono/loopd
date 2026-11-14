@@ -644,6 +644,9 @@ function draw($: any, e: any, now: number): any {
       const [glyph, look] = p.awaiting_close ? ['✓', DONE] : active ? ['●', WORK] : p.status === 'paused' ? ['○', MUTED] : p.status === 'done' ? ['✓', MUTED] : ['·', MUTED]
       const tail: [string, Record<string, unknown>][] = []
       if (n) tail.push([needYou(n), NEEDS_YOU])
+      // Off task_sessions, never the snapshot: the PM tick has no key there, so it never marks a project.
+      const ts = counts.state === 'ok' ? counts.tasks : null
+      if (group === 0 && ts && Object.entries(ts).some(([k, s]) => s === 'working' && (k.match(TASK_KEY) || [])[1] === p.ref)) tail.push(['running', DONE])
       if (p.awaiting_close) tail.push(['done', DONE])
       else if (p.status === 'paused') tail.push(['paused', MUTED])
       else if (p.status === 'done') tail.push(['closed', MUTED])
