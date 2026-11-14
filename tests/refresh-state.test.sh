@@ -11,7 +11,8 @@
 #   * AN UNCHANGED TREE COSTS NO WRITE of the snapshot; a missing snapshot is never created.
 #   * A FAILING WRITER IS NOT RETRIED until an input moves again (the stamp).
 #   * ONE RUN AT A TIME: a held lock turns a second run away; a dead run's lock is taken over.
-#   * A LINKED WORKTREE'S SESSION refreshes the bundle its `loopd-bundle` marker names.
+#   * A LINKED WORKTREE'S SESSION refreshes its bundle only when that bundle links the repo
+#     back; a marker naming any other folder, or a board that is off, starts no worker.
 #   * THE STATUS LINE starts it for a stale snapshot only (a hand edit with no turn).
 #   * OFFLINE: `gh` and `curl` are PATH stubs that leave a sentinel.
 # Fixtures live under mktemp; no real bundle is touched.
@@ -30,6 +31,7 @@ for f in "$HOOK" "$WORKER" "$SL"; do [ -f "$f" ] || { echo "refresh-state.test: 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/refreshstate.XXXXXX")" || {
   echo "refresh-state.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
+TMP="$(cd -P "$TMP" && pwd -P)"   # the worker keys its stamp and lock on the canonical root
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-66s (%s)\n' "$1" "$2"; pass=$((pass+1))
@@ -122,15 +124,31 @@ bash "$WORKER" "$B"
 ok "a dead run's lock (over 2 min) is taken over" "$([ "$(mt "$B/$AB_SNAPSHOT")" != "$s2" ] && echo yes || echo no)" yes
 ok "…and released" "$([ -d "$lock" ] && echo held || echo free)" free
 
-echo "== a linked worktree's session refreshes its bundle"
-R="$TMP/repo"; W="$TMP/wt"; mkdir -p "$R/.git/worktrees/w" "$W"
-printf '%s\n' "$B" > "$R/.git/loopd-bundle"
-printf 'gitdir: %s\n' "$R/.git/worktrees/w" > "$W/.git"
-printf '../..\n' > "$R/.git/worktrees/w/commondir"
+echo "== a linked worktree's session: the marker is trusted only as far as it is checked"
+# <repo> <worktree> <marker target> — a worktree of <repo> whose common dir's marker names it.
+wt() { mkdir -p "$1/.git/worktrees/w" "$2"; printf '%s\n' "$3" > "$1/.git/loopd-bundle"
+       printf 'gitdir: %s\n' "$1/.git/worktrees/w" > "$2/.git"; printf '../..\n' > "$1/.git/worktrees/w/commondir"; }
+cache_n() { ls "$XDG_CACHE_HOME/loopd" 2>/dev/null | grep -c refresh; }
+R="$TMP/repo"; W="$TMP/wt"; wt "$R" "$W" "$B"
+mkdir -p "$B/repos"; ln -s "$R" "$B/repos/repo"
 tick; touch "$B/projects/proj-a/project.md"; s3="$(mt "$B/$AB_SNAPSHOT")"
 CLAUDE_PROJECT_DIR="$W" bash "$HOOK" </dev/null
-ok "SNAPSHOT.json of the marked bundle is rewritten" "$(moved "$B/$AB_SNAPSHOT" "$s3")" yes
+ok "a marked bundle that links the repo back is refreshed" "$(moved "$B/$AB_SNAPSHOT" "$s3")" yes
 settle "$B"
+X="$TMP/victim"; mkdir -p "$X"; printf 'keep\n' > "$X/file"; n0="$(cache_n)"
+wt "$TMP/repo2" "$TMP/wt2" "$X"
+out="$(CLAUDE_PROJECT_DIR="$TMP/wt2" bash "$HOOK" </dev/null 2>&1)"; rc=$?; sleep 1
+ok "a marker naming a folder with no .loopd/ or config: exit 0, silent" "$rc:$out" "0:"
+ok "…no worker: nothing written there, no stamp" "$(ls -A "$X" | tr '\n' ' ')|$(cache_n)" "file |$n0"
+O="$TMP/other"; mk "$O"; tick; touch "$O/projects/proj-a/project.md"; so="$(mt "$O/$AB_SNAPSHOT")"
+wt "$TMP/repo3" "$TMP/wt3" "$O"
+CLAUDE_PROJECT_DIR="$TMP/wt3" bash "$HOOK" </dev/null; sleep 1.5
+ok "a real bundle that does not link the repo back is not written" "$(mt "$O/$AB_SNAPSHOT")" "$so"
+bash "$WORKER" "projects/../$(basename "$O")" </dev/null; ( cd "$TMP" && bash "$WORKER" other ); sleep 0.5
+ok "the worker refuses a relative argv" "$(mt "$O/$AB_SNAPSHOT")" "$so"
+F2="$TMP/boardoff"; mk "$F2"; rm -f "$F2/$AB_SNAPSHOT"
+CLAUDE_PROJECT_DIR="$F2" bash "$HOOK" </dev/null; sleep 1
+ok "no SNAPSHOT.json (board off): the hook starts no worker" "$([ -e "$F2/$AB_COUNTS" ] && echo written || echo none)" none
 
 echo "== the status line starts it for a stale snapshot only"
 s4="$(mt "$B/$AB_SNAPSHOT")"

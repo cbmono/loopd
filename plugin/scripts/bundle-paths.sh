@@ -133,6 +133,17 @@ ab_snapshot_stale() { # <root> [<stamp>, default ab_refresh_stamp's]
   done
   return 1
 }
+# The root refresh-state.sh may WRITE: prints its canonical path, or exits 1. Absolute,
+# resolved by `cd -P` (never the raw string), holding instance.config.json, a .loopd/ folder
+# and SNAPSHOT.json — the board's off switch. Hook and worker both ask it.
+ab_board_root() { # <path>
+  local r
+  case "${1:-}" in /*) ;; *) return 1 ;; esac
+  r="$(cd -P -- "$1" 2>/dev/null && pwd -P)" || return 1
+  case "$r" in /*) ;; *) return 1 ;; esac
+  [ -f "$r/instance.config.json" ] && [ -d "$r/$AB_DIR" ] && [ -f "$r/$AB_SNAPSHOT" ] || return 1
+  printf '%s\n' "$r"
+}
 # The per-machine <stamp> above, named from the root's spelling with no process (the
 # default above spells the same path inline, so a caller on every redraw forks nothing).
 ab_refresh_stamp() { # <root>

@@ -106,7 +106,9 @@ up, on its first draw — and stops when it closes.
 **What keeps the two files current is outside the mod**, which starts no process. The shell
 hook `hooks/refresh-state.sh` runs at a session's Stop, SubagentStop and UserPromptSubmit —
 the main session, the tick's and every role session (a linked worktree reaches its bundle by
-the `loopd-bundle` marker) — and starts `${CLAUDE_PLUGIN_ROOT}/scripts/refresh-state.sh` detached: `counts.json` is
+the `loopd-bundle` marker, trusted only when that bundle's `repos/` links the repo back; the
+root must resolve, absolute, to a folder holding `instance.config.json`, `.loopd/` and
+`SNAPSHOT.json`, which the worker checks again) — and starts `${CLAUDE_PLUGIN_ROOT}/scripts/refresh-state.sh` detached: `counts.json` is
 rewritten through `counts.sh` (its `claude agents` cache skipped, as the session's word just
 changed), and `SNAPSHOT.json` through `write-snapshot.sh`, its one writer, only when a document
 it reads is newer than the snapshot and than the last attempt (`ab_snapshot_stale`, `-nt` with

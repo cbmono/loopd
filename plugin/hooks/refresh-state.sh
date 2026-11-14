@@ -3,34 +3,43 @@
 # refresh-state.sh — Stop, SubagentStop and UserPromptSubmit hook (loopd machinery).
 # Starts ${CLAUDE_PLUGIN_ROOT}/scripts/refresh-state.sh for this session's bundle, detached,
 # and returns at once — no output, exit 0 — so /pane's two files follow the turn, not the tick.
-# The bundle: CLAUDE_PROJECT_DIR, or what a linked worktree's `loopd-bundle` marker names (the
-# instance-root guard, copied from deny-destructive.sh). Anything else ⇒ silent. No network.
+# The bundle is CLAUDE_PROJECT_DIR, or — in a linked worktree — what `<common dir>/loopd-bundle`
+# names, trusted only when that bundle links this repo back (a `repos/*` resolving to the main
+# clone, as link-repos.sh made it). Either way ab_board_root must pass: canonical, absolute,
+# config + .loopd/ + SNAPSHOT.json. Unlike deny-destructive.sh this one WRITES, so a marker
+# naming any other folder starts nothing. No network.
 set -uo pipefail
 
-INSTANCE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-INSTANCE_ROOT="$(cd "$INSTANCE_ROOT" 2>/dev/null && pwd -P || printf '%s' "$INSTANCE_ROOT")"
-if [ ! -f "$INSTANCE_ROOT/instance.config.json" ] && [ -f "$INSTANCE_ROOT/.git" ]; then
-  _gd=""; IFS= read -r _gd < "$INSTANCE_ROOT/.git" 2>/dev/null || _gd=""
-  _gd="${_gd#gitdir:}"; _gd="${_gd# }"
-  case "$_gd" in ""|/*) ;; *) _gd="$INSTANCE_ROOT/$_gd" ;; esac
-  _cd="$_gd"
-  if [ -n "$_gd" ] && [ -f "$_gd/commondir" ]; then
-    _c=""; IFS= read -r _c < "$_gd/commondir" 2>/dev/null || _c=""
-    case "$_c" in "") ;; /*) _cd="$_c" ;; *) _cd="$_gd/$_c" ;; esac
-  fi
-  if [ -n "$_cd" ] && [ -f "$_cd/loopd-bundle" ]; then
-    _b=""; IFS= read -r _b < "$_cd/loopd-bundle" 2>/dev/null || _b=""
-    if [ -n "$_b" ] && [ -f "$_b/instance.config.json" ]; then
-      INSTANCE_ROOT="$(cd "$_b" 2>/dev/null && pwd -P || printf '%s' "$_b")"
-    fi
-  fi
-  unset _gd _cd _c _b
-fi
-[ -f "$INSTANCE_ROOT/instance.config.json" ] || exit 0
-
 self="${BASH_SOURCE[0]:-$0}"; case "$self" in /*) ;; *) self="$PWD/$self" ;; esac
-worker="${CLAUDE_PLUGIN_ROOT:-${self%/hooks/*}}/scripts/refresh-state.sh"
-[ -f "$worker" ] || exit 0
+plug="${CLAUDE_PLUGIN_ROOT:-${self%/hooks/*}}"
+[ -f "$plug/scripts/refresh-state.sh" ] || exit 0
+# Sourced only once a candidate exists: every session on the machine runs this hook.
+load() { . "$plug/scripts/bundle-paths.sh" 2>/dev/null; }
+
+dir="$(cd -P -- "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null && pwd -P)" || exit 0
+root=""
+if [ -f "$dir/instance.config.json" ]; then
+  root="$dir"
+elif [ -f "$dir/.git" ]; then
+  gd=""; IFS= read -r gd < "$dir/.git" 2>/dev/null || gd=""
+  gd="${gd#gitdir:}"; gd="${gd# }"
+  case "$gd" in ""|/*) ;; *) gd="$dir/$gd" ;; esac
+  cd_="$gd"
+  if [ -n "$gd" ] && [ -f "$gd/commondir" ]; then
+    c=""; IFS= read -r c < "$gd/commondir" 2>/dev/null || c=""
+    case "$c" in "") ;; /*) cd_="$c" ;; *) cd_="$gd/$c" ;; esac
+  fi
+  b=""; [ -n "$cd_" ] && [ -f "$cd_/loopd-bundle" ] && { IFS= read -r b < "$cd_/loopd-bundle" 2>/dev/null || b=""; }
+  [ -n "$b" ] && load || exit 0
+  clone="$(cd -P -- "$cd_/.." 2>/dev/null && pwd -P)" || clone=""
+  b="$(ab_board_root "$b")" || b=""
+  if [ -n "$b" ] && [ -n "$clone" ]; then
+    for l in "$b"/repos/*; do
+      [ -L "$l" ] && [ "$(cd -P -- "$l" 2>/dev/null && pwd -P)" = "$clone" ] && { root="$b"; break; }
+    done
+  fi
+fi
+[ -n "$root" ] && load && root="$(ab_board_root "$root")" || exit 0
 # All three streams closed: the hook returns now and the session never waits on the write.
-nohup bash "$worker" "$INSTANCE_ROOT" </dev/null >/dev/null 2>&1 &
+nohup bash "$plug/scripts/refresh-state.sh" "$root" </dev/null >/dev/null 2>&1 &
 exit 0

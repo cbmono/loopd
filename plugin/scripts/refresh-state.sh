@@ -14,8 +14,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)" || exit 0
 . "$here/bundle-paths.sh" 2>/dev/null || exit 0
 . "$here/counts.sh" 2>/dev/null || exit 0
 
-root="${1:-}"
-[ -n "$root" ] && ab_is_bundle "$root" && cd "$root" 2>/dev/null || exit 0
+root="$(ab_board_root "${1:-}")" && cd "$root" 2>/dev/null || exit 0   # never a raw argv
 stamp="$(ab_refresh_stamp "$root")"
 lock="$stamp.lock"
 mkdir -p "${stamp%/*}" 2>/dev/null || exit 0
