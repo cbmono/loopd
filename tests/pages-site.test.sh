@@ -50,7 +50,7 @@ pages() {
 check_hex() {
   local h bad=0 files
   files="$(pages "$1")" || { echo "no local stylesheet"; return 1; }
-  for h in $(cat $files | grep -oE '#[0-9a-fA-F]{6}' | tr 'A-F' 'a-f' | sort -u); do
+  for h in $(grep -hoE '#[0-9a-fA-F]{6}' $files | tr 'A-F' 'a-f' | sort -u); do
     case " $(echo $TOKEN_HEXES) " in *" $h "*) ;; *) echo "off-palette $h"; bad=1 ;; esac
   done
   return "$bad"
@@ -59,7 +59,7 @@ check_hex() {
 check_rgba() {
   local v bad=0 files
   files="$(pages "$1")" || { echo "no local stylesheet"; return 1; }
-  for v in $(cat $files | grep -oE 'rgba\([^)]*\)' | tr -d ' ' | sort -u); do
+  for v in $(grep -hoE 'rgba\([^)]*\)' $files | tr -d ' ' | sort -u); do
     case " $RGBAS " in *" $v "*) ;; *) echo "unlisted $v"; bad=1 ;; esac
   done
   return "$bad"
@@ -95,9 +95,9 @@ check_nojekyll() { [ -f "$1/.nojekyll" ]; }
 check_fonts() {
   local d files
   files="$(pages "$1")" || return 1
-  ! cat $files | grep -qiE 'fonts\.(googleapis|gstatic)\.com' || return 1
-  cat $files | grep -qE "@font-face\{font-family:'Inter';" || return 1
-  cat $files | grep -qE "@font-face\{font-family:'JetBrains Mono';" || return 1
+  ! grep -qiE 'fonts\.(googleapis|gstatic)\.com' $files || return 1
+  grep -qE "@font-face\{font-family:'Inter';" $files || return 1
+  grep -qE "@font-face\{font-family:'JetBrains Mono';" $files || return 1
   for d in "$1/assets/fonts/inter" "$1/assets/fonts/jetbrains-mono"; do
     ls "$d"/*.woff2 >/dev/null 2>&1 || return 1
     grep -lqi 'SIL Open Font License' "$d"/*.txt 2>/dev/null || return 1
@@ -110,9 +110,9 @@ check_retry() {
   local files
   files="$(pages "$1")" || return 1
   grep -qE '<path class="edge" [^>]*stroke-dasharray=' "$1/index.html" \
-    && cat $files | grep -qE '\.flow-svg \.edge\{stroke:var\(--blue\)\}' \
+    && grep -qE '\.flow-svg \.edge\{stroke:var\(--blue\)\}' $files \
     && grep -q 'class="fix-tag"' "$1/index.html" \
-    && cat $files | grep -qE '\.fix-tag\{[^}]*dashed'
+    && grep -qE '\.fix-tag\{[^}]*dashed' $files
 }
 
 check_c2pa() {
