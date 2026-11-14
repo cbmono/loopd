@@ -3,413 +3,267 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>loopd — the loop, running</title>
+<title>loopd: the loop, running</title>
 <meta name="description" content="loopd is a Claude Code plugin that runs a small team of AI agents on your repositories. You steer. They build. Two gates stay yours.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="loopd">
+<meta property="og:title" content="loopd: the loop, running">
+<meta property="og:description" content="A Claude Code plugin that runs a small team of AI agents on your repositories. You steer. They build. Two gates stay yours.">
+<meta property="og:url" content="https://cbmono.github.io/loopd/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="loopd: the loop, running">
+<meta name="twitter:description" content="A Claude Code plugin that runs a small team of AI agents on your repositories. You steer. They build. Two gates stay yours.">
 <link rel="icon" type="image/svg+xml" href="assets/loopd-mark-color.svg">
-<style>
-@font-face{font-family:'Inter';font-weight:400;font-display:swap;src:url("assets/fonts/inter/Inter-Regular.woff2") format("woff2")}
-@font-face{font-family:'Inter';font-weight:600;font-display:swap;src:url("assets/fonts/inter/Inter-SemiBold.woff2") format("woff2")}
-@font-face{font-family:'Inter';font-weight:700;font-display:swap;src:url("assets/fonts/inter/Inter-Bold.woff2") format("woff2")}
-@font-face{font-family:'JetBrains Mono';font-weight:400;font-display:swap;src:url("assets/fonts/jetbrains-mono/JetBrainsMono-Regular.woff2") format("woff2")}
-@font-face{font-family:'JetBrains Mono';font-weight:500;font-display:swap;src:url("assets/fonts/jetbrains-mono/JetBrainsMono-Medium.woff2") format("woff2")}
-@font-face{font-family:'JetBrains Mono';font-weight:700;font-display:swap;src:url("assets/fonts/jetbrains-mono/JetBrainsMono-Bold.woff2") format("woff2")}
-
-:root{
-  --loopd-bg:#101318; --loopd-surface:#171b22; --loopd-surface-2:#1c212b;
-  --loopd-terminal:#14171c; --loopd-line:#262c37; --loopd-line-strong:#33405a;
-  --loopd-ink:#e9edf4; --loopd-muted:#9aa4b5; --loopd-dim:#6c7488;
-  --loopd-blue:#5ea2ff; --loopd-blue-bright:#8dbdff;
-  --loopd-pink:#ff7ac2;
-  --loopd-font-ui:'Inter',system-ui,sans-serif;
-  --loopd-font-mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
-  --loopd-r-m:10px; --loopd-r-l:12px; --loopd-r-pill:999px;
-  --grid:rgba(233,237,244,.045);
-  --blue-glow:rgba(94,162,255,.09);
-  --pink-glow:rgba(255,122,194,.08);
-}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{
-  margin:0; color:var(--loopd-muted); font:400 16px/1.6 var(--loopd-font-ui);
-  background-color:var(--loopd-bg);
-  background-image:
-    radial-gradient(700px 380px at 88% -4%,var(--blue-glow),transparent 60%),
-    radial-gradient(560px 420px at -6% 42%,var(--pink-glow),transparent 60%),
-    radial-gradient(var(--grid) 1px,transparent 1px);
-  background-size:auto,auto,26px 26px;
-  -webkit-font-smoothing:antialiased;
-}
-a{color:var(--loopd-blue);text-decoration:none}
-a:hover{color:var(--loopd-blue-bright)}
-code,.mono{font-family:var(--loopd-font-mono)}
-code{white-space:nowrap}
-code{color:var(--loopd-blue);font-size:.9em}
-h1,h2,h3{color:var(--loopd-ink);font-weight:600;letter-spacing:-0.01em;margin:0}
-h2{font-size:30px;line-height:1.2;margin-bottom:12px}
-h3{font-size:18px;line-height:1.35}
-p{margin:0 0 16px}
-strong{color:var(--loopd-ink);font-weight:600}
-.pink{color:var(--loopd-pink)}
-.blue{color:var(--loopd-blue)}
-.wrap{max-width:1072px;margin:0 auto;padding:0 24px}
-section{padding:72px 0 0}
-
-.kicker{display:flex;align-items:center;gap:16px;margin-bottom:14px;font:500 13px/1 var(--loopd-font-mono);color:var(--loopd-blue);letter-spacing:.14em;text-transform:uppercase}
-.kicker::after{content:"";height:1px;flex:0 0 72px;background:linear-gradient(90deg,var(--loopd-blue),transparent)}
-.lede{font-size:18px;max-width:640px}
-
-header.top{border-bottom:1px solid var(--loopd-line)}
-header.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:64px}
-.brand{display:flex;align-items:center;gap:10px;color:var(--loopd-ink);font:700 20px/1 var(--loopd-font-mono)}
-.brand:hover{color:var(--loopd-ink)}
-.brand img{width:40px;height:auto}
-nav{display:flex;align-items:center;gap:20px;font-size:14px}
-nav a{color:var(--loopd-muted);display:inline-flex;align-items:center;min-height:44px}
-nav a:hover{color:var(--loopd-ink)}
-
-.btn{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border:1px solid var(--loopd-blue);border-radius:var(--loopd-r-m);color:var(--loopd-blue);font:500 14px/1 var(--loopd-font-mono);background:transparent;transition:background-color .15s}
-.btn:hover{background:var(--blue-glow);color:var(--loopd-blue)}
-.btn.quiet{border-color:var(--loopd-line-strong);color:var(--loopd-ink)}
-.btn.quiet:hover{color:var(--loopd-ink)}
-nav .btn{color:var(--loopd-blue)}
-
-.hero{display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center;padding-top:72px}
-.hero h1{font-size:clamp(34px,4.6vw,50px);line-height:1.1;letter-spacing:-0.02em;font-weight:700;margin-bottom:24px}
-.hero .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
-.hero figure{margin:0;text-align:center}
-.hero figure img{width:100%;max-width:420px;height:auto}
-.rename{margin-top:24px;font-size:14px;color:var(--loopd-dim)}
-
-.card{background:linear-gradient(180deg,var(--loopd-surface-2),var(--loopd-surface));border:1px solid var(--loopd-line);border-top:2px solid var(--loopd-blue);border-radius:var(--loopd-r-l);padding:24px 26px}
-.card.human{border-top-color:var(--loopd-pink);box-shadow:0 0 34px var(--pink-glow)}
-.card .label{font:700 13px/1.2 var(--loopd-font-mono);letter-spacing:.08em;color:var(--loopd-blue);margin-bottom:10px;text-transform:uppercase}
-.card.human .label{color:var(--loopd-pink)}
-.card p:last-child{margin-bottom:0}
-.duo{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:32px}
-
-.diagram{margin-top:32px;background:var(--loopd-terminal);border:1px solid var(--loopd-line);border-radius:var(--loopd-r-l);padding:24px}
-.diagram svg{display:block;width:100%;height:auto}
-.diagram .tall{display:none;max-width:360px;margin:0 auto}
-.legend{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:16px;font:400 13px/1.4 var(--loopd-font-mono);color:var(--loopd-dim)}
-.legend span{display:inline-flex;align-items:center;gap:8px}
-.legend i{display:inline-block;width:28px;height:0;border-top:3px solid var(--loopd-blue)}
-.legend i.dash{border-top-style:dashed}
-.legend i.exit{border-top-color:var(--loopd-pink)}
-svg text{font-family:var(--loopd-font-ui)}
-svg .ref{font:500 15px var(--loopd-font-mono);fill:var(--loopd-blue)}
-svg .gate{font:700 13px var(--loopd-font-mono);fill:var(--loopd-pink);letter-spacing:.08em}
-svg .step{font:600 15px var(--loopd-font-ui);fill:var(--loopd-ink)}
-svg .note{font:400 13px var(--loopd-font-ui);fill:var(--loopd-muted)}
-svg .edge{font:400 12px var(--loopd-font-mono);fill:var(--loopd-dim)}
-svg .chip{font:500 14px var(--loopd-font-mono);fill:var(--loopd-pink)}
-
-.steps{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:32px;list-style:none;padding:0}
-.steps li:nth-child(even){transform:translateY(40px)}
-.steps .num{font:500 13px var(--loopd-font-mono);color:var(--loopd-dim);margin-bottom:6px}
-.steps h3{margin-bottom:8px}
-.steps h3 code{font-size:16px}
-.retry{margin-top:72px}
-
-.needs{margin-top:32px;border-left:3px solid var(--loopd-pink);background:var(--loopd-surface);border-radius:0 var(--loopd-r-m) var(--loopd-r-m) 0;padding:18px 22px;font:400 14px/1.8 var(--loopd-font-mono)}
-.needs .head{color:var(--loopd-pink);font-weight:700}
-.needs .item{color:var(--loopd-ink)}
-.needs .item b{color:var(--loopd-pink);font-weight:400}
-.needs .item code{font-size:1em}
-
-.term{background:var(--loopd-terminal);border:1px solid var(--loopd-line);border-radius:var(--loopd-r-l);overflow:hidden;margin-top:32px}
-.term .bar{display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid var(--loopd-line)}
-.term .bar i{width:10px;height:10px;border-radius:var(--loopd-r-pill);border:1px solid var(--loopd-line-strong)}
-.term pre{margin:0;padding:20px 22px;overflow-x:auto;font:400 14px/1.7 var(--loopd-font-mono);color:var(--loopd-muted)}
-.term .logo{color:var(--loopd-blue);line-height:1.15;margin-bottom:12px;display:block}
-.term .logo .arrow{display:inline-block;width:2ch;color:var(--loopd-pink)}
-.term .c{color:var(--loopd-dim);font-style:italic}
-.term .cmd{color:var(--loopd-blue)}
-.term .you{color:var(--loopd-pink)}
-
-.rails{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:32px}
-.rails .card{padding:20px 22px}
-.rails h3{font-size:16px;margin-bottom:8px}
-.rails p{font-size:14px}
-
-footer{margin-top:96px;border-top:1px solid var(--loopd-line)}
-footer .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;padding-top:28px;padding-bottom:40px;font:400 13px/1.6 var(--loopd-font-mono);color:var(--loopd-dim)}
-footer nav{gap:16px;font-size:13px}
-
-.kicker,.brand,.btn,.card .label,.legend,.steps .num,.needs,.term pre,footer .wrap,code,svg .ref,svg .gate,svg .edge,svg .chip{font-variant-ligatures:none}
-
-@media (max-width:1020px){
-  .diagram .wide{display:none}
-  .diagram .tall{display:block}
-  .steps{grid-template-columns:1fr}
-  .steps li:nth-child(even){transform:none}
-  .retry{margin-top:32px}
-  .rails{grid-template-columns:1fr 1fr}
-}
-@media (max-width:820px){
-  .hero{grid-template-columns:1fr;gap:24px;padding-top:40px}
-  .hero figure{order:-1}
-  .hero figure img{max-width:280px}
-  .duo,.rails{grid-template-columns:1fr}
-  nav .hide-s{display:none}
-  section{padding-top:56px}
-  .diagram{padding:16px}
-  h2{font-size:24px}
-}
-</style>
+<link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
 
-<header class="top">
-  <div class="wrap">
-    <a class="brand" href="./"><img src="assets/loopd-mark-color.svg" alt="" width="40" height="26">loopd</a>
-    <nav aria-label="Primary">
-      <a class="hide-s" href="#loop">The loop</a>
-      <a class="hide-s" href="#install">Install</a>
-      <a class="hide-s" href="#rails">Safety rails</a>
-      <a class="btn" href="https://github.com/cbmono/loopd">GitHub</a>
-    </nav>
-  </div>
+<header class="nav">
+  <nav class="wrap" aria-label="Main">
+    <a class="brand" href="#top"><img src="assets/loopd-mark-color.svg" alt="" width="28" height="18"><span>loopd</span></a>
+    <div class="nav-links">
+      <a class="nav-link" href="#loop">The loop</a>
+      <a class="nav-link" href="#rails">Safety rails</a>
+      <a class="nav-link" href="https://github.com/cbmono/loopd">GitHub</a>
+      <a class="btn" href="#install">Install</a>
+    </div>
+  </nav>
 </header>
 
 <main>
-<div class="wrap">
-
-  <div class="hero">
-    <div>
-      <div class="kicker">loopd · the loop, running</div>
-      <h1>You steer.<br>They build.<br><span class="pink">Two gates stay yours.</span></h1>
-      <p class="lede">loopd is a Claude Code plugin that runs a small team of AI agents on your repositories. You describe the work. A project-manager agent breaks it into tasks. Engineer agents build them in the background, open pull requests and get reviewed. You promote, and you merge; everything else reaches you as a result or a question.</p>
-      <div class="actions">
-        <a class="btn" href="#install">Install the plugin</a>
-        <a class="btn quiet" href="#loop">Walk the loop</a>
+<section id="top" class="wrap hero">
+  <div class="hero-copy">
+    <div class="eyebrow">LOOPD · THE LOOP, RUNNING</div>
+    <h1 class="h1">You steer.<br>They build.<br><span class="pink">Two gates stay yours.</span></h1>
+    <p class="lede">loopd is a Claude Code plugin that runs a small team of AI agents on your repositories. You describe the work. They plan it, build it and get it reviewed. You promote, and you merge.</p>
+    <div class="hero-cta"><a class="btn btn-lg" href="#install">Install the plugin</a></div>
+  </div>
+  <div class="hero-side">
+    <div class="panel">
+      <div class="panel-head"><span>/loopd:whats-up</span><span class="pink">2 waiting on you</span></div>
+      <div class="panel-body">
+        <div class="head">▸ Needs you</div>
+        <div>1 <span class="pink">◆</span> promote <span class="blue">task-004</span> draft → ready</div>
+        <div>2 <span class="pink">◆</span> merge PR <span class="blue">#42</span> — criteria 6 ✓ / 0 ✗</div>
       </div>
-      <p class="rename">Formerly ai-bridge. An existing install moves over with <a href="https://github.com/cbmono/loopd/blob/main/MIGRATION.md">MIGRATION.md</a>.</p>
+      <p class="panel-foot">The same list sits in <span class="ink">AWAITING.md</span>, on the session banner and on the board: <span class="ink">/pane</span> beside your session, <span class="ink">/loopd:board publish</span> on your phone.</p>
     </div>
-    <figure><img src="assets/loopd-icon.png" alt="The loopd mark: a blue loop with a pink gate on its top edge and a pink exit arrow leaving to the left" width="700" height="480"></figure>
+  </div>
+</section>
+
+<section id="loop" class="wrap sec">
+  <div class="eyebrow">THE LOOP</div>
+  <h2 class="h2">Five stops. Two of them are yours.</h2>
+  <p class="intro">The agents work in their lane. The flow only drops into <span class="pink">yours</span> twice: nothing is dispatched until you promote, and nothing reaches main until you merge.</p>
+
+  <div class="stage">
+    <div class="lanes"></div>
+    <div class="lane-you"></div>
+    <div class="lane-rule"></div>
+    <div class="lane-label agents">AGENTS</div>
+    <div class="lane-label you">YOU</div>
+    <svg class="flow-svg" width="1072" height="364" viewBox="0 0 1072 364" aria-hidden="true" focusable="false">
+      <defs>
+        <marker id="head-blue" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path class="head-blue" d="M0 0 L4 2 L0 4 Z"/></marker>
+        <marker id="head-pink" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path class="head-pink" d="M0 0 L4 2 L0 4 Z"/></marker>
+      </defs>
+      <path class="edge" d="M 212 94 H 262 Q 274 94 274 106 V 205" marker-end="url(#head-blue)"/>
+      <path class="edge" d="M 356 276 H 406 Q 418 276 418 264 V 165" marker-end="url(#head-blue)"/>
+      <path class="edge" d="M 500 72 L 571 72" marker-end="url(#head-blue)"/>
+      <path class="edge" d="M 576 116 L 505 116" stroke-dasharray="5 5" marker-end="url(#head-blue)"/>
+      <path class="edge" d="M 740 94 H 790 Q 802 94 802 106 V 205" marker-end="url(#head-blue)"/>
+      <path class="edge-pink" d="M 884 276 L 915 276" marker-end="url(#head-pink)"/>
+    </svg>
+    <div class="edge-label pr">PR</div>
+    <div class="edge-label fix">↺ fix</div>
+
+    <div class="stop s1" tabindex="0" aria-describedby="tip-s1"><span class="badge">1</span><span><span class="stop-l">/loopd:new-project</span><span class="stop-t">Scaffold, then the PM refines</span><span class="stop-s">Phases, tasks, criteria</span></span><span class="tip-body tip-below" id="tip-s1" role="tooltip"><span class="tip-h">Step 1 · Scaffold</span><span class="tip-t">Describe the work in one sentence. loopd scaffolds phases and draft tasks; the project-manager adds acceptance criteria and the questions only you can answer.</span><span class="tip-m">/loopd:new-project · /loopd:answer</span></span></div>
+    <div class="stop gate s2" tabindex="0" aria-describedby="tip-s2"><span class="badge">2</span><span><span class="stop-l">GATE 1</span><span class="stop-t">You promote draft → ready</span><span class="stop-s">Nothing runs until you do</span></span><span class="tip-body tip-you" id="tip-s2" role="tooltip"><span class="tip-h">Gate 1 · You promote</span><span class="tip-t">Change a task’s status from draft to ready. The project-manager never promotes on its own, so nothing is dispatched without your say.</span><span class="tip-m">status: draft → ready</span></span></div>
+    <div class="stop s3" tabindex="0" aria-describedby="tip-s3"><span class="badge">3</span><span><span class="stop-l">/loopd:dispatch</span><span class="stop-t">An engineer builds it</span><span class="stop-s">Own worktree, opens a PR</span></span><span class="tip-body tip-below" id="tip-s3" role="tooltip"><span class="tip-h">Step 3 · Build</span><span class="tip-t">Each tick picks up one ready task. A software-engineer builds it in its own worktree, reviews its own diff and opens a PR with a ✓/✗ criteria table.</span><span class="tip-m">/loopd:dispatch · every 10m, once, or stop</span></span></div>
+    <div class="stop s4" tabindex="0" aria-describedby="tip-s4"><span class="badge">4</span><span><span class="stop-l">review</span><span class="stop-t">Independent review</span><span class="stop-s">Built-in or external code reviewer</span></span><span class="tip-body tip-below" id="tip-s4" role="tooltip"><span class="tip-h">Step 4 · Review</span><span class="tip-t">Runs at the PR’s current head: your external reviewer if one is configured, otherwise the built-in qa-reviewer. A declined review never counts as a pass.</span><span class="tip-m">fixes go back · one round per reviewer</span></span></div>
+    <div class="stop gate s5" tabindex="0" aria-describedby="tip-s5"><span class="badge">5</span><span><span class="stop-l">GATE 2</span><span class="stop-t">You merge the PR</span><span class="stop-s">One ✗ blocks it, however green CI is</span></span><span class="tip-body tip-you" id="tip-s5" role="tooltip"><span class="tip-h">Gate 2 · You merge</span><span class="tip-t">Merge, guided by the PR’s criteria table. A single ✗ blocks it however green CI is. Agents never merge on their own.</span><span class="tip-m">delegable only via loopd-yolo</span></span></div>
+    <div class="done"><span><b>✓ Done.</b><br><small>Shipped to main</small></span></div>
   </div>
 
-  <section id="loop">
-    <div class="kicker">the loop</div>
-    <h2>Four steps. Two of them are yours.</h2>
-    <p class="lede">Blue is the machine's — agents, code, refs, running state. <span class="pink">Pink is yours</span> — every pink pixel is a decision waiting. Nothing is dispatched until you promote, and nothing reaches main until you merge.</p>
+  <div class="flow-list">
+    <div class="step"><div class="step-l">1 · AGENTS · /loopd:new-project</div><div class="step-t">Scaffold, then the PM refines</div><div class="step-s">Phases, tasks, criteria</div></div>
+    <div class="down" aria-hidden="true">↓</div>
+    <div class="step gate"><div class="step-l">2 · YOU · GATE 1</div><div class="step-t">You promote draft → ready</div><div class="step-s">Nothing runs until you do</div></div>
+    <div class="down" aria-hidden="true">↓</div>
+    <div class="step"><div class="step-l">3 · AGENTS · /loopd:dispatch</div><div class="step-t">An engineer builds it</div><div class="step-s">Own worktree, opens a PR</div></div>
+    <div class="down fix"><span aria-hidden="true">↓</span><span class="fix-tag">↺ fix, re-review</span></div>
+    <div class="step"><div class="step-l">4 · AGENTS · review</div><div class="step-t">Independent review</div><div class="step-s">Built-in or external code reviewer</div></div>
+    <div class="down" aria-hidden="true">↓</div>
+    <div class="step gate"><div class="step-l">5 · YOU · GATE 2</div><div class="step-t">You merge the PR</div><div class="step-s">One ✗ blocks it, however green CI is</div></div>
+    <div class="down pink" aria-hidden="true">↓</div>
+    <div class="flow-done"><b>✓ Done.</b> Shipped to main</div>
+  </div>
 
-    <div class="diagram" role="img" aria-label="The core loop. /loopd:new-project scaffolds draft tasks; you promote draft to ready; /loopd:dispatch sends an agent to build and open a pull request; an independent review either sends it back to the agent, within each reviewer's round cap, or clears it; you merge, and it ships to main.">
-      <svg class="wide" viewBox="0 0 1080 330" aria-hidden="true">
-        <defs>
-          <marker id="ah-blue" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5ea2ff"/></marker>
-          <marker id="ah-pink" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#ff7ac2"/></marker>
-        </defs>
-        <g fill="none" stroke-width="5" stroke-linejoin="round">
-          <path d="M280 70 H358" stroke="#5ea2ff" marker-end="url(#ah-blue)"/>
-          <path d="M650 70 H728" stroke="#5ea2ff" marker-end="url(#ah-blue)"/>
-          <path d="M880 120 V198" stroke="#5ea2ff" marker-end="url(#ah-blue)"/>
-          <path d="M1020 260 H1052 V70 H1032" stroke="#5ea2ff" stroke-dasharray="10 9" marker-end="url(#ah-blue)"/>
-          <path d="M740 260 H662" stroke="#5ea2ff" marker-end="url(#ah-blue)"/>
-          <path d="M370 260 H292" stroke="#ff7ac2" marker-end="url(#ah-pink)"/>
-        </g>
-        <g stroke-width="1">
-          <rect x="0.5" y="20.5" width="279" height="99" rx="12" fill="#171b22" stroke="#262c37"/>
-          <rect x="370.5" y="20.5" width="279" height="99" rx="12" fill="#171b22" stroke="#262c37"/>
-          <rect x="740.5" y="20.5" width="279" height="99" rx="12" fill="#171b22" stroke="#262c37"/>
-          <rect x="740.5" y="210.5" width="279" height="99" rx="12" fill="#171b22" stroke="#262c37"/>
-          <rect x="370.5" y="210.5" width="279" height="99" rx="12" fill="#171b22" stroke="#262c37"/>
-          <rect x="40.5" y="238.5" width="239" height="43" rx="21.5" fill="#171b22" stroke="#ff7ac2"/>
-        </g>
-        <g stroke-width="2" fill="none" stroke-linecap="round">
-          <path d="M12 21 H268" stroke="#5ea2ff"/>
-          <path d="M382 21 H638" stroke="#ff7ac2"/>
-          <path d="M752 21 H1008" stroke="#5ea2ff"/>
-          <path d="M752 211 H1008" stroke="#5ea2ff"/>
-          <path d="M382 211 H638" stroke="#ff7ac2"/>
-        </g>
-        <text class="ref" x="22" y="56">/loopd:new-project</text>
-        <text class="step" x="22" y="82">Scaffold, then PM refines</text>
-        <text class="note" x="22" y="104">phases, draft tasks, criteria</text>
-        <text class="gate" x="392" y="56">GATE 1 · YOU</text>
-        <text class="step" x="392" y="82">Promote draft → ready</text>
-        <text class="note" x="392" y="104">nothing is dispatched until you do</text>
-        <text class="ref" x="762" y="56">/loopd:dispatch</text>
-        <text class="step" x="762" y="82">An agent builds it</text>
-        <text class="note" x="762" y="104">own worktree, opens the PR</text>
-        <text class="ref" x="762" y="246">review</text>
-        <text class="step" x="762" y="272">Independent review</text>
-        <text class="note" x="762" y="294">fresh context, at the PR's head</text>
-        <text class="gate" x="392" y="246">GATE 2 · YOU</text>
-        <text class="step" x="392" y="272">Merge the PR</text>
-        <text class="note" x="392" y="294">one ✗ blocks it, however green CI is</text>
-        <text class="chip" x="160" y="265" text-anchor="middle">shipped to main</text>
-        <text class="edge" x="866" y="166" text-anchor="end">PR opened</text>
-        <text class="edge" x="1040" y="166" text-anchor="end">fix · ≤ round cap</text>
-        <text class="edge" x="695" y="248" text-anchor="middle">cleared</text>
-        <text class="edge" x="331" y="248" text-anchor="middle">merge</text>
-      </svg>
+  <p class="retry-note">Review can send a PR back for a fix: one round per reviewer, then it comes to you.</p>
 
-      <svg class="tall" viewBox="0 0 360 780" aria-hidden="true">
-        <defs>
-          <marker id="ah-blue-t" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5ea2ff"/></marker>
-          <marker id="ah-pink-t" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#ff7ac2"/></marker>
-        </defs>
-        <g fill="none" stroke-width="5" stroke-linejoin="round">
-          <path d="M150 100 V138" stroke="#5ea2ff" marker-end="url(#ah-blue-t)"/>
-          <path d="M150 240 V278" stroke="#5ea2ff" marker-end="url(#ah-blue-t)"/>
-          <path d="M150 380 V418" stroke="#5ea2ff" marker-end="url(#ah-blue-t)"/>
-          <path d="M290 480 H334 V330 H312" stroke="#5ea2ff" stroke-dasharray="10 9" marker-end="url(#ah-blue-t)"/>
-          <path d="M150 520 V558" stroke="#5ea2ff" marker-end="url(#ah-blue-t)"/>
-          <path d="M150 660 V698" stroke="#ff7ac2" marker-end="url(#ah-pink-t)"/>
-        </g>
-        <g stroke-width="1">
-          <rect x="10.5" y="0.5" width="279" height="99" rx="12" fill="#171b22" stroke="#262c37"/>
-          <rect x="10.5" y="140.5" width="279" height="99" rx="12" fill="#171b22" stroke="#262c37"/>
-          <rect x="10.5" y="280.5" width="279" height="99" rx="12" fill="#171b22" stroke="#262c37"/>
-          <rect x="10.5" y="420.5" width="279" height="99" rx="12" fill="#171b22" stroke="#262c37"/>
-          <rect x="10.5" y="560.5" width="279" height="99" rx="12" fill="#171b22" stroke="#262c37"/>
-          <rect x="30.5" y="710.5" width="239" height="43" rx="21.5" fill="#171b22" stroke="#ff7ac2"/>
-        </g>
-        <g stroke-width="2" fill="none" stroke-linecap="round">
-          <path d="M22 1 H278" stroke="#5ea2ff"/>
-          <path d="M22 141 H278" stroke="#ff7ac2"/>
-          <path d="M22 281 H278" stroke="#5ea2ff"/>
-          <path d="M22 421 H278" stroke="#5ea2ff"/>
-          <path d="M22 561 H278" stroke="#ff7ac2"/>
-        </g>
-        <text class="ref" x="30" y="36">/loopd:new-project</text>
-        <text class="step" x="30" y="62">Scaffold, then PM refines</text>
-        <text class="note" x="30" y="84">phases, draft tasks, criteria</text>
-        <text class="gate" x="30" y="176">GATE 1 · YOU</text>
-        <text class="step" x="30" y="202">Promote draft → ready</text>
-        <text class="note" x="30" y="224">nothing is dispatched until you do</text>
-        <text class="ref" x="30" y="316">/loopd:dispatch</text>
-        <text class="step" x="30" y="342">An agent builds it</text>
-        <text class="note" x="30" y="364">own worktree, opens the PR</text>
-        <text class="ref" x="30" y="456">review</text>
-        <text class="step" x="30" y="482">Independent review</text>
-        <text class="note" x="30" y="504">fix · ≤ round cap, then you decide</text>
-        <text class="gate" x="30" y="596">GATE 2 · YOU</text>
-        <text class="step" x="30" y="622">Merge the PR</text>
-        <text class="note" x="30" y="644">one ✗ blocks it, however green CI is</text>
-        <text class="chip" x="150" y="737" text-anchor="middle">shipped to main</text>
-      </svg>
-
-      <div class="legend">
-        <span><i></i>flow</span>
-        <span><i class="dash"></i>retry</span>
-        <span><i class="exit"></i>exit to main</span>
+  <div class="cards">
+    <div class="card">
+      <h3>Not every project is code</h3>
+      <p>A <span class="code-in">kind=research</span> project produces documents in the bundle: no repo, no PR. Its second gate is you approving the deliverable.</p>
+    </div>
+    <div class="card crew">
+      <h3>The Crew</h3>
+      <div class="pills">
+        <span class="pill-wrap"><button type="button" class="pill" aria-describedby="tip-pm">project-manager</button><span class="tip-body" id="tip-pm" role="tooltip"><span class="tip-h">Project manager</span><span class="tip-t">Runs the loop: refines drafts, dispatches ready tasks, tracks progress and reports back. Never promotes a task itself.</span><span class="tip-m">tier: deep</span></span></span>
+        <span class="pill-wrap"><button type="button" class="pill" aria-describedby="tip-se">software-engineer</button><span class="tip-body" id="tip-se" role="tooltip"><span class="tip-h">Software engineer</span><span class="tip-t">Builds a task in its own worktree and opens a PR with a ✓/✗ acceptance-criteria table.</span><span class="tip-m">tier: deep</span></span></span>
+        <span class="pill-wrap"><button type="button" class="pill" aria-describedby="tip-de">devops-engineer</button><span class="tip-body" id="tip-de" role="tooltip"><span class="tip-h">DevOps engineer</span><span class="tip-t">Takes the infrastructure, CI and deploy tasks.</span><span class="tip-m">tier: deep</span></span></span>
+        <span class="pill-wrap"><button type="button" class="pill" aria-describedby="tip-qa">qa-reviewer</button><span class="tip-body" id="tip-qa" role="tooltip"><span class="tip-h">QA reviewer</span><span class="tip-t">The built-in independent reviewer. Reviews when no external reviewer is set up, or when it refuses.</span><span class="tip-m">tier: apex</span></span></span>
+        <span class="pill-wrap"><button type="button" class="pill" aria-describedby="tip-pa">plan-architect</button><span class="tip-body" id="tip-pa" role="tooltip"><span class="tip-h">Plan architect</span><span class="tip-t">Critiques the approach while tasks are refined, before anything gets built.</span><span class="tip-m">tier: apex</span></span></span>
+        <span class="pill-wrap"><button type="button" class="pill" aria-describedby="tip-fa">failure-analyst</button><span class="tip-body" id="tip-fa" role="tooltip"><span class="tip-h">Failure analyst</span><span class="tip-t">Diagnoses failing builds. Read-only by instruction.</span><span class="tip-m">sonnet · high effort</span></span></span>
+        <span class="pill-wrap"><button type="button" class="pill" aria-describedby="tip-ca">cataloguer</button><span class="tip-body" id="tip-ca" role="tooltip"><span class="tip-h">Cataloguer</span><span class="tip-t">When a project closes, folds its conclusions into the bundle’s knowledge/ folder.</span><span class="tip-m">runs on /loopd:close-project</span></span></span>
+        <span class="pill-wrap"><button type="button" class="pill" aria-describedby="tip-ex">explorer</button><span class="tip-body" id="tip-ex" role="tooltip"><span class="tip-h">Explorer</span><span class="tip-t">Claude Code’s built-in Explore subagent, for fast codebase searches. Not a loopd agent; loopd only sets its tier.</span><span class="tip-m">tier: light</span></span></span>
       </div>
     </div>
+  </div>
+</section>
 
-    <ol class="steps">
-      <li class="card">
-        <div class="num">01 · agents</div>
-        <h3><code>/loopd:new-project</code></h3>
-        <p>One sentence is enough. You and the main session scaffold phases and <code>draft</code> tasks; the project-manager agent then refines each one: acceptance criteria, and the questions only you can answer.</p>
-      </li>
-      <li class="card human">
-        <div class="num">02 · gate 1</div>
-        <h3>You promote <span class="pink">draft → ready</span></h3>
-        <p>The PM refines and critiques a draft but never sets <code>ready</code>. Nothing is dispatched until you promote.</p>
-      </li>
-      <li class="card">
-        <div class="num">03 · agents</div>
-        <h3><code>/loopd:dispatch</code></h3>
-        <p>One tick at a time. Each <code>ready</code> task gets its own worktree and branch; an engineer agent builds it, reviews its own diff and opens a PR with the criteria as a ✓/✗ table.</p>
-      </li>
-      <li class="card human">
-        <div class="num">04 · gate 2</div>
-        <h3>You <span class="pink">merge</span> the PR</h3>
-        <p>An independent reviewer with fresh context checks it first. One ✗ in the criteria table blocks the merge — however green CI is. Agents never merge.</p>
-      </li>
-    </ol>
-
-    <div class="card retry">
-      <div class="label">The retry edge · a round cap per reviewer, then you decide</div>
-      <p>Review sends the PR back to its agent: the reviewer reports, the agent fixes and replies once. Each reviewer gets one round by default — <code>coderabbitRounds</code> and <code>qaRounds</code> raise it. When CodeRabbit refuses to review, out of quota or credits, a QA reviewer takes the round instead. After the last round a <code>yolo</code> project merges the fix on green with no re-review, if it changes at most <code>reviewFixMaxLines</code> lines (300 by default). Anything bigger, or still disputed, comes to you in one short block. <a href="https://github.com/cbmono/loopd/blob/main/docs/autonomy.md#a-round-cap-per-reviewer-then-the-human-decides">docs/autonomy.md</a></p>
+<section id="install" class="wrap sec install">
+  <div class="install-copy">
+    <div class="eyebrow">INSTALL</div>
+    <h2 class="h2">From install to your first Pull Request.</h2>
+    <p>Needs Claude Code, git, gh (logged in) and bash. The plugin installs once per machine. Each group of repositories gets its own bundle: a small git repo that holds plans, tasks and notes, never application code.</p>
+    <p>Two or three people can share one bundle; each project has an owner.</p>
+    <div class="links">
+      <a class="link-u" href="https://github.com/cbmono/loopd/blob/main/docs/getting-started.md">Getting started guide →</a>
+      <a class="link-u" href="https://github.com/cbmono/loopd/blob/main/docs/sharing.md">Sharing a bundle →</a>
+      <a class="link-u" href="https://github.com/cbmono/loopd/blob/main/docs/sharing.md#handing-off-a-project-with-work-in-flight">Handing over tasks to your team →</a>
     </div>
-    <p style="margin-top:16px">Not every project is code. A <code>kind=research</code> project produces documents inside the bundle — no repo, no PR — and its second gate is you approving the deliverable.</p>
-  </section>
-
-  <section id="crew">
-    <div class="kicker">the crew</div>
-    <h2>They build in the background. You get the decisions.</h2>
-    <div class="duo">
-      <div class="card">
-        <div class="label">Agents · blue</div>
-        <p>Refine, build in their own worktrees, open PRs, review with fresh context — in the background. Results and questions bubble up; every step does not.</p>
+  </div>
+  <div class="install-code">
+    <div class="code-card">
+      <div class="code-head">
+        <span class="code-label">ONCE PER MACHINE</span>
+        <button type="button" class="copy" aria-label="Copy install commands">Copy</button>
+        <span class="sr-only" role="status" aria-live="polite"></span>
       </div>
-      <div class="card human">
-        <div class="label">You · pink</div>
-        <p>Two gates, by default: promote <code>draft → ready</code>, and merge. Anything waiting on you lands in <code>AWAITING.md</code> and on the session banner.</p>
+      <div class="code">
+        <div><span class="cmd">/plugin</span> marketplace add cbmono/loopd</div>
+        <div><span class="cmd">/plugin</span> install loopd@loopd <span class="cmt"># user scope</span></div>
+        <div>/reload-plugins</div>
+      </div>
+      <div class="code-label">ONCE PER GROUP OF REPOSITORIES</div>
+      <div class="code">
+        <div><span class="cmd">/loopd:init</span> ~/workspace/&lt;group&gt;/_loopd-&lt;group&gt;</div>
+        <div class="cmt"># set org, defaultRepo and reposRoot, then start claude inside the bundle</div>
+        <div><span class="cmd">/loopd:init</span></div>
+        <div><span class="cmd">/loopd:welcome</span> check</div>
+      </div>
+      <div class="code-label">THEN, EVERY TIME</div>
+      <div class="code">
+        <div><span class="cmd">/loopd:new-project</span> add rate limiting to the public API</div>
+        <div class="you">you promote draft → ready</div>
+        <div><span class="cmd">/loopd:dispatch</span></div>
+        <div class="you">you merge the PR</div>
       </div>
     </div>
-    <div class="needs" aria-label="Example of an AWAITING.md block">
-      <div class="head">▸ Needs you</div>
-      <div class="item"><b>1</b> ◆ promote <code>task-004</code> draft → ready</div>
-      <div class="item"><b>2</b> ◆ merge <code>api#42</code> — criteria 6 ✓ / 0 ✗</div>
+  </div>
+</section>
+
+<section id="rails" class="wrap sec rails">
+  <div class="eyebrow">SAFETY RAILS</div>
+  <h2 class="h2">None of them is decoration.</h2>
+  <div class="rail-grid">
+    <div class="rail">
+      <div class="tile"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></div>
+      <div class="rail-body">
+        <h3>Independent review</h3>
+        <p>Every PR is cleared by a reviewer with fresh context, never the implementing agent’s own report.</p>
+        <div class="enforced">enforced by <span>review-clearance.sh</span></div>
+      </div>
     </div>
-    <p style="margin-top:16px">Day to day: <code>/pane</code> keeps the board beside your session, <code>/loopd:whats-up</code> lists what needs you, numbered, and <code>/loopd:update</code> brings the plugin current.</p>
-  </section>
-
-  <section id="install">
-    <div class="kicker">install</div>
-    <h2>About ten minutes to your first loop.</h2>
-    <p class="lede">Needs Claude Code, <code>git</code>, <code>gh</code> and bash. The plugin installs once per machine; each group of repositories gets its own bundle — a small git repo that holds the state of the work, never application code.</p>
-    <div class="term">
-      <div class="bar"><i></i><i></i><i></i></div>
-<pre><span class="logo">   <span class="pink">▄</span>▄▄▄
-<span class="arrow">◀━</span>▐    ▌   loopd — the loop, running
-  ▝▄▄▄▄▘</span><span class="c"># once per machine</span>
-<span class="cmd">/plugin marketplace add cbmono/loopd</span>
-<span class="cmd">/plugin install loopd@loopd</span>   <span class="c"># choose user scope</span>
-<span class="c"># optional: let a project delegate its gates</span>
-<span class="cmd">/plugin install loopd-yolo@loopd</span>
-<span class="c"># then /reload-plugins (or restart Claude Code)</span>
-
-<span class="c"># once per group of repositories</span>
-<span class="cmd">/loopd:init ~/workspace/&lt;group&gt;/_loopd-&lt;group&gt;</span>
-<span class="c"># in the bundle: org + defaultRepo in instance.config.json,</span>
-<span class="c"># reposRoot in instance.config.local.json — then, from a</span>
-<span class="c"># session started inside the bundle, stamp it once more</span>
-<span class="cmd">/loopd:init</span>
-
-<span class="c"># then, every time</span>
-<span class="cmd">/loopd:new-project</span> add rate limiting to the public API
-<span class="you">you promote draft → ready</span>
-<span class="cmd">/loopd:dispatch</span>
-<span class="you">you merge the PR</span></pre>
+    <div class="rail">
+      <div class="tile"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div>
+      <div class="rail-body">
+        <h3>Exit 0 is the only clearance</h3>
+        <p>Missing, pending, skipped and unreadable checks all refuse. So does a reviewer that declined to review.</p>
+        <div class="enforced">enforced by <span>required-checks.sh</span></div>
+      </div>
     </div>
-    <p style="margin-top:16px"><a href="https://github.com/cbmono/loopd#install">The full install guide</a> covers configuring the bundle, giving it a remote and sharing it between two people.</p>
-  </section>
-
-  <section id="rails">
-    <div class="kicker">safety rails</div>
-    <h2>None of them is decoration.</h2>
-    <div class="rails">
-      <div class="card"><h3>Independent review</h3><p>Every PR is cleared by a reviewer with fresh context — never the implementing agent's own report.</p></div>
-      <div class="card"><h3>Exit 0 is the only clearance</h3><p>Missing, pending, skipped and unreadable checks all refuse. A green check from a reviewer that declined to review is not verification.</p></div>
-      <div class="card"><h3>Done means a PR exists</h3><p>An agent's "done" is not evidence. The dispatch check asks whether the status moved and the PR resolves — and only reports.</p></div>
-      <div class="card"><h3>One tick at a time</h3><p>A lock refuses a second orchestrator. Stale or unattributable means ask the human — never delete, never adopt.</p></div>
-      <div class="card"><h3>Never deletes on a guess</h3><p>The worktree pruner only reports. A worktree goes when its task is done with every PR merged, or when you say yes to <code>/loopd:prune-wt</code>. The bundle repair is report-only by default.</p></div>
-      <div class="card"><h3>Every comment is signed</h3><p>Each agent comment and review on a PR ends with <code>— &lt;login&gt;-&lt;role&gt;</code>, so you can tell who wrote it. A label for people; no gate reads it.</p></div>
-      <div class="card"><h3>Credential stores stay shut</h3><p>Agents cannot write, move or delete <code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.config/gh</code>, key files or credential files outside their own worktree.</p></div>
-      <div class="card human"><h3>The gates can be delegated</h3><p>Only through the separate <code>loopd-yolo</code> companion plugin, never by default; each project stays gated until it opts in. Uninstall it and every project is gated again, with no other edits.</p></div>
+    <div class="rail">
+      <div class="tile"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/></svg></div>
+      <div class="rail-body">
+        <h3>Destructive commands are blocked</h3>
+        <p>A hook stops shapes like <span class="code-in">terraform destroy</span>, force-pushes to protected branches and <span class="code-in">rm -rf</span> of a repo root.</p>
+        <div class="enforced">enforced by <span>deny-destructive.sh</span></div>
+      </div>
     </div>
-  </section>
-
-</div>
+    <div class="rail">
+      <div class="tile"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.4A8 8 0 1 1 21 12z"/><path d="M10 10a2 2 0 1 1 3 1.7c-.6.4-1 .8-1 1.3"/><path d="M12 16h.01"/></svg></div>
+      <div class="rail-body">
+        <h3>Never deletes on a guess</h3>
+        <p>The worktree pruner only reports, and bundle repair is report-only by default. Stale means ask the human.</p>
+        <div class="enforced">enforced by <span>prune-worktrees.sh</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="yolo">
+    <div class="tile"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/></svg></div>
+    <h3>The gates can be delegated</h3>
+    <p>Only through the separate <span class="code-in">loopd-yolo</span> plugin, and only for projects set to <span class="code-in">autonomy: yolo</span>. Uninstall it and every project on this machine is gated again.</p>
+    <a class="link-u" href="https://github.com/cbmono/loopd/blob/main/docs/autonomy.md">How autonomy works →</a>
+  </div>
+  <a class="link-u rail-ref" href="https://github.com/cbmono/loopd/blob/main/docs/reference.md">Every rail, in the reference →</a>
+</section>
 </main>
 
-<footer>
+<footer class="foot">
   <div class="wrap">
-    <span>loopd · MIT · <a href="https://github.com/cbmono/loopd">github.com/cbmono/loopd</a></span>
-    <nav aria-label="Documentation">
-      <a href="https://github.com/cbmono/loopd#readme">README</a>
-      <a href="https://github.com/cbmono/loopd/blob/main/docs/autonomy.md">Autonomy</a>
+    <div class="foot-l">loopd · MIT · <a href="https://github.com/cbmono/loopd">github.com/cbmono/loopd</a></div>
+    <nav class="foot-links" aria-label="Docs">
       <a href="https://github.com/cbmono/loopd/blob/main/docs/getting-started.md">Getting started</a>
       <a href="https://github.com/cbmono/loopd/blob/main/docs/reference.md">Reference</a>
-      <a href="assets/fonts/inter/LICENSE.txt">Inter OFL</a>
-      <a href="assets/fonts/jetbrains-mono/OFL.txt">JetBrains Mono OFL</a>
+      <a href="https://github.com/cbmono/loopd/blob/main/docs/autonomy.md">Autonomy</a>
+      <a href="https://github.com/cbmono/loopd/blob/main/docs/operations.md">Operations</a>
     </nav>
   </div>
 </footer>
 
+<script>
+(function () {
+  var COMMANDS = '/plugin marketplace add cbmono/loopd\n/plugin install loopd@loopd';
+  var btn = document.querySelector('.copy');
+  var status = document.querySelector('.code-head [role="status"]');
+  var timer;
+  btn.addEventListener('click', function () {
+    navigator.clipboard.writeText(COMMANDS).then(function () {
+      btn.textContent = 'Copied';
+      status.textContent = 'Install commands copied to the clipboard';
+      clearTimeout(timer);
+      timer = setTimeout(function () { btn.textContent = 'Copy'; status.textContent = ''; }, 1500);
+    }, function () { status.textContent = 'Copy failed: select the commands and copy them by hand'; });
+  });
+
+  // A centred panel near the viewport edge would widen the page even while hidden.
+  var tips = document.querySelectorAll('.tip-body');
+  function keepInside() {
+    var max = document.documentElement.clientWidth - 8;
+    tips.forEach(function (tip) {
+      tip.style.removeProperty('--dx');
+      var r = tip.getBoundingClientRect();
+      if (!r.width) return;
+      var dx = r.left < 8 ? 8 - r.left : (r.right > max ? max - r.right : 0);
+      if (dx) tip.style.setProperty('--dx', Math.round(dx) + 'px');
+    });
+  }
+  var root = document.documentElement;
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') root.classList.add('tips-off');
+  });
+  document.querySelectorAll('.stop, .pill-wrap').forEach(function (t) {
+    t.addEventListener('mouseenter', function () { root.classList.remove('tips-off'); });
+    t.addEventListener('focusin', function () { root.classList.remove('tips-off'); });
+  });
+
+  keepInside();
+  window.addEventListener('resize', keepInside);
+  window.addEventListener('load', keepInside);
+  if (document.fonts) document.fonts.addEventListener('loadingdone', keepInside);
+})();
+</script>
 </body>
 </html>
