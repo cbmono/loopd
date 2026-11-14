@@ -201,7 +201,7 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRE
     ' ',
     'PROJECTS (6)',
     ' ',
-    '● alpha' + ' '.repeat(28) + '2 need you',
+    '● alpha' + ' '.repeat(18) + '2 need you · running',   // alpha/task-001 is working in countsOf()
     '  ░░░░░░░░░░  0/3  phases 1/3',
     ' ',
     '✓ beta' + ' '.repeat(35) + 'done',  // awaiting_close: done, and the close is not counted here
@@ -1832,7 +1832,7 @@ test('SAME NUMBERS: every section count is the value counts.json gives, and NEED
     ' ', '─'.repeat(45), ' ', ' ',
   ])
   // A project's count is its AWAITING items; a close is its `done`, not a count.
-  expect(rows).toContain('● alpha' + ' '.repeat(28) + '4 need you')
+  expect(rows).toContain('● alpha' + ' '.repeat(18) + '4 need you · running')
   expect(rows).toContain('✓ beta' + ' '.repeat(21) + '1 needs you · done')
   expect(rows).toContain('● gamma' + ' '.repeat(27) + '1 needs you')
   expect(rows.join('\n')).not.toContain('counts unavailable')
@@ -1910,12 +1910,12 @@ test('QUEUE OFF: no project carries a need-you label, on the task-verb fallback 
   const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
   expect(SNAP.projects[0].tasks.some(t => t.awaiting === 'answer')).toBe(true)
   let rows = await rowsOf(ui)
-  expect(rows).toContain('● alpha')
+  expect(rows).toContain('● alpha' + ' '.repeat(31) + 'running')
   expect(rows.join('\n')).not.toMatch(/need(s)? you/)
   w.files.set(SNAPSHOT, { text: JSON.stringify(ITEMS_SNAP), mtimeMs: 2000 })
   await ui.press({ key: 'refresh' })
   rows = await rowsOf(ui)
-  expect(rows).toContain('● alpha')
+  expect(rows).toContain('● alpha' + ' '.repeat(31) + 'running')
   expect(rows.join('\n')).not.toMatch(/need(s)? you/)
   await ui.unmount()
 })
@@ -1928,7 +1928,7 @@ test('AWAITING READ FAILURE: awaiting_items null is unknown — NEEDS YOU (?) wi
   const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
   const rows = await rowsOf(ui)
   expect(rows.slice(rows.indexOf('NEEDS YOU (?)'))).toEqual(['NEEDS YOU (?)', ' ', ' ', '─'.repeat(45), ' ', ' '])
-  expect(rows).toContain('● alpha')                      // no fallback count either
+  expect(rows).toContain('● alpha' + ' '.repeat(31) + 'running')   // no fallback count either
   expect(await ui.findAll({ type: 'Button' }).then((b: any[]) => b.filter(x => String(x.key).startsWith('copy-need-')))).toEqual([])
   await ui.unmount()
 })
@@ -2175,5 +2175,89 @@ test('OTHER OWNERS: eight owners wrap at entry boundaries past three lines, ever
   expect(sum.length).toBeGreaterThan(3)
   for (const r of sum) expect([r, cols(r) <= 45, r.includes('…')]).toEqual([r, true, false])
   expect(sum.map(r => r.trim()).join(' · ').split(' · ')).toEqual(owners.map((o, i) => '+' + (i + 1) + ' by @' + o))
+  await ui.unmount()
+})
+
+// RUNNING: a project row says `running` while one of its tasks has a working session in task_sessions.
+function runningSnap() {
+  const t = (id: string, status = 'in-progress') =>
+    ({ id, title: id, status, assignee: 'software-engineer', in_flight: false, pr_mergeable: 'MERGEABLE', awaiting: '', prs: [] })
+  const p = (slug: string, tasks: any[], more: any = {}) =>
+    ({ slug, title: slug, status: 'active', owner: '', mine: true, awaiting_close: false, phase_progress: { done: 0, total: 0 }, tasks, ...more })
+  return {
+    ...SNAP, counts: { projects: 9, tasks: 10, awaiting: 2 },
+    projects: [
+      p('busy', [t('task-001'), t('task-002', 'draft')]),
+      p('asking', [t('task-001')]),
+      p('a-project-slug-far-too-long-for-the-pane', [t('task-001')]),
+      p('resting', [t('task-001')]),
+      p('stalled', [t('task-001')]),
+      p('unseen', [t('task-001')]),
+      p('theirs', [t('task-001')], { owner: 'example-user-008', mine: false }),
+      p('shut', [t('task-001', 'done')], { status: 'done' }),
+    ],
+    awaiting_items: [{ verb: 'answer', slug: 'asking', task: 'task-001' }, { verb: 'merge', slug: 'asking', task: 'task-001' },
+      { verb: 'answer', slug: 'a-project-slug-far-too-long-for-the-pane', task: 'task-001' }],
+  }
+}
+const RUNNING_SESSIONS = {
+  'projects/busy/tasks/task-001.md': 'working', 'projects/busy/tasks/task-002.md': 'idle',
+  'projects/asking/tasks/task-001.md': 'working', 'projects/a-project-slug-far-too-long-for-the-pane/tasks/task-001.md': 'working',
+  'projects/resting/tasks/task-001.md': 'idle', 'projects/stalled/tasks/task-001.md': 'dead',
+  'projects/theirs/tasks/task-001.md': 'working', 'projects/shut/tasks/task-001.md': 'working',
+}
+const runningCounts = (task_sessions: unknown, tick = 0) =>
+  ({ ...(countsOf(runningSnap()) as any), sessions: { working: 5 + tick, idle: 2, dead: 1, tick_working: tick }, need_you: 3, task_sessions })
+const edge = (left: string, tail: string) => left + ' '.repeat(45 - cols(left) - cols(tail)) + tail
+const projectRows = (rows: string[]) => rows.slice(rows.findIndex(r => r.startsWith('PROJECTS')), rows.findIndex(r => r.startsWith('IN PROGRESS')))
+
+test('RUNNING: a working task session draws `running` in green at the right of its own project row, after need-you; nothing else does', ONLY, async ($, on) => {
+  const w = world(runningSnap(), true, runningCounts(RUNNING_SESSIONS, 1))
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = projectRows(await rowsOf(ui))
+  expect(rows).toContain(edge('● busy', 'running'))
+  expect(rows).toContain(edge('● asking', '2 need you · running'))
+  // A longer tail shortens the slug, never the tail.
+  expect(rows).toContain('● a-project-slug-far-t… 1 needs you · running')
+  for (const r of rows) expect(cols(r)).toBeLessThanOrEqual(45)
+  // idle, dead, no session, another owner's project, a closed project: no label.
+  for (const s of ['resting', 'stalled', 'unseen']) expect(rows).toContain('● ' + s)
+  expect(rows.find(r => r.includes('theirs'))).not.toContain('running')
+  expect(rows).toContain(edge('✓ shut', 'closed'))
+  expect(rows.filter(r => r.includes('running'))).toHaveLength(3)
+  // Each word in its own colour, plain text: no border, background or inverse.
+  const segs = await ui.findAll({ type: 'Text' })
+  const colour = (t: string) => segs.filter((el: any) => el.text === t).map((el: any) => el.props.color)
+  expect(colour('running')).toEqual(['#76d6a4'])
+  expect(colour(' · running')).toEqual(['#76d6a4', '#76d6a4'])
+  expect(colour('2 need you')).toEqual(['#DA627D'])
+  for (const el of segs.filter((el: any) => el.text.endsWith('running') && el.text.length <= 10)) {
+    expect([el.props.borderStyle, el.props.backgroundColor, el.props.inverse, el.props.bold]).toEqual([undefined, undefined, undefined, undefined])
+  }
+  for (const box of await ui.findAll({ type: 'Box' })) expect(box.props.borderStyle).toBeUndefined()
+  await ui.unmount()
+})
+
+test('RUNNING: only the PM tick working, or task_sessions unreadable, draws no `running` and no `?` on any project row', ONLY, async ($, on) => {
+  const quiet = Object.fromEntries(Object.keys(RUNNING_SESSIONS).map(k => [k, 'idle']))
+  const w = world(runningSnap(), true, runningCounts(quiet, 1))
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  let rows = projectRows(await rowsOf(ui))
+  expect(rows.join('\n')).not.toContain('running')
+  expect(rows).toContain('● busy')
+
+  w.files.set(COUNTS, { text: JSON.stringify(runningCounts(undefined)), mtimeMs: GENERATED })
+  await ui.press({ key: 'refresh' })
+  const all = await rowsOf(ui)
+  expect(all).toContain(edge('   software-engineer  task-001', '?'))   // counts.tasks is null: IN PROGRESS draws ?
+  rows = projectRows(all)
+  expect(rows.join('\n')).not.toMatch(/running|\?/)
+  expect(rows).toContain(edge('● asking', '2 need you'))
   await ui.unmount()
 })
