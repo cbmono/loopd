@@ -35,7 +35,8 @@ for _ in 1 2 3; do
   pass=0
   while [ "$pass" -lt 3 ] && ab_snapshot_stale "$root" "$stamp"; do
     : > "$stamp" 2>/dev/null || break   # stamped first: an edit during the write is newer
-    bash "$here/write-snapshot.sh" --quiet </dev/null >/dev/null 2>&1
+    # Backdated to the stamp: an edit made during the write must stay newer than the snapshot.
+    bash "$here/write-snapshot.sh" --quiet </dev/null >/dev/null 2>&1 && touch -r "$stamp" "$AB_SNAPSHOT" 2>/dev/null
     pass=$((pass + 1))
   done
   rmdir "$lock" 2>/dev/null

@@ -141,7 +141,8 @@ ab_board_root() { # <path>
   case "${1:-}" in /*) ;; *) return 1 ;; esac
   r="$(cd -P -- "$1" 2>/dev/null && pwd -P)" || return 1
   case "$r" in /*) ;; *) return 1 ;; esac
-  [ -f "$r/instance.config.json" ] && [ -d "$r/$AB_DIR" ] && [ -f "$r/$AB_SNAPSHOT" ] || return 1
+  # A committed .loopd symlink would aim the write at another bundle's board.
+  [ -f "$r/instance.config.json" ] && [ -d "$r/$AB_DIR" ] && [ ! -L "$r/$AB_DIR" ] && [ -f "$r/$AB_SNAPSHOT" ] || return 1
   printf '%s\n' "$r"
 }
 # The per-machine <stamp> above, named from the root's spelling with no process (the

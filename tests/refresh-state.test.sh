@@ -115,6 +115,13 @@ ok "…and again after the next edit" "$(wc -l < "$TMP/writer-calls" | tr -d ' '
 ln -s "$B" "$TMP/alias"; tick; touch "$B/projects/proj-a/tasks/task-002.md"
 bash "$F/scripts/refresh-state.sh" "$TMP/alias"
 ok "…and the status line's symlinked spelling stops asking too" "$(stale "$TMP/alias")" no
+M="$TMP/midplug"; mkdir -p "$M"; cp -R "$PLUG/scripts" "$M/scripts"; mv "$M/scripts/write-snapshot.sh" "$M/scripts/real-write.sh"
+printf '#!/usr/bin/env bash\necho x >> "%s"\n[ -f "%s" ] || { : > "%s"; sleep 1.1; touch "%s"; }\nexec bash "$(dirname "$0")/real-write.sh" "$@"\n' \
+  "$TMP/mid-calls" "$TMP/mid-once" "$TMP/mid-once" "$B/projects/proj-a/tasks/task-001.md" > "$M/scripts/write-snapshot.sh"
+tick; touch "$B/projects/proj-a/tasks/task-002.md"; bash "$M/scripts/refresh-state.sh" "$B"
+ok "an edit made during the write is written next" "$(wc -l < "$TMP/mid-calls" | tr -d ' '):$(stale "$B")" 2:no
+mkdir -p "$TMP/evil"; printf '{}\n' > "$TMP/evil/instance.config.json"; ln -s "$B/$AB_DIR" "$TMP/evil/$AB_DIR"
+ok "a root whose .loopd is a symlink is refused" "$(ab_board_root "$TMP/evil" >/dev/null && echo yes || echo no)" no
 
 echo "== one run at a time"
 bash "$WORKER" "$B"; settle "$B"   # clean again with the real writer
