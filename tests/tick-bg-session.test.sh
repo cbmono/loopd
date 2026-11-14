@@ -238,6 +238,53 @@ spawned; bash "$SC/tick-delta.sh" record --idle --instance "$B" --tick-id "$ID" 
 STATUS=idle state working; reap
 ok "a real record --idle line with --swept closes the tick" "$RC:$(has "$OUT" "reaped: $ID · closed")" "0:yes"
 
+echo "== the readers agree with the reaper: a committed close is FINISHED, never RUNNING =="
+# The 2026-11-13 shape: an idle tick claimed its lock, `record --idle --tick-id` (no --swept)
+# wrote its close, the tick committed it, and the launcher's session never fired again.
+lstat() { LOUT="$(bash "$SC/tick-lock.sh" status --instance "$B" 2>&1)"; LRC=$?; }
+claim() { bash "$SC/tick-lock.sh" acquire --as tick --instance "$B" --claimant "$ID" >/dev/null 2>&1; }
+idle_close() { bash "$SC/tick-delta.sh" record --idle --instance "$B" --tick-id "$ID" >/dev/null; }
+spawned; claim; idle_close; commit "$B"
+BEFORE="$(cat "$B/.loopd/.tick-lock")"; lstat
+ok "status: the claimant's committed idle close ⇒ exit 5" "$LRC" 5
+ok "…says FINISHED, naming the tick and its close" \
+   "$(has "$LOUT" "FINISHED: tick $ID"):$(has "$LOUT" "idle — fingerprint unchanged (tick-delta) · $ID")" "yes:yes"
+ok "…never RUNNING or in flight" "$(has "$LOUT" 'it is RUNNING'):$(has "$LOUT" 'in flight')" "no:no"
+ok "…prints the exact reap command" "$(has "$LOUT" "Reap it with: tick-reap.sh --instance $B")" yes
+ok "…and leaves the lock byte-identical" "$([ "$(cat "$B/.loopd/.tick-lock")" = "$BEFORE" ] && echo yes || echo no)" yes
+STATUS=busy state working; reap
+ok "the reaper agrees: closed, turn still running ⇒ held (1)" "$RC:$(locked):$(has "$OUT" 'closed its entry')" "1:yes:yes"
+lstat; ok "…and status still says FINISHED, not RUNNING" "$LRC" 5
+STATUS=idle state working; reap
+ok "the printed command reaps it once the turn is over" "$RC:$(locked)" "0:no"
+lstat; ok "…and status then reads free" "$LRC" 0
+
+echo "== …and a tick with no committed close is still RUNNING (negatives) =="
+spawned; claim; printf '* TICK %s by me open: %s · x\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"; lstat
+ok "an open entry only ⇒ 1, RUNNING" "$LRC:$(has "$LOUT" 'it is RUNNING'):$(has "$LOUT" FINISHED)" "1:yes:no"
+spawned; claim; idle_close; lstat
+ok "the idle close on disk, uncommitted ⇒ 1, RUNNING" "$LRC:$(has "$LOUT" 'it is RUNNING')" "1:yes"
+spawned; claim; printf '* TICK %s by me idle — fingerprint unchanged (tick-delta) · tick-20261029T100000Z-zzzz\n' "$TS" >> "$B/.loopd/log.md"
+commit "$B"; lstat
+ok "another tick's committed close ⇒ 1" "$LRC:$(has "$LOUT" FINISHED)" "1:no"
+spawned; claim; printf '* TICK %s by me close: dispatched x; quoting %s\n' "$TS" "$ID" >> "$B/.loopd/log.md"; commit "$B"; lstat
+ok "the id in a close's free text ⇒ 1, the reaper's own rule" "$LRC" 1
+bundle; ID="$(bash "$SC/tick-lock.sh" mint)"; bash "$SC/tick-lock.sh" acquire --instance "$B" --claimant "$ID" >/dev/null 2>&1
+claim; idle_close; commit "$B"; lstat
+ok "no session on the lock (the reaper frees nothing) ⇒ not FINISHED" "$LRC:$(has "$LOUT" FINISHED)" "1:no"
+
+echo "== mutant: the reader IS the reaper's grammar, not a second one =="
+MUT="$TMP/mut"; cp -R "$SC" "$MUT"
+sed -i.bak 's/idle — fingerprint unchanged/idle — fingerprint UNCHANGED/' "$MUT/lib/tick-close.sh"
+ok "the mutant lib differs" "$(cmp -s "$MUT/lib/tick-close.sh" "$SC/lib/tick-close.sh" && echo same || echo differs)" differs
+spawned; claim; idle_close; commit "$B"
+mrc() { bash "$MUT/$1" "${@:2}" --instance "$B" >/dev/null 2>&1; echo $?; }
+STATUS=busy state working
+ok "real status sees the close (5); the mutant's does not (1)" "$(lstat; echo "$LRC"):$(mrc tick-lock.sh status)" "5:1"
+STATUS=idle state working
+ok "…and the mutant reaper holds it too: one grammar moves both" "$(mrc tick-reap.sh):$(locked)" "1:yes"
+reap; ok "the real reaper frees it" "$RC:$(locked)" "0:no"
+
 echo "== no plugin prompt tells a tick to write the ledger at the root =="
 stray="$(grep -rnE --include='*.md' 'root `log\.md`|>> ?log\.md|-- log\.md| log\.md objectives' "$REPO/plugin" | sed "s|^$REPO/||")"
 ok "no prompt names a root log.md ledger" "${stray:-none}" none

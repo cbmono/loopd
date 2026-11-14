@@ -11,6 +11,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 3
+. "$HERE/lib/tick-close.sh" || exit 3
 
 inst="."; wait=no
 while [ $# -gt 0 ]; do
@@ -28,34 +29,6 @@ TERMINAL=" done gone stopped completed cancelled failed error exited "
 NO_ENTRY_GRACE_S=120
 
 field() { awk -v k="$1" '!/^#/ && index($0, k ":") == 1 { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }' "$LOCK" 2>/dev/null; }
-
-# <ledger text on stdin> -> "closed <line>" | "open <ts>" | "none". The id counts only as the
-# token right after the line's FIRST marker, or in the exact `record --idle` grammar — never
-# in free text, which agents write. A line carrying it whose first marker is not ` open: ` is closed.
-scan() {
-  ID="$tick" awk '
-    function tok(at,   r) { r = substr($0, at); sub(/[[:space:]].*/, "", r); return r }
-    function slot(   o, c, r) {
-      o = index($0, " open: "); c = index($0, " close: ")
-      if (o > 0 && (c == 0 || o < c)) return tok(o + 7) == ENVIRON["ID"]
-      if (c > 0) return tok(c + 8) == ENVIRON["ID"]
-      if (!match($0, /^\* TICK [^ ]+ by [^ ]+ idle — fingerprint unchanged \(tick-delta\) · /)) return 0
-      r = substr($0, RSTART + RLENGTH)
-      return r == ENVIRON["ID"] || index(r, ENVIRON["ID"] " · swept: ") == 1
-    }
-    /^\* TICK / {
-      o = index($0, " open: "); c = index($0, " close: ")
-      if (c > 0 && (o == 0 || c < o)) { cl[$3] = $0 }
-      if (!slot()) next
-      if (o > 0 && (c == 0 || o < c)) ots = $3; else done = $0
-    }
-    END {
-      if (done != "") print "closed " done
-      else if (ots != "" && (ots in cl)) print "closed " cl[ots]
-      else if (ots != "") print "open " ots
-      else print "none"
-    }'
-}
 
 needs_you() {
   [ -r "$inst/$AB_AWAITING" ] || return 0
@@ -111,19 +84,18 @@ assess() {
   [ -n "$tick" ] || { echo "tick-reap: $LOCK records a session and no claimant — leaving it for a human" >&2; exit 2; }
   short="${session%%-*}"
   state="$(bash "$HERE/agent-sessions.sh" state "$session" 2>/dev/null)" || state=unknown
-  disk=unread; [ -r "$LOG" ] && { disk="$(scan < "$LOG")" || disk=unread; }
-  head="$(git -C "$inst" show "HEAD:$AB_LEDGER" 2>/dev/null | scan)" || head=none
-  case "$head" in
-    closed\ *)
-      # A bg session does not exit after its turn, and `state` reads `working` while it
-      # stays resident (measured 2026-10-31: 40m past a committed close, three fires dropped). `status: idle` is the turn over, so stop it
-      # as for `blocked` rather than hold the lock an hour. Anything else is still finishing.
-      if [ "$state" = working ]; then
-        [ "$(turn_status)" = idle ] || return 2
-        state=idle-after-close
-      fi
-      release closed "${head#closed }" ;;
-  esac
+  disk=unread; [ -r "$LOG" ] && { disk="$(tick_close_scan "$tick" < "$LOG")" || disk=unread; }
+  # The same call tick-lock.sh status reports FINISHED on, so no reader says RUNNING here.
+  if closed="$(tick_committed_close "$inst" "$tick")"; then
+    # A bg session does not exit after its turn, and `state` reads `working` while it
+    # stays resident (measured 2026-10-31: 40m past a committed close, three fires dropped). `status: idle` is the turn over, so stop it
+    # as for `blocked` rather than hold the lock an hour. Anything else is still finishing.
+    if [ "$state" = working ]; then
+      [ "$(turn_status)" = idle ] || return 2
+      state=idle-after-close
+    fi
+    release closed "$closed"
+  fi
   # Turn over, no line for the id anywhere in the ledger: it wrote its close elsewhere (a
   # hand-typed root `log.md`) or not at all. Still `working` only because a bg session stays
   # resident, so stop it before closing — never on age alone, a full walk can run past 45m.
@@ -154,7 +126,7 @@ assess() {
       bash "$HERE/tick-delta.sh" record --instance "$inst" --tick "$ts" \
         --close "dead — $tick session $short $state with its entry open (tick-reap)" >/dev/null \
         || { echo "tick-reap: could not close the dead tick's entry at $ts — the lock stays." >&2; exit 2; }
-      release dead "$(scan < "$LOG" | sed 's/^closed //')" ;;
+      release dead "$(tick_close_scan "$tick" < "$LOG" | sed 's/^closed //')" ;;
   esac
   ended
 }

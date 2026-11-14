@@ -34,7 +34,8 @@
 #     delete, a pure rename and a BULK commit by a person are not touches, and a file whose
 #     author git cannot name is SKIPPED, like the timestamp — never labelled `human` here.
 #   · THE 3.0 LAYOUT. Plugin-owned files still sitting at the bundle root move under
-#     `.loopd/`, and the links pointing at them are rewritten. See that step.
+#     `.loopd/`, and the links pointing at them are rewritten. See that step. A root
+#     log.md beside `.loopd/log.md` holding only TICK lines MERGES into it by timestamp.
 #   · THE .loopd RENAME. `.ai-bridge/` moves to `.loopd/` in one `git mv`, with its ignore
 #     lines, the statusline pin and any KB mount's `core.worktree`, then commits. See that step.
 #
@@ -132,6 +133,37 @@ layout_conflicts() { # <pending> — prints "<old> -> <new>" per occupied destin
     [[ -n "$new" && -e "$new" ]] && printf '%s -> %s\n' "$old" "$new"
   done <<< "$1"
   return 0
+}
+
+# THE ONE OCCUPIED DESTINATION THAT IS NOT A STOP: both ledgers. A tick that kept writing the
+# pre-3.0 path after the move leaves TICK lines in a root log.md (measured 2026-11-13: nine
+# idle lines, which stopped this script). The ledger is append-only, so it merges: each root
+# line the destination lacks goes in among the destination's TICK lines by timestamp —
+# appended with `>>`, so ascending — after its equals, and an identical line goes in once.
+# A root line that is not a TICK line is prose a human placed, and stays a STOP.
+ledger_merge() { # <root log> <dest log> -> the merged ledger on stdout; 1 when not mergeable
+  awk '
+    function ts(l,   f) { split(l, f, " "); return f[3] }
+    FNR == NR { if ($0 ~ /^[[:space:]]*$/) next
+                if ($0 !~ /^\* TICK [0-9]/) bad = 1
+                src[++ns] = $0; next }
+    { dst[++nd] = $0; have[$0] = 1; if ($0 ~ /^\* TICK /) last = nd }
+    END {
+      if (bad) exit 1
+      for (i = 1; i <= ns; i++) if (!(src[i] in have)) { have[src[i]] = 1; add[++na] = src[i] }
+      for (i = 2; i <= na; i++) for (j = i; j > 1 && ts(add[j]) < ts(add[j-1]); j--) {
+        t = add[j]; add[j] = add[j-1]; add[j-1] = t }
+      a = 1
+      for (k = 1; k <= nd; k++) {
+        if (dst[k] ~ /^\* TICK /) while (a <= na && ts(add[a]) < ts(dst[k])) print add[a++]
+        print dst[k]
+        if (k == last) while (a <= na) print add[a++]
+      }
+      while (a <= na) print add[a++]
+    }' "$1" "$2"
+}
+ledger_new() { # <root log> <dest log> -> how many of the root's lines the destination lacks
+  grep -v '^[[:space:]]*$' "$1" | grep -vxFf "$2" | sort -u | grep -c . || true
 }
 
 # THE .loopd RENAME. Both ends are spelled here: AB_DIR names only the new directory, and the
@@ -454,6 +486,10 @@ if [[ -n "$PENDING" ]]; then
   echo "layout: this bundle is on the pre-3.0 layout."
   refusal="$(layout_refusal)"
   conflicts="$(layout_conflicts "$PENDING")"
+  LEDGER_TO="$(awk -F'\t' '$1 == "log.md" { print $2 }' <<< "$PENDING")"; MERGE_LEDGER=0
+  if [[ -n "$LEDGER_TO" && -f "$LEDGER_TO" && -f log.md ]] && ledger_merge log.md "$LEDGER_TO" >/dev/null; then
+    MERGE_LEDGER=1; conflicts="$(grep -vxF "log.md -> $LEDGER_TO" <<< "$conflicts" || true)"
+  fi
   if [[ -n "$conflicts" ]]; then
     echo "  STOPPED  this bundle is half-migrated — a destination is already occupied, so"
     echo "           nothing was moved. Resolve each pair by hand, then re-run:"
@@ -463,12 +499,30 @@ if [[ -n "$PENDING" ]]; then
     echo "  REFUSED  $refusal"; human=$((human+1))
     echo "           Run these by hand once it clears, from $(pwd):"
     echo "             mkdir -p $LAYOUT_DIR $LAYOUT_DIR/$(basename "$(dirname "$AB_ROSTER")")"
-    while IFS=$'\t' read -r old new; do echo "             $(layout_cmd "$old") $old $new"; done <<< "$PENDING"
+    while IFS=$'\t' read -r old new; do
+      [[ $MERGE_LEDGER -eq 1 && "$old" == log.md ]] && continue
+      echo "             $(layout_cmd "$old") $old $new"
+    done <<< "$PENDING"
+    [[ $MERGE_LEDGER -eq 0 ]] || echo "             (log.md is MERGED into $LEDGER_TO, not moved — this script does it once the refusal clears)"
     echo "           …then re-run this script. docs/operations.md carries the full list."
   elif [[ $APPLY -eq 0 ]]; then
-    while IFS=$'\t' read -r old new; do echo "  WOULD MOVE $old -> $new"; done <<< "$PENDING"
+    while IFS=$'\t' read -r old new; do
+      if [[ $MERGE_LEDGER -eq 1 && "$old" == log.md ]]; then
+        echo "  WOULD MERGE $old into $new — $(ledger_new log.md "$new") line(s) it lacks, placed by timestamp"
+      else
+        echo "  WOULD MOVE $old -> $new"
+      fi
+    done <<< "$PENDING"
   else
     while IFS=$'\t' read -r old new; do
+      if [[ $MERGE_LEDGER -eq 1 && "$old" == log.md ]]; then
+        n="$(ledger_new log.md "$new")"; tmp="$(temp_beside "$new")" \
+          && ledger_merge log.md "$new" > "$tmp" && mv "$tmp" "$new" \
+          && { git rm -q -- log.md 2>/dev/null || rm -f -- log.md; } \
+          && echo "  MERGED   $old into $new — $n line(s) placed by timestamp, the root file removed" \
+          || { echo "  FAILED   the merge of $old into $new — both files are as they were" >&2; rm -f "${tmp:-}"; failed=$((failed+1)); }
+        continue
+      fi
       layout_move "$old" "$new" && echo "  MOVED    $old -> $new"
     done <<< "$PENDING"
     # The five gitignored paths need their ignore lines moved with them; /<plugin>:init

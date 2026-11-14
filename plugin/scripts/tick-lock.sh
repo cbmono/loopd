@@ -394,6 +394,8 @@
 # silently treated as live: both are refused on purpose, because silent deletion re-opens
 # the double-dispatch and silent adoption is the pressure that makes overriding a stalled
 # loop tempting. It is surfaced — timestamp, agent, age, path — and a human decides.
+# `status`'s FINISHED (exit 5) is the one ledger read here, and it only REPORTS what the
+# reaper would do: `acquire` never consults it.
 #
 # IT IS A PER-CLONE LOCK AND IT MUST NOT PRETEND OTHERWISE. The file is gitignored and
 # lives in one working tree. Two humans sharing one bundle from two clones each dispatch
@@ -450,6 +452,13 @@
 #   4  REFUSED — `--as tick` with no lock: nobody dispatched you, so you are a resumed or
 #      hand-started tick. End the tick. `--as launcher` never sees this: taking a lock
 #      where there is none is exactly what a launcher is for.
+#   5  `status` only: FINISHED — the lock is held, but the ledger at HEAD already carries
+#      the close of the tick it was minted for (`lib/tick-close.sh`, tick-reap.sh's own
+#      reader), so it is not RUNNING: it waits for the reaper, whose exact command is
+#      printed. Not a clearance — only tick-reap.sh releases it, and it keeps the lock
+#      while that session is still ending its turn. Measured 2026-11-13: the launcher's
+#      session stopped firing after an idle tick closed, and every reader said RUNNING
+#      for 40+ minutes.
 #
 # GENERIC PLUGIN FILE — ships inside the `loopd` plugin; nothing to edit per
 # instance. It reads no org, repo or path literal.
@@ -1073,6 +1082,23 @@ case "$cmd" in
       echo "free: no $LOCK — the next dispatch tick takes it."
       [ -e "$CLAIM" ] && echo "note: $CLAIM outlived its lock; the next acquire clears it."
       exit 0
+    fi
+    # FINISHED before HELD, STALE or AHEAD: the reaper decides on the claimant's committed
+    # close alone, so a reader that judged the clock first would call RUNNING (or "decide,
+    # then release") a lock the reaper is about to free. Same preconditions as its release:
+    # a recorded session and a claimant — without a session, tick-reap.sh frees nothing.
+    # Sourced here, not at the top: `acquire` must not depend on it. Missing = no verdict.
+    fin_tick="$(lock_field claimant)"
+    if [ -n "$fin_tick" ] && [ -n "$(lock_field session)" ] \
+       && . "$(dirname "${BASH_SOURCE[0]:-$0}")/lib/tick-close.sh" 2>/dev/null \
+       && fin_line="$(tick_committed_close "$inst" "$fin_tick")"; then
+      REAP_ROOT="$(cd "$inst" && pwd -P)"
+      echo "FINISHED: tick $fin_tick closed its ledger entry and the close is committed — it is" >&2
+      echo "          not RUNNING. $LOCK waits only for the reaper:" >&2
+      echo "          $fin_line" >&2
+      echo "          The reaper keeps the lock while that session is still ending its turn." >&2
+      ab_say_run "          Reap it with:" tick-reap.sh --instance "$REAP_ROOT" >&2
+      exit 5
     fi
     judge_existing; exit $?
     ;;
