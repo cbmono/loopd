@@ -749,7 +749,7 @@ EOF
 # a certificate URL (.pem/.crt/.cer/.der) carrying no data, form, upload, config or non-GET
 # method flag is a download of a public file. `env`/`printenv` piped to a sender is refused.
 rule_secret_exfiltration() {
-  case "$1" in *env*|*id_rsa*|*id_ed25519*|*id_ecdsa*|*id_dsa*|*.pem*|*.p12*|*.pfx*|*npmrc*|*netrc*|*pgpass*|*credentials*|*kubeconfig*|*.ssh*|*service-account*) ;; *) return 1 ;; esac
+  case "$1" in *://*'$'*|*env*|*id_rsa*|*id_ed25519*|*id_ecdsa*|*id_dsa*|*.pem*|*.p12*|*.pfx*|*npmrc*|*netrc*|*pgpass*|*credentials*|*kubeconfig*|*.ssh*|*service-account*) ;; *) return 1 ;; esac
   local seg w prev sender secret upload st
   while IFS= read -r seg; do
     [ -n "$seg" ] || continue
@@ -794,6 +794,9 @@ EOT
     done <<EOT
 $(printf '%s' "$seg" | tr '|' '\n')
 EOT
+    # …or substituted into the command line: `curl "https://…/x?k=$(env | base64)"`.
+    [ -z "$secret" ] && printf '%s' "$seg" | grep -Eq '(\$\(|`)[[:space:]]*(env|printenv)([^A-Za-z0-9_.-]|$)' \
+      && secret="the environment (a substitution)"
     [ -z "$secret" ] && while IFS= read -r w; do
       # A KEY PRESENTED TO AUTHENTICATE IS NOT A KEY BEING SENT. `ssh -i ~/.ssh/id_ed25519
       # host` and `curl --cert client.pem …` are ordinary authenticated calls, and refusing
@@ -809,9 +812,23 @@ EOT
       case "$w" in
         --cert=*|--key=*|--cacert=*|--capath=*|--identity-file=*|--pubkey=*|--proxy-cert=*|--proxy-key=*|--output=*) continue ;;
       esac
-      case "$sender:$upload:$w" in
-        curl:0:http://*|curl:0:https://*|wget:0:http://*|wget:0:https://*)
-          case "${w%%[?#]*}" in *.pem|*.crt|*.cer|*.der) continue ;; esac ;;
+      case "$w" in
+        http://*|https://*)
+          # THE URL ITSELF CAN CARRY THE SECRET: an expansion of a secret-named variable
+          # in it is the payload. A certificate URL is skipped only when it is a constant —
+          # no expansion, no query or fragment, no secret-looking name — on a bare GET.
+          case "$w" in *'$'*)
+            case "$(lower "${w#*\$}")" in *secret*|*token*|*key*|*passw*|*credential*|*auth*|*env*) secret="$w"; break ;; esac ;;
+          esac
+          case "$sender:$upload:$w" in
+            curl:0:*|wget:0:*)
+              case "$w" in *'$'*|*'`'*|*[?#]*) ;; *)
+                case "$(lower "$w")" in
+                  *env*|*id_rsa*|*id_ed25519*|*id_ecdsa*|*id_dsa*|*npmrc*|*netrc*|*pgpass*|*credentials*|*kubeconfig*|*.ssh*|*service-account*|*token*|*secret*) ;;
+                  *.pem|*.crt|*.cer|*.der) continue ;;
+                esac ;;
+              esac ;;
+          esac ;;
       esac
       w="${w#@}"
       case "$w" in
