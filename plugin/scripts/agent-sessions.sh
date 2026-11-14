@@ -74,7 +74,13 @@ command -v python3 >/dev/null 2>&1 || {
 sessions_json() {
   [ -n "${AB_SESSIONS_LISTING:-}" ] && { cat "$AB_SESSIONS_LISTING"; return; }
   command -v claude >/dev/null 2>&1 || return 1
-  claude agents --json --all 2>/dev/null </dev/null
+  # Capped at 20 s, as `listing` is: a hung `claude agents` must not pin a status-line or
+  # refresh-state.sh run forever (perl's alarm: macOS ships no `timeout`).
+  if command -v perl >/dev/null 2>&1; then
+    perl -e 'alarm shift; exec @ARGV or exit 127' 20 claude agents --json --all 2>/dev/null </dev/null
+  else
+    claude agents --json --all 2>/dev/null </dev/null
+  fi
 }
 
 # The short id `--bg` prints is the first field of `sessionId`, so one recorded value

@@ -328,6 +328,8 @@ echo "== 4. this repo's own machinery is clean, or allowlisted with a reason =="
 # run in a fixture copy — were FIXED in this change rather than listed here.
 ALLOW=(
   "plugin/scripts/watch-board.sh|1|run_wait backgrounds a one-shot render (write-snapshot, build-board) and waits on it immediately, so its own INT/TERM trap fires at once instead of after the child returns; the child exits on its own and nothing is detached."
+  "plugin/hooks/refresh-state.sh|1|the hook detaches one refresh-state.sh run so the session never waits on a write; the run takes a lock, makes at most three bounded passes and exits on its own."
+  "plugin/scripts/status-line.sh|1|a stale snapshot detaches one refresh-state.sh run so the redraw never waits on the write; the run is bounded (lock, at most three passes) and exits on its own."
   "tests/artifact-board.test.sh|1|a one-shot page render of a 900-million-question fixture, backgrounded only so the harness can cap the hang it is asserting about; the generator exits on its own."
   "tests/tick-lock.test.sh|3|N concurrent one-shot tick-lock.sh acquire calls, racing on purpose; each exits in milliseconds and the harness waits for all of them."
 )
