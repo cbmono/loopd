@@ -58,6 +58,14 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/report-shape.sh\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/refresh-state.sh\""
+          }
+        ]
       }
     ],
     "WorktreeCreate": [
@@ -96,6 +104,24 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/push-state.sh\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/refresh-state.sh\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/refresh-state.sh\""
           }
         ]
       }

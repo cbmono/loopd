@@ -117,6 +117,41 @@ ab_awaiting_on() { # [<bundle root>] — exit 0 on (absent key or file), 1 off
     | grep -q '"awaiting"[[:space:]]*:[[:space:]]*false'
 }
 
+# Is the board snapshot behind what write-snapshot.sh reads? Exit 0 when some input — a
+# document, or a folder whose listing it walks (a task added or removed moves the folder) —
+# is newer than BOTH the snapshot and <stamp>, the last refresh-state.sh attempt, so a
+# writer that fails is retried only when an input moves again. A glob and `-nt` alone, no
+# process: status-line.sh asks on every redraw. No snapshot ⇒ 1, the board's off switch.
+ab_snapshot_stale() { # <root> [<stamp>, default ab_refresh_stamp's]
+  local r="${1:-.}" s="${2:-}" f
+  [ -f "$r/$AB_SNAPSHOT" ] || return 1
+  [ -n "$s" ] || s="${XDG_CACHE_HOME:-$HOME/.cache}/loopd/refresh${r//\//_}"
+  for f in "$r/projects" "$r"/projects/* "$r"/projects/*/*.md "$r"/projects/*/tasks \
+           "$r"/projects/*/tasks/*.md "$r"/projects/*/phases "$r"/projects/*/phases/*.md \
+           "$r/$AB_AWAITING" "$r/instance.config.json" "$r/instance.config.local.json"; do
+    [ "$f" -nt "$r/$AB_SNAPSHOT" ] && [ "$f" -nt "$s" ] && return 0
+  done
+  return 1
+}
+# The root refresh-state.sh may WRITE: prints its canonical path, or exits 1. Absolute,
+# resolved by `cd -P` (never the raw string), holding instance.config.json, a .loopd/ folder
+# and SNAPSHOT.json — the board's off switch. Hook and worker both ask it.
+ab_board_root() { # <path>
+  local r
+  case "${1:-}" in /*) ;; *) return 1 ;; esac
+  r="$(cd -P -- "$1" 2>/dev/null && pwd -P)" || return 1
+  case "$r" in /*) ;; *) return 1 ;; esac
+  # A committed .loopd symlink would aim the write at another bundle's board.
+  [ -f "$r/instance.config.json" ] && [ -d "$r/$AB_DIR" ] && [ ! -L "$r/$AB_DIR" ] && [ -f "$r/$AB_SNAPSHOT" ] || return 1
+  printf '%s\n' "$r"
+}
+# The per-machine <stamp> above, named from the root's spelling with no process (the
+# default above spells the same path inline, so a caller on every redraw forks nothing).
+ab_refresh_stamp() { # <root>
+  local r="${1:-.}"
+  printf '%s/loopd/refresh%s\n' "${XDG_CACHE_HOME:-$HOME/.cache}" "${r//\//_}"
+}
+
 # Every AB_* path now has a PARENT DIRECTORY, which the pre-3.0 root spellings did not.
 # A writer that skipped this reported "the instance root is not writable" on a perfectly
 # writable bundle, so it is the resolver's job rather than each caller's.

@@ -1086,6 +1086,40 @@ test('the poll re-reads each file only when its mtime moved, and Refresh re-read
   await ui.unmount()
 })
 
+// A reload (/reload-plugins, a plugin update) starts the module over with the pane still up:
+// nothing runs /pane, the first thing that happens is a draw. Through 4.13.1 that draw read
+// once and nothing polled again, so the pane froze until Refresh.
+test('RELOADED WITH THE PANE UP: the first draw starts the poll; a task moving to review is drawn with no /pane and no Refresh', ONLY, async ($, on) => {
+  const w = world(SNAP)
+  stubs(on, w)
+  const clock = mock.clock(on, { now: GENERATED })
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: CWD })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await clock.advance(1)
+  expect(w.reads).toBe(4)
+  const review = async () => (await rowsOf(ui)).filter(r => r.includes('Ship the widget'))
+  expect(await shown(ui)).toContain('IN REVIEW (1)')
+  // An idle tree: three polls stat the two files and read nothing.
+  await clock.advance(5000)
+  await clock.advance(5000)
+  await clock.advance(5000)
+  expect(w.reads).toBe(4)
+  // A turn moved task-001's document to in-review; refresh-state.sh rewrote both files.
+  const moved = JSON.parse(JSON.stringify(SNAP)); moved.projects[0].tasks[0].status = 'in-review'
+  w.files.set(SNAPSHOT, { text: JSON.stringify(moved), mtimeMs: 2000 })
+  w.files.set(COUNTS, { text: JSON.stringify({ ...(countsOf(moved) as any), task_status: {
+    'projects/alpha/tasks/task-003.md': 'in-review', 'projects/alpha/tasks/task-001.md': 'in-review' } }), mtimeMs: 2000 })
+  await clock.advance(5000)
+  expect(w.reads).toBe(6)
+  expect(await shown(ui)).toContain('IN REVIEW (2)')
+  expect(await review()).toHaveLength(1)
+  // The poll is the pane's own now: /pane closes it, as it would one /pane opened.
+  await $.command.run({ command: 'pane', args: '' })
+  expect(w.closed).toBe(1)
+  expect(w.submitted).toEqual([])
+  await ui.unmount()
+})
+
 test('where no surface places the pane, one transcript line carries the summary', ONLY, async ($, on) => {
   const w = world(SNAP)
   stubs(on, w, false)   // a narrow terminal: the pane is open but waits undrawn

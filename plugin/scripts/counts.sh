@@ -45,7 +45,8 @@ ab_counts() {
   # Sessions: PROCESSES behind this bundle's background sessions, not the registry's word.
   # `agent-sessions.sh view --counts` runs `claude agents --json` (~150 ms), so its answer is
   # cached per bundle for 10 s and every open session shares it. A failed read caches `?`,
-  # never `0 working`. `v3` is the format; anything else in the file is unknown.
+  # never `0 working`. `v3` is the format; anything else in the file is unknown. CNT_FRESH=1
+  # reads past the cache and refills it: refresh-state.sh, right after a session's turn.
   a_cache="${XDG_CACHE_HOME:-$HOME/.cache}/loopd/counts-$(printf '%s' "$root" | cksum | cut -d' ' -f1)"
   a_ep=""; a_rest=""; agents=""
   if [ -r "$a_cache" ]; then
@@ -53,7 +54,7 @@ ab_counts() {
       while IFS= read -r l; do agents="$agents$l"$'\n'; done; } < "$a_cache" 2>/dev/null
   fi
   case "$a_ep" in ''|*[!0-9]*) a_ep=0 ;; esac
-  if [ $((CNT_EPOCH - a_ep)) -lt 0 ] || [ $((CNT_EPOCH - a_ep)) -ge 10 ]; then
+  if [ -n "${CNT_FRESH:-}" ] || [ $((CNT_EPOCH - a_ep)) -lt 0 ] || [ $((CNT_EPOCH - a_ep)) -ge 10 ]; then
     agents="$(bash "$here/agent-sessions.sh" view "$root" --counts </dev/null 2>/dev/null)" || agents='?'
     a_rest="v3 ${agents%%$'\n'*}"
     case "$agents" in *$'\n'*) agents="${agents#*$'\n'}"$'\n' ;; *) agents="" ;; esac
