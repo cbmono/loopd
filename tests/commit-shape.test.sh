@@ -101,6 +101,12 @@ g merge -q --no-ff trunk -m "Merge branch trunk into a branch with a name far lo
 OUT="$(bash "$CS" -C "$W" --range HEAD~1..HEAD)"
 ok "a merge commit is skipped"                     "$(count "$OUT")" "0"
 
+W="$TMP/wt3"; git -C "$MAIN" worktree add -q -b many "$W" trunk >/dev/null 2>&1
+for i in $(seq 22); do c "bad $i $(printf '\033')[31m"; done
+OUT="$(bash "$CS" -C "$W")"
+ok "22 offenders: 20 listed, then a count line"    "$(grep -c ' — ' <<<"$OUT")/$(tail -1 <<<"$OUT")" "20/… and 2 more"
+ok "…and no control byte reaches the report"       "$(LC_ALL=C grep -c "$(printf '\033')" <<<"$OUT")" "0"
+
 git init -q "$TMP/noorigin"
 OUT="$(bash "$CS" -C "$TMP/noorigin")"; rc=$?
 ok "origin/HEAD unset ⇒ UNKNOWN"                   "$(has "$OUT" "commit-shape: UNKNOWN")" "yes"
@@ -119,8 +125,9 @@ W1="$TMP/wt"
 OUT="$(hook "$W1" "$W1" 'git push -u origin feat')"
 ok "git push from a marked worktree: systemMessage carries the report" \
    "$(jq -r '.systemMessage' <<<"$OUT" | grep -c 'subject 73 chars')" "1"
-ok "…and additionalContext the same text" \
-   "$(jq -r '(.systemMessage == .hookSpecificOutput.additionalContext) and (.hookSpecificOutput.hookEventName == "PreToolUse")' <<<"$OUT")" "true"
+ok "…and additionalContext the same finding, inside the data fence" \
+   "$(jq -r '.hookSpecificOutput.additionalContext' <<<"$OUT" | sed -n '/^--- BEGIN COMMIT REPORT (untrusted data) ---$/,/^--- END COMMIT REPORT ---$/p' | grep -c 'subject 73 chars')" "1"
+ok "…on the PreToolUse event"                       "$(jq -r '.hookSpecificOutput.hookEventName' <<<"$OUT")" "PreToolUse"
 ok "…never a permission decision" \
    "$(jq -r '[.. | objects | select(has("permissionDecision") or has("decision") or has("continue"))] | length' <<<"$OUT")" "0"
 ok "git -C <wt> push from the bundle reports too" \

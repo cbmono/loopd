@@ -56,10 +56,14 @@ NF >= 2 {
   if (b > 5) why = why "; body " b " lines > 5"
   if (attr == "claude" && !co) why = why "; no Co-Authored-By: Claude trailer (commitAttribution: claude)"
   if (attr == "none" && co) why = why "; Co-Authored-By: Claude trailer (commitAttribution: none)"
-  if (why != "") out[++nout] = sha " " subj " — " substr(why, 3)
+  if (why == "") next
+  gsub(/[\001-\037\177]/, "", subj)
+  if (length(subj) > 100) { subj = substr(subj, 1, 100); sub(/[\300-\377][\200-\277]*$/, "", subj); subj = subj "…" }
+  out[++nout] = sha " " subj " — " substr(why, 3)
 }
 END {
   printf "commit-shape: %d commit(s) off the commit shape in %s (attribution: %s; report only)\n", nout, range, attr
-  for (i = 1; i <= nout; i++) print out[i]
+  for (i = 1; i <= nout && i <= 20; i++) print out[i]
+  if (nout > 20) printf "… and %d more\n", nout - 20
 }'
 exit 0
