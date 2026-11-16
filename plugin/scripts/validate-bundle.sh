@@ -77,7 +77,8 @@
 # `CONVENTIONS.md` -> "Write less" sets both, and the 133 findings that predate the rule
 # average 110 lines. A warning puts them on the cataloguer's list; an error would fail
 # every bundle that has one, which is every bundle. So does a `Q<n>:` open question whose
-# `### Q<n>` block under `## Question details` is missing, has no options or under 3 depths.
+# `### Q<n>` block under `## Question details` is missing, has no options or under 3 depths,
+# or has no `Recommendation:` — an ERROR for a question HEAD's copy does not list yet.
 #
 # EVERY PER-DOCUMENT CHECK RUNS ON EVERY SCOPE — full bundle, `--changed`, or the paths
 # you name. The Finding cap reached only a full run while nothing else could name one
@@ -314,17 +315,18 @@ fm_wellformed() { # <frontmatter>
   '
 }
 
-question_blocks() { # <file> -> "Q<n> <options> <depths>" per block under `## Question details`
+question_blocks() { # <file> -> "Q<n> <options> <depths> <recommendation 0|1>" per block under `## Question details`
   awk '
-    function flush() { if (q != "") print q, opts, length(d1) + length(d2) + length(d3); q = "" }
+    function flush() { if (q != "") print q, opts, length(d1) + length(d2) + length(d3), rec; q = "" }
     NR == 1 && $0 == "---" { fm = 1; next }
     fm { if ($0 == "---") fm = 0; next }
     /^[[:space:]]*(```|~~~)/ { fence = !fence; next }
     fence { next }
     /^## / { flush(); sec = ($0 ~ /^## Question details[[:space:]]*$/); next }
     !sec { next }
-    /^### / { flush(); if ($0 ~ /^### Q[0-9]+[[:space:]]*$/) { q = $2; opts = 0; inopt = 0; d1 = d2 = d3 = "" }; next }
+    /^### / { flush(); if ($0 ~ /^### Q[0-9]+[[:space:]]*$/) { q = $2; opts = 0; inopt = 0; d1 = d2 = d3 = ""; rec = 0 }; next }
     q == "" { next }
+    /^Recommendation:[[:space:]]*[^[:space:]]/ { rec = 1 }
     /^Options:/ { inopt = 1; next }
     /^[A-Za-z][^:]*:/ { inopt = 0 }
     inopt && /^[0-9]+\.[[:space:]]+[^[:space:]]/ { opts++ }
@@ -333,6 +335,15 @@ question_blocks() { # <file> -> "Q<n> <options> <depths>" per block under `## Qu
     /^[-*]?[[:space:]]*Depth 3:[[:space:]]*[^[:space:]]/ { d3 = "x" }
     END { flush() }
   ' "$1"
+}
+
+# Labels of the open questions HEAD's copy of <file> lists; exit 1 when git cannot say. A
+# document HEAD does not have lists none, so every question in it is new.
+head_labels() { # <file>
+  git rev-parse -q --verify HEAD >/dev/null 2>&1 || return 1
+  git cat-file -e "HEAD:$1" 2>/dev/null || return 0
+  git show "HEAD:$1" 2>/dev/null | frontmatter /dev/stdin | { fm="$(cat)"; list_entries "$fm" open_questions; } \
+    | sed -n 's/^\(Q[0-9][0-9]*\):.*/\1/p'
 }
 
 fail() { printf '  ERROR  %s\n         %s\n' "$1" "$2"; errors=$((errors+1)); }
@@ -510,17 +521,29 @@ while IFS= read -r file; do
       done <<< "$(list_entries "$fm" open_caveats)"
     fi
 
-    blocks=""
+    blocks=""; old_labels=""; old_known=""
     while IFS= read -r question; do
       label="$(sed -n 's/^\(Q[0-9][0-9]*\):.*/\1/p' <<<"$question")"
       [[ -n "$label" ]] || continue
       [[ -n "$blocks" ]] || blocks="$(question_blocks "$file")"
       row="$(awk -v q="$label" '$1 == q { print; exit }' <<<"$blocks")"
+      nrec=0; [[ -z "$row" ]] || read -r _ nopt ndepth nrec <<<"$row"
+      # Missing on a question the uncommitted change ADDS errors: its author is still here to
+      # write one, so nothing accumulates for migrate-bundle.sh to repair (docs/conventions.md #9).
+      if [[ "$nrec" == 0 && "${question#"$label": }" != advisor:* ]]; then
+        if [[ -z "$old_known" ]]; then
+          old_known=1; old_labels="$(head_labels "$file")" || old_known=unknown
+        fi
+        if [[ "$old_known" == 1 ]] && ! grep -qxF -- "$label" <<<"$old_labels"; then
+          fail "$rel" "open question $label is new in this change and has no 'Recommendation:' line under '### $label' ($AB_SCHEMA, 'Question details')"
+        elif [[ -n "$row" ]]; then
+          warn "$rel" "'### $label' has no 'Recommendation:' line ($AB_SCHEMA, 'Question details')"
+        fi
+      fi
       if [[ -z "$row" ]]; then
         warn "$rel" "open question $label has no '### $label' block under '## Question details' ($AB_SCHEMA, 'Question details')"
         continue
       fi
-      read -r _ nopt ndepth <<<"$row"
       [[ "$nopt" -gt 0 ]] || warn "$rel" "'### $label' has an empty 'Options:' list ($AB_SCHEMA, 'Question details')"
       [[ "$ndepth" -ge 3 ]] || warn "$rel" "'### $label' has $ndepth of 3 context depths ($AB_SCHEMA, 'Question details')"
     done <<< "$(list_entries "$fm" open_questions)"
