@@ -338,12 +338,29 @@ question_blocks() { # <file> -> "Q<n> <options> <depths> <recommendation 0|1>" p
 }
 
 # Labels of the open questions HEAD's copy of <file> lists; exit 1 when git cannot say. A
-# document HEAD does not have lists none, so every question in it is new.
+# document missing from HEAD is looked up as a staged rename, then by file name (task ids
+# are unique); else, when this change deletes any document, it may be a move and is
+# unknown. Only then is every question in it new.
 head_labels() { # <file>
+  local p="$1" src hfm
   git rev-parse -q --verify HEAD >/dev/null 2>&1 || return 1
-  git cat-file -e "HEAD:$1" 2>/dev/null || return 0
-  git show "HEAD:$1" 2>/dev/null | frontmatter /dev/stdin | { fm="$(cat)"; list_entries "$fm" open_questions; } \
-    | sed -n 's/^\(Q[0-9][0-9]*\):.*/\1/p'
+  if ! git cat-file -e "HEAD:$p" 2>/dev/null; then
+    p="$(git diff --cached -M --relative --name-status --diff-filter=R HEAD -- . 2>/dev/null \
+         | awk -F'\t' -v n="${1#./}" '$3 == n { print $2 }')" || return 1
+    [[ -n "$p" ]] || p="$(git ls-tree -r --name-only HEAD -- . 2>/dev/null \
+         | awk -v b="/$(basename "$1")" 'substr($0, length($0) - length(b) + 1) == b')" || return 1
+    [[ "$(grep -c . <<<"$p")" -le 1 ]] || return 1
+    if [[ -z "$p" ]]; then
+      [[ -z "$(git diff --relative --name-only --diff-filter=D HEAD -- '*.md' 2>/dev/null)" ]] || return 1
+      return 0
+    fi
+    p="./$p"
+  fi
+  # Read whole, never piped into frontmatter: it stops at the closing `---`, and the
+  # SIGPIPE that sends `git show` on a large document is a failure under pipefail.
+  src="$(git show "HEAD:$p" 2>/dev/null)" || return 1
+  hfm="$(frontmatter /dev/stdin <<<"$src")" || true
+  list_entries "$hfm" open_questions | sed -n 's/^\(Q[0-9][0-9]*\):.*/\1/p'
 }
 
 fail() { printf '  ERROR  %s\n         %s\n' "$1" "$2"; errors=$((errors+1)); }
@@ -535,7 +552,11 @@ while IFS= read -r file; do
           old_known=1; old_labels="$(head_labels "$file")" || old_known=unknown
         fi
         if [[ "$old_known" == 1 ]] && ! grep -qxF -- "$label" <<<"$old_labels"; then
-          fail "$rel" "open question $label is new in this change and has no 'Recommendation:' line under '### $label' ($AB_SCHEMA, 'Question details')"
+          if [[ -z "$row" ]]; then
+            fail "$rel" "open question $label is new in this change and has no '### $label' block under '## Question details', so no 'Recommendation:' ($AB_SCHEMA, 'Question details')"
+            continue
+          fi
+          fail "$rel" "open question $label is new in this change and '### $label' has no 'Recommendation:' line ($AB_SCHEMA, 'Question details')"
         elif [[ -n "$row" ]]; then
           warn "$rel" "'### $label' has no 'Recommendation:' line ($AB_SCHEMA, 'Question details')"
         fi

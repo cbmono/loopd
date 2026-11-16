@@ -42,7 +42,8 @@
 # malformed one (2), shows no close row. Nor does a project whose terminal task still shows a
 # `👉 do` row: closing it would set `status: done` and drop that row from the page.
 # A `👀 review` row — one per unanswered `D<n>` in project.md's `decisions:` — passes the
-# same two gates, and sorts before `approve` without withholding it.
+# same two gates, and sorts before `approve` without withholding it. It ends
+# `(recommended: ok)`: the D<n> is the recommendation, and ` --- ok` takes it.
 #
 # A build draft's `approve` row is marked `unverified` (no `## Verified facts`, or a facts
 # verdict of unknown) or `stale`. The verdict is verified-facts.sh's, passed in with --facts:
@@ -183,7 +184,7 @@ PY
 
 # An open question's recommendation as row text, from its `### Q<n>` block through
 # fold-answers.sh --block, escaped and capped at a word. A Q<n> entry without one says so;
-# an unlabelled entry has no block and prints nothing.
+# an unlabelled or `advisor:` entry without one prints nothing.
 rec_of() { # <file> <entry>
   local o
   [[ "$2" =~ ^(Q[0-9]+): ]] || return 0
@@ -195,7 +196,9 @@ if len(r) > 160:
     cut = r.rfind(" ", 0, 160); r = r[:cut if cut > 0 else 160].rstrip() + " …"
 print("recommended: " + re.sub(r"([\\`*_\[\]()<>|~!#])", r"\\\1", r) if r else "no recommendation", end="")
 ' 2>/dev/null)"
-  printf '%s' "${o:-no recommendation}"
+  o="${o:-no recommendation}"
+  case "$o|${2#*: }" in 'no recommendation|advisor:'*) return 0 ;; esac
+  printf '%s' "$o"
 }
 
 do_row() { # <entry> <file> <rel> <title>
@@ -401,7 +404,8 @@ for pm in "$inst"/projects/*/project.md; do
       esac
       r="$(rec_of "$f" "$e")"
       if is_grant "$e"; then
-        add "🧰" grant "$t" "$rel" "${trail:+$trail${r:+ (${e%%:*} $r)}}${trail:-$e${r:+ ($r)}}"
+        if [ -n "$trail" ]; then add "🧰" grant "$t" "$rel" "$trail${r:+ (${e%%:*} $r)}"
+        else add "🧰" grant "$t" "$rel" "$e${r:+ ($r)}"; fi
         continue
       fi
       qs="${qs:+$qs; }$e${r:+ ($r)}"
@@ -409,7 +413,8 @@ for pm in "$inst"/projects/*/project.md; do
     done <<EOF
 $qlist
 EOF
-    [ -n "$qs" ] && add "❓" answer "$t" "$rel" "${trail:+$trail${qr:+ ($qr)}}${trail:-$qs}"
+    if [ -n "$qs" ] && [ -n "$trail" ]; then add "❓" answer "$t" "$rel" "$trail${qr:+ ($qr)}"
+    elif [ -n "$qs" ]; then add "❓" answer "$t" "$rel" "$qs"; fi
 
     [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${mq_link}${trail:+ · $trail}$mq_warn"
 
@@ -432,7 +437,7 @@ EOF
     while IFS= read -r e; do
       case "$e" in D[0-9]*:*) ;; *) continue ;; esac
       case "$e" in *' --- '*[![:space:]]*) [ -n "$(printf '%s' "${e##* --- }" | tr -d '[:space:]')" ] && continue ;; esac
-      add "👀" review "$(title_of "$pm")" "${pm#"$inst"}" "$e"
+      add "👀" review "$(title_of "$pm")" "${pm#"$inst"}" "$e (recommended: ok)"
     done <<EOF
 $dlist
 EOF

@@ -566,6 +566,28 @@ assert "…and every question of an uncommitted doc" "$(rsaw ERROR fresh.md "$RO
 assert "a new question that carries one is silent" "$(grep -q "Q3" <<<"$ROUT" && echo 1 || echo 0)"
 assert "an advisor: question stays exempt"        "$(grep -q "Q4" <<<"$ROUT" && echo 1 || echo 0)"
 assert "exactly three errors, and the run fails"  "$(grep -q ', 3 errors,' <<<"$ROUT" && [[ $RRC -eq 1 ]] && echo 0 || echo 1)"
+assert "a new question with no block names the missing block, once" \
+  "$([[ "$(grep -c "Q5 is new in this change and has no '### Q5' block" <<<"$ROUT")" == 1 ]] \
+     && ! grep -q "open question Q5 has no '### Q5' block" <<<"$ROUT" && echo 0 || echo 1)"
+GIT add -A && GIT commit -qm second
+GIT mv projects/q/tasks/old.md projects/q/tasks/moved.md
+mkdir -p projects/r/tasks && mv projects/q/tasks/fresh.md projects/r/tasks/fresh.md
+set +e; MOUT="$(bash "$VALIDATOR" 2>&1)"; set -e
+assert "a git mv keeps its committed questions committed" "$(rsaw WARN moved.md "$MOUT" "'### Q2' has no 'Recommendation:' line")"
+assert "…and so does a plain mv"                  "$(grep -qF "fresh.md" <<<"$(grep -A1 -E 'WARN +projects/r/tasks/fresh.md' <<<"$MOUT")" && echo 0 || echo 1)"
+assert "…so a move errors on nothing"             "$(grep -q ', 0 errors,' <<<"$MOUT" && echo 0 || echo 1)"
+GIT add -A && GIT commit -qm moved
+mv projects/q/tasks/moved.md projects/q/tasks/renamed.md
+set +e; NOUT="$(bash "$VALIDATOR" 2>&1)"; set -e
+assert "an unstaged rename beside a deletion is unknown: it warns" "$(rsaw WARN renamed.md "$NOUT" "'### Q2' has no 'Recommendation:' line")"
+assert "…and errors on nothing"                   "$(grep -q ', 0 errors,' <<<"$NOUT" && echo 0 || echo 1)"
+GIT add -A && GIT commit -qm renamed
+pad="$(printf 'filler line for a document larger than any pipe buffer\n%.0s' $(seq 1 4000))"
+qtask big.md 'open_questions: [ "Q1: which region?" ]' '## Question details' '### Q1' "${REC[@]}" "$pad"
+GIT add -A && GIT commit -qm big
+qtask big.md 'open_questions: [ "Q1: which region?", "Q2: which tier?" ]' '## Question details' '### Q1' "${REC[@]}" '### Q2' "${NOREC[@]}" "$pad"
+set +e; BOUT="$(bash "$VALIDATOR" 2>&1)"; set -e
+assert "a large document's new question still errors" "$(rsaw ERROR big.md "$BOUT" "open question Q2 is new in this change")"
 cd "$B"
 
 echo "== refusing to run outside an instance root =="
