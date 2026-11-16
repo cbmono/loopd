@@ -136,6 +136,9 @@ PROVENANCE_ENUM="machine mixed human"
 
 # CONVENTIONS.md -> "Write less". Lowering it is free; raising it is a rule change.
 FINDING_MAX_LINES=40
+# A task's `# Result` counts the lines after its heading up to the next `# ` heading outside a
+# fence, or EOF, minus blank lines at either end. Frontmatter is never part of it.
+RESULT_MAX_LINES=15
 # conventions/rounds.md -> "A round that ends on a failed check appends ONE line to do_not_repeat". `do-not-repeat.sh append` refuses past it;
 # this reports a list already over it, which is the PM's cue to fold the oldest into `# Notes`.
 DO_NOT_REPEAT_MAX=10
@@ -499,6 +502,14 @@ while IFS= read -r file; do
     n="$(flow_entries "$fm" do_not_repeat)"
     if [[ "$n" -gt $DO_NOT_REPEAT_MAX ]]; then
       warn "$rel" "do_not_repeat carries $n entries; $AB_CONVENTIONS_DIR/rounds.md caps it at $DO_NOT_REPEAT_MAX — the project-manager folds the oldest into '# Notes'"
+    fi
+    n="$(awk 'NR==1 && $0=="---" { fm=1; next } fm { if ($0=="---") fm=0; next }
+      /^(```|~~~)/ { if (in_r) fence = !fence }
+      !fence && /^# / { if (in_r) exit; in_r = ($0 ~ /^# Result[[:space:]]*$/); next }
+      in_r { if ($0 ~ /^[[:space:]]*$/) { if (n) gap++ } else { n += gap + 1; gap = 0 } }
+      END { print n+0 }' "$file")"
+    if [[ "$n" -gt $RESULT_MAX_LINES ]]; then
+      warn "$rel" "# Result is $n lines; $AB_CONVENTIONS → \"Write less\" caps it at $RESULT_MAX_LINES — the reasoning belongs in '# Notes'"
     fi
 
     # `open_caveats` holds a TERMINAL write only — `done`/`cancelled`. Any other status
