@@ -391,9 +391,10 @@ template `tick-spawn.sh` fills — never retyped here, and never composed by you
   **its whole report is one line naming the next check** (`project-manager.md` step
   0.9). Pass the gap on: the tick puts it in `tick-delta.sh check --gap <gap>` so
   that line can say when you will next hear from the loop.
-- Each tick refreshes `AWAITING.md` **only when that file already exists, and only
-  when the tick changed something** (a `noop: true` tick leaves it alone rather than
-  restamping its `Last refreshed:` line). The loop never creates it: `/loopd:init`
+- Each full tick refreshes `AWAITING.md` **only when that file already exists**,
+  `noop: true` full ticks included, so an answered row leaves on the tick the answer's
+  commit triggers; an idle fast-path tick leaves it alone rather than restamping its
+  `Last refreshed:` line. The loop never creates it: `/loopd:init`
   does, on any stamp, unless `"awaiting": false` in `instance.config.json` — the
   durable off switch; deleting the file turns the queue off until the next stamp.
 - Each tick also refreshes `SNAPSHOT.json` (`${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet`, at
