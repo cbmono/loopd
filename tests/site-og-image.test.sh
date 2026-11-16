@@ -32,7 +32,7 @@ ok() { # <name> <actual> <expected>
 # meta <file> <attr> <key> — the content of the one <meta attr="key"> in <head>, or empty.
 meta() {
   sed -n '1,/<\/head>/p' "$1" \
-    | grep -o "<meta $2=\"$3\" content=\"[^\"]*\">" | head -1 \
+    | grep -o "<meta $2=\"$3\" content=\"[^\"]*\">" | sed -n 1p \
     | sed 's/.*content="\([^"]*\)".*/\1/'
 }
 
