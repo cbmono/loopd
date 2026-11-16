@@ -21,6 +21,7 @@ Review the current changes (staged + unstaged) with a focus on:
 4. **Naming** — Clear, consistent, aligned with the domain. Flag leaky implementation details in public names.
 5. **Dependencies** — Are new dependencies justified? Could existing utilities in the repo cover the need? Grep before flagging.
 6. **Scope creep** — Bug fixes shouldn't carry refactors; one-shot operations shouldn't add helpers.
+7. **Comments** — An added comment that is neither a section header nor a link to an external constraint is a finding, unless the repo's own conventions or lint rules allow it. Run `${CLAUDE_PLUGIN_ROOT}/scripts/comment-check.sh -C <repo> --range <base>...<head>` (default `origin/<default>...HEAD`) for the candidate lines; a new script's header block is not one. Rank the comment SUGGESTION (it alone never blocks a merge); rank a workaround it justifies on its own merits.
 
 Use `git diff` and `git diff --cached` to see changes. Read surrounding code before commenting — context is mandatory, not optional.
 

@@ -42,7 +42,7 @@ in `cbmono/loopd` enforces this.
 
 | Surface | Ceiling |
 |---|---|
-| an **inline comment** | **none by default — it is a trigger, not a budget.** One, only where the code is **unusual**, is **risky to change**, or carries a **trap the reader would not see**. **Explaining what the code does is not a trigger** — the reader, human or agent, is looking at it. |
+| an **inline comment** | **none by default — only a section header or an external-constraint link.** A **section header** formats a file for readability (a title of 8 words or fewer, not a sentence); a **link** points at a constraint the code cannot express (an upstream issue, a spec). **Explaining what the code does, or why a shortcut was taken, is neither.** **A repo's own conventions or lint rules override this default.** `scripts/comment-check.sh` reports every other added comment line. |
 | a **script header** | **10 lines** — what it does, its exit codes, and where the reasoning lives. |
 | a **commit** | subject **72 characters**, body at most **5 lines**. |
 | a **PR body** | the TL;DR line + the criteria table + at most **3 one-line notes**. Hard ceiling **2,500 characters**. |
@@ -195,7 +195,7 @@ Verified: `foo.test.sh` 40/0 locally, 10/10 checks green on [run 1234](https://�
 2. **A `Verified:` line that cites something a reader can open** — a link, not "all green".
 3. **The criteria table** under a heading carrying **the tally, and the reason for any
    `✗`**; the gate counts rows and refuses a tally that disagrees.
-4. **`### Decided without asking`** — one row per technical choice no criterion,
+4. **`### Decided without asking`**, required — one row per technical choice no criterion,
    `answered_questions` or `acknowledged_decisions:` entry named, shaped
    `<decision> — alternatives: …; why: …; reversible: …`; a departure from a `D<n>` is
    always a row; nothing to declare is `none — <why>`, never a bare `none`.
@@ -203,8 +203,7 @@ Verified: `foo.test.sh` 40/0 locally, 10/10 checks green on [run 1234](https://�
 
 A `### Notes` section is optional, **at most three one-line notes, each leading with its
 claim in bold**. **Reasoning goes in the commit message and the task doc**, never the
-body. The worked example is
-[alteos-gmbh/monorepo#3286](https://github.com/alteos-gmbh/monorepo/pull/3286). Detail:
+body. The worked example is the block above. Detail:
 `conventions/pr-body.md` → "The PR body shape" — when `pr-body-clearance.sh`
 refuses your draft at exit 1 or 4.
 

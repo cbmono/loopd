@@ -76,9 +76,9 @@ Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short
   comment**, whoever writes them. Longer only when the finding genuinely needs it — a race
   whose trigger takes three sentences to state — and **never by default**.
   **280 is what a comment MAY cost, never a reason to write one.** The inline half is
-  gated first by the row in "Write less": none unless the code is unusual, risky to change,
-  or carries a trap — so the usual number of inline comments in a diff is **zero**, and 280
-  bounds the one that clears the trigger.
+  gated first by the row in "Write less": none but a section header or an external-constraint
+  link — so the usual number of inline comments in a diff is **zero**, and 280 bounds the
+  one that is allowed.
   **The shape is: what is wrong, where, and what to do.**
 
   ```md
