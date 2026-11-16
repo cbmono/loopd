@@ -1519,7 +1519,10 @@ export function register(on: any, options?: any) {
   USAGE = o.usage !== false
   PANE_ON = o.pane !== false
   SIGNAL = o.signal !== false
-  MODE = o.paneMode === 'simple' ? 'simple' : 'operator'
+  // paneMode is free text in /config: the manifest carries no `options` list, because Claude
+  // Code 2.1.109 rejects the whole manifest over that key. So `simple` in any case, with any
+  // surrounding space, is simple; anything else — a typo, empty, absent, not a string — is operator.
+  MODE = typeof o.paneMode === 'string' && o.paneMode.trim().toLowerCase() === 'simple' ? 'simple' : 'operator'
   if (!USAGE && !PANE_ON && !SIGNAL) return   // the shell hooks alone: no module hook at all
 
   on('session.start', async ($: any, e: any, next: any) => {

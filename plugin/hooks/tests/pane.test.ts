@@ -1194,6 +1194,36 @@ test('ONE SWITCH: instance.config.json saying simple does not switch the mode �
   await ui.unmount()
 })
 
+// paneMode is free text in /config (no `options` list: Claude Code 2.1.109 refuses a manifest
+// carrying one), so `simple` is forgiven its case and spaces, and any other string is the board.
+// (A non-string never reaches the module: the host refuses it against the manifest's `type`.)
+for (const paneMode of [' Simple ', 'SIMPLE']) {
+  test(`FREE TEXT: paneMode ${JSON.stringify(paneMode)} is simple`, { options: { usage: false, signal: false, paneMode } }, async ($, on) => {
+    const w = bundle()
+    stubs(on, w)
+    mock.clock(on)
+    await open($)
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    const text = await everything(ui)
+    expect(text).not.toContain('NEEDS YOU')
+    expect(text).toContain('Q1 · Alpha project · Decide the colour')
+    await ui.unmount()
+  })
+}
+for (const paneMode of ['simpel', '', 'board']) {
+  test(`FREE TEXT: paneMode ${JSON.stringify(paneMode)} falls back to the operator board`, { options: { usage: false, signal: false, paneMode } }, async ($, on) => {
+    const w = bundle()
+    stubs(on, w)
+    mock.clock(on)
+    await open($)
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    const text = await shown(ui)
+    expect(text).toContain('NEEDS YOU')
+    expect(text).not.toContain('Questions for you')
+    await ui.unmount()
+  })
+}
+
 test('SIMPLE IS AN INBOX: the open question, the rest as lines, blocked tasks, progress — nothing else', SIMPLE, async ($, on) => {
   const w = bundle()
   stubs(on, w)

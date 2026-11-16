@@ -160,10 +160,25 @@ for sw in usage pane signal; do
   ok "…and the module reads it as \`o.$sw !== false\` exactly once (absent is on)" \
      "$(code "$MOD" | grep -cF "o.$sw !== false")" 1
 done
-ok "userConfig.paneMode is a choice of operator|simple, default operator" \
-   "$(jq -c '.userConfig.paneMode | [.type, .default, .options]' "$MANIFEST" 2>/dev/null)" '["string","operator",["operator","simple"]]'
-ok "…and the module reads paneMode off the options exactly once" \
-   "$(code "$MOD" | grep -c 'paneMode')/$(code "$MOD" | grep -cF "o.paneMode === 'simple'")" 1/1
+ok "userConfig.paneMode is a string, default operator" \
+   "$(jq -c '.userConfig.paneMode | [.type, .default]' "$MANIFEST" 2>/dev/null)" '["string","operator"]'
+ok "…whose description names both values" \
+   "$(jq -r '.userConfig.paneMode.description' "$MANIFEST" 2>/dev/null | grep -cE '^operator \(default\) or simple\.')" 1
+ok "…and the module reads paneMode off the options exactly once, forgiving case and space" \
+   "$(code "$MOD" | grep -c 'paneMode')/$(code "$MOD" | grep -cF "o.paneMode.trim().toLowerCase() === 'simple' ? 'simple' : 'operator'")" 1/1
+# OLDER CLAUDE CODE. 2.1.109 refused to install loopd at all over `userConfig.paneMode.options`
+# ("Unrecognized key"), while 2.1.325 accepts it — so `claude plugin validate` below, which
+# runs whatever CLI this machine has, cannot catch it. A userConfig field keeps to the keys
+# both accept; a new key is a decision to drop the older versions, taken here.
+UC_KEYS='["default","description","required","sensitive","title","type"]'
+uc_extra() { # manifest on stdin -> field.key per key outside UC_KEYS, space-joined
+  jq -r --argjson ok "$UC_KEYS" '[(.userConfig // {}) | to_entries[] | .key as $f | .value | keys[] | select(. as $k | $ok | index($k) | not) | "\($f).\(.)"] | join(" ")' 2>/dev/null
+}
+for m in "$MANIFEST" "$REPO/plugin-yolo/.claude-plugin/plugin.json"; do
+  ok "userConfig in ${m#"$REPO/"} uses only keys older Claude Code accepts" "$(uc_extra <"$m")" ""
+done
+ok "…and the check names an \`options\` key planted back (mutant)" \
+   "$(jq '.userConfig.paneMode.options = ["operator","simple"]' "$MANIFEST" | uc_extra)" "paneMode.options"
 ok "the options object is the only source: no \`mode\` read anywhere else" \
    "$(code "$MOD" | grep -cE '\.mode\b')" 0
 # The form is /loopd:new-project runs: every shape the pane passes is one the skill takes.

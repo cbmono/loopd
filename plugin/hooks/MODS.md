@@ -48,6 +48,12 @@ does. `paneMode` decides what it draws:
 | `operator` (default) | the board below, with Answer Questions, Refresh and Close Pane | the snapshot, its numbers from `counts.json`, and `org` and the stamped version for its header |
 | `simple` | an inbox — questions, stuck tasks, progress — and a form to start a project; nothing else | the task documents and the form |
 
+`paneMode` is **free text** in `/config`: the manifest declares no `options` list, because
+Claude Code 2.1.109 refuses to install a plugin whose `userConfig` carries one ("Unrecognized
+key"). So `simple` is read in any case and with surrounding spaces, and **any other value** — a
+typo, an empty field — draws `operator`, never an error. `tests/mods.test.sh` keeps every
+`userConfig` field to `type`, `title`, `description`, `default`, `sensitive` and `required`.
+
 ### operator mode
 
 The **fourth renderer** over the one board contract, `plugin/scripts/write-snapshot.sh` →
