@@ -292,7 +292,6 @@ acceptance_criteria:                  # PM fills/expands during refine
   - "<testable outcome>"
 worktree: /abs/path/to/worktree        # optional, BUILD only. MACHINE-READ by the WorktreeCreate hook.
 branch:   <branch-name>                # optional, BUILD only. MACHINE-READ. Required whenever `worktree:` is set.
-ui: true                              # optional, BUILD only: the task changes a screen a human looks at. Set by the PM at refine; absent ⇒ false. The PR is UI when this is true OR its diff touches the target repo's `uiGlobs` (instance.config.json: `{ "<owner>/<repo>": ["<glob>", ...] }`, absent ⇒ no globs); a UI PR's body names a screenshot path and its author runs `pr-body-clearance.sh --ui` (`conventions/pr-body.md` → "UI evidence: a screenshot per changed screen").
 # Both are written by the project-manager AT DISPATCH, and read by
 # `plugin/hooks/worktree-create.sh` when a session starts as `claude --worktree <task-id>`:
 # the hook places that path, on that branch, in a worktree of `target_repo`. They are
@@ -381,6 +380,7 @@ open_caveats:                         # optional, TICK-WRITTEN. A caveat a tick 
 # on an in-progress task would block promotion as a side effect — conflating "a question
 # for the human" with "a warning that outranks you".
 pr: [ ]                               # BUILD only: PR URL(s) set by the role agent(s) — a task may fan out to several
+ui: true                              # optional, BUILD only: the task changes a screen a human looks at. Set by the PM at refine; absent ⇒ false. The PR is UI when this is true OR its diff touches the target repo's `uiGlobs` (instance.config.json: `{ "<owner>/<repo>": ["<glob>", ...] }`, absent ⇒ no globs); a UI PR's body names a screenshot path and its author runs `pr-body-clearance.sh --ui` (`conventions/pr-body.md` → "UI evidence: a screenshot per changed screen").
 deploy: manual | auto                 # optional, BUILD only: overrides the Service doc's `deploy:` — see type: Service
 pr_mergeable: MERGEABLE               # PM-OWNED, NEVER HAND-EDITED. `MERGEABLE` | `CONFLICTING` | `UNKNOWN` — the tick's LAST `gh pr view --json mergeable,mergeStateStatus` read, written by `scripts/review-clearance.sh --record <task-doc>` in the same call that made it. Absent ⇒ `UNKNOWN`, which is NOT mergeable: `write-snapshot.sh` is offline by contract, so the board and `AWAITING.md` mint the 🔀 **merge** verb only for `MERGEABLE`, and a `CONFLICTING` in-review task renders as in flight (a rebase round) instead. Not a cache to consult INSTEAD of asking — mergeability changes when the default branch moves with no commit on the PR, so every tick overwrites it.
 stall_count: 0                        # PM-OWNED, NEVER HAND-EDITED. Consecutive rounds this task ended on the SAME blocker; absent ⇒ 0. The tick maintains it with `scripts/stall-counter.sh record` after every round, and it resets on progress: a changed blocker, a new commit or review thread on the PR (`--progress`), or a human edit — a task the human puts back in the queue (`draft`/`ready`) at or past the cap starts over.
