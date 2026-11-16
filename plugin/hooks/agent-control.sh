@@ -130,7 +130,7 @@
 # the cap is off for that agent and `control.log` says `elapsed=unknown`. The transcript is
 # never a clock — it is the parent session's, so its age is the session's (task-029).
 # A role session has no SubagentStart: its clock starts at its round's first PreToolUse and
-# restarts when `prompt_id` changes. A resume is `--resume <id> '<message>'` — a new prompt
+# restarts when `prompt_id` changes. A resume (step 4) is a new message, i.e. a new prompt
 # in the same session (session_id and agent_type unchanged, measured), and no stop event
 # reaches a `--bg` session, so the prompt is the only round boundary in the payload. No
 # `prompt_id` ⇒ no clock, as for a missing SubagentStart. Past the cap a role session may
