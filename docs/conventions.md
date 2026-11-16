@@ -273,7 +273,11 @@ and `transcript_path` are IDENTICAL for parent and subagent**, so a design keyed
 either would silently have been all-or-nothing: halt one agent, lose the human's own
 session with it. Two properties follow and both are load-bearing: the *presence* of
 `agent_id` is the parent-vs-subagent test with no heuristic, and an absent `agent_id`
-therefore means **exit 0 immediately** — this hook can never gate the parent. There is
+therefore means **exit 0 immediately** — this hook can never gate the parent. One
+exception, from bg-role-agent-guards: a top-level `claude --bg --agent` role session carries
+`agent_type` and no `agent_id`, and has no parent sharing its `session_id`, so it is keyed on
+that `session_id` — never the PM tick and never a session without `agent_type`
+(`docs/pm-design.md`). There is
 deliberately **no all-agents wildcard**, because it would reintroduce exactly the failure
 the measurement exists to have avoided. This is the third scoping assumption in the
 project to have been wrong (native worktree isolation, `paths:` globs, nearly this one),

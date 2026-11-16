@@ -215,7 +215,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    map it: `${CLAUDE_PLUGIN_ROOT}/scripts/control.sh agents` gives the `agent_id`'s role
    and first-seen time, which name a task only when **exactly one** dispatch matches both
    — the roster carries no task id and two tasks of one role can be in flight, so a role
-   with more than one candidate dispatch is unmapped, never the likelier of them. Then **one `# Notes` line** on that task (the tool, the count, the limit — never
+   with more than one candidate dispatch is unmapped, never the likelier of them. A
+   top-level role session's line carries its `session_id` in that field, which maps to the
+   one task whose `session:` names it, with no roster lookup. Then **one `# Notes` line** on that task (the tool, the count, the limit — never
    the arguments, which the log does not carry either) and **at most one 🔴 queue row**,
    whatever the log holds: an agent that looped is one item, not fifty. An `agent_id` you
    cannot map is reported unmapped, never guessed onto a task. **Never re-dispatch on a
