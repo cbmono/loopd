@@ -189,7 +189,7 @@ note() {
 if [ "$cmd" = digest ]; then
   mkdir -p "$inst/$AB_TICK_START" 2>/dev/null \
     && { [ -e "$inst/$AB_TICK_START/.gitignore" ] || printf '*\n' > "$inst/$AB_TICK_START/.gitignore"; } 2>/dev/null
-  : > "$REASON" 2>/dev/null
+  : > "$REASON" 2>/dev/null; : > "$SKIPPED" 2>/dev/null
 fi
 fail2() { note "CANNOT ANSWER: $1 — run the full tick."; exit 2; }
 
@@ -277,15 +277,21 @@ if [ "$close_set" -eq 1 ]; then
   line="* TICK $ts$by close: $close"
   [ "$suffix" = "usage UNKNOWN" ] || line="$line · $suffix"
   # After the usage suffix, so agent-usage.sh's first `tokens=` match is still the real one.
-  if [ -s "$REASON" ]; then
+  # Only a reason file written since this tick's open line is this tick's.
+  if [ -s "$REASON" ] && perl -MTime::Local -e '
+       my @s = stat $ARGV[0] or exit 1;
+       $ARGV[1] =~ /^(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+)Z$/ or exit 1;
+       exit($s[9] >= timegm($6, $5, $4, $3, $2 - 1, $1) ? 0 : 1)' "$REASON" "$ts" 2>/dev/null; then
     ia="$(cd "$inst" && pwd)/"; ip="$(cd "$inst" && pwd -P)/"
     case "$inst" in /*) ig="${inst%/}/" ;; *) ig="/" ;; esac
-    rs="$(IG="$ig" IA="$ia" IP="$ip" awk '
-      function strip(s, p,   i) { while (p != "/" && (i = index(s, p)) > 0) s = substr(s, 1, i - 1) substr(s, i + length(p)); return s }
-      NF { s = strip(strip(strip($0, ENVIRON["IG"]), ENVIRON["IA"]), ENVIRON["IP"]); out = out (n++ ? "; " : "") s }
-      END { printf "%s", out }' "$REASON" 2>/dev/null)"
-    rs="$(oneline "$rs")"
-    [ -n "$rs" ] && line="$line · digest: ${rs:0:300}"
+    # Longest prefix first: /tmp/x/ stripped out of /private/tmp/x/ would leave /private.
+    rs="$(printf '%s\n' "$ip" "$ia" "$ig" | awk '{ print length($0) "\t" $0 }' | sort -rn | cut -f2- \
+      | awk 'NR == FNR { if ($0 != "/") p[++np] = $0; next }
+        function strip(s,   i, k) { for (k = 1; k <= np; k++) while ((i = index(s, p[k])) > 0) s = substr(s, 1, i - 1) substr(s, i + length(p[k])); return s }
+        NF { out = out (n++ ? "; " : "") strip($0) }
+        END { printf "%s", out }' - "$REASON" 2>/dev/null)"
+    rs="$(oneline "$rs" | perl -CS -ne 'print substr($_, 0, 300)')"
+    [ -n "$rs" ] && line="$line · digest: $rs"
   fi
   tmp="$LOG.close.$$"
   AT="$at" LINE="$line" awk 'NR == ENVIRON["AT"] + 0 { print; print ENVIRON["LINE"]; next } { print }' \
@@ -377,8 +383,7 @@ step2=0 step3=0 step4=0 step5=0 step6=0
 # A ` --- `-answered entry inside the open_questions block. The digest's `q=` count says
 # how many questions there are and never whether one has been answered, which is the only
 # thing that names step 2 on a task that is not a draft.
-# The cheap read is bounded to the list, so a hit is always genuine; a miss still falls
-# through to fold-answers.sh's parser, the one reader of this shape that round-trips.
+# Read through fold-answers.sh's parser, the one reader of this shape that round-trips.
 # Exit 2 is UNKNOWN, not "no": the caller poisons the fingerprint on it rather than let a
 # parser it could not run read as a task with nothing answered.
 FOLD="$(dirname "${BASH_SOURCE[0]}")/fold-answers.sh"
@@ -396,8 +401,8 @@ inputs_state() { # <project.md> -> waiting | arrived | ready
 }
 SESS="$(dirname "${BASH_SOURCE[0]}")/agent-sessions.sh"
 # Only the parser's exit 3 (a list it refused) is 3 here — skip-and-name; anything else is 2.
+# No cheap ` --- ` grep first: an answered entry in a list the parser refuses must be named.
 answered_open() { # <file> -> 0 answered · 1 not · 2 cannot run · 3 unparseable; reason in $PERR
-  fmlist "$1" open_questions text 2>/dev/null | grep -qF -- ' --- ' && return 0
   local parsed rc
   parsed="$(bash "$FOLD" --list "$1" open_questions 2>"$PERR")"; rc=$?
   case $rc in 0) ;; 3) return 3 ;; *) return 2 ;; esac
@@ -468,6 +473,9 @@ fingerprint() { # <probe|digest>
     bad="$bad|$1|"; step2=1
     printf 'unparseable %s %s\n' "$1" "$(oneline "$2")"
     note "unparseable $1 $(oneline "$2")"
+    # Written as found, not after the walk: a digest that fails later still hands `record` its set.
+    [ "$cmd" = digest ] && printf 'unparseable %s %s\n' "$1" "$(oneline "$2")" >> "$SKIPPED" 2>/dev/null
+    return 0
   }
   for d in "$inst"/projects/*/; do
     [ -d "$d" ] || continue
@@ -703,7 +711,6 @@ if [ "$cmd" != record ] && [ ! -e "$START" ]; then
   mkdir -p "$sd" 2>/dev/null && { [ -e "$sd/.gitignore" ] || printf '*\n' > "$sd/.gitignore"; } 2>/dev/null \
     && { printf '%s\n' "$FP" | grep '^pr ' > "$START.$$"; mv "$START.$$" "$START"; } 2>/dev/null
 fi
-[ "$cmd" = digest ] && { printf '%s\n' "$FP" | grep '^unparseable ' > "$SKIPPED"; } 2>/dev/null
 
 case "$cmd" in
   digest)
