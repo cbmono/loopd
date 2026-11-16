@@ -387,7 +387,6 @@ cap_task_doc() {
   return 1
 }
 
-# A role session's round clock: rewritten when the round's prompt changes, never inside one.
 role_round_start() {
   local f s p
   [ -n "$prompt_id" ] || return 0
