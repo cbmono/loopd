@@ -275,6 +275,18 @@ state, and act only on deltas.
    ${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh pull   # exit 3 = no `knowledge` key, nothing to do
    ```
 
+   Then fold the answers of finished tasks — **every full tick, before the digest and
+   whatever the digest exits**:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/fold-terminal-answers.sh
+   ```
+
+   It moves each answered entry of a `done` or `cancelled` task, paused projects included;
+   live tasks keep your fold at step 2. Stage every `folded <path>` it prints with
+   `commit-as.sh`, name those paths in your close summary, and report `noop: false`; carry a
+   `skipped <path> <reason>` line onto the report as-is.
+
    Then read `index.md`, and run
 
    ```bash
