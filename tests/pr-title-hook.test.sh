@@ -20,7 +20,6 @@ BUNDLE="$(res "$TMP/bundle")"
 ELSEWHERE="$(res "$TMP/elsewhere")"
 prefix() { printf '{"ticketPrefix": %s}\n' "$1" > "$BUNDLE/instance.config.json"; }
 
-# verdict <project-dir> <command> — allow, deny, or stderr when the hook spoke there
 verdict() {
   local out
   out="$(jq -n --arg c "$2" '{tool_name:"Bash",tool_input:{command:$c}}' \
