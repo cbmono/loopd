@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # refactor-backlog.test.sh — `refactor-backlog.sh`: add appends one line, a duplicate and
 # each bad field are refused, the 200-open bound refuses and `done` frees a slot, two
-# concurrent adds both land in one well-formed file, and the file validates as a Backlog.
+# concurrent adds both land in one well-formed file, a backslash keeps dedup and the printed
+# id intact, racing first adds from two orgs land one, and the file validates as a Backlog.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -54,6 +55,14 @@ ok "an unknown id is refused"             "$(rc bash "$RB" "done" --repo acme/wi
 ok "a closed entry still deduplicates"    "$(rc add src/a.ts 'Extract the parser')" 1
 ok "count is the open total"              "$(bash "$RB" count)" 2
 
+echo "== a backslash in a field"
+out="$(add 'src\new\tmp.c' 'split it')"; added="$(grep -oE 'rb-[0-9]+' <<<"$out")"
+ok "the add lands"                        "$(grep -c 'src.new.tmp.c' "$F")" 1
+ok "the id add prints is the id list shows" \
+  "$(bash "$RB" list --repo acme/widget | awk '/tmp.c/ {print $1}')" "$added"
+ok "the same add again is a duplicate"    "$(rc add 'src\new\tmp.c' 'split it')" 1
+ok "done closes it by the printed id"     "$(rc bash "$RB" "done" --repo acme/widget "$added")" 0
+
 echo "== bound"
 for i in $(seq 198); do printf -- '- [ ] 2026-01-01 | f%s | w | y | r\n' "$i"; done >> "$F"
 ok "200 open: the add is refused"         "$(rc add src/z.ts 'One more')" 1
@@ -69,10 +78,20 @@ ok "two distinct adds, one duplicate: two entries" "$(open_lines)" 2
 ok "one frontmatter block"                "$(grep -c '^type: Backlog$' "$F")" 1
 ok "the lock is released"                 "$(find knowledge/backlog -name '*.lock' | grep -c .)" 0
 
+echo "== racing first adds from two orgs"
+rm -rf knowledge; mkdir -p knowledge/backlog/.web.lock
+bash "$RB" add --repo acme/web --path p --what w --why y --by r >/dev/null 2>&1 &
+bash "$RB" add --repo other/web --path p --what v --why y --by r >/dev/null 2>&1 &
+sleep 1; rmdir knowledge/backlog/.web.lock; wait
+ok "exactly one lands"                    "$(grep -c '^- \[ \] ' knowledge/backlog/web.md)" 1
+rm -rf knowledge
+add src/p.ts 'First' >/dev/null 2>&1; add src/q.ts 'Second' >/dev/null 2>&1
+
 echo "== validates as a Backlog"
 out="$(bash "$VB" knowledge/backlog/widget.md 2>&1)"
 ok "validate-bundle.sh exits 0 on it"     "$(rc bash "$VB" knowledge/backlog/widget.md)" 0
 ok "…and reports no error for it"         "$(grep -c ERROR <<<"$out")" 0
+ok "…having checked it, not skipped it"   "$(grep -c 'checked 1, ' <<<"$out")" 1
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

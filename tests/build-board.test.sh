@@ -69,12 +69,14 @@ RB="$TPL/plugin/scripts/refactor-backlog.sh"
 ( cd "$INST" && for w in one two three; do
     bash "$RB" add --repo o/r --path src/x.ts --what "$w" --why y --by software-engineer; done
   bash "$RB" "done" --repo o/r "$(bash "$RB" list --repo o/r | awk '/ — three$/ {print $1}')" ) >/dev/null 2>&1
-: > "$INST/AWAITING.md"; bash "$TPL/plugin/scripts/build-awaiting.sh" --instance "$INST" >/dev/null 2>&1
+mkdir -p "$(dirname "$INST/$AB_AWAITING")"; : > "$INST/$AB_AWAITING"
+bash "$TPL/plugin/scripts/build-awaiting.sh" --instance "$INST" >/dev/null 2>&1
 P3="$TMP/backlog.html"; render "$P3"
 ok "the snapshot carries the open count" \
   "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["counts"].get("backlog"))' "$INST/$AB_SNAPSHOT")" 2
 ok "the board shows it"                    "$(grep -oE 'refactor backlog</dt><dd>[0-9]+' "$P3" | grep -oE '[0-9]+$')" 2
-ok "AWAITING.md does not"                  "$(grep -ci 'backlog' "$INST/AWAITING.md")" 0
+ok "AWAITING.md was rebuilt"               "$([ -s "$INST/$AB_AWAITING" ] && echo yes || echo no)" yes
+ok "…and does not show it"                 "$(grep -ci 'backlog' "$INST/$AB_AWAITING")" 0
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

@@ -5,7 +5,7 @@
 #   refactor-backlog.sh done --repo <org>/<name> <id> | list [--repo <r>] | count [--repo <r>]
 #
 # Run at the bundle root. `add` only appends (the tick commits); entry `- [ ] DATE | WHERE |
-# WHAT | WHY | FOUND BY`, id `rb-<cksum of repo+path+what>`. Exit: 0 ok · 1 refused, named
+# WHAT | WHY | FOUND BY`, id `rb-<djb2 of repo+path+what>`. Exit: 0 ok · 1 refused, named
 # on stderr (bad field, duplicate, bound, unknown id) · 2 usage / not a bundle / lock held.
 # Why: SCHEMA.md → "type: Backlog"; all-code-is-slop-lessons/task-005.
 set -uo pipefail
@@ -42,12 +42,16 @@ KEY_AWK='
 function n(s) { s = tolower(s); gsub(/[ \t]+/, " ", s); gsub(/^ | $/, "", s); return s }
 function hid(s,   h, i) { h = 5381; for (i = 1; i <= length(s); i++) h = (h * 33 + ord[substr(s, i, 1)]) % 4294967296; return sprintf("rb-%.0f", h) }
 BEGIN { for (i = 1; i < 256; i++) ord[sprintf("%c", i)] = i }'
-id_of() { LC_ALL=C awk -v r="$1" -v w="$2" -v t="$3" "$KEY_AWK"' BEGIN { print hid(n(r) "|" n(w) "|" n(t)) }'; }
+# ENVIRON, not -v: -v expands backslash escapes, and `entries` reads the file literally.
+id_of() { R="$1" W="$2" T="$3" LC_ALL=C awk "$KEY_AWK"' BEGIN { print hid(n(ENVIRON["R"]) "|" n(ENVIRON["W"]) "|" n(ENVIRON["T"])) }'; }
 
 repo_ok() {
   REPO="$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')"
   [[ "$REPO" =~ ^[a-z0-9._-]+/[a-z0-9._-]+$ ]] || die 1 "refused — --repo wants <org>/<name>, got '$REPO'"
   FILE="$DIR/${REPO#*/}.md"
+  owner_ok
+}
+owner_ok() {
   if [ -f "$FILE" ]; then
     local have; have="$(sed -n '2,/^---$/s/^repo:[[:space:]]*//p' "$FILE" | head -1)"
     [ "$have" = "$REPO" ] || die 1 "refused — $FILE belongs to '$have', not '$REPO'"
@@ -89,6 +93,7 @@ case "$CMD" in
     done
     repo_ok
     lock
+    owner_ok
     id="$(id_of "$REPO" "$WHERE" "$WHAT")"
     dup="$(entries "$FILE" "$REPO" | awk -F'\t' -v id="$id" '$2 == id { print $1; exit }')"
     [ -z "$dup" ] || die 1 "refused — duplicate of $id ($dup)"
