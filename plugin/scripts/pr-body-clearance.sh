@@ -602,8 +602,31 @@ EOF
 }
 
 # --- element 9: under `--ui`, a screenshot path or the `✗` row that waives it --
-#   0 a screenshot path on the Verified line or a criteria row, or a `✗` row naming the
-#     screenshot (no runnable app; the `✗` sends the PR to a human)   1 neither
+#   0 a screenshot path on the Verified line or a criteria data row, or a data row whose
+#     STATUS CELL is `✗` naming the screenshot (the `✗` sends the PR to a human)   1 neither
+# The status cell is a cell holding only the mark, as in `table_scan`: a header such as
+# `| ✓/✗ | Evidence (screenshot) |` or a `✓` row quoting a `✗` would otherwise waive it.
+crit_rows() { # <rendered-body> -> "<chk|crs><TAB><row>" per table data row with a status cell
+  LC_ALL=C awk -v chk="$CRITERIA_MARK_VERIFIED" -v crs="$CRITERIA_MARK_UNVERIFIED" '
+    {
+      t = $0
+      if (!match(t, /^ *[|]/) || RLENGTH > 4) { intable = 0; prev = ""; next }
+      if (!intable) {
+        if (prev != "" && t ~ /^[ |:-]+$/ && t ~ /-/) intable = 1
+        else prev = t
+        next
+      }
+      s = t; gsub(/[\\][|]/, "", s); n = split(s, c, "|"); st = ""; both = 0
+      for (i = 2; i <= n; i++) {
+        v = c[i]; gsub(/[*_` ~]/, "", v)
+        if (v == chk) { if (st == "crs") both = 1; st = "chk" }
+        else if (v == crs) { if (st == "chk") both = 1; st = "crs" }
+      }
+      if (st != "" && !both) print st "\t" t
+    }
+  ' "$1"
+}
+
 has_screenshot() { # <rendered-body>
   local pat lines crit
   lines="$(while IFS= read -r pat; do
@@ -612,10 +635,10 @@ has_screenshot() { # <rendered-body>
 $(rows "$VERIFIED_MARKERS")
 EOF
 )"
-  crit="$(grep -E '^[[:space:]]{0,3}[|]' "$1" 2>/dev/null \
-            | grep -F -e "$CRITERIA_MARK_VERIFIED" -e "$CRITERIA_MARK_UNVERIFIED")"
-  printf '%s\n%s\n' "$lines" "$crit" | grep -Eiq "$SCREENSHOT_PATH" && return 0
-  printf '%s\n' "$crit" | grep -F "$CRITERIA_MARK_UNVERIFIED" | grep -iq screenshot && return 0
+  crit="$(crit_rows "$1")"
+  printf '%s\n%s\n' "$lines" "$(printf '%s\n' "$crit" | cut -f2-)" \
+    | grep -Eiq "$SCREENSHOT_PATH" && return 0
+  printf '%s\n' "$crit" | awk -F'\t' '$1 == "crs"' | grep -iq screenshot && return 0
   return 1
 }
 

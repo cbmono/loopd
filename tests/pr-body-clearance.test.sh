@@ -1137,7 +1137,20 @@ expect "no --ui, no screenshot -> clear" 0 --body-file "$(good_body)"
 expect "--ui, the only link a CI run -> refuse" 1 --ui --body-file \
   "$(ui_body 'Verified: CI green on [run 7](https://example.invalid/actions/runs/7/screenshot).')"
 expect "--ui, a screenshot path outside deliverables/local/ -> refuse" 1 --ui --body-file \
-  "$(ui_body 'Verified: `foo.test.sh` 40/0; screen at `docs/screenshot-login.png`.')"
+  "$(ui_body 'Verified: [run 1](https://example.invalid/actions/runs/1); screen at `docs/screenshot-login.png`.')"
+says   "  ...naming the screenshot, not the Verified line" "MISSING: the screenshot (--ui)"
+expect "--ui, a path only under ## Description -> refuse" 1 --ui --body-file \
+  "$(body_file '## Description' "Adds the screen, see \`$SHOT\`." '' "$VERIFIED" '' "$(crit_head 1)" '' \
+     "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "--ui, a ✓ row naming a screenshot, no path -> refuse" 1 --ui --body-file \
+  "$(body_file '## Description' 'Adds the screen.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
+     "$TABLE_HEAD" "$TABLE_RULE" '| the login screen renders | ✓ | screenshot taken, `foo.test.sh` 40/0 |')"
+expect "--ui, ✓/✗ header naming screenshot, no ✗ row -> refuse" 1 --ui --body-file \
+  "$(body_file '## Description' 'Adds the screen.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
+     '| Criterion | ✓/✗ | Evidence (test or screenshot) |' "$TABLE_RULE" "$TABLE_ROW")"
+expect "--ui, a ✓ row quoting ✗ and screenshot -> refuse" 1 --ui --body-file \
+  "$(body_file '## Description' 'Adds the screen.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
+     "$TABLE_HEAD" "$TABLE_RULE" '| no ✗ screenshot rows remain | ✓ | `foo.test.sh` 40/0 |')"
 expect "--ui, a ✗ row naming the screenshot -> clear" 0 --ui --body-file \
   "$(ui_body "$VERIFIED" '| a screenshot per changed screen | ✗ | no runnable app in this repo |')"
 expect "--ui, an unrelated ✗ row -> refuse" 1 --ui --body-file \
