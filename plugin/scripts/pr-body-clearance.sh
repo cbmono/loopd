@@ -198,7 +198,8 @@
 #   9. `--ui` — THE CALLER SAYS THE PR IS UI (the task's `ui: true`, or its diff touches
 #      the repo's `uiGlobs`); this file reads only the body, so it cannot know. With it, the
 #      `Verified:` line or a criteria row names a screenshot path, or a `✗` row says why
-#      there is none — refused at 1 otherwise. `conventions/pr-body.md` → "UI evidence".
+#      there is none — refused at 1 otherwise. `conventions/pr-body.md` →
+#      "UI evidence: a screenshot per changed screen".
 #
 # WHAT THIS DOES NOT DO, AND WHOSE JOB THAT IS. It answers "is the criteria table there
 # and well-formed", never "is every row `✓`". WHETHER EVERY ROW IS `✓` STAYS
