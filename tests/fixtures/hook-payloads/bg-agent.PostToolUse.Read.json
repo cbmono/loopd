@@ -1,0 +1,29 @@
+{
+  "agent_type": "",
+  "cwd": "",
+  "duration_ms": 0,
+  "effort": {
+    "level": ""
+  },
+  "hook_event_name": "",
+  "permission_mode": "",
+  "prompt_id": "",
+  "scratchpad_dir": "",
+  "session_id": "",
+  "tool_input": {
+    "file_path": ""
+  },
+  "tool_name": "",
+  "tool_response": {
+    "file": {
+      "content": "",
+      "filePath": "",
+      "numLines": 0,
+      "startLine": 0,
+      "totalLines": 0
+    },
+    "type": ""
+  },
+  "tool_use_id": "",
+  "transcript_path": ""
+}
