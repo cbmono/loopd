@@ -47,11 +47,11 @@ signature". Never on a PR body.
    package store).
 3. **Make the change**, matching existing conventions (workflow structure, chart
    values, module layout).
-   **Never add a workaround, or a comment justifying a shortcut.** Debt you cannot fix within
-   the task stays out of the code: add it to the repo's refactor backlog with
-   `${CLAUDE_PLUGIN_ROOT}/scripts/refactor-backlog.sh` where that script exists, else write one
-   `Out of scope:` line in the PR body. A `Finding` only when a later task would plausibly hit
-   the same problem.
+   **Never add a workaround, or a comment justifying a shortcut.** Debt
+   you cannot fix within the task stays out of the code: add it to the repo's refactor
+   backlog under the bundle's `knowledge/backlog/` where one exists, else write one
+   `Out of scope:` line in the PR body. A `Finding` only when a later task would plausibly
+   hit the same problem.
 4. **Validate without mutating live infra.** Use static/dry checks only:
    - YAML/Actions: lint, `actionlint` if available, `--dry-run` where supported.
    - Helm: `helm lint` / `helm template`.
