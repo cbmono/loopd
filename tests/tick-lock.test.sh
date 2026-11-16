@@ -132,6 +132,8 @@ TICK="$TPL/plugin/agents/project-manager.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/tick-lock.XXXXXX")" || {
   echo "tick-lock.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
+# tick-lock.sh refuses a directory with no instance.config.json, so every fixture carries one.
+mkinst() { local d; for d; do mkdir -p "$d/$AB_DIR" && : > "$d/instance.config.json"; done; }
 
 pass=0; fail=0
 ok() { # <name> <actual> <expected>
@@ -217,7 +219,7 @@ said() { # <fixed-string> -> yes|no, against the last tick's output
 }
 
 echo "== absence is never an error: no lock, so it dispatches, in silence =="
-A="$TMP/a"; mkdir -p "$A" "$A/$AB_DIR"
+A="$TMP/a"; mkinst "$A"
 attempt "$A"
 ok "exit 0 on a missing lock"            "$ATTEMPT_RC" 0
 ok "…and it dispatched"                  "$(dispatches "$A")" 1
@@ -256,7 +258,7 @@ echo "== the race the mechanism exists for: 20 attempts, one dispatch =="
 # check and the write are one syscall and there is no window to interleave with — which is
 # exactly what the tick's own ledger check (project-manager.md step 0.5) cannot claim,
 # since it reads, then syncs, then writes.
-R="$TMP/race"; mkdir -p "$R" "$R/$AB_DIR"
+R="$TMP/race"; mkinst "$R"
 for i in $(seq 1 20); do
   ( bash "$LOCKSH" acquire --instance "$R" >/dev/null 2>&1 && : > "$R/won.$i" ) &
 done
@@ -266,7 +268,7 @@ ok "exactly one attempt won the lock" \
 # NON-VACUITY: the same 20 parallel attempts must be able to produce 20 wins, or "one
 # winner" would be a property of the loop rather than of the lock.
 for i in $(seq 1 20); do
-  ( mkdir -p "$TMP/solo/$i" && bash "$LOCKSH" acquire --instance "$TMP/solo/$i" >/dev/null 2>&1 \
+  ( mkinst "$TMP/solo/$i" && bash "$LOCKSH" acquire --instance "$TMP/solo/$i" >/dev/null 2>&1 \
     && : > "$TMP/solo/$i/won" ) &
 done
 wait
@@ -275,7 +277,7 @@ ok "…and 20 separate instances give 20 wins" \
 
 echo
 echo "== stale: surfaced to the human, not deleted and not adopted =="
-S="$TMP/stale"; mkdir -p "$S" "$S/$AB_DIR"
+S="$TMP/stale"; mkinst "$S"
 OLD=$(( $(date -u +%s) - 9000 ))          # 2h30m ago, past the 120m default
 OLD_ISO="$(iso_of "$OLD")"
 printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$OLD_ISO" "$OLD" > "$S/$AB_LOCK"
@@ -298,7 +300,7 @@ echo
 echo "== liveness is computed FROM THE FILE, timestamp alone is enough =="
 # A lock carrying only the human-readable field still answers "is this stale?" — the
 # criterion is that a reader never needs session memory, git log or the tick ledger.
-T2="$TMP/tsonly"; mkdir -p "$T2" "$T2/$AB_DIR"
+T2="$TMP/tsonly"; mkinst "$T2"
 printf 'timestamp: %s\nagent: cataloguer\n' "$OLD_ISO" > "$T2/$AB_LOCK"
 attempt "$T2"
 ok "exit 2 from the timestamp alone"     "$ATTEMPT_RC" 2
@@ -307,13 +309,13 @@ ok "…naming the agent the file records"  "$(grep -qF 'cataloguer' <<<"$ATTEMPT
 
 echo
 echo "== a lock that cannot answer, and one dated in the future, both ask a human =="
-U="$TMP/unreadable"; mkdir -p "$U" "$U/$AB_DIR"
+U="$TMP/unreadable"; mkinst "$U"
 printf 'this is not a lock\n' > "$U/$AB_LOCK"
 attempt "$U"
 ok "unreadable: exit 2"                  "$ATTEMPT_RC" 2
 ok "…no dispatch"                        "$(dispatches "$U")" 0
 ok "…and it is left on disk"             "$(yn test -f "$U/$AB_LOCK")" yes
-F="$TMP/future"; mkdir -p "$F" "$F/$AB_DIR"
+F="$TMP/future"; mkinst "$F"
 AHEAD=$(( $(date -u +%s) + 86400 ))
 printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$(iso_of "$AHEAD")" "$AHEAD" > "$F/$AB_LOCK"
 attempt "$F"
@@ -327,7 +329,7 @@ echo "== per clone, NOT cross-machine: two clones dispatch independently =="
 # The supported design (`/pm-loop` -> "Why serial"; SCHEMA.md -> "Ownership on a shared
 # instance"): two humans, one bundle, two clones. A lock that reached across them would
 # break it, which is why it is gitignored and why this is asserted rather than assumed.
-C1="$TMP/clone1"; C2="$TMP/clone2"; mkdir -p "$C1" "$C1/$AB_DIR" "$C2" "$C2/$AB_DIR"
+C1="$TMP/clone1"; C2="$TMP/clone2"; mkinst "$C1" "$C2"
 attempt "$C1"; ok "clone 1 dispatches"   "$ATTEMPT_RC" 0
 attempt "$C2"; ok "clone 2 dispatches too, while clone 1 holds" "$ATTEMPT_RC" 0
 ok "…each holding its own lock" \
@@ -340,7 +342,7 @@ echo "== THE CRUX: the launcher takes it, then the tick it spawned takes it and 
 # project-manager.md step 0.5 acquires. If the tick cannot tell "held by the launcher that
 # spawned me" from "held by someone else", this is where every dispatched tick deadlocks —
 # an outage of the whole loop, worse than the bug being fixed.
-H="$TMP/handoff"; mkdir -p "$H" "$H/$AB_DIR"
+H="$TMP/handoff"; mkinst "$H"
 attempt "$H"
 ok "the launcher took the lock"          "$ATTEMPT_RC" 0
 ok "…and spawned a tick"                 "$(dispatches "$H")" 1
@@ -385,7 +387,7 @@ echo "== the measured bug: a RESUMED tick is REFUSED, and never runs at all =="
 # moved on, holding context from work already finished. Inverted deliberately, in the same
 # change that makes a tick never resumable; the ordering assertions below are what proves
 # the inversion did not simply delete the guarantee.
-R2="$TMP/resume"; mkdir -p "$R2" "$R2/$AB_DIR"
+R2="$TMP/resume"; mkinst "$R2"
 tick "$R2"                                # resumed: it did not pass through the launcher
 ok "the resumed tick is REFUSED"         "$TICK_RC" 4
 ok "…and did NOT run"                    "$(ran "$R2")" 0
@@ -408,7 +410,7 @@ echo "== and the refusal is not decoration: strip it and the resumed tick runs a
 # A guard is only a guard if its removal is detectable, so the removal is performed here.
 # `MUTANT` is this script with the two `refuse_unlaunched` calls in `acquire` deleted —
 # nothing else — which is exactly the edit a future "simplification" would make.
-MUT="$TMP/mutant"; mkdir -p "$MUT" "$MUT/$AB_DIR"
+MUT="$TMP/mutant"; mkinst "$MUT"
 MUTANT="$MUT/tick-lock.sh"
 sed 's/^\( *\)refuse_unlaunched$/\1: # refusal removed/' "$LOCKSH" > "$MUTANT"
 ok "the mutant differs from the real script" \
@@ -416,7 +418,7 @@ ok "the mutant differs from the real script" \
 ok "…and is still valid shell"           "$(yn bash -n "$MUTANT")" yes
 # The same sequence against both scripts, from identical empty instances, so the only
 # variable is the refusal itself.
-MR="$TMP/mutant-run"; MRR="$TMP/real-run"; mkdir -p "$MR" "$MR/$AB_DIR" "$MRR" "$MRR/$AB_DIR"
+MR="$TMP/mutant-run"; MRR="$TMP/real-run"; mkinst "$MR" "$MRR"
 # tick-lock.sh sources its sibling resolver (ai-bridge-v3/task-031); the mutant lives in
 # $TMP, so the resolver has to as well or it exits 2 before reaching the refusal.
 cp "$(dirname "$LOCKSH")/bundle-paths.sh" "$MUT/bundle-paths.sh"
@@ -435,7 +437,7 @@ echo "== two concurrent ticks cannot both proceed, whichever order they arrive i
 # which is the property, though not the same one. This is the one way a resumed tick still
 # gets through, and it is asserted rather than left implicit: closing it would mean telling
 # two ticks apart at the instant neither has claimed anything.
-B="$TMP/order-b"; mkdir -p "$B" "$B/$AB_DIR"
+B="$TMP/order-b"; mkinst "$B"
 attempt "$B"                              # launcher takes the lock…
 tick "$B" cataloguer                      # …a resumed tick gets to step 0.5 first
 tick "$B" project-manager                 # …and the dispatched tick arrives after
@@ -448,7 +450,7 @@ echo "== 20 ticks racing for ONE unclaimed dispatch lock: exactly one adopts it 
 # The claim is created with O_EXCL for the same reason the lock is. A claim written by
 # read-then-write would re-open, one layer down, the very race `acquire` exists to close —
 # and it would do it in the adoption path, which is the one nobody would think to test.
-A2="$TMP/adopt-race"; mkdir -p "$A2" "$A2/$AB_DIR"
+A2="$TMP/adopt-race"; mkinst "$A2"
 bash "$LOCKSH" acquire --instance "$A2" >/dev/null 2>&1     # the launcher's lock
 for i in $(seq 1 20); do
   ( bash "$LOCKSH" acquire --as tick --instance "$A2" >/dev/null 2>&1 && : > "$A2/adopted.$i" ) &
@@ -465,7 +467,7 @@ echo "== THE 2026-08-30 SEQUENCE: a tick meets its OWN claim and PROCEEDS =="
 # read as a different tick, so the tick stood down on its own claim and dispatched nothing.
 # Note both ticks below carry `--agent project-manager`: the role is identical and cannot
 # be what separates them, which is precisely why `--agent` is not the identity.
-E="$TMP/reentry"; mkdir -p "$E" "$E/$AB_DIR"
+E="$TMP/reentry"; mkinst "$E"
 attempt "$E"
 ok "the launcher took the lock"          "$ATTEMPT_RC" 0
 tick "$E" project-manager pm-tick-1
@@ -513,7 +515,7 @@ echo "== a resume is refused in BOTH directions, which is why both guards are he
 #
 # Drop the second and a resume takes a lock of its own and stands the next genuine dispatch
 # down; drop the first and a resume runs beside a live tick. Both halves, driven in order.
-RE="$TMP/resume-id"; mkdir -p "$RE" "$RE/$AB_DIR"
+RE="$TMP/resume-id"; mkinst "$RE"
 attempt "$RE"                             # the launcher, dispatching tick A
 tick "$RE" project-manager tick-A
 ok "the dispatched tick adopts"          "$TICK_RC" 0
@@ -537,7 +539,7 @@ echo "== THE LAUNCHER MINTS THE ID: it lives in the lock, and in no second file 
 # was exit 2 on the ORDINARY path. The launcher now mints one literal per tick and passes it
 # to its own acquire; `.tick-lock` records it and nothing else on disk does.
 ID=tick-20260906T152233Z-a7f3
-MINT="$TMP/minted"; mkdir -p "$MINT" "$MINT/$AB_DIR"
+MINT="$TMP/minted"; mkinst "$MINT"
 attempt_as "$MINT" "$ID"
 ok "the launcher takes the lock with an id" "$ATTEMPT_RC" 0
 ok "…still in silence"                     "$ATTEMPT_OUT" ""
@@ -578,7 +580,7 @@ echo "== adopting proves RE-ENTRY ONLY: a mis-copied id still runs, and is told 
 # ADOPT would close the 41-47s dispatch window — and one mis-typed literal would then refuse
 # every dispatched tick, the total outage this design calls strictly worse than the bug. So a
 # mismatch here is REPORTED and the tick runs.
-WIN="$TMP/mint-typo"; mkdir -p "$WIN" "$WIN/$AB_DIR"
+WIN="$TMP/mint-typo"; mkinst "$WIN"
 attempt_as "$WIN" tick-A
 tick "$WIN" project-manager tick-typo
 ok "a tick whose id differs still adopts" "$TICK_RC" 0
@@ -592,7 +594,7 @@ echo "== declare nothing and NOTHING changes: the derived tier is still the fall
 # Criterion 4, and the direction that must never invert: a bundle that never adopts the
 # launcher path behaves exactly as it did before any of this. A session-derived id names the
 # session that ran the LAUNCHER, not the tick it is about to spawn, so it is not recorded.
-OLDW="$TMP/undeclared"; mkdir -p "$OLDW" "$OLDW/$AB_DIR"
+OLDW="$TMP/undeclared"; mkinst "$OLDW"
 CLAUDE_CODE_SESSION_ID=aaf01a1c-fc30-4e96-99e9-a2c43733c10f \
   bash "$LOCKSH" acquire --instance "$OLDW" --agent project-manager >/dev/null 2>&1
 ok "an undeclared launcher writes no claimant" "$(grep -c '^claimant:' "$OLDW/$AB_LOCK" | tr -d ' ')" 0
@@ -604,7 +606,7 @@ echo "== the claimant is checked LAST: a stale lock is stale even to its own cla
 # The claim must never become a second clock, and "recognise yourself" is the tempting way
 # to build one by accident. Staleness is computed from `.tick-lock` alone, before identity
 # is looked at at all — so the tick whose claim it is gets the same exit 2 as anyone else.
-SM="$TMP/stale-mine"; mkdir -p "$SM" "$SM/$AB_DIR"
+SM="$TMP/stale-mine"; mkinst "$SM"
 printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$OLD_ISO" "$OLD" > "$SM/$AB_LOCK"
 printf 'timestamp: %s\nepoch: %s\nagent: project-manager\norigin: adopted\nclaimant: mine\n' \
   "$(iso_of "$(date -u +%s)")" "$(date -u +%s)" > "$SM/$AB_LOCK_CLAIM"
@@ -618,14 +620,14 @@ echo
 echo "== --as launcher is unchanged: it refuses a claimed lock, identity or not =="
 # The strict path must not learn the new trick. A launcher carrying the very identity that
 # made the claim still gets HELD, and still writes no claim of its own.
-LA="$TMP/launcher-id"; mkdir -p "$LA" "$LA/$AB_DIR"
+LA="$TMP/launcher-id"; mkinst "$LA"
 attempt "$LA"                             # the dispatch lock a tick may claim
 tick "$LA" project-manager L
 ok "a tick claims that lock as L"        "$TICK_RC" 0
 OUT="$(TICK_CLAIMANT=L bash "$LOCKSH" acquire --instance "$LA" 2>&1)"; RC=$?
 ok "the launcher is refused even as L"   "$RC" 1
 ok "…and is not offered a re-entry"      "$(grep -qF 're-entered:' <<<"$OUT" && echo yes || echo no)" no
-LB="$TMP/launcher-claim"; mkdir -p "$LB" "$LB/$AB_DIR"
+LB="$TMP/launcher-claim"; mkinst "$LB"
 TICK_CLAIMANT=L bash "$LOCKSH" acquire --instance "$LB" >/dev/null 2>&1
 ok "…and a launcher never writes a claim" "$(yn test -e "$LB/$AB_LOCK_CLAIM")" no
 # `release` is still the human's override: it asks nobody who they are and takes both files,
@@ -639,7 +641,7 @@ echo "== no identity available: exactly the old behaviour, said out loud =="
 # The degradation that must never invert. With nothing to identify a tick, a claim it made
 # itself is indistinguishable from a sibling's — so it HOLDS, as it did before claimants
 # existed, and the refusal names the reason rather than letting it read as a live sibling.
-ND="$TMP/no-id"; mkdir -p "$ND" "$ND/$AB_DIR"
+ND="$TMP/no-id"; mkinst "$ND"
 attempt "$ND"
 tick "$ND"                                # no --claimant, and the environment is unset
 ok "an unidentified tick still adopts"   "$TICK_RC" 0
@@ -650,7 +652,7 @@ ok "…naming the missing identity as the reason" "$(said 'No identity for THIS 
 ok "…and it did not run twice"           "$(ran "$ND")" 1
 # The mirror: an identified tick meeting a claim written before claimants existed. It cannot
 # be matched to anybody, so it is nobody's — hold, and say which side is missing.
-OLDC="$TMP/old-claim"; mkdir -p "$OLDC" "$OLDC/$AB_DIR"
+OLDC="$TMP/old-claim"; mkinst "$OLDC"
 attempt "$OLDC"
 NOW_T="$(date -u +%s)"
 printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$(iso_of "$NOW_T")" "$NOW_T" > "$OLDC/$AB_LOCK_CLAIM"
@@ -664,7 +666,7 @@ echo "== THE MEASUREMENT: the runtime's id names a SESSION, so it may never clea
 # `CLAUDE_CODE_SESSION_ID`, byte for byte. So this block drives the sequence that fact makes
 # dangerous — launcher dispatches A, A claims, the SAME SESSION arrives again (a resume) —
 # and asserts the one thing that keeps 2026-08-29 shut: it does NOT proceed.
-EV="$TMP/env-id"; mkdir -p "$EV" "$EV/$AB_DIR"
+EV="$TMP/env-id"; mkinst "$EV"
 bash "$LOCKSH" acquire --instance "$EV" >/dev/null 2>&1
 OUT="$(CLAUDE_CODE_SESSION_ID=sess-aaa bash "$LOCKSH" acquire --as tick --instance "$EV" 2>&1)"; RC=$?
 ok "a session id is enough to claim"     "$RC" 0
@@ -694,7 +696,7 @@ echo "== the two tiers: a DECLARED match is proof, a mixed one is not =="
 # `--claimant`/`TICK_CLAIMANT` are a caller PROMISING "this names this tick"; the runtime's
 # variable promises only "this names this session". Equal strings from different tiers are
 # therefore not the same statement, and the script must not average them into one.
-TD="$TMP/tier-declared"; mkdir -p "$TD" "$TD/$AB_DIR"
+TD="$TMP/tier-declared"; mkinst "$TD"
 bash "$LOCKSH" acquire --instance "$TD" >/dev/null 2>&1
 bash "$LOCKSH" acquire --as tick --instance "$TD" --claimant tick-x >/dev/null 2>&1
 OUT="$(TICK_CLAIMANT=tick-x bash "$LOCKSH" acquire --as tick --instance "$TD" 2>&1)"; RC=$?
@@ -702,7 +704,7 @@ ok "declared on both sides re-enters"    "$RC" 0
 ok "…as a re-entry, not a fresh claim"   "$(grep -qF 're-entered:' <<<"$OUT" && echo yes || echo no)" yes
 OUT="$(CLAUDE_CODE_SESSION_ID=tick-x bash "$LOCKSH" acquire --as tick --instance "$TD" 2>&1)"; RC=$?
 ok "a DERIVED id matching a declared claim cannot clear it" "$RC" 2
-TM="$TMP/tier-mixed"; mkdir -p "$TM" "$TM/$AB_DIR"
+TM="$TMP/tier-mixed"; mkinst "$TM"
 bash "$LOCKSH" acquire --instance "$TM" >/dev/null 2>&1
 CLAUDE_CODE_SESSION_ID=tick-y bash "$LOCKSH" acquire --as tick --instance "$TM" >/dev/null 2>&1
 OUT="$(bash "$LOCKSH" acquire --as tick --instance "$TM" --claimant tick-y 2>&1)"; RC=$?
@@ -716,7 +718,7 @@ echo "== THE SEQUENCE THE COLLISION WOULD HAVE RE-OPENED, counted end to end =="
 # ran.log can say that. One `/pm-loop` session S: it takes the lock, dispatches tick A, and
 # then — the bypass the whole claim exists for — resumes a completed tick R. Every one of
 # those carries S's session id, measured identical. Exactly one of A and R may run.
-SIB="$TMP/sibling-resume"; mkdir -p "$SIB" "$SIB/$AB_DIR"
+SIB="$TMP/sibling-resume"; mkinst "$SIB"
 attempt "$SIB"
 ok "session S takes the lock and dispatches" "$ATTEMPT_RC" 0
 TICK_OUT="$(CLAUDE_CODE_SESSION_ID=sess-S bash "$LOCKSH" acquire --as tick --instance "$SIB" 2>&1)"
@@ -732,7 +734,7 @@ echo "== status answers 'whose claim is that?' without a probe =="
 # The refusal and `status` must both print BOTH identities. Until they did, the only way to
 # answer the one question an operator has was to cat the claim and echo the environment by
 # hand — which is how the session id's real granularity went unnoticed until it shipped.
-ST="$TMP/status-id"; mkdir -p "$ST" "$ST/$AB_DIR"
+ST="$TMP/status-id"; mkinst "$ST"
 bash "$LOCKSH" acquire --instance "$ST" >/dev/null 2>&1
 bash "$LOCKSH" acquire --as tick --instance "$ST" --claimant tick-s >/dev/null 2>&1
 OUT="$(CLAUDE_CODE_SESSION_ID=sess-other bash "$LOCKSH" status --instance "$ST" 2>&1)"; RC=$?
@@ -760,13 +762,13 @@ echo "== an empty value is not a declaration, and an empty flag is =="
 # how a caller UNSETS a variable, so it falls through to the runtime rather than refusing,
 # while `--claimant ''` is a caller declaring nothing and stays exit 3. The header says so;
 # this asserts the header is describing the code and not the other way round.
-EMPTY="$TMP/empty-id"; mkdir -p "$EMPTY" "$EMPTY/$AB_DIR"
+EMPTY="$TMP/empty-id"; mkinst "$EMPTY"
 bash "$LOCKSH" acquire --instance "$EMPTY" >/dev/null 2>&1   # a tick only ever claims
 OUT="$(TICK_CLAIMANT= CLAUDE_CODE_SESSION_ID=sess-fallback bash "$LOCKSH" acquire --as tick --instance "$EMPTY" 2>&1)"; RC=$?
 ok "an empty TICK_CLAIMANT falls through" "$RC" 0
 ok "…to the runtime's id, recorded as such" \
   "$(lock_field_of "$EMPTY/$AB_LOCK_CLAIM" claimant-source)" session
-mkdir -p "$TMP/empty-flag" "$TMP/empty-flag/$AB_DIR"
+mkinst "$TMP/empty-flag"
 OUT="$(bash "$LOCKSH" acquire --as tick --instance "$TMP/empty-flag" --claimant '' 2>&1)"; RC=$?
 ok "…while an empty --claimant is still refused" "$RC" 3
 
@@ -779,7 +781,7 @@ PR="$TMP/precedence"
 for combo in "session:::sess-env-only" "env::envwins:sess-loser" "flag:flagwins:envloser:sessloser"; do
   want="${combo%%:*}"; rest="${combo#*:}"
   fl="${rest%%:*}"; rest="${rest#*:}"; ev="${rest%%:*}"; se="${rest##*:}"
-  d="$PR-$want"; mkdir -p "$d" "$d/$AB_DIR"
+  d="$PR-$want"; mkinst "$d"
   bash "$LOCKSH" acquire --instance "$d" >/dev/null 2>&1     # a tick only ever claims
   CLAUDE_CODE_SESSION_ID="$se" TICK_CLAIMANT="$ev" bash "$LOCKSH" acquire --as tick \
     --instance "$d" ${fl:+--claimant "$fl"} >/dev/null 2>&1
@@ -787,19 +789,19 @@ for combo in "session:::sess-env-only" "env::envwins:sess-loser" "flag:flagwins:
 done
 # A runtime that renames or reshapes its variable must not stop ticks: an unusable IMPLICIT
 # identity is ignored (no identity, old behaviour), where an unusable EXPLICIT one refuses.
-EV2="$TMP/env-junk"; mkdir -p "$EV2" "$EV2/$AB_DIR"
+EV2="$TMP/env-junk"; mkinst "$EV2"
 bash "$LOCKSH" acquire --instance "$EV2" >/dev/null 2>&1     # a tick only ever claims
 OUT="$(CLAUDE_CODE_SESSION_ID='not a plain id' bash "$LOCKSH" acquire --as tick --instance "$EV2" 2>&1)"; RC=$?
 ok "a malformed session id is ignored, not fatal" "$RC" 0
 ok "…and simply leaves the claim unattributed" \
   "$(grep -c '^claimant:' "$EV2/$AB_LOCK_CLAIM" | tr -d ' ')" 0
-mkdir -p "$TMP/env-bad" "$TMP/env-bad/$AB_DIR"
+mkinst "$TMP/env-bad"
 OUT="$(TICK_CLAIMANT='not a plain id' bash "$LOCKSH" acquire --as tick --instance "$TMP/env-bad" 2>&1)"; RC=$?
 ok "a malformed TICK_CLAIMANT is refused" "$RC" 3
 
 echo
 echo "== --claimant is validated, and belongs to acquire alone =="
-V="$TMP/claimant-args"; mkdir -p "$V" "$V/$AB_DIR"
+V="$TMP/claimant-args"; mkinst "$V"
 OUT="$(bash "$LOCKSH" acquire --as tick --instance "$V" --claimant 'two words' 2>&1)"; RC=$?
 ok "a non-id --claimant is refused"      "$RC" 3
 ok "…saying what an id may contain"      "$(grep -qF 'plain id' <<<"$OUT" && echo yes || echo no)" yes
@@ -816,7 +818,7 @@ echo
 echo "== the claim is part of the lock, not a second clock and not a second lock =="
 # A tick must not be able to refresh its own deadline by claiming: staleness is computed
 # from `.tick-lock` alone, exactly as before this change.
-SC="$TMP/stale-claim"; mkdir -p "$SC" "$SC/$AB_DIR"
+SC="$TMP/stale-claim"; mkinst "$SC"
 printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$OLD_ISO" "$OLD" > "$SC/$AB_LOCK"
 printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$(iso_of "$(date -u +%s)")" "$(date -u +%s)" \
   > "$SC/$AB_LOCK_CLAIM"
@@ -841,7 +843,7 @@ echo "== a claim that outlived its lock is residue, and must not deadlock the ne
 # that died between its two rm's) and every subsequently dispatched tick refuses a lock
 # nobody holds. `acquire` clears it on the create — and only when it was there BEFORE the
 # create, so it can never delete a live tick's claim.
-RS="$TMP/residue"; mkdir -p "$RS" "$RS/$AB_DIR"
+RS="$TMP/residue"; mkinst "$RS"
 printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$OLD_ISO" "$OLD" > "$RS/$AB_LOCK_CLAIM"
 ok "status says the claim outlived its lock" \
   "$(grep -qF 'outlived' <<<"$(bash "$LOCKSH" status --instance "$RS" 2>&1)" && echo yes || echo no)" yes
@@ -857,7 +859,7 @@ echo "== absence is never an error for the LAUNCHER — and is the refusal for a
 # The two halves of "absence" are opposite answers on purpose, and neither may drift into
 # the other: for the launcher an absent lock is the ordinary case it exists to take, and
 # for a tick it is proof that no launcher ran.
-N="$TMP/tick-absent"; mkdir -p "$N" "$N/$AB_DIR"
+N="$TMP/tick-absent"; mkinst "$N"
 OUT="$(bash "$LOCKSH" acquire --as tick --instance "$N" 2>/dev/null)"; RC=$?
 ok "no lock: the tick is refused"        "$RC" 4
 ok "…with nothing on stdout"             "$([ -z "$OUT" ] && echo empty || echo "$OUT")" empty
@@ -883,7 +885,7 @@ echo "== a claim that cannot be WRITTEN is not a claim somebody else holds =="
 if [ "$(id -u)" = 0 ]; then
   echo "  SKIP  running as root: permission bits refuse nobody"
 else
-  W="$TMP/readonly"; mkdir -p "$W" "$W/$AB_DIR"
+  W="$TMP/readonly"; mkinst "$W"
   attempt "$W"                              # the launcher takes the lock while it can
   chmod a-w "$W/$AB_DIR"
   tick "$W"; RC_RO="$TICK_RC"; OUT_RO="$TICK_OUT"
@@ -1206,7 +1208,7 @@ mh="${M1#tick-}"; mh="${mh:0:11}"
 ok "…in UTC under a non-UTC TZ"          "$([ "$mh" = "$h0" ] || [ "$mh" = "$h1" ] && echo yes || echo no)" yes
 ok "…and two mints differ"               "$([ "$M1" != "$M2" ] && echo yes || echo no)" yes
 ok "…which acquire accepts as a claimant" \
-  "$(mkdir -p "$TMP/mint" && bash "$LOCKSH" acquire --instance "$TMP/mint" --claimant "$M1" >/dev/null 2>&1; echo $?)" 0
+  "$(mkinst "$TMP/mint" && bash "$LOCKSH" acquire --instance "$TMP/mint" --claimant "$M1" >/dev/null 2>&1; echo $?)" 0
 # SIGPIPE ignored on entry (as a nightly runner's parent can leave it): an unbounded
 # /dev/urandom reader never ends there. perl's alarm is the 10 s bound; it kills the group.
 mrc2="$( trap '' PIPE; perl -e 'setpgrp(0,0); $SIG{ALRM}=sub{$SIG{TERM}="IGNORE"; kill "TERM",-$$; exit 124}; alarm 10;
@@ -1330,7 +1332,7 @@ echo "== FINISHED: status reports a committed close; acquire never reads it =="
 # status exits 5 when the claimant's close is committed (lib/tick-close.sh, the reaper's own
 # reader). That is a REPORT: every acquire mode must still refuse the lock, because only
 # tick-reap.sh may release it. tests/tick-bg-session.test.sh holds the reaper-agreement half.
-FN="$TMP/finished"; mkdir -p "$FN/$AB_DIR"
+FN="$TMP/finished"; mkinst "$FN"
 FID=tick-20261113T214257Z-69e4
 printf '/%s\n/%s\n' "$AB_LOCK" "$AB_LOCK_CLAIM" > "$FN/.gitignore"
 printf '* TICK 2026-11-13T21:43:39Z by someone idle — fingerprint unchanged (tick-delta) · %s\n' "$FID" > "$FN/$AB_LEDGER"
@@ -1349,6 +1351,24 @@ ok "…and the lock is byte-identical"                "$([ "$(cat "$FN/$AB_LOCK"
 sed -i.bak '/^session:/d' "$FN/$AB_LOCK"
 bash "$LOCKSH" status --instance "$FN" >/dev/null 2>&1; RC=$?
 ok "no session recorded ⇒ HELD (1), as the reaper frees nothing" "$RC" 1
+
+echo "== outside an instance root: exit 2, one stderr line, no $AB_DIR left behind =="
+NI="$TMP/not-an-instance"; mkdir -p "$NI"
+for c in acquire release status; do
+  OUT="$( cd "$NI" && bash "$LOCKSH" "$c" 2>"$TMP/ni.err" )"; RC=$?
+  ok "cwd: $c ⇒ 2"                                 "$RC" 2
+  ok "…stdout empty, one stderr line"              "${#OUT}:$(wc -l <"$TMP/ni.err" | tr -d ' ')" 0:1
+  OUT="$( bash "$LOCKSH" "$c" --instance "$NI" 2>"$TMP/ni.err" )"; RC=$?
+  ok "--instance: $c ⇒ 2"                          "$RC" 2
+  ok "…stdout empty, one stderr line"              "${#OUT}:$(wc -l <"$TMP/ni.err" | tr -d ' ')" 0:1
+done
+ok "…and no $AB_DIR was created"                   "$([ -e "$NI/$AB_DIR" ] && echo yes || echo no)" no
+ok "mint is unaffected"                            "$( cd "$NI" && bash "$LOCKSH" mint >/dev/null 2>&1; echo $? )" 0
+IR="$TMP/instance-root"; mkinst "$IR"
+for c in status acquire release; do
+  ( cd "$IR" && bash "$LOCKSH" "$c" >/dev/null 2>&1 ); RC=$?
+  ok "from the instance root: $c ⇒ 0"              "$RC" 0
+done
 
 echo
 printf '%s passed, %s failed\n' "$pass" "$fail"
