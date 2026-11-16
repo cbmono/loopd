@@ -104,8 +104,8 @@ ok "…and parses no open_questions itself"              "$(grep -v '^[[:space:]
 echo "== the PM runs it before the digest, stages and reports each folded path =="
 step1="$(awk '/^1\. \*\*Orient/,/^2\. \*\*Refine/' "$PM")"
 flat="$(tr '\n' ' ' <<<"$step1" | tr -s ' ')"
-fl="$(grep -n 'scripts/fold-terminal-answers.sh' <<<"$step1" | head -n1 | cut -d: -f1)"
-dl="$(grep -n 'scripts/tick-delta.sh digest' <<<"$step1" | head -n1 | cut -d: -f1)"
+fl="$(awk '/scripts\/fold-terminal-answers\.sh/ && !n { n = NR } END { print n }' <<<"$step1")"
+dl="$(awk '/scripts\/tick-delta\.sh digest/ && !n { n = NR } END { print n }' <<<"$step1")"
 ok "step 1 runs the script"                            "$([ -n "$fl" ] && echo yes || echo no)" yes
 ok "…before the digest"                                "$([ -n "$fl" ] && [ -n "$dl" ] && [ "$fl" -lt "$dl" ] && echo yes || echo no)" yes
 ok "…whatever the digest exits"                        "$(grep -c 'whatever the digest' <<<"$step1" | tr -d ' ')" 1
