@@ -13,7 +13,7 @@ trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
        else printf '  FAIL  %-58s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi; }
-has() { printf '%s\n' "$OUT" | grep -qF -- "$1" && echo yes || echo no; }
+has() { grep -qF -- "$1" <<<"$OUT" && echo yes || echo no; }
 
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 g() { git -C "$W" -c user.name=t -c user.email=t@example.com "$@" >/dev/null 2>&1; }
@@ -63,7 +63,7 @@ OUT="$(bash "$CC" -C "$W")"; rc=$?
 echo "== a branch adding headers, links, directives and explanations =="
 ok "exit 0 with explanatory comments present"           "$rc" 0
 ok "default range is origin/<default>, not main"        "$(has 'in origin/trunk...HEAD')" yes
-ok "count of reported lines"                            "$(printf '%s\n' "$OUT" | head -1 | awk '{print $2}')" 6
+ok "count of reported lines"                            "$(awk 'NR == 1 { print $2 }' <<<"$OUT")" 6
 ok "explanatory comment reported, with path:line"       "$(has 'new.sh:7: # Retry once because the upstream API flakes under load.')" yes
 ok "wrapped prose: first short line reported too"       "$(has 'new.sh:9: # The cache key includes the user')" yes
 ok "wrapped prose: second line reported"                "$(has 'new.sh:10: # so that two sessions')" yes
