@@ -1,0 +1,13 @@
+[
+ {
+  "pid": 1,
+  "id": "1234abcd",
+  "cwd": "<redacted>",
+  "kind": "background",
+  "startedAt": 1794856341248,
+  "sessionId": "1234abcd-0000-4000-8000-00000000000a",
+  "name": "<redacted>",
+  "status": "idle",
+  "state": "blocked"
+ }
+]

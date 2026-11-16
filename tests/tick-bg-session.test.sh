@@ -46,6 +46,9 @@ state() { # <state|none|garbage>
     *) printf '[{"id":"1234abcd","sessionId":"%s","state":"%s"%s}]\n' "$SID" "$1" \
          "${STATUS:+,\"status\":\"$STATUS\"}" ;;
   esac > "$ST/agents.json"
+  # The job record a BLOCKED verdict needs: this state, nothing in flight (tick-reap-children).
+  mkdir -p "$CLAUDE_CONFIG_DIR/jobs/1234abcd"
+  printf '{"state":"%s","inFlight":{"tasks":0,"queued":0}}\n' "$1" > "$CLAUDE_CONFIG_DIR/jobs/1234abcd/state.json"
 }
 
 mkdir -p "$CLAUDE_CONFIG_DIR/projects/p"

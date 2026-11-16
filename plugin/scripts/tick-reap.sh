@@ -46,7 +46,30 @@ cost() {
   [ "$u" = "usage UNKNOWN" ] || echo "COST: $u"
 }
 
+# -> W (yes|no), KIDS (live in-flight tasks, or "unread"), JOB (the job record's own state)
+kids() {
+  local o; o="$(bash "$HERE/agent-sessions.sh" children "$session" 2>/dev/null)" || o=""
+  W="$(sed -n 's/^waiting=\([a-z]*\) .*/\1/p' <<<"$o")"
+  KIDS="$(sed -n 's/.* children=\([0-9a-z]*\) .*/\1/p' <<<"$o")"; JOB="${o##*job=}"
+  case "$KIDS" in ''|*[!0-9]*) KIDS=unread ;; esac
+}
+live_kids() { kids; [ "$KIDS" != unread ] && [ "$KIDS" -gt 0 ]; }
+
+budget_min() {
+  local b
+  b="$(bash "$HERE/resolve-config.sh" --instance "$inst" roleMinutes project-manager 2>/dev/null)" \
+    || b="$(bash "$HERE/resolve-config.sh" --instance "$inst" maxAgentMinutes 2>/dev/null)" || b=45
+  case "$b" in ''|0|*[!0-9]*) b=45 ;; esac
+  echo "$b"
+}
+age_s() {
+  local t; t="$(field spawned)"; case "$t" in ''|*[!0-9]*) t="$(field epoch)" ;; esac
+  echo $(( $(date +%s) - ${t:-0} ))
+}
+
 release() { # <verdict> <close line>
+  # A live fork or `Agent` child would be killed with it: it is still finishing.
+  case "$state" in blocked|idle-after-close) live_kids && return 2 ;; esac
   bash "$HERE/tick-lock.sh" release --instance "$inst" || { echo "tick-reap: could not release $LOCK" >&2; exit 2; }
   case "$state" in blocked|idle-after-close) claude stop "$short" >/dev/null 2>&1 </dev/null ;; esac
   echo "reaped: $tick · $1 · session $short $state"
@@ -94,7 +117,7 @@ assess() {
       [ "$(turn_status)" = idle ] || return 2
       state=idle-after-close
     fi
-    release closed "$closed"
+    release closed "$closed"; return
   fi
   # Turn over, no line for the id anywhere in the ledger: it wrote its close elsewhere (a
   # hand-typed root `log.md`) or not at all. Still `working` only because a bg session stays
@@ -103,6 +126,7 @@ assess() {
   if [ "$state" = working ] && [ "$(turn_status)" = idle ] && past_grace; then
     case "$disk" in
       none) grep -qF -- "$tick" "$LOG" && return 1
+            live_kids && return 1
             claude stop "$short" >/dev/null 2>&1 </dev/null; state=turn-over; ended ;;
       unread)
         [ -e "$LOG" ] && why="cannot read $LOG" || why="$LOG is missing, so no entry can be ruled out"
@@ -112,6 +136,18 @@ assess() {
   case "$state" in
     working|idle) return 1 ;;
     blocked)
+      # `blocked` is also a turn that ended (an API error, measured 2026-11-16) while its
+      # forks still run. BLOCKED needs a prompt, or ONE job read saying blocked with nothing
+      # in flight; an unreadable or disagreeing record holds it until the tick's budget.
+      kids
+      if [ "$W" != yes ]; then
+        [ "$KIDS" != unread ] && [ "$KIDS" -gt 0 ] && { state="blocked, $KIDS in flight"; return 1; }
+        if [ "$KIDS" = unread ] || [ "$JOB" != blocked ]; then
+          [ "$KIDS" = unread ] && state="blocked, children unread" || state="blocked, job $JOB"
+          [ "$(age_s)" -lt $(( $(budget_min) * 60 )) ] && return 1
+          state=blocked
+        fi
+      fi
       echo "BLOCKED: tick $tick (session $short) is blocked before a committed close — claude attach $short to answer it, or claude stop $short; the next fire then closes it." >&2
       exit 4 ;;
     unknown)
@@ -138,14 +174,11 @@ if [ "$wait" = no ]; then
   exit 1
 fi
 
-budget="$(bash "$HERE/resolve-config.sh" --instance "$inst" roleMinutes project-manager 2>/dev/null)" \
-  || budget="$(bash "$HERE/resolve-config.sh" --instance "$inst" maxAgentMinutes 2>/dev/null)" || budget=45
-case "$budget" in ''|0|*[!0-9]*) budget=45 ;; esac
+budget="$(budget_min)"
 poll="${TICK_REAP_POLL:-15}"; slice_end=$(( $(date +%s) + ${TICK_REAP_SLICE:-540} ))
 while :; do
   assess
-  started="$(field spawned)"; case "$started" in ''|*[!0-9]*) started="$(field epoch)" ;; esac
-  if [ $(( $(date +%s) - ${started:-0} )) -ge $(( budget * 60 )) ]; then
+  if [ "$(age_s)" -ge $(( budget * 60 )) ]; then
     echo "tick $tick still running past its ${budget}m budget — not waiting longer; the next /${PLUGIN_NAME:-loopd}:dispatch reaps it."
     exit 1
   fi

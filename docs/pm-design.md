@@ -198,13 +198,17 @@ ledger, `AWAITING.md` or the transcript itself. The decisions it carries:
 
 | Ledger, for the minted id | Session | Reaper |
 |---|---|---|
-| close committed | not `working` | release; print the close line, Needs-you, `COST:` |
+| close committed | not `working`, no live child | release; print the close line, Needs-you, `COST:` |
+| close committed | `blocked` or `status: idle`, a live child | hold, still finishing — a stop would kill the child |
 | close committed | `working`, turn running | hold — the tick is still pushing and rendering |
 | close committed | `working`, `status: idle` | `claude stop` it, then release — the turn is over |
 | open, or none | `working`, turn running | hold; the fire is dropped, never queued |
 | open | `working`, `status: idle` | hold — a full walk may be waiting on background work |
 | none, the id nowhere in the ledger, past 120s | `working`, `status: idle` | `claude stop` it, append the `ended with no ledger entry` close, then release |
-| open, or none | `blocked` | `BLOCKED`, lock kept — neither idle nor done |
+| open, or none | `blocked`, `waitingFor` set | `BLOCKED`, lock kept — a prompt is a prompt, child or not |
+| open, or none | `blocked`, a live child | hold, exit 1 — the turn ended while its forks run |
+| open, or none | `blocked`, nothing in flight | `BLOCKED`, lock kept — neither idle nor done |
+| open, or none | `blocked`, job record unreadable | hold until the tick's budget, then `BLOCKED` |
 | open | ended or gone | write the `close: dead …` line beside it, then release |
 | none | ended or gone | append a `close: … ended with no ledger entry` line, then release |
 | any | unreadable | `UNKNOWN`, lock kept |
@@ -215,6 +219,14 @@ turn; the daemon retires it after about 60 minutes idle, and its row reads `stat
 18:34 held the lock for three fires (40 minutes) until it was stopped by hand. So a
 committed close plus `status: idle` is stopped and reaped; an open entry never is, whatever
 the status, because only a committed close says the tick's writes landed.
+
+**A `blocked` tick can still be working.** Measured 2026-11-16 (CLI 2.1.325): a tick whose
+turn ended on an API error read `blocked` while its two forks ran, and the reaper advised
+`claude stop`. `claude agents --json` carries no child field, so the live-child signal is
+the session's job record (`jobs/<id>/state.json`), whose `inFlight.tasks` counts forks,
+`Agent` children and background shells. BLOCKED is printed only when that one read says
+`blocked` with nothing in flight; when it cannot be read, the hold is bounded by the same
+budget `--wait` uses (`roleMinutes project-manager`, else `maxAgentMinutes`, else 45).
 
 The dead tick's close is written by the launcher's script and not by a hook in the tick,
 because a killed session runs no hook. `once` and `dry-run` wait through the same
