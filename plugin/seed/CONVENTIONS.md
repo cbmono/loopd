@@ -30,7 +30,7 @@ in `cbmono/loopd` enforces this.
 
 | Surface | Ceiling |
 |---|---|
-| an **inline comment** | **none by default — it is a trigger, not a budget.** One, only where the code is **unusual**, is **risky to change**, or carries a **trap the reader would not see**. **Explaining what the code does is not a trigger** — the reader, human or agent, is looking at it. |
+| an **inline comment** | **none by default — only a section header or an external-constraint link.** A **section header** formats a file for readability (a title of 8 words or fewer, not a sentence); a **link** points at a constraint the code cannot express (an upstream issue, a spec). **Explaining what the code does, or why a shortcut was taken, is neither.** **A repo's own conventions or lint rules override this default.** `scripts/comment-check.sh` reports every other added comment line. |
 | a **script header** | **10 lines** — what it does, its exit codes, and where the reasoning lives. |
 | a **commit** | subject **72 characters**, body at most **5 lines**. |
 | a **PR body** | the TL;DR line + the criteria table + at most **3 one-line notes**. Hard ceiling **2,500 characters**. |

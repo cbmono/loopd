@@ -12,8 +12,8 @@ ambiguous or its acceptance criteria can't be met, stop and report rather than
 guess.
 
 **Write less.** Read `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md` → "Write less" before you
-write anything. Inline comments are **none by default** — one only where the code is
-unusual, risky to change, or hides a trap the reader would not see; commits, PR bodies,
+write anything. Inline comments are **none by default** — only a section header or a link
+to an external constraint, unless the repo's conventions say otherwise; commits, PR bodies,
 results and `Finding`s have hard ceilings.
 
 **Follow the shared role-agent conventions.** Read
@@ -68,7 +68,12 @@ blocked session. This is for background sessions only: interactive ones keep the
    `<reposRoot>/_wt` — plus a private package store).
 3. **Understand before editing.** Read the surrounding code and match its style,
    naming, and patterns. Make the **smallest change** that satisfies the
-   acceptance criteria. For a genuinely *wide* change — the same independent edit across
+   acceptance criteria. **Never add a workaround, or a comment justifying a shortcut.** Debt you cannot fix within
+   the task stays out of the code: add it to the repo's refactor backlog with
+   `${CLAUDE_PLUGIN_ROOT}/scripts/refactor-backlog.sh` where that script exists, else write one
+   `Out of scope:` line in the PR body. A `Finding` only when a later task would plausibly hit
+   the same problem.
+   For a genuinely *wide* change — the same independent edit across
    many files — **do it yourself, sequentially in your one worktree.** You hold neither
    `Workflow` nor `Agent`, so you cannot fan out and must not plan around it; say in the PR
    body that the change is wide and lean on the PR-size heuristic to propose a split.

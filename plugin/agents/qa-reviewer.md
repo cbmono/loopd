@@ -12,8 +12,8 @@ criterion actually hold, do the tests actually pass — never the executor's "it
 done." You operate in one of **three** ways depending on the task.
 
 **Write less.** Read `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md` → "Write less" before you
-write anything. Inline comments are **none by default** — one only where the code is
-unusual, risky to change, or hides a trap the reader would not see; commits, PR bodies,
+write anything. Inline comments are **none by default** — only a section header or a link
+to an external constraint, unless the repo's conventions say otherwise; commits, PR bodies,
 results and `Finding`s have hard ceilings.
 
 **Follow the shared role-agent conventions.** Read
@@ -349,6 +349,12 @@ signature". Never on a PR body.
    **Emit all three mandatory lenses** — `correctness`, `security`, `repro`. A lens you
    didn't run is `skipped(<why>)`, never omitted: an absent lens would otherwise pass
    vacuously.
+
+   **Comments.** Run `${CLAUDE_PLUGIN_ROOT}/scripts/comment-check.sh -C <reposRoot>/<repo> --range
+   origin/<baseRefName>...origin/<headRefName>` (fetch both refs first). Each line it reports that is
+   neither a section header nor a link to an external constraint is a finding — unless the
+   repo's own conventions or lint rules allow it, and a new script's header block is not one.
+   It always exits 0, and its report alone never makes `changes-requested`.
 
    End the comment with your role signature line (`— <login>-qa`, above), then the
    machine-readable `okf-verdict v1` trailer defined in

@@ -11,8 +11,8 @@ infrastructure: GitHub Actions / reusable workflows, Helm charts, ArgoCD,
 Terraform, Docker images, and observability config.
 
 **Write less.** Read `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md` → "Write less" before you
-write anything. Inline comments are **none by default** — one only where the code is
-unusual, risky to change, or hides a trap the reader would not see; commits, PR bodies,
+write anything. Inline comments are **none by default** — only a section header or a link
+to an external constraint, unless the repo's conventions say otherwise; commits, PR bodies,
 results and `Finding`s have hard ceilings.
 
 **Follow the shared role-agent conventions.** Read
@@ -47,6 +47,11 @@ signature". Never on a PR body.
    package store).
 3. **Make the change**, matching existing conventions (workflow structure, chart
    values, module layout).
+   **Never add a workaround, or a comment justifying a shortcut.** Debt you cannot fix within
+   the task stays out of the code: add it to the repo's refactor backlog with
+   `${CLAUDE_PLUGIN_ROOT}/scripts/refactor-backlog.sh` where that script exists, else write one
+   `Out of scope:` line in the PR body. A `Finding` only when a later task would plausibly hit
+   the same problem.
 4. **Validate without mutating live infra.** Use static/dry checks only:
    - YAML/Actions: lint, `actionlint` if available, `--dry-run` where supported.
    - Helm: `helm lint` / `helm template`.

@@ -14,8 +14,8 @@ that reads current state and acts only on what has changed. You never write
 product code yourself.
 
 **Write less.** Read `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md` → "Write less" before you
-write anything. Inline comments are **none by default** — one only where the code is
-unusual, risky to change, or hides a trap the reader would not see; commits, PR bodies,
+write anything. Inline comments are **none by default** — only a section header or a link
+to an external constraint, unless the repo's conventions say otherwise; commits, PR bodies,
 results and `Finding`s have hard ceilings.
 
 **A read that could not have established the answer returns UNKNOWN** —
