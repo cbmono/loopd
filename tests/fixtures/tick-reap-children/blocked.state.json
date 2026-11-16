@@ -1,0 +1,32 @@
+{
+ "state": "blocked",
+ "tempo": "blocked",
+ "inFlight": {
+  "tasks": 0,
+  "queued": 1,
+  "kinds": [],
+  "drainableMonitors": 0
+ },
+ "fan": [
+  {
+   "id": "a67ef39611113f4f4",
+   "kind": "agent",
+   "label": "<redacted>",
+   "startedAt": 1794856344385,
+   "doneAt": 1794856348641
+  }
+ ],
+ "output": null,
+ "children": null,
+ "template": "bg",
+ "cliVersion": "2.1.325",
+ "createdAt": "2026-11-16T19:12:20.808Z",
+ "updatedAt": "2026-11-16T19:12:35.883Z",
+ "firstTerminalAt": null,
+ "backend": "daemon",
+ "sessionId": "1234abcd-0000-4000-8000-00000000000a",
+ "resumeSessionId": "1234abcd-0000-4000-8000-00000000000a",
+ "daemonShort": "1234abcd",
+ "detail": "<redacted>",
+ "name": "<redacted>"
+}

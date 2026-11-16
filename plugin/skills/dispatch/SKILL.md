@@ -228,8 +228,10 @@ spawned with `--dry-run`; anything else is the inter-tick
      `Needs you:` from `AWAITING.md`, a `COST:` line) verbatim, then go to step 1.
    - **1** — the tick is still running. Print its one line and **end the pass**: the fire
      is dropped, never queued.
-   - **4** — `BLOCKED`: the tick's session waits on a prompt before a committed close. Put
-     its line in front of the human and end the pass; it is neither idle nor done.
+   - **4** — `BLOCKED`: the tick's session waits on a prompt, or its turn ended with nothing
+     still running under it, before a committed close. A `blocked` session with a live fork
+     or `Agent` child is exit **1**, never 4. Put its line in front of the human and end the
+     pass; it is neither idle nor done.
    - **2** — it cannot tell. Report the line and stop; the lock stays.
 
    It never prints the tick's transcript, and neither do you: the tick's own report goes

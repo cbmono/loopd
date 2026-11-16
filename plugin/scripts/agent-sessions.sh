@@ -25,6 +25,10 @@
 #                                                round recorded (check-dispatch exit 0) and the
 #                                                turn ended; 1 `unrecorded …`, `prompt …` or
 #                                                `not-blocked <state>`
+#   agent-sessions.sh children <session-id> [--jobs-dir <dir>]
+#                                             -> `waiting=<yes|no> children=<n|unread> job=<state|->`:
+#                                                the row's `waitingFor`, then the job record's
+#                                                `inFlight` tasks and `state` from ONE read of it
 #   agent-sessions.sh in-flight <bundle-root> -> how many recorded sessions still hold a
 #                                                slot, on stdout; one line per recorded
 #                                                session on stderr
@@ -61,7 +65,7 @@
 # tests/resume-full-id.test.sh, tests/blocked-recorded.test.sh and tests/dead-session-sweep.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,54p' "$0" >&2; exit 2; }
+usage() { sed -n '3,58p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 here="$(dirname "${BASH_SOURCE[0]:-$0}")"
@@ -309,6 +313,32 @@ print("recorded " + sid)
 PY
     ;;
 
+  children)
+    [ $# -eq 2 ] || [ $# -eq 4 ] || usage
+    jobs="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/jobs"
+    if [ $# -eq 4 ]; then [ "$3" = "--jobs-dir" ] || usage; jobs="$4"; fi
+    json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
+    row="$(match_of "$2" "$json" 2>/dev/null)" || exit 2
+    # `claude agents --json` carries no child field (CLI 2.1.325); the job record's
+    # `inFlight.tasks` counts forks, `Agent` children and background shells (`queued` stays 1
+    # on a finished job). `state` comes from the same read, so a child ending between two
+    # reads cannot pair "blocked" with "nothing running".
+    python3 - "$row" "$jobs" <<'PY'
+import json, os, sys
+r, jobs = json.loads(sys.argv[1]), sys.argv[2]
+w = "yes" if r.get("waitingFor") else "no"
+n, st = "unread", "-"
+try:
+    d = json.load(open(os.path.join(jobs, str(r.get("id") or r["sessionId"].split("-")[0]), "state.json"), encoding="utf-8"))
+    t = d["inFlight"]["tasks"]
+    if isinstance(t, int) and not isinstance(t, bool) and t >= 0:
+        n, st = str(t), "".join(ch for ch in str(d.get("state") or "") if ch.isalnum() or ch in "-_") or "-"
+except Exception:
+    pass
+print("waiting=%s children=%s job=%s" % (w, n, st))
+PY
+    ;;
+
   in-flight)
     [ $# -eq 2 ] || usage
     root="$2"
@@ -458,6 +488,6 @@ PY
     echo "copy $uuid"
     ;;
 
-  -h|--help) sed -n '3,54p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,58p' "$0"; exit 0 ;;
   *) usage ;;
 esac
