@@ -118,6 +118,7 @@ a deleted assertion or a dropped required check is a hit with no line added. A t
 already on the default branch is not one, and neither is prose or a test that only names
 a token. A change the task's `acceptance_criteria`, an `answered_questions` entry or an
 acknowledged `D<n>` names is the human's decision already made, not a hit.
+Check: `scripts/reserved-scan.sh`.
 
 **On a hit, make no such change.** Set the task `status: blocked`, add a numbered
 `open_questions` entry naming the decision and the failing check —
