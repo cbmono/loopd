@@ -139,7 +139,7 @@ loopd depends on no other plugin. These are worth knowing about:
 |---|---|---|
 | `loopd-yolo` | lets a project delegate the two gates | optional; never on a bundle with production credentials unless you mean it |
 | `security-guidance` | warnings on risky edits, a security review of each diff | install |
-| `typescript-lsp` | real references, types and diagnostics for TS/JS | install on TS/JS repos |
+| `typescript-lsp` | real references, types and diagnostics for TS/JS | install on TS/JS repos, plus its binary (below) |
 | `frontend-design` | better UI generation | install on UI repos |
 | `chrome-devtools-mcp` | inspect a live Chrome | install; foreground sessions only |
 | `playwright` | browser automation for e2e suites | where the repo uses Playwright |
@@ -148,6 +148,11 @@ loopd depends on no other plugin. These are worth knowing about:
 | `superpowers` | skill-first workflows | **don't install with loopd** — its start-up hook fights the agents' task instructions |
 
 Install with `/plugin install <name>@claude-plugins-official`.
+
+`typescript-lsp` only points Claude Code at a language server; it does not install one. Without
+the binary every session starts with `couldn't start: its program "typescript-language-server"
+wasn't found`. Install it too: `npm i -g typescript-language-server typescript`.
+`/loopd:welcome check` flags the plugin enabled with the binary missing.
 
 Running agents unattended in a container or VM:
 [operations.md → Running the role agents in a sandbox](operations.md#running-the-role-agents-in-a-sandbox).
