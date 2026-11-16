@@ -556,7 +556,7 @@ qtask old.md 'open_questions: [ "Q1: which region?", "Q2: which tier?", "Q3: whi
   '## Question details' '### Q1' "${NOREC[@]}" '### Q2' "${NOREC[@]}" '### Q3' "${REC[@]}" '### Q4' "${NOREC[@]}"
 qtask fresh.md 'open_questions: [ "Q1: which region?" ]' '## Question details' '### Q1' "${NOREC[@]}"
 set +e; ROUT="$(bash "$VALIDATOR" 2>&1)"; RRC=$?; set -e
-rsaw() { grep -A1 -E "$1 +projects/q/tasks/$2" <<<"$3" | grep -qF -- "$4" && echo 0 || echo 1; }
+rsaw() { grep -qF -- "$4" <<<"$(grep -A1 -E "$1 +projects/q/tasks/$2" <<<"$3")" && echo 0 || echo 1; }
 assert "a committed question without one warns"   "$(rsaw WARN old.md "$ROUT_OLD" "'### Q1' has no 'Recommendation:' line")"
 assert "…and that run has no error"               "$([[ $ROLD_RC -eq 0 ]] && echo 0 || echo 1)"
 assert "it still only warns once the doc changes" "$(rsaw WARN old.md "$ROUT" "'### Q1' has no 'Recommendation:' line")"
