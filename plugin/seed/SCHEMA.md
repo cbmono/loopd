@@ -563,7 +563,7 @@ projects, and tasks. **No customer PII** in any knowledge doc; authoritative
 *data* questions route to the owning team (see `knowledge/teams/`), not the KB.
 
 **`provenance:` says whether machinery or a person wrote the document** — required on
-all five types below, closed set, enforced by `validate-bundle.sh`:
+every type below but `Backlog`, closed set, enforced by `validate-bundle.sh`:
 
 | Value | Meaning | May a cleanup pass rewrite it? |
 |---|---|---|
@@ -838,6 +838,33 @@ frontmatter references — the one gap was the `status` enum, because `Reference
 none. Declaring the kind closes exactly that gap and adds no field the live
 documents do not already carry. Root documents are unaffected: they are not in a
 schema-defined location, so no enum reaches them.
+
+### type: Backlog  (`knowledge/backlog/<repo>.md`)
+
+The refactor backlog: one file per target repo, one line per refactor someone found out of
+a task's scope. **A refactor is never part of the PR or project that found it.**
+
+```yaml
+---
+type: Backlog
+repo: <org>/<repo>          # lowercased; the file is named for <repo>
+timestamp: <ISO 8601>       # when the file was created
+---
+```
+
+Below `## Entries`, one line each: `- [ ] DATE | WHERE | WHAT | WHY | FOUND BY` (`[x]` once
+closed). `scripts/refactor-backlog.sh` is the only writer, run at the bundle root:
+
+| Verb | What it does |
+|---|---|
+| `add --repo <org>/<repo> --path <p> --what <t> --why <t> --by <role>` | appends one line under a lock; the tick commits it. Refuses a duplicate (repo + path + what, lowercased, whitespace collapsed, open or closed), a `\|` or newline, an empty field, a field over 200 characters, and an add past **200 open entries** — report that refusal, don't work around it |
+| `done --repo <org>/<repo> <id>` | closes one entry; `list` prints each open entry's id |
+| `count` | the open total, which `write-snapshot.sh` carries to the board (never `AWAITING.md`) |
+
+Role agents add their own; `plan-architect` and `code-architect` are read-only and list each
+under a `## Refactor opportunities` heading in their report, which the PM records. **No
+script turns an entry into work**: the owner does, with `/loopd:new-project`, then closes it.
+No `provenance:` and no `status:` — each line carries who found it and whether it is open.
 
 # Task lifecycle
 

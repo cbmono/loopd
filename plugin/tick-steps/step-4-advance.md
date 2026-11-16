@@ -360,7 +360,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      against **every clause of the clearance predicate** there, record the trailer's
      `head_sha` as the verified SHA, read the verdict **only** from the trailer and
      criteria coverage **only** from the `✓`/`✗` column; free prose is never an input.
-     When you refuse, name the clause that failed.
+     When you refuse, name the clause that failed. A `## Refactor opportunities` section
+     at the end of its final message is not a verdict input: record each line with
+     `${CLAUDE_PLUGIN_ROOT}/scripts/refactor-backlog.sh add … --by code-architect`.
    - **Compare the two tables — the worker's and the checker's — and never merge on one.**
      The PR body carries the implementer's `✓`/`✗` table; the `qa-reviewer` posts its own
      PASS/FAIL table, re-derived from the task and the diff (its mode B step 5). Run

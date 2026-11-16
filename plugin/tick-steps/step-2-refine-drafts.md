@@ -212,7 +212,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    never `# Notes`** — which `SCHEMA.md` defines as deliberately not a gate: it
    does not block promotion, puts no row in `AWAITING.md`, and no validator reads it.
    One entry per concern, `<ISO 8601> · <the concern, as a question>`; you triage the
-   list on a later tick. **The triage — your decision, not the critique's findings — writes
+   list on a later tick. **A line under its `## Refactor opportunities` heading is not a
+   concern**: record it with `${CLAUDE_PLUGIN_ROOT}/scripts/refactor-backlog.sh add --repo
+   <target_repo> --path <p> --what <t> --why <t> --by plan-architect`, never in the task. **The triage — your decision, not the critique's findings — writes
    exactly one `* <ISO 8601> triage: …` line under `# Notes`**, and that line is what
    `tick-delta.sh check` reads: a `draft` whose newest concern is dated after it, or that
    has none, is a `DELTA`, so a critique left for "next tick" gets one. Not a gate, a

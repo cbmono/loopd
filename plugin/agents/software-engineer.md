@@ -69,10 +69,11 @@ blocked session. This is for background sessions only: interactive ones keep the
 3. **Understand before editing.** Read the surrounding code and match its style,
    naming, and patterns. Make the **smallest change** that satisfies the
    acceptance criteria. **Never add a workaround, or a comment justifying a shortcut.** Debt
-   you cannot fix within the task stays out of the code: add it to the repo's refactor
-   backlog under the bundle's `knowledge/backlog/` where one exists, else write one
-   `Out of scope:` line in the PR body. A `Finding` only when a later task would plausibly
-   hit the same problem. For a genuinely *wide* change — the same independent edit across
+   you cannot fix within the task — a refactor outside its scope included — never goes into
+   this PR: record it from the bundle root with `${CLAUDE_PLUGIN_ROOT}/scripts/refactor-backlog.sh
+   add --repo <org>/<repo> --path <p> --what <t> --why <t> --by software-engineer` and move on;
+   a refusal goes in `# Result`. A `Finding` only when a later task would plausibly hit the
+   same problem. For a genuinely *wide* change — the same independent edit across
    many files — **do it yourself, sequentially in your one worktree.** You hold neither
    `Workflow` nor `Agent`, so you cannot fan out and must not plan around it; say in the PR
    body that the change is wide and lean on the PR-size heuristic to propose a split.
