@@ -57,7 +57,8 @@
 # WHAT COUNTS AS A CONCEPT DOCUMENT. Only the schema-defined locations:
 # `objectives/*.md` (OPTIONAL — a bundle with none is valid), `projects/*/project.md`,
 # `projects/*/design.md` (OPTIONAL, build projects),
-# `projects/*/phases/*.md`, `projects/*/tasks/*.md`, `knowledge/<kind>/*.md`. Everything
+# `projects/*/phases/*.md`, `projects/*/tasks/*.md`, `knowledge/<kind>/*.md` (a
+# `knowledge/backlog/` file is a `Backlog`: type and timestamp only). Everything
 # else — `index.md`, `log.md`, the `knowledge/{log,papercuts}/` month shards, `sources/`,
 # `deliverables/`, a doc a human dropped into a project — is content or navigation. The
 # first version of this script validated those
@@ -128,7 +129,7 @@ enum_for() {
   esac
 }
 
-KNOWN_TYPES="Objective Project Phase Task Design Agent Service Finding Team Runbook Reference"
+KNOWN_TYPES="Objective Project Phase Task Design Agent Service Finding Team Runbook Reference Backlog"
 # Who wrote a knowledge document — SCHEMA.md, "provenance:". Its own enum, because Team and
 # Runbook have no status, so enum_for never reaches them.
 KB_TYPES="Service Finding Team Runbook Reference"
