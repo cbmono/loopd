@@ -380,8 +380,10 @@ cap_task_doc() {
   f="$(printf '%s' "$payload" | jq -r '.tool_input.file_path // ""' 2>/dev/null)" || return 1
   case "$f" in /*.md) ;; *) return 1 ;; esac
   case "$f" in */../*|*/./*) return 1 ;; esac
+  [ ! -L "$f" ] || return 1
   d="$(cd "${f%/*}" 2>/dev/null && pwd -P)" || return 1
-  case "$d/" in "$root"/projects/*/tasks/) return 0 ;; esac
+  d="${d#"$root"/projects/}"
+  case "$d" in */*/*|/*) return 1 ;; ?*/tasks) return 0 ;; esac
   return 1
 }
 

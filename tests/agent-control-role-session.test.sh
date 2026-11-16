@@ -72,6 +72,10 @@ run bg-agent "$S2" p1 "$RT" Bash "git push origin HEAD"; ok "past the cap: git p
 run bg-agent "$S2" p1 "$RT" Edit "$TASKDOC"; ok "past the cap: Edit of its task doc allowed" "$(verdict)" allowed
 run bg-agent "$S2" p1 "$RT" Edit "$INST/CLAUDE.md"; ok "past the cap: Edit of any other file capped" "$(verdict)" deny
 run bg-agent "$S2" p1 "$RT" Edit "$INST/projects/p/tasks/../../../CLAUDE.md"; ok "past the cap: a ../ path out of tasks/ capped" "$(verdict)" deny
+mkdir -p "$INST/projects/p/tasks/x/tasks"; : > "$INST/projects/p/tasks/x/tasks/t.md"
+run bg-agent "$S2" p1 "$RT" Edit "$INST/projects/p/tasks/x/tasks/t.md"; ok "past the cap: a nested tasks/ directory capped" "$(verdict)" deny
+ln -s "$INST/CLAUDE.md" "$INST/projects/p/tasks/link.md"
+run bg-agent "$S2" p1 "$RT" Edit "$INST/projects/p/tasks/link.md"; ok "past the cap: a symlinked task doc capped" "$(verdict)" deny
 
 echo "== resume: claude --bg --resume keeps the session; a new prompt restarts the clock"
 run bg-resume "$S2" p2 "$RT" Bash "pnpm build"; ok "resumed round's first call allowed" "$(verdict)" allowed
