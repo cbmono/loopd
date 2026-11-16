@@ -126,7 +126,8 @@ review-config|ambiguous|yes
 output-style|ambiguous|no
 tick-lock|human|yes
 orphan-processes|human|yes
-memory-stale|human|no'
+memory-stale|human|no
+ts-lsp-binary|human|no'
 
 # =========================================================================================
 # ARGUMENTS
@@ -1294,6 +1295,52 @@ check_memory_stale() {
   warn "$n auto-memory note(s) name something no longer true"
   printf '%s\n' "$out" | sed 's/^/    /'
   hint "yours, not fix's: /memory — correct or delete each listed note"
+  return 1
+}
+
+# =========================================================================================
+# CHECK 10 — ts-lsp-binary (HUMAN — never repaired; banner:no)
+# =========================================================================================
+# THE FACT: the official `typescript-lsp` plugin is enabled, but the program it points
+# Claude Code at — `typescript-language-server` — is not on PATH. The plugin configures a
+# language server; it installs no binary, so every session starts with "couldn't start".
+# Enabled is read from `enabledPlugins` in the user, project and local settings, lowest
+# precedence first, so a later `false` turns an earlier `true` off. Installing a global npm
+# package is the human's: this row prints the command and runs nothing.
+check_ts_lsp_binary() {
+  _warned=0
+  local cfg="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}" on=""
+  if ! command -v python3 >/dev/null 2>&1; then
+    good "typescript-lsp: not judged (python3 absent)"
+    return 0
+  fi
+  on="$(python3 - "$cfg/settings.json" "$ROOT/.claude/settings.json" "$ROOT/.claude/settings.local.json" <<'PY' 2>/dev/null
+import json,sys
+on=False
+for p in sys.argv[1:]:
+    try:
+        d=json.load(open(p))
+    except Exception:
+        continue
+    ep=d.get("enabledPlugins") if isinstance(d,dict) else None
+    if not isinstance(ep,dict):
+        continue
+    for k,v in ep.items():
+        if k.split("@",1)[0]=="typescript-lsp" and isinstance(v,bool):
+            on=v
+print("yes" if on else "no")
+PY
+)"
+  if [ "$on" != yes ]; then
+    good "typescript-lsp: not enabled, so no language server to look for"
+    return 0
+  fi
+  if command -v typescript-language-server >/dev/null 2>&1; then
+    good "typescript-lsp: enabled, and typescript-language-server is on PATH"
+    return 0
+  fi
+  warn "typescript-lsp: enabled, but typescript-language-server is not on PATH (the plugin installs no binary)"
+  hint "yours, not fix's: npm i -g typescript-language-server typescript"
   return 1
 }
 
