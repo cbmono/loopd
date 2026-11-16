@@ -248,6 +248,16 @@ for st in requested queued waiting pending in_progress; do
   cat "$TMP/r" >> "$TMP/runs"
 done
 
+# A queued run with no jobs on a deleted branch never starts (GitHub will neither cancel nor
+# delete it), so it is skipped; asked only once its group is unevaluable, and any doubt keeps it.
+ghost() { # <id> <status> <head branch> -> 0 skip it
+  [ "$2" = queued ] && [ -n "$3" ] || return 1
+  case "$3" in *[!A-Za-z0-9._/-]*) return 1 ;; esac # a `?` or `#` in the URL could 404 a live branch
+  gh_api "$TMP/jobs" "repos/$repo/actions/runs/$1/jobs" --jq '.total_count' && [ "$(cat "$TMP/jobs")" = 0 ] || return 1
+  gh_api "$TMP/hb" "repos/$repo/branches/$3"; [ $? = 1 ] || return 1
+  echo "merge-queue: skipped run $1 (queued, no jobs, branch $3 gone)" >&2
+}
+
 why=""
 while IFS="$US" read -r id path ev hb sha prn base st url; do
   [ -n "$id" ] || continue
@@ -271,7 +281,10 @@ while IFS="$US" read -r id path ev hb sha prn base st url; do
     fi ;;
   esac
   while IFS= read -r e; do
-    if ! g="$(evalg "$e")"; then why="${why:-run $id ($rf, $st): its group '${e#"$UNK"}' cannot be evaluated}"; continue; fi
+    if ! g="$(evalg "$e")"; then
+      ghost "$id" "$st" "$hb" && break
+      why="${why:-run $id ($rf, $st): its group '${e#"$UNK"}' cannot be evaluated}"; continue
+    fi
     if grep -Fxqi -- "$g" "$TMP/pushg"; then
       echo "hold: group '$g' has run $id ($X_WF, $st, $ev on $hb) $url"
       finish 1 "##mq1 $branch $g"
