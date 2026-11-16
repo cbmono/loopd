@@ -52,11 +52,11 @@ fixture() { # <name> -> sets FIX, a repo with loopd's own tests.yml and no runs
   cp "$REPO/.github/workflows/tests.yml" "$FIX/files/tests.yml"
   printf '{"workflows":[{"path":".github/workflows/tests.yml","state":"active"}]}\n' > "$FIX/workflows.json"
 }
-run() { # <status> <id> <event> <branch> [pr] [file] [head_sha] -> appends a run to runs.<status>.json
+run() { # <status> <id> <event> <branch> [pr] [file] [head_sha] [head repo] [created_at] -> appends a run
   local f="$FIX/runs.$1.json" pr="[]"
   [ -n "${5:-}" ] && pr="[{\"number\":$5,\"base\":{\"ref\":\"main\"}}]"
   [ -f "$f" ] || printf '{"workflow_runs":[]}' > "$f"
-  jq --argjson r "{\"id\":$2,\"path\":\".github/workflows/${6:-tests.yml}\",\"event\":\"$3\",\"head_branch\":\"$4\",\"head_sha\":\"${7:-run$2}\",\"status\":\"$1\",\"pull_requests\":$pr,\"html_url\":\"https://github.com/example-org/example-repo/actions/runs/$2\"}" \
+  jq --argjson r "{\"id\":$2,\"path\":\".github/workflows/${6:-tests.yml}\",\"event\":\"$3\",\"head_branch\":\"$4\",\"head_sha\":\"${7:-run$2}\",\"status\":\"$1\",\"head_repository\":{\"full_name\":\"${8:-example-org/example-repo}\"},\"created_at\":\"${9:-2026-01-01T00:00:00Z}\",\"pull_requests\":$pr,\"html_url\":\"https://github.com/example-org/example-repo/actions/runs/$2\"}" \
     '.workflow_runs += [$r]' "$f" > "$f.n" && mv "$f.n" "$f"
 }
 mq() { PATH="$BIN:$PATH" bash "$SH" example-org/example-repo main "$@" 2>&1; }
@@ -140,6 +140,15 @@ fixture ghostbrfail; run queued 84 pull_request pane-gone; : > "$FIX/fail.pane-g
 ok "the branch lookup failing: unknown"                     "$(rc)" 2
 fixture ghostodd; run queued 88 pull_request 'pane?x'; : > "$FIX/gone.pane?x"
 ok "a branch name a URL would mangle: unknown"              "$(rc)" 2
+fixture ghostfork; run queued 89 pull_request pane-gone "" "" "" someone/fork; : > "$FIX/gone.pane-gone"
+ok "a run from a fork: unknown"                             "$(rc)" 2
+fixture ghostfresh; run queued 90 pull_request pane-gone "" "" "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; : > "$FIX/gone.pane-gone"
+ok "a run queued under an hour ago: unknown"                "$(rc)" 2
+fixture ghostdots; run queued 91 pull_request 'a/../b'; mkdir "$FIX/gone.a"; : > "$FIX/b"
+ok "a branch name with ..: unknown"                         "$(rc)" 2
+fixture ghostboth; printf 'name: CI\non: push\njobs:\n  a:\n    runs-on: x\n    concurrency: ci-${{ github.ref }}\n  b:\n    runs-on: x\n    concurrency: ci-refs/heads/main\n' > "$FIX/files/tests.yml"
+run queued 92 pull_request pane-gone; : > "$FIX/gone.pane-gone"
+ok "a skipped run's other group still holds"                "$(rc)" 1
 fixture ghostrunning; run in_progress 85 pull_request pane-gone; : > "$FIX/gone.pane-gone"
 ok "in progress, jobless, branch gone: unknown"             "$(rc)" 2
 fixture ghostcalls; run queued 81 pull_request pane-gone; : > "$FIX/gone.pane-gone"; rc >/dev/null
