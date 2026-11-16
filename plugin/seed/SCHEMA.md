@@ -292,6 +292,7 @@ acceptance_criteria:                  # PM fills/expands during refine
   - "<testable outcome>"
 worktree: /abs/path/to/worktree        # optional, BUILD only. MACHINE-READ by the WorktreeCreate hook.
 branch:   <branch-name>                # optional, BUILD only. MACHINE-READ. Required whenever `worktree:` is set.
+ui: true                              # optional, BUILD only: the task changes a screen a human looks at. Set by the PM at refine; absent ⇒ false. The PR is UI when this is true OR its diff touches the target repo's `uiGlobs` (instance.config.json: `{ "<owner>/<repo>": ["<glob>", ...] }`, absent ⇒ no globs); a UI PR's body names a screenshot path and its author runs `pr-body-clearance.sh --ui` (`conventions/pr-body.md` → "UI evidence: a screenshot per changed screen").
 # Both are written by the project-manager AT DISPATCH, and read by
 # `plugin/hooks/worktree-create.sh` when a session starts as `claude --worktree <task-id>`:
 # the hook places that path, on that branch, in a worktree of `target_repo`. They are
@@ -1331,6 +1332,7 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `roleMinutes` | **yes**, merged **per role** like `roleTiers` — a map of role → minutes that replaces `maxAgentMinutes` for the roles it names | `project-manager` **180** (a tick walks the whole bundle and grows with it); every other role `maxAgentMinutes` |
 | `defaultOwner` | **no, by design** | step 4 above: unowned, so every clone treats it as its own |
 | `people` | **no** — a shared directory of who is who | no lookup; the `authorEmail` chain answers |
+| `uiGlobs` | **no** — which paths of a repo are UI is a fact about the repo, and both clones must call the same PR UI | **no globs**: a PR is UI only when its task sets `ui: true`. A map `{ "<owner>/<repo>": ["<glob>", ...] }`; a diff touching one makes the PR UI (`conventions/pr-body.md` → "UI evidence: a screenshot per changed screen") |
 | `commitAttribution` | **yes** — the tracked file is where an organisation states its policy; the local file is how one machine departs from it | `claude`: a target-repo commit keeps the `Co-Authored-By: Claude` trailer, because Claude co-authored it. `none` drops the trailer and the session URL |
 | `ticketPrefix` | **no** — it names the organisation's ticket system, a shared fact both clones' PR titles must agree on | **no tag**: a PR title is `<type>: <subject>` with nothing appended. Set (a Jira-shaped key, e.g. `ABC`), titles end `[ABC-<n>]`, or `[ABC-0]` when the task names no ticket. `dispatch-brief.sh` resolves it into the brief's `## PR title`; no agent reads it |
 | `reclaimIgnoreOk` | **yes** — which build output a machine's worktrees produce is a per-machine fact | `reclaim-worktree.sh`'s built-in G12 list alone. An array of path-component names added to it, matched at any depth below plain directories like the built-in ones; a name starting with `.env` is warned about and never added |

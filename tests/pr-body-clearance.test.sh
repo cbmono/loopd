@@ -1115,6 +1115,39 @@ expect "a draft that does not exist -> unknown, not clear" 2 --body-file "$TMP/n
 expect "--body-file with a PR number too -> usage error" 2 --body-file "$GOOD" 42
 
 echo
+echo "== --ui: a UI PR names a screenshot path, or a ✗ row saying why not =="
+SHOT='projects/demo/deliverables/local/Screenshot-login.png'
+ui_body() { # <verified line> [<extra ✗ row>] -> a complete body
+  if [ -n "${2:-}" ]; then
+    body_file '## Description' 'Adds the screen.' '' "$1" '' "$(crit_head 1 1)" '' \
+      "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" "$2"
+  else
+    body_file '## Description' 'Adds the screen.' '' "$1" '' "$(crit_head 1)" '' \
+      "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW"
+  fi
+}
+expect "--ui, screenshot path on the Verified line -> clear" 0 --ui --body-file \
+  "$(ui_body "Verified: [run 1](https://example.invalid/actions/runs/1) green; screen at \`$SHOT\`.")"
+expect "--ui, screenshot path in a criteria row -> clear" 0 --ui --body-file \
+  "$(body_file '## Description' 'Adds the screen.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
+     "$TABLE_HEAD" "$TABLE_RULE" "| the login screen renders | ✓ | \`$SHOT\` |")"
+expect "--ui, no screenshot -> refuse" 1 --ui --body-file "$(good_body)"
+says   "  ...naming the screenshot" "MISSING: the screenshot (--ui)"
+expect "no --ui, no screenshot -> clear" 0 --body-file "$(good_body)"
+expect "--ui, the only link a CI run -> refuse" 1 --ui --body-file \
+  "$(ui_body 'Verified: CI green on [run 7](https://example.invalid/actions/runs/7/screenshot).')"
+expect "--ui, a screenshot path outside deliverables/local/ -> refuse" 1 --ui --body-file \
+  "$(ui_body 'Verified: `foo.test.sh` 40/0; screen at `docs/screenshot-login.png`.')"
+expect "--ui, a ✗ row naming the screenshot -> clear" 0 --ui --body-file \
+  "$(ui_body "$VERIFIED" '| a screenshot per changed screen | ✗ | no runnable app in this repo |')"
+expect "--ui, an unrelated ✗ row -> refuse" 1 --ui --body-file \
+  "$(ui_body "$VERIFIED" '| the export runs nightly | ✗ | needs the staging cron |')"
+serve "$(good_body)"
+expect "--ui on a PR, no screenshot -> refuse" 1 42 --ui
+serve "$(ui_body "Verified: [run 1](https://example.invalid/actions/runs/1) green; screen at \`$SHOT\`.")"
+expect "--ui on a PR, screenshot path -> clear" 0 42 --ui
+
+echo
 echo "== usage =="
 rc=0; "$SCRIPT" >/dev/null 2>&1 || rc=$?
 ok "no arguments -> usage error"   "$rc" 2

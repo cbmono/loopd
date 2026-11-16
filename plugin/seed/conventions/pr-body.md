@@ -248,6 +248,27 @@ Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short
   the rule opened a 14,673-character body. A rule with no reader at the moment of writing
   is a rule that gets discovered at the moment of merging.
 
+### UI evidence: a screenshot per changed screen
+
+- **A PR counts as UI when its task sets `ui: true`, or its diff touches a glob in the
+  target repo's `uiGlobs` entry** (`instance.config.json`; absent ⇒ no globs, so only the
+  task field counts). Check both before you post: `git diff --name-only origin/<default>`
+  against the globs. Either one ⇒ run the reader with `--ui`:
+  `scripts/pr-body-clearance.sh --body-file <file> --ui`.
+- **At least one screenshot per changed screen**, taken with the browser tools you hold,
+  saved under the project's gitignored `projects/<slug>/deliverables/local/` in the bundle,
+  with `screenshot` in its path (`deliverables/local/screenshot-login.png`). **Never push
+  it**: no PR comment, no workflow artifact, no release upload. The `Verified:` line or a
+  criteria row names that file path; `--ui` refuses at 1 when neither does. One per changed
+  screen is the reviewer's check, not the reader's.
+- **Video is optional, and only for a flow** (drag and drop, a multi-step wizard) — nothing
+  requires it, and a screenshot never waits for one.
+- **No runnable app** (or only production data renders): write a `✗` row whose text says
+  why there is no screenshot. It is the one row `--ui` accepts in place of a path, and the
+  PR goes to a human, as every `✗` does.
+- **Test data only.** A screenshot that shows real customer data is **deleted, not
+  redacted**, and taken again against test data — or becomes that `✗` row.
+
 ### PR size is a heuristic, never a gate
 
 - **PR size is a heuristic that suggests a split, never a gate.** **And it is TWO
