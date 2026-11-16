@@ -471,9 +471,12 @@ question is answered it stays as the record. Readers find it by the `### Q<n>` h
 alone. `/loopd:answer <task> [Q<n>] <n | more | later | text>` (`answer.sh`) records option `n`'s
 text from it, `more` prints the next depth, counted per clone in the ignored
 `.loopd/.answer-depth/`, and `later` sends the question to the end of the pane's inbox,
-one line in the ignored `.loopd/.answer-later`. `validate-bundle.sh` **warns** — never errors — on a `Q<n>:`
-question with no block, a block with no options, or one with fewer than three depths; an unlabelled or
-`advisor:` question is exempt. The published snapshot never carries any of it.
+one line in the ignored `.loopd/.answer-later`. `validate-bundle.sh` **warns** on a `Q<n>:`
+question with no block, a block with no options, one with fewer than three depths, or one with no
+`Recommendation:` — which **errors** instead on a question the document's `HEAD` copy does not list
+yet; an unlabelled or `advisor:` question is exempt. `AWAITING.md` shows each question's
+recommendation beside it, `(no recommendation)` when it has none. The published snapshot never
+carries any of it.
 
 ## type: Design  (`projects/<slug>/design.md`) — optional, build projects only
 

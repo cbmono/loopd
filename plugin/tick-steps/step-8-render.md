@@ -28,7 +28,9 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    disk (`approve`, `answer`/`grant`, `unblock`, `close`, and `continue` — the continue
    checkpoint, whose sentence is the script's because it carries the human's answer line;
    `SCHEMA.md` → "The continue checkpoint") and **classifies `grant` against
-   `answer` from the `open_questions` entry itself, so you never pick a glyph**. You supply
+   `answer` from the `open_questions` entry itself, so you never pick a glyph**. Each
+   question's recommendation is the script's too, read from its `### Q<n>` block and kept
+   beside a trailer that replaces the question text — never restate it. You supply
    two things and nothing else: the trailing sentence of each row, which is per-tick prose
    by design, and a `--merge` row per PR you have found verified and green at its current
    head — merge-eligibility is this tick's judgement and is written down nowhere the script
