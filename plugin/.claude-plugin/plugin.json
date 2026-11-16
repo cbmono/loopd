@@ -19,12 +19,8 @@
     "paneMode": {
       "type": "string",
       "title": "Pane mode",
-      "description": "operator draws the full board from the snapshot; simple draws only projects, open questions and blocked tasks, from the task documents.",
-      "default": "operator",
-      "options": [
-        "operator",
-        "simple"
-      ]
+      "description": "operator (default) or simple. operator draws the full board from the snapshot; simple draws only projects, open questions and blocked tasks, from the task documents. Any other value draws operator.",
+      "default": "operator"
     },
     "signal": {
       "type": "boolean",
