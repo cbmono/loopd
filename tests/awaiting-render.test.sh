@@ -242,5 +242,46 @@ ok "the merge row still links the PR"   "$(saw "$mrow" '[ai-bridge#7](https://gi
 ok "…and carries the trailer after it"  "$(saw "$mrow" '/pull/7) · 7/7 checks green at a069721')" yes
 ok "…as one row"                        "$(grep -c '^\* 🔀' "$M/$AB_AWAITING" | tr -d ' ')" 1
 
+# =====================================================================================
+# A QA DISAGREEMENT IS A Q<n> ENTRY ON DISK (qa-disagreement.sh), so the render needs no
+# flag and no host: a `gh` that records every call must see none.
+# =====================================================================================
+echo
+echo "== a QA disagreement renders from the task doc and clears when the head moves =="
+QD="$REPO/plugin/scripts/qa-disagreement.sh"
+D="$TMP/disagree"; inst "$D"; : > "$D/$AB_AWAITING"
+task "$D" task-005-e "Disputed" in-review '"x"' ''
+DT="$D/projects/demo/tasks/task-005-e.md"
+H1=0123456789abcdef0123456789abcdef01234567; H2=89abcdef0123456789abcdef0123456789abcdef
+U=https://github.com/octo/demo/pull/7
+mkdir -p "$TMP/ghbin"; printf '#!/bin/sh\necho "$*" >> "%s/gh.calls"\nexit 1\n' "$TMP" > "$TMP/ghbin/gh"
+chmod +x "$TMP/ghbin/gh"
+opens() { bash "$REPO/plugin/scripts/fold-answers.sh" --list "$DT" open_questions | grep -c 'QA disagreement on' | tr -d ' '; }
+ok "a checker table older than the head writes nothing (exit 1)" \
+   "$(bash "$QD" open "$DT" --pr "$U" --head "$H1" --checker "$H2" --criteria 2 >/dev/null; echo "$?/$(opens)")" 1/0
+ok "exit 1 at the head writes ONE Q<n> entry" \
+   "$(bash "$QD" open "$DT" --pr "$U" --head "$H1" --checker "$H1" --criteria 2,3)" "written: Q1"
+ok "…a second exit 1 at the same head writes nothing twice" \
+   "$(bash "$QD" open "$DT" --pr "$U" --head "$H1" --checker "$H1" --criteria 2,3)/$(opens)" "exists: Q1/1"
+PATH="$TMP/ghbin:$PATH" bash "$SH" --instance "$D" >/dev/null 2>&1
+drow="$(grep '^\* ❓' "$D/$AB_AWAITING")"
+ok "build-awaiting.sh renders it as one answer row" "$(grep -c '^\* ' "$D/$AB_AWAITING" | tr -d ' ')" 1
+ok "…naming the PR and the disputed criteria" "$(saw "$drow" "QA disagreement on $U at ${H1:0:12}: criteria 2, 3")" yes
+ok "…with the recommendation" "$(saw "$drow" '(recommended: send it back for a fix round)')" yes
+ok "…and it called no gh" "$([ -e "$TMP/gh.calls" ] && echo yes || echo no)" no
+ok "clear at the same head keeps it" "$(bash "$QD" clear "$DT" --pr "$U" --head "$H1")/$(opens)" "cleared: 0/1"
+ok "clear once the head moved moves it" "$(bash "$QD" clear "$DT" --pr "$U" --head "$H2")/$(opens)" "cleared: 1/0"
+ans="$(bash "$REPO/plugin/scripts/fold-answers.sh" --list "$DT" answered_questions)"
+ok "…to answered_questions, cleared: head moved past <sha>" \
+   "$(saw "$ans" "Q1: QA disagreement on $U at ${H1:0:12}: criteria 2, 3 — the PR body marks ✓, QA's table FAILs. What next? --- cleared: head moved past ${H1:0:12}")" yes
+ok "…with no by" "$(saw "$ans" ' by ')" no
+bash "$SH" --instance "$D" >/dev/null 2>&1
+ok "…and the row is gone" "$(grep -c '^\* ' "$D/$AB_AWAITING" | tr -d ' ')" 0
+bash "$QD" open "$DT" --pr "$U" --head "$H2" --checker "$H2" --criteria 1 >/dev/null
+sed -i.bak 's/^status: in-review$/status: done/' "$DT"
+ok "a task that left in-review clears it too" "$(bash "$QD" clear "$DT")/$(opens)" "cleared: 1/0"
+ok "…and open refuses there (exit 1)" \
+   "$(bash "$QD" open "$DT" --pr "$U" --head "$H2" --checker "$H2" --criteria 1 >/dev/null; echo $?)" 1
+
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

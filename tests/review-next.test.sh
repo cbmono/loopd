@@ -62,6 +62,8 @@ echo "== QA rounds =="
 ok "round 1 PASS at the head -> merge path (stop)" "$(d rc=1 class=declined crr=1 qar=2 crd=0 qad=1 qlast=pass qhead=yes qrec=yes)" merge-path
 ok "round 1 PASS, a commit after it -> merge path, no round 2" "$(d rc=1 class=declined crr=1 qar=2 crd=0 qad=1 qlast=pass qhead=no)" merge-path
 ok "round 1 FAIL at the head, no fix yet -> implementer round" "$(d rc=1 class=declined crr=1 qar=2 crd=0 qad=1 qlast=fail qhead=yes qrec=yes)" implementer-round
+ok "QA at qaRounds (1 of 1) FAILed at the head, no fix -> implementer round, never merge path" "$(d rc=8 crr=0 qar=1 crd=0 qad=1 qlast=fail qhead=yes)" implementer-round
+ok "…the same at 2 of 2, CodeRabbit refused" "$(d rc=1 class=declined crr=1 qar=2 crd=1 qad=2 qlast=fail qhead=yes)" implementer-round
 ok "round 1 FAIL, fix landed, qaRounds 2 -> dispatch QA round 2" "$(d rc=1 class=declined crr=1 qar=2 crd=0 qad=1 qlast=fail qhead=no)" dispatch-qa
 ok "…the same once CodeRabbit answers 8 at the fix commit" "$(d rc=8 crr=1 qar=2 crd=0 qad=1 qlast=fail qhead=no)" dispatch-qa
 ok "round 2 FAIL, fix landed, qaRounds 2 -> merge path (cap)" "$(d rc=1 class=declined crr=1 qar=2 crd=0 qad=2 qlast=fail qhead=no)" merge-path
