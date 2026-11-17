@@ -86,10 +86,10 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # drops pr-review-request and gains whats-up, answer, prune-wt and a /pane line; .loopd/ paths
 # and the cut docs/sharing.md citation are paid for by tighter close-project, new-project and
 # two-gates prose. The ceiling is not lowered: the margin is noise.
-# 16086 -> 16257 (recommendation-on-every-decision/task-004, 2026-11-17). +171 bytes, 1 line
+# 16095 -> 16255 (recommendation-on-every-decision/task-004, 2026-11-17). +160 bytes, 1 line
 # on "Reporting progress": a command the human runs is its own line of inline code — a
 # bulleted command pasted `-` into the owner's shell. Measured, not rounded.
-CEILING=16257
+CEILING=16255
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
