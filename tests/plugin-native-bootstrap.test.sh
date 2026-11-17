@@ -95,7 +95,7 @@ ok "every \${CLAUDE_PLUGIN_ROOT}/scripts/… reference resolves" "${MISSING:-non
 # `agent-control.sh` is on `SubagentStart` and `SubagentStop` as well as `PreToolUse` — the
 # two events that start and drop its per-agent state; `report-shape.sh` is on `SubagentStop`,
 # `board-session.sh` on `SessionEnd`; `refresh-state.sh` on Stop, `SubagentStop` and
-# `UserPromptSubmit`.
+# `UserPromptSubmit`; `task-doc-dirty.sh` on Stop.
 HOOKCMDS="$(python3 -c '
 import json,sys
 d=json.load(open(sys.argv[1]))
@@ -103,8 +103,8 @@ for ev in d["hooks"].values():
     for g in ev:
         for h in g["hooks"]:
             print(h["command"])' "$REPO/plugin/hooks/hooks.json" 2>/dev/null)"
-ok "hooks.json registers sixteen commands" "$(printf '%s\n' "$HOOKCMDS" | grep -c . | tr -d ' ')" 16
-ok "…naming twelve distinct scripts"        "$(printf '%s\n' "$HOOKCMDS" | sort -u | grep -c . | tr -d ' ')" 12
+ok "hooks.json registers seventeen commands" "$(printf '%s\n' "$HOOKCMDS" | grep -c . | tr -d ' ')" 17
+ok "…naming thirteen distinct scripts"        "$(printf '%s\n' "$HOOKCMDS" | sort -u | grep -c . | tr -d ' ')" 13
 ok "…every one through \${CLAUDE_PLUGIN_ROOT}" \
    "$(printf '%s\n' "$HOOKCMDS" | grep -cv '^"\${CLAUDE_PLUGIN_ROOT}/hooks/[a-z-]*\.sh"' | tr -d ' ')" 0
 HOOKMISS=""

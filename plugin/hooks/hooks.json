@@ -152,6 +152,14 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/refresh-state.sh\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/task-doc-dirty.sh\""
+          }
+        ]
       }
     ]
   }
