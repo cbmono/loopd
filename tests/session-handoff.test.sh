@@ -101,6 +101,8 @@ mk "$T/task-010-ended.md" done "$U5"
 mk "$T/task-032-working.md" in-progress "$U6"
 mk "$T/task-033-prompt.md" in-review "$U7"
 mk "$T/task-011-done.md" done "$U8"
+DISP='* DISPATCH 2026-10-21T09:00:00Z · %s · model opus · effort high · usage UNKNOWN\n'
+printf "$DISP" software-engineer >> "$T/task-022-sso.md"
 run() { ( cd "$B" && bash "$SH" "$@" --jobs-dir "$J" 2>/dev/null ); echo "rc=$?"; }
 one() { run "$@" | paste -sd ' ' -; }
 render() { printf '# Awaiting you\n' > "$AWF"; bash "$AW" --instance "$B" >/dev/null 2>&1 || echo "build-awaiting rc=$?" >&2; }
@@ -153,6 +155,7 @@ render
 ok "the answer folds, and the row leaves the queue" "$(grep -c 'task-022-sso' "$AWF")" 0
 OWED="$(cd "$B" && bash "$SH" --owed "$T/task-022-sso.md" 2>/dev/null)"
 ok "owed: the stopped session, with the answer" "$OWED" "owed $U1 $ID1
+round: resume
 answer: done, and the SSO profile is labs-admin"
 RES="$(PATH="$PATH" claude --bg --resume "$(bash "$SESS" full a8b4344d)" "The human finished hand-off $ID1: done. Carry on with this task.")"
 ok "the resume went to the FULL id, flag-free" "$(cnt "$TMP/calls" "resume $U1 The human finished hand-off $ID1")" 1
@@ -211,6 +214,7 @@ STARTED=1791557649233; all_blocked
 
 echo "== B1: a launched resume counts as resumed, so a second tick never resumes again =="
 mk "$T/task-050-launched.md" in-progress "$U6"
+printf "$DISP" software-engineer >> "$T/task-050-launched.md"
 printf '\n* 2026-10-21T09:00:00Z needs handed off %s · hand-off f6f6f6f6-0000aaaa · Q1 · session stopped by the tick\n' "$U6" >> "$T/task-050-launched.md"
 bash "$FOLD" --add "$T/task-050-launched.md" "Q1: do: finish the agent's hand-off f6f6f6f6-0000aaaa — x" >/dev/null
 sed -i.bak 's/^  - "\(Q1: do: .*\)"$/  - "\1 --- done"/' "$T/task-050-launched.md"
@@ -220,6 +224,41 @@ printf 'resume launched; session id unresolved: 0badc0de\n' >> "$T/task-050-laun
 ok "after 'resume launched': not owed" "$(one --owed "$T/task-050-launched.md")" "not-owed already-resumed rc=1"
 agents blocked blocked blocked blocked done done blocked blocked
 ok "…nor on the next tick, once the old session reads done" "$(one --owed "$T/task-050-launched.md")" "not-owed already-resumed rc=1"
+all_blocked
+
+echo "== a QA-filed hand-off: the answer goes to a fresh implementer, never back to the checker =="
+qa() { # <file> <answer> [dispatch role...] — a stopped U6 session's answered hand-off
+  local f="$1" a="$2" r; shift 2
+  printf -- '---\ntype: Task\ntitle: qa\nkind: build\nstatus: in-review\nassignee: software-engineer\nsession: %s\nopen_questions: [ ]\n---\n\n# Notes\n\n' "$U6" > "$f"
+  for r in "$@"; do printf "$DISP" "$r" >> "$f"; done
+  printf '* 2026-10-21T10:00:00Z needs handed off %s · hand-off f6f6f6f6-0000bbbb · Q1 · session stopped by the tick\n' "$U6" >> "$f"
+  bash "$FOLD" --add "$f" "Q1: do: finish the agent's hand-off f6f6f6f6-0000bbbb — x" >/dev/null
+  sed -i.bak "s/^  - \"\\(Q1: do: .*\\)\"\$/  - \"\\1 --- $a\"/" "$f"
+}
+agents blocked blocked blocked blocked done stopped blocked blocked
+QF="$T/task-060-qa.md"
+qa "$QF" "send the hang fix back to the implementer" software-engineer qa-reviewer
+ok "QA-filed, answered with work: a fresh round of the assignee" "$(run --owed "$QF" | sed -n 2p)" "round: dispatch software-engineer"
+ok "…the answer still rides along" "$(run --owed "$QF" | sed -n 3p)" "answer: send the hang fix back to the implementer"
+printf '* 2026-10-21T11:00:00Z dispatched 0d15ea5e-0000-4000-8000-00000000000a for hand-off f6f6f6f6-0000bbbb\n' >> "$QF"
+ok "…the dispatched note: the second call is not owed" "$(one --owed "$QF")" "not-owed already-resumed rc=1"
+qa "$QF" "send the hang fix back to the implementer" software-engineer qa-reviewer
+printf '* spawned; session id unresolved: 0d15ea5e\n' >> "$QF"
+ok "…so is an unresolved spawn's note" "$(one --owed "$QF")" "not-owed already-resumed rc=1"
+qa "$QF" "send it back" qa-reviewer software-engineer
+ok "implementer-filed: resume as before" "$(run --owed "$QF" | sed -n 2p)" "round: resume"
+for a in done accept; do
+  qa "$QF" "$a" software-engineer qa-reviewer
+  ok "QA-filed, answered '$a': no round owed" "$(one --owed "$QF")" "not-owed accepted rc=1"
+done
+qa "$QF" "done, then also bump the timeout" software-engineer qa-reviewer
+ok "…but more than the bare word is work" "$(run --owed "$QF" | sed -n 2p)" "round: dispatch software-engineer"
+qa "$QF" "send it back"
+ok "no DISPATCH line above the hand-off: unknown, no round" "$(one --owed "$QF")" "rc=2"
+qa "$QF" "send it back" software-engineer
+sed -i.bak '/^\* DISPATCH /d; s/^\(\* .*needs handed off.*\)$/\1\
+* DISPATCH 2026-10-21T12:00:00Z · qa-reviewer · model opus · usage UNKNOWN/' "$QF"
+ok "…a DISPATCH only BELOW it counts for nothing" "$(one --owed "$QF")" "rc=2"
 all_blocked
 
 echo "== W1: the next Q number counts advisor: entries and ### headings =="
@@ -267,6 +306,7 @@ ok "step 4 hands a needs off" "$(cnt "$S4" 'scripts/session-handoff.sh <task-pat
 ok "…never attaches it" "$(cnt "$S4" '**Hand it off, never attach:**')" 1
 ok "…has a stopped row that reaches the owed read" "$(grep -c '^   | `stopped` or `done` | either, after a hand-off |' "$S4")" 1
 ok "…and runs it" "$(cnt "$S4" 'scripts/session-handoff.sh --owed <task-path>')" 1
+ok "…and sends a QA hand-off's answer to a fresh round" "$(cnt "$S4" 'dispatch a fresh `loopd:<role>` round as step 3 spawns it')" 1
 ok "step 5 stops a done task's session through it" "$(cnt "$S5" 'scripts/session-handoff.sh <task-path>')" 1
 ok "…filing a pending needs first" "$(cnt "$S5" '**A `needs` it still holds is filed first**')" 1
 ok "no line in either runs claude rm" "$(cat "$S4" "$S5" | grep -E 'claude rm' | grep -vcE 'Never `claude rm`|never `claude rm`|`rm` is the human' | tr -d ' ')" 0

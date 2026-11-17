@@ -828,7 +828,7 @@ first open question". The id hashes the session's `startedAt` with the text, so 
 writes nothing twice and the next round's hand-off — a flag-free resume keeps the uuid — is
 a new entry. **After the human answers, the round is a RESUME**: same task and same PR is
 `CONVENTIONS.md`'s resume case, and `session-handoff.sh --owed` is the one read that says so
-from a `stopped` session, which the `recorded` read never reaches. **A done task's
+from a `stopped` session, which the `recorded` read never reaches. **Unless a checker filed it**: a `qa-reviewer` writes no code, so resuming it on "send it back to the implementer" spent a round that changed nothing (loopd#587, 2026-11-17); its answered hand-off is a fresh round of the task's `assignee:`, and `done`/`accept` owes none. **A done task's
 hand-off outlives the `done`**: jobs meant for after the merge are the measured case, so
 `AWAITING.md` keeps the row until it is answered, and step 5 files a pending `needs` before
 it stops the session.
