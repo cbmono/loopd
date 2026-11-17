@@ -42,7 +42,8 @@
 # malformed one (2), shows no close row. Nor does a project whose terminal task still shows a
 # `👉 do` row: closing it would set `status: done` and drop that row from the page.
 # A `👀 review` row — one per unanswered `D<n>` in project.md's `decisions:` — passes the
-# same two gates, and sorts before `approve` without withholding it.
+# same two gates, and sorts before `approve` without withholding it. It ends
+# `(recommended: ok)`: the D<n> is the recommendation, and ` --- ok` takes it.
 #
 # A build draft's `approve` row is marked `unverified` (no `## Verified facts`, or a facts
 # verdict of unknown) or `stale`. The verdict is verified-facts.sh's, passed in with --facts:
@@ -181,13 +182,42 @@ if v: print(" · " + re.sub(r"([\\`*_\[\]()<>|~!#])", r"\\\1", v), end="")
 PY
 }
 
+# An open question's recommendation as row text, from its `### Q<n>` block through
+# fold-answers.sh --block, escaped and capped at a word. A Q<n> entry without one says so;
+# an unlabelled or `advisor:` entry without one prints nothing.
+rec_of() { # <file> <entry>
+  local o
+  [[ "$2" =~ ^(Q[0-9]+): ]] || return 0
+  o="$(bash "$HERE/fold-answers.sh" --block "${BASH_REMATCH[1]}" "$1" 2>/dev/null | python3 -c '
+import json, re, sys
+try: r = (json.load(sys.stdin) or {}).get("recommendation", "").strip()
+except ValueError: r = ""
+if len(r) > 160:
+    cut = r.rfind(" ", 0, 160); r = r[:cut if cut > 0 else 160].rstrip() + " …"
+print("recommended: " + re.sub(r"([\\`*_\[\]()<>|~!#])", r"\\\1", r) if r else "no recommendation", end="")
+' 2>/dev/null)"
+  o="${o:-no recommendation}"
+  case "$o|${2#*: }" in 'no recommendation|advisor:'*) return 0 ;; esac
+  printf '%s' "$o"
+}
+
+do_row() { # <entry> <file> <rel> <title>
+  local r t; r="$(rec_of "$2" "$1")"
+  case "$1" in
+    *'hand-off '*) t="$(handoff_text "$1" "$2")"
+                   # Its sentence already ends "then answer Q<n> done": the recommendation, said once.
+                   case "$r|$t" in 'recommended: done|'*'`done`') r="" ;; esac ;;
+    *) t="$1" ;;
+  esac
+  add "👉" do "$4" "$3" "$t${r:+ ($r)}"
+}
+
 handoffs_of() { # <file> <rel> <title> -> one 👉 row per unanswered hand-off or deploy entry
   local e
   while IFS= read -r e; do
     case "$e" in
       *' --- '*) continue ;;
-      Q[0-9]*': do: deploy '*) add "👉" do "$3" "$2" "$e" ;;
-      Q[0-9]*': do: '*'hand-off '*) add "👉" do "$3" "$2" "$(handoff_text "$e" "$1")" ;;
+      Q[0-9]*': do: deploy '*|Q[0-9]*': do: '*'hand-off '*) do_row "$e" "$1" "$2" "$3" ;;
     esac
   done <<EOF
 $(entries "$1" open_questions || true)
@@ -362,22 +392,29 @@ for pm in "$inst"/projects/*/project.md; do
 
     # UNANSWERED questions only: an entry carrying ` --- ` is answered and belongs to
     # step 2's fold, not to the human's queue.
-    qs=""; qn=0
+    # A --trailer replaces the question text, never its recommendation: that follows it.
+    qs=""; qr=""; qn=0
     qlist="$(entries "$f" open_questions)" || fail3 "cannot read open_questions in $rel"
     while IFS= read -r e; do
       [ -n "$e" ] || continue
       case "$e" in *' --- '*) continue ;; esac
       qn=$((qn + 1))
       case "$e" in
-        Q[0-9]*': do: deploy '*) add "👉" do "$t" "$rel" "$e"; continue ;;
-        Q[0-9]*': do: '*'hand-off '*) add "👉" do "$t" "$rel" "$(handoff_text "$e" "$f")"; continue ;;
+        Q[0-9]*': do: deploy '*|Q[0-9]*': do: '*'hand-off '*) do_row "$e" "$f" "$rel" "$t"; continue ;;
       esac
-      is_grant "$e" && { add "🧰" grant "$t" "$rel" "${trail:-$e}"; continue; }
-      qs="${qs:+$qs; }$e"
+      r="$(rec_of "$f" "$e")"
+      if is_grant "$e"; then
+        if [ -n "$trail" ]; then add "🧰" grant "$t" "$rel" "$trail${r:+ (${e%%:*} $r)}"
+        else add "🧰" grant "$t" "$rel" "$e${r:+ ($r)}"; fi
+        continue
+      fi
+      qs="${qs:+$qs; }$e${r:+ ($r)}"
+      [ -z "$r" ] || qr="${qr:+$qr; }${e%%:*} $r"
     done <<EOF
 $qlist
 EOF
-    [ -n "$qs" ] && add "❓" answer "$t" "$rel" "${trail:-$qs}"
+    if [ -n "$qs" ] && [ -n "$trail" ]; then add "❓" answer "$t" "$rel" "$trail${qr:+ ($qr)}"
+    elif [ -n "$qs" ]; then add "❓" answer "$t" "$rel" "$qs"; fi
 
     [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${mq_link}${trail:+ · $trail}$mq_warn"
 
@@ -400,7 +437,7 @@ EOF
     while IFS= read -r e; do
       case "$e" in D[0-9]*:*) ;; *) continue ;; esac
       case "$e" in *' --- '*[![:space:]]*) [ -n "$(printf '%s' "${e##* --- }" | tr -d '[:space:]')" ] && continue ;; esac
-      add "👀" review "$(title_of "$pm")" "${pm#"$inst"}" "$e"
+      add "👀" review "$(title_of "$pm")" "${pm#"$inst"}" "$e (recommended: ok)"
     done <<EOF
 $dlist
 EOF

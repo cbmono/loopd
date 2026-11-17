@@ -64,8 +64,11 @@ committed as you. Exit 3 and 4 read as above. It never dispatches: the next tick
    `open_questions` list. For each entry (numbered `Q1:`, `Q2:`, …) record the task path
    + question text.
 2. **Ask.** Present them with `AskUserQuestion`, batched (max 4 per call — loop if there
-   are more), grouped by task so the context is clear. Where you can propose plausible
-   answers, offer them as options; otherwise take free-form. When several options could
+   are more), grouped by task so the context is clear. **Show each question's recommendation
+   beside it** — the `Recommendation:` line of its `### Q<n>` block, or `no recommendation`
+   when the block has none — and offer the block's `Options:` in order, option 1 first and
+   labelled `(Recommended)`: picking it takes the recommendation, as `answer.sh … 1` does.
+   With no block, propose plausible answers as options where you can; otherwise take free-form. When several options could
    jointly apply, mark that question `multiSelect` so more than one can be picked —
    selections then fold back as ONE combined answer on the question's line.
 3. **Fold back.** For each answered question, bake the answer into the task itself

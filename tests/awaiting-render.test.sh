@@ -60,9 +60,9 @@ by each dispatch tick that changed something. Set "awaiting": false in instance.
 Last refreshed: <ISO>.
 
 ## 🔴 Awaiting you (5)
-* 🧰 **grant** — [Has questions](/projects/demo/tasks/task-002-b.md) · Q2: install the foo CLI
+* 🧰 **grant** — [Has questions](/projects/demo/tasks/task-002-b.md) · Q2: install the foo CLI (no recommendation)
 * ⛔ **unblock** — [Stuck](/projects/demo/tasks/task-003-c.md) · waiting on a host account
-* ❓ **answer** — [Has questions](/projects/demo/tasks/task-002-b.md) · Q1: which colour?
+* ❓ **answer** — [Has questions](/projects/demo/tasks/task-002-b.md) · Q1: which colour? (no recommendation)
 * ✅ **approve** — [Clean draft](/projects/demo/tasks/task-001-a.md) · unverified · refined & clean, promote `draft → ready`
 * 🔀 **merge** — [Green](/projects/demo/tasks/task-004-d.md) · [ai-bridge#7](https://github.com/cbmono/ai-bridge/pull/7)
 WANT
@@ -173,7 +173,44 @@ G="$TMP/hard"; inst "$G"; : > "$G/$AB_AWAITING"
 task "$G" task-001-a "Hard" draft '"a `[x](y)` link, a comma, and a ] bracket"' '"Q1: is a ] fine, really?"'
 bash "$SH" --instance "$G" >/dev/null 2>&1
 ok "an entry with brackets and commas survives whole" \
-   "$(grep -c '❓ \*\*answer\*\*.*Q1: is a \] fine, really?$' "$G/$AB_AWAITING" | tr -d ' ')" 1
+   "$(grep -c '❓ \*\*answer\*\*.*Q1: is a \] fine, really? (no recommendation)$' "$G/$AB_AWAITING" | tr -d ' ')" 1
+
+echo
+echo "== every question's recommendation renders beside it, from its ### Q<n> block =="
+R="$TMP/rec"; inst "$R"; : > "$R/$AB_AWAITING"
+printf -- '---\ntype: Project\ntitle: "Demo"\nstatus: active\ndecisions: [ "D1: no cache — alternatives: redis; why: low load; reversible: yes" ]\n---\n' \
+  > "$R/projects/demo/project.md"
+block() { printf '\n### %s\nRecommendation: %s\nOptions:\n1. %s\n' "$1" "$2" "$2"; }
+qs='"Q1: which colour?", "Q2: install the foo CLI", "Q3: which font?", "Q4: advisor: is the cache bounded?", "advisor: is it sound?"'
+task "$R" task-001-a "Recs" draft '"x"' "$qs"
+{ printf '\n## Question details\n'; block Q1 'Blue, the `brand` colour'; block Q2 'yes, with brew'; } >> "$R/projects/demo/tasks/task-001-a.md"
+DQ='Q1: do: deploy demo/web — merged, not deployed'
+task "$R" task-002-b "Deploy" done '"x"' "\"$DQ\""
+{ printf '\n## Question details\n'; block Q1 done; } >> "$R/projects/demo/tasks/task-002-b.md"
+task "$R" task-003-c "Clean" draft '"x"' ''
+{ printf '\n## Question details\n'; block Q1 'an answered one'; } >> "$R/projects/demo/tasks/task-003-c.md"
+bash "$SH" --instance "$R" >/dev/null 2>&1
+L1='* ❓ **answer** — [Recs](/projects/demo/tasks/task-001-a.md) · Q1: which colour? (recommended: Blue, the \`brand\` colour); Q3: which font? (no recommendation); Q4: advisor: is the cache bounded?; advisor: is it sound?'
+L2='* 🧰 **grant** — [Recs](/projects/demo/tasks/task-001-a.md) · Q2: install the foo CLI (recommended: yes, with brew)'
+row_is() { grep -cxF -- "$1" "$R/$AB_AWAITING" | tr -d ' '; }
+ok "answer: the whole row, each question with its own, escaped" "$(row_is "$L1")" 1
+ok "grant: the whole row"        "$(row_is "$L2")" 1
+ok "do: the whole row"           "$(row_is "* 👉 **do** — [Deploy](/projects/demo/tasks/task-002-b.md) · $DQ (recommended: done)")" 1
+ok "review: the decision is the recommendation" \
+   "$(row_is '* 👀 **review** — [Demo](/projects/demo/project.md) · D1: no cache — alternatives: redis; why: low load; reversible: yes (recommended: ok)')" 1
+ok "approve: one row, display-only, nothing added" \
+   "$(row_is '* ✅ **approve** — [Clean](/projects/demo/tasks/task-003-c.md) · unverified · refined & clean, promote `draft → ready`')" 1
+bash "$SH" --instance "$R" --trailer "$R/projects/demo/tasks/task-001-a.md=pick a colour and a font" >/dev/null 2>&1
+ok "a trailer replaces the questions, once, never their recommendations" \
+   "$(row_is '* ❓ **answer** — [Recs](/projects/demo/tasks/task-001-a.md) · pick a colour and a font (Q1 recommended: Blue, the \`brand\` colour; Q3 no recommendation)')" 1
+ok "…and on a grant row"         "$(row_is '* 🧰 **grant** — [Recs](/projects/demo/tasks/task-001-a.md) · pick a colour and a font (Q2 recommended: yes, with brew)')" 1
+ok "…and the trailer is never printed twice" "$(grep -c 'font.*pick a colour' "$R/$AB_AWAITING" | tr -d ' ')" 0
+ok "one reader of the block: fold-answers.sh --block" "$(grep -c 'fold-answers.sh" --block' "$SH" | tr -d ' ')" 1
+long="$(printf 'word%.0s ' $(seq 1 60))"
+task "$R" task-001-a "Recs" draft '"x"' '"Q1: which colour?"'
+{ printf '\n## Question details\n'; block Q1 "$long"; } >> "$R/projects/demo/tasks/task-001-a.md"
+bash "$SH" --instance "$R" >/dev/null 2>&1
+ok "a long recommendation is capped at a word" "$(grep -cE 'which colour\? \(recommended: (word ){30,32}…\)$' "$R/$AB_AWAITING" | tr -d ' ')" 1
 
 # A LIST IT CANNOT PARSE IS NOT AN EMPTY LIST. Swallowing the parser's exit renders the
 # draft as a clean `approve` row with its unresolved questions still on the page, which is

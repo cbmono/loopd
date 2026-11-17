@@ -10,11 +10,11 @@ tree the same day — `init-bundle.sh` 1,115 comment lines of 2,400, `session-ba
 [#135](https://github.com/cbmono/loopd/pull/135) at 5,826 and 6,423 characters, 133
 `Finding`s averaging 110 lines. **These are ceilings, not targets, and they bind every
 agent on every surface below.**
-**Four of these have readers, so they are not prose.**
+**Five of these have readers, so they are not prose.**
 `pr-body-clearance.sh` refuses a body over 2,500 characters or carrying more than 3 notes
 (**exit 4**); `pr-verdict-clearance.sh` refuses a checker row with no `PASS`/`FAIL` or no
 command (**exit 3**); `validate-bundle.sh` warns on a `Finding` over 40 lines or missing its
-`lesson:` — **on the document you name (`validate-bundle.sh <path>`) as well as on the whole
+`lesson:`, and on a task `# Result` over 15 lines — **on the document you name (`validate-bundle.sh <path>`) as well as on the whole
 bundle**, so the cap lands while you are writing rather than at the next full run; and
 `tests/concision-contract.test.sh` in `cbmono/loopd` fails when a
 `plugin/**/*.sh` file's comment-line share exceeds **35%**, ratcheting the files already
