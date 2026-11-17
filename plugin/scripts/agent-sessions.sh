@@ -408,12 +408,13 @@ PY
     tasks=""
     [ -e "$1" ] && tasks="$(awk '
       function flush() { if (v != "") print v "\t" st "\t" f; v = "" }
-      FNR == 1 { flush(); f = FILENAME; fm = ($0 == "---"); hit = 0; st = ""; next }
+      FNR == 1 { flush(); f = FILENAME; fm = ($0 == "---"); hit = 0; ns = 0; st = ""; next }
       fm && $0 == "---" { fm = 0; flush(); next }
-      fm && st == "" && /^status:/ { st = $0; sub(/^status:[[:space:]]*/, "", st); sub(/[[:space:]]+#.*$/, "", st); gsub(/["\047\r]/, "", st) }
+      fm && /^status:/ && ns++ { st = "" }
+      fm && /^status:/ && ns == 1 { st = $0; sub(/^status:[[:space:]]*/, "", st); sub(/[[:space:]]+#.*$/, "", st); gsub(/["\047\r\t]/, "", st) }
       fm && !hit && /^worktree:/ {
         hit = 1; v = $0
-        sub(/^worktree:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v); gsub(/["\047]/, "", v)
+        sub(/^worktree:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v); gsub(/["\047\t]/, "", v)
       }
       END { flush() }' "$@" 2>/dev/null)"
     # A session a task records is that task's to stop (session-handoff.sh), wherever its cwd.

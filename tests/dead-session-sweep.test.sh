@@ -158,6 +158,8 @@ task() { { echo ---; echo "type: Task"; [ -n "$3" ] && echo "status: $3"; echo "
            [ -n "${4:-}" ] && echo "session: $4"; echo ---; } > "$T/$1.md"; }
 task task-003-done t3 done; task task-004-gone t4 cancelled; task task-005-nostatus t5 ""
 task task-006-done t6 done; task task-007-open t6 in-review; task task-008-rec t8 done "$(u 0000a8a8)"
+printf -- '---\nstatus: done\nworktree: %s\nstatus: in-review\n---\n' "$WT/t9" > "$T/task-009-twice.md"
+printf -- '---\nstatus: done\nworktree: %s\tdone\n---\n' "$WT/t10" > "$T/task-010-tab.md"
 cat > "$TMP/fin.spec" <<EOF
 $(u 0000f101) $B working $LIVE $((5*H))
 $(u 0000d301) $WT/t3 blocked - 1800 qa-review-pr-568
@@ -167,13 +169,16 @@ $(u 0000a501) $WT/t5 blocked - $((30*H)) qa-review-pr-574
 $(u 0000a601) $WT/t6 working - $((5*H)) qa-review-pr-583
 $(u 0000a8a8) $WT/t8 blocked - $((30*H))
 $(u 0000c103) $WT/orphan working - $((5*H))
+$(u 0000a901) $WT/t9 working - $((5*H))
+$(u 0000aa01) $WT/t10 working - $((5*H))
 EOF
 mk "$TMP/fin.spec"; rep="$(sweep)"
 ok "a done task's worktree, and a reclaimed cancelled one's: stopped past 10m, blocked too" "$(stops)" "0000d301 0000d401"
 ok "…reported as dead" "$(grep -c '^stopped 0000d301 ([0-9]*m) dead$' <<<"$rep")" 1
 for g in "0000d302|a finished worktree's session under 10m" "0000a501|a worktree whose task has no status:" \
          "0000a601|a worktree an open task records too" "0000a8a8|a finished worktree's session a task records" \
-         "0000c103|a worktreeRoot path no task of this bundle records"; do
+         "0000c103|a worktreeRoot path no task of this bundle records" \
+         "0000a901|a worktree whose task has two status: lines" "0000aa01|a tab in worktree: forging a status"; do
   mk "$TMP/fin.spec"; sweep >/dev/null
   ok "no stop for ${g#*|}" "$(grep -c "^${g%%|*}$" "$STOPS")" 0
 done
