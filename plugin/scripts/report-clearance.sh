@@ -172,6 +172,7 @@ if [ "$2" = "-" ]; then body="$(cat)"; else
 fi
 printf '%s\n' "$body" | check
 rc=$?
+printf '%s\n' "$body" | "$(dirname "$0")/wording-notes.sh" - >&2 || true
 [ "$rc" -le 1 ] || { echo "report-clearance: the checker itself failed (awk exit $rc)" >&2; exit 2; }
 [ "$rc" -eq 0 ] && echo "CLEAR"
 exit "$rc"

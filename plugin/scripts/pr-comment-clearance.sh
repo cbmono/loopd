@@ -692,6 +692,7 @@ if [ -n "$file" ]; then
   reply_chars="$(jq -Rs 'length' < "$file" 2>/dev/null)" || reply_chars="unknown"
   echo "pr-comment-clearance: $file is $reply_chars characters (information only — no" >&2
   echo "                      exit code in this script is derived from that number)" >&2
+  "$(dirname "${BASH_SOURCE[0]:-$0}")/wording-notes.sh" "$file" >&2 || true
   render_reply "$file" "$TMPD/rendered"
   decide "$TMPD/rendered" "'$file'"
   exit $?
@@ -759,6 +760,7 @@ echo "pr-comment-clearance: comment $comment is $reply_chars characters (informa
 echo "                      only — no exit code in this script is derived from that" >&2
 echo "                      number)" >&2
 
+"$(dirname "${BASH_SOURCE[0]:-$0}")/wording-notes.sh" "$TMPD/body" >&2 || true
 render_reply "$TMPD/body" "$TMPD/rendered"
 decide "$TMPD/rendered" "comment $comment ($url)"
 exit $?

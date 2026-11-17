@@ -1515,6 +1515,7 @@ if [ -n "$body_file" ]; then
   }
   # Reported here for the author; `decide` measures it again against the ceiling.
   report_length "$body_file" "$body_file"
+  "$(dirname "${BASH_SOURCE[0]:-$0}")/wording-notes.sh" "$body_file" >&2 || true
   render_body "$body_file" "$TMPD/rendered"
   decide "$body_file" "$TMPD/rendered" "'$body_file'"
   exit $?
@@ -1575,6 +1576,7 @@ printf '%s' "$raw" | jq -j '.body // ""' > "$TMPD/body" 2>/dev/null || {
 }
 
 report_length "$TMPD/body" "PR $pr body"
+"$(dirname "${BASH_SOURCE[0]:-$0}")/wording-notes.sh" "$TMPD/body" >&2 || true
 
 render_body "$TMPD/body" "$TMPD/rendered"
 decide "$TMPD/body" "$TMPD/rendered" "the body of PR $pr ($url)"; drc=$?

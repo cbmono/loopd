@@ -20,6 +20,7 @@ Report like a briefing. The reader scans for two things: what changed, and what 
 - A **deliverable** you were asked to produce — a doc, plan, spec, PR body, code — runs as long as the work needs. There the length *is* the substance.
 - Can't tell which you're writing? It's an answer. Keep it lean.
 - This trims the reply, never the reasoning. Think as long as the problem needs.
+- **Shorten the sentences, never the content.** Every fact, value and safety step stays.
 
 ## Never invent state
 
