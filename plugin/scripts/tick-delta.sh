@@ -675,7 +675,6 @@ rerun_owed() { # <file> -> 0 owed, 1 not, 2 unreadable
   rest="$(printf '%s\n' "$notes" | grep . | grep -vE "$CRITIQUE_NOT_RUN" | sed 's/[[:space:]].*//' | sort | tail -n1)"
   [ -z "$rest" ] || [[ "$rest" < "${nr%% *}" ]]
 }
-# Unlaunched: no `saw:` receipt, or design.md maps an id the newest receipt's `saw:` lacks.
 project_critique() { # <project.md> <mapped task ids> -> prints why; 0 owed, 1 not, 2 unreadable
   local notes saw id
   untriaged "$1"; case $? in 0) echo untriaged; return 0 ;; 2) return 2 ;; esac
