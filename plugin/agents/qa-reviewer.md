@@ -257,6 +257,8 @@ signature". Never on a PR body.
      or correctness-only issue is valid even if the others didn't independently surface it);
      reproduction *raises confidence*, it doesn't veto a lens. Read-only, so no worktree
      isolation needed.
+     A `## Refactor opportunities` section in `loopd:code-architect`'s report is never a
+     finding against this PR: end your final message with it, unchanged, for the PM.
      With no trigger fired, **the cheap review is the second opinion** — say so in the
      verdict rather than leaving a reader to assume a deep review happened.
    - **d. If the cheap route is unreachable, fall back — silently, and never as an error.**
