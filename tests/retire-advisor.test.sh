@@ -96,7 +96,7 @@ ok "…and carries no \$advisor comment key" \
 
 # NOT retired, deliberately — the field outlives the agent because a second writer uses it.
 ok "advisor_notes is still a schema field" \
-  "$(grep -c '^advisor_notes:' "$SCHEMA" | tr -d ' ')" 1
+  "$(grep -cE '^advisor_notes:[[:space:]]+#' "$SCHEMA" | tr -d ' ')" 1
 ok "…marked retired-for-the-advisor in place, with the date" \
   "$(grep -c 'advisor_notes:.*RETIRED on 2026-10-08' "$SCHEMA" | tr -d ' ')" 1
 ok "…and the approach critique still writes it" \

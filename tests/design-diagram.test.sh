@@ -52,7 +52,8 @@ mkdir -p "$P/tasks" "$I/projects/p2/tasks" "$I/$AB_DIR"
 printf '{ "org": "o" }\n' > "$I/instance.config.json"
 printf '# SCHEMA\n' > "$I/$AB_SCHEMA"
 printf '/%s\n' "$AB_STATE_DIR" > "$I/.gitignore"
-proj() { printf -- '---\ntype: Project\ntitle: "%s"\nkind: build\nstatus: active\ntimestamp: 2026-10-28T00:00:00Z\n---\n' "$2" > "$I/projects/$1/project.md"; }
+SAW='advisor_notes: [ "2026-10-28T00:00:00Z · advisor: project critique — no concerns · saw: task-001 task-002 task-003 task-004" ]'
+proj() { printf -- '---\ntype: Project\ntitle: "%s"\nkind: build\nstatus: active\n%s\ntimestamp: 2026-10-28T00:00:00Z\n---\n' "$2" "$SAW" > "$I/projects/$1/project.md"; }
 task() { # <slug> <id> <title> <criteria>
   printf -- '---\ntype: Task\ntitle: "%s"\nkind: build\nstatus: draft\nacceptance_criteria: [ %s ]\nopen_questions: [ ]\ntimestamp: 2026-10-28T00:00:00Z\n---\n' \
     "$3" "$4" > "$I/projects/$1/tasks/$2.md"; }

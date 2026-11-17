@@ -152,7 +152,7 @@ namespace when it spawns.
 
 | Agent | Called by | Does |
 |---|---|---|
-| `plan-architect` | the PM, at refine time | the approach critique: missing edge cases, wrong layering, scope creep |
+| `plan-architect` | the PM, at refine time | the approach critique of a task (its Context and criteria, plus the project's need, success_criteria and sibling titles), and once per build project the project critique (project.md, design.md, every task's title and criteria) |
 | `code-architect` | the `qa-reviewer`, on a trigger | a staff-engineer read of a diff: architecture, patterns, trade-offs |
 | `deep-bug-scan` | the `qa-reviewer`, on a trigger | a deep bug hunt: logic errors, races, SQL, assertion gaps |
 

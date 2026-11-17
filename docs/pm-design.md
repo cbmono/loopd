@@ -602,6 +602,31 @@ adopted 2026-11-02:
   receipt of its own, a critique that errored was either re-dispatched every tick or read
   as a concern; one re-dispatch, then a named report, bounds both.
 
+<a id="step-2-project"></a>
+### Step 2 — the project critique, and why the task critique sees the project
+
+Added 2026-11-17. The task critique was briefed with one task's `# Context` and criteria,
+so it took the project as given; nothing independent read the decomposition. `pre_mortem:`
+is the PM's own sentence, and new-project's scaffold review checks the scaffold, not the
+split. One project's pre-mortem named the conflict chain its checks would land as, and that
+day it happened (hook-count, `docs/reference.md` and seed-ceiling conflicts across four
+PRs) — nothing escalated it.
+
+Two briefs now:
+
+- **Task** — its `# Context` and criteria, plus the project's `need:`, `success_criteria`
+  and the sibling tasks' titles: enough to see a task that does not serve the project,
+  without re-reading the whole project per task.
+- **Project** — `project.md`'s need, success_criteria and decisions, design.md's diagram and
+  `pre_mortem:`, every task's title and criteria. It runs on the first design.md draw,
+  not at new-project: at creation there is often one seed task and no decomposition.
+
+The receipt carries `saw: <task ids>` so a rerun is owed exactly when design.md maps a task
+the last run never saw; its entries stay after triage because they are that receipt. A
+`pre-mortem:` concern is always escalated, since a risk the PM already wrote down and did
+not act on is the failure this exists for. Escalation goes to the named tasks'
+`open_questions`, never `decisions:`, so `design-inputs.sh` sees no change.
+
 <a id="step-2-5"></a>
 ### Step 2.5 — why a promotion is stamped, once
 
