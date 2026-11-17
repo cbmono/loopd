@@ -119,7 +119,9 @@ echo
 echo "== 4. tick-delta.sh digest: a waiting project names no step 2 =="
 gitinit() { ( cd "$INST" && git init -q && git add -A && git -c user.name=t -c user.email=t@example.com commit -qm init ) >/dev/null 2>&1; }
 steps() { bash "${1:-$SCRIPTS}/tick-delta.sh" digest --instance "$INST" 2>/dev/null; }
-mk_inst p later; gitinit
+# No open question: the draft is unrefined, so only the inputs guard keeps step 2 unnamed.
+noq() { sed -i.bak '/^open_questions:/d' "$INST/projects/p/tasks/task-001-a.md"; rm -f "$INST/projects/p/tasks/task-001-a.md.bak"; }
+mk_inst p later; noq; gitinit
 D="$(steps)"
 ok "waiting: the digest says so"                   "$(grep -c '^inputs waiting projects/p/project.md$' <<<"$D" | tr -d ' ')" 1
 ok "…and step 2 is not named"                      "$(grep '^steps:' <<<"$D" | grep -c 'step-2' | tr -d ' ')" 0
@@ -127,7 +129,6 @@ printf 'x\n' > "$INST/projects/p/sources/notes.txt"
 D="$(steps)"
 ok "arrived: the digest says so"                   "$(grep -c '^inputs arrived projects/p/project.md$' <<<"$D" | tr -d ' ')" 1
 ok "…and step 2 is named, to release it"           "$(grep '^steps:' <<<"$D" | grep -c 'step-2' | tr -d ' ')" 1
-noq() { sed -i.bak '/^open_questions:/d' "$INST/projects/p/tasks/task-001-a.md"; rm -f "$INST/projects/p/tasks/task-001-a.md.bak"; }
 mk_inst p ""; noq; gitinit
 ok "no inputs: key: an unrefined draft names step 2 as ever"  "$(steps | grep '^steps:' | grep -c 'step-2' | tr -d ' ')" 1
 # MUTANT: the draft guard removed — a waiting project names step 2 again.
