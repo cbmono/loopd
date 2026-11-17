@@ -49,8 +49,7 @@ ok "mutant: carve-out deleted -> check FAILS"    "$(saw "$(section "$TMP/mutant.
 grep -vF 'Agent-raised questions go to the owner' "$SEED" > "$TMP/mutant2.md"
 ok "mutant: one-at-a-time rule deleted -> check FAILS" "$(saw "$(section "$TMP/mutant2.md")" "$ONEBYONE")" no
 
-grep -vF 'A lone merge or close whose verb is' "$SEED" > "$TMP/mutant3.md"
-ok "mutant: exemption deleted -> check FAILS"    "$(saw "$(section "$TMP/mutant3.md")" "$EXEMPT")" no
+ok "mutant: exemption deleted -> check FAILS"    "$(saw "${S//"$EXEMPT"/}" "$EXEMPT")" no
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
