@@ -32,7 +32,6 @@ ASKED='[{"author":{"login":"example-user-007"},"body":"@coderabbitai review"}]'
 NONE='[{"author":{"login":"example-user-007"},"body":"looks good"}]'
 BOTTIPS='[{"author":{"login":"coderabbitai"},"body":"Tips: `@coderabbitai review` to trigger"},{"author":{"login":"github-actions[bot]"},"body":"@coderabbitai review"}]'
 
-# verdict <project-dir> <command> — report | silent | deny | stderr | bad
 verdict() {
   local out
   : > "$CALLS"
