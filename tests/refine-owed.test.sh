@@ -38,7 +38,7 @@ digest() { "$INST/scripts/tick-delta.sh" digest --instance "$INST" 2>/dev/null; 
 check() { local out rc; out="$("$INST/scripts/tick-delta.sh" check --instance "$INST" 2>&1)"; rc=$?
           printf 'rc:%s %s' "$rc" "$(head -1 <<<"$out" | cut -c1-30)"; }
 record() { "$INST/scripts/tick-delta.sh" record --instance "$INST" >/dev/null 2>&1; }
-names_step2() { digest | grep '^steps:' | grep -q 'step-2-refine-drafts.md' && echo yes || echo no; }
+names_step2() { local d; d="$(digest)"; case "$(grep '^steps:' <<<"$d")" in *step-2-refine-drafts.md*) echo yes ;; *) echo no ;; esac; }
 
 echo "== digest: refine owed lines and the step-2 name =="
 project a active
