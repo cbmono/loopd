@@ -87,6 +87,12 @@ BEGIN {
     next
   }
   if (sec == "needs") {
+    if (line ~ /^([-*+]|[0-9]+[.)])[ \t]+`[^`]+`$/) {
+      refuse("command", "a command as a list item pastes its marker into the shell — give it its own line as inline code: " substr(line, 1, 60))
+      if (line ~ /^[0-9]+\./) { items++; cmdonly[items] = 1 } else if (items > 0) cmd[items] = cmd[items] " " line
+      next
+    }
+    if (line ~ /^`[^`]+`$/ && items > 0) { cmd[items] = cmd[items] " " line; next }
     if (match(line, /^[0-9]+\.[ \t]+/) && raw !~ /^    /) {
       num = substr(line, 1, index(line, ".") - 1) + 0
       items++
@@ -118,8 +124,9 @@ END {
   if (tolower(block) ~ narr) refuse("reasoning", "Blocking: narrates steps or alternatives")
   if (sec == "needs" && items == 0) refuse("shape", "Needs you: with no numbered item — omit it when nothing is needed")
   for (n = 1; n <= items; n++) {
-    t = item[n]; d = shown(t); dl = tolower(d)
-    if (t !~ /\]\([^) \t]+\)/ && t !~ /https?:\/\// && t !~ /`[^`]*\/[^`]*`/ && t !~ /(^|[ \t(])~?\/[A-Za-z0-9._-]/)
+    if (n in cmdonly) continue
+    t = item[n]; d = shown(t); dl = tolower(d); u = t cmd[n]
+    if (u !~ /\]\([^) \t]+\)/ && u !~ /https?:\/\// && u !~ /`[^`]*\/[^`]*`/ && u !~ /(^|[ \t(])~?\/[A-Za-z0-9._-]/)
       refuse("item", "item " n " links no URL or path inline")
     w = d; gsub(/\*\*|__/, "", w); w = trim(w)
     while (w != "" && substr(w, 1, 1) !~ /[A-Za-z0-9`\[]/) w = substr(w, 2)

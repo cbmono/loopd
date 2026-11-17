@@ -84,6 +84,13 @@ ok "[task-001](/projects/x/tasks/task-001.md) is refused" "$(verdict c8-bundle-r
 ok "an absolute-path link clears"                        "$(verdict clean-absolute-link.md)" "0 "
 ok "…the shipped text points at it"  "$(grep -c 'by URL — `/projects/` refused (`bundle`)' "$PM")" 1
 
+echo "-- a command the human runs is its own inline-code line, never a list item"
+ok "a bulleted command is refused"               "$(verdict c9-bulleted-command.md)" "1 command"
+ok "a numbered item that is only a command is refused" "$(verdict c9-numbered-command.md)" "1 command"
+ok "bare inline-code command lines under an item clear" "$(verdict clean-command-line.md)" "0 "
+ok "…a code fence is still refused"              "$(printf 'Tick 1 merged nothing.\n\nNeeds you:\n1. Merge [d#1](https://example.com/1) — green.\n```sh\ngit mrg x\n```\n' | "$SCRIPT" --body-file - | grep -c '^REFUSED outside: a code fence')" 2
+ok "…the shipped text points at it"              "$(grep -c 'number or fence (refused as `command`)' "$PM")" 1
+
 echo "-- criterion 1: the binding point is SubagentStop, and it acts"
 ok "hooks.json registers report-shape.sh on SubagentStop" \
    "$(jq -r '[.hooks.SubagentStop[].hooks[].command] | index("\"${CLAUDE_PLUGIN_ROOT}/hooks/report-shape.sh\"") != null' "$REPO/plugin/hooks/hooks.json")" true

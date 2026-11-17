@@ -112,6 +112,7 @@ bundle-relative `/projects/…` target `.loopd/AWAITING.md` carries (a terminal 
 - **Lead with the outcome**, in one sentence.
 - **Tables over paragraphs** for anything with more than two of a thing.
 - **What needs a decision goes last, and short** — one line per item, nothing after.
+- **A command the human runs is its own line of inline code** — no bullet, number, `$` or trailing prose, never a fenced block; several are several lines, in run order.
 
 Reasoning belongs where it is durable — the task doc, the commit message, a
 `Finding` — not in a status message.

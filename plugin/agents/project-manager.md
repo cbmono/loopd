@@ -486,7 +486,9 @@ Three parts, in this order, and nothing else:
      file path;
    - **your recommendation, with one clause of why after ` — `** — never "whether" or "either";
    - **in dependency order, executable top to bottom** — a prerequisite never sits below the
-     item that needs it.
+     item that needs it;
+   - **a command the human runs on its own line under the item, as inline code** — never a
+     bullet, number or fence (refused as `command`), so it pastes into a shell as is.
 
 After those, only trailer lines: step 8's `BOARD:` lines and a `COST: <n> tokens` line.
 **At most ONE cost line, and only when there is one to give** — a tick that

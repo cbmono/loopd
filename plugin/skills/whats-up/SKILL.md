@@ -17,6 +17,9 @@ A question's row carries its recommendation beside it — `(recommended: …)` o
 recommendation)`, rendered by `build-awaiting.sh` — so relaying the row shows it; option `1`
 of `/loopd:answer` takes it.
 
+**A command you ask the human to run goes on its own line as inline code** — never a bullet,
+number or fenced block, so it pastes into a shell as is. The relayed rows stay unchanged.
+
 The numbers are the ones the human's next reply addresses. The reply vocabulary and its
 promote/merge carve-out live in the instance `CLAUDE.md` → "Reporting progress"; follow
 them there, not from a copy here.
