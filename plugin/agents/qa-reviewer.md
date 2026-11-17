@@ -70,9 +70,9 @@ signature". Never on a PR body.
 
    | Tier | Picked when | Evidence it requires |
    |---|---|---|
-   | **UI** | the task sets `ui: true`, or the diff touches the repo's `uiGlobs` | **the PR's screenshots are the review input** (`conventions/pr-body.md` → "UI evidence: a screenshot per changed screen"): open every screenshot path its `Verified:` line or criteria rows name, under the bundle's `deliverables/local/`, and check there is one per changed screen. A changed screen with neither a screenshot nor a `✗` row saying why is a FAIL row. Run its tests; the screenshots replace your own run of the screen. |
+   | **UI** | the task sets `ui: true`, or the diff touches the repo's `uiGlobs` | **the PR's screenshots are the review input** (`conventions/pr-body.md` → "UI evidence: a screenshot per changed screen"): open every screenshot path its `Verified:` line or criteria rows name, under the project's `projects/<slug>/deliverables/local/`, and check there is one per changed screen. A changed screen with neither a screenshot nor a `✗` row saying why is a FAIL row. Run its tests; the screenshots replace your own run of the screen. |
    | **behaviour-changing** | a criterion changes runtime behaviour, or the diff exceeds **100** changed lines (`additions` + `deletions` from `gh pr view <n> --json additions,deletions`) | **run the affected suite and the app path the diff touches** — the command, the CLI, the URL — and cite each run in step 5's table. |
-   | **small** | neither | **run the change's tests and re-derive the criteria table** (step 5). **Keeps step 4's cheap second opinion**: on a diff this size it is the cheapest independent read there is, so your own effort goes to running the tests, not to a second read of the diff. |
+   | **small** | neither | **run the change's tests and re-derive the criteria table** (step 5). **Keeps step 4's cheap second opinion** (step 4 runs unchanged in every tier): on a diff this size it is the cheapest independent read there is, so your own effort goes to running the tests, not to a second read of the diff. |
 
    **Execution evidence comes before a diff read, in every tier.** Run the thing first;
    read the diff deeply only for what no run answers — a criterion about the code's shape,
