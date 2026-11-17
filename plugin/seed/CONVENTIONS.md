@@ -150,7 +150,7 @@ choices outside this list.
   a prefix such as `ABC` ⇒ append `[ABC-<n>]` with the id your task or brief names, else
   `[ABC-0]`. **Never invent an id.** No OKF task id in the title. Target the default
   branch. **Never merge.** Detail: `conventions/pr-body.md` → "PR title" — when
-  your brief names a prefix.
+  your brief names a prefix. Check: `hooks/pr-title.sh`.
 
 ### The PR body shape
 
