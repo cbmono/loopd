@@ -73,7 +73,7 @@ saw() { case "$1" in *"$2"*) echo yes ;; *) echo no ;; esac; }
 # =======================================================================================
 echo "== 1. BEHAVIOUR: a firing that lands mid-tick is one quiet line, and still exit 1 =="
 # =======================================================================================
-INST="$TMP/inst"; mkdir -p "$INST" "$INST/$AB_DIR"
+INST="$TMP/inst"; mkdir -p "$INST" "$INST/$AB_DIR"; : > "$INST/instance.config.json"
 
 # A free lock: `--as loop` is the launcher in every respect — it takes it, silently, 0.
 out="$(bash "$LOCKSH" acquire --as loop --agent project-manager --instance "$INST" 2>"$TMP/e1")"; rc=$?
@@ -113,7 +113,7 @@ ok "…and still silent on stdout"          "$([ -z "$lout" ] && echo yes || ech
 
 # The loud paths stay loud. A clock asking does not make a stale lock less of a human's
 # problem, so STALE keeps exit 2 and its stderr text under `--as loop` too.
-STALE="$TMP/stale"; mkdir -p "$STALE" "$STALE/$AB_DIR"
+STALE="$TMP/stale"; mkdir -p "$STALE" "$STALE/$AB_DIR"; : > "$STALE/instance.config.json"
 OLD=$(( $(date -u +%s) - 60*60*24 ))
 if date -u -r 0 +%Y >/dev/null 2>&1; then OLD_ISO="$(date -u -r "$OLD" +%Y-%m-%dT%H:%M:%SZ)"
 else OLD_ISO="$(date -u -d "@$OLD" +%Y-%m-%dT%H:%M:%SZ)"; fi

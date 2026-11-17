@@ -447,6 +447,7 @@
 #   2  needs a human, and these four only: the lock is STALE, dated in the FUTURE,
 #      UNREADABLE, or claimed by an identity that MIGHT be yours (`maybe` — equal ids, at
 #      least one DERIVED). Never a different id. Do not dispatch, do not delete it.
+#      Also 2, before any lock is read: DIR is not an instance root (no instance.config.json).
 #   3  cannot answer: usage, a bad `--agent`/`--claimant`/threshold, or an unwritable root.
 #      Never a silent pass — a lock nothing can write is a guarantee nothing is keeping.
 #   4  REFUSED — `--as tick` with no lock: nobody dispatched you, so you are a resumed or
@@ -540,6 +541,8 @@ if [ "$claimant_given" = yes ] && [ "$cmd" != acquire ]; then
 fi
 
 [ -d "$inst" ] || { echo "tick-lock: no such instance directory: $inst" >&2; exit 3; }
+# Without this, a call from the wrong cwd answers "free" and leaves an empty .loopd/ behind.
+ab_is_bundle "$inst" || { echo "tick-lock: $inst is not an instance root (no instance.config.json): pass --instance DIR or run from the instance root" >&2; exit 2; }
 ab_ensure_dir "$inst"
 LOCK="$inst/$LOCK_NAME"
 CLAIM="$inst/$CLAIM_NAME"
