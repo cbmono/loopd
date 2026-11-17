@@ -17,10 +17,7 @@ trigger applies, never by default. Where the two disagree, this file wins.
 **One rule about this file's own wording, because four agents with differing `tools:`
 lists read it:** an instruction here must be executable by **every** one of them, so where
 a rule depends on a tool only some of you hold, it says **which list decides** and what the
-others do instead. Never the other way round — a condition on what is *installed* reads as
-satisfied while still being unexecutable for an agent that lacks the tool, which is exactly
-how the `code-architect` clause below went unnoticed. `tests/agent-tool-allowlist.test.sh`
-in `cbmono/loopd` enforces this.
+others do instead. `tests/agent-tool-allowlist.test.sh` in `cbmono/loopd` enforces this.
 
 <!-- tool-mention: Workflow(1), Agent(4), EnterWorktree(1), AskUserQuestion(1) — named below to state their ABSENCE for some readers, never to instruct: no role agent holds Workflow; only qa-reviewer holds Agent, which is why the Explore and self-review rules state the route for the three that do not; EnterWorktree may be missing for a subagent; no role agent holds AskUserQuestion, which is why a tool request goes into open_questions instead of a live prompt. Every mention gives the route for an agent that lacks it. Enforced by tests/agent-tool-allowlist.test.sh. -->
 

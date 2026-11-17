@@ -636,9 +636,8 @@ $(rows "$VERIFIED_MARKERS")
 EOF
 )"
   crit="$(crit_rows "$1")"
-  printf '%s\n%s\n' "$lines" "$(printf '%s\n' "$crit" | cut -f2-)" \
-    | grep -Eiq "$SCREENSHOT_PATH" && return 0
-  printf '%s\n' "$crit" | awk -F'\t' '$1 == "crs"' | grep -iq screenshot && return 0
+  grep -Eiq "$SCREENSHOT_PATH" <<<"$(printf '%s\n%s\n' "$lines" "$(printf '%s\n' "$crit" | cut -f2-)")" && return 0
+  grep -iq screenshot <<<"$(printf '%s\n' "$crit" | awk -F'\t' '$1 == "crs"')" && return 0
   return 1
 }
 
