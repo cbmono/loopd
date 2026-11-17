@@ -127,13 +127,14 @@ printf 'x\n' > "$INST/projects/p/sources/notes.txt"
 D="$(steps)"
 ok "arrived: the digest says so"                   "$(grep -c '^inputs arrived projects/p/project.md$' <<<"$D" | tr -d ' ')" 1
 ok "…and step 2 is named, to release it"           "$(grep '^steps:' <<<"$D" | grep -c 'step-2' | tr -d ' ')" 1
-mk_inst p ""; gitinit
-ok "no inputs: key: a draft names step 2 as ever"  "$(steps | grep '^steps:' | grep -c 'step-2' | tr -d ' ')" 1
+noq() { sed -i.bak '/^open_questions:/d' "$INST/projects/p/tasks/task-001-a.md"; rm -f "$INST/projects/p/tasks/task-001-a.md.bak"; }
+mk_inst p ""; noq; gitinit
+ok "no inputs: key: an unrefined draft names step 2 as ever"  "$(steps | grep '^steps:' | grep -c 'step-2' | tr -d ' ')" 1
 # MUTANT: the draft guard removed — a waiting project names step 2 again.
 mkdir -p "$TMP/mut4"; cp -R "$SCRIPTS/." "$TMP/mut4/"; cp -R "$REPO/plugin/tick-steps" "$TMP/tick-steps"
-sed -i.bak 's/\[ "\$inw" = waiting \] || step2=1/step2=1/' "$TMP/mut4/tick-delta.sh"
-ok "MUTANT: the mutation took"                     "$(grep -c 'inw" = waiting' "$TMP/mut4/tick-delta.sh" | tr -d ' ')" 0
-mk_inst p later; gitinit
+sed -i.bak 's/\[ "\$inw" != waiting \] && //' "$TMP/mut4/tick-delta.sh"
+ok "MUTANT: the mutation took"                     "$(grep -c 'inw" != waiting' "$TMP/mut4/tick-delta.sh" | tr -d ' ')" 0
+mk_inst p later; noq; gitinit
 ok "MUTANT: a waiting draft names step 2"          "$(steps "$TMP/mut4" | grep '^steps:' | grep -c 'step-2' | tr -d ' ')" 1
 
 echo
