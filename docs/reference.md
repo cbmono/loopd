@@ -100,9 +100,9 @@ document that **owns** its rule; nothing here restates one. Tiers are the **seed
 
 | # | Step | Who runs it |
 |---|---|---|
-| 1 | **Scaffold** — slug, objective, phases, seed `draft` tasks | you and the main session, interactively [→](../plugin/skills/new-project/SKILL.md) |
-| 2 | **Commit** the scaffold and its registration as one change | main session, via `commit-as.sh` |
-| 3 | **Scaffold review**, three stages: `validate-bundle.sh`, then an external reviewer, then the `qa-reviewer` fallback. Stage 1 gates the rest; stages 2 and 3 are advisory, and stage 2 is *dispatched* rather than waited on | main session; `qa-reviewer` (`apex`) on the fallback [→ step 8](../plugin/skills/new-project/SKILL.md) |
+| 1 | **Scaffold** — slug, objective, phases, seed `draft` tasks | the main session asks the one question; a background `project-manager` writes the files [→](../plugin/skills/new-project/SKILL.md) |
+| 2 | **Commit** the scaffold and its registration as one change | that `project-manager`, via `commit-as.sh` |
+| 3 | **Scaffold review**, three stages: `validate-bundle.sh`, then an external reviewer, then the `qa-reviewer` fallback. Stage 1 gates the rest; stages 2 and 3 are advisory, and the verdict comes back in the scaffold's one report | that `project-manager`; `qa-reviewer` (`apex`) on the fallback [→ step 8](../plugin/skills/new-project/SKILL.md) |
 | 4 | **Refine** each `draft` — fill `acceptance_criteria`, raise `open_questions` | `project-manager` (`deep`) [→](../plugin/agents/project-manager.md) |
 | 5 | **Approach critique** — **mandatory on its trigger** (a complex or heavily-inferred `kind: build` draft), advisory in what it may decide; its concerns land in `advisor_notes` and gate nothing | `plan-architect` (`apex`), dispatched by the PM [→](../plugin/agents/project-manager.md) |
 

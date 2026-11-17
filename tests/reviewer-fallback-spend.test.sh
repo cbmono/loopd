@@ -106,8 +106,9 @@ ok "the ask fires on the spend"           "$(saw "$NP_FLAT" 'the ask fires on th
 ok "resolution splits the two classes"    "$(saw "$NP_FLAT" '**none configured**')" yes
 ok "…and says so is not one condition"    "$(saw "$NP_FLAT" '"No usable reviewer" is NOT one condition')" yes
 ok "none configured ⇒ dispatch, no ask"   "$(saw "$NP_FLAT" '**None configured ⇒ dispatch it, no ask.**')" yes
-ok "configured but refusing ⇒ ASK"        "$(saw "$NP_FLAT" '**Configured but refusing ⇒ ASK, in this session')" yes
-ok "…in the MAIN THREAD, unlike the tick" "$(saw "$NP_FLAT" 'main thread and the human is right here')" yes
+ok "configured but refusing ⇒ ASK"        "$(saw "$NP_FLAT" '**Configured but refusing ⇒ ASK, in the main session')" yes
+ok "…the agent hands it back as its report" "$(saw "$NP_FLAT" 'end your run with the question as your report')" yes
+ok "…and the launcher asks, unlike the tick" "$(saw "$NP_FLAT" 'The **launcher asks the human in the main session**')" yes
 ok "…and yolo dispatches automatically"   "$(saw "$NP_FLAT" 'defines as delegating this is in force ⇒ dispatch it')" yes
 
 # THE HALF THAT IS ONLY TRUE HERE. A PM tick may hold because a later tick re-asks; step 8
@@ -204,14 +205,14 @@ else
   ok "MUTATION B removed something" \
      "$([ "$(wc -c < "$MUT_B")" -lt "$(wc -c < "$NP")" ] && echo yes || echo no)" yes
   ok "mutant: the no-ask/ask split is gone"  "$(saw "$B_FLAT" '**None configured ⇒ dispatch it, no ask.**')" no
-  ok "mutant: the in-session ask is gone"    "$(saw "$B_FLAT" '**Configured but refusing ⇒ ASK, in this session')" no
+  ok "mutant: the main-session ask is gone"  "$(saw "$B_FLAT" '**Configured but refusing ⇒ ASK, in the main session')" no
   ok "mutant: the ONE-SHOT record rule is gone" "$(saw "$B_FLAT" 'this step is ONE-SHOT and nothing re-runs it')" no
   ok "mutant: the unrun-review record is gone"  "$(saw "$B_FLAT" 'the scaffold got no second')" no
   # CONTROLS, mirroring MUTATION A's.
   ok "CONTROL: the mode-C dispatch survives"  "$(saw "$B_FLAT" 'ask for **mode C**')" yes
   ok "CONTROL: project-manager.md is UNAFFECTED" "$(saw "$PM_FLAT" 'ONE SCRIPT DECIDES, and you never re-derive it')" yes
   ok "CONTROL: …and so is AUTONOMY.md"           "$(saw "$AUT_FLAT" '## The QA fallback, in every mode')" yes
-  ok "CONTROL: the real NP file still splits"    "$(saw "$NP_FLAT" '**Configured but refusing ⇒ ASK, in this session')" yes
+  ok "CONTROL: the real NP file still splits"    "$(saw "$NP_FLAT" '**Configured but refusing ⇒ ASK, in the main session')" yes
 fi
 
 # ================================================== 6. non-vacuity: the matchers can fail

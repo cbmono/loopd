@@ -5,6 +5,7 @@
 # relays it. Refused the first time ⇒ exit 2: the tick is sent back to rewrite it. Refused
 # again ⇒ it goes out as written with a systemMessage naming what failed, so a detector's
 # false positive costs one rewrite and can never loop a tick. Every other agent type: exit 0.
+# A scaffold report (`SCAFFOLD: projects/<slug>` first, that project.md present) is skipped.
 # Silent (no output, no state) outside an instance — a plugin hook fires in every session.
 # Reasoning: dispatch-reporting-defects/task-006.
 set -uo pipefail
@@ -22,6 +23,13 @@ type="$(field '.agent_type // ""')"
 say() { jq -cn --arg m "$1" '{systemMessage: $m}'; exit 0; }
 [ "$(field 'has("last_assistant_message")')" = true ] \
   || say "loopd: the tick report went out unchecked — this Claude Code sends no last_assistant_message on SubagentStop."
+
+first="$(field '.last_assistant_message' | head -n 1 | tr -d '\r')"
+case "$first" in
+  'SCAFFOLD: projects/'*)
+    slug="${first#SCAFFOLD: projects/}"
+    case "$slug" in ''|*[!a-z0-9-]*) ;; *) [ -f "$root/projects/$slug/project.md" ] && exit 0 ;; esac ;;
+esac
 
 mark="${TMPDIR:-/tmp}/loopd-report-shape.$(field '.agent_id // ""' | tr -cd 'A-Za-z0-9_-')"
 verdict="$(field '.last_assistant_message' | "$(dirname "${BASH_SOURCE[0]}")/../scripts/report-clearance.sh" --body-file -)"
