@@ -274,8 +274,7 @@ without a reason" — when your diff adds ~150 lines or more there.
 **Locally, run the tests your change touches, plus anything that exercises the file you
 edited**, and **do not run the full suite locally as a matter of course** — the required
 check runs everything on a clean machine. Where the repo ships a diff-selecting runner,
-**use it** — `tests/run.sh --changed` in `cbmono/loopd`, whose `--all` runs once before the
-PR is opened. You still test your own branch before every push. A full local run is legitimate only when your change touches
+**use it** — `tests/run.sh --changed` in `cbmono/loopd`, whose full suite is CI's. You still test your own branch before every push. A full local run is legitimate only when your change touches
 **shared machinery every test loads**, and then **the PR body must state why**. **Do not
 poll a long-running local run.** Detail: `conventions/testing.md` → "The full suite belongs
 to CI" — before you start a full local run.

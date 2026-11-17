@@ -11,7 +11,7 @@ Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short
   and **do not run the full suite locally as a matter of course**.
   **Where the repo ships a runner that selects on the diff, use it rather than choosing by
   hand** — `tests/run.sh --changed` in `cbmono/loopd` runs exactly what CI runs, and
-  its `--all` runs once before the PR is opened. Selecting by hand is how a changed path
+  the full suite is CI's: run `--all` locally only when the human asks. Selecting by hand is how a changed path
   ends up with no harness covering it and nobody noticing.
   **This is a rule about RE-RUNNING, not about testing.** Follow it literally and you still
   test before every push — that is the point of it, not a loophole in it.

@@ -11,8 +11,8 @@ build step.
 **Run the harnesses your change touches before pushing — not all of them:**
 
 ```bash
-tests/run.sh --changed        # the core plus every harness that NAMES a path you changed
-tests/run.sh --all            # all of them — once, before you open the PR, and never polled
+tests/run.sh                  # = --changed, the default: the core plus every harness that NAMES a path you changed
+tests/run.sh --all            # all of them — CI's job; locally only when a human asks, and never polled
 tests/run.sh --all --jobs 4   # the pool is CPU-wide by default; bound it when you need the machine
 tests/run.sh --deep           # ONLY the `# deep` harnesses: they spawn the claude CLI and cost money
 tests/run.sh --iced           # ONLY the `# iced` harnesses: a subject on hold (today: the board)
@@ -25,7 +25,9 @@ buys the full suite, and since every change carries its test that is every PR �
 workflow grows a second copy. It reads committed, uncommitted and untracked paths against
 `origin/HEAD` (`--base <ref>` for another base). **No changed path runs the core; a changed
 path no harness names runs the core and says so in one line** — never a zero-harness run
-that reads as a pass, which is why `--all` is still the answer before the PR.
+that reads as a pass. The full suite runs in CI on every PR, so a local `--all` buys the same
+answer twice; with several agents in parallel it saturates the machine (measured 2026-11-17:
+load average 310 on 12 cores).
 **Two tiers and a pool** (ai-bridge-v3/task-038). A harness declares `# serial` in its
 header to run alone, and `# deep` to leave the merge gate altogether — `--deep` and the
 nightly `tests-deep.yml` are the only things that run a `# deep` harness, and every other
