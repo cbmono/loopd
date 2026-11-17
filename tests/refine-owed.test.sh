@@ -27,7 +27,8 @@ mkdir -p "$INST/.loopd"; : > "$INST/.loopd/SCHEMA.md"
 printf '/%s\n' "$AB_STATE_DIR" > "$INST/.gitignore"; printf '{}\n' > "$INST/instance.config.json"
 GIT -C "$INST" init -q
 
-project() { printf -- '---\ntype: Project\nkind: build\ntarget_repo: example-org/example-repo\nstatus: %s\n%b---\n' "$2" "${3:-}" > "$INST/projects/$1/project.md"; }
+project() { printf -- '---\ntype: Project\nkind: build\ntarget_repo: example-org/example-repo\nstatus: %s\n'"\
+"'advisor_notes:\n  - "2026-11-01T10:00:00Z · advisor: project critique — no concerns · saw: task-001"\n%b---\n' "$2" "${3:-}" > "$INST/projects/$1/project.md"; }
 unrefined() { printf -- '---\ntype: Task\nkind: build\nstatus: draft\nacceptance_criteria: [ ]\n%b---\n' "${2:-}" > "$INST/$1"; }
 refined() { # a draft step 2 owes nothing: criteria, a critique receipt and verified facts
   printf -- '---\ntype: Task\nkind: build\nstatus: draft\nacceptance_criteria: [ "x" ]\n'"\
