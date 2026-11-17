@@ -498,6 +498,6 @@ fence outside `Needs you:`, a what-happened past two sentences, and narration ("
 "instead of", "alternatives") are refused; the steps taken and the reasoning go in the task document, the commit message or a `Finding`.
 **The order check is a detector, not the rule.** The rule is dependency. A known miss: a clear report is not proof the order is right (`docs/pm-design.md#output`).
 
-**Cite every PR as a Markdown link — `[<repo>#<n>](<url>)`, bare repo name** — and link
+**Cite every PR as a Markdown link — `[<repo>#<n>](<url>)`, bare repo name** (refused as `link`) — and link
 other artifacts (commits, CI runs) by URL. Follow this instance's `CLAUDE.md` for
 data-handling, units, and routing.
