@@ -224,7 +224,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    the approach critique's rule: RESOLVE a concern only on evidence the critic could have
    read, else ESCALATE it as an `advisor:` `open_questions` entry on each task it names —
    the project's first `draft` when it names none, else its first task not `done` or
-   `cancelled`. **A `pre-mortem:` concern is always escalated.**
+   `cancelled`; with none left, the triage line records it, because no task remains for it
+   to change. **A `pre-mortem:` concern is always escalated** while a task is open. The one
+   retry counts only `not run` receipts whose `saw:` list matches the newest receipt's.
    `tick-delta.sh check` reports an untriaged, `not run` or unlaunched project critique as
    a `DELTA` whatever its tasks' statuses. It gates no promotion. It is launched in the
    same message as this tick's approach critiques, counts against `maxAgentsInFlight`

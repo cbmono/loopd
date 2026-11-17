@@ -39,6 +39,7 @@ ok "the rerun rule keys on the newest saw: list"   "$(in_block 'maps a task id m
 ok "…at most once per tick per project"            "$(in_block 'at most once per tick per project')" yes
 ok "the critic labels a pre-mortem concern"        "$(in_block 'the ask to label `pre-mortem:`')" yes
 ok "…which is always escalated"                    "$(in_block 'A `pre-mortem:` concern is always escalated')" yes
+ok "…and recorded by triage when no task is open"   "$(in_block 'with none left, the triage line records it')" yes
 ok "triage resolves only on evidence the critic read" "$(in_block 'RESOLVE a concern only on evidence the critic could have')" yes
 ok "…escalating to the named tasks' open_questions" "$(in_block 'an `advisor:` `open_questions` entry on each task it names')" yes
 ok "the DELTA is stated whatever the statuses"     "$(in_block 'whatever its tasks'"'"' statuses')" yes
@@ -100,6 +101,8 @@ fx build draft "2026-11-17T10:00:00Z $NR (error) · saw: task-001 task-002"
 ok "a lone not-run receipt owes one re-dispatch" "$(check)" "rc:1 DELTA: $P project critique not run — re-dispatch owed"
 fx build draft "2026-11-17T10:00:00Z $NR (error) · saw: task-001 task-002${N}2026-11-17T12:00:00Z $NR (no result by step 8) · saw: task-001 task-002"
 ok "…a second one ends the retries"                                "$(check | cut -c1-10)" "rc:0 IDLE:"
+fx build draft "2026-11-17T10:00:00Z $NR (error) · saw: task-001${N}2026-11-17T11:00:00Z $NR (error) · saw: task-001${N}2026-11-17T12:00:00Z $NR (error) · saw: task-001 task-002"
+ok "…counted per saw: list: a new list's first failure owes one" "$(check)" "rc:1 DELTA: $P project critique not run — re-dispatch owed"
 
 echo "== lib/critique-receipt.sh =="
 . "$S/lib/critique-receipt.sh"

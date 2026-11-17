@@ -676,13 +676,15 @@ rerun_owed() { # <file> -> 0 owed, 1 not, 2 unreadable
   [ -z "$rest" ] || [[ "$rest" < "${nr%% *}" ]]
 }
 project_critique() { # <project.md> <mapped task ids> -> prints why; 0 owed, 1 not, 2 unreadable
-  local notes saw id
+  local notes saw id nr
   untriaged "$1"; case $? in 0) echo untriaged; return 0 ;; 2) return 2 ;; esac
-  rerun_owed "$1"; case $? in 0) echo not-run; return 0 ;; 2) return 2 ;; esac
   [ "$(fmcount "$1" advisor_notes)" -gt 0 ] || { echo unlaunched; return 0; }
   notes="$(bash "$FOLD" --list "$1" advisor_notes 2>/dev/null)" || return 2
   saw="$(printf '%s\n' "$notes" | grep -F ' · saw: ' | sort | tail -n1)"
   [ -n "$saw" ] || { echo unlaunched; return 0; }
+  nr="$(printf '%s\n' "$notes" | S="${saw##* · saw: }" awk -F ' · saw: ' 'NF > 1 && $NF == ENVIRON["S"]' \
+        | grep -cE "$CRITIQUE_NOT_RUN")"
+  [ "$nr" = 1 ] && grep -qE "$CRITIQUE_NOT_RUN" <<<"$saw" && { echo not-run; return 0; }
   saw=" $(printf '%s\n' "${saw##* · saw: }" | grep -oE 'task-[0-9]+' | tr '\n' ' ')"
   for id in $2; do
     case "$saw" in *" $id "*) ;; *) echo unlaunched; return 0 ;; esac
