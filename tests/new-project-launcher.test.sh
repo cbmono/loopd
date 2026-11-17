@@ -60,7 +60,7 @@ ok "new-project points at both siblings" \
 ok "close-project's sentence names all three" \
   "$(has "$CLOSE" 'One contract, three launchers')/$(has "$CLOSE" 'skills/new-project/SKILL.md')" yes/yes
 
-# --- the question stays in the main session, same shape ---------------------------
+# --- the question stays in the session ---
 ok "step 4 is still ONE question of at most three parts" "$(has "$SKILL" 'ONE question, at most three parts')" yes
 ok "…its default first, labelled (Recommended)"          "$(has "$SKILL" 'labelled `(Recommended)`')" yes
 ok "…asked by the launcher"                              "$(in_section 'batched `AskUserQuestion`')" yes
@@ -82,11 +82,11 @@ ok "a scaffold is not a tick"              "$(in_launcher 'A scaffold is NOT a t
 ok "…and takes no tick lock"               "$(in_launcher 'no tick')/$(in_brief 'take no tick lock')" yes/yes
 ok "--no-commit travels in the brief"      "$(in_launcher '`--no-commit` and `--no-ask` when given')" yes
 
-# --- the commit is the agent's, never the human's ---------------------------------
+# --- the commit is the agent's ---
 ok "step 7 commits as project-manager"     "$(in_brief 'commit-as.sh project-manager "feat: add <slug> project"')" yes
 ok "…never as human"                       "$(grep -c 'commit-as.sh human' "$SKILL" | tr -d ' ')" 0
 
-# --- step 8 runs in the agent, and one report carries everything -------------------
+# --- step 8 and the one report ---
 ok "the review runs in the agent's foreground" "$(in_brief 'in your own foreground')" yes
 ok "one report, no file noise"             "$(in_brief 'nothing else reaches the main session')" yes
 ok "…with the seed tasks and depends_on"   "$(in_brief 'a table of the seed tasks: id, title, `depends_on`')" yes
@@ -94,13 +94,13 @@ ok "…criteria with today's value"          "$(in_brief "each with today's valu
 ok "…the commit and the verdict"           "$(in_brief 'the step-7 commit SHA')/$(in_brief 'the step-8 verdict')" yes/yes
 ok "…and the next step"                    "$(in_brief 'the PM refines the drafts, then **you** promote')" yes
 
-# --- a human decision comes back as the report ------------------------------------
+# --- a human decision comes back ---
 ok "the launcher asks, then a fresh agent resumes" "$(in_launcher 'comes back as the report, never a guess')" yes
 ok "…at step 8e"                           "$(in_launcher 'resumes at step 8e')" yes
 ok "the agent ends its run on the question" "$(in_brief 'end your run with the question as your report')" yes
 ok "the form's cancel is the launcher's"   "$(in_launcher 'the launcher runs it once the agent')" yes
 
-# --- the mechanical split: the launcher runs none of the scaffold's commands --------
+# --- the mechanical split ---
 for s in commit-as push-commit validate-bundle write-snapshot; do
   ok "the brief runs $s.sh" \
     "$(brief_of "$SKILL" | grep -cF "\${CLAUDE_PLUGIN_ROOT}/scripts/$s.sh" | awk '{print ($1>0)?"yes":"no"}')" yes
