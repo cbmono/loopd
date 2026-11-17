@@ -209,5 +209,20 @@ out="$(cd "$TMP" && bash "$S" 2>&1)"; rc=$?
 ok "no instance.config.json: exit 2"         "$rc" 2
 ok "…and its working line says unknown"      "$(tail -1 <<<"$out")" "working: unknown — not an instance root"
 
+echo "== a question's recommendation reaches the numbered list beside it =="
+W="$TMP/rec"; mkdir -p "$W/.loopd" "$W/projects/p/tasks"; echo '{}' > "$W/instance.config.json"
+printf -- '---\ntype: Project\ntitle: "P"\nstatus: active\n---\n' > "$W/projects/p/project.md"
+printf -- '---\ntype: Task\ntitle: "T"\nstatus: draft\nopen_questions: [ "Q1: which colour?", "Q2: which font?" ]\n---\n\n## Question details\n\n### Q1\nRecommendation: blue\nOptions:\n1. blue\n' \
+  > "$W/projects/p/tasks/task-001-t.md"
+: > "$W/.loopd/AWAITING.md"
+bash "$HERE/../plugin/scripts/build-awaiting.sh" --instance "$W" >/dev/null 2>&1
+out="$(cd "$W" && PATH="$TMP/stub:$PATH" bash "$S" 2>&1)"
+ok "one numbered row: each question with its own" \
+   "$(grep -c '^1\. ❓ \*\*answer\*\* — .* · Q1: which colour? (recommended: blue); Q2: which font? (no recommendation)$' <<<"$out")" 1
+ok "the answer skill shows it beside each question" \
+   "$(grep -c 'Show each question.s recommendation' "$HERE/../plugin/skills/answer/SKILL.md")" 1
+ok "…and option 1, labelled (Recommended), takes it" \
+   "$(grep -c 'option 1 first and' "$HERE/../plugin/skills/answer/SKILL.md")" 1
+
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
