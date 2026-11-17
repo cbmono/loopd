@@ -50,6 +50,16 @@
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/agent-control.sh\""
+          }
+        ]
+      }
+    ],
     "SubagentStart": [
       {
         "hooks": [
