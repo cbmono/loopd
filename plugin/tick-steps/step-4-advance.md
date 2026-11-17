@@ -372,16 +372,20 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      The PR body carries the implementer's `✓`/`✗` table; the `qa-reviewer` posts its own
      PASS/FAIL table, re-derived from the task and the diff (its mode B step 5). Run
      `${CLAUDE_PLUGIN_ROOT}/scripts/pr-verdict-clearance.sh <pr> --repo <org>/<repo>` and
-     read its exit code, never the tables by eye:
+     read its exit code, never the tables by eye. First run
+     `${CLAUDE_PLUGIN_ROOT}/scripts/qa-disagreement.sh clear <task-doc> --pr <url> --head <sha>`:
+     it moves a disagreement entry whose head this PR has moved past to `answered_questions`.
 
      | Exit | What it found | What you do |
      |---|---|---|
      | **0** | both tables agree | Record it: post one comment on the PR naming the criteria count and the checker's login. Clearance continues on the trailer as usual. |
-     | **1** | a row the worker marked `✓` and the checker marked `FAIL` | **ROUTE.** Surface the PR as a 🔴 item and quote **both rows** the script printed, verbatim. Do not adjudicate it and do not re-dispatch either agent. |
+     | **1** | a row the worker marked `✓` and the checker marked `FAIL` | **ROUTE.** Run `${CLAUDE_PLUGIN_ROOT}/scripts/qa-disagreement.sh open <task-doc>` followed by the words after `disagreement:` on its stdout: exit 0 is the ONE `Q<n>` entry `AWAITING.md` renders (written, or already there); exit 1 means the checker's table is not at the head, so surface the PR as a 🔴 item quoting **both rows** verbatim. Do not adjudicate it. When `review-next.sh` answered `implementer-round` for this PR, resume the implementer with the checker's FAIL rows (same task, same PR); otherwise re-dispatch neither agent. |
      | **3** | the checker's table is malformed — a row with no verdict, or no command | Re-dispatch the `qa-reviewer` for that PR (its round, not a new one). |
      | **4** | the checker posted under the PR author's own login, with no trailer matching a recorded QA dispatch at this head | **ROUTE**, and say which limit it is: one `gh` login cannot evidence a second principal, and only the dispatch record above stands in for one. |
      | **2** | unknown — no table, or the two cannot be aligned | **HOLD.** Unknown is not permission. |
 
+     A task that left `in-review` with a `QA disagreement on` entry still open gets
+     `${CLAUDE_PLUGIN_ROOT}/scripts/qa-disagreement.sh clear <task-doc>` with no PR, in the same tick.
      **Any exit code this table does not name HOLDS.** A disagreement is the human's: the whole
      point of a checker is that nobody reconciles the two tables downstream of it.
      **Run it on EVERY in-review PR, external review or not**: exit 1 writes the fail line
