@@ -21,10 +21,10 @@ refused by the deny baseline exactly as a `--bg` agent is. The price is one read
 
 ## Why this question exists
 
-`maxRepeatedToolCalls` and `maxAgentMinutes` do not reach a top-level `--bg` role agent:
-`agent-control.sh` keys on `agent_id`, which only a subagent's call carries
-(`docs/pm-design.md`). So nothing bounds a role agent today but `claude stop <id>`,
-run by a human.
+`maxRepeatedToolCalls` and `maxAgentMinutes` did not reach a top-level `--bg` role agent
+when this was written: `agent-control.sh` keyed on `agent_id`, which only a subagent's call
+carries. The bg-role-agent-guards project keyed it on the role session too
+(`docs/pm-design.md`).
 
 **Corrected 2026-10-05.** The first version of this section said auto mode "is not a
 substitute" because a detached session started with `--permission-mode auto` parked as

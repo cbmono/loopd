@@ -27,10 +27,22 @@
 #
 # Two properties fall out of that, and both are load-bearing:
 #   · the PRESENCE of `agent_id` is the parent-vs-subagent test, with no heuristic;
-#   · an absent `agent_id` means "this is the parent" ⇒ exit 0 immediately. This
-#     hook can never gate or halt the human's own session. There is deliberately
-#     no all-agents wildcard: it would reintroduce the all-or-nothing failure the
-#     measurement exists to have avoided.
+#   · an absent `agent_id` means "this is a main thread" ⇒ exit 0 immediately, with
+#     ONE exception below. This hook can never gate or halt the human's own session.
+#     There is deliberately no all-agents wildcard: it would reintroduce the
+#     all-or-nothing failure the measurement exists to have avoided.
+#
+# ---------------------------------------------------------- WHY A ROLE SESSION TOO
+# The exception is a top-level `claude --bg --agent <plugin>:<role>` session launched in a
+# linked worktree — how the tick dispatches a role agent. It carries `agent_type` and no
+# `agent_id` (measured on 2.1.325, tests/fixtures/hook-payloads/), so it is matched on all
+# of: no `agent_id`; `agent_type` `<this plugin>:<role>` naming an agent this plugin ships,
+# other than `project-manager` (the tick stays unbounded, bg-role-agent-guards D1); and a
+# CLAUDE_PROJECT_DIR that is not itself a bundle, i.e. the bundle was reached through
+# `.git/loopd-bundle`. Its `session_id` then stands in for `agent_id` everywhere — the
+# roster, the counters, the directives — which a role session may use because it has no
+# parent sharing that id. The owner's session has no `agent_type` and never matches.
+# The 2026-10-04 decision to leave these sessions unbounded is reversed by that project.
 #
 # ------------------------------------------------------- ABSENCE IS THE DEFAULT
 # `.claude/control/` absent ⇒ this hook is a strict no-op: no read, no write, no
@@ -117,6 +129,14 @@
 # start time is the `SubagentStart` record under `agents.d/` and NOTHING else: no record ⇒
 # the cap is off for that agent and `control.log` says `elapsed=unknown`. The transcript is
 # never a clock — it is the parent session's, so its age is the session's (task-029).
+# A role session has no SubagentStart: its clock starts at its first PreToolUse with no
+# record, and only `control.sh round <session>` — which step 4 runs before every resume —
+# clears that record (and the repeat counter), so the resumed round starts fresh. Nothing in
+# the payload marks a round: a resume keeps `session_id` and `agent_type` (measured), and
+# `prompt_id` changes on every wake from idle, a background task's notification included
+# (QA on loopd#568), so keying on it restarted the clock mid-round. Past the cap a role
+# session may also Edit/Write the one task document whose `session:` names it: that is
+# where it records `pr:` and its result, which a subagent hands back instead.
 #
 # ------------------------------------------------------------------------ BOUNDED
 # Unbounded per-call state in front of every tool call is its own hazard, so the
@@ -317,7 +337,7 @@ cap_started() {
   f="$(cap_file)" || return 1
   for f in "$f" "${f%.started}.stopped"; do
     [ -r "$f" ] || continue
-    read -r s < "$f" 2>/dev/null || s=""
+    read -r s _ < "$f" 2>/dev/null || s=""
     case "$s" in ''|*[!0-9]*) ;; *) printf '%s' "$s"; return 0 ;; esac
   done
   return 1
@@ -350,9 +370,32 @@ cap_allows() {
   case "$tool_name" in
     Read|Grep|Glob|SubagentHandback) return 0 ;;
     Bash) ;;
+    Edit|Write|MultiEdit) [ "$role_session" = 1 ] && cap_task_doc; return ;;
     *) return 1 ;;
   esac
   printf '%s' "$payload" | jq -e --arg ok "$CAP_ALLOW_BASH" "$CAP_SCAN" >/dev/null 2>&1
+}
+
+cap_task_doc() {
+  local f d s
+  f="$(printf '%s' "$payload" | jq -r '.tool_input.file_path // ""' 2>/dev/null)" || return 1
+  case "$f" in /?*/*.md) ;; *) return 1 ;; esac
+  case "$f" in */../*|*/./*) return 1 ;; esac
+  [ -f "$f" ] && [ ! -L "$f" ] || return 1
+  d="$(cd "${f%/*}" 2>/dev/null && pwd -P)" || return 1
+  d="${d#"$root"/projects/}"
+  case "$d" in */*/*|/*) return 1 ;; ?*/tasks) ;; *) return 1 ;; esac
+  s="$(awk 'NR == 1 && $0 != "---" { exit } NR > 1 && $0 == "---" { exit }
+            /^session:/ { sub(/^session:[[:space:]]*/, ""); gsub(/["\047\r ]/, ""); print; exit }' "$f" 2>/dev/null)"
+  [ -n "$s" ] && [ "$s" = "$session_id" ]
+}
+
+role_round_start() {
+  local f
+  f="$(cap_file)" || return 0
+  [ ! -e "$f" ] || return 0
+  mkdir -p "$AGENTSTATE" 2>/dev/null || true
+  { printf '%s\n' "$epoch" > "$f" && rm -f "${f%.started}.capped" "${f%.started}.unclocked"; } 2>/dev/null || true
 }
 
 # One file per agent_id, under a name NOTHING else can produce. Sanitising an id to
@@ -441,14 +484,15 @@ command -v jq >/dev/null 2>&1 || {
 # TRAILING newlines, which is harmless here: only `hook_event` is last, and an empty
 # one is read as PreToolUse below.
 fields="$(printf '%s' "$payload" \
-  | jq -r '[(.agent_id // ""), (.agent_type // ""), (.tool_name // ""), (.hook_event_name // "")] | .[]' 2>/dev/null)" || fields=""
+  | jq -r '[(.agent_id // ""), (.agent_type // ""), (.tool_name // ""), (.session_id // ""), (.hook_event_name // "")] | .[]' 2>/dev/null)" || fields=""
 [ -n "$fields" ] || { note "fail-open: unparseable PreToolUse payload"; exit 0; }
 
-agent_id=""; agent_type=""; tool_name=""; hook_event=""
+agent_id=""; agent_type=""; tool_name=""; session_id=""; hook_event=""
 {
   IFS='' read -r agent_id || true
   IFS='' read -r agent_type || true
   IFS='' read -r tool_name || true
+  IFS='' read -r session_id || true
   IFS='' read -r hook_event || true
 } <<EOF
 $fields
@@ -464,10 +508,20 @@ case "${hook_event:-PreToolUse}" in
   *) exit 0 ;;
 esac
 
-# No agent_id ⇒ the PARENT session's own tool call. Never gate, never halt, never
-# even record it. This is the property that keeps a directive from taking the
-# human's session down with the agent it targets.
-[ -n "$agent_id" ] || exit 0
+# No agent_id ⇒ a main thread's own tool call. Never gate, never halt, never even
+# record it — unless it is a role session (WHY A ROLE SESSION TOO, above). This is the
+# property that keeps a directive from taking the human's session down with the agent.
+role_session=0
+if [ -z "$agent_id" ]; then
+  case "$agent_type" in ?*:?*) ;; *) exit 0 ;; esac
+  case "${agent_type##*:}" in project-manager|*[!A-Za-z0-9_-]*) exit 0 ;; esac
+  [ -f "$(dirname "$0")/../agents/${agent_type##*:}.md" ] || exit 0
+  [ ! -f "${CLAUDE_PROJECT_DIR:-$PWD}/instance.config.json" ] || exit 0
+  case "$session_id" in ''|*[!A-Za-z0-9._-]*) exit 0 ;; esac
+  [ "${#session_id}" -le 64 ] || exit 0
+  [ "${agent_type%:*}" = "$(jq -r '.name // ""' "$(dirname "$0")/../.claude-plugin/plugin.json" 2>/dev/null)" ] || exit 0
+  agent_id="$session_id"; role_session=1
+fi
 
 # ---------------------------------------------------------------- the roster
 # `control.sh agents` reads this. Without it the kill switch is unusable: the
@@ -503,6 +557,7 @@ fi
 # is the more useful of the two messages. An ALLOWED call falls through and is still counted.
 cap_limit_load
 if [ "$CAP_N" != off ]; then
+  [ "$role_session" = 0 ] || role_round_start
   started="$(cap_started)" || started=""
   if [ -z "$started" ]; then
     mark="$(cap_mark)" || mark=""
@@ -523,7 +578,8 @@ if [ "$CAP_N" != off ]; then
         : > "$mark" 2>/dev/null || true
         note agent-cap "$agent_id" "$agent_type" "$tool_name" "elapsed=${elapsed}m budget=${CAP_N}m"
       fi
-      body="TIME CAP: this agent has been running ${elapsed} minutes and the budget ($CAP_SRC) is ${CAP_N}, so $tool_name is refused. Wrap up now: commit and push what you have, open or update the pull request, and report what is done and what is not. Still allowed so that report is accurate: Read, Grep, Glob, SubagentHandback, and a Bash made only of git add|commit|push, commit-as.sh, cd and gh pr create|edit|view|checks, joined by && or ; — a quoted message may span lines and carry parentheses, but no pipe, redirect or unquoted \$( is admitted. Nothing else is. Do not start new work and do not work around this."
+      role_note=""; [ "$role_session" = 0 ] || role_note=" A role session may also Edit or Write its task document under projects/*/tasks/ to record pr: and its result."
+      body="TIME CAP: this agent has been running ${elapsed} minutes and the budget ($CAP_SRC) is ${CAP_N}, so $tool_name is refused. Wrap up now: commit and push what you have, open or update the pull request, and report what is done and what is not. Still allowed so that report is accurate: Read, Grep, Glob, SubagentHandback, and a Bash made only of git add|commit|push, commit-as.sh, cd and gh pr create|edit|view|checks, joined by && or ; — a quoted message may span lines and carry parentheses, but no pipe, redirect or unquoted \$( is admitted. Nothing else is.${role_note} Do not start new work and do not work around this."
       jq -n --arg r "$body" '{
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
