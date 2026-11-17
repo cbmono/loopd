@@ -86,6 +86,7 @@ ok "…the shipped text points at it"  "$(grep -c 'by URL — `/projects/` refus
 
 echo "-- a command the human runs is its own inline-code line, never a list item"
 ok "a bulleted command is refused"               "$(verdict c9-bulleted-command.md)" "1 command"
+ok "…and one in a double-backtick span"         "$(verdict c9-double-backtick-command.md)" "1 command"
 ok "a numbered item that is only a command is refused" "$(verdict c9-numbered-command.md)" "1 command"
 ok "bare inline-code command lines under an item clear" "$(verdict clean-command-line.md)" "0 "
 ok "…a code fence is still refused"              "$(printf 'Tick 1 merged nothing.\n\nNeeds you:\n1. Merge [d#1](https://example.com/1) — green.\n```sh\ngit mrg x\n```\n' | "$SCRIPT" --body-file - | grep -c '^REFUSED outside: a code fence')" 2

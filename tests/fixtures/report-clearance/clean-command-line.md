@@ -6,3 +6,4 @@ Needs you:
 `git mrg https://example.com/pr/13`
 2. Merge the docs PR — its review is clean.
    `git mrg https://example.com/pr/14`
+   ``git mrg https://example.com/pr/15``
