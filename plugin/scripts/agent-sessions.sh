@@ -42,8 +42,12 @@
 #                                                `view` counts as working
 #   agent-sessions.sh dead-ids <bundle-root>  -> `<uuid> <short> <age>` per session the tick
 #                                                may stop: no live pid (row or roster), no
-#                                                task records it or its cwd, cwd under the
-#                                                bundle root, past 10m (blocked: 24h)
+#                                                task records it, cwd under the bundle root
+#                                                and no task's worktree (past 10m, blocked
+#                                                24h) or under worktrees only done/cancelled
+#                                                tasks record, inside worktreeRoot, gone or on
+#                                                that task's branch (past 10m); exit 2 when a
+#                                                task file is unreadable
 #   agent-sessions.sh stop-ids <bundle-root>  -> `<uuid> <short> <age> <class> <task|->`, oldest
 #                                                first: `dead` as above; `finished` terminal, live
 #                                                pid, cwd under the bundle root, unrecorded;
@@ -65,7 +69,7 @@
 # tests/resume-full-id.test.sh, tests/blocked-recorded.test.sh and tests/dead-session-sweep.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,58p' "$0" >&2; exit 2; }
+usage() { sed -n '3,63p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 here="$(dirname "${BASH_SOURCE[0]:-$0}")"
@@ -378,15 +382,12 @@ PY
     fi
     [ -d "$root" ] || { echo "agent-sessions: no such bundle root: $root" >&2; exit 2; }
     json="$(sessions_json)" || { echo "agent-sessions: no \`claude\` on PATH" >&2; exit 2; }
-    # dead-ids leaves worktreeRoot out of scope: it is shared by every bundle on the machine.
-    wtroot=""; skip=""; bounds=""; self=""
-    if [ "$mode" != dead-ids ]; then
-      wtroot="$(bash "$here/resolve-config.sh" --instance "$root" worktreeRoot 2>/dev/null)" || wtroot=""
-      if [ -z "$wtroot" ]; then
-        rr="$(bash "$here/resolve-config.sh" --instance "$root" reposRoot 2>/dev/null)" || rr=""
-        [ -n "$rr" ] && wtroot="$rr/_wt"
-      fi
+    wtroot="$(bash "$here/resolve-config.sh" --instance "$root" worktreeRoot 2>/dev/null)" || wtroot=""
+    if [ -z "$wtroot" ]; then
+      rr="$(bash "$here/resolve-config.sh" --instance "$root" reposRoot 2>/dev/null)" || rr=""
+      [ -n "$rr" ] && wtroot="$rr/_wt"
     fi
+    skip=""; bounds=""; self=""
     if [ "$mode" = dead-ids ] || [ "$mode" = stop-ids ]; then
       . "$here/bundle-paths.sh" || exit 2
       self="${CLAUDE_CODE_SESSION_ID:-} $(sed -n 's/^session:[[:space:]]*//p' "$root/$AB_LOCK" 2>/dev/null)"
@@ -400,27 +401,36 @@ PY
       . "$here/bundle-paths.sh" || exit 2
       self="$(sed -n 's/^session:[[:space:]]*//p' "$root/$AB_LOCK" 2>/dev/null)"
     fi
-    # `<worktree> TAB <task file>` per task that recorded one, terminal tasks included: a
-    # merged task's lingering session is still THAT task's session.
+    # `<worktree> TAB <status> TAB <branch> TAB <task file>` per task that recorded one,
+    # terminal tasks included: a merged task's lingering session is still THAT task's session.
     set -- "$root"/projects/*/tasks/*.md
+    [ -e "$1" ] || [ -L "$1" ] || set --
+    unread=0
+    for f; do [ -f "$f" ] && [ -r "$f" ] || unread=1; done
     tasks=""
-    [ -e "$1" ] && tasks="$(awk '
-      FNR == 1 { fm = 0; hit = 0; if ($0 == "---") { fm = 1; next } }
-      fm && $0 == "---" { fm = 0; next }
-      fm && !hit && /^worktree:/ {
-        hit = 1; v = $0
-        sub(/^worktree:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v); gsub(/["\047]/, "", v)
-        if (v != "") print v "\t" FILENAME
-      }' "$@" 2>/dev/null)"
+    [ $# -gt 0 ] && { tasks="$(awk '
+      function one(k) { x = $0; sub("^" k ":[[:space:]]*", "", x); sub(/[[:space:]]+#.*$/, "", x); gsub(/["\047\t]/, "", x); return x }
+      function flush() { if (v != "") print v "\t" st "\t" br "\t" f; v = "" }
+      { sub(/[[:space:]]+$/, "") }
+      FNR == 1 { flush(); f = FILENAME; fm = ($0 == "---"); hit = 0; ns = 0; nb = 0; st = ""; br = ""; next }
+      fm && $0 == "---" { fm = 0; flush(); next }
+      fm && /^status:/ { st = ns++ ? "" : one("status") }
+      fm && /^branch:/ { br = nb++ ? "" : one("branch") }
+      fm && !hit && /^worktree:/ { hit = 1; v = one("worktree") }
+      END { flush() }' "$@" 2>/dev/null)" || unread=1; }
     # A session a task records is that task's to stop (session-handoff.sh), wherever its cwd.
     # `<session> TAB <status> TAB <task file>` per task that records a session.
     recs=""
-    [ "$mode" != view ] && [ -e "$1" ] && recs="$(awk '
-      FNR == 1 { fm = ($0 == "---"); st = ""; v = ""; next }
-      fm && $0 == "---" { fm = 0; if (v != "") print v "\t" st "\t" FILENAME; next }
-      fm && /^status:/ { st = $0; sub(/^status:[[:space:]]*/, "", st); sub(/[[:space:]]+#.*$/, "", st); gsub(/["\047\r]/, "", st) }
-      fm && /^session:/ { v = $0; sub(/^session:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v); gsub(/["\047\r]/, "", v) }
-      ' "$@" 2>/dev/null)"
+    [ "$mode" != view ] && [ $# -gt 0 ] && { recs="$(awk '
+      function flush() { if (v != "") print v "\t" st "\t" f; v = "" }
+      { sub(/[[:space:]]+$/, "") }
+      FNR == 1 { flush(); f = FILENAME; fm = ($0 == "---"); st = ""; next }
+      fm && $0 == "---" { fm = 0; flush(); next }
+      fm && /^status:/ { st = $0; sub(/^status:[[:space:]]*/, "", st); sub(/[[:space:]]+#.*$/, "", st); gsub(/["\047]/, "", st) }
+      fm && /^session:/ { v = $0; sub(/^session:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v); gsub(/["\047]/, "", v) }
+      END { flush() }' "$@" 2>/dev/null)" || unread=1; }
+    case "$mode" in dead-ids|stop-ids) [ "$unread" = 0 ] \
+      || { echo "agent-sessions: a task file is unreadable — nothing selected" >&2; exit 2; } ;; esac
     skip="$skip $(printf '%s\n' "$recs" | cut -f1)"
     out="$(python3 "$here/agent-sessions-classify.py" "$json" "$root" "$wtroot" "$TERMINAL" "$summary" "$tasks" \
       "$skip" "$recs" "$self" "$bounds" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects")" \
@@ -488,6 +498,6 @@ PY
     echo "copy $uuid"
     ;;
 
-  -h|--help) sed -n '3,58p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,63p' "$0"; exit 0 ;;
   *) usage ;;
 esac

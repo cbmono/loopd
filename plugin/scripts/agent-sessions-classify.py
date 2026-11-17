@@ -2,12 +2,13 @@
 # stop-ids`: reads one `claude agents --json --all` listing and prints that mode's rows.
 #   python3 agent-sessions-classify.py <listing-json> <root> <wtroot> <terminal> <summary> <tasks>
 #                                      <skip> <recs> <self-ids> <bounds> <projects-dir>
+# <tasks> `<worktree> TAB <status> TAB <branch> TAB <task file>` per task that records a worktree.
 # <summary> `counts`: `<working> <idle> <dead>`, `tick TAB <n>` (working sessions among
 # <self-ids>, the tick's), then `<word> TAB <json task path>` per task whose worktree holds a
 # session, the path relative to <root>.
 # Exit 0 answered · 2 unreadable listing, or no row carries a pid (dead-ids, stop-ids).
 # Reasoning: docs/pm-design.md#step-3-background.
-import glob, json, os, re, sys, time, unicodedata
+import glob, json, os, re, subprocess, sys, time, unicodedata
 from datetime import datetime
 from pid_alive import alive
 raw, root, wtroot, terminal, summary, tasks, skip, recs, self_ids, bounds, projects = sys.argv[1:12]
@@ -27,14 +28,33 @@ def canon(p):
     return os.path.realpath(os.path.expanduser(p)) if p else ""
 def under(p, d):
     return bool(p and d) and (p == d or p.startswith(d.rstrip("/") + "/"))
-by_wt = []
+by_wt, open_wt, done_wt = [], [], []
 for line in tasks.splitlines():
-    wt, _, path = line.partition("\t")
+    wt, st_, br, path = (line.split("\t", 3) + ["", "", ""])[:4]
     if wt and path:
         stem = os.path.basename(path)[:-3]
         m = re.match(r"(task-[0-9]+)-", stem)
         label = os.path.basename(os.path.dirname(os.path.dirname(path))) + "/" + (m.group(1) if m else stem)
         by_wt.append((canon(wt), label, path))
+        if st_ not in ("done", "cancelled"):
+            open_wt.append(canon(wt))
+        else:
+            done_wt.append((canon(wt), br))
+def git(w, *a):
+    try:
+        p = subprocess.run(["git", "-C", w, *a], capture_output=True, text=True, timeout=10)
+        return p.stdout.strip() if p.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+# Another bundle's task can hold the same `<worktreeRoot>/<task-id>`: a finished path is one
+# that is gone, or still checked out on the finished task's own branch.
+def finished(w, br):
+    W = canon(wtroot)
+    if not (W and w != W and under(w, W)):
+        return False
+    if not os.path.lexists(w):
+        return True
+    return bool(br) and git(w, "rev-parse", "--show-toplevel") == w and git(w, "symbolic-ref", "-q", "--short", "HEAD") == br
 scope = [canon(root), canon(wtroot) if not dead else ""] + [w for w, _, _ in by_wt]
 rec = {}
 for line in recs.splitlines():
@@ -154,8 +174,10 @@ for r in rows:
                 per_task[k] = word
     if dead:
         sid, s = str(r.get("sessionId") or ""), secs(r.get("startedAt"))
-        if (proc == "none" and not labels and c and s is not None
-                and s >= (86400 if state == "blocked" else 600)
+        settled = (not any(under(c, w) for w in open_wt)
+                   and any(under(c, w) and finished(w, br) for w, br in done_wt))
+        if (proc == "none" and (settled or not labels) and c and s is not None
+                and s >= (86400 if state == "blocked" and not settled else 600)
                 and re.fullmatch(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", sid)
                 and not skip & {sid, sid.split("-")[0]}):
             cands.append((-s, sid, age(r.get("startedAt")), "dead", "-"))

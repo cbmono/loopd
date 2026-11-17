@@ -959,7 +959,14 @@ pid on the row **or** in the roster, no task records the session or its `cwd` (a
 task's `worktree:` is that task's), a `cwd` under the bundle root — never the shared worktree root, which another bundle's
 sessions sit under, and never a row with no `cwd` — older than 10 minutes (the spawn race,
 before a row has a pid) or 24 hours when `blocked` (a day to `claude attach`), and no stop at
-all when no row carries a `pid`. At most 20 a tick.
+all when no row carries a `pid`. At most 20 a tick. **Since 2026-11-17 it also selects a dead
+session in a worktree only `done` or `cancelled` tasks record** — every QA round left its
+`qa-review-*` session there, recorded by no task, and six merged PRs' sessions read `6 dead`
+until a human stopped them. Past 10 minutes, with no 24-hour wait: a done task's PRs are
+merged, so the round has no work left, and `claude stop` keeps the transcript. A worktree an
+open task, or one with no readable `status:`, also records stays that task's. The worktree must sit
+under `worktreeRoot` and be gone or still on the done task's `branch:`, since another bundle's
+task can hold the same `<worktreeRoot>/<task-id>`; an unreadable task file selects nothing.
 **Since 2026-11-02 it also stops what is resident, and runs on every tick.** One bundle
 counted 10 rows `state: done` with a live process (6 reaped ticks, ~5 GB) and a role
 session idle a day after its PR merged; neither reaper reached them. `stop-ids` adds three
