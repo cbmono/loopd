@@ -123,7 +123,7 @@ case "$CMD" in
   list|count)
     files=()
     if [ -n "$REPO" ]; then repo_ok; files=("$FILE")
-    else for f in "$DIR"/*.md; do [ -f "$f" ] && files+=("$f"); done; fi
+    else for f in "$DIR"/*.md "$DIR"/.*.md; do [ -f "$f" ] && files+=("$f"); done; fi
     total=0
     for f in ${files[@]+"${files[@]}"}; do
       [ -e "$f" ] || continue

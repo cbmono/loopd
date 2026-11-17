@@ -2,7 +2,8 @@
 # refactor-backlog.test.sh — `refactor-backlog.sh`: add appends one line, a duplicate and
 # each bad field are refused, the 200-open bound refuses and `done` frees a slot, two
 # concurrent adds both land in one well-formed file, a backslash keeps dedup and the printed
-# id intact, racing first adds from two orgs land one, and the file validates as a Backlog.
+# id intact, racing first adds from two orgs land one, a dot-named repo is counted, and the
+# file validates as a Backlog.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -54,6 +55,10 @@ ok "closing it twice is refused"          "$(rc bash "$RB" "done" --repo acme/wi
 ok "an unknown id is refused"             "$(rc bash "$RB" "done" --repo acme/widget rb-1)" 1
 ok "a closed entry still deduplicates"    "$(rc add src/a.ts 'Extract the parser')" 1
 ok "count is the open total"              "$(bash "$RB" count)" 2
+bash "$RB" add --repo acme/.github --path p --what w --why y --by r >/dev/null 2>&1
+ok "a dot-named repo's file is counted"   "$(bash "$RB" count)" 3
+ok "…and listed"                          "$(bash "$RB" list | grep -c ' acme/.github ')" 1
+rm knowledge/backlog/.github.md
 
 echo "== a backslash in a field"
 out="$(add 'src\new\tmp.c' 'split it')"; added="$(grep -oE 'rb-[0-9]+' <<<"$out")"
