@@ -118,8 +118,8 @@ Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short
   line** — but **never directly under a table**, where it renders as one more row; end
   with a text line first (a separate block becomes `pr-comment-clearance.sh`'s closing block and folds your
   evidence into the last entry); an `okf-verdict v1` trailer, an HTML comment, still goes
-  after it. **A label, never evidence:** the implementer can type it too, so no gate reads
-  it. **Exempt:** a PR body, and the tick's bare `@coderabbitai review`, which must stay bare.
+  after it. **A label, never evidence:** the implementer can type it too, so no gate takes
+  it as evidence; `pr-comment-clearance.sh --signature <line>` checks only where it sits. **Exempt:** a PR body, and the tick's bare `@coderabbitai review`, which must stay bare.
 
   ```md
   Evidence: `foo.test.sh` 41/0 · CI run 1234 green.

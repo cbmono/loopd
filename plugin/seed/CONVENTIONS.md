@@ -338,7 +338,7 @@ is about 280 characters" — when a finding needs more than that.
 It is the line your brief's `## Signature` call prints (`scripts/role-signature.sh <role>
 --instance <bundle>`), `— <login>-<qa|dev|ops|pm>`, as the **last visible line** with
 **no blank line** before it and **never directly under a table**; an `okf-verdict v1`
-trailer still goes after it. A label, never evidence. **Exempt:** a PR body, and the
+trailer still goes after it. Check: `pr-comment-clearance.sh --signature`. A label, never evidence. **Exempt:** a PR body, and the
 tick's bare `@coderabbitai review`. Detail: `conventions/review.md` → "Every PR comment and
 review an agent posts ends with its role signature" — when your comment ends in a
 table or carries a trailer.

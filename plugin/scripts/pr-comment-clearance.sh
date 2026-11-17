@@ -626,8 +626,8 @@ check_signature() { # <raw-reply> <label> <line> -> 0 placed, 1 missing or mispl
   [ -n "$why" ] || return 0
   echo "refuse: $label does not end with its role signature: $why." >&2
   echo "        End with a text line, then the signature with no blank line between;" >&2
-  echo "        an okf-verdict v1 trailer may follow it. See $AB_CONVENTIONS →" >&2
-  echo "        \"Every PR comment and review an agent posts ends with its role signature\"." >&2
+  echo "        an okf-verdict v1 trailer may follow it. See" >&2
+  echo "        $AB_CONVENTIONS → \"Every PR comment and review an agent posts ends with its role signature\"." >&2
   return 1
 }
 
