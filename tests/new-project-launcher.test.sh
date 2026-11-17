@@ -27,7 +27,7 @@ has() { grep -qF -- "$2" <<<"$(flat <"$1")" && echo yes || echo no; }
 
 ok "the skill exists" "$([ -f "$SKILL" ] && echo yes || echo no)" yes
 
-# --- the two halves, split at the brief's heading ---------------------------------
+# --- the two halves ---
 launcher_of() {
   awk 'NR==1 && $0=="---"{fm=1; next} fm && $0=="---"{fm=0; next} fm{next}
        /^## The scaffold agent.s brief/{exit} {print}' "$1"
@@ -38,7 +38,7 @@ in_brief()    { grep -qF -- "$1" <<<"$(brief_of "$SKILL" | flat)" && echo yes ||
 ok "both halves are present" \
   "$([ -n "$(launcher_of "$SKILL")" ] && [ -n "$(brief_of "$SKILL")" ] && echo yes || echo no)" yes
 
-# --- the allowlist is its own list of six -----------------------------------------
+# --- the allowlist of six ---
 section() { awk '/^## The launcher reads nothing else/{p=1;next} p&&/^#/{p=0} p' "$1"; }
 in_section() { grep -qF -- "$1" <<<"$(section "$SKILL" | flat)" && echo yes || echo no; }
 count_ops() { section "$1" | grep -c -E '^[0-9]+\. ' | tr -d ' '; }
