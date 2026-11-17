@@ -228,8 +228,10 @@ spawned with `--dry-run`; anything else is the inter-tick
      `Needs you:` from `AWAITING.md`, a `COST:` line) verbatim, then go to step 1.
    - **1** — the tick is still running. Print its one line and **end the pass**: the fire
      is dropped, never queued.
-   - **4** — `BLOCKED`: the tick's session waits on a prompt before a committed close. Put
-     its line in front of the human and end the pass; it is neither idle nor done.
+   - **4** — `BLOCKED`: the tick's session waits on a prompt, or its turn ended with nothing
+     still running under it, before a committed close. A `blocked` session with a live fork
+     or `Agent` child is exit **1**, never 4. Put its line in front of the human and end the
+     pass; it is neither idle nor done.
    - **2** — it cannot tell. Report the line and stop; the lock stays.
 
    It never prints the tick's transcript, and neither do you: the tick's own report goes
@@ -391,9 +393,10 @@ template `tick-spawn.sh` fills — never retyped here, and never composed by you
   **its whole report is one line naming the next check** (`project-manager.md` step
   0.9). Pass the gap on: the tick puts it in `tick-delta.sh check --gap <gap>` so
   that line can say when you will next hear from the loop.
-- Each tick refreshes `AWAITING.md` **only when that file already exists, and only
-  when the tick changed something** (a `noop: true` tick leaves it alone rather than
-  restamping its `Last refreshed:` line). The loop never creates it: `/loopd:init`
+- Each full tick refreshes `AWAITING.md` **only when that file already exists**,
+  `noop: true` full ticks included, so an answered row leaves on the tick the answer's
+  commit triggers; an idle fast-path tick leaves it alone rather than restamping its
+  `Last refreshed:` line. The loop never creates it: `/loopd:init`
   does, on any stamp, unless `"awaiting": false` in `instance.config.json` — the
   durable off switch; deleting the file turns the queue off until the next stamp.
 - Each tick also refreshes `SNAPSHOT.json` (`${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet`, at

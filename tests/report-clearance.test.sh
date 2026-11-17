@@ -74,6 +74,16 @@ ok "an outcome past 2 sentences" "$(verdict c6-long-outcome.md)" "1 reasoning"
 ok "…reasoning goes to the task document, commit or Finding" \
    "$(has "$PM" 'go in the task document, the commit message or a `Finding`')" yes
 
+echo "-- a PR reference outside a markdown link"
+ok "bare loopd#560 is refused"       "$(verdict c7-bare-pr-ref.md)" "1 link"
+ok "[loopd#560](<url>) clears"       "$(verdict clean-linked-pr-ref.md)" "0 "
+ok "…the shipped text points at it"  "$(grep -c 'Markdown link — .*refused as `link`' "$PM")" 1
+
+echo "-- a bundle-relative link target"
+ok "[task-001](/projects/x/tasks/task-001.md) is refused" "$(verdict c8-bundle-relative-link.md)" "1 bundle"
+ok "an absolute-path link clears"                        "$(verdict clean-absolute-link.md)" "0 "
+ok "…the shipped text points at it"  "$(grep -c 'by URL — `/projects/` refused (`bundle`)' "$PM")" 1
+
 echo "-- criterion 1: the binding point is SubagentStop, and it acts"
 ok "hooks.json registers report-shape.sh on SubagentStop" \
    "$(jq -r '[.hooks.SubagentStop[].hooks[].command] | index("\"${CLAUDE_PLUGIN_ROOT}/hooks/report-shape.sh\"") != null' "$REPO/plugin/hooks/hooks.json")" true
@@ -107,6 +117,9 @@ ok "…refused again ⇒ passes, systemMessage to the human" \
    "$(payload c3a-stop-agents-first.md loopd:project-manager false a2 | hook "$INST")" "0|went-out-flagged|silent"
 ok "stop_hook_active ⇒ never a second block" \
    "$(payload c3a-stop-agents-first.md loopd:project-manager true a3 | hook "$INST")" "0|went-out-flagged|silent"
+ok "bare PR reference ⇒ exit 2, then passes flagged" \
+   "$(payload c7-bare-pr-ref.md loopd:project-manager false a8 | hook "$INST");$(payload c7-bare-pr-ref.md loopd:project-manager false a8 | hook "$INST")" \
+   "2|silent|rewrite-with-reasons;0|went-out-flagged|silent"
 ok "a clean tick report ⇒ silent"   "$(payload clean.md loopd:project-manager false a4 | hook "$INST")" "0|silent|silent"
 ok "any other agent ⇒ silent"       "$(payload c3a-stop-agents-first.md loopd:qa-reviewer false a5 | hook "$INST")" "0|silent|silent"
 ok "outside an instance ⇒ silent"   "$(payload c3a-stop-agents-first.md loopd:project-manager false a6 | hook "$TMP")" "0|silent|silent"

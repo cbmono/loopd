@@ -519,17 +519,29 @@ ok "…so neither hook name appears in it" \
 # the feature. THE SCRIPT COUNT IS DERIVED FROM THE HOOK FILES ON DISK, not typed under a
 # `# N -> N` history — that shape is the merge magnet the Finding
 # `a-running-counter-annotated-by-a-comment-history-is-a-merge-magnet` names, and a hook
-# that ships without a manifest entry is exactly what this row is for. The REGISTRATION
-# total stays a literal on purpose: it counts events, not files, so deriving it from the
-# manifest would leave the row vouching for itself and a dropped `SubagentStop` — the
-# registration that drops a doom-loop counter when the agent ends — would pass.
+# that ships without a manifest entry is exactly what this row is for. The REGISTRATIONS
+# are pinned by NAME, never by a total: a derived total would vouch for itself, and a typed
+# one turned every hook-adding PR into a conflict with every other (loopd#571, #574, #576,
+# #577, 2026-11-17). Each `event script` pair below must be registered, so a dropped
+# `SubagentStop` (the registration that drops a doom-loop counter when the agent ends)
+# still fails, and adding a hook touches nothing here.
 N_HOOK_FILES="$(ls -1 "$REPO"/plugin/hooks/*.sh 2>/dev/null | grep -c .)"
 ok "…and the seeded settings.json has no hooks key at all" \
    "$(jq -r 'if has("hooks") then "present" else "absent" end' "$SETTINGS")" "absent"
 ok "…while the plugin manifest carries every hook file" \
    "$(jq -r '[.hooks[][].hooks[].command] | unique | length' "$HOOKSJSON")" "$N_HOOK_FILES"
-ok "…across thirteen registrations" \
-   "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "13"
+REGS="$(jq -r '.hooks | to_entries[] | .key as $e | .value[] | .hooks[] | "\($e) \(.command | sub(".*hooks/"; "") | sub("\"" + ".*"; ""))"' "$HOOKSJSON")"
+REGMISS=""
+for pair in "PreToolUse agent-control.sh" "PreToolUse deny-destructive.sh" \
+            "PreToolUse permission-mode.sh" "SubagentStart agent-control.sh" \
+            "SubagentStop agent-control.sh" "SubagentStop report-shape.sh" \
+            "SubagentStop refresh-state.sh" "WorktreeCreate worktree-create.sh" \
+            "SessionStart session-banner.sh" "SessionEnd board-session.sh" \
+            "UserPromptSubmit push-state.sh" "UserPromptSubmit refresh-state.sh" \
+            "Stop refresh-state.sh" "PostToolUseFailure agent-control.sh"; do
+  grep -qxF "$pair" <<<"$REGS" || REGMISS="${REGMISS:+$REGMISS, }$pair"
+done
+ok "…with every core event registration in place, by name" "${REGMISS:-none}" none
 
 echo "== the permissions.deny block: unconditional shapes only"
 # This block is the SECOND layer — the harness matches it before any hook runs — and every

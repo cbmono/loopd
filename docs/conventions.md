@@ -161,7 +161,7 @@ Writes through a temp file **beside** the target carrying the target's mode, nev
 
 **A mounted `knowledge/` is another repository's working tree, and this script repairs only this bundle's own files.** When `<state dir>/kb.git` exists, every document under `knowledge/` is reported `SKIPPED … lives in a knowledge mount; repair it from that repository` in both modes and counted as skipped — never silently dropped. The reason is sharper than ownership: `git log` run from inside the mount resolves to the *bundle's* repository, which ignores `knowledge/`, so every mounted document read as "unresolved" and 326 of them were about to be labelled `provenance: human` — a wrong label the script itself could not tell from a right one.
 
-**A new required check ships as a warning, or as an error only together with its repair here.** `provenance` became a required knowledge field with its backfill left a separate manual step: one bundle read 262 errors of that single fixable class, and a sibling stamped 4.9.1 read 354, 307 of them `requires provenance` — all fixed by `--apply`, none of it said anywhere. A validator whose errors are mostly one mechanical class teaches people to ignore it, and the one real error among them goes unseen. So `/loopd:init` step 6 runs this script in **report mode** whenever the validator fails and prints `<n> schema errors, <m> fixable: <path>/migrate-bundle.sh --apply`, both numbers parsed from the two summary lines (`tests/init-migrate-hint.test.sh` fails when either format drifts, and an unparsed line falls back to the bare validator pointer rather than a guessed number). With a mounted `knowledge/` the line also carries the skipped count, because the validator still counts those documents' errors and this script will not touch them.
+**A new required check ships as a warning, or as an error only together with its repair here** — or as an error scoped to what the uncommitted change adds, which nothing committed can carry: a `### Q<n>` block with no `Recommendation:` warns, and errors only on a question `HEAD` does not list yet, while its author is still there to write one. `provenance` became a required knowledge field with its backfill left a separate manual step: one bundle read 262 errors of that single fixable class, and a sibling stamped 4.9.1 read 354, 307 of them `requires provenance` — all fixed by `--apply`, none of it said anywhere. A validator whose errors are mostly one mechanical class teaches people to ignore it, and the one real error among them goes unseen. So `/loopd:init` step 6 runs this script in **report mode** whenever the validator fails and prints `<n> schema errors, <m> fixable: <path>/migrate-bundle.sh --apply`, both numbers parsed from the two summary lines (`tests/init-migrate-hint.test.sh` fails when either format drifts, and an unparsed line falls back to the bare validator pointer rather than a guessed number). With a mounted `knowledge/` the line also carries the skipped count, because the validator still counts those documents' errors and this script will not touch them.
 
 ## 10. The scaffold review is a three-stage chain with a declared fallback, never a skip
 
@@ -273,7 +273,11 @@ and `transcript_path` are IDENTICAL for parent and subagent**, so a design keyed
 either would silently have been all-or-nothing: halt one agent, lose the human's own
 session with it. Two properties follow and both are load-bearing: the *presence* of
 `agent_id` is the parent-vs-subagent test with no heuristic, and an absent `agent_id`
-therefore means **exit 0 immediately** — this hook can never gate the parent. There is
+therefore means **exit 0 immediately** — this hook can never gate the parent. One
+exception, from bg-role-agent-guards: a top-level `claude --bg --agent` role session carries
+`agent_type` and no `agent_id`, and has no parent sharing its `session_id`, so it is keyed on
+that `session_id` — never the PM tick and never a session without `agent_type`
+(`docs/pm-design.md`). There is
 deliberately **no all-agents wildcard**, because it would reintroduce exactly the failure
 the measurement exists to have avoided. This is the third scoping assumption in the
 project to have been wrong (native worktree isolation, `paths:` globs, nearly this one),
@@ -398,6 +402,19 @@ registration of this same script, and an orphan expires by age, so a crashed age
 nothing. The hook still writes no task document: the breach lands in `control.log` and the
 next `project-manager` tick maps the `agent_id` to a task, writes one `# Notes` line and
 emits at most one queue row.
+
+**Beside it, a counter that only watches — the stuck signature.** The doom loop cannot see
+an agent that varies its command while failing the same way, because a failure lives in the
+result, and the result reaches a hook only as `PostToolUseFailure`'s `error` (measured on
+2.1.325; a failed call fires no PostToolUse). So this script is registered on that event
+too. `stuckSignature` is **off when absent from both config layers** (one cache line is
+written, nothing else); `true` takes C=18 calls, N=3 repeats, E=8 errors (TokenEconomizer's
+gate and the doom loop's N), and an object overrides any of them. A signature is the tool,
+the exit code and the first error line with paths, hashes and numbers stripped, kept as a
+fingerprint in a ring of the last 64; past C calls, N of one fingerprint or E failures
+writes **one** `stuck-signature` line per agent or role round, naming the arm and the
+counts, never the output, and **denies nothing**. Whether it ever denies is decided from
+two weeks of those lines, each matched to how its round ended.
 
 **A second breaker with no beat either — the wall clock.** The doom loop catches an agent
 that has stopped making progress; on 2026-09-13 a whole wave ran over an hour while

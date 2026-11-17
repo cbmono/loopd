@@ -1,0 +1,21 @@
+{
+  "cwd": "",
+  "duration_ms": 0,
+  "effort": {
+    "level": ""
+  },
+  "error": "",
+  "hook_event_name": "",
+  "is_interrupt": false,
+  "permission_mode": "",
+  "prompt_id": "",
+  "scratchpad_dir": "",
+  "session_id": "",
+  "tool_input": {
+    "command": "",
+    "description": ""
+  },
+  "tool_name": "",
+  "tool_use_id": "",
+  "transcript_path": ""
+}

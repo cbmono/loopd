@@ -4,10 +4,11 @@
 or `SNAPSHOT.json` exists at the bundle root — the two artifacts this half writes. The
 commit-and-sync half of step 8 is in the core and runs every tick, before this one.
 
-   **Refresh the awaiting-you queue — only if it already exists, and only on a tick that
-   changed something.** If `AWAITING.md` is present at the bundle root **and this tick will
-   report `noop: false`** — or this tick's `tick-delta.sh check` named a moved `checkpoint`
-   line — rewrite it with the renderer; **you never format the page**:
+   **Refresh the awaiting-you queue — only if it already exists, on every full tick.** If
+   `AWAITING.md` is present at the bundle root, rewrite it with the renderer, **`noop: true`
+   ticks included**: an answer is a commit, the commit makes a full tick that may change
+   nothing else, and only a render takes the answered row off the page. **You never format
+   the page**:
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh \
@@ -28,7 +29,9 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    disk (`approve`, `answer`/`grant`, `unblock`, `close`, and `continue` — the continue
    checkpoint, whose sentence is the script's because it carries the human's answer line;
    `SCHEMA.md` → "The continue checkpoint") and **classifies `grant` against
-   `answer` from the `open_questions` entry itself, so you never pick a glyph**. You supply
+   `answer` from the `open_questions` entry itself, so you never pick a glyph**. Each
+   question's recommendation is the script's too, read from its `### Q<n>` block and kept
+   beside a trailer that replaces the question text — never restate it. You supply
    two things and nothing else: the trailing sentence of each row, which is per-tick prose
    by design, and a `--merge` row per PR you have found verified and green at its current
    head — merge-eligibility is this tick's judgement and is written down nowhere the script
@@ -39,12 +42,12 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    **No `AWAITING.md` ⇒ it writes nothing and exits 0.** **Presence means rewrite, never
    create — for `AWAITING.md` and `SNAPSHOT.json` alike:** `/loopd:init` is their one
    creator, gated by `awaiting` and `board` in the tracked `instance.config.json`, and a
-   deleted file stays off until the next stamp. A `noop: true` tick leaves `AWAITING.md` exactly as it is — not
-   rewritten with the same items, not restamped: the `Last refreshed:` line moves on every
-   render, so an unconditional rewrite churns the file the SessionStart banner reads and
-   makes a stale queue indistinguishable from a fresh one, and the queue derives from
-   documents a `noop` tick just proved unmoved. `AWAITING.md` is **derived and
-   gitignored**: rewrite it, never stage or commit it.
+   deleted file stays off until the next stamp. The idle fast path (step 0.9) never loads
+   this file, so the queue is rewritten only on a tick that changed something or could not
+   prove otherwise; that idle `noop: true` tick leaves `AWAITING.md` exactly as it is — its
+   `IDLE` proves nothing moved since the last full tick's render, and a render there would
+   only move `Last refreshed:`. `AWAITING.md` is **derived and gitignored**: rewrite it,
+   never stage or commit it.
 
    The queue holds **only** what a human decision unblocks — never in-flight, next, or
    blocked-but-progressing work. **On a shared instance the script narrows it once more
@@ -52,8 +55,10 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    human's items belong in *their* queue — report them in the tick summary instead.
 
    **Never invent an item.** Pass a `--trailer` or a `--merge` only for a task you actually
-   read this tick; if a state is unclear, leave it off rather than guessing. Exit 3 means it
-   was handed a task path it could not read — report that line and change nothing.
+   read this tick; if a state is unclear, leave it off rather than guessing. A `noop: true`
+   tick still passes every `--merge` and `--trailer` it would on any other — a render without
+   one drops that row. Exit 3 means a task document it could not read or parse: the page is
+   left as it was, and its `build-awaiting:` line goes in the tick report verbatim.
 
    **Refresh the board snapshot — again, only if it already exists.** At the very end
    of the tick, after the curation commit and the queue rewrite, run

@@ -1,0 +1,39 @@
+{
+ "state": "working",
+ "tempo": "active",
+ "inFlight": {
+  "tasks": 1,
+  "queued": 0,
+  "kinds": [
+   "local_agent"
+  ],
+  "drainableMonitors": 0
+ },
+ "fan": [
+  {
+   "id": "aee91c5fc0711a46b",
+   "kind": "agent",
+   "label": "<redacted>",
+   "startedAt": 1794856415805
+  },
+  {
+   "id": "b41n8igd0",
+   "kind": "shell",
+   "label": "<redacted>",
+   "startedAt": 1794856421578
+  }
+ ],
+ "output": null,
+ "children": null,
+ "template": "bg",
+ "cliVersion": "2.1.325",
+ "createdAt": "2026-11-16T19:13:29.845Z",
+ "updatedAt": "2026-11-16T19:13:41.581Z",
+ "firstTerminalAt": null,
+ "backend": "daemon",
+ "sessionId": "1234abcd-0000-4000-8000-00000000000a",
+ "resumeSessionId": "1234abcd-0000-4000-8000-00000000000a",
+ "daemonShort": "1234abcd",
+ "detail": "<redacted>",
+ "name": "<redacted>"
+}

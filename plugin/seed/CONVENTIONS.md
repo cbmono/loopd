@@ -17,10 +17,7 @@ trigger applies, never by default. Where the two disagree, this file wins.
 **One rule about this file's own wording, because four agents with differing `tools:`
 lists read it:** an instruction here must be executable by **every** one of them, so where
 a rule depends on a tool only some of you hold, it says **which list decides** and what the
-others do instead. Never the other way round — a condition on what is *installed* reads as
-satisfied while still being unexecutable for an agent that lacks the tool, which is exactly
-how the `code-architect` clause below went unnoticed. `tests/agent-tool-allowlist.test.sh`
-in `cbmono/loopd` enforces this.
+others do instead. `tests/agent-tool-allowlist.test.sh` in `cbmono/loopd` enforces this.
 
 <!-- tool-mention: Workflow(1), Agent(4), EnterWorktree(1), AskUserQuestion(1) — named below to state their ABSENCE for some readers, never to instruct: no role agent holds Workflow; only qa-reviewer holds Agent, which is why the Explore and self-review rules state the route for the three that do not; EnterWorktree may be missing for a subagent; no role agent holds AskUserQuestion, which is why a tool request goes into open_questions instead of a live prompt. Every mention gives the route for an agent that lacks it. Enforced by tests/agent-tool-allowlist.test.sh. -->
 
@@ -32,9 +29,9 @@ in `cbmono/loopd` enforces this.
 |---|---|
 | an **inline comment** | **none by default — only a section header or an external-constraint link.** A **section header** formats a file for readability (a title of 8 words or fewer, not a sentence); a **link** points at a constraint the code cannot express (an upstream issue, a spec). **Explaining what the code does, or why a shortcut was taken, is neither.** **A repo's own conventions or lint rules override this default.** `scripts/comment-check.sh` reports every other added comment line. |
 | a **script header** | **10 lines** — what it does, its exit codes, and where the reasoning lives. |
-| a **commit** | subject **72 characters**, body at most **5 lines**. |
+| a **commit** | subject **72 characters**, body at most **5 lines**. Check: `scripts/commit-shape.sh`. |
 | a **PR body** | the TL;DR line + the criteria table + at most **3 one-line notes**. Hard ceiling **2,500 characters**. |
-| a task **`# Result`** | **15 lines**. |
+| a task **`# Result`** | **15 lines**. Check: `validate-bundle.sh`. |
 | a **`Finding`** | **40 lines**, and a required one-line `lesson:` in its frontmatter. |
 | a **checker's criteria table** | **the table IS the table** — one row per criterion, `PASS`/`FAIL`, one command or artifact. No narration around it, ever. |
 
@@ -150,7 +147,7 @@ choices outside this list.
   a prefix such as `ABC` ⇒ append `[ABC-<n>]` with the id your task or brief names, else
   `[ABC-0]`. **Never invent an id.** No OKF task id in the title. Target the default
   branch. **Never merge.** Detail: `conventions/pr-body.md` → "PR title" — when
-  your brief names a prefix.
+  your brief names a prefix. Check: `hooks/pr-title.sh`.
 
 ### The PR body shape
 
@@ -221,13 +218,18 @@ It does not replace the gate — `required-checks.sh` reads what the host serves
 `conventions/pr-body.md` → "Run the shape reader on your draft" — when a refusal's
 message does not tell you the fix.
 
+**A UI PR** (task `ui: true`, or a diff touching the repo's `uiGlobs`) adds `--ui`: a
+screenshot path under the bundle's `deliverables/local/`, never pushed, test data only.
+Detail: `conventions/pr-body.md` → "UI evidence: a screenshot per changed screen" — when
+the task sets `ui: true` or your diff touches a UI glob.
+
 ### PR size is a heuristic, never a gate
 
 Two numbers: **`maxPrLoc`** (**absent that key, 500**) and **`maxPrFiles`** (**absent that
 key, 100**) in `instance.config.json`. Count as the host does —
 `git diff --shortstat origin/<default>` and `git diff --numstat origin/<default> | wc -l`.
 Past either, **open the PR anyway** with one `⚠️` line naming the figure and the split you
-would make. It is never a review finding. Detail: `conventions/pr-body.md` → "PR size is a
+would make. It is never a review finding. Check: `scripts/pr-size.sh`. Detail: `conventions/pr-body.md` → "PR size is a
 heuristic, never a gate" — when your diff is past either number.
 
 ### A repo with a VERSION file at its root
@@ -255,7 +257,7 @@ has no CodeRabbit integration.
 Measure what you added to the repo's own machinery before opening the PR
 (`git diff --numstat origin/main -- 'plugin/**/*.sh' | awk '{a+=$1} END{print a+0}'`).
 **At or above ~150 added lines, flag it as one `⚠️` line naming the figure** and let the
-owner decide; never a block. Detail: `conventions/pr-body.md` → "Don't grow the harness
+owner decide; never a block. Check: `scripts/pr-size.sh`. Detail: `conventions/pr-body.md` → "Don't grow the harness
 without a reason" — when your diff adds ~150 lines or more there.
 
 ## Tests and evidence
@@ -272,8 +274,7 @@ without a reason" — when your diff adds ~150 lines or more there.
 **Locally, run the tests your change touches, plus anything that exercises the file you
 edited**, and **do not run the full suite locally as a matter of course** — the required
 check runs everything on a clean machine. Where the repo ships a diff-selecting runner,
-**use it** — `tests/run.sh --changed` in `cbmono/loopd`, whose `--all` runs once before the
-PR is opened. You still test your own branch before every push. A full local run is legitimate only when your change touches
+**use it** — `tests/run.sh --changed` in `cbmono/loopd`, whose full suite is CI's. You still test your own branch before every push. A full local run is legitimate only when your change touches
 **shared machinery every test loads**, and then **the PR body must state why**. **Do not
 poll a long-running local run.** Detail: `conventions/testing.md` → "The full suite belongs
 to CI" — before you start a full local run.
@@ -304,7 +305,7 @@ Self-review, push everything it made you change, get CI green, **then** post
 `@coderabbitai review` — **once per PR, never after a fix commit, never on a schedule**. A
 review of a head that moves is spent (`review-clearance.sh` exit 4, stale). Detail:
 `conventions/review.md` → "Ask for the independent review once, at the head you consider
-final" — before you request a review.
+final" — before you request a review. Check: `hooks/review-request.sh`.
 
 ### Resolve or answer every reviewer-authored thread before you re-request
 
@@ -423,7 +424,7 @@ do_not_repeat" — when the script refuses.
 
 **Never at the round's end.** `cd <bundle>`, then
 `scripts/commit-as.sh <role> "<msg>" --stage -- <task-doc>`. An uncommitted doc stalls
-every tick's pull. On a rebase refusal (exit 2): **retry once on your next write,
+every tick's pull. Check: `hooks/task-doc-dirty.sh`. On a rebase refusal (exit 2): **retry once on your next write,
 or before your final message if there is none, then leave it.** Detail:
 `conventions/rounds.md` → "Commit your task-doc edit immediately after each write" —
 when `commit-as.sh` refuses.
@@ -476,7 +477,7 @@ repo's package manager has one, and pushes early. **Check `pwd` before you creat
 `claude --worktree` session is already there. Otherwise `git worktree add <path> -b
 <branch> origin/<default-branch>`; the `EnterWorktree` tool may be unavailable to you. **Scratch files go in `<worktree>/tmp/`, never a shared scratchpad**, and only on
 a path the repo ignores (`git check-ignore -q`). Detail: `conventions/repos.md` →
-"Parallel-safety" — when your brief names no worktree, or `tmp/` is not ignored.
+"Parallel-safety" — when your brief names no worktree, or `tmp/` is not ignored. Check: `hooks/write-path.sh`.
 
 ### Browser (only if the project opts in)
 
@@ -508,7 +509,7 @@ If present, `codegraph` is for **TypeScript blast radius only** (`codegraph impa
 
 **Every file you write has a home inside the project, and `~` is never one of them.** A build
 task once left a human-facing labelling sheet and its instructions in a folder under `~`,
-where no reviewer, no `AWAITING.md` row and no other clone could see them.
+where no reviewer, no `AWAITING.md` row and no other clone could see them. Check: `hooks/write-path.sh`.
 
 | What the file is | Where it goes |
 |---|---|

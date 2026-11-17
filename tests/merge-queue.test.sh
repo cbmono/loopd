@@ -16,7 +16,8 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-66s (%s)\n' "$1" "$2"; pass=$(
        else printf '  FAIL  %-66s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi }
 
 # The stub answers from $FIX: workflows.json, files/<name> (at.<ref>/<name> instead, when that
-# directory exists), runs.<status>.json; *.fail breaks a call, branch.missing 404s the branch.
+# directory exists), runs.<status>.json, jobs.<run id> (a job count, else 0); *.fail breaks a
+# call, branch.missing 404s the branch, gone.<b> 404s branch <b>, fail.<b> breaks it. calls logs each URL.
 BIN="$TMP/bin"; mkdir -p "$BIN"
 cat > "$BIN/gh" <<'EOS'
 #!/usr/bin/env bash
@@ -25,10 +26,16 @@ filter="."; url=""
 while [ $# -gt 0 ]; do
   case "$1" in --jq) filter="$2"; shift 2 ;; -H) shift 2 ;; --paginate) shift ;; *) url="$1"; shift ;; esac
 done
+printf '%s\n' "$url" >> "$FIX/calls"
 case "$url" in
   */actions/workflows) [ -e "$FIX/workflows.fail" ] && { echo "gh: Server Error (HTTP 502)" >&2; exit 1; }
                        jq -r "$filter" "$FIX/workflows.json" ;;
-  */branches/*) [ -e "$FIX/branch.missing" ] && { echo "gh: Branch not found (HTTP 404)" >&2; exit 1; }; echo '{}' ;;
+  */actions/runs/*/jobs) id="${url%/jobs}"; id="${id##*/}"
+                [ -e "$FIX/jobs.fail" ] && { echo "gh: Server Error (HTTP 502)" >&2; exit 1; }
+                printf '{"total_count":%s}' "$(cat "$FIX/jobs.$id" 2>/dev/null || echo 0)" | jq -r "$filter" ;;
+  */branches/*) b="${url##*/branches/}"
+                [ -e "$FIX/fail.$b" ] && { echo "gh: Server Error (HTTP 502)" >&2; exit 1; }
+                [ -e "$FIX/branch.missing" ] || [ -e "$FIX/gone.$b" ] && { echo "gh: Branch not found (HTTP 404)" >&2; exit 1; }; echo '{}' ;;
   */contents/*) f="${url#*/contents/}"; ref="${f#*\?ref=}"; d="$FIX/files"; [ -d "$FIX/at.$ref" ] && d="$FIX/at.$ref"
                 f="$d/$(basename "${f%%\?*}")"
                 [ -f "$f" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }; cat "$f" ;;
@@ -45,11 +52,11 @@ fixture() { # <name> -> sets FIX, a repo with loopd's own tests.yml and no runs
   cp "$REPO/.github/workflows/tests.yml" "$FIX/files/tests.yml"
   printf '{"workflows":[{"path":".github/workflows/tests.yml","state":"active"}]}\n' > "$FIX/workflows.json"
 }
-run() { # <status> <id> <event> <branch> [pr] [file] [head_sha] -> appends a run to runs.<status>.json
+run() { # <status> <id> <event> <branch> [pr] [file] [head_sha] [head repo] [created_at] -> appends a run
   local f="$FIX/runs.$1.json" pr="[]"
   [ -n "${5:-}" ] && pr="[{\"number\":$5,\"base\":{\"ref\":\"main\"}}]"
   [ -f "$f" ] || printf '{"workflow_runs":[]}' > "$f"
-  jq --argjson r "{\"id\":$2,\"path\":\".github/workflows/${6:-tests.yml}\",\"event\":\"$3\",\"head_branch\":\"$4\",\"head_sha\":\"${7:-run$2}\",\"status\":\"$1\",\"pull_requests\":$pr,\"html_url\":\"https://github.com/example-org/example-repo/actions/runs/$2\"}" \
+  jq --argjson r "{\"id\":$2,\"path\":\".github/workflows/${6:-tests.yml}\",\"event\":\"$3\",\"head_branch\":\"$4\",\"head_sha\":\"${7:-run$2}\",\"status\":\"$1\",\"head_repository\":{\"full_name\":\"${8:-example-org/example-repo}\"},\"created_at\":\"${9:-2026-01-01T00:00:00Z}\",\"pull_requests\":$pr,\"html_url\":\"https://github.com/example-org/example-repo/actions/runs/$2\"}" \
     '.workflow_runs += [$r]' "$f" > "$f.n" && mv "$f.n" "$f"
 }
 mq() { PATH="$BIN:$PATH" bash "$SH" example-org/example-repo main "$@" 2>&1; }
@@ -116,6 +123,39 @@ fixture ghruns; : > "$FIX/runs.fail"
 ok "gh failing to list the runs is exit 2"                  "$(rc)" 2
 fixture fork; run in_progress 51 pull_request feat-z
 ok "a run whose group needs a missing PR number is unknown" "$(rc)" 2
+
+echo "== a queued run with no jobs on a deleted branch is skipped; any doubt stays unknown =="
+fixture ghost; run queued 81 pull_request pane-gone; : > "$FIX/gone.pane-gone"
+ok "jobless, branch gone: skipped, clear (exit 0)"          "$(rc)" 0
+ok "…named once on stderr"                                  "$(PATH="$BIN:$PATH" bash "$SH" example-org/example-repo main 2>&1 >/dev/null | grep -c '^merge-queue: skipped run 81 (queued, no jobs, branch pane-gone gone)$')" 1
+ok "…and not on stdout"                                     "$(PATH="$BIN:$PATH" bash "$SH" example-org/example-repo main 2>/dev/null | grep -c skipped)" 0
+echo 1 > "$FIX/jobs.81"
+ok "jobs, branch gone: unknown (exit 2)"                    "$(rc)" 2
+ok "…naming the run's group as today"                       "$(mq | grep -c "^unknown: run 81 (.github/workflows/tests.yml, queued): its group")" 1
+fixture ghostbranch; run queued 82 pull_request pane-here
+ok "jobless, branch present: unknown"                       "$(rc)" 2
+fixture ghostjobsfail; run queued 83 pull_request pane-gone; : > "$FIX/gone.pane-gone"; : > "$FIX/jobs.fail"
+ok "the jobs lookup failing: unknown"                       "$(rc)" 2
+fixture ghostbrfail; run queued 84 pull_request pane-gone; : > "$FIX/fail.pane-gone"
+ok "the branch lookup failing: unknown"                     "$(rc)" 2
+fixture ghostodd; run queued 88 pull_request 'pane?x'; : > "$FIX/gone.pane?x"
+ok "a branch name a URL would mangle: unknown"              "$(rc)" 2
+fixture ghostfork; run queued 89 pull_request pane-gone "" "" "" someone/fork; : > "$FIX/gone.pane-gone"
+ok "a run from a fork: unknown"                             "$(rc)" 2
+fixture ghostfresh; run queued 90 pull_request pane-gone "" "" "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; : > "$FIX/gone.pane-gone"
+ok "a run queued under an hour ago: unknown"                "$(rc)" 2
+fixture ghostdots; run queued 91 pull_request 'a/../b'; mkdir "$FIX/gone.a"; : > "$FIX/b"
+ok "a branch name with ..: unknown"                         "$(rc)" 2
+fixture ghostboth; printf 'name: CI\non: push\njobs:\n  a:\n    runs-on: x\n    concurrency: ci-${{ github.ref }}\n  b:\n    runs-on: x\n    concurrency: ci-refs/heads/main\n' > "$FIX/files/tests.yml"
+run queued 92 pull_request pane-gone; : > "$FIX/gone.pane-gone"
+ok "a skipped run's other group still holds"                "$(rc)" 1
+fixture ghostrunning; run in_progress 85 pull_request pane-gone; : > "$FIX/gone.pane-gone"
+ok "in progress, jobless, branch gone: unknown"             "$(rc)" 2
+fixture ghostcalls; run queued 81 pull_request pane-gone; : > "$FIX/gone.pane-gone"; rc >/dev/null
+ok "the stub logs the ghost's lookups (jobs, branch)"       "$(grep -c -e '/jobs$' -e '/branches/pane-gone$' "$FIX/calls")" 2
+fixture evalcalls; run queued 86 pull_request feat-q 9; run queued 87 push feat-r
+ok "every run evaluates: clear"                             "$(rc)" 0
+ok "…and no jobs or branch lookup beyond main's"            "$(grep -v '/branches/main$' "$FIX/calls" | grep -c -e '/jobs$' -e '/branches/')" 0
 
 echo "== every false clear the QA review found answers hold or unknown =="
 fixture case; run in_progress 71 push MAIN

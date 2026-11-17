@@ -120,9 +120,13 @@ dec 'acknowledged_decisions: [ "2026-11-07T13:52:44Z by example-user-007 · D1: 
 ok "…but an overturned text does" "$([ "$(DI)" != "$hd" ] && echo yes)" yes
 cp "$P/tasks/task-001-a.md" "$TMP/a.keep"
 printf -- '---\ntype: Task\nstatus: draft\nacceptance_criteria: [ "x" ]\nopen_questions: [ "unterminated\n---\n' > "$P/tasks/task-001-a.md"
-out="$(DI 2>/dev/null)"; rc=$?
-ok "an unreadable list exits 1" "$rc" 1
+out="$(DI 2>"$TMP/di.err")"; rc=$?
+ok "a list the parser refuses exits 3" "$rc" 3
 ok "…and prints no hash" "${out:-none}" none
+ok "…naming the file and the parser's reason on stderr" "$(grep -c "task-001-a.md	unterminated double-quoted entry in open_questions" "$TMP/di.err")" 1
+chmod 000 "$P/tasks/task-001-a.md"
+ok "an unreadable file exits 1" "$(DI >/dev/null 2>&1; echo $?)" 1
+chmod 644 "$P/tasks/task-001-a.md"
 cp "$TMP/a.keep" "$P/tasks/task-001-a.md"
 
 echo; echo "== tick-delta.sh: the stale-inputs DELTA =="
@@ -141,7 +145,7 @@ design "$MAP2, \"api → task-003\""; qtask '"Q1: which store? --- a third answe
 ok "no inputs_hash: ⇒ never stale" "$(TD check >/dev/null; echo $?)" 0
 withhash "0000000000000000"
 printf -- '---\ntype: Task\nstatus: draft\nacceptance_criteria: [ "x" ]\nopen_questions: [ "unterminated\n---\n' > "$P/tasks/task-001-a.md"; settle broken
-ok "an unreadable input ⇒ exit 2, the full tick runs" "$(TD check >/dev/null; echo $?)" 2
+ok "an unparseable input ⇒ DELTA naming it, the full tick runs" "$(TD check 2>/dev/null | grep -c '^DELTA: projects/p1/tasks/task-001-a.md cannot be parsed')" 1
 cp "$TMP/a.keep" "$P/tasks/task-001-a.md"; cp "$TMP/design.keep" "$P/design.md"; settle restore-2
 
 echo; echo "== build-awaiting.sh: one link per project, on its first promote row =="

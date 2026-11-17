@@ -198,13 +198,17 @@ ledger, `AWAITING.md` or the transcript itself. The decisions it carries:
 
 | Ledger, for the minted id | Session | Reaper |
 |---|---|---|
-| close committed | not `working` | release; print the close line, Needs-you, `COST:` |
+| close committed | not `working`, no live child | release; print the close line, Needs-you, `COST:` |
+| close committed | `blocked` or `status: idle`, a live child | hold, still finishing — a stop would kill the child |
 | close committed | `working`, turn running | hold — the tick is still pushing and rendering |
 | close committed | `working`, `status: idle` | `claude stop` it, then release — the turn is over |
 | open, or none | `working`, turn running | hold; the fire is dropped, never queued |
 | open | `working`, `status: idle` | hold — a full walk may be waiting on background work |
 | none, the id nowhere in the ledger, past 120s | `working`, `status: idle` | `claude stop` it, append the `ended with no ledger entry` close, then release |
-| open, or none | `blocked` | `BLOCKED`, lock kept — neither idle nor done |
+| open, or none | `blocked`, `waitingFor` set | `BLOCKED`, lock kept — a prompt is a prompt, child or not |
+| open, or none | `blocked`, a live child | hold, exit 1 — the turn ended while its forks run |
+| open, or none | `blocked`, nothing in flight | `BLOCKED`, lock kept — neither idle nor done |
+| open, or none | `blocked`, job record unreadable | hold until the tick's budget, then `BLOCKED` |
 | open | ended or gone | write the `close: dead …` line beside it, then release |
 | none | ended or gone | append a `close: … ended with no ledger entry` line, then release |
 | any | unreadable | `UNKNOWN`, lock kept |
@@ -215,6 +219,14 @@ turn; the daemon retires it after about 60 minutes idle, and its row reads `stat
 18:34 held the lock for three fires (40 minutes) until it was stopped by hand. So a
 committed close plus `status: idle` is stopped and reaped; an open entry never is, whatever
 the status, because only a committed close says the tick's writes landed.
+
+**A `blocked` tick can still be working.** Measured 2026-11-16 (CLI 2.1.325): a tick whose
+turn ended on an API error read `blocked` while its two forks ran, and the reaper advised
+`claude stop`. `claude agents --json` carries no child field, so the live-child signal is
+the session's job record (`jobs/<id>/state.json`), whose `inFlight.tasks` counts forks,
+`Agent` children and background shells. BLOCKED is printed only when that one read says
+`blocked` with nothing in flight; when it cannot be read, the hold is bounded by the same
+budget `--wait` uses (`roleMinutes project-manager`, else `maxAgentMinutes`, else 45).
 
 The dead tick's close is written by the launcher's script and not by a hook in the tick,
 because a killed session runs no hook. `once` and `dry-run` wait through the same
@@ -478,10 +490,13 @@ zero-delta tick that skips the walk and still hands back a multi-section report 
 "repeat notification, no new information" the loop's readers stop reading — so the
 probe's `IDLE:` line IS the quiet tick's whole report, verbatim, and it names the next
 check (`--gap`) because a human otherwise cannot tell a quiet loop from a stopped one.
-The same rule reaches `AWAITING.md`: a `noop: true` tick does not rewrite it, since the
-`Last refreshed:` line moves on every render and would make a stale queue look fresh.
-Both directions are pinned by `tests/quiet-tick.test.sh` on a fixture with no
-dispatchable work.
+The same rule reaches `AWAITING.md`: the idle fast path does not rewrite it, since the
+`Last refreshed:` line moves on every render and IDLE proves no input moved since the last
+full tick's render. Both directions are pinned by `tests/quiet-tick.test.sh` on a fixture
+with no dispatchable work. Every full tick does render it, `noop: true` ones included:
+until 2026-11-16 those skipped it too, and an answered `👉 do` row in a paused project
+stayed on the page through four full ticks whose only change was the answer's commit
+(`tests/awaiting-noop-tick.test.sh`).
 
 The record is written by a FULL tick as its last derived act (after the commit, the
 sync, the queue and the board), through a temp-file rename so a crash cannot leave a
@@ -677,12 +692,12 @@ launcher's release point are untouched.
    no re-dispatch, because a checker that re-ran a round on its own reading would automate
    the loop's most expensive failure, the same reason `check-dispatch.sh` is report-only.
    The number is for the human.
-3. **`agent-control.sh` no longer reaches a role agent.** It keys on `agent_id`, which is
-   present only on a subagent's tool call, and a `--bg` session is top-level. Operator
-   `halt`/`gate`/`steer` therefore apply to nothing the tick dispatches. The blunt
-   replacement is `claude stop <id>`, which the human runs; keying the hook on the
-   recorded `session:` id is now *possible* — a background session's `session_id` is its
-   own, which was never true of a subagent's — and is deliberately left to its own change.
+3. **`agent-control.sh` no longer reached a role agent.** It keyed on `agent_id`, which is
+   present only on a subagent's tool call, and a `--bg` session is top-level, so operator
+   `halt`/`gate`/`steer` applied to nothing the tick dispatched. Keying the hook on the
+   recorded `session:` id was *possible* — a background session's `session_id` is its
+   own, which was never true of a subagent's — and the bg-role-agent-guards project did
+   it (below).
 
 **A fourth price was paid UNknowingly, and is closed.** Both plugin hooks guard on
 `$CLAUDE_PROJECT_DIR/instance.config.json`. That held while a role agent was a subagent of
@@ -695,11 +710,18 @@ The guard now resolves a **linked worktree** to its bundle through `<repo>/.git/
 written by `link-repos.sh` on every stamp; the harness carries the worktree-rooted cases in
 both directions.
 
-**What that does NOT change: the doom-loop and wall-clock bounds do not reach a top-level
-`--bg` role agent** (owner, 2026-10-04: left as is). `agent-control.sh` finds the bundle
-now, but still keys on `agent_id`, which a top-level session never carries — so
-`maxRepeatedToolCalls` and `maxAgentMinutes` bound a role agent's own *subagents* (a
-reviewer's lenses) and nothing bounds the role agent itself but `claude stop <id>`.
+**What that does NOT change, since the bg-role-agent-guards project: the doom-loop and
+wall-clock bounds reach top-level `--bg` role sessions too.** That project reverses the
+2026-10-04 decision to leave them unbounded. `agent-control.sh` matches a role session on
+no `agent_id`, an `agent_type` `<this plugin>:<role>` other than `project-manager`, and a
+bundle reached through `.git/loopd-bundle` (so a session launched in a linked worktree, not
+in the bundle); its `session_id` stands in for `agent_id`, so `control.sh halt <session>`
+reaches it too, and stays until `control.sh clear`, across a resume. Its clock starts at
+its first `PreToolUse` and restarts only when step 4 runs `control.sh round <session>`
+before a resume: the payload marks no round, and `prompt_id` changes on every wake from
+idle, a background task's notification included (QA on loopd#568). The PM tick and the
+owner's own session are never matched (D1: the tick stays unbounded). Past the cap a role
+session may also edit the task document whose `session:` names it, where it records `pr:`.
 
 **Why the child runs in auto mode, and why it used to run in `bypassPermissions`.**
 task-026 measured that a prefix allowlist cannot cover a real tick and that hooks fire
