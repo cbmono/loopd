@@ -62,9 +62,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` runs `claude stop` on what
    `agent-sessions.sh stop-ids` selects, `background` rows with a `state` only, never the
    running tick's or the lock's session: **dead** — no live pid on the row or in the daemon
-   roster, no task records it or holds its `cwd` as its `worktree:`, a `cwd` under this
-   bundle's root (never the shared worktree root, never a row with no `cwd`), older than
-   10 minutes, 24 hours when `blocked`; **finished** — a terminal `state` with a live pid,
+   roster, no task records it, and either a `cwd` under this bundle's root no task holds as
+   its `worktree:` (never the shared worktree root, never a row with no `cwd`), older than
+   10 minutes, 24 hours when `blocked`, or a `cwd` under a `worktree:` only `done` or
+   `cancelled` tasks hold (a missing `status:` is open), older than 10 minutes; **finished** — a terminal `state` with a live pid,
    unrecorded, its `cwd` under this bundle's root and not under the worktree root (a reaped
    tick); **idle** — an open task's live, not-`blocked` session whose last assistant turn
    is older than `maxIdleMinutes` (absent ⇒ 120); **busy** — one whose last text user turn

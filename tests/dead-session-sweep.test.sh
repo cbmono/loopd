@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # dead-session-sweep.test.sh — `agent-sessions.sh dead-ids` and `session-sweep.sh`: the tick
-# stops this bundle's dead, unattributed sessions and nothing else (tick-stops-dead-sessions/task-001).
+# stops this bundle's dead, unattributed sessions, and dead ones in worktrees only finished tasks
+# record, and nothing else (tick-stops-dead-sessions/task-001, all-code-is-slop-lessons/task-022).
 # Every `claude` is a PATH stub; `stop` is logged and marks the row stopped. Exit 0 pass, 1 fail, 2 setup.
 set -uo pipefail
 
@@ -49,7 +50,7 @@ chmod +x "$TMP/bin/claude"
 export FIXTURE="$TMP/rows.json" STOPS="$TMP/stops" TMP CLAUDE_CONFIG_DIR="$TMP/cfg" CLAUDE_CODE_SESSION_ID="$(u 0000e0e0)"
 P="$TMP/bin:$PATH"
 
-# <spec file>: `<sid> <cwd|-> <state> <pid|-|none> <age s|->` per line -> $FIXTURE
+# <spec file>: `<sid> <cwd|-> <state> <pid|-|none> <age s|-> [name]` per line -> $FIXTURE
 mk() {
   python3 - "$1" "$FIXTURE" <<'PY'
 import json, sys, time
@@ -57,8 +58,9 @@ rows = []
 for line in open(sys.argv[1]):
     if not line.strip():
         continue
-    sid, cwd, state, pid, age = line.split()
+    sid, cwd, state, pid, age, *name = line.split()
     r = {"id": sid.split("-")[0], "sessionId": sid, "kind": "background", "state": state}
+    if name: r["name"] = name[0]
     if cwd != "-": r["cwd"] = cwd
     if pid != "-": r["pid"] = int(pid)
     if age != "-": r["startedAt"] = int((time.time() - int(age)) * 1000)
@@ -150,6 +152,32 @@ EOF
 mk "$TMP/age.spec"; sweep >/dev/null
 ok "blocked under 24h and other under 10m are kept; both past the floor stopped" "$(stops)" "0000bb02 0000cc02"
 
+echo "== FINISHED WORKTREE: a dead session where only done or cancelled tasks worked =="
+T="$B/projects/p/tasks"; mkdir -p "$WT/t3" "$WT/t5" "$WT/t6" "$WT/t8"
+task() { { echo ---; echo "type: Task"; [ -n "$3" ] && echo "status: $3"; echo "worktree: $WT/$2"
+           [ -n "${4:-}" ] && echo "session: $4"; echo ---; } > "$T/$1.md"; }
+task task-003-done t3 done; task task-004-gone t4 cancelled; task task-005-nostatus t5 ""
+task task-006-done t6 done; task task-007-open t6 in-review; task task-008-rec t8 done "$(u 0000a8a8)"
+cat > "$TMP/fin.spec" <<EOF
+$(u 0000f101) $B working $LIVE $((5*H))
+$(u 0000d301) $WT/t3 blocked - 1800 qa-review-pr-568
+$(u 0000d401) $WT/t4/sub working - 1800 qa-review-pr-569
+$(u 0000d302) $WT/t3 blocked - 540 qa-review-pr-571
+$(u 0000a501) $WT/t5 blocked - $((30*H)) qa-review-pr-574
+$(u 0000a601) $WT/t6 working - $((5*H)) qa-review-pr-583
+$(u 0000a8a8) $WT/t8 blocked - $((30*H))
+$(u 0000c103) $WT/orphan working - $((5*H))
+EOF
+mk "$TMP/fin.spec"; rep="$(sweep)"
+ok "a done task's worktree, and a reclaimed cancelled one's: stopped past 10m, blocked too" "$(stops)" "0000d301 0000d401"
+ok "…reported as dead" "$(grep -c '^stopped 0000d301 ([0-9]*m) dead$' <<<"$rep")" 1
+for g in "0000d302|a finished worktree's session under 10m" "0000a501|a worktree whose task has no status:" \
+         "0000a601|a worktree an open task records too" "0000a8a8|a finished worktree's session a task records" \
+         "0000c103|a worktreeRoot path no task of this bundle records"; do
+  mk "$TMP/fin.spec"; sweep >/dev/null
+  ok "no stop for ${g#*|}" "$(grep -c "^${g%%|*}$" "$STOPS")" 0
+done
+
 echo "== CAP: at most 20 stops a tick (D3) =="
 { printf '%s %s working %s %s\n' "$(u 0000f101)" "$B" "$LIVE" 100
   for i in $(seq 1 25); do printf '%s %s working - %d\n' "$(u "$(printf '0000%04d' "$i")")" "$B" $((H+i)); done; } > "$TMP/cap.spec"
@@ -176,8 +204,16 @@ mut() { PATH="$P" bash "$M" dead-ids "$B" 2>/dev/null | awk '{print $2}' | grep 
 C="$TMP/scripts/agent-sessions-classify.py"; CSRC="$REPO/plugin/scripts/agent-sessions-classify.py"
 sed 's/and not skip & {sid, sid.split("-")\[0\]}/and True/' "$CSRC" > "$C"
 ok "dropping the skip set selects the lock's session" "$(mut 0000c0c0)" 1
-sed 's/86400 if state == "blocked" else 600/0/' "$CSRC" > "$C"
+sed 's/86400 if state == "blocked" and not settled else 600/0/' "$CSRC" > "$C"
 ok "dropping the floors selects a 9m-old row" "$(mut 0000b202)" 1
+mk "$TMP/fin.spec"
+sed 's/if st_ not in ("done", "cancelled"):/if True:/' "$CSRC" > "$C"
+ok "dropping the done/cancelled check keeps a done worktree's session" "$(mut 0000d301)" 0
+sed 's/state == "blocked" and not settled/state == "blocked"/' "$CSRC" > "$C"
+ok "dropping the waiver keeps a 30m blocked one there" "$(mut 0000d301)" 0
+cp "$CSRC" "$C"
+ok "…and the unmutated copy selects it" "$(mut 0000d301)" 1
+mk "$TMP/main.spec"
 cp "$CSRC" "$C"; sed 's/ps -p /false /' "$SESS" > "$M"
 ok "dropping the roster check selects a roster-live row" "$(mut 0000f102)" 1
 
