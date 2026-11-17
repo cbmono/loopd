@@ -589,6 +589,56 @@ EOF
   return 3
 }
 
+# Placement only: the caller hands in the exact line and this compares it. Who signed is never
+# read here — the line is a label, not evidence (`conventions/review.md`).
+check_signature() { # <raw-reply> <label> <line> -> 0 placed, 1 missing or misplaced
+  local why label="$2"
+  why="$(tr -d '\r' < "$1" | SIG="$3" LC_ALL=C awk '
+    function rtrim(s) { sub(/[[:space:]]+$/, "", s); return s }
+    function blank(s) { return s ~ /^[[:space:]]*$/ }
+    function is_delim(s,   arr, k, i, c) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+      if (index(s, "|") == 0) return 0
+      sub(/^\|/, "", s); sub(/\|$/, "", s)
+      k = split(s, arr, "|")
+      for (i = 1; i <= k; i++) { c = arr[i]; gsub(/^[[:space:]]+|[[:space:]]+$/, "", c); if (c !~ /^:?-+:?$/) return 0 }
+      return k > 0
+    }
+    { l[NR] = rtrim($0) }
+    END {
+      sig = rtrim(ENVIRON["SIG"])
+      n = NR; while (n > 0 && blank(l[n])) n--
+      if (n > 0 && l[n] ~ /-->$/) {
+        for (j = n; j > 0; j--) if (l[j] ~ /^[[:space:]]{0,3}<!-- okf-verdict v1/) break
+        whole = (j > 0)
+        for (i = j; whole && i < n; i++) if (index(l[i], "-->")) whole = 0
+        if (whole) { n = j - 1; while (n > 0 && blank(l[n])) n-- }
+      }
+      if (n == 0 || l[n] != sig) { print "its last visible line is not the signature"; exit }
+      fence = 0
+      for (i = 1; i < n; i++) {
+        if (!fence && match(l[i], /^[[:space:]]{0,3}(`{3,}|~{3,})/)) {
+          op = substr(l[i], RSTART, RLENGTH); gsub(/[[:space:]]/, "", op)
+          fc = substr(op, 1, 1); fw = length(op); fence = 1
+        } else if (fence && match(l[i], /^[[:space:]]{0,3}(`{3,}|~{3,})[[:space:]]*$/)) {
+          cl = substr(l[i], RSTART, RLENGTH); gsub(/[[:space:]]/, "", cl)
+          if (substr(cl, 1, 1) == fc && length(cl) >= fw) fence = 0
+        }
+      }
+      if (fence) { print "the signature sits inside an unclosed code fence"; exit }
+      if (n > 1 && blank(l[n-1])) { print "a blank line sits before the signature"; exit }
+      table = (n > 1 && l[n-1] ~ /^[[:space:]]*[|]/)
+      for (i = n - 1; !table && i > 0 && !blank(l[i]); i--) if (is_delim(l[i])) table = 1
+      if (table) { print "the signature sits directly under a table row, where it renders as one more row"; exit }
+    }')"
+  [ -n "$why" ] || return 0
+  echo "refuse: $label does not end with its role signature: $why." >&2
+  echo "        End with a text line, then the signature with no blank line between;" >&2
+  echo "        an okf-verdict v1 trailer may follow it. See" >&2
+  echo "        $AB_CONVENTIONS → \"Every PR comment and review an agent posts ends with its role signature\"." >&2
+  return 1
+}
+
 # --- --self-test: no network, no comment --------------------------------------
 #
 # It PROVES THIS SCRIPT RUNS, which `[ -x ]` does not. A dead shebang, a syntax error, a
@@ -604,33 +654,6 @@ EOF
 #
 # AND "IT RUNS" IS NOT "IT IS COMPLETE": this block sits near the TOP, so a copy truncated
 # below it would still reach this exit. The last line of the file is asserted here.
-# Placement only: the caller hands in the exact line and this compares it. Who signed is never
-# read here — the line is a label, not evidence (`conventions/review.md`).
-check_signature() { # <raw-reply> <label> <line> -> 0 placed, 1 missing or misplaced
-  local why label="$2"
-  why="$(tr -d '\r' < "$1" | LC_ALL=C awk -v sig="$3" '
-    function rtrim(s) { sub(/[[:space:]]+$/, "", s); return s }
-    function blank(s) { return s ~ /^[[:space:]]*$/ }
-    { l[NR] = rtrim($0) }
-    END {
-      sig = rtrim(sig)
-      n = NR; while (n > 0 && blank(l[n])) n--
-      if (n > 0 && l[n] ~ /-->$/)
-        for (j = n; j > 0; j--) if (l[j] ~ /^[[:space:]]{0,3}<!-- okf-verdict v1/) {
-          n = j - 1; while (n > 0 && blank(l[n])) n--; break
-        }
-      if (n == 0 || l[n] != sig) { print "its last visible line is not the signature"; exit }
-      if (n > 1 && blank(l[n-1])) { print "a blank line sits before the signature"; exit }
-      if (n > 1 && l[n-1] ~ /^[[:space:]]*[|]/) { print "the signature sits directly under a table row, where it renders as one more row"; exit }
-    }')"
-  [ -n "$why" ] || return 0
-  echo "refuse: $label does not end with its role signature: $why." >&2
-  echo "        End with a text line, then the signature with no blank line between;" >&2
-  echo "        an okf-verdict v1 trailer may follow it. See" >&2
-  echo "        $AB_CONVENTIONS → \"Every PR comment and review an agent posts ends with its role signature\"." >&2
-  return 1
-}
-
 SELFTEST_OK="pr-comment-clearance: self-test ok"
 EOF_SENTINEL="#EOF: pr-comment-clearance.sh is complete to here"
 if [ "${1:-}" = "--self-test" ]; then
