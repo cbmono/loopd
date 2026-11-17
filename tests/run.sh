@@ -2,7 +2,8 @@
 #
 # run.sh — the ONE implementation of this repo's harness selection. CI calls it too.
 #   --changed [--base <ref>]  the core harnesses plus every harness naming a changed path
-#   --all                     every tests/*.test.sh (the default)
+#                             (the default: a local run tests the diff; the full suite is CI's)
+#   --all                     every tests/*.test.sh — CI, or when a human asks for it
 #   --ci                      the workflow entry: the fast path on a plugin-only PR diff,
 #                             the full suite on anything else
 #   --deep                    ONLY the harnesses marked `# deep` — they spawn the claude
@@ -81,9 +82,9 @@ HARNESS_TIMEOUT_DEEP="${HARNESS_TIMEOUT_DEEP:-1800}"
 SUITE_BUDGET_S="${SUITE_BUDGET_S:-2000}"
 HARNESS_WARN_S="${HARNESS_WARN_S:-300}"
 
-usage() { sed -n '3,20p' "$0" | sed 's/^#\{1,\} \{0,1\}//'; }
+usage() { sed -n '3,21p' "$0" | sed 's/^#\{1,\} \{0,1\}//'; }
 
-mode=all
+mode=changed
 base=""
 jobs=""
 one=""
