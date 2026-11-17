@@ -10,7 +10,8 @@
 #                             CLI and cost money; no other mode runs them or reaches it
 #   --iced                    ONLY the harnesses marked `# iced` — a subject on hold; every
 #                             other mode runs one only when a changed path names it
-#   --jobs N                  harnesses in parallel (default: CPUs); `# serial` runs alone
+#   --jobs N                  harnesses in parallel; `# serial` runs alone. Default: half the
+#                             CPUs locally (LOOPD_TEST_JOBS overrides), all of them under --ci
 # Each harness is bounded by HARNESS_TIMEOUT seconds (600, 1800 under --deep): one that
 # never returns is killed and fails as ITSELF, and the rest of the suite still reports.
 # A kill at 100% CPU is usually one `<( )` per scoped file spinning past ~256 files on bash 3.2.
@@ -82,7 +83,7 @@ HARNESS_TIMEOUT_DEEP="${HARNESS_TIMEOUT_DEEP:-1800}"
 SUITE_BUDGET_S="${SUITE_BUDGET_S:-2000}"
 HARNESS_WARN_S="${HARNESS_WARN_S:-300}"
 
-usage() { sed -n '3,21p' "$0" | sed 's/^#\{1,\} \{0,1\}//'; }
+usage() { sed -n '3,22p' "$0" | sed 's/^#\{1,\} \{0,1\}//'; }
 
 mode=changed
 base=""
@@ -179,6 +180,17 @@ cpus() {
   case "$n" in ''|*[!0-9]*) n=4 ;; esac
   echo "$n"
 }
+
+# Half the CPUs locally: several agents run this at once on one machine, and a pool per CPU
+# each took a 12-core box to load 310 (2026-11-17). CI's runner is nobody else's.
+n_cpu="$(cpus)"
+if [ -n "$jobs" ]; then jobs_from="--jobs"
+elif [ "$mode" != ci ] && [ -n "${LOOPD_TEST_JOBS:-}" ]; then jobs="$LOOPD_TEST_JOBS"; jobs_from="LOOPD_TEST_JOBS"
+elif [ "$mode" = ci ]; then jobs="$n_cpu"; jobs_from="default, all $n_cpu CPUs under --ci"
+else jobs=$(( n_cpu / 2 )); [ "$jobs" -ge 1 ] || jobs=1; jobs_from="default, half of $n_cpu CPUs"
+fi
+case "$jobs" in ''|*[!0-9]*|0) fatal "$jobs_from wants a positive integer, got '$jobs'"; exit 2 ;; esac
+echo "== $jobs worker(s), from $jobs_from =="
 
 default_base() {
   git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main
@@ -405,8 +417,6 @@ SHIM
   PATH="$shim:$PATH"; export PATH
 fi
 
-[ -n "$jobs" ] || jobs="$(cpus)"
-case "$jobs" in ''|*[!0-9]*|0) fatal "--jobs wants a positive integer, got '$jobs'"; exit 2 ;; esac
 
 total_pass=0
 total_fail=0
