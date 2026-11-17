@@ -301,6 +301,33 @@ assert "a clean named document is silent"         "$(grep -q '0 errors, 0 warnin
 assert "a named non-concept file is SKIPped"      "$(grep -q 'SKIP   projects/live/HANDOVER.md' <<<"$SKIP_ONE" && echo 0 || echo 1)"
 assert "…not turned into an error"                "$([[ $SKIP_RC -eq 0 ]] && echo 0 || echo 1)"
 
+echo "== a task # Result over 15 lines WARNS =="
+# Counted: the lines after `# Result` up to the next `# ` heading outside a fence, or EOF,
+# minus blank lines at either end. The fenced `# ` line is content, so it counts.
+result_task() { # <path> <result lines>
+  { printf '%s\n' '---' 'type: Task' 'title: R' 'status: done' "timestamp: $TS" '---' '# Result' ''
+    printf '%s\n' '```' '# fenced, not a heading' '```'
+    for i in $(seq $(( $2 - 3 ))); do echo "line $i"; done
+    printf '%s\n' '' '' '# Notes' 'note'; } > "$1"
+}
+result_task projects/live/tasks/task-090-result-15.md 15
+result_task projects/live/tasks/task-091-result-16.md 16
+set +e
+R15="$(bash "$VALIDATOR" projects/live/tasks/task-090-result-15.md 2>&1)"
+R16="$(bash "$VALIDATOR" projects/live/tasks/task-091-result-16.md 2>&1)"; R16_RC=$?
+set -e
+# A fence closes only on its own character, at least as long; a fenced `# Result` is content.
+{ printf '%s\n' '---' 'type: Task' 'title: R' 'status: done' "timestamp: $TS" '---' \
+    '````' '# Result' 'example' '```' '# Notes' '````' '# Result' '```' '~~~' '# example'
+  for i in $(seq 14); do echo "line $i"; done; echo '```'; } > projects/live/tasks/task-092-result-fenced.md
+RF="$(bash "$VALIDATOR" projects/live/tasks/task-092-result-fenced.md 2>&1)"
+rm projects/live/tasks/task-090-result-15.md projects/live/tasks/task-091-result-16.md projects/live/tasks/task-092-result-fenced.md
+assert "a 15-line Result: 0 warnings"            "$(grep -q -- '0 errors, 0 warnings' <<<"$R15" && echo 0 || echo 1)"
+assert "a 16-line Result: 1 warning"             "$(grep -q -- '0 errors, 1 warnings' <<<"$R16" && echo 0 || echo 1)"
+assert "…naming the count"                       "$(grep -q -- '# Result is 16 lines' <<<"$R16" && echo 0 || echo 1)"
+assert "…and it is a WARN, so it exits 0"        "$([[ $R16_RC -eq 0 ]] && echo 0 || echo 1)"
+assert "a mismatched fence and a fenced example do not hide it" "$(grep -q -- '# Result is 18 lines' <<<"$RF" && echo 0 || echo 1)"
+
 echo "== a named path is found whatever its form or order, past a 64 KiB FILE_LIST =="
 # `printf | grep -q` under pipefail: grep exits on the first match, printf takes SIGPIPE once
 # the list outgrows the pipe buffer, and a checked document was also reported SKIP.

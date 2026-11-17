@@ -34,7 +34,7 @@ in `cbmono/loopd` enforces this.
 | a **script header** | **10 lines** — what it does, its exit codes, and where the reasoning lives. |
 | a **commit** | subject **72 characters**, body at most **5 lines**. |
 | a **PR body** | the TL;DR line + the criteria table + at most **3 one-line notes**. Hard ceiling **2,500 characters**. |
-| a task **`# Result`** | **15 lines**. |
+| a task **`# Result`** | **15 lines**. Check: `validate-bundle.sh`. |
 | a **`Finding`** | **40 lines**, and a required one-line `lesson:` in its frontmatter. |
 | a **checker's criteria table** | **the table IS the table** — one row per criterion, `PASS`/`FAIL`, one command or artifact. No narration around it, ever. |
 
