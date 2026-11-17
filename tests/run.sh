@@ -417,7 +417,6 @@ SHIM
   PATH="$shim:$PATH"; export PATH
 fi
 
-
 total_pass=0
 total_fail=0
 sum_secs=0
