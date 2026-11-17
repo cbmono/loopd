@@ -44,7 +44,7 @@ ok "a title glued to more text is read as bash reads it" "$(v 'gh pr create --ti
 ok "…so a glued bad title is refused"                   "$(v 'gh pr create --title "Bad"y')" deny
 ok "--title inside another argument is not the title"   "$(v "gh pr create --body 'Example: --title Bad --fill' --title \"fix: retry\"")" allow
 ok "…and cannot cover for a bad real title"             "$(v "gh pr create --body 'see --title \"fix: ok\"' --title Bad")" deny
-ok "gh pr create inside a heredoc body is data"         "$(v $'cat >example.md <<\'EOF\'\ngh pr create --title "Bad"\nEOF')" allow
+ok "gh pr create inside a heredoc body is data"         "$(v $'cat >example.md <<"EOF"\ngh pr create --title "Bad"\nEOF')" allow
 ok "…while one fed a heredoc is still read"             "$(v $'gh pr create --title "Bad" --body-file - <<EOF\nbody\nEOF')" deny
 ok "…and one after the heredoc too"                     "$(v $'cat <<EOF\nx\nEOF\ngh pr create --title Bad')" deny
 ok "a commented-out gh pr create is ignored"            "$(v 'echo hi # gh pr create --title Bad')" allow
