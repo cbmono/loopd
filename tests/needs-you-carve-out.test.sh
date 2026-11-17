@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # needs-you-carve-out.test.sh — plugin/seed/CLAUDE.md's `Needs you:` reply vocabulary
-# carries the rule that promote and merge are never inferred from a glyph.
+# carries the rule that promote and merge are never inferred from a glyph, and that a lone
+# merge or close carries no Recommend: while a choice keeps one.
 #
 # Pins the CARVE-OUT, the superseded- and done-list rules and one-at-a-time questions,
 # never the verb list: a glossary that cannot grow without a red harness is one nobody
@@ -31,6 +32,7 @@ STALE='reprinted, numbered, before you act on a number.'
 CONFIRM='could fit an earlier list whose items are done: confirm the mapping in one line before acting.**'
 ONEBYONE='**Agent-raised questions go to the owner one at a time**, the `### Q<n>` recommendation as option 1 — **never answered on the owner'"'"'s behalf.**'
 RECOMMEND='one line per item, ending `Recommend: <answer> — <reason>`'
+EXEMPT='A lone merge or close whose verb is the advice carries none; a choice, or advice other than the verb (wait), keeps it.'
 
 S="$(section "$SEED")"
 ok "the vocabulary is in § Reporting progress"   "$(saw "$S" 'Replies to a `Needs you:` list are shorthand.')" yes
@@ -39,12 +41,16 @@ ok "a superseded list is reprinted first"        "$(saw "$S" "$STALE")" yes
 ok "a reply fitting a done list is confirmed"    "$(saw "$S" "$CONFIRM")" yes
 ok "agent questions go one at a time, never self-answered" "$(saw "$S" "$ONEBYONE")" yes
 ok "each decision line ends in its Recommend:"   "$(saw "$S" "$RECOMMEND")" yes
+ok "a lone merge or close carries none; a choice keeps it" "$(saw "$S" "$EXEMPT")" yes
 
 grep -vF '**Promote and merge are never inferred' "$SEED" > "$TMP/mutant.md"
 ok "mutant: carve-out deleted -> check FAILS"    "$(saw "$(section "$TMP/mutant.md")" "$CARVE")" no
 
 grep -vF 'Agent-raised questions go to the owner' "$SEED" > "$TMP/mutant2.md"
 ok "mutant: one-at-a-time rule deleted -> check FAILS" "$(saw "$(section "$TMP/mutant2.md")" "$ONEBYONE")" no
+
+grep -vF 'A lone merge or close whose verb is' "$SEED" > "$TMP/mutant3.md"
+ok "mutant: exemption deleted -> check FAILS"    "$(saw "$(section "$TMP/mutant3.md")" "$EXEMPT")" no
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

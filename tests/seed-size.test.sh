@@ -89,7 +89,10 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # 16095 -> 16255 (recommendation-on-every-decision/task-004, 2026-11-17). +160 bytes, 1 line
 # on "Reporting progress": a command the human runs is its own line of inline code — a
 # bulleted command pasted `-` into the owner's shell. Measured, not rounded.
-CEILING=16255
+# 16255 -> 16376 (recommendation-on-every-decision/task-005, 2026-11-17). +121 bytes, 1 line
+# on "Reporting progress": a lone merge or close whose verb is the advice carries no
+# Recommend: — the owner found "Recommend: merge." redundant. Measured, not rounded.
+CEILING=16376
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
