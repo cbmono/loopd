@@ -29,7 +29,7 @@ others do instead. `tests/agent-tool-allowlist.test.sh` in `cbmono/loopd` enforc
 |---|---|
 | an **inline comment** | **none by default — only a section header or an external-constraint link.** A **section header** formats a file for readability (a title of 8 words or fewer, not a sentence); a **link** points at a constraint the code cannot express (an upstream issue, a spec). **Explaining what the code does, or why a shortcut was taken, is neither.** **A repo's own conventions or lint rules override this default.** `scripts/comment-check.sh` reports every other added comment line. |
 | a **script header** | **10 lines** — what it does, its exit codes, and where the reasoning lives. |
-| a **commit** | subject **72 characters**, body at most **5 lines**. |
+| a **commit** | subject **72 characters**, body at most **5 lines**. Check: `scripts/commit-shape.sh`. |
 | a **PR body** | the TL;DR line + the criteria table + at most **3 one-line notes**. Hard ceiling **2,500 characters**. |
 | a task **`# Result`** | **15 lines**. Check: `validate-bundle.sh`. |
 | a **`Finding`** | **40 lines**, and a required one-line `lesson:` in its frontmatter. |
