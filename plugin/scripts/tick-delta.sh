@@ -62,6 +62,10 @@
 #   web queue               not a line: an unconsumed web-board entry (web-queue.sh pending)
 #                           is an immediate DELTA, because the queue is gitignored and moves
 #                           nothing above — and the tick's step 0.95 is what consumes it.
+#   unparseable <path> <reason>
+#                           a document whose `decisions`/`open_questions` fold-answers.sh refused
+#                           (exit 3 only): skipped, named on stderr, step 2 named. `record` copies
+#                           the digest's set; `check` is a DELTA on it in either fingerprint.
 #   decision answered <project.md>
 #                           a ` --- `-answered `decisions:` entry, an immediate DELTA: step 2
 #                           owes its fold, and a tick whose tasks are all promoted has no draft
@@ -100,6 +104,10 @@
 #   1  DELTA — something moved; prints `DELTA:` lines naming what. Full tick.
 #   2  cannot answer — no record, no `gh`, not a git repo, probe error. Full tick.
 #   3  usage.
+#
+# Every `digest` stderr line also lands in a gitignored reason file under AB_TICK_START,
+# truncated at digest start; `record --close` appends it to the close line (`; `-joined,
+# instance-relative, 300 characters).
 #
 # `record` writes `.tick-state` (gitignored, per clone — the same class as
 # `.tick-lock`) and refuses (exit 2, file untouched) when it cannot compute the full
@@ -171,7 +179,19 @@ next_check="on the next tick"
 ab_ensure_dir "$inst"
 STATE="$inst/$STATE_NAME"
 
-fail2() { echo "CANNOT ANSWER: $1 — run the full tick." >&2; exit 2; }
+REASON="$inst/$AB_TICK_START/digest-stderr"
+SKIPPED="$inst/$AB_TICK_START/unparseable"
+note() {
+  printf '%s\n' "$1" >&2
+  [ "$cmd" = digest ] && printf '%s\n' "$1" >> "$REASON" 2>/dev/null
+  return 0
+}
+if [ "$cmd" = digest ]; then
+  mkdir -p "$inst/$AB_TICK_START" 2>/dev/null \
+    && { [ -e "$inst/$AB_TICK_START/.gitignore" ] || printf '*\n' > "$inst/$AB_TICK_START/.gitignore"; } 2>/dev/null
+  : > "$REASON" 2>/dev/null; : > "$SKIPPED" 2>/dev/null
+fi
+fail2() { note "CANNOT ANSWER: $1 — run the full tick."; exit 2; }
 
 # --- the ledger half ---------------------------------------------------------------------
 # Beside the open line, never over it. Everything here is file reads and one insert: a tick
@@ -256,6 +276,23 @@ if [ "$close_set" -eq 1 ]; then
     || { echo "tick-delta: $FMT could not format the usage numbers." >&2; exit 2; }
   line="* TICK $ts$by close: $close"
   [ "$suffix" = "usage UNKNOWN" ] || line="$line · $suffix"
+  # After the usage suffix, so agent-usage.sh's first `tokens=` match is still the real one.
+  # Only a reason file written since this tick's open line is this tick's.
+  if [ -s "$REASON" ] && perl -MTime::Local -e '
+       my @s = stat $ARGV[0] or exit 1;
+       $ARGV[1] =~ /^(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+)Z$/ or exit 1;
+       exit($s[9] >= timegm($6, $5, $4, $3, $2 - 1, $1) ? 0 : 1)' "$REASON" "$ts" 2>/dev/null; then
+    ia="$(cd "$inst" && pwd)/"; ip="$(cd "$inst" && pwd -P)/"
+    case "$inst" in /*) ig="${inst%/}/" ;; *) ig="/" ;; esac
+    # Longest prefix first: /tmp/x/ stripped out of /private/tmp/x/ would leave /private.
+    rs="$(printf '%s\n' "$ip" "$ia" "$ig" | awk '{ print length($0) "\t" $0 }' | sort -rn | cut -f2- \
+      | awk 'NR == FNR { if ($0 != "/") p[++np] = $0; next }
+        function strip(s,   i, k) { for (k = 1; k <= np; k++) while ((i = index(s, p[k])) > 0) s = substr(s, 1, i - 1) substr(s, i + length(p[k])); return s }
+        NF { out = out (n++ ? "; " : "") strip($0) }
+        END { printf "%s", out }' - "$REASON" 2>/dev/null)"
+    rs="$(oneline "$rs" | perl -CS -ne 'print substr($_, 0, 300)')"
+    [ -n "$rs" ] && line="$line · digest: $rs"
+  fi
   tmp="$LOG.close.$$"
   AT="$at" LINE="$line" awk 'NR == ENVIRON["AT"] + 0 { print; print ENVIRON["LINE"]; next } { print }' \
     "$LOG" > "$tmp" || { rm -f "$tmp"; fail2 "cannot write beside $LOG"; }
@@ -346,8 +383,7 @@ step2=0 step3=0 step4=0 step5=0 step6=0
 # A ` --- `-answered entry inside the open_questions block. The digest's `q=` count says
 # how many questions there are and never whether one has been answered, which is the only
 # thing that names step 2 on a task that is not a draft.
-# The cheap read is bounded to the list, so a hit is always genuine; a miss still falls
-# through to fold-answers.sh's parser, the one reader of this shape that round-trips.
+# Read through fold-answers.sh's parser, the one reader of this shape that round-trips.
 # Exit 2 is UNKNOWN, not "no": the caller poisons the fingerprint on it rather than let a
 # parser it could not run read as a task with nothing answered.
 FOLD="$(dirname "${BASH_SOURCE[0]}")/fold-answers.sh"
@@ -364,12 +400,17 @@ inputs_state() { # <project.md> -> waiting | arrived | ready
   case $? in 1) echo waiting ;; 3) echo arrived ;; *) echo ready ;; esac
 }
 SESS="$(dirname "${BASH_SOURCE[0]}")/agent-sessions.sh"
-answered_open() { # <file>
-  fmlist "$1" open_questions text 2>/dev/null | grep -qF -- ' --- ' && return 0
-  local parsed
-  parsed="$(bash "$FOLD" --list "$1" open_questions 2>/dev/null)" || return 2
+# Only the parser's exit 3 (a list it refused) is 3 here — skip-and-name; anything else is 2.
+# No cheap ` --- ` grep first: an answered entry in a list the parser refuses must be named.
+answered_open() { # <file> -> 0 answered · 1 not · 2 cannot run · 3 unparseable; reason in $PERR
+  local parsed rc
+  parsed="$(bash "$FOLD" --list "$1" open_questions 2>"$PERR")"; rc=$?
+  case $rc in 0) ;; 3) return 3 ;; *) return 2 ;; esac
   grep -qF -- ' --- ' <<<"$parsed"
 }
+perr() { sed -n '1s/^fold-answers: //p' "$PERR" 2>/dev/null; }
+# A cause line the caller turns into its CANNOT ANSWER message (the walk is a subshell).
+cause() { printf 'cause: %s\n' "$(oneline "$1")"; }
 
 # NO DIRECTORY IS NOT AN EMPTY LINE. `steps:` with nothing after it means "this tick has
 # work for no step"; a tick-steps directory the walk cannot find means the opposite, and
@@ -426,7 +467,16 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs urls="" ntask nterm wtp sid sids="" ipsids="" dl redraw mapped b inw
+  local p d pst f st prs urls="" ntask nterm wtp sid sids="" ipsids="" dl redraw mapped b inw rc r rel bad=""
+  skip() { # <instance-relative path> <reason>
+    case "$bad" in *"|$1|"*) return 0 ;; esac
+    bad="$bad|$1|"; step2=1
+    printf 'unparseable %s %s\n' "$1" "$(oneline "$2")"
+    note "unparseable $1 $(oneline "$2")"
+    # Written as found, not after the walk: a digest that fails later still hands `record` its set.
+    [ "$cmd" = digest ] && printf 'unparseable %s %s\n' "$1" "$(oneline "$2")" >> "$SKIPPED" 2>/dev/null
+    return 0
+  }
   for d in "$inst"/projects/*/; do
     [ -d "$d" ] || continue
     p="$d/project.md"
@@ -434,7 +484,7 @@ fingerprint() { # <probe|digest>
     # its tasks would otherwise silently vanish from the fingerprint, which is the
     # false-IDLE hole this script must never open. (validate-bundle owns the schema
     # error; this probe just refuses to guess around it.)
-    [ -f "$p" ] && [ -r "$p" ] || return 1
+    [ -f "$p" ] && [ -r "$p" ] || { cause "unreadable projects/$(basename "$d")/project.md"; return 1; }
     pst="$(fmfirst "$p" status)"; pst="${pst:-unset}"
     if [ "$mode" = digest ]; then
       printf 'project %s status=%s autonomy=%s owner=%s\n'         "$(basename "$(dirname "$p")")" "$pst"         "$(fmfirst "$p" autonomy | grep -oE '^[A-Za-z-]+' || printf -- -)"         "$(fmfirst "$p" owner    | grep -oE '^[A-Za-z0-9._-]+' || printf -- -)"
@@ -447,9 +497,14 @@ fingerprint() { # <probe|digest>
     [ "$mode" = digest ] && [ "$inw" != ready ] && printf 'inputs %s projects/%s/project.md\n' "$inw" "$(basename "$d")"
     [ "$inw" = arrived ] && step2=1
     if grep -q '^decisions:' "$p"; then
-      dl="$(bash "$FOLD" --list "$p" decisions 2>/dev/null)" || return 1
+      dl="$(bash "$FOLD" --list "$p" decisions 2>"$PERR")"; rc=$?
+      case $rc in
+        0) ;;
+        3) skip "projects/$(basename "$d")/project.md" "$(perr)" ;;
+        *) cause "fold-answers.sh exit $rc reading decisions in projects/$(basename "$d")/project.md: $(perr)"; return 1 ;;
+      esac
       # The text after the FINAL ` --- ` must have content, as fold-answers.sh decides.
-      if printf '%s\n' "$dl" | awk -F' --- ' 'NF > 1 && $NF ~ /[^[:space:]]/ { f = 1 } END { exit !f }'; then
+      if [ "$rc" = 0 ] && printf '%s\n' "$dl" | awk -F' --- ' 'NF > 1 && $NF ~ /[^[:space:]]/ { f = 1 } END { exit !f }'; then
         printf 'decision answered %s\n' "${p#"$inst"/}"; step2=1
       fi
     fi
@@ -460,7 +515,7 @@ fingerprint() { # <probe|digest>
       [ -f "$f" ] || continue
       # An UNREADABLE task file poisons the whole walk rather than degrading to a fake
       # `unset` fact — a record built on a hole would let the next check "match" it.
-      [ -r "$f" ] || return 1
+      [ -r "$f" ] || { cause "unreadable ${f#"$inst"/}"; return 1; }
       st="$(sed -n 's/^status:[[:space:]]*\([A-Za-z-]*\).*/\1/p' "$f" | head -n1)"
       if [ "$mode" = digest ]; then
         printf 'task %s status=%s kind=%s assignee=%s deps=%s q=%s crit=%s wt=%s\n'           "${f#"$inst"/}" "${st:-unset}"           "$(fmfirst "$f" kind | grep -oE '^[A-Za-z-]+' || printf -- -)"           "$(fmfirst "$f" assignee | grep -oE '^[A-Za-z0-9._-]+' || printf -- -)"           "$(fmcount "$f" depends_on)" "$(fmcount "$f" open_questions)"           "$([ "$(fmcount "$f" acceptance_criteria)" -gt 0 ] && echo yes || echo no)"           "$([ -n "$(fmfirst "$f" worktree)" ] && echo yes || echo no)"
@@ -488,12 +543,13 @@ fingerprint() { # <probe|digest>
         # An answered hand-off owes its task a resume (step 4), whatever the status.
         answered_open "$f"; case $? in
           0) step2=1; grep -qF 'needs handed off' "$f" && step4=1 ;;
-          2) return 1 ;;
+          3) skip "${f#"$inst"/}" "$(perr)" ;;
+          2) cause "fold-answers.sh could not read open_questions in ${f#"$inst"/}: $(perr)"; return 1 ;;
         esac
       fi
       case "$st" in in-progress|in-review|blocked)
         sid="$(fmfirst "$f" session | sed 's/#.*$//' | tr -d "\"' \r")"
-        case "$sid" in '') ;; *[!A-Za-z0-9-]*) return 1 ;; *) sids="$sids $sid" ;; esac
+        case "$sid" in '') ;; *[!A-Za-z0-9-]*) cause "malformed session: on ${f#"$inst"/}"; return 1 ;; *) sids="$sids $sid" ;; esac
         if [ "$st" = in-progress ]; then
           [ -n "$sid" ] && ipsids="$ipsids $sid=${f#"$inst"/}" || printf 'unmonitored %s no-session\n' "${f#"$inst"/}"
         fi ;;
@@ -510,32 +566,44 @@ $prs"
     # (`inputs_hash:`); an answered question, a decision or a reworded criterion moves it.
     # A design.md without the key predates it and is never reported stale.
     if [ -f "${d}design.md" ] && want="$(fmfirst "${d}design.md" inputs_hash | tr -d "\"' \r")" && [ -n "$want" ]; then
-      have="$(bash "$DESIGN_INPUTS" "${d%/}")" || return 1
-      [ "$have" = "$want" ] || { printf 'redraw stale %s\n' "${d#"$inst"/}design.md"; step2=1; }
+      have="$(bash "$DESIGN_INPUTS" "${d%/}" 2>"$PERR")"; rc=$?
+      case $rc in
+        0) [ "$have" = "$want" ] || { printf 'redraw stale %s\n' "${d#"$inst"/}design.md"; step2=1; } ;;
+        3) r="$(head -n1 "$PERR")"; rel="${r%%$'\t'*}"; skip "${rel#"$inst"/}" "${r#*$'\t'}" ;;
+        *) cause "design-inputs.sh exit $rc hashing ${d#"$inst"/}"; return 1 ;;
+      esac
     fi
   done
+  # `record` reads no open_questions, so it carries the digest's skipped set forward;
+  # `check` then refuses IDLE on it without re-parsing a single task.
+  if [ "$cmd" = record ] && [ -f "$SKIPPED" ]; then
+    grep '^unparseable ' "$SKIPPED" | while IFS= read -r r; do
+      rel="${r#unparseable }"; rel="${rel%% *}"
+      case "$bad" in *"|$rel|"*) ;; *) printf '%s\n' "$r" ;; esac
+    done
+  fi
 
   # The one wall-clock fact: a stalled project's fingerprint never moves, and it is the
   # project the continue checkpoint exists for. Only the DUE SET is printed, so it moves
   # once per crossing rather than once per day.
   if [ -f "$inst/$AB_AWAITING" ] && [ -f "$CKPT" ]; then
-    local due; due="$(bash "$CKPT" --instance "$inst" 2>/dev/null)" || return 1
+    local due; due="$(bash "$CKPT" --instance "$inst" 2>/dev/null)" || { cause "continue-checkpoint.sh failed"; return 1; }
     printf 'checkpoint %s\n' "$(printf '%s\n' "$due" | cut -f1 | grep . | tr '\n' ' ')"
   fi
 
   if [ -n "$sids" ]; then
     if command -v claude >/dev/null 2>&1; then
       local states e ss
-      bash "$SESS" listing > "$LISTING" 2>/dev/null || return 1
+      bash "$SESS" listing > "$LISTING" 2>/dev/null || { cause "\`claude agents\` listing failed (agent-sessions.sh listing)"; return 1; }
       # shellcheck disable=SC2086
-      states="$(AB_SESSIONS_LISTING="$LISTING" bash "$SESS" states $sids 2>/dev/null)" || return 1
+      states="$(AB_SESSIONS_LISTING="$LISTING" bash "$SESS" states $sids 2>/dev/null)" || { cause "agent-sessions.sh states could not read the listing"; return 1; }
       printf '%s\n' "$states" | sed 's/^/session /'
       for e in $ipsids; do
         ss="$(printf '%s\n' "$states" | awk -v s="${e%%=*}" '$1 == s { print $2; exit }')"
         case "$ss" in working|blocked) ;; *) printf 'unmonitored %s %s\n' "${e#*=}" "${ss:-gone}" ;; esac
       done
       AB_SESSIONS_LISTING="$LISTING" bash "$SESS" stop-ids "$inst" 2>/dev/null | awk '{ print "due", $1, $4 }' | sort
-      [ "${PIPESTATUS[0]}" = 0 ] || return 1
+      [ "${PIPESTATUS[0]}" = 0 ] || { cause "agent-sessions.sh stop-ids failed"; return 1; }
     else
       printf 'sessions unavailable\n'
       for e in $ipsids; do printf 'unmonitored %s sessions-unavailable\n' "${e#*=}"; done
@@ -553,20 +621,21 @@ $prs"
       printf '%s\n' "$line"
       continue
     fi
-    command -v gh >/dev/null 2>&1 || return 1
+    command -v gh >/dev/null 2>&1 || { cause "gh not found, and $u is open"; return 1; }
     IFS=/ read -r host owner repo _ num <<<"${u#https://}"
-    case "$num" in ''|*[!0-9]*) return 1 ;; esac
+    case "$num" in ''|*[!0-9]*) cause "bad PR URL $u"; return 1 ;; esac
     # GraphQL, not `gh pr view`: its statusCheckRollup drops a commit status's description,
     # the only field that tells a rate-limited reviewer's SUCCESS from a completed review.
     line="$(gh api graphql --hostname "$host" -f o="$owner" -f r="$repo" -F n="$num" \
-            -f query="$PR_QUERY" --jq "$PR_JQ" 2>/dev/null)" || return 1
-    case "$line" in *$'\n'*) return 1 ;; esac
-    printf '%s\n' "$line" | grep -Eqx -- "$PR_RE" || return 1
+            -f query="$PR_QUERY" --jq "$PR_JQ" 2>"$PERR")" \
+      || { cause "gh PR query failed for $u: $(head -n1 "$PERR")"; return 1; }
+    case "$line" in *$'\n'*) cause "gh PR query for $u answered more than one line"; return 1 ;; esac
+    printf '%s\n' "$line" | grep -Eqx -- "$PR_RE" || { cause "gh PR query for $u answered an unreadable shape"; return 1; }
     printf 'pr %s %s\n' "$u" "$line"
   done
   # Emitted from INSIDE the walk: the caller reads this function through a command
   # substitution, so a flag set here never survives to the caller's scope.
-  [ "$mode" = digest ] && { steps_line || return 1; }
+  [ "$mode" = digest ] && { steps_line || { cause "no tick-steps directory beside the script"; return 1; }; }
   return 0
 }
 
@@ -628,8 +697,12 @@ MAXA="$(dirname "${BASH_SOURCE[0]}")/resolve-max-agents.sh"
 
 mode=probe; [ "$cmd" = digest ] && mode=digest
 LISTING="$(mktemp "${TMPDIR:-/tmp}/tick-delta-sessions.XXXXXX")" || fail2 "mktemp failed"
-trap 'rm -f "$LISTING"' EXIT
-FP="$(fingerprint "$mode")" || fail2 "could not complete the fingerprint (an unreadable task file, gh missing or offline, a bad PR URL, or \`claude agents\` failing)"
+PERR="$(mktemp "${TMPDIR:-/tmp}/tick-delta-stderr.XXXXXX")" || { rm -f "$LISTING"; fail2 "mktemp failed"; }
+trap 'rm -f "$LISTING" "$PERR"' EXIT
+FP="$(fingerprint "$mode")" || {
+  why="$(printf '%s\n' "$FP" | sed -n 's/^cause: //p' | tail -n1)"
+  fail2 "could not complete the fingerprint: ${why:-an unnamed probe error}"
+}
 
 # The FIRST read of a tick wins and `record` consumes it: a later read replacing it would
 # move the baseline past what the tick acted on. Unwritable ⇒ `unread` ⇒ a full next tick.
@@ -658,7 +731,7 @@ case "$cmd" in
       printf '%s\n' "$FP"
     } > "$tmp" || { rm -f "$tmp" 2>/dev/null; fail2 "cannot write $STATE"; }
     mv "$tmp" "$STATE" || { rm -f "$tmp" 2>/dev/null; fail2 "cannot write $STATE"; }
-    rm -f "$START"
+    rm -f "$START" "$SKIPPED"
     exit 0
     ;;
   check)
@@ -674,6 +747,11 @@ case "$cmd" in
     fi
     if [ "${wq:-0}" != 0 ]; then
       echo "DELTA: $wq web board entr$([ "$wq" = 1 ] && echo y || echo ies) waiting in the queue — step 0.95 consumes them."
+      exit 1
+    fi
+    un="$(printf '%s\n' "$FP" | sed -n 's/^unparseable //p' | head -n1)"
+    if [ -n "$un" ]; then
+      echo "DELTA: ${un%% *} cannot be parsed (${un#* }) — step 2 owes its repair."
       exit 1
     fi
     if grep -q '^decision answered ' <<<"$FP"; then
@@ -706,6 +784,11 @@ case "$cmd" in
     [ -f "$STATE" ] || fail2 "no $STATE_NAME record yet (first tick, or an upgrade)"
     OLD="$(grep -v '^#' "$STATE" | grep -v '^recorded:' || true)"
     [ -n "$OLD" ] || fail2 "$STATE_NAME is empty or unreadable"
+    un="$(printf '%s\n' "$OLD" | sed -n 's/^unparseable //p' | head -n1)"
+    if [ -n "$un" ]; then
+      echo "DELTA: ${un%% *} could not be parsed at the last full tick (${un#* }) — step 2 owes its repair."
+      exit 1
+    fi
     # A merge or close the last tick READ but never reflected: the record already holds it,
     # the host agrees every check after, and the fingerprint never moves again. Unreflected
     # only when none of the task's PRs is still open — one merged of two is still in flight.
