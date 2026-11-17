@@ -39,6 +39,15 @@ ok "an uppercase type is refused"                       "$(v 'gh pr create --tit
 ok "scope, breaking mark and -t are allowed"            "$(v "cd x && gh pr create -t 'feat(hooks)!: add a hook' -B main")" allow
 ok "a continued multi-line command is read"             "$(v $'gh pr create \\\n  --title "Refuse a title" \\\n  --body-file b.md')" deny
 ok "brackets inside the subject are allowed"            "$(v 'gh pr create --title "fix: handle a[0]"')" allow
+ok "a task id mid-subject is refused"                   "$(v 'gh pr create --title "fix: retry [task-009] safely"')" deny
+ok "a title glued to more text is read as bash reads it" "$(v 'gh pr create --title "fix: x"y')" allow
+ok "…so a glued bad title is refused"                   "$(v 'gh pr create --title "Bad"y')" deny
+ok "--title inside another argument is not the title"   "$(v "gh pr create --body 'Example: --title Bad --fill' --title \"fix: retry\"")" allow
+ok "…and cannot cover for a bad real title"             "$(v "gh pr create --body 'see --title \"fix: ok\"' --title Bad")" deny
+ok "gh pr create inside a heredoc body is data"         "$(v $'cat >example.md <<\'EOF\'\ngh pr create --title "Bad"\nEOF')" allow
+ok "…while one fed a heredoc is still read"             "$(v $'gh pr create --title "Bad" --body-file - <<EOF\nbody\nEOF')" deny
+ok "…and one after the heredoc too"                     "$(v $'cat <<EOF\nx\nEOF\ngh pr create --title Bad')" deny
+ok "a commented-out gh pr create is ignored"            "$(v 'echo hi # gh pr create --title Bad')" allow
 ok "a non-Jira prefix in config means none"             "$(prefix '"abc"'; v 'gh pr create --title "fix: x [abc-1]"')" deny
 
 echo "== ticketPrefix: ABC =="
@@ -47,6 +56,7 @@ ok "[ABC-12] is allowed"                                "$(v 'gh pr create --tit
 ok "[ABC-0] is allowed"                                 "$(v 'gh pr create --title "fix: retry [ABC-0]"')" allow
 ok "a missing tag is refused"                           "$(v 'gh pr create --title "fix: retry"')" deny
 ok "a second tag is refused"                            "$(v 'gh pr create --title "fix: retry [task-9] [ABC-1]"')" deny
+ok "a task id before the tag is refused"                "$(v 'gh pr create --title "fix: retry [task-009] safely [ABC-1]"')" deny
 ok "another prefix is refused"                          "$(v 'gh pr create --title "fix: retry [XYZ-1]"')" deny
 
 echo "== unreadable ⇒ allowed =="
@@ -55,7 +65,8 @@ ok "no --title"                                         "$(v 'gh pr create --fil
 ok "a command substitution"                             "$(v 'gh pr create --title "$(cat t.txt)"')" allow
 ok "a variable"                                         "$(v 'gh pr create --title "$T"')" allow
 ok "an escaped quote"                                   "$(v 'gh pr create --title "a \"b\""')" allow
-ok "a title glued to more text"                         "$(v 'gh pr create --title "Bad"y')" allow
+ok "an unclosed quote"                                  "$(v 'gh pr create --title "Bad')" allow
+ok "an unterminated heredoc"                            "$(v $'cat <<EOF\ngh pr create --title Bad')" allow
 ok "gh pr create only as an argument"                   "$(v 'echo gh pr create --title "Bad"')" allow
 ok "another command"                                    "$(v 'git commit -m "Bad [task-9]"')" allow
 
