@@ -13,9 +13,12 @@
 #                             -> as a hand-off, for a round past maxBgRoundMinutes: its `needs`,
 #                                or `busy past maxBgRoundMinutes — stopped` when it has none
 #   session-handoff.sh --owed <task-doc>
-#                             -> `owed <uuid> <id>` then `answer: <text>`: the human answered
-#                                the latest hand-off of the task's current session, nothing
-#                                resumed it since, and the session has ended — resume it
+#                             -> `owed <uuid> <id>`, `round: resume` or `round: dispatch
+#                                <assignee>`, then `answer: <text>`: the human answered the
+#                                latest hand-off of the task's current session, nothing resumed
+#                                it since, and the session has ended. A `qa-reviewer` filer
+#                                (last `* DISPATCH` above the hand-off) gets a fresh round of
+#                                the task's `assignee:`, or `not-owed accepted` on `done`/`accept`
 #
 # A HAND-OFF writes the agent's `needs` VERBATIM (whitespace folded) to the per-clone,
 # ignored `$AB_HANDOFFS/<id>.txt`, which AWAITING.md renders — and the task gets only fixed
@@ -25,7 +28,7 @@
 # text, so a retry writes nothing twice and the next round's hand-off is a new entry.
 #
 # Exit 0 done · 1 not this script's case (`not-handed-off <why>`, `not-owed <why>`) · 2
-# unknown (no `claude`, an unreadable record or task) · 3 the stop did not land (the record
+# unknown (no `claude`, an unreadable record or task, no `* DISPATCH` role above the hand-off) · 3 the stop did not land (the record
 # is written; the next tick stops again). Never removes a session.
 #
 # Why (measured 2026-10-21, CLI 2.1.301-2.1.304): a round that ends listing jobs for the
@@ -35,7 +38,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
-usage() { sed -n '7,18p' "$0" >&2; exit 2; }
+usage() { sed -n '7,21p' "$0" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "session-handoff: python3 is required" >&2; exit 2; }
 
 task=""; jobs="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/jobs"; owed=0; busy=0
@@ -44,7 +47,7 @@ while [ $# -gt 0 ]; do
     --jobs-dir) [ $# -ge 2 ] || usage; jobs="$2"; shift 2 ;;
     --owed)     owed=1; shift ;;
     --busy)     busy=1; shift ;;
-    -h|--help)  sed -n '3,33p' "$0"; exit 0 ;;
+    -h|--help)  sed -n '3,36p' "$0"; exit 0 ;;
     -*) usage ;;
     *) [ -z "$task" ] || usage; task="$1"; shift ;;
   esac
@@ -70,9 +73,9 @@ if [ "$owed" = 1 ]; then
   case "$state" in stopped|done) ;; *) echo "not-owed session-$state"; exit 1 ;; esac
   open="$(bash "$HERE/fold-answers.sh" --list "$task" open_questions 2>/dev/null)" || exit 2
   answered="$(bash "$HERE/fold-answers.sh" --list "$task" answered_questions 2>/dev/null)" || exit 2
-  python3 - "$task" "$sid" "$open" "$answered" <<'PY'
+  python3 - "$task" "$sid" "$open" "$answered" "$(fmval assignee)" <<'PY'
 import re, sys
-path, sid, open_q, answered = sys.argv[1:5]
+path, sid, open_q, answered, assignee = sys.argv[1:6]
 notes, last = open(path, encoding="utf-8").read().split("\n"), None
 for i, l in enumerate(notes):
     m = re.search(r"needs handed off ([0-9a-f-]+) · hand-off ([0-9a-f]{8}-[0-9a-f]{8}) · (Q\d+)", l)
@@ -85,14 +88,23 @@ if not (uuid == sid or uuid.split("-")[0] == sid.split("-")[0]):
     print("not-owed session-replaced"); sys.exit(1)
 # Step 4 writes `woke`/`resumed <uuid>` after a resume, or `resume launched; …` when it
 # could not read the id back — every one of them means this hand-off was resumed.
-if any(re.search(r"\b(woke|resumed) [0-9a-f]{8}|\bresume launched\b", l) for l in notes[i + 1:]):
+if any(re.search(r"\b(woke|resumed) [0-9a-f]{8}|\bresume launched\b|\bdispatched [0-9a-f-]{8,} for hand-off ", l) for l in notes[i + 1:]):
     print("not-owed already-resumed"); sys.exit(1)
 for e in answered.splitlines() + open_q.splitlines():
     body = re.sub(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z by [^\n]*? · ", "", e, count=1)
     if body.startswith(q + ": do: ") and hid in body:
         head, sep, ans = body.rpartition(" --- ")
         if sep and ans.strip():
-            print("owed %s %s" % (uuid, hid)); print("answer: " + ans.strip()); sys.exit(0)
+            roles = [m.group(1) for m in (re.match(r"\* DISPATCH \S+ · ([^ ·]+) ·", l) for l in notes[:i]) if m]
+            if not roles or (roles[-1] == "qa-reviewer" and not assignee):
+                print("session-handoff: no role for hand-off %s" % hid, file=sys.stderr); sys.exit(2)
+            if roles[-1] != "qa-reviewer":
+                rnd = "resume"
+            elif ans.strip() in ("done", "accept"):
+                print("not-owed accepted"); sys.exit(1)
+            else:
+                rnd = "dispatch " + assignee
+            print("owed %s %s" % (uuid, hid)); print("round: " + rnd); print("answer: " + ans.strip()); sys.exit(0)
 print("not-owed unanswered"); sys.exit(1)
 PY
   exit $?
