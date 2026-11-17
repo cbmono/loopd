@@ -16,8 +16,8 @@ ok() { # <label> <actual> <expected>
   else printf '  FAIL  %s (want %s, got %s)\n' "$1" "$3" "$2"; fail=$((fail+1)); fi; }
 
 row() { grep -E "^[[:space:]]*\| \*\*$2\*\* \|" "$1"; }
-row_has() { row "$1" "$2" | grep -qF -- "$3" && echo yes || echo no; }
-line_of() { local n; n="$(grep -nE "^[[:space:]]*\| \*\*$2\*\* \|" "$1" | head -1 | cut -d: -f1)"; echo "${n:-0}"; }
+row_has() { grep -qF -- "$3" <<<"$(row "$1" "$2")" && echo yes || echo no; }
+line_of() { local n; n="$(grep -nE -m1 "^[[:space:]]*\| \*\*$2\*\* \|" "$1")"; n="${n%%:*}"; echo "${n:-0}"; }
 
 check() { # <file> — every assertion on one copy of qa-reviewer.md
   local f="$1" u b s
