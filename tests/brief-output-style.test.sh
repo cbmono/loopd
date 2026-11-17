@@ -66,6 +66,10 @@ ok "…every item executable, with the URL inline" "$(has "$STYLE" 'with the URL
 ok "…a command is its own inline-code line, no bullet, number, prompt or prose" "$(has "$STYLE" 'A command the human runs goes on its own line as inline code, with no bullet, number, `$` prompt or trailing prose on the line, and never in a fenced block')" yes
 ok "…several commands are several lines, in run order" "$(has "$STYLE" 'Several commands are several such lines, in run order.')" yes
 ok "…every item carries a recommendation" "$(has "$STYLE" 'Every `Needs you` item ends with `Recommend: <the answer> — <one-line reason>`** on the item'"'"'s line')" yes
+ok "…except a lone merge or close whose verb is the advice, and no other" "$(has "$STYLE" '**except a lone merge or close item whose verb already is the advice** (🔀 merge once green, 🏁 close a finished project), which carries none; no other verb is exempt.')" yes
+ok "…a real choice still carries it"      "$(has "$STYLE" 'A real choice (options, yes/no, `go`/`prom`) keeps it')" yes
+ok "…and so does advice unlike the verb, with its reason" "$(has "$STYLE" 'an item whose advice differs from the obvious action (wait, don'"'"'t merge yet), with its reason')" yes
+ok "…a relayed row keeps its recommendation, its link made absolute" "$(has "$STYLE" 'keep that text unchanged, a merge or close row included, and rewrite only its link target to an absolute path.')" yes
 ok "…which an AWAITING row already carries" "$(has "$STYLE" 'carries it as `(recommended: …)` or `(no recommendation)`, which satisfies this')" yes
 ok "…or says why it has none"             "$(has "$STYLE" 'An item with no sensible default says why')" yes
 ok "…display-only on promote and merge"   "$(has "$STYLE" 'On a promote or merge item it is display-only — only a typed `prom` or `mrg` acts')" yes
@@ -130,7 +134,7 @@ ok "…and where the seed's Brief is"       "$(saw "$out" '.claude/output-styles
 
 echo
 total=$((pass + fail))
-ok "exactly 31 assertions ran"            "$total" 31
+ok "exactly 35 assertions ran"            "$total" 35
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

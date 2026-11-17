@@ -111,7 +111,8 @@ bundle-relative `/projects/…` target `.loopd/AWAITING.md` carries (a terminal 
 - **Lead with the outcome**, in one sentence.
 - **Tables over paragraphs** for anything with more than two of a thing.
 - **What needs a decision goes last, and short** — one line per item, ending
-  `Recommend: <answer> — <reason>`, nothing after.
+  `Recommend: <answer> — <reason>`, nothing after. A lone merge or close whose verb is
+  the advice carries none; a choice, or advice other than the verb (wait), keeps it.
 - **A command the human runs is its own inline-code line** — no bullet, number, `$` or trailing prose, never fenced; several are several lines, in run order.
 
 Reasoning belongs where it is durable — the task doc, the commit message, a
