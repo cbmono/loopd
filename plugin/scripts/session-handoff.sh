@@ -28,8 +28,9 @@
 # text, so a retry writes nothing twice and the next round's hand-off is a new entry.
 #
 # Exit 0 done · 1 not this script's case (`not-handed-off <why>`, `not-owed <why>`) · 2
-# unknown (no `claude`, an unreadable record or task, no `* DISPATCH` role above the hand-off) · 3 the stop did not land (the record
-# is written; the next tick stops again). Never removes a session.
+# unknown (no `claude`, an unreadable record or task, no `* DISPATCH` role above the
+# hand-off) · 3 the stop did not land (the record is written; the next tick stops again).
+# Never removes a session.
 #
 # Why (measured 2026-10-21, CLI 2.1.301-2.1.304): a round that ends listing jobs for the
 # human sits `blocked` with that list in `needs`, and `claude attach` showed nothing the
@@ -47,7 +48,7 @@ while [ $# -gt 0 ]; do
     --jobs-dir) [ $# -ge 2 ] || usage; jobs="$2"; shift 2 ;;
     --owed)     owed=1; shift ;;
     --busy)     busy=1; shift ;;
-    -h|--help)  sed -n '3,36p' "$0"; exit 0 ;;
+    -h|--help)  sed -n '3,37p' "$0"; exit 0 ;;
     -*) usage ;;
     *) [ -z "$task" ] || usage; task="$1"; shift ;;
   esac
