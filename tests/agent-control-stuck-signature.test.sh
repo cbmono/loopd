@@ -62,7 +62,7 @@ ok "the third, past C=18 calls, logs one line" "$(lines)" 1
 L="$(grep stuck-signature "$LOG")"
 ok "…naming the session, the role and the tool" "$(printf '%s' "$L" | awk -F'\t' -v s="$S1" '$3==s && $4 ~ /software-engineer$/ && $5=="Bash" {print "yes"}')" yes
 ok "…the arm, the counts and a fingerprint" "$(printf '%s' "$L" | grep -cE 'arm=repeat calls=21 errors=3 repeats=3 fingerprint=[0-9a-f]{16} session=')" 1
-ok "…and never the output" "$(grep -c 'Cannot find' "$LOG")" 0
+ok "…and never the output, in the log or the state" "$(grep -rc 'Cannot find' "$CTL" | awk -F: '{n+=$NF} END {print n+0}')" 0
 call bg-agent "$S1" "pnpm test --filter d" $'Exit code 1\nError: Cannot find module /z/d.js at 1:1'
 ok "a fourth repeat adds no second line" "$(lines)" 1
 ok "nothing was denied" "$DENIES" 0
