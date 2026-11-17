@@ -113,12 +113,12 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    ${CLAUDE_PLUGIN_ROOT}/scripts/session-handoff.sh --owed <task-path>
    ```
 
-   **Exit 0** prints `owed <uuid> <id>` and `answer: <text>`: the latest hand-off names the
-   task's `session:`, its `Q<n>: do:` entry is answered, no `woke`/`resumed` note follows it,
-   and the session is `stopped` or `done`. Resume it by the three calls below with the message
+   **Exit 0** prints `owed <uuid> <id>`, `round: …` and `answer: <text>`: the latest hand-off names the
+   task's `session:`, its `Q<n>: do:` entry is answered, no `woke`/`resumed`/`dispatched` note follows it,
+   and the session is `stopped` or `done`. **`round: dispatch <role>` means a `qa-reviewer` filed it, and a checker writes no code — never resume it: dispatch a fresh `loopd:<role>` round as step 3 spawns it, its brief carrying the answer verbatim, the `.loopd/.handoffs/<id>.txt` path and the PR's QA verdict comment URL, and write `dispatched <uuid> for hand-off <id>` under `# Notes` — or, when its id is unresolved, step 3's `spawned; session id unresolved` note, which `--owed` reads the same way.** On `round: resume`, resume it by the three calls below with the message
    `The human finished hand-off <id>: <text>. Carry on with this task.`, read the id back with
    `resume-id`, and write the `woke`/`resumed` note — that note, or the `resume launched` one
-   below, is what makes the next tick answer `not-owed already-resumed`. **Exit 1** (`not-owed <why>`) — nothing to send. A
+   below, is what makes the next tick answer `not-owed already-resumed`. **Exit 1** (`not-owed <why>`, `accepted` for a QA hand-off answered exactly `done` or `accept`) — nothing to send. **Exit 2** — no `* DISPATCH` role above the hand-off: unknown, change nothing. A
    `done` task is never owed: its hand-off row stays in `AWAITING.md` until answered, and
    the answer is the human's record, not a round.
 

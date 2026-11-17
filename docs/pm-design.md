@@ -312,7 +312,9 @@ still in `project-manager.md`; these are the reasons that travelled with it.
   re-prompts the human on every call.
 - **The step-file router.** This prompt is re-sent every tick, and a step nobody is going
   to run is a step nobody should pay to read. The `steps:` line is derived from the same
-  walk that prints the enumeration — a `draft` or a ` --- `-answered entry names step 2, a
+  walk that prints the enumeration — an unrefined draft (a `refine owed` line), a refined
+  draft step 2 still owes (critique, fact check, design.md), or a ` --- `-answered entry
+  names step 2, a
   `ready` task names step 3, and so on. The digest fails toward the behaviour that was
   always correct: a tick that skipped a step on a refusal would skip it silently. Step 7
   is never named because whether the knowledge base is owed a pass is not on disk before
@@ -446,7 +448,9 @@ The safety argument has one load-bearing direction: a false DELTA costs one full
 (the price that was always paid); a false IDLE would skip owed work. So every doubt —
 no record, no `gh`, a probe error, an `in-progress` task with no `session:` or one that
 is not `working`/`blocked`, any dirty tracked file, any
-untracked file under `projects/` — resolves to the full tick, and the fingerprint holds
+untracked file under `projects/`, an unrefined draft (`refine owed`; 2026-11-17: a
+new project's five drafts sat unrefined behind IDLE ticks once the tree went clean) —
+resolves to the full tick, and the fingerprint holds
 exactly the facts whose movement creates tick work: bundle HEAD, per-task status, each
 PR on an `in-progress` or `in-review` task's head SHA, state, review decision,
 `mergeable`/`mergeStateStatus` (UNKNOWN as-is: a push costs one extra full tick while the
@@ -601,6 +605,31 @@ adopted 2026-11-02:
 - **`not run` is not zero findings** (its synthesizer's failed reviewers). Without a
   receipt of its own, a critique that errored was either re-dispatched every tick or read
   as a concern; one re-dispatch, then a named report, bounds both.
+
+<a id="step-2-project"></a>
+### Step 2 — the project critique, and why the task critique sees the project
+
+Added 2026-11-17. The task critique was briefed with one task's `# Context` and criteria,
+so it took the project as given; nothing independent read the decomposition. `pre_mortem:`
+is the PM's own sentence, and new-project's scaffold review checks the scaffold, not the
+split. One project's pre-mortem named the conflict chain its checks would land as, and that
+day it happened (hook-count, `docs/reference.md` and seed-ceiling conflicts across four
+PRs) — nothing escalated it.
+
+Two briefs now:
+
+- **Task** — its `# Context` and criteria, plus the project's `need:`, `success_criteria`
+  and the sibling tasks' titles: enough to see a task that does not serve the project,
+  without re-reading the whole project per task.
+- **Project** — `project.md`'s need, success_criteria and decisions, design.md's diagram and
+  `pre_mortem:`, every task's title and criteria. It runs on the first design.md draw,
+  not at new-project: at creation there is often one seed task and no decomposition.
+
+The receipt carries `saw: <task ids>` so a rerun is owed exactly when design.md maps a task
+the last run never saw; its entries stay after triage because they are that receipt. A
+`pre-mortem:` concern is always escalated, since a risk the PM already wrote down and did
+not act on is the failure this exists for. Escalation goes to the named tasks'
+`open_questions`, never `decisions:`, so `design-inputs.sh` sees no change.
 
 <a id="step-2-5"></a>
 ### Step 2.5 — why a promotion is stamped, once
@@ -824,7 +853,7 @@ first open question". The id hashes the session's `startedAt` with the text, so 
 writes nothing twice and the next round's hand-off — a flag-free resume keeps the uuid — is
 a new entry. **After the human answers, the round is a RESUME**: same task and same PR is
 `CONVENTIONS.md`'s resume case, and `session-handoff.sh --owed` is the one read that says so
-from a `stopped` session, which the `recorded` read never reaches. **A done task's
+from a `stopped` session, which the `recorded` read never reaches. **Unless a checker filed it**: a `qa-reviewer` writes no code, so resuming it on "send it back to the implementer" spent a round that changed nothing (loopd#587, 2026-11-17); its answered hand-off is a fresh round of the task's `assignee:`, and `done`/`accept` owes none. **A done task's
 hand-off outlives the `done`**: jobs meant for after the merge are the measured case, so
 `AWAITING.md` keeps the row until it is answered, and step 5 files a pending `needs` before
 it stops the session.

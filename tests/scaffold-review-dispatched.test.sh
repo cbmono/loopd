@@ -5,8 +5,9 @@
 #
 # WHY. Step 8 stage 2 used to read "Run it scoped to the new project and wait for it (a
 # review takes ~1-2 min; run it synchronously...)" — the one place in the create-a-project
-# flow where the main session sat idle (ai-bridge-v5/task-032). This pins the fix: stage 2's
-# own block dispatches the review (`run_in_background: true`) instead of blocking on it.
+# flow where the main session sat idle (ai-bridge-v5/task-032). Since the launcher split
+# (all-code-is-slop-lessons/task-024) the whole scaffold runs `run_in_background: true` and
+# stage 2's block says so; it still must not tell anyone to wait on the review.
 #
 # NON-VACUOUS BY CONSTRUCTION. A check that only ever sees the post-fix wording proves
 # nothing — it would pass identically on a file that had never been fixed. So this harness

@@ -98,10 +98,11 @@ An enumeration of forbidden sources is the shape that already failed: it said it
 closed, it was, and it rotted the day the expensive reads were a category it had never
 named.
 
-**One contract, two launchers.** `/loopd:dispatch` states the same rule under the
-same heading (`skills/dispatch/SKILL.md` → "The launcher reads nothing else"). They are
-one contract in two places; change the shape here and change it there, or a reader learns
-two different rules from two commands that do the same thing. Note what the rule does
+**One contract, three launchers.** `/loopd:dispatch` and `/loopd:new-project` state the
+same rule under the same heading (`skills/dispatch/SKILL.md` and
+`skills/new-project/SKILL.md` → "The launcher reads nothing else"). They are one contract
+in three places; change the shape here and change it there, or a reader learns different
+rules from commands that do the same thing. Note what the rule does
 **not** rest on: `allowed-tools` is documentation, not enforcement — this launcher's
 grants are the closeout's, unchanged by the split, and what closes it is the allowlist
 above plus the harness that counts it.

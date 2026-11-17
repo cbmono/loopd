@@ -34,7 +34,7 @@ NR='· advisor: approach critique — not run'
 NC='· advisor: approach critique — no concerns'
 N=$'\n'
 draft() { # <advisor_notes entries, one per line> [notes body]
-  { printf -- '---\ntype: Task\nstatus: draft\nadvisor_notes:\n'
+  { printf -- '---\ntype: Task\nstatus: draft\nacceptance_criteria: [ "x" ]\nadvisor_notes:\n'
     printf '%s\n' "$1" | sed 's/^/  - "/; s/$/"/'
     printf -- '---\n\n# Notes\n\n%b' "${2:-}"; } > "$INST/$T"
   GIT -C "$INST" add -A && GIT -C "$INST" commit -qm fx && "$INST/scripts/tick-delta.sh" record --instance "$INST"
@@ -61,7 +61,7 @@ draft "2026-11-01T10:00:00Z $NC"
 ok "no concerns stays IDLE"                                "$(check | cut -c1-10)" "rc:0 IDLE:"
 raw() { printf -- '---\ntype: Task\n%b---\n' "$1" > "$INST/$T"
         GIT -C "$INST" add -A && GIT -C "$INST" commit -qm fx && "$INST/scripts/tick-delta.sh" record --instance "$INST"; }
-raw 'status: draft\nadvisor_notes: [ ]\n'
+raw 'status: draft\nacceptance_criteria: [ "x" ]\nadvisor_notes: [ ]\n'
 ok "a returned retry, receipt deleted and concerns triaged, is IDLE" "$(check | cut -c1-10)" "rc:0 IDLE:"
 printf -- '---\ntype: Task\nstatus: in-review\npr: []\n---\n' > "$INST/projects/p/tasks/dep.md"
 raw "status: ready\ndepends_on: [ /projects/p/tasks/dep.md ]\nadvisor_notes:\n  - \"2026-11-01T10:00:00Z $NR (error)\"\n"

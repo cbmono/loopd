@@ -47,7 +47,7 @@ cp "$SRC" "$INST/scripts/tick-delta.sh"; chmod +x "$INST/scripts/tick-delta.sh"
 cp "$REPO/plugin/scripts/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"; cp -R "$REPO/plugin/scripts/lib" "$INST/scripts/lib"
 SH="$INST/scripts/tick-delta.sh"
 
-task() { printf 'type: Task\nkind: build\nstatus: %s\npr: []\n' "$2" > "$1"; }
+task() { printf -- '---\ntype: Task\nkind: build\nstatus: %s\npr: []\nacceptance_criteria: [ "x" ]\n---\n' "$2" > "$1"; }
 printf 'type: Project\nstatus: active\nautonomy: gated\n' > "$INST/projects/quiet-proj/project.md"
 task "$INST/projects/quiet-proj/tasks/t1.md" draft
 task "$INST/projects/quiet-proj/tasks/t2.md" "done"
