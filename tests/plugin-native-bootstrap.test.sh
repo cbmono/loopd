@@ -93,7 +93,7 @@ ok "every \${CLAUDE_PLUGIN_ROOT}/scripts/… reference resolves" "${MISSING:-non
 
 # (e) the hooks manifest names its own files the same way, and every one exists.
 # `agent-control.sh` is on `SubagentStart` and `SubagentStop` as well as `PreToolUse` — the
-# two events that start and drop its per-agent state; `report-shape.sh` is on `SubagentStop`,
+# two events that start and drop its per-agent state — and on `PostToolUseFailure`; `report-shape.sh` is on `SubagentStop`,
 # `board-session.sh` on `SessionEnd`; `refresh-state.sh` on Stop, `SubagentStop` and
 # `UserPromptSubmit`; `task-doc-dirty.sh` on Stop.
 HOOKCMDS="$(python3 -c '

@@ -327,6 +327,14 @@ comment_at "dev" "$LATER" "$(verdict_body "$THIRD" - "$(mint_qa "$CAPS2" "$THIRD
 ok "an okf-verdict trailer from the PR author IS a qa round" "$(run qa)" "0 1"
 ok "…and no coderabbit round" "$(run coderabbit)" "0 0"
 
+# review-rounds.sh's author branch: qa-dispatch.sh check answers 1 for "no bundle" as for
+# "no record", so an --instance with no bundle must not read as 0 QA rounds.
+setup; commit "$CLEAN_HEAD"; commit "$THIRD"
+comment_at "dev" "$LATER" "$(verdict_body "$THIRD" - "$(mint_qa "$CAPS2" "$THIRD")")"
+ok "an author trailer with --instance resolving no bundle: exit 2, never 0 rounds" \
+  "$(run qa "$NOCFG")" "2 <none>"
+ok "…and it says why" "$(grep -c 'no bundle at' "$TMP/err")" 1
+
 setup; commit "$CLEAN_HEAD"; commit "$THIRD"
 comment_at "dev" "$LATER" "$(verdict_body "$THIRD" - 0123456789abcdef0123456789abcdef)"
 ok "a forged author trailer, no dispatch record: NOT a qa round" "$(run qa)" "0 0"

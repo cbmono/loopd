@@ -13,7 +13,7 @@ build step.
 ```bash
 tests/run.sh                  # = --changed, the default: the core plus every harness that NAMES a path you changed
 tests/run.sh --all            # all of them — CI's job; locally only when a human asks, and never polled
-tests/run.sh --all --jobs 4   # the pool is CPU-wide by default; bound it when you need the machine
+tests/run.sh --all --jobs 4   # the pool is half the CPUs locally (LOOPD_TEST_JOBS overrides), every CPU under --ci
 tests/run.sh --deep           # ONLY the `# deep` harnesses: they spawn the claude CLI and cost money
 tests/run.sh --iced           # ONLY the `# iced` harnesses: a subject on hold (today: the board)
 bash tests/<one>.test.sh      # still fine while you iterate on one harness
@@ -40,7 +40,11 @@ makes that probe answer empty on a machine that HAS one** — a binary that hang
 fresh Gatekeeper quarantine) is found by `command -v` and sits a harness at the 600s kill
 bound; the operator says so and gets the SKIP instead. It is a flag of its own rather than a
 pre-set `AB_CLAUDE_REAL` because `run.sh` exports that, and a nested run would inherit it.
-Everything else runs in a bounded pool, output replayed in file order.
+Everything else runs in a bounded pool, output replayed in file order. **The pool is half the
+CPUs locally** (at least 1; `LOOPD_TEST_JOBS` or `--jobs` overrides) and every CPU under `--ci`:
+up to 8 agents each ran a pool per CPU on one 12-core machine (load 310, 2026-11-17). The first
+line of a run names the size and where it came from. The nightly jobs export
+`LOOPD_TEST_JOBS` to the runner's CPU count, so only a local run is halved.
 **A third marker, `# iced`, pauses a subject without retiring it.** The owner put the board
 on hold on 2026-10-05, and its twelve harnesses were still 241 of 3,015 harness-seconds on
 every PR (run 37310865693) for a verdict nothing was moving. An iced harness runs under

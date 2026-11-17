@@ -37,7 +37,8 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    head — merge-eligibility is this tick's judgement and is written down nowhere the script
    can read. A `--merge` value may end in the `##mq1 …`/`##mq2 …` token `merge-queue.sh`
    printed in step 4; the script turns it into one `> warning:` line under the row, and the
-   renderer itself never calls `gh`.
+   renderer itself never calls `gh`. A QA disagreement needs no flag: step 4's
+   `qa-disagreement.sh` wrote it as a `Q<n>` entry, which renders as any `answer` row.
 
    **No `AWAITING.md` ⇒ it writes nothing and exits 0.** **Presence means rewrite, never
    create — for `AWAITING.md` and `SNAPSHOT.json` alike:** `/loopd:init` is their one

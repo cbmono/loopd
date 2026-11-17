@@ -538,7 +538,7 @@ for pair in "PreToolUse agent-control.sh" "PreToolUse deny-destructive.sh" \
             "SubagentStop refresh-state.sh" "WorktreeCreate worktree-create.sh" \
             "SessionStart session-banner.sh" "SessionEnd board-session.sh" \
             "UserPromptSubmit push-state.sh" "UserPromptSubmit refresh-state.sh" \
-            "Stop refresh-state.sh"; do
+            "Stop refresh-state.sh" "PostToolUseFailure agent-control.sh"; do
   grep -qxF "$pair" <<<"$REGS" || REGMISS="${REGMISS:+$REGMISS, }$pair"
 done
 ok "…with every core event registration in place, by name" "${REGMISS:-none}" none

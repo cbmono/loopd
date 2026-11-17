@@ -305,7 +305,7 @@ Self-review, push everything it made you change, get CI green, **then** post
 `@coderabbitai review` — **once per PR, never after a fix commit, never on a schedule**. A
 review of a head that moves is spent (`review-clearance.sh` exit 4, stale). Detail:
 `conventions/review.md` → "Ask for the independent review once, at the head you consider
-final" — before you request a review.
+final" — before you request a review. Check: `hooks/review-request.sh`.
 
 ### Resolve or answer every reviewer-authored thread before you re-request
 
