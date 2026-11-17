@@ -411,8 +411,11 @@ paused_now() { # reads/sets $held and $prel for the project being walked
   [ "$held" = yes ]
 }
 # A REFINED draft names step 2 only for work step 2 owes it: a critique to triage or re-run,
-# a build fact check never written, or the project's design.md not yet drawn.
+# a build fact check never written, the project's design.md not yet drawn, or a build draft
+# with no critique receipt at all: a critique that found no free slot waits for that.
 draft_owes() { # <task> <project dir/> -> 0 owes
+  local k; k="$(fmfirst "$1" kind)"; [ -n "$k" ] || k="$(fmfirst "${2}project.md" kind)"
+  [ "${k%% *}" != research ] && [ "$(fmcount "$1" advisor_notes)" = 0 ] && return 0
   untriaged "$1"; [ $? = 1 ] || return 0
   rerun_owed "$1"; [ $? = 1 ] || return 0
   bash "$VFACTS" --presence "$1" >/dev/null 2>&1; case $? in 1) return 0 ;; 5) return 1 ;; esac

@@ -312,7 +312,9 @@ still in `project-manager.md`; these are the reasons that travelled with it.
   re-prompts the human on every call.
 - **The step-file router.** This prompt is re-sent every tick, and a step nobody is going
   to run is a step nobody should pay to read. The `steps:` line is derived from the same
-  walk that prints the enumeration — a `draft` or a ` --- `-answered entry names step 2, a
+  walk that prints the enumeration — an unrefined draft (a `refine owed` line), a refined
+  draft step 2 still owes (critique, fact check, design.md), or a ` --- `-answered entry
+  names step 2, a
   `ready` task names step 3, and so on. The digest fails toward the behaviour that was
   always correct: a tick that skipped a step on a refusal would skip it silently. Step 7
   is never named because whether the knowledge base is owed a pass is not on disk before
@@ -446,7 +448,9 @@ The safety argument has one load-bearing direction: a false DELTA costs one full
 (the price that was always paid); a false IDLE would skip owed work. So every doubt —
 no record, no `gh`, a probe error, an `in-progress` task with no `session:` or one that
 is not `working`/`blocked`, any dirty tracked file, any
-untracked file under `projects/` — resolves to the full tick, and the fingerprint holds
+untracked file under `projects/`, an unrefined draft (`refine owed`; 2026-11-17: a
+new project's five drafts sat unrefined behind IDLE ticks once the tree went clean) —
+resolves to the full tick, and the fingerprint holds
 exactly the facts whose movement creates tick work: bundle HEAD, per-task status, each
 PR on an `in-progress` or `in-review` task's head SHA, state, review decision,
 `mergeable`/`mergeStateStatus` (UNKNOWN as-is: a push costs one extra full tick while the

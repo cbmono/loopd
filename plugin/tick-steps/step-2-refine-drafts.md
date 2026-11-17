@@ -20,6 +20,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    exports. No digest (any exit but 0): run `project-inputs.sh <project.md>` per project on
    `inputs: later` — exit 1 waiting, 3 arrived, anything else refines as usual.
 
+   **Each digest line `refine owed <task>` is work this tick owes**: refine it below, or
+   name it in the close line as `refine deferred: <task> <reason>`. `check` reads no tick
+   IDLE while one stands, so a skipped refine comes back every tick until it is done.
+
    **Refine drafts.** For each `draft` whose `acceptance_criteria` are empty/thin
    (not yet refined): enrich it, add concrete `acceptance_criteria`, and record
    reasoning in `# Notes`. For **`kind: build`** also resolve `target_repo` (confirm
