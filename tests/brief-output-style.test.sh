@@ -63,6 +63,9 @@ ok "…and keeps the coding instructions"  "$(has "$STYLE" 'keep-coding-instruct
 # into a different shape under the same name.
 ok "…it defines the Needs-you heading"   "$(has "$STYLE" 'ℹ️ **Needs you:**')" yes
 ok "…every item executable, with the URL inline" "$(has "$STYLE" 'with the URL inline, or a local file as a markdown link whose target is its absolute path')" yes
+ok "…every item carries a recommendation" "$(has "$STYLE" 'Every `Needs you` item carries `Recommend: <the answer> — <one-line reason>`')" yes
+ok "…or says why it has none"             "$(has "$STYLE" 'An item with no sensible default says why')" yes
+ok "…display-only on promote and merge"   "$(has "$STYLE" 'On a promote or merge item it is display-only')" yes
 ok "…and the Done-so-far heading"        "$(has "$STYLE" '🚀 **Done so far:**')" yes
 ok "…and never invents state"            "$(has "$STYLE" 'Report only what you verified')" yes
 
@@ -124,7 +127,7 @@ ok "…and where the seed's Brief is"       "$(saw "$out" '.claude/output-styles
 
 echo
 total=$((pass + fail))
-ok "exactly 25 assertions ran"            "$total" 25
+ok "exactly 28 assertions ran"            "$total" 28
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

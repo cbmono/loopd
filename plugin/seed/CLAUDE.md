@@ -88,9 +88,8 @@ this file so product-repo sessions aren't told they are a control panel. -->
   is recorded**, whose `needs` it filed as a `👉 do` hand-off, whose task is done, or
   that `session-sweep.sh` selects; any other stays yours.
 - **One active `/loopd:dispatch` loop per clone**, run from a session **in this
-  repo**. The one-tick-at-a-time guarantee is backed by `.tick-lock` (per clone, gitignored) —
-  the launcher takes it before dispatching and the tick checks it on entry — but the
-  lock catches the mistake; it does not make two loops on one clone a good idea.
+  repo**. `.tick-lock` (per clone, gitignored) backs the one-tick-at-a-time guarantee, but
+  the lock catches the mistake; it does not make two loops on one clone a good idea.
 - **A bundle shared with another human**: each clones it and runs their own loop.
   Set `ownerGithubUser` in `instance.config.local.json` (per-machine), **`defaultOwner`**
   in the tracked config, and `owner:` on their projects — each loop then dispatches
@@ -111,7 +110,8 @@ bundle-relative `/projects/…` target `.loopd/AWAITING.md` carries (a terminal 
 **And keep it short — same discipline as a PR body (`CONVENTIONS.md`):**
 - **Lead with the outcome**, in one sentence.
 - **Tables over paragraphs** for anything with more than two of a thing.
-- **What needs a decision goes last, and short** — one line per item, nothing after.
+- **What needs a decision goes last, and short** — one line per item, ending
+  `Recommend: <answer> — <reason>`, nothing after.
 
 Reasoning belongs where it is durable — the task doc, the commit message, a
 `Finding` — not in a status message.
@@ -131,6 +131,10 @@ recommend with reasons and do NOT act; `?` explain; `st` status.
   row is your own job: a number on it runs none of its text.
 - **A list a tick, agent report or board refresh has replaced since you printed it is
   reprinted, numbered, before you act on a number.**
+- **A number that could fit an earlier list whose items are done: confirm the mapping
+  in one line before acting** (`2 = promote task-004?`).
+- **Agent-raised questions go to the owner one at a time** via `/loopd:answer`, the
+  `### Q<n>` recommendation as option 1 — **never answered on the owner's behalf.**
 
 ## Ad-hoc requests vs. the project loop
 **Tracked work** (anything that becomes a PR or a `projects/` deliverable) flows
@@ -147,9 +151,9 @@ on the task's `# Notes` — never into a three-option architecture question — 
 **Offer the loop when there is work to dispatch — once, and only then.** The
 SessionStart banner prints `Ready to dispatch   N` only when at least one task is
 genuinely dispatchable. When that line is present, **offer `/loopd:dispatch`
-in your first reply** — one sentence, naming the count, riding along with the answer
-to what they asked. Bounded: **once per session**; only off that line (never count the documents
-yourself); never instead of the answer; never for ad-hoc work.
+in your first reply** — one sentence, naming the count, after the answer to what they
+asked. Bounded: **once per session**; only off that line, never counted yourself; never
+for ad-hoc work.
 
 **Ad-hoc batches:** ≥2 independent, well-specified asks in one turn ⇒ act as
 coordinator — dispatch each to a **background `general-purpose` agent** in a single
@@ -165,16 +169,14 @@ with the full brief: the ref, the repo, "root cause + ranked next steps, and a
 Finding draft if durable". Report the result when it lands; a known fix is a
 separate dispatch or a tracked task.
 
-Subagents return only their final message, so brief each one completely. They
-inherit this file; role agents additionally read `CONVENTIONS.md`.
+Subagents return only their final message, so brief each one completely.
 
 **One agent, one task — resume it only for that task's next round.** The rule is
 stated once, in [`CONVENTIONS.md`](.loopd/CONVENTIONS.md) → "A subagent works ONE task":
 
 > same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never
 
-Apart from a tick with no dispatch lock — refused by the lock itself — **you** are
-the only reader this rule has.
+**You** are its only reader; a tick without the dispatch lock is refused.
 
 ## Git workflow (this repo)
 - **This control-panel repo commits directly to `main` and pushes — no feature
@@ -229,10 +231,9 @@ detail is read only when a rule's trigger fires.
 (`.loopd/SCHEMA.md`). The `cataloguer` builds it; agents write a `Finding`
 only when a later task would plausibly hit the same problem. **Reading it: grep, never the whole index; at most three; superseded rows are history.**
 The brief's `## Knowledge` rows first, then `grep -i` the capped `knowledge/index.md`
-or `knowledge/`; **never bulk-read** it; never cite a **Superseded** row. Detail: `.claude/rules/knowledge-base.md`.
+or `knowledge/`; never cite a **Superseded** row. Detail: `.claude/rules/knowledge-base.md`.
 
 ## Data handling
-- **No customer PII** in task documents, logs, or PR descriptions.
 - Set your default units and route authoritative data questions to the owning
   team in `knowledge/teams/` (customize this line for your group).
 
