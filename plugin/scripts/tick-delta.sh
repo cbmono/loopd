@@ -87,7 +87,10 @@
 # prints every live project (slug, status, autonomy, owner), every task under them
 # (path, status, kind, assignee, dependency/open-question counts, criteria filled or
 # not, worktree recorded or not), an `inputs waiting|arrived <project.md>` line for a project
-# on `inputs: later` (project-inputs.sh), and every open PR's host facts — so step 1's N
+# on `inputs: later` (project-inputs.sh), a `refine owed <task>` line per draft with no
+# `acceptance_criteria` and no `open_questions` outside a paused or inputs-waiting project
+# (`check` is a DELTA on one, so a clean tree never idles past it; `record` never writes
+# it), and every open PR's host facts — so step 1's N
 # frontmatter reads and per-PR `gh` round-trips become one read. It changes NOTHING
 # about what the tick may act on: the digest is the enumeration, never the judgement,
 # and the tick still opens every document it acts on. A `status: done` project is
@@ -399,6 +402,25 @@ inputs_state() { # <project.md> -> waiting | arrived | ready
   ( cd "$inst" && bash "$INPUTS" "$1" ) >/dev/null 2>&1
   case $? in 1) echo waiting ;; 3) echo arrived ;; *) echo ready ;; esac
 }
+PAUSED="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/project-paused.sh"
+VFACTS="$(dirname "${BASH_SOURCE[0]}")/verified-facts.sh"
+# Asked once per project, and only when it has an unrefined draft. Exit 1 alone is paused:
+# a gate that cannot answer counts as active, so the doubt costs a full tick, never a refine.
+paused_now() { # reads/sets $held and $prel for the project being walked
+  [ -n "$held" ] || { ( cd "$inst" && bash "$PAUSED" "$prel" ) >/dev/null 2>&1; [ $? = 1 ] && held=yes || held=no; }
+  [ "$held" = yes ]
+}
+# A REFINED draft names step 2 only for work step 2 owes it: a critique to triage or re-run,
+# a build fact check never written, the project's design.md not yet drawn, or a build draft
+# with no critique receipt at all: a critique that found no free slot waits for that.
+draft_owes() { # <task> <project dir/> -> 0 owes
+  local k; k="$(fmfirst "$1" kind)"; [ -n "$k" ] || k="$(fmfirst "${2}project.md" kind)"
+  [ "${k%% *}" != research ] && [ "$(fmcount "$1" advisor_notes)" = 0 ] && return 0
+  untriaged "$1"; [ $? = 1 ] || return 0
+  rerun_owed "$1"; [ $? = 1 ] || return 0
+  bash "$VFACTS" --presence "$1" >/dev/null 2>&1; case $? in 1) return 0 ;; 5) return 1 ;; esac
+  [ ! -f "${2}design.md" ]
+}
 SESS="$(dirname "${BASH_SOURCE[0]}")/agent-sessions.sh"
 # Only the parser's exit 3 (a list it refused) is 3 here — skip-and-name; anything else is 2.
 # No cheap ` --- ` grep first: an answered entry in a list the parser refuses must be named.
@@ -467,7 +489,7 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs urls="" ntask nterm wtp sid sids="" ipsids="" dl redraw mapped b inw rc r rel bad=""
+  local p d pst f st prs urls="" ntask nterm wtp sid sids="" ipsids="" dl redraw mapped b inw rc r rel bad="" held prel
   skip() { # <instance-relative path> <reason>
     case "$bad" in *"|$1|"*) return 0 ;; esac
     bad="$bad|$1|"; step2=1
@@ -509,7 +531,7 @@ fingerprint() { # <probe|digest>
       fi
     fi
 
-    ntask=0; nterm=0; redraw=0; mapped=""
+    ntask=0; nterm=0; redraw=0; mapped=""; held=""; prel="projects/$(basename "$d")/project.md"
     [ -f "${d}design.md" ] && mapped=" $(fmlist "${d}design.md" tasks text | grep -oE 'task-[0-9]+' | tr '\n' ' ')"
     for f in "$d"tasks/*.md; do
       [ -f "$f" ] || continue
@@ -526,6 +548,15 @@ fingerprint() { # <probe|digest>
          && [ "${mapped#* "$b" }" = "$mapped" ] && [ "$(fmcount "$f" acceptance_criteria)" -gt 0 ]; then
         redraw=1
       fi
+      # An unrefined draft is owed work, so a clean tree cannot idle past it. Never recorded:
+      # `check` short-circuits on it, and the refine itself moves HEAD.
+      if [ "$st" = draft ] && [ "$inw" != waiting ] && [ "$cmd" != record ]; then
+        if [ "$(fmcount "$f" acceptance_criteria)" -gt 0 ]; then
+          [ "$mode" = digest ] && draft_owes "$f" "$d" && step2=1
+        elif [ "$(fmcount "$f" open_questions)" = 0 ] && ! paused_now; then
+          printf 'refine owed %s\n' "${f#"$inst"/}"; step2=1
+        fi
+      fi
       # Step 5's reclaim retry: nothing else on disk moves while an own-session refusal waits.
       if [ "$st" = "done" ] && wtp="$(fmfirst "$f" worktree)" && [ -n "$wtp" ] && [ -d "$wtp" ] \
          && ! grep -qF 'worktree retained:' "$f"; then
@@ -534,7 +565,6 @@ fingerprint() { # <probe|digest>
       if [ "$mode" = digest ]; then
         ntask=$((ntask + 1))
         case "${st:-unset}" in
-          draft)       [ "$inw" = waiting ] || step2=1 ;;
           ready)       step3=1 ;;
           in-progress) step4=1 ;;
           in-review)   step4=1; step5=1 ;;
@@ -767,6 +797,12 @@ case "$cmd" in
         exit 1
       fi
     done
+    ro="$(printf '%s\n' "$FP" | sed -n 's/^refine owed //p')"
+    if [ -n "$ro" ]; then
+      n="$(printf '%s\n' "$ro" | wc -l | tr -d ' ')"
+      echo "DELTA: refine owed $(head -n1 <<<"$ro")$([ "$n" -gt 1 ] && echo " (+$((n - 1)) more)") — an unrefined draft; step 2 owes its refine."
+      exit 1
+    fi
     if grep -q '^reclaim owed ' <<<"$FP"; then
       echo "DELTA: a done task's worktree is still on disk — step 5 owes its reclaim a retry."
       exit 1

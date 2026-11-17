@@ -60,6 +60,7 @@ design() { # <mapping entries>
   printf -- '---\ntype: Design\ntitle: "P1 — design"\ntimestamp: 2026-10-28T00:00:00Z\ntasks: [ %s ]\n---\n\n```mermaid\nflowchart LR\n  subgraph public\n    ui[UI]\n  end\n  ui --> api[API]\n```\n\nBODY-SENTINEL the UI is new.\n' "$1" > "$P/design.md"; }
 proj p1 "P1"; proj p2 "P2"
 task p1 task-001-a "A" '"x"'; task p1 task-002-b "B" '"x"'; task p1 task-003-c "C" ''
+sed -i.bak 's/^open_questions: \[ \]$/open_questions: [ "Q1: which store?" ]/' "$P/tasks/task-003-c.md"; rm -f "$P/tasks/task-003-c.md.bak"
 task p2 task-001-z "Z" '"x"'
 MAP2='"ui → task-001", "ui --> api → task-002"'
 design "$MAP2"
