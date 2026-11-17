@@ -12,6 +12,7 @@ set -uo pipefail
 [ $# -eq 1 ] || { echo "Usage: $(basename "$0") <file|->" >&2; exit 2; }
 [ "$1" = - ] || [ -r "$1" ] || { echo "wording-notes: cannot read '$1'" >&2; exit 2; }
 words="$(dirname "${BASH_SOURCE[0]}")/../data/banned-words.txt"
+[ "$1" = - ] || exec < "$1"
 [ -r "$words" ] || { echo "note: banned-word list missing ($words) — words not checked"; words=/dev/null; }
 
 LC_ALL=C awk -v LIST="$words" '
@@ -56,5 +57,5 @@ BEGIN { while ((getline w < LIST) > 0) { w = tolower(w); gsub(/[^a-z]/, "", w); 
   para = para " " c
   if (line ~ /^[ \t]*#/) flush()
 }
-END { flush() }' "$1"
+END { flush() }'
 exit 0

@@ -63,6 +63,17 @@ for spec in pr-body:--body-file pr-comment:--comment-file report:--body-file; do
   ok "$name: …and its code matches the no-op reporter's" "$r1" "$("$TMP/noop/$s" "$flag" "$g" >/dev/null 2>&1; echo $?)"
   ok "$name: …and still reports the banned word" "$(grep -c 'banned word "utilize"' "$TMP/err")" 1
 done
+odd() { # <variant> <script> <flag> <path>: exit code with stdin held open, stderr to $TMP/err
+  (cd "$TMP/odd" && { { sleep 5 & } | perl -e 'alarm 3; exec @ARGV' "$TMP/$1/scripts/$2" "$3" "$4" 2>"$TMP/err" >/dev/null; } 2>/dev/null; echo $?)
+}
+mkdir -p "$TMP/odd"
+for spec in pr-body:--body-file:a=b.md pr-comment:--comment-file:a=b.md pr-comment:--comment-file:-; do
+  IFS=: read -r name flag path <<<"$spec"; s="$name-clearance.sh"; cp "$FIX/$name.md" "$TMP/odd/$path"
+  ok "$name: a file named $path is read, not stdin" "$(odd real "$s" "$flag" "$path")" 0
+  ok "$name: …and its banned word reported" "$(grep -c 'banned word "utilize"' "$TMP/err")" 1
+done
+cp "$FIX/pr-body.md" "$TMP/odd/-"
+ok "pr-body: a file named - exits as with a no-op reporter" "$(odd real pr-body-clearance.sh --body-file -)" "$(odd noop pr-body-clearance.sh --body-file -)"
 
 echo "== 4. a missing list costs the word check, never the run =="
 mv "$TMP/real/data/banned-words.txt" "$TMP/list"

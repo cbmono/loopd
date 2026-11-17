@@ -1515,7 +1515,7 @@ if [ -n "$body_file" ]; then
   }
   # Reported here for the author; `decide` measures it again against the ceiling.
   report_length "$body_file" "$body_file"
-  "$(dirname "${BASH_SOURCE[0]:-$0}")/wording-notes.sh" "$body_file" >&2 || true
+  "$(dirname "${BASH_SOURCE[0]:-$0}")/wording-notes.sh" - < "$body_file" >&2 || true
   render_body "$body_file" "$TMPD/rendered"
   decide "$body_file" "$TMPD/rendered" "'$body_file'"
   exit $?
