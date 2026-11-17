@@ -134,5 +134,17 @@ ok "outside an instance ⇒ silent"   "$(payload c3a-stop-agents-first.md loopd:
 ok "no last_assistant_message ⇒ unchecked, and says so" \
    "$(payload - loopd:project-manager false a7 | hook "$INST")" "0|unchecked-flagged|silent"
 
+echo "-- a /new-project scaffold report is skipped only for a project that exists"
+scaffold() { # <first line> <agent_id> -> a payload whose report carries a seed-task table
+  jq -cn --arg m "$1"$'\n\n| Task | Title | depends_on |\n|---|---|---|\n| task-001 | a | [] |\n' --arg i "$2" \
+    '{hook_event_name:"SubagentStop",agent_id:$i,agent_type:"loopd:project-manager",stop_hook_active:false,last_assistant_message:$m}'
+}
+mkdir -p "$INST/projects/sc-1"; : > "$INST/projects/sc-1/project.md"
+ok "SCAFFOLD: line + project.md ⇒ silent, table kept" "$(scaffold 'SCAFFOLD: projects/sc-1' s1 | hook "$INST")" "0|silent|silent"
+ok "…naming a project that is not there ⇒ checked"   "$(scaffold 'SCAFFOLD: projects/nope' s2 | hook "$INST")" "2|silent|rewrite-with-reasons"
+ok "…a slug with a path in it ⇒ checked"             "$(scaffold 'SCAFFOLD: projects/../sc-1' s3 | hook "$INST")" "2|silent|rewrite-with-reasons"
+ok "…the line anywhere but first ⇒ checked"          "$(scaffold $'Scaffold done.\nSCAFFOLD: projects/sc-1' s4 | hook "$INST")" "2|silent|rewrite-with-reasons"
+ok "…and new-project's report spec names the line"   "$(grep -c 'Its first line is `SCAFFOLD: projects/<slug>`' "$REPO/plugin/skills/new-project/SKILL.md")" 1
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

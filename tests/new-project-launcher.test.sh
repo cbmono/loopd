@@ -96,8 +96,12 @@ ok "…and the next step"                    "$(in_brief 'the PM refines the dra
 
 # --- a human decision comes back ---
 ok "the launcher asks, then a fresh agent resumes" "$(in_launcher 'comes back as the report, never a guess')" yes
-ok "…at step 8e"                           "$(in_launcher 'resumes at step 8e')" yes
+ok "…at step 8e"                           "$(in_launcher 'resuming: start at step 8e')" yes
 ok "the agent ends its run on the question" "$(in_brief 'end your run with the question as your report')" yes
+ok "…the resume dispatch names its entry point" "$(in_launcher '`resuming: start at step 8e; steps 1-7 are done at <sha>`')" yes
+ok "…and the brief obeys it"               "$(in_brief 'A `resuming:` line in your brief wins')" yes
+ok "the brief names the file its steps are in" \
+  "$(in_brief '`${CLAUDE_PLUGIN_ROOT}/skills/new-project/SKILL.md` → "Steps"')" yes
 ok "the form's cancel is the launcher's"   "$(in_launcher 'the launcher runs it once the agent')" yes
 
 # --- the mechanical split ---

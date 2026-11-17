@@ -150,15 +150,19 @@ lock**. **Never wake a completed agent with a message** — dispatch a fresh one
 
 **A decision that needs the human comes back as the report, never a guess.** Today that is
 step 8e's spend question. Ask it here, in one line, then dispatch a fresh
-`loopd:project-manager` with the answer, the slug and the review base from the report; it
-resumes at step 8e. The form's `cancel` runs here too, after a report that names step 7's
+`loopd:project-manager` with the answer, the slug, the review base from the report and the
+line `resuming: start at step 8e; steps 1-7 are done at <sha>`, the SHA the report named. The form's `cancel` runs here too, after a report that names step 7's
 commit.
 
 ## The scaffold agent's brief
 
 > **You are the scaffold agent.** The launcher did the six operations in "The launcher
-> reads nothing else" and nothing else. Run steps 1-9 below; where a step asks the human
+> reads nothing else" and nothing else. Run steps 1-9 of
+> `${CLAUDE_PLUGIN_ROOT}/skills/new-project/SKILL.md` → "Steps"; where a step asks the human
 > (steps 2 and 4), its answer is in your brief — never ask, never re-derive it.
+>
+> **A `resuming:` line in your brief wins**: start at the step it names and take the
+> earlier steps as done at the SHA it gives.
 >
 > **This is a scaffold, not a tick**: take no tick lock and skip the tick's entry steps.
 >
@@ -166,7 +170,7 @@ commit.
 > issue's shape (what is asked, the components, the counts), never customer records.
 >
 > **A decision only the human can make ends your run as your report**: say what you did,
-> the question, and the state to resume from. Never guess it.
+> the question, the step to resume at and the step-7 commit SHA. Never guess it.
 
 ## Steps
 
@@ -541,7 +545,9 @@ commit.
    switch). A non-zero exit never fails this command: put its one line in the report.
 
 **Report back** — one report, and nothing else reaches the main session (no per-file write,
-validator or commit output):
+validator or commit output). **Its first line is `SCAFFOLD: projects/<slug>`**, on every
+report including an escalation: `hooks/report-shape.sh` skips the tick-report shape check
+for it once that `project.md` exists, because the table below is not a tick's shape.
 
 - a table of the seed tasks: id, title, `depends_on`;
 - the `success_criteria` step 3 wrote, each with today's value, under "edit project.md to
