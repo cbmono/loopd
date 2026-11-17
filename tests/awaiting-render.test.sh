@@ -277,7 +277,14 @@ ok "…to answered_questions, cleared: head moved past <sha>" \
 ok "…with no by" "$(saw "$ans" ' by ')" no
 bash "$SH" --instance "$D" >/dev/null 2>&1
 ok "…and the row is gone" "$(grep -c '^\* ' "$D/$AB_AWAITING" | tr -d ' ')" 0
-bash "$QD" open "$DT" --pr "$U" --head "$H2" --checker "$H2" --criteria 1 >/dev/null
+ok "a cleared entry does not stop a new one at a new head" \
+   "$(bash "$QD" open "$DT" --pr "$U" --head "$H2" --checker "$H2" --criteria 1)" "written: Q2"
+bash "$REPO/plugin/scripts/fold-answers.sh" --answer "$(bash "$REPO/plugin/scripts/fold-answers.sh" --list "$DT" open_questions | grep 'QA disagreement on')" 3 "$DT" >/dev/null
+ok "an answered entry at the same head writes nothing again" \
+   "$(bash "$QD" open "$DT" --pr "$U" --head "$H2" --checker "$H2" --criteria 1)/$(opens)" "answered: Q2/0"
+bash "$SH" --instance "$D" >/dev/null 2>&1
+ok "…and renders no row" "$(grep -c '^\* ' "$D/$AB_AWAITING" | tr -d ' ')" 0
+bash "$QD" open "$DT" --pr "$U" --head "$H1" --checker "$H1" --criteria 1 >/dev/null
 sed -i.bak 's/^status: in-review$/status: done/' "$DT"
 ok "a task that left in-review clears it too" "$(bash "$QD" clear "$DT")/$(opens)" "cleared: 1/0"
 ok "…and open refuses there (exit 1)" \

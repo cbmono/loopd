@@ -6,8 +6,9 @@
 #   Usage: qa-disagreement.sh open  <task-doc> --pr <url> --head <sha> --checker <sha|-> --criteria <n[,n]>
 #          qa-disagreement.sh clear <task-doc> [--pr <url> --head <sha>]
 #
-# open: 0 written or already open (`written|exists Q<n>`) · 1 not written: the task is not
-# in-review or the checker's commit is not the head · 2 usage or unreadable · 3 write failed.
+# open: 0 written, already open, or answered at this head (`written|exists|answered Q<n>`) ·
+# 1 not written: the task is not in-review or the checker's commit is not the head ·
+# 2 usage or unreadable · 3 write failed.
 # clear: 0 (`cleared: <n>`) · 2 · 3. Reasoning: step-4-advance.md, "Compare the two tables".
 set -uo pipefail
 
@@ -60,6 +61,9 @@ fi
 key="QA disagreement on $pr at ${head:0:12}:"
 q="$(printf '%s\n' "$open_q" | grep -F -- "$key" | grep -oE '^Q[0-9]+' | head -1)"
 [ -z "$q" ] || { echo "exists: $q"; exit 0; }
+q="$(bash "$HERE/fold-answers.sh" --list "$task" answered_questions 2>/dev/null | grep -F -- "$key" \
+     | grep -vF ' --- cleared: ' | grep -oE 'Q[0-9]+: QA disagreement' | grep -oE '^Q[0-9]+' | head -1)"
+[ -z "$q" ] || { echo "answered: $q"; exit 0; }
 
 # The highest number in use anywhere, as session-handoff.sh numbers a hand-off.
 qn="$( { printf '%s\n' "$open_q"; bash "$HERE/fold-answers.sh" --list "$task" answered_questions
