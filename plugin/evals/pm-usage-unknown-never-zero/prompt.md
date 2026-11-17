@@ -573,7 +573,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    roster, no task records it, and either a `cwd` under this bundle's root no task holds as
    its `worktree:` (never the shared worktree root, never a row with no `cwd`), older than
    10 minutes, 24 hours when `blocked`, or a `cwd` under a `worktree:` only `done` or
-   `cancelled` tasks hold (a missing `status:` is open), older than 10 minutes; **finished** — a terminal `state` with a live pid,
+   `cancelled` tasks hold, under the worktree root and gone or still on that task's `branch:`
+   (a missing `status:` is open; an unreadable task file selects nothing), older than 10 minutes; **finished** — a terminal `state` with a live pid,
    unrecorded, its `cwd` under this bundle's root and not under the worktree root (a reaped
    tick); **idle** — an open task's live, not-`blocked` session whose last assistant turn
    is older than `maxIdleMinutes` (absent ⇒ 120); **busy** — one whose last text user turn

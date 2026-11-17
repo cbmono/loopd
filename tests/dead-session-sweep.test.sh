@@ -153,13 +153,23 @@ mk "$TMP/age.spec"; sweep >/dev/null
 ok "blocked under 24h and other under 10m are kept; both past the floor stopped" "$(stops)" "0000bb02 0000cc02"
 
 echo "== FINISHED WORKTREE: a dead session where only done or cancelled tasks worked =="
-T="$B/projects/p/tasks"; mkdir -p "$WT/t3" "$WT/t5" "$WT/t6" "$WT/t8"
-task() { { echo ---; echo "type: Task"; [ -n "$3" ] && echo "status: $3"; echo "worktree: $WT/$2"
+T="$B/projects/p/tasks"; mkdir -p "$WT/t6"
+repo() { git init -q "$WT/$1" && git -C "$WT/$1" symbolic-ref HEAD "refs/heads/${2:-feat/$1}"; }
+for t in t3 t5 t8 t9 t10 t12 t14 t16; do repo "$t" || exit 2; done
+repo t11 feat/other-bundle || exit 2
+task() { { echo ---; echo "type: Task"; [ -n "$3" ] && echo "status: $3"; echo "worktree: $WT/$2"; echo "branch: feat/$2"
            [ -n "${4:-}" ] && echo "session: $4"; echo ---; } > "$T/$1.md"; }
 task task-003-done t3 done; task task-004-gone t4 cancelled; task task-005-nostatus t5 ""
 task task-006-done t6 done; task task-007-open t6 in-review; task task-008-rec t8 done "$(u 0000a8a8)"
-printf -- '---\nstatus: done\nworktree: %s\nstatus: in-review\n---\n' "$WT/t9" > "$T/task-009-twice.md"
-printf -- '---\nstatus: done\nworktree: %s\tdone\n---\n' "$WT/t10" > "$T/task-010-tab.md"
+printf -- '---\nstatus: done\nworktree: %s\nbranch: feat/t9\nstatus: in-review\n---\n' "$WT/t9" > "$T/task-009-twice.md"
+printf -- '---\nstatus: in-review\nbranch: feat/t10\nworktree: %s\tdone\tfeat/t10\n---\n' "$WT/t10" > "$T/task-010-tab.md"
+task task-011-shared t11 done
+printf -- '---\nstatus: done\nworktree: %s\nbranch: feat/t12\nsession: %s\n' "$WT/t12" "$(u 0000ac12)" > "$T/task-012-open-fm.md"
+printf -- '---\r\nstatus: in-review\r\nworktree: %s\r\n---\r\n' "$WT/t14" > "$T/task-013-crlf.md"
+task task-014-done t14 done
+printf -- '---\nstatus: done\nworktree: %s/../outside\n---\n' "$WT" > "$T/task-015-outside.md"
+task task-016-done t16 done
+printf -- '---\nstatus: in-review\nworktree: %s\n' "$WT/t16" > "$T/task-017-open-fm.md"
 cat > "$TMP/fin.spec" <<EOF
 $(u 0000f101) $B working $LIVE $((5*H))
 $(u 0000d301) $WT/t3 blocked - 1800 qa-review-pr-568
@@ -171,6 +181,11 @@ $(u 0000a8a8) $WT/t8 blocked - $((30*H))
 $(u 0000c103) $WT/orphan working - $((5*H))
 $(u 0000a901) $WT/t9 working - $((5*H))
 $(u 0000aa01) $WT/t10 working - $((5*H))
+$(u 0000ab11) $WT/t11 blocked - 1800
+$(u 0000ac12) $WT/t12 blocked - 1800
+$(u 0000ad14) $WT/t14 blocked - 1800
+$(u 0000ae15) $TMP/outside blocked - 1800
+$(u 0000af16) $WT/t16 blocked - 1800
 EOF
 mk "$TMP/fin.spec"; rep="$(sweep)"
 ok "a done task's worktree, and a reclaimed cancelled one's: stopped past 10m, blocked too" "$(stops)" "0000d301 0000d401"
@@ -178,10 +193,22 @@ ok "…reported as dead" "$(grep -c '^stopped 0000d301 ([0-9]*m) dead$' <<<"$rep
 for g in "0000d302|a finished worktree's session under 10m" "0000a501|a worktree whose task has no status:" \
          "0000a601|a worktree an open task records too" "0000a8a8|a finished worktree's session a task records" \
          "0000c103|a worktreeRoot path no task of this bundle records" \
-         "0000a901|a worktree whose task has two status: lines" "0000aa01|a tab in worktree: forging a status"; do
+         "0000a901|a worktree whose task has two status: lines" "0000aa01|an open task's tab in worktree: forging done" \
+         "0000ab11|a done task's path checked out on another branch (another bundle's)" \
+         "0000ac12|a done task's recorded session, front matter never closed" \
+         "0000ad14|a worktree an open task with CRLF front matter records" \
+         "0000ae15|a done worktree: outside worktreeRoot" \
+         "0000af16|a worktree an open task with unclosed front matter records"; do
   mk "$TMP/fin.spec"; sweep >/dev/null
   ok "no stop for ${g#*|}" "$(grep -c "^${g%%|*}$" "$STOPS")" 0
 done
+
+echo "== UNREADABLE: a task file nobody can read selects nothing =="
+ln -s "$TMP/nowhere.md" "$T/task-0065-dangling.md"
+mk "$TMP/fin.spec"
+ok "a dangling task symlink: dead-ids exits 2 and prints nothing" "$(dead_ids; echo "rc=$?")" "rc=2"
+ok "…and the sweep exits 2 and stops nothing" "$(sweep >/dev/null; echo $?):$(stops)" "2:"
+rm -f "$T/task-0065-dangling.md"
 
 echo "== CAP: at most 20 stops a tick (D3) =="
 { printf '%s %s working %s %s\n' "$(u 0000f101)" "$B" "$LIVE" 100
@@ -218,6 +245,9 @@ sed 's/state == "blocked" and not settled/state == "blocked"/' "$CSRC" > "$C"
 ok "dropping the waiver keeps a 30m blocked one there" "$(mut 0000d301)" 0
 cp "$CSRC" "$C"
 ok "…and the unmutated copy selects it" "$(mut 0000d301)" 1
+sed 's/FNR == 1 { flush();/FNR == 1 {/; s/END { flush() }/END { }/' "$SESS" > "$M"
+ok "dropping the feeds' flush stops an unclosed open task's session" "$(mut 0000af16)" 1
+cp "$SESS" "$M"
 mk "$TMP/main.spec"
 cp "$CSRC" "$C"; sed 's/ps -p /false /' "$SESS" > "$M"
 ok "dropping the roster check selects a roster-live row" "$(mut 0000f102)" 1
