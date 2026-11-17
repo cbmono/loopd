@@ -94,6 +94,8 @@ plugin/scripts/review-clearance.sh
 plugin/scripts/required-checks.sh
 plugin/scripts/merge-queue.sh
 plugin/scripts/pr-body-clearance.sh
+plugin/scripts/wording-notes.sh
+plugin/data/banned-words.txt
 plugin/scripts/pr-verdict-clearance.sh
 plugin/scripts/review-rounds.sh
 plugin/scripts/review-next.sh

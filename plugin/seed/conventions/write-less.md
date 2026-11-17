@@ -25,7 +25,9 @@ above it so none may grow its share.
 - **Write for a human who will not read it.** They scan. Say the thing, then stop —
   a reader who wants depth will ask, and asking is cheap where re-reading to find the
   point is not. **One house style, for every surface below:**
-  - **Short sentences.** One idea each.
+  - **Short sentences.** One idea each. The three clearance scripts report, never refuse,
+    a sentence over 25 words (20 in a numbered step) and each word on the plugin's
+    banned list (`wording-notes.sh`). Shorten the sentence, never the content.
   - **Bullets, tables and icons over paragraphs.** More than two of a thing is a table.
   - **Lead with the outcome** — what happened and what it means, before how you got there.
 
