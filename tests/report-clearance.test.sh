@@ -79,6 +79,11 @@ ok "bare loopd#560 is refused"       "$(verdict c7-bare-pr-ref.md)" "1 link"
 ok "[loopd#560](<url>) clears"       "$(verdict clean-linked-pr-ref.md)" "0 "
 ok "…the shipped text points at it"  "$(grep -c 'Markdown link — .*refused as `link`' "$PM")" 1
 
+echo "-- a bundle-relative link target"
+ok "[task-001](/projects/x/tasks/task-001.md) is refused" "$(verdict c8-bundle-relative-link.md)" "1 bundle"
+ok "an absolute-path link clears"                        "$(verdict clean-absolute-link.md)" "0 "
+ok "…the shipped text points at it"  "$(grep -c 'by URL — `/projects/` refused (`bundle`)' "$PM")" 1
+
 echo "-- criterion 1: the binding point is SubagentStop, and it acts"
 ok "hooks.json registers report-shape.sh on SubagentStop" \
    "$(jq -r '[.hooks.SubagentStop[].hooks[].command] | index("\"${CLAUDE_PLUGIN_ROOT}/hooks/report-shape.sh\"") != null' "$REPO/plugin/hooks/hooks.json")" true

@@ -72,6 +72,8 @@ BEGIN {
   if (trail) { refuse("outside", "line after the BOARD:/COST: trailer: " substr(line, 1, 60)); next }
   if (line ~ /^```/) { refuse("outside", "a code fence — a report carries no code or logs"); next }
   if ((r = bareref(line)) != "") refuse("link", "names " r " without its link — write it as [" r "](<url>)")
+  t = line; gsub(/`[^`]*`/, "", t)
+  if (t ~ /\]\(<?\/projects\//) refuse("bundle", "a link target starts /projects/, which opens nothing outside the bundle — write the absolute path")
   if (b ~ /^(blocking|blocked|blockers?)[ \t]*:/) {
     if (sec != "out") refuse("order", "Blocking: must come right after what happened, once")
     sec = "block"; blockseen = 1; rest = line; sub(/^[^:]*:[ \t]*/, "", rest); gsub(/^\*+[ \t]*/, "", rest)
@@ -158,6 +160,8 @@ if [ "${1:-}" = "--self-test" ]; then
   printf '%s\n' "$bad" | check >/dev/null && { echo "self-test: an inverted list cleared" >&2; exit 2; }
   printf 'Merged [loopd#560](https://github.com/cbmono/loopd/pull/560).\n' | check >/dev/null || { echo "self-test: a linked PR was refused" >&2; exit 2; }
   printf 'Merged loopd#560.\n' | check >/dev/null && { echo "self-test: a bare PR reference cleared" >&2; exit 2; }
+  printf 'Drafted [task-001](/projects/x/tasks/task-001.md).\n' | check >/dev/null && { echo "self-test: a /projects/ link cleared" >&2; exit 2; }
+  printf 'Drafted [task-001](/abs/projects/x/tasks/task-001.md).\n' | check >/dev/null || { echo "self-test: an absolute-path link was refused" >&2; exit 2; }
   echo "$SELFTEST_OK"; exit 0
 fi
 
