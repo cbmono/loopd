@@ -194,8 +194,9 @@ type Task = {
   pr_mergeable: string
   awaiting: string
   open_questions: number
-  prs: number
+  prs: Pr[]
 }
+type Pr = { label: string; url: string }
 type Project = {
   slug: string
   ref: string
@@ -277,6 +278,12 @@ function obj(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
 }
 function arr(v: unknown): unknown[] { return Array.isArray(v) ? v : [] }
+// The url becomes an OSC 8 target, so only printable ASCII with no space gets through.
+function pr(v: unknown): Pr {
+  const o = obj(v) || {}
+  const url = typeof o.url === 'string' && /^https?:\/\/[!-~]+$/.test(o.url) ? o.url : ''
+  return { label: (str(o.repo).split('/').pop() || '?') + '#' + (toint(o.number) || '?'), url }
+}
 // task-owner.sh's valid_user(): a value of any other shape is drawn as no tag at all.
 function login(v: unknown): string { const s = str(v); return s.length <= 39 && /^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$/.test(s) ? s : '' }
 
@@ -298,7 +305,7 @@ function shape(json: unknown): Board | null {
       tasks.push({
         id: str(to.id), ref: raw(to.id), title: str(to.title), status: str(to.status), assignee: str(to.assignee),
         pr_mergeable: str(to.pr_mergeable), awaiting: str(to.awaiting),
-        open_questions: toint(to.open_questions), prs: arr(to.prs).length,
+        open_questions: toint(to.open_questions), prs: arr(to.prs).map(pr),
       })
     }
     rows.push({
@@ -507,10 +514,10 @@ async function copyRef($: any, ref: string, surface: unknown): Promise<void> {
 }
 
 // ---------------------------------------------------------------- the drawing
-// Function-call form (this is a .ts file, so no JSX); Box, Text and Button are the three
+// Function-call form (this is a .ts file, so no JSX); Box, Text, Button and Link are the
 // elements every surface draws. Every string passed to Text has been through clean().
 function draw($: any, e: any, now: number): any {
-  const { Box, Text, Button } = $.ui.resolve(e)
+  const { Box, Text, Button, Link } = $.ui.resolve(e)
   const line = (s: string, props: Record<string, unknown> = {}) => Text({ ...props, children: [s] })
   const seg = (s: string, props: Record<string, unknown> = {}) => s ? Text({ ...props, children: [s] }) : null
   const row = (...parts: any[]) => Text({ children: parts.filter(Boolean) })
@@ -535,7 +542,7 @@ function draw($: any, e: any, now: number): any {
     // NEEDS YOU: AWAITING.md's items from the snapshot, title looked up by task id; a snapshot
     // without them gets print-board.sh's rule — a task's AWAITING verb, plus one close per awaiting_close project.
     // Items the writer could not read (null) are unknown: no rows, and no fallback.
-    const need: { verb: string; text: string; ref: string }[] = []
+    const need: { verb: string; text: string; ref: string; prs: Pr[] }[] = []
     if (b.items) {
       for (const it of b.items) {
         const p = b.rows.find(r => r.ref === it.slug)
@@ -545,12 +552,13 @@ function draw($: any, e: any, now: number): any {
           verb: cut(it.verb, 10) || '?',
           text: it.task ? slug + ' · ' + (t ? t.title || t.id : clean(it.task)) : slug,
           ref: it.task ? pathOf(it.slug, it.task) : okRef(it.slug) ? it.slug : '',
+          prs: t ? t.prs : [],
         })
       }
     } else if (!b.itemsUnknown) {
       for (const p of b.rows) {
-        if (p.awaiting_close) need.push({ verb: 'close', text: p.slug, ref: okRef(p.ref) ? p.ref : '' })
-        for (const t of p.tasks) if (needs(t)) need.push({ verb: t.awaiting, text: p.slug + ' · ' + (t.title || t.id), ref: taskPath(p, t) })
+        if (p.awaiting_close) need.push({ verb: 'close', text: p.slug, ref: okRef(p.ref) ? p.ref : '', prs: [] })
+        for (const t of p.tasks) if (needs(t)) need.push({ verb: t.awaiting, text: p.slug + ' · ' + (t.title || t.id), ref: taskPath(p, t), prs: t.prs })
       }
     }
     // A row is placed by task_status in counts.json, the source of the heading count; the
@@ -562,7 +570,7 @@ function draw($: any, e: any, now: number): any {
       const other = !!p && !p.mine
       const owner = other ? p.owner : ''
       return t
-        ? { path, head: '   ' + (t.assignee || 'unassigned') + '  ', title: t.title || t.id, mark: t.prs && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : '', other, owner }
+        ? { path, head: '   ' + (t.assignee || 'unassigned') + '  ', title: t.title || t.id, mark: t.prs.length && t.pr_mergeable !== 'MERGEABLE' ? '  PR ' + (t.pr_mergeable || 'UNKNOWN') : '', other, owner }
         : { path, head: '   ', title: clean(slug) + ' · ' + clean(id), mark: '', other, owner }
     }
     const progress: Live[] = []
@@ -710,10 +718,21 @@ function draw($: any, e: any, now: number): any {
       need.forEach((x, k) => {
         const num = String(k + 1).padStart(digits) + '. '
         const head = num + x.verb.padEnd(vw) + '  '
-        const wrapped = wrap(x.text, Math.max(1, W - cols(head)), ROW_LINES)
+        const room = Math.max(1, W - cols(head))
+        const lines: [string, Pr[]][] = wrap(x.text, room, ROW_LINES).map(l => [l, []])
+        const used = ([s, ps]: [string, Pr[]]) => cols(s) + ps.reduce((n, p, j) => n + (s || j ? 1 : 0) + cols(p.label), 0)
+        for (const p of x.prs) {
+          const last = lines[lines.length - 1]!, u = used(last)
+          if (u + (u ? 1 : 0) + cols(p.label) <= room) last[1].push(p)
+          else lines.push(['', [p]])
+        }
+        const tail = ([s, ps]: [string, Pr[]]) => [seg(s, TEXT), ...ps.flatMap((p, j) => {
+          const l = cut(p.label, room - (s || j ? 1 : 0))
+          return [seg(s || j ? ' ' : ''), p.url ? Text({ ...TEXT, children: [Link({ href: p.url, children: [l] })] }) : seg(l, TEXT)]
+        })]
         rows.push(pressRow(seg(num, NEEDS_YOU), copyButton('copy-need-' + k, x.verb, NEEDS_YOU, x.ref),
-          seg(' '.repeat(cols(head) - cols(num) - cols(x.verb)), NEEDS_YOU), seg(wrapped[0], TEXT)))
-        for (const l of wrapped.slice(1)) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
+          seg(' '.repeat(cols(head) - cols(num) - cols(x.verb)), NEEDS_YOU), ...tail(lines[0]!)))
+        for (const l of lines.slice(1)) rows.push(row(seg(' '.repeat(cols(head))), ...tail(l)))
       })
     }
   }
