@@ -301,6 +301,33 @@ assert "a clean named document is silent"         "$(grep -q '0 errors, 0 warnin
 assert "a named non-concept file is SKIPped"      "$(grep -q 'SKIP   projects/live/HANDOVER.md' <<<"$SKIP_ONE" && echo 0 || echo 1)"
 assert "…not turned into an error"                "$([[ $SKIP_RC -eq 0 ]] && echo 0 || echo 1)"
 
+echo "== a task # Result over 15 lines WARNS =="
+# Counted: the lines after `# Result` up to the next `# ` heading outside a fence, or EOF,
+# minus blank lines at either end. The fenced `# ` line is content, so it counts.
+result_task() { # <path> <result lines>
+  { printf '%s\n' '---' 'type: Task' 'title: R' 'status: done' "timestamp: $TS" '---' '# Result' ''
+    printf '%s\n' '```' '# fenced, not a heading' '```'
+    for i in $(seq $(( $2 - 3 ))); do echo "line $i"; done
+    printf '%s\n' '' '' '# Notes' 'note'; } > "$1"
+}
+result_task projects/live/tasks/task-090-result-15.md 15
+result_task projects/live/tasks/task-091-result-16.md 16
+set +e
+R15="$(bash "$VALIDATOR" projects/live/tasks/task-090-result-15.md 2>&1)"
+R16="$(bash "$VALIDATOR" projects/live/tasks/task-091-result-16.md 2>&1)"; R16_RC=$?
+set -e
+# A fence closes only on its own character, at least as long; a fenced `# Result` is content.
+{ printf '%s\n' '---' 'type: Task' 'title: R' 'status: done' "timestamp: $TS" '---' \
+    '````' '# Result' 'example' '```' '# Notes' '````' '# Result' '```' '~~~' '# example'
+  for i in $(seq 14); do echo "line $i"; done; echo '```'; } > projects/live/tasks/task-092-result-fenced.md
+RF="$(bash "$VALIDATOR" projects/live/tasks/task-092-result-fenced.md 2>&1)"
+rm projects/live/tasks/task-090-result-15.md projects/live/tasks/task-091-result-16.md projects/live/tasks/task-092-result-fenced.md
+assert "a 15-line Result: 0 warnings"            "$(grep -q -- '0 errors, 0 warnings' <<<"$R15" && echo 0 || echo 1)"
+assert "a 16-line Result: 1 warning"             "$(grep -q -- '0 errors, 1 warnings' <<<"$R16" && echo 0 || echo 1)"
+assert "…naming the count"                       "$(grep -q -- '# Result is 16 lines' <<<"$R16" && echo 0 || echo 1)"
+assert "…and it is a WARN, so it exits 0"        "$([[ $R16_RC -eq 0 ]] && echo 0 || echo 1)"
+assert "a mismatched fence and a fenced example do not hide it" "$(grep -q -- '# Result is 18 lines' <<<"$RF" && echo 0 || echo 1)"
+
 echo "== a named path is found whatever its form or order, past a 64 KiB FILE_LIST =="
 # `printf | grep -q` under pipefail: grep exits on the first match, printf takes SIGPIPE once
 # the list outgrows the pipe buffer, and a checked document was also reported SKIP.
@@ -539,6 +566,55 @@ assert "unlabelled and advisor: questions get no warning" "$(qsilent exempt.md)"
 assert "exactly four warnings, no errors"           "$(grep -q '0 errors, 4 warnings' <<<"$QOUT" && echo 0 || echo 1)"
 assert "…so a plain run exits 0"                    "$([[ $QRC -eq 0 ]] && echo 0 || echo 1)"
 assert "…and only --strict fails it"                "$([[ $QSTRICT_RC -eq 1 ]] && echo 0 || echo 1)"
+cd "$B"
+
+echo "== no Recommendation: warns bundle-wide, and errors only on a question this change adds =="
+RB="$TMP/recs"
+mkdir -p "$RB/projects/q/tasks" && cd "$RB"
+echo '{ "org": "x", "reposRoot": "/tmp" }' > instance.config.json
+echo '# Schema' > SCHEMA.md
+NOREC=( 'Options:' '1. eu-central-1' "${DEPTHS[@]}" '' )
+REC=( 'Recommendation: eu-central-1' "${NOREC[@]}" )
+qtask old.md 'open_questions: [ "Q1: which region?" ]' '## Question details' '### Q1' "${NOREC[@]}"
+GIT() { env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git -c user.email=t@t -c user.name=t -c commit.gpgsign=false "$@"; }
+GIT init -q . && GIT add -A && GIT commit -qm init
+set +e; ROUT_OLD="$(bash "$VALIDATOR" 2>&1)"; ROLD_RC=$?; set -e
+qtask old.md 'open_questions: [ "Q1: which region?", "Q2: which tier?", "Q3: which zone?", "Q4: advisor: is it sound?", "Q5: which size?" ]' \
+  '## Question details' '### Q1' "${NOREC[@]}" '### Q2' "${NOREC[@]}" '### Q3' "${REC[@]}" '### Q4' "${NOREC[@]}"
+qtask fresh.md 'open_questions: [ "Q1: which region?" ]' '## Question details' '### Q1' "${NOREC[@]}"
+set +e; ROUT="$(bash "$VALIDATOR" 2>&1)"; RRC=$?; set -e
+rsaw() { grep -qF -- "$4" <<<"$(grep -A1 -E "$1 +projects/q/tasks/$2" <<<"$3")" && echo 0 || echo 1; }
+assert "a committed question without one warns"   "$(rsaw WARN old.md "$ROUT_OLD" "'### Q1' has no 'Recommendation:' line")"
+assert "…and that run has no error"               "$([[ $ROLD_RC -eq 0 ]] && echo 0 || echo 1)"
+assert "it still only warns once the doc changes" "$(rsaw WARN old.md "$ROUT" "'### Q1' has no 'Recommendation:' line")"
+assert "a question this change adds errors"       "$(rsaw ERROR old.md "$ROUT" "open question Q2 is new in this change")"
+assert "…and so does one with no block at all"    "$(rsaw ERROR old.md "$ROUT" "open question Q5 is new in this change")"
+assert "…and every question of an uncommitted doc" "$(rsaw ERROR fresh.md "$ROUT" "open question Q1 is new in this change")"
+assert "a new question that carries one is silent" "$(grep -q "Q3" <<<"$ROUT" && echo 1 || echo 0)"
+assert "an advisor: question stays exempt"        "$(grep -q "Q4" <<<"$ROUT" && echo 1 || echo 0)"
+assert "exactly three errors, and the run fails"  "$(grep -q ', 3 errors,' <<<"$ROUT" && [[ $RRC -eq 1 ]] && echo 0 || echo 1)"
+assert "a new question with no block names the missing block, once" \
+  "$([[ "$(grep -c "Q5 is new in this change and has no '### Q5' block" <<<"$ROUT")" == 1 ]] \
+     && ! grep -q "open question Q5 has no '### Q5' block" <<<"$ROUT" && echo 0 || echo 1)"
+GIT add -A && GIT commit -qm second
+GIT mv projects/q/tasks/old.md projects/q/tasks/moved.md
+mkdir -p projects/r/tasks && mv projects/q/tasks/fresh.md projects/r/tasks/fresh.md
+set +e; MOUT="$(bash "$VALIDATOR" 2>&1)"; set -e
+assert "a git mv keeps its committed questions committed" "$(rsaw WARN moved.md "$MOUT" "'### Q2' has no 'Recommendation:' line")"
+assert "…and so does a plain mv"                  "$(grep -qF "fresh.md" <<<"$(grep -A1 -E 'WARN +projects/r/tasks/fresh.md' <<<"$MOUT")" && echo 0 || echo 1)"
+assert "…so a move errors on nothing"             "$(grep -q ', 0 errors,' <<<"$MOUT" && echo 0 || echo 1)"
+GIT add -A && GIT commit -qm moved
+mv projects/q/tasks/moved.md projects/q/tasks/renamed.md
+set +e; NOUT="$(bash "$VALIDATOR" 2>&1)"; set -e
+assert "an unstaged rename beside a deletion is unknown: it warns" "$(rsaw WARN renamed.md "$NOUT" "'### Q2' has no 'Recommendation:' line")"
+assert "…and errors on nothing"                   "$(grep -q ', 0 errors,' <<<"$NOUT" && echo 0 || echo 1)"
+GIT add -A && GIT commit -qm renamed
+pad="$(printf 'filler line for a document larger than any pipe buffer\n%.0s' $(seq 1 4000))"
+qtask big.md 'open_questions: [ "Q1: which region?" ]' '## Question details' '### Q1' "${REC[@]}" "$pad"
+GIT add -A && GIT commit -qm big
+qtask big.md 'open_questions: [ "Q1: which region?", "Q2: which tier?" ]' '## Question details' '### Q1' "${REC[@]}" '### Q2' "${NOREC[@]}" "$pad"
+set +e; BOUT="$(bash "$VALIDATOR" 2>&1)"; set -e
+assert "a large document's new question still errors" "$(rsaw ERROR big.md "$BOUT" "open question Q2 is new in this change")"
 cd "$B"
 
 echo "== refusing to run outside an instance root =="

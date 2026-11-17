@@ -34,7 +34,7 @@ in `cbmono/loopd` enforces this.
 | a **script header** | **10 lines** — what it does, its exit codes, and where the reasoning lives. |
 | a **commit** | subject **72 characters**, body at most **5 lines**. |
 | a **PR body** | the TL;DR line + the criteria table + at most **3 one-line notes**. Hard ceiling **2,500 characters**. |
-| a task **`# Result`** | **15 lines**. |
+| a task **`# Result`** | **15 lines**. Check: `validate-bundle.sh`. |
 | a **`Finding`** | **40 lines**, and a required one-line `lesson:` in its frontmatter. |
 | a **checker's criteria table** | **the table IS the table** — one row per criterion, `PASS`/`FAIL`, one command or artifact. No narration around it, ever. |
 
@@ -150,7 +150,7 @@ choices outside this list.
   a prefix such as `ABC` ⇒ append `[ABC-<n>]` with the id your task or brief names, else
   `[ABC-0]`. **Never invent an id.** No OKF task id in the title. Target the default
   branch. **Never merge.** Detail: `conventions/pr-body.md` → "PR title" — when
-  your brief names a prefix.
+  your brief names a prefix. Check: `hooks/pr-title.sh`.
 
 ### The PR body shape
 
@@ -221,13 +221,18 @@ It does not replace the gate — `required-checks.sh` reads what the host serves
 `conventions/pr-body.md` → "Run the shape reader on your draft" — when a refusal's
 message does not tell you the fix.
 
+**A UI PR** (task `ui: true`, or a diff touching the repo's `uiGlobs`) adds `--ui`: a
+screenshot path under the bundle's `deliverables/local/`, never pushed, test data only.
+Detail: `conventions/pr-body.md` → "UI evidence: a screenshot per changed screen" — when
+the task sets `ui: true` or your diff touches a UI glob.
+
 ### PR size is a heuristic, never a gate
 
 Two numbers: **`maxPrLoc`** (**absent that key, 500**) and **`maxPrFiles`** (**absent that
 key, 100**) in `instance.config.json`. Count as the host does —
 `git diff --shortstat origin/<default>` and `git diff --numstat origin/<default> | wc -l`.
 Past either, **open the PR anyway** with one `⚠️` line naming the figure and the split you
-would make. It is never a review finding. Detail: `conventions/pr-body.md` → "PR size is a
+would make. It is never a review finding. Check: `scripts/pr-size.sh`. Detail: `conventions/pr-body.md` → "PR size is a
 heuristic, never a gate" — when your diff is past either number.
 
 ### A repo with a VERSION file at its root
@@ -255,7 +260,7 @@ has no CodeRabbit integration.
 Measure what you added to the repo's own machinery before opening the PR
 (`git diff --numstat origin/main -- 'plugin/**/*.sh' | awk '{a+=$1} END{print a+0}'`).
 **At or above ~150 added lines, flag it as one `⚠️` line naming the figure** and let the
-owner decide; never a block. Detail: `conventions/pr-body.md` → "Don't grow the harness
+owner decide; never a block. Check: `scripts/pr-size.sh`. Detail: `conventions/pr-body.md` → "Don't grow the harness
 without a reason" — when your diff adds ~150 lines or more there.
 
 ## Tests and evidence

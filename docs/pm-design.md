@@ -490,10 +490,13 @@ zero-delta tick that skips the walk and still hands back a multi-section report 
 "repeat notification, no new information" the loop's readers stop reading — so the
 probe's `IDLE:` line IS the quiet tick's whole report, verbatim, and it names the next
 check (`--gap`) because a human otherwise cannot tell a quiet loop from a stopped one.
-The same rule reaches `AWAITING.md`: a `noop: true` tick does not rewrite it, since the
-`Last refreshed:` line moves on every render and would make a stale queue look fresh.
-Both directions are pinned by `tests/quiet-tick.test.sh` on a fixture with no
-dispatchable work.
+The same rule reaches `AWAITING.md`: the idle fast path does not rewrite it, since the
+`Last refreshed:` line moves on every render and IDLE proves no input moved since the last
+full tick's render. Both directions are pinned by `tests/quiet-tick.test.sh` on a fixture
+with no dispatchable work. Every full tick does render it, `noop: true` ones included:
+until 2026-11-16 those skipped it too, and an answered `👉 do` row in a paused project
+stayed on the page through four full ticks whose only change was the answer's commit
+(`tests/awaiting-noop-tick.test.sh`).
 
 The record is written by a FULL tick as its last derived act (after the commit, the
 sync, the queue and the board), through a temp-file rename so a crash cannot leave a

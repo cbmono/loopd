@@ -153,7 +153,7 @@ ok "…and state the one case still open on the checked half" \
 # NOW DRIVE IT. Everything above is prose about a mechanism; this is the mechanism. A
 # tick with no lock in front of it is a tick nothing dispatched, and the claim in
 # CONVENTIONS.md is only true if this exits non-zero.
-INST="$TMP/instance"; mkdir -p "$INST"
+INST="$TMP/instance"; mkdir -p "$INST"; : > "$INST/instance.config.json"
 OUT="$(bash "$LOCKSH" acquire --as tick --instance "$INST" 2>&1)"; RC=$?
 ok "a tick nothing dispatched is refused for real" "$RC" 4
 ok "…and the refusal names the resume"   "$(grep -qF 'never resumed' <<<"$OUT" && echo yes || echo no)" yes
@@ -212,7 +212,7 @@ sed 's/^\( *\)refuse_unlaunched$/\1: # removed/' "$LOCKSH" > "$FIX/tick-lock.sh"
 # tick-lock.sh sources its sibling resolver (ai-bridge-v3/task-031); without it the mutant
 # exits 2 before reaching the refusal this asserts is gone.
 cp "$(dirname "$LOCKSH")/bundle-paths.sh" "$FIX/bundle-paths.sh"
-MI="$TMP/mutant-instance"; mkdir -p "$MI"
+MI="$TMP/mutant-instance"; mkdir -p "$MI"; : > "$MI/instance.config.json"
 bash "$FIX/tick-lock.sh" acquire --as tick --instance "$MI" >/dev/null 2>&1
 ok "…and a stripped refusal stops refusing" "$?" 0
 

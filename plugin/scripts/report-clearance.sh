@@ -29,6 +29,12 @@ function bare(s) {
   return tolower(s)
 }
 function shown(s) { gsub(/\]\([^)]*\)/, "]", s); gsub(/https?:\/\/[^ \t)]+/, "URL", s); gsub(/\*\*/, "", s); return s }
+function bareref(s) {
+  gsub(/\[[^]]*\]\([^)]*\)/, "", s); gsub(/https?:\/\/[^ \t)>]+/, "", s)
+  if (!match(s, /(^|[^A-Za-z0-9_&])[A-Za-z0-9_.\/-]*#[0-9]+([^A-Za-z0-9_]|$)/)) return ""
+  s = substr(s, RSTART, RLENGTH); sub(/^[^A-Za-z0-9_.\/#-]/, "", s); sub(/[^0-9]$/, "", s)
+  return s
+}
 function refuse(rule, msg) { printf "REFUSED %s: %s\n", rule, msg; n_refused++ }
 function sentences(s,   c, t) {
   s = shown(s); gsub(/`[^`]*`/, "CODE", s); gsub(/(e\.g|i\.e|etc|vs)\./, "x", s)
@@ -65,6 +71,7 @@ BEGIN {
   if (line ~ /^(BOARD|COST):[ \t]/) { trail = 1; next }
   if (trail) { refuse("outside", "line after the BOARD:/COST: trailer: " substr(line, 1, 60)); next }
   if (line ~ /^```/) { refuse("outside", "a code fence — a report carries no code or logs"); next }
+  if ((r = bareref(line)) != "") refuse("link", "names " r " without its link — write it as [" r "](<url>)")
   if (b ~ /^(blocking|blocked|blockers?)[ \t]*:/) {
     if (sec != "out") refuse("order", "Blocking: must come right after what happened, once")
     sec = "block"; blockseen = 1; rest = line; sub(/^[^:]*:[ \t]*/, "", rest); gsub(/^\*+[ \t]*/, "", rest)
@@ -149,6 +156,8 @@ if [ "${1:-}" = "--self-test" ]; then
   bad=$'Did things.\n\nNeeds you:\n1. Restart Claude at `~/x` \342\200\224 it reloads.\n2. Stop the agents at `~/y` first \342\200\224 they hold locks.'
   printf '%s\n' "$good" | check >/dev/null || { echo "self-test: a clean report was refused" >&2; exit 2; }
   printf '%s\n' "$bad" | check >/dev/null && { echo "self-test: an inverted list cleared" >&2; exit 2; }
+  printf 'Merged [loopd#560](https://github.com/cbmono/loopd/pull/560).\n' | check >/dev/null || { echo "self-test: a linked PR was refused" >&2; exit 2; }
+  printf 'Merged loopd#560.\n' | check >/dev/null && { echo "self-test: a bare PR reference cleared" >&2; exit 2; }
   echo "$SELFTEST_OK"; exit 0
 fi
 

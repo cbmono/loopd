@@ -77,7 +77,8 @@
 # `CONVENTIONS.md` -> "Write less" sets both, and the 133 findings that predate the rule
 # average 110 lines. A warning puts them on the cataloguer's list; an error would fail
 # every bundle that has one, which is every bundle. So does a `Q<n>:` open question whose
-# `### Q<n>` block under `## Question details` is missing, has no options or under 3 depths.
+# `### Q<n>` block under `## Question details` is missing, has no options or under 3 depths,
+# or has no `Recommendation:` — an ERROR for a question HEAD's copy does not list yet.
 #
 # EVERY PER-DOCUMENT CHECK RUNS ON EVERY SCOPE — full bundle, `--changed`, or the paths
 # you name. The Finding cap reached only a full run while nothing else could name one
@@ -136,6 +137,10 @@ PROVENANCE_ENUM="machine mixed human"
 
 # CONVENTIONS.md -> "Write less". Lowering it is free; raising it is a rule change.
 FINDING_MAX_LINES=40
+# A task's `# Result` counts the lines after its heading up to the next `# ` heading outside a
+# fence, or EOF, minus blank lines at either end. Frontmatter is never part of it. A fence
+# closes only on its own character, at least as long (CommonMark), so neither heading is fenced.
+RESULT_MAX_LINES=15
 # conventions/rounds.md -> "A round that ends on a failed check appends ONE line to do_not_repeat". `do-not-repeat.sh append` refuses past it;
 # this reports a list already over it, which is the PM's cue to fold the oldest into `# Notes`.
 DO_NOT_REPEAT_MAX=10
@@ -314,17 +319,18 @@ fm_wellformed() { # <frontmatter>
   '
 }
 
-question_blocks() { # <file> -> "Q<n> <options> <depths>" per block under `## Question details`
+question_blocks() { # <file> -> "Q<n> <options> <depths> <recommendation 0|1>" per block under `## Question details`
   awk '
-    function flush() { if (q != "") print q, opts, length(d1) + length(d2) + length(d3); q = "" }
+    function flush() { if (q != "") print q, opts, length(d1) + length(d2) + length(d3), rec; q = "" }
     NR == 1 && $0 == "---" { fm = 1; next }
     fm { if ($0 == "---") fm = 0; next }
     /^[[:space:]]*(```|~~~)/ { fence = !fence; next }
     fence { next }
     /^## / { flush(); sec = ($0 ~ /^## Question details[[:space:]]*$/); next }
     !sec { next }
-    /^### / { flush(); if ($0 ~ /^### Q[0-9]+[[:space:]]*$/) { q = $2; opts = 0; inopt = 0; d1 = d2 = d3 = "" }; next }
+    /^### / { flush(); if ($0 ~ /^### Q[0-9]+[[:space:]]*$/) { q = $2; opts = 0; inopt = 0; d1 = d2 = d3 = ""; rec = 0 }; next }
     q == "" { next }
+    /^Recommendation:[[:space:]]*[^[:space:]]/ { rec = 1 }
     /^Options:/ { inopt = 1; next }
     /^[A-Za-z][^:]*:/ { inopt = 0 }
     inopt && /^[0-9]+\.[[:space:]]+[^[:space:]]/ { opts++ }
@@ -333,6 +339,32 @@ question_blocks() { # <file> -> "Q<n> <options> <depths>" per block under `## Qu
     /^[-*]?[[:space:]]*Depth 3:[[:space:]]*[^[:space:]]/ { d3 = "x" }
     END { flush() }
   ' "$1"
+}
+
+# Labels of the open questions HEAD's copy of <file> lists; exit 1 when git cannot say. A
+# document missing from HEAD is looked up as a staged rename, then by file name (task ids
+# are unique); else, when this change deletes any document, it may be a move and is
+# unknown. Only then is every question in it new.
+head_labels() { # <file>
+  local p="$1" src hfm
+  git rev-parse -q --verify HEAD >/dev/null 2>&1 || return 1
+  if ! git cat-file -e "HEAD:$p" 2>/dev/null; then
+    p="$(git diff --cached -M --relative --name-status --diff-filter=R HEAD -- . 2>/dev/null \
+         | awk -F'\t' -v n="${1#./}" '$3 == n { print $2 }')" || return 1
+    [[ -n "$p" ]] || p="$(git ls-tree -r --name-only HEAD -- . 2>/dev/null \
+         | awk -v b="/$(basename "$1")" 'substr($0, length($0) - length(b) + 1) == b')" || return 1
+    [[ "$(grep -c . <<<"$p")" -le 1 ]] || return 1
+    if [[ -z "$p" ]]; then
+      [[ -z "$(git diff --relative --name-only --diff-filter=D HEAD -- '*.md' 2>/dev/null)" ]] || return 1
+      return 0
+    fi
+    p="./$p"
+  fi
+  # Read whole, never piped into frontmatter: it stops at the closing `---`, and the
+  # SIGPIPE that sends `git show` on a large document is a failure under pipefail.
+  src="$(git show "HEAD:$p" 2>/dev/null)" || return 1
+  hfm="$(frontmatter /dev/stdin <<<"$src")" || true
+  list_entries "$hfm" open_questions | sed -n 's/^\(Q[0-9][0-9]*\):.*/\1/p'
 }
 
 fail() { printf '  ERROR  %s\n         %s\n' "$1" "$2"; errors=$((errors+1)); }
@@ -500,6 +532,17 @@ while IFS= read -r file; do
     if [[ "$n" -gt $DO_NOT_REPEAT_MAX ]]; then
       warn "$rel" "do_not_repeat carries $n entries; $AB_CONVENTIONS_DIR/rounds.md caps it at $DO_NOT_REPEAT_MAX — the project-manager folds the oldest into '# Notes'"
     fi
+    n="$(awk 'function run(s, c,   k) { while (substr(s, k + 1, 1) == c) k++; return k }
+      NR==1 && $0=="---" { fm=1; next } fm { if ($0=="---") fm=0; next }
+      { t = $0; sub(/^ ? ? ?/, "", t); c = substr(t, 1, 1); k = (c == "`" || c == "~") ? run(t, c) : 0
+        if (fence) { if (c == fc && k >= fl && substr(t, k + 1) ~ /^[ \t]*$/) fence = 0 }
+        else if (k >= 3 && !(c == "`" && index(substr(t, k + 1), "`"))) { fence = 1; fc = c; fl = k }
+        else if (/^# /) { if (in_r) exit; in_r = /^# Result[[:space:]]*$/; next } }
+      in_r { if ($0 ~ /^[[:space:]]*$/) { if (n) gap++ } else { n += gap + 1; gap = 0 } }
+      END { print n+0 }' "$file")"
+    if [[ "$n" -gt $RESULT_MAX_LINES ]]; then
+      warn "$rel" "# Result is $n lines; $AB_CONVENTIONS → \"Write less\" caps it at $RESULT_MAX_LINES — the reasoning belongs in '# Notes'"
+    fi
 
     # `open_caveats` holds a TERMINAL write only — `done`/`cancelled`. Any other status
     # with a caveat outstanding is the normal working state and stays silent.
@@ -510,17 +553,33 @@ while IFS= read -r file; do
       done <<< "$(list_entries "$fm" open_caveats)"
     fi
 
-    blocks=""
+    blocks=""; old_labels=""; old_known=""
     while IFS= read -r question; do
       label="$(sed -n 's/^\(Q[0-9][0-9]*\):.*/\1/p' <<<"$question")"
       [[ -n "$label" ]] || continue
       [[ -n "$blocks" ]] || blocks="$(question_blocks "$file")"
       row="$(awk -v q="$label" '$1 == q { print; exit }' <<<"$blocks")"
+      nrec=0; [[ -z "$row" ]] || read -r _ nopt ndepth nrec <<<"$row"
+      # Missing on a question the uncommitted change ADDS errors: its author is still here to
+      # write one, so nothing accumulates for migrate-bundle.sh to repair (docs/conventions.md #9).
+      if [[ "$nrec" == 0 && "${question#"$label": }" != advisor:* ]]; then
+        if [[ -z "$old_known" ]]; then
+          old_known=1; old_labels="$(head_labels "$file")" || old_known=unknown
+        fi
+        if [[ "$old_known" == 1 ]] && ! grep -qxF -- "$label" <<<"$old_labels"; then
+          if [[ -z "$row" ]]; then
+            fail "$rel" "open question $label is new in this change and has no '### $label' block under '## Question details', so no 'Recommendation:' ($AB_SCHEMA, 'Question details')"
+            continue
+          fi
+          fail "$rel" "open question $label is new in this change and '### $label' has no 'Recommendation:' line ($AB_SCHEMA, 'Question details')"
+        elif [[ -n "$row" ]]; then
+          warn "$rel" "'### $label' has no 'Recommendation:' line ($AB_SCHEMA, 'Question details')"
+        fi
+      fi
       if [[ -z "$row" ]]; then
         warn "$rel" "open question $label has no '### $label' block under '## Question details' ($AB_SCHEMA, 'Question details')"
         continue
       fi
-      read -r _ nopt ndepth <<<"$row"
       [[ "$nopt" -gt 0 ]] || warn "$rel" "'### $label' has an empty 'Options:' list ($AB_SCHEMA, 'Question details')"
       [[ "$ndepth" -ge 3 ]] || warn "$rel" "'### $label' has $ndepth of 3 context depths ($AB_SCHEMA, 'Question details')"
     done <<< "$(list_entries "$fm" open_questions)"
