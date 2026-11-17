@@ -9,7 +9,7 @@ set -u
 command -v jq >/dev/null 2>&1 || exit 0
 payload="$(cat 2>/dev/null || true)"
 case "$payload" in *push*) ;; *) exit 0 ;; esac
-fields="$(printf '%s' "$payload" | jq -r '(.tool_input.command // "" | gsub("\n"; " ")), (.cwd // "")' 2>/dev/null)" || exit 0
+fields="$(printf '%s' "$payload" | jq -r '(.tool_input.command // "" | gsub("\n"; "; ")), (.cwd // "")' 2>/dev/null)" || exit 0
 cmd="$(printf '%s\n' "$fields" | sed -n 1p)"
 dir="$(printf '%s\n' "$fields" | sed -n 2p)"
 re='(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:space:]]+("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:];&|]+))?[[:space:]]+push([[:space:]]|$)'

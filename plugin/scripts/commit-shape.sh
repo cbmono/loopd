@@ -22,8 +22,7 @@ if [ -z "$range" ]; then
     unknown "origin/HEAD is not set in $dir; pass --range <base>..<head>"
   range="$def..HEAD"
 fi
-log="$(git -C "$dir" log --no-merges --format='%x1e%h%x1f%s%x1f%b' "$range" -- 2>/dev/null)" ||
-  unknown "git log $range failed in $dir"
+git -C "$dir" rev-list --count "$range" -- >/dev/null 2>&1 || unknown "git log $range failed in $dir"
 
 attr=unknown
 common="$(cd "$dir" 2>/dev/null && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
@@ -37,11 +36,13 @@ if [ -n "$common" ] && [ -f "$common/loopd-bundle" ]; then
   fi
 fi
 
-printf '%s' "$log" | LC_ALL=C awk -v range="$range" -v attr="$attr" '
+git -C "$dir" log -z --no-merges --format='%h%x1f%s%x1f%b' "$range" -- 2>/dev/null |
+  while IFS= read -r -d '' rec || [ -n "$rec" ]; do printf '%s\036' "${rec//$'\036'/}"; done |
+  LC_ALL=C awk -v range="$range" -v attr="$attr" '
 BEGIN { RS = "\036"; FS = "\037" }
 function chars(s,   t) { t = s; return length(s) - gsub(/[\200-\277]/, "", t) }
 function trailer(l) { return l ~ /^[A-Za-z0-9][A-Za-z0-9-]*: / || l ~ /^[ \t]/ }
-NF >= 2 {
+NF >= 2 && $1 ~ /^[0-9a-f]+$/ {
   sha = $1; subj = $2; body = $3
   if (subj ~ /^(Revert |fixup! |squash! |amend! )/) next
   why = ""
