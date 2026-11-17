@@ -499,5 +499,5 @@ fence outside `Needs you:`, a what-happened past two sentences, and narration ("
 **The order check is a detector, not the rule.** The rule is dependency. A known miss: a clear report is not proof the order is right (`docs/pm-design.md#output`).
 
 **Cite every PR as a Markdown link — `[<repo>#<n>](<url>)`, bare repo name** (refused as `link`) — and link
-other artifacts (commits, CI runs) by URL. Follow this instance's `CLAUDE.md` for
+other artifacts (commits, CI runs) by URL — `/projects/` refused (`bundle`). Follow this instance's `CLAUDE.md` for
 data-handling, units, and routing.
