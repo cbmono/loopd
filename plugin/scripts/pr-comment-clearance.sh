@@ -7,6 +7,7 @@
 #   Usage: pr-comment-clearance.sh --comment <id> [--repo <owner>/<name>]
 #          pr-comment-clearance.sh --review-comment <id> [--repo <owner>/<name>]
 #          pr-comment-clearance.sh --comment-file <path>  (decide before posting)
+#          …any of the three, plus --signature <line>    (it must end the comment)
 #          pr-comment-clearance.sh --self-test            (prove this script RUNS)
 #
 # WHY THIS EXISTS, AND WHY THE SIBLING DID NOT COVER IT. `pr-body-clearance.sh` reads a
@@ -148,7 +149,8 @@
 #   0  the reply carries the shape, every element is inside the ceiling, at whatever total
 #      length — or a carve-out is claimed, in which case the reason is printed
 #   1  the reply is readable and the SHAPE is missing: it is empty, or an entry carries no
-#      verdict. stderr names every entry it means, by index
+#      verdict, or `--signature` was given and the comment does not end with it as its last
+#      visible line, straight under a text line. stderr names every entry it means, by index
 #   2  usage error, or the environment cannot answer (no `gh`/`jq`, an unreadable comment,
 #      an unreadable file, a pattern table that will not compile) — UNKNOWN, and unknown is
 #      never clearance. A COMMENT THAT CANNOT BE FETCHED OR READ IS THIS CODE, NEVER 0:
@@ -256,6 +258,7 @@ usage() {
   echo "Usage: $(basename "$0") --comment <id> [--repo <owner>/<name>]" >&2
   echo "       $(basename "$0") --review-comment <id> [--repo <owner>/<name>]" >&2
   echo "       $(basename "$0") --comment-file <path>  (decide before posting)" >&2
+  echo "       …any of the three, plus --signature <line>    (it must end the comment)" >&2
   echo "       $(basename "$0") --self-test            (prove this script RUNS)" >&2
   exit 2
 }
@@ -601,6 +604,33 @@ EOF
 #
 # AND "IT RUNS" IS NOT "IT IS COMPLETE": this block sits near the TOP, so a copy truncated
 # below it would still reach this exit. The last line of the file is asserted here.
+# Placement only: the caller hands in the exact line and this compares it. Who signed is never
+# read here — the line is a label, not evidence (`conventions/review.md`).
+check_signature() { # <raw-reply> <label> <line> -> 0 placed, 1 missing or misplaced
+  local why label="$2"
+  why="$(tr -d '\r' < "$1" | LC_ALL=C awk -v sig="$3" '
+    function rtrim(s) { sub(/[[:space:]]+$/, "", s); return s }
+    function blank(s) { return s ~ /^[[:space:]]*$/ }
+    { l[NR] = rtrim($0) }
+    END {
+      sig = rtrim(sig)
+      n = NR; while (n > 0 && blank(l[n])) n--
+      if (n > 0 && l[n] ~ /-->$/)
+        for (j = n; j > 0; j--) if (l[j] ~ /^[[:space:]]{0,3}<!-- okf-verdict v1/) {
+          n = j - 1; while (n > 0 && blank(l[n])) n--; break
+        }
+      if (n == 0 || l[n] != sig) { print "its last visible line is not the signature"; exit }
+      if (n > 1 && blank(l[n-1])) { print "a blank line sits before the signature"; exit }
+      if (n > 1 && l[n-1] ~ /^[[:space:]]*[|]/) { print "the signature sits directly under a table row, where it renders as one more row"; exit }
+    }')"
+  [ -n "$why" ] || return 0
+  echo "refuse: $label does not end with its role signature: $why." >&2
+  echo "        End with a text line, then the signature with no blank line between;" >&2
+  echo "        an okf-verdict v1 trailer may follow it. See $AB_CONVENTIONS →" >&2
+  echo "        \"Every PR comment and review an agent posts ends with its role signature\"." >&2
+  return 1
+}
+
 SELFTEST_OK="pr-comment-clearance: self-test ok"
 EOF_SENTINEL="#EOF: pr-comment-clearance.sh is complete to here"
 if [ "${1:-}" = "--self-test" ]; then
@@ -645,18 +675,26 @@ if [ "${1:-}" = "--self-test" ]; then
   st_probe 0 "a carve-out is never trimmed" \
     "**Security** — the token is logged in plaintext. $(st_pad 900)"
 
+  printf 'Evidence: 41/0.\nsig\n' > "$TMPD/raw"
+  check_signature "$TMPD/raw" st sig 2>/dev/null || {
+    echo "self-test: a placed signature was refused — refusing" >&2; exit 2; }
+  printf '| a | b |\n|---|---|\n| 1 | 2 |\nsig\n' > "$TMPD/raw"
+  ! check_signature "$TMPD/raw" st sig 2>/dev/null || {
+    echo "self-test: a signature under a table cleared — refusing" >&2; exit 2; }
+
   printf '%s\n' "$SELFTEST_OK"
   exit 0
 fi
 
 # --- argument parsing ---------------------------------------------------------
-comment=""; kind=""; repo=""; file=""
+comment=""; kind=""; repo=""; file=""; sig=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --comment)        comment="${2:-}"; kind="issue";  [ -n "$comment" ] || usage; shift 2 ;;
     --review-comment) comment="${2:-}"; kind="review"; [ -n "$comment" ] || usage; shift 2 ;;
     --repo)           repo="${2:-}";    [ -n "$repo" ] || usage; shift 2 ;;
     --comment-file)   file="${2:-}";    [ -n "$file" ] || usage; shift 2 ;;
+    --signature)      sig="${2:-}";     [ -n "$sig" ] || usage; shift 2 ;;
     -h|--help)        usage ;;
     *) echo "error: unexpected argument '$1'" >&2; usage ;;
   esac
@@ -692,6 +730,7 @@ if [ -n "$file" ]; then
   reply_chars="$(jq -Rs 'length' < "$file" 2>/dev/null)" || reply_chars="unknown"
   echo "pr-comment-clearance: $file is $reply_chars characters (information only — no" >&2
   echo "                      exit code in this script is derived from that number)" >&2
+  [ -z "$sig" ] || check_signature "$file" "'$file'" "$sig" || exit 1
   render_reply "$file" "$TMPD/rendered"
   decide "$TMPD/rendered" "'$file'"
   exit $?
@@ -759,6 +798,7 @@ echo "pr-comment-clearance: comment $comment is $reply_chars characters (informa
 echo "                      only — no exit code in this script is derived from that" >&2
 echo "                      number)" >&2
 
+[ -z "$sig" ] || check_signature "$TMPD/body" "comment $comment ($url)" "$sig" || exit 1
 render_reply "$TMPD/body" "$TMPD/rendered"
 decide "$TMPD/rendered" "comment $comment ($url)"
 exit $?
