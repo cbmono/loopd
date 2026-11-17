@@ -591,7 +591,8 @@ d1 'depends_on: [ /projects/proj-a/tasks/t2.md ]\n'; cr blocked-again
 
 echo "== a draft whose approach critique awaits triage =="
 D2="$INST/projects/proj-d/tasks/d2.md"
-d2() { { printf -- '---\ntype: Task\nstatus: draft\nadvisor_notes: [ %s ]\n---\n\n# Notes\n\n' "$1"; printf '%b' "${2:-}"; } > "$D2"; }
+# Criteria filled: a critiqued draft was refined first, or it would be `refine owed` instead.
+d2() { { printf -- '---\ntype: Task\nstatus: draft\nacceptance_criteria: [ "x" ]\nadvisor_notes: [ %s ]\n---\n\n# Notes\n\n' "$1"; printf '%b' "${2:-}"; } > "$D2"; }
 d2 '"2026-10-25T15:45:00Z · a concern?"'; cr critique
 ok "a concern with no triage line is a DELTA naming the draft" "$(crun1)" "rc:1 DELTA: projects/proj-d/tasks/d2.md has an untriaged approach critique — step 2 owes it a triage."
 d2 '"2026-10-25T15:45:00Z · a concern?"' '* 2026-10-25T15:00:00Z triage: an older one\n'; cr old-triage
