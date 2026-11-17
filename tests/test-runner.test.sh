@@ -223,11 +223,11 @@ assert "the mutant that drops the guard falsely passes (proves the pin bites)" \
 assert "…reporting the all-clear banner it should not"        "$(has "$MUT_SUM_OUT" 'ok: all')"
 rm -f "$H/work/tests/run-mutant.sh" "$H/work/tests/silent-death.test.sh"
 
-echo "== --all, the default, and the refusals =="
+echo "== --all, the --changed default, and the refusals =="
 ALL_OUT="$( cd "$A/work" && bash tests/run.sh --all 2>&1 )"
 assert "--all runs the harness no changed path names"         "$(has "$ALL_OUT" 'tests/fp-names-nothing.test.sh')"
 BARE_OUT="$( cd "$A/work" && bash tests/run.sh 2>&1 )"
-assert "…and no flag at all behaves as --all"                 "$(has "$BARE_OUT" 'tests/fp-names-nothing.test.sh')"
+assert "…and no flag at all behaves as --changed, not --all"  "$(lacks "$BARE_OUT" 'tests/fp-names-nothing.test.sh')"
 
 ( cd "$A/work" && bash tests/run.sh --nonsense >/dev/null 2>&1 ); UNK_RC=$?
 assert "an unknown flag is refused at exit 2"                 "$([ "$UNK_RC" -eq 2 ] && echo 0 || echo 1)"
