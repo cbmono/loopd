@@ -67,7 +67,7 @@ fx() { # <kind> <task status> <advisor_notes entries, one per line, or empty> [n
   { printf -- '---\ntype: Project\nkind: %s\nstatus: active\n' "$1"
     if [ -n "$3" ]; then printf 'advisor_notes:\n'; printf '%s\n' "$3" | sed 's/^/  - "/; s/$/"/'; fi
     printf -- '---\n\n# Notes\n\n%b' "${4:-}"; } > "$INST/$P"
-  for t in 001 002; do printf -- '---\ntype: Task\nstatus: %s\n---\n' "$2" > "$INST/projects/p/tasks/task-$t.md"; done
+  for t in 001 002; do printf -- '---\ntype: Task\nstatus: %s\nacceptance_criteria: [ "x" ]\n---\n' "$2" > "$INST/projects/p/tasks/task-$t.md"; done
   GIT -C "$INST" add -A && GIT -C "$INST" commit -qm fx && "$INST/scripts/tick-delta.sh" record --instance "$INST"
 }
 check() { local out rc; out="$("$INST/scripts/tick-delta.sh" check --instance "$INST" 2>&1)"; rc=$?
