@@ -138,6 +138,17 @@
 # session may also Edit/Write the one task document whose `session:` names it: that is
 # where it records `pr:` and its result, which a subagent hands back instead.
 #
+# ------------------------------------------------------- WHY THE STUCK SIGNATURE IS HERE
+# The doom loop cannot see an agent that varies its command while failing the same way: a
+# failure lives in the RESULT, which reaches a hook only as PostToolUseFailure's top-level
+# `error` (measured on 2.1.325; a failed call fires no PostToolUse). So that event is
+# registered too, and for the same two shapes as above. OPT-IN on `stuckSignature`, shadow
+# only: it never denies. PreToolUse counts calls; each failure adds its signature — tool,
+# exit code and the first error line with paths, hashes and numbers stripped — to a ring of
+# the last 64. Past C calls, N of one signature or E failures writes ONE `stuck-signature`
+# line per agent, naming the arm and the counts, never the output. `REPEAT_SKIP` waits are
+# transparent here too. `control.sh round` clears it with the rest of a round's state.
+#
 # ------------------------------------------------------------------------ BOUNDED
 # Unbounded per-call state in front of every tool call is its own hazard, so the
 # directive scan stops at `CONTROL_MAX` records (default 20) and SAYS what it did
@@ -234,6 +245,9 @@ REPEAT_SKIP='^(gh +(pr +(checks|view)|run +(view|watch|list))|sleep)([[:space:]]
 # The exemption is for a WHOLE command, so anything that can chain a second one to a poll
 # disqualifies it: `sleep 1; make test` is a `make test` loop wearing a poll's prefix.
 REPEAT_CHAIN='[;&|`\n()]'
+STUCK="$CTL/stuck"
+STUCK_CACHE="$CTL/stuck-limit"
+STUCK_RING=64
 # `$CTL/agents` is the roster FILE, so the per-agent clock cannot live under that name.
 AGENTSTATE="$CTL/agents.d"
 CAP_CACHE="$CTL/agent-cap"
@@ -285,6 +299,33 @@ repeat_limit_load() {
     printf '%s %s\n' "$n" "$epoch" > "$REPEAT_CACHE" 2>/dev/null || true
   fi
   case "$REPEAT_N" in ''|*[!0-9]*) REPEAT_N=off ;; esac
+}
+
+# `off`, or C N E — on the same cached terms as the repeat limit. `true` takes the defaults;
+# an object overrides any of `calls`, `repeats` and `errors`, and a bad value falls to its default.
+STUCK_C=off; STUCK_N=3; STUCK_E=8
+stuck_limit_load() {
+  local cfg="$root/instance.config.json" loc="$root/instance.config.local.json" v=off when=0 layers
+  if [ -r "$STUCK_CACHE" ]; then
+    read -r v when < "$STUCK_CACHE" 2>/dev/null || { v=off; when=0; }
+    case "$when" in ''|*[!0-9]*) when=0 ;; esac
+  fi
+  if [ ! -e "$STUCK_CACHE" ] || [ "$cfg" -nt "$STUCK_CACHE" ] \
+     || { [ -e "$loc" ] && [ "$loc" -nt "$STUCK_CACHE" ]; } \
+     || [ "$((epoch - when))" -ge "$REPEAT_RECHECK" ]; then
+    layers=("$cfg"); [ -f "$loc" ] && layers=("$loc" "$cfg")
+    v="$(jq -s -r '[.[] | objects | select(has("stuckSignature")) | .stuckSignature] | .[0] as $v
+         | def n($k; $d; $min): ($v[$k] | if type == "number" and . == floor and . >= $min and . < 100000 then . else $d end);
+         if $v == true then "18,3,8"
+         elif ($v | type) == "object" then "\(n("calls"; 18; 1)),\(n("repeats"; 3; 2)),\(n("errors"; 8; 1))"
+         else "off" end' "${layers[@]}" 2>/dev/null)" || v=off
+    printf '%s %s\n' "$v" "$epoch" > "$STUCK_CACHE" 2>/dev/null || true
+  fi
+  case "$v" in
+    [0-9]*,[0-9]*,[0-9]*) IFS=, read -r STUCK_C STUCK_N STUCK_E <<<"$v" ;;
+    *) STUCK_C=off ;;
+  esac
+  case "$STUCK_C$STUCK_N$STUCK_E" in ''|*[!0-9]*) STUCK_C=off ;; esac
 }
 
 digest() { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else cksum; fi; }
@@ -422,6 +463,53 @@ agent_key() {
 repeat_file() { local k; k="$(agent_key)" || return 1; printf '%s/%s' "$REPEATS" "$k"; }
 cap_file()    { local k; k="$(agent_key)" || return 1; printf '%s/%s.started' "$AGENTSTATE" "$k"; }
 cap_mark()    { local k; k="$(agent_key)" || return 1; printf '%s/%s.capped' "$AGENTSTATE" "$k"; }
+stuck_file()  { local k; k="$(agent_key)" || return 1; printf '%s/%s' "$STUCK" "$k"; }
+
+# `<key>.n` holds "calls errors" and is the only per-call write, by builtins alone; the ring
+# and the once-only `.logged` mark are touched on a failure. Parallel calls can lose a count,
+# which a shadow counter can afford and a lock in front of every call cannot.
+stuck_counts() {
+  sc_calls=0; sc_errors=0
+  [ -r "$1.n" ] && read -r sc_calls sc_errors < "$1.n" 2>/dev/null
+  case "$sc_calls$sc_errors" in ''|*[!0-9]*) sc_calls=0; sc_errors=0 ;; esac
+}
+stuck_call() {
+  local f; f="$(stuck_file)" || return 0
+  stuck_counts "$f"
+  mkdir -p "$STUCK" 2>/dev/null || true
+  printf '%s %s\n' "$((sc_calls + 1))" "$sc_errors" > "$f.n" 2>/dev/null || true
+}
+stuck_failure() {
+  local f sig fp rep arm tmp
+  f="$(stuck_file)" || return 0
+  sig="$(printf '%s' "$payload" | jq -r '
+    (.error // "" | tostring | split("\n")) as $l
+    | (($l[0] // "") | capture("^Exit code (?<c>[0-9]+)$").c // "") as $ec
+    | ([$l[] | select(test("^Exit code [0-9]+$") | not) | select(test("\\S"))][0] // "")
+    | gsub("(~|\\.{1,2})?/[^\\s\u0027\"\u0060:,;()]+"; "<p>") | gsub("[0-9A-Fa-f]{7,}"; "<h>")
+    | gsub("[0-9]+"; "<n>") | .[0:200]
+    | "\($ec)|\(.)"' 2>/dev/null)" || sig=""
+  [ -n "$sig" ] || { note "fail-open: could not read this failure — stuck-signature skipped"; return 0; }
+  fp="$(printf '%s|%s' "$tool_name" "$sig" | digest 2>/dev/null)" || fp=""
+  fp="${fp%%[![:xdigit:]]*}"; fp="${fp:0:16}"
+  [ -n "$fp" ] || return 0
+  stuck_counts "$f"
+  mkdir -p "$STUCK" 2>/dev/null || true
+  printf '%s %s\n' "$sc_calls" "$((sc_errors + 1))" > "$f.n" 2>/dev/null || true
+  tmp="$f.tmp.$$"; [ -e "$f" ] || : > "$f" 2>/dev/null
+  rep="$(awk -v fp="$fp" -v max="$STUCK_RING" -v out="$tmp" '{ a[NR] = $0 }
+    END { n = NR + 1; a[n] = fp; for (i = (n > max ? n - max + 1 : 1); i <= n; i++) { print a[i] > out; if (a[i] == fp) c++ }
+          print c + 0 }' "$f" 2>/dev/null </dev/null)" || rep=0
+  mv -f "$tmp" "$f" 2>/dev/null || rm -f "$tmp" 2>/dev/null
+  case "$rep" in ''|*[!0-9]*) rep=0 ;; esac
+  [ "$sc_calls" -ge "$STUCK_C" ] && [ ! -e "$f.logged" ] || return 0
+  if [ "$rep" -ge "$STUCK_N" ]; then arm=repeat
+  elif [ "$((sc_errors + 1))" -ge "$STUCK_E" ]; then arm=errors
+  else return 0; fi
+  : > "$f.logged" 2>/dev/null || true
+  note stuck-signature "$agent_id" "$agent_type" "$tool_name" \
+    "arm=$arm calls=$sc_calls errors=$((sc_errors + 1)) repeats=$rep fingerprint=$fp session=$session_id"
+}
 
 # One cleanup for both counters on SubagentStop. The clock is PARKED, never deleted: the stop
 # is not terminal when the harness re-prompts an agent to hand back, and a deleted clock left
@@ -437,6 +525,11 @@ agent_forget() {
     f="$(cap_file)" || f=""
     [ -z "$f" ] || { [ ! -e "$f" ] || mv -f "$f" "${f%.started}.stopped"; rm -f "${f%.started}.capped" "${f%.started}.unclocked"; } 2>/dev/null || true
     find "$AGENTSTATE" -type f -mmin +"$CAP_SWEEP" -delete 2>/dev/null || true
+  fi
+  if [ -d "$STUCK" ]; then
+    f="$(stuck_file)" || f=""
+    [ -z "$f" ] || rm -f "$f" "$f.n" "$f.logged" 2>/dev/null || true
+    find "$STUCK" -type f -mmin +"$CAP_SWEEP" -delete 2>/dev/null || true
   fi
 }
 
@@ -467,7 +560,7 @@ command -v jq >/dev/null 2>&1 || {
   exit 0
 }
 
-# One jq call for all three fields: this runs per tool call, so the process count
+# One jq call for all six fields: this runs per tool call, so the process count
 # is the cost that matters.
 #
 # ONE FIELD PER LINE, NOT TAB-SEPARATED, and that is not a style choice. TAB is an
@@ -481,19 +574,22 @@ command -v jq >/dev/null 2>&1 || {
 # roster assertion looked for the empty string and passed vacuously.
 #
 # Line-oriented `IFS='' read -r` preserves an empty field exactly. `$(...)` strips
-# TRAILING newlines, which is harmless here: only `hook_event` is last, and an empty
-# one is read as PreToolUse below.
-fields="$(printf '%s' "$payload" \
-  | jq -r '[(.agent_id // ""), (.agent_type // ""), (.tool_name // ""), (.session_id // ""), (.hook_event_name // "")] | .[]' 2>/dev/null)" || fields=""
+# TRAILING newlines, which is harmless here: only `poll` is last, and it is never empty.
+fields="$(printf '%s' "$payload" | jq -r --arg skip "$REPEAT_SKIP" --arg chain "$REPEAT_CHAIN" '
+  ((.tool_input.command // "") | if type == "string" then sub("^\\s+"; "") else "" end) as $c
+  | [(.agent_id // ""), (.agent_type // ""), (.tool_name // ""), (.session_id // ""), (.hook_event_name // ""),
+     (if (.tool_name // "") == "Bash" and ($c | test($skip)) and ($c | test($chain) | not) then "1" else "0" end)]
+  | .[]' 2>/dev/null)" || fields=""
 [ -n "$fields" ] || { note "fail-open: unparseable PreToolUse payload"; exit 0; }
 
-agent_id=""; agent_type=""; tool_name=""; session_id=""; hook_event=""
+agent_id=""; agent_type=""; tool_name=""; session_id=""; hook_event=""; poll=0
 {
   IFS='' read -r agent_id || true
   IFS='' read -r agent_type || true
   IFS='' read -r tool_name || true
   IFS='' read -r session_id || true
   IFS='' read -r hook_event || true
+  IFS='' read -r poll || true
 } <<EOF
 $fields
 EOF
@@ -505,6 +601,7 @@ case "${hook_event:-PreToolUse}" in
   PreToolUse) ;;
   SubagentStop) agent_forget; exit 0 ;;
   SubagentStart) agent_started_record; exit 0 ;;
+  PostToolUseFailure) stuck_limit_load; [ "$STUCK_C" != off ] && [ "$poll" != 1 ] || exit 0 ;;
   *) exit 0 ;;
 esac
 
@@ -522,6 +619,7 @@ if [ -z "$agent_id" ]; then
   [ "${agent_type%:*}" = "$(jq -r '.name // ""' "$(dirname "$0")/../.claude-plugin/plugin.json" 2>/dev/null)" ] || exit 0
   agent_id="$session_id"; role_session=1
 fi
+[ "$hook_event" != PostToolUseFailure ] || { stuck_failure; exit 0; }
 
 # ---------------------------------------------------------------- the roster
 # `control.sh agents` reads this. Without it the kill switch is unusable: the
@@ -551,6 +649,9 @@ if [ ! -e "$ROSTER" ] || ! awk -F'\t' -v id="$agent_id" '$1==id { found=1; exit 
     fi
   fi
 fi
+
+stuck_limit_load
+[ "$STUCK_C" = off ] || [ "$poll" = 1 ] || stuck_call
 
 # ------------------------------------------------------------------- the wall clock
 # Ahead of the doom-loop counter: an agent past its budget is being told to wrap up, which

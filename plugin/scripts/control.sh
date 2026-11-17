@@ -92,8 +92,8 @@ control.sh — steer, gate or cleanly halt ONE dispatched role agent, live.
   control.sh steer <agent-id>  note...     one course correction, delivered once
   control.sh status                        what is pending, what fired
   control.sh clear <agent-id> | --all      release
-  control.sh round <session-id>            restart a role session's clock and repeat
-                                           counter, before step 4 resumes it
+  control.sh round <session-id>            restart a role session's clock and counters,
+                                           before step 4 resumes it
   control.sh arm | disarm                  turn the surface on / off
   control.sh log [n]                       the action log
 
@@ -238,8 +238,9 @@ round)
   case "$1" in *[!A-Za-z0-9._-]*) echo "error: not a session id: '$1'" >&2; exit 1 ;; esac
   [ "${#1}" -le 64 ] || { echo "error: not a session id: '$1'" >&2; exit 1; }
   rm -f "$CTL/agents.d/$1.started" "$CTL/agents.d/$1.capped" "$CTL/agents.d/$1.unclocked" "$CTL/repeats/$1" \
+    "$CTL/stuck/$1" "$CTL/stuck/$1.n" "$CTL/stuck/$1.logged" \
     || { echo "error: could not reset $1" >&2; exit 1; }
-  echo "round  $1: its wall clock and repeat counter restart at its next tool call"
+  echo "round  $1: its wall clock, repeat and stuck-signature counters restart at its next tool call"
   ;;
 
 agents)
