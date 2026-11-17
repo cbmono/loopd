@@ -54,6 +54,7 @@ BEGIN { while ((getline w < LIST) > 0) { w = tolower(w); gsub(/[^a-z]/, "", w); 
   }
   if (para == "") pline = NR
   para = para " " c
+  if (line ~ /^[ \t]*#/) flush()
 }
 END { flush() }' "$1"
 exit 0

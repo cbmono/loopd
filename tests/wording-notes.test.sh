@@ -37,6 +37,7 @@ ok "a code span is not counted"            "$(notes "$(words 20) \`$(words 10)\`
 ok "a URL is not counted"                  "$(notes "$(words 25) https://example.com/a/b.")" 0
 ok "a table row is not a sentence"         "$(notes "| $(words 30) |")" 0
 ok "a fenced block is not a sentence"      "$(notes "$(printf '```\n%s\n```' "$(words 30).")")" 0
+ok "a heading ends its own sentence"       "$(notes "$(printf '## %s\n%s.' "$(words 15)" "$(words 15)")")" 0
 ok "two short sentences on one line"       "$(notes "$(words 15). $(words 15).")" 0
 ok "a banned word in a code span is not reported" "$(notes 'Run `utilize` now.')" 0
 ok "an inflected banned word is reported"  "$(notes 'It ensures nothing.')" 1
