@@ -48,6 +48,16 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pr-title.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/review-request.sh\"",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "SubagentStart": [
