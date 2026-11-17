@@ -242,6 +242,9 @@ ok "QA-filed, answered with work: a fresh round of the assignee" "$(run --owed "
 ok "…the answer still rides along" "$(run --owed "$QF" | sed -n 3p)" "answer: send the hang fix back to the implementer"
 printf '* 2026-10-21T11:00:00Z dispatched 0d15ea5e-0000-4000-8000-00000000000a for hand-off f6f6f6f6-0000bbbb\n' >> "$QF"
 ok "…the dispatched note: the second call is not owed" "$(one --owed "$QF")" "not-owed already-resumed rc=1"
+qa "$QF" "send the hang fix back to the implementer" software-engineer qa-reviewer
+printf '* spawned; session id unresolved: 0d15ea5e\n' >> "$QF"
+ok "…so is an unresolved spawn's note" "$(one --owed "$QF")" "not-owed already-resumed rc=1"
 qa "$QF" "send it back" qa-reviewer software-engineer
 ok "implementer-filed: resume as before" "$(run --owed "$QF" | sed -n 2p)" "round: resume"
 for a in done accept; do
