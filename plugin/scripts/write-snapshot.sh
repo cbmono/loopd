@@ -42,6 +42,8 @@
 #              never its body — plus a top-level `repo` (the bundle's own GitHub
 #              `<org>/<repo>`, already inside every `closed` permalink) only then
 #     phase:   file, order, title, status
+#     backlog: the open refactor-backlog COUNT (`counts.backlog`, refactor-backlog.sh count),
+#              left out when `knowledge/backlog/` is absent — never an entry's text
 #     closed:  slug, close date, pinned sha, one-line outcome, and one bundle-relative
 #              path + GitHub permalink per deliverable — read from the TRACKED
 #              projects/CLOSED.md, which close-project-folder.sh writes. A SECOND
@@ -876,6 +878,11 @@ if ab_awaiting_on . && [[ -e "$AB_AWAITING" ]]; then
   fi
 fi
 
+BACKLOG_KEY=""
+if [[ -d knowledge/backlog ]] && b_n="$(bash "$HERE/refactor-backlog.sh" count 2>/dev/null)" && [[ "$b_n" =~ ^[0-9]+$ ]]; then
+  BACKLOG_KEY=", \"backlog\": $b_n"
+fi
+
 # ---------------------------------------------------------------- write
 # Temp file BESIDE the target, never $TMPDIR: a cross-filesystem `mv` degrades to
 # copy-and-remove, where an interruption leaves a half-written snapshot that the
@@ -886,10 +893,10 @@ cat > "$tmp" <<JSON
 {
   "_schema": "loopd board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
-  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md) and mine (true when task-owner.sh clears the project for this clone); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); design (the PATH of projects/<slug>/design.md when it exists, never its body) and, only then, repo (this bundle's own GitHub org/repo); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/pr_mergeable (MERGEABLE|CONFLICTING|UNKNOWN, the tick's last host read)/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links; awaiting_items (one verb + project slug + task id per AWAITING.md item, never its title or sentence). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
+  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md) and mine (true when task-owner.sh clears the project for this clone); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); design (the PATH of projects/<slug>/design.md when it exists, never its body) and, only then, repo (this bundle's own GitHub org/repo); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/pr_mergeable (MERGEABLE|CONFLICTING|UNKNOWN, the tick's last host read)/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links; awaiting_items (one verb + project slug + task id per AWAITING.md item, never its title or sentence); counts.backlog (the open refactor-backlog COUNT, never an entry). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
-  "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},
+  "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total${BACKLOG_KEY}},
   ${CLOSED_BLOCK}${REPO_LINE}${AWAITING_BLOCK}"projects": [$projects_json]
 }
 JSON

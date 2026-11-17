@@ -29,7 +29,7 @@ others do instead. `tests/agent-tool-allowlist.test.sh` in `cbmono/loopd` enforc
 |---|---|
 | an **inline comment** | **none by default — only a section header or an external-constraint link.** A **section header** formats a file for readability (a title of 8 words or fewer, not a sentence); a **link** points at a constraint the code cannot express (an upstream issue, a spec). **Explaining what the code does, or why a shortcut was taken, is neither.** **A repo's own conventions or lint rules override this default.** `scripts/comment-check.sh` reports every other added comment line. |
 | a **script header** | **10 lines** — what it does, its exit codes, and where the reasoning lives. |
-| a **commit** | subject **72 characters**, body at most **5 lines**. |
+| a **commit** | subject **72 characters**, body at most **5 lines**. Check: `scripts/commit-shape.sh`. |
 | a **PR body** | the TL;DR line + the criteria table + at most **3 one-line notes**. Hard ceiling **2,500 characters**. |
 | a task **`# Result`** | **15 lines**. Check: `validate-bundle.sh`. |
 | a **`Finding`** | **40 lines**, and a required one-line `lesson:` in its frontmatter. |
@@ -115,6 +115,7 @@ a deleted assertion or a dropped required check is a hit with no line added. A t
 already on the default branch is not one, and neither is prose or a test that only names
 a token. A change the task's `acceptance_criteria`, an `answered_questions` entry or an
 acknowledged `D<n>` names is the human's decision already made, not a hit.
+Check: `scripts/reserved-scan.sh`.
 
 **On a hit, make no such change.** Set the task `status: blocked`, add a numbered
 `open_questions` entry naming the decision and the failing check —
@@ -305,7 +306,7 @@ Self-review, push everything it made you change, get CI green, **then** post
 `@coderabbitai review` — **once per PR, never after a fix commit, never on a schedule**. A
 review of a head that moves is spent (`review-clearance.sh` exit 4, stale). Detail:
 `conventions/review.md` → "Ask for the independent review once, at the head you consider
-final" — before you request a review.
+final" — before you request a review. Check: `hooks/review-request.sh`.
 
 ### Resolve or answer every reviewer-authored thread before you re-request
 
@@ -334,7 +335,7 @@ is about 280 characters" — when a finding needs more than that.
 It is the line your brief's `## Signature` call prints (`scripts/role-signature.sh <role>
 --instance <bundle>`), `— <login>-<qa|dev|ops|pm>`, as the **last visible line** with
 **no blank line** before it and **never directly under a table**; an `okf-verdict v1`
-trailer still goes after it. A label, never evidence. **Exempt:** a PR body, and the
+trailer still goes after it. Check: `pr-comment-clearance.sh --signature`. A label, never evidence. **Exempt:** a PR body, and the
 tick's bare `@coderabbitai review`. Detail: `conventions/review.md` → "Every PR comment and
 review an agent posts ends with its role signature" — when your comment ends in a
 table or carries a trailer.

@@ -437,6 +437,11 @@ while IFS= read -r sha; do
       # sibling would refuse at 2, so the commit is simply not that account's round.
       lc="$(printf '%s' "$login" | tr '[:upper:]' '[:lower:]')"
       if [ "${lc%\[bot\]}" = "$author" ]; then
+        # qa-dispatch.sh check answers 1 for "no bundle" too, which would read as 0 rounds.
+        [ -f "$inst/instance.config.json" ] || {
+          echo "error: no bundle at $inst, so whether $login's trailer at $sha is a recorded" >&2
+          echo "       qa round is unknown. Refusing (fail closed)." >&2
+          exit 2; }
         "$QA_DISPATCH" check --repo "$nwo" --pr "$num" --head "$sha" --instance "$inst" >/dev/null 2>&1
         case "$?" in
           0) ;;

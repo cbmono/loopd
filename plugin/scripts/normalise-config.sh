@@ -60,7 +60,7 @@ ROLE_MAPS = ("roleTiers", "roleEffort", "roleMinutes")
 LOCAL_ORDER = ["$schema", "ownerGithubUser", "authorEmail", "reposRoot", "worktreeRoot",
                "boardInstances", "boardArtifactUrl", "boardPort", "models", "roleTiers",
                "roleEffort",
-               "maxAgentsInFlight", "maxRepeatedToolCalls", "maxAgentMinutes", "roleMinutes",
+               "maxAgentsInFlight", "maxRepeatedToolCalls", "stuckSignature", "maxAgentMinutes", "roleMinutes",
                "maxIdleMinutes", "maxBgRoundMinutes", "minFreeDiskGb", "minFreeMemGb",
                "commitAttribution", "reclaimIgnoreOk"]
 

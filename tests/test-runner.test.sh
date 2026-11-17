@@ -361,6 +361,57 @@ assert "…and the tally is still exact (one pass per fixture harness)" \
 ( cd "$A/work" && bash tests/run.sh --all --jobs 0 >/dev/null 2>&1 ); J_RC=$?
 assert "--jobs 0 is refused at exit 2"                        "$([ "$J_RC" -eq 2 ] && echo 0 || echo 1)"
 
+echo "== the pool size: half the CPUs locally, all of them under --ci, and what overrides it =="
+# The CPU count is stubbed through the two tools cpus() asks. Eight probe harnesses each
+# record how many of them are running at once, so the bound is read off real concurrency,
+# not only off the runner's announcement of it.
+J="$TMP/j"; mkdir -p "$J" "$TMP/cpu"; build "$J"
+printf '#!/bin/sh\n[ "$1 $2" = "-n hw.ncpu" ] && echo "$FAKE_NCPU"\n' > "$TMP/cpu/sysctl"
+printf '#!/bin/sh\necho "$FAKE_NCPU"\n' > "$TMP/cpu/nproc"
+chmod +x "$TMP/cpu/sysctl" "$TMP/cpu/nproc"
+for i in 1 2 3 4 5 6 7 8; do
+  printf '#!/usr/bin/env bash\ntouch "$PROBE/$$"; sleep 1; ls "$PROBE" | wc -l >> "$PROBE.peak"; rm -f "$PROBE/$$"\necho "pass=1 fail=0"\n' \
+    > "$J/work/tests/fp-probe-$i.test.sh"
+done
+# <cpus> <LOOPD_TEST_JOBS or ''> <run.sh args...> — LOOPD_TEST_JOBS='' is the variable absent
+pool() {
+  local n="$1" env_jobs="$2"; shift 2
+  rm -rf "$TMP/probe" "$TMP/probe.peak"; mkdir -p "$TMP/probe"
+  ( cd "$J/work" && GITHUB_EVENT_NAME=pull_request GITHUB_BASE_REF=main PROBE="$TMP/probe" \
+      FAKE_NCPU="$n" LOOPD_TEST_JOBS="$env_jobs" PATH="$TMP/cpu:$PATH" bash tests/run.sh "$@" 2>&1 )
+}
+peak() { sort -n "$TMP/probe.peak" 2>/dev/null | tail -1 | tr -d " "; }
+first() { head -1 <<<"$1"; }
+
+JO="$(pool 12 '' --all)"; JP="$(peak)"
+assert "12 CPUs, a local run: the first line says 6 workers, from the default" \
+  "$([ "$(first "$JO")" = '== 6 worker(s), from default, half of 12 CPUs ==' ] && echo 0 || echo 1)"
+assert "…the pool is 6"                                        "$(has "$JO" 'in a pool of 6')"
+assert "…and no more than 6 probes ran at once (peak ${JP:-none})" "$([ -n "$JP" ] && [ "$JP" -le 6 ] && echo 0 || echo 1)"
+JO="$(pool 1 '' --all)"; JP="$(peak)"
+assert "1 CPU, a local run: 1 worker, never 0"                 "$([ "$(first "$JO")" = '== 1 worker(s), from default, half of 1 CPUs ==' ] && echo 0 || echo 1)"
+assert "…and the probes ran one at a time (peak ${JP:-none})"  "$([ "$JP" = 1 ] && echo 0 || echo 1)"
+assert "…and still all green"                                  "$(has "$JO" 'ok: all')"
+JO="$(pool 12 '' --changed --base main)"
+assert "--changed is a local run too: 6 workers"               "$([ "$(first "$JO")" = '== 6 worker(s), from default, half of 12 CPUs ==' ] && echo 0 || echo 1)"
+JO="$(pool 12 '' --ci)"
+assert "--ci keeps every CPU: 12 workers"                      "$([ "$(first "$JO")" = '== 12 worker(s), from default, all 12 CPUs under --ci ==' ] && echo 0 || echo 1)"
+JO="$(pool 12 '' --all --jobs 3)"; JP="$(peak)"
+assert "--jobs 3 overrides the local default"                  "$([ "$(first "$JO")" = '== 3 worker(s), from --jobs ==' ] && echo 0 || echo 1)"
+assert "…and bounds the probes at 3 (peak ${JP:-none})"        "$([ -n "$JP" ] && [ "$JP" -le 3 ] && echo 0 || echo 1)"
+JO="$(pool 12 '' --ci --jobs 3)"
+assert "…and the --ci default too"                             "$([ "$(first "$JO")" = '== 3 worker(s), from --jobs ==' ] && echo 0 || echo 1)"
+JO="$(pool 12 5 --all)"
+assert "LOOPD_TEST_JOBS=5 overrides the local default"         "$([ "$(first "$JO")" = '== 5 worker(s), from LOOPD_TEST_JOBS ==' ] && echo 0 || echo 1)"
+assert "…the pool is 5"                                        "$(has "$JO" 'in a pool of 5')"
+JO="$(pool 12 5 --all --jobs 3)"
+assert "…and --jobs outranks it"                               "$([ "$(first "$JO")" = '== 3 worker(s), from --jobs ==' ] && echo 0 || echo 1)"
+JO="$(pool 12 5 --ci)"
+assert "…and it leaves --ci on every CPU"                      "$([ "$(first "$JO")" = '== 12 worker(s), from default, all 12 CPUs under --ci ==' ] && echo 0 || echo 1)"
+JO="$(pool 12 0 --all)"; J_RC=$?
+assert "LOOPD_TEST_JOBS=0 is refused at exit 2"                "$([ "$J_RC" -eq 2 ] && echo 0 || echo 1)"
+assert "…naming the variable"                                  "$(has "$JO" "LOOPD_TEST_JOBS wants a positive integer, got '0'")"
+
 echo "== the checkout is re-verified after EVERY harness, not once at the start =="
 W="$TMP/w"; mkdir -p "$W"; build "$W"
 cat > "$W/work/tests/aaa-destroys-checkout.test.sh" <<'FIX'

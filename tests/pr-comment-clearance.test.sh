@@ -628,6 +628,50 @@ serve "$TMP/example-noverdict.md"
 expect "…the same example with its verdicts removed -> refuse" 1 --comment 4242
 
 echo
+echo "== --signature: the line must end the comment, under a text line =="
+SIGL='— example-user-007-dev'
+EV='Evidence: `foo.test.sh` 41/0.'
+TRAILER='<!-- okf-verdict v1
+verdict: pass
+-->'
+serve "$(reply_file 'Round 1 addressed.' '' '- Finding 1 — fixed: quoted.' '' "$EV" "$SIGL")"
+expect "signature as the last visible line -> clear" 0 --comment 4242 --signature "$SIGL"
+serve "$(reply_file 'Round 1 addressed.' '' '- Finding 1 — fixed: quoted.' '' "$EV" "$SIGL" '' "$TRAILER")"
+expect "…with an okf-verdict v1 trailer after it -> clear" 0 --comment 4242 --signature "$SIGL"
+serve "$(reply_file '| finding | verdict |' '|---|---|' '| 1 | fixed |' "$SIGL")"
+expect "signature directly under a table row -> refuse" 1 --comment 4242 --signature "$SIGL"
+says "…and it names the table" "directly under a table row"
+expect "…the same comment without the flag -> clear (unchanged)" 0 --comment 4242
+serve "$(reply_file 'Round 1 addressed.' '' '- Finding 1 — fixed: quoted.' '' "$EV" '' "$SIGL")"
+expect "a blank line before the signature -> refuse" 1 --comment 4242 --signature "$SIGL"
+says "…and it names the blank line" "a blank line sits before"
+serve "$(reply_file 'Round 1 addressed.' '' '- Finding 1 — fixed: quoted.' '' "$EV")"
+expect "no signature at all -> refuse" 1 --comment 4242 --signature "$SIGL"
+expect "…and without the flag -> clear (unchanged)" 0 --comment 4242
+serve "$(reply_file 'Round 1 addressed.' '' '- Finding 1 — fixed: quoted.' '' "$EV" "$SIGL" 'PS: one more line.')"
+expect "a line after the signature -> refuse" 1 --comment 4242 --signature "$SIGL"
+expect "the draft route takes the flag too" 1 \
+  --comment-file "$(reply_file '| a | b |' '|---|---|' '| 1 | 2 |' "$SIGL")" --signature "$SIGL"
+serve "$(reply_file "$EV" "$SIGL" "$TRAILER" 'Late paragraph.' '<!-- note -->')"
+expect "visible text after a mid-comment trailer -> refuse" 1 --comment 4242 --signature "$SIGL"
+serve "$(reply_file 'a | b' '--|--' '1 | 2' "$SIGL")"
+expect "under a table with no leading pipe -> refuse" 1 --comment 4242 --signature "$SIGL"
+says "…and it names the table" "directly under a table row"
+serve "$(reply_file 'a | b, two halves of one sentence.' "$SIGL")"
+expect "a pipe in prose above it -> clear" 0 --comment 4242 --signature "$SIGL"
+serve "$(reply_file "$EV" '```sh' 'echo hi' "$SIGL")"
+expect "inside an unclosed code fence -> refuse" 1 --comment 4242 --signature "$SIGL"
+says "…and it names the fence" "unclosed code fence"
+serve "$(reply_file "$EV" '```sh' 'echo hi' '```' 'Done.' "$SIGL")"
+expect "after a closed code fence -> clear" 0 --comment 4242 --signature "$SIGL"
+serve "$(reply_file "$EV" 'a\tb')"
+expect "a backslash in the signature is literal -> clear" 0 --comment 4242 --signature 'a\tb'
+example_of "$CONV" '**Every PR comment and review an agent posts ends with its role signature' > "$TMP/sig-example.md"
+ok "the signature example was extracted" "$(tail -n 1 "$TMP/sig-example.md")" "$SIGL"
+serve "$TMP/sig-example.md"
+expect "CONVENTIONS.md's own signature example -> clear" 0 --comment 4242 --signature "$SIGL"
+
+echo
 echo "== NON-VACUITY: a mutant that RAISES the ceiling, and one that LOWERS it =="
 # Both directions, because one is not enough: a ceiling proved only by raising it can still
 # be dead code at the low end. Each mutant is built from the file that just passed, so it

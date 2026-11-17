@@ -8,6 +8,7 @@
 #          fold-answers.sh --block Q<n> <task-doc>   # read-only: the ### Q<n> block as JSON, exit 1 if absent
 #          fold-answers.sh [--keys SRC DST] --add <doc> <entry>...  # append, skipping any open or answered
 #          fold-answers.sh --sweep <entry> <note> <doc>  # append ` · sweep: <note>` to one open entry, fold nothing
+#          fold-answers.sh --clear <entry> <note> <doc>  # move that one entry as `<ISO 8601> · <entry> --- <note>`: no human answered, so no `by`
 # `--answer` appends ` --- <text>` to that one open entry first (answer.sh's in-session answer).
 # Exit: 0 done (nothing to move is also 0) · 2 usage · 3 a list it could not round-trip,
 # nothing written · 4 the move would leave one entry in BOTH lists, nothing written.
@@ -17,10 +18,10 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-usage() { sed -n '6,11p' "$0" >&2; exit 2; }
+usage() { sed -n '6,12p' "$0" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "fold-answers: python3 is required" >&2; exit 2; }
 
-inst="."; doc=""; src_key="open_questions"; dst_key="answered_questions"; list_key=""; ans_entry=""; ans_text=""; block_label=""; add_json=""; sweep_entry=""; sweep_note=""
+inst="."; doc=""; src_key="open_questions"; dst_key="answered_questions"; list_key=""; ans_entry=""; ans_text=""; block_label=""; add_json=""; sweep_entry=""; sweep_note=""; clear_entry=""; clear_note=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) [ $# -ge 2 ] || usage; inst="$2"; shift 2 ;;
@@ -29,6 +30,7 @@ while [ $# -gt 0 ]; do
                 src_key="$2"; dst_key="$3"; shift 3 ;;
     --answer)   [ $# -ge 3 ] || usage; ans_entry="$2"; ans_text="$3"; shift 3 ;;
     --sweep)    [ $# -ge 3 ] || usage; sweep_entry="$2"; sweep_note="$3"; shift 3 ;;
+    --clear)    [ $# -ge 3 ] || usage; clear_entry="$2"; clear_note="$3"; shift 3 ;;
     --block)    [ $# -ge 3 ] && [[ "$2" =~ ^Q[0-9]+$ ]] || usage; block_label="$2"; doc="$3"; shift 3 ;;
     # The ONE writer of a new entry, so it goes through the parser that round-trips.
     --add)      [ $# -ge 3 ] || usage; doc="$2"; shift 2
@@ -56,7 +58,7 @@ done
 # unresolvable author stays `<unknown>` rather than being stamped with whoever's loop is
 # folding it.
 login_self="<unknown>"; login_author="<unknown>"; committed_state="absent"; committed_file=""
-if [ -z "$list_key$block_label$add_json$sweep_entry" ] && [ -x "$HERE/decision-stamp.sh" ]; then
+if [ -z "$list_key$block_label$add_json$sweep_entry$clear_entry" ] && [ -x "$HERE/decision-stamp.sh" ]; then
   committed_file="$(mktemp -t fold-answers.XXXXXX)"; head_doc="$(mktemp -t fold-answers-head.XXXXXX)"
   trap 'rm -f "$committed_file" "$head_doc"' EXIT
   login_self="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --self 2>/dev/null || true)"
@@ -75,13 +77,13 @@ if [ -z "$list_key$block_label$add_json$sweep_entry" ] && [ -x "$HERE/decision-s
 fi
 
 python3 - "$doc" "$list_key" "$login_self" "$login_author" "$committed_state" \
-         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ans_entry" "$ans_text" "$block_label" "$add_json" "$src_key" "$dst_key" "$sweep_entry" "$sweep_note" <<'PY'
+         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ans_entry" "$ans_text" "$block_label" "$add_json" "$src_key" "$dst_key" "$sweep_entry" "$sweep_note" "$clear_entry" "$clear_note" <<'PY'
 import json, os, re, sys, tempfile
 
 ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "/": "/"}
 
 path, list_key = sys.argv[1], sys.argv[2]
-login_self, login_author, committed_state, committed_file, stamp, ans_entry, ans_text, block_label, add_json, SRC, DST, sweep_entry, sweep_note = sys.argv[3:16]
+login_self, login_author, committed_state, committed_file, stamp, ans_entry, ans_text, block_label, add_json, SRC, DST, sweep_entry, sweep_note, clear_entry, clear_note = sys.argv[3:18]
 src = open(path, encoding="utf-8").read()
 
 
@@ -305,7 +307,7 @@ if add_json:
     have = list(open_q or [])
     ans_q = read(DST)[0] or []
     seen = {e.split(" --- ", 1)[0] for e in have} | {
-        re.sub(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z by [^\n]*? · ", "", a, count=1).split(" --- ", 1)[0]
+        re.sub(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z(?: by [^\n]*?)? · ", "", a, count=1).split(" --- ", 1)[0]
         for a in ans_q}
     new_q = have + [e for i, e in enumerate(adds) if e not in seen and e not in adds[:i]]
     if len(new_q) == len(have):
@@ -401,8 +403,8 @@ def answered_entry(entry):
 open_q, o_at, o_end, o_cmt = read(SRC)
 ans_q, a_at, a_end, a_cmt = read(DST)
 if open_q is None:
-    if sweep_entry:
-        die(3, "no %s to sweep" % SRC)
+    if sweep_entry or clear_entry:
+        die(3, "no %s to sweep or clear" % SRC)
     sys.exit(0)
 if ans_q is None:
     ans_q, a_at, a_end = [], None, None
@@ -439,9 +441,18 @@ if ans_entry:
     open_q[hits[0]] += " --- " + ans_text
 
 answered = [e for e in open_q if answered_entry(e)]
+if clear_entry:
+    hits = [i for i, e in enumerate(open_q) if e == clear_entry]
+    if len(hits) != 1 or answered_entry(clear_entry):
+        die(3, "the entry to clear is not in %s exactly once, unanswered" % SRC)
+    if not clear_note.strip() or "\n" in clear_note:
+        die(3, "a clear note must be one non-empty line")
+    answered = [clear_entry + " --- " + clear_note]
+    keep = [e for i, e in enumerate(open_q) if i != hits[0]]
+else:
+    keep = [e for e in open_q if not answered_entry(e)]
 if not answered:
     sys.exit(0)
-keep = [e for e in open_q if not answered_entry(e)]
 
 COMMITTED = set()
 if committed_state == "read":
@@ -454,10 +465,11 @@ def login_for(entry):
     return login_author if entry in COMMITTED else login_self
 
 
-moved = ["%s by %s · %s" % (stamp, login_for(e), e) for e in answered]
+moved = ["%s · %s" % (stamp, e) for e in answered] if clear_entry else \
+    ["%s by %s · %s" % (stamp, login_for(e), e) for e in answered]
 new_ans = ans_q + moved
 
-STAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z by [^\n]*? · ")
+STAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z(?: by [^\n]*?)? · ")
 
 
 def question(entry):

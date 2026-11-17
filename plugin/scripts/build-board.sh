@@ -2329,6 +2329,11 @@ def render_table():
              % (n_done, n_tasks))
     o.append('<div class="%s"><dt>awaiting you</dt><dd>%d</dd></div>'
              % ("live" if asks else "", len(asks)))
+    # A count only, never an entry; absent from every snapshot ⇒ no cell (write-snapshot.sh).
+    backlogs = [todict(s.get("counts")).get("backlog") for s in instances]
+    if any(b is not None for b in backlogs):
+        o.append('<div><dt>refactor backlog</dt><dd>%d</dd></div>'
+                 % sum(toint(b) for b in backlogs))
     o.append("</dl></header>")
 
     # ---- the tab row: six filters over the SAME project rows ----

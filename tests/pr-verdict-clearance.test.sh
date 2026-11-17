@@ -222,6 +222,25 @@ if command -v jq >/dev/null 2>&1; then
   ok "…an upper-cased copy in a second pass comment: exit 4" "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
   jq '.comments = [.comments[0]] | .comments[0].body |= ascii_upcase' "$FIX/pr_json" > "$FIX/p2" && mv "$FIX/p2" "$FIX/pr_json"
   ok "…a lone upper-cased nonce is not one: exit 4"         "$(rc_of "$SCRIPT" 42 --repo acme/widgets)" 4
+
+  # The words the tick hands to qa-disagreement.sh open (step-4-advance.md, exit-1 row).
+  serve_dis() { # <table> <trailer head_sha>
+    { cat "$1"; printf '\n<!-- okf-verdict v1\nverdict: changes-requested\nhead_sha: %s\nreviewer: qa-reviewer\n-->\n' "$2"; } > "$TMP/qa-dis"
+    jq -n --rawfile body "$WORKER" --rawfile new "$TMP/qa-dis" --arg h "$H" \
+      '{body:$body, author:{login:"worker-bot"}, url:"https://github.com/acme/widgets/pull/42", headRefOid:$h,
+        comments:[{author:{login:"qa-bot"},body:$new,createdAt:"2099-01-01T00:00:00Z",includesCreatedEdit:false}]}' > "$FIX/pr_json"
+  }
+  serve_dis "$DISAGREE" "$H"
+  ok "a disagreement prints its disputed criteria and the checker's commit" \
+     "$("$SCRIPT" 42 --repo acme/widgets 2>/dev/null)" \
+     "disagreement: --pr https://github.com/acme/widgets/pull/42 --head $H --checker $H --criteria 2"
+  serve_dis "$DISAGREE" 0123456789abcdef0123456789abcdef01234567
+  ok "…a table from an older commit names that commit" \
+     "$("$SCRIPT" 42 --repo acme/widgets 2>/dev/null | sed -n 's/.*--checker \([^ ]*\).*/\1/p')" \
+     0123456789abcdef0123456789abcdef01234567
+  serve_dis "$AGREE" "$H"
+  ok "…and agreement prints no disagreement line" \
+     "$("$SCRIPT" 42 --repo acme/widgets 2>/dev/null | grep -c '^disagreement:')" 0
   unset CLAUDE_PROJECT_DIR
   serve worker-bot qa-bot "$AGREE"
   ok "--checker naming nobody finds no table"  \

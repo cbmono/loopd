@@ -567,7 +567,7 @@ projects, and tasks. **No customer PII** in any knowledge doc; authoritative
 *data* questions route to the owning team (see `knowledge/teams/`), not the KB.
 
 **`provenance:` says whether machinery or a person wrote the document** — required on
-all five types below, closed set, enforced by `validate-bundle.sh`:
+every type below but `Backlog`, closed set, enforced by `validate-bundle.sh`:
 
 | Value | Meaning | May a cleanup pass rewrite it? |
 |---|---|---|
@@ -842,6 +842,33 @@ frontmatter references — the one gap was the `status` enum, because `Reference
 none. Declaring the kind closes exactly that gap and adds no field the live
 documents do not already carry. Root documents are unaffected: they are not in a
 schema-defined location, so no enum reaches them.
+
+### type: Backlog  (`knowledge/backlog/<repo>.md`)
+
+The refactor backlog: one file per target repo, one line per refactor someone found out of
+a task's scope. **A refactor is never part of the PR or project that found it.**
+
+```yaml
+---
+type: Backlog
+repo: <org>/<repo>          # lowercased; the file is named for <repo>
+timestamp: <ISO 8601>       # when the file was created
+---
+```
+
+Below `## Entries`, one line each: `- [ ] DATE | WHERE | WHAT | WHY | FOUND BY` (`[x]` once
+closed). `scripts/refactor-backlog.sh` is the only writer, run at the bundle root:
+
+| Verb | What it does |
+|---|---|
+| `add --repo <org>/<repo> --path <p> --what <t> --why <t> --by <role>` | appends one line under a lock; the tick commits it. Refuses a duplicate (repo + path + what, lowercased, whitespace collapsed, open or closed), a `\|` or newline, an empty field, a field over 200 characters, and an add past **200 open entries** — report that refusal, don't work around it |
+| `done --repo <org>/<repo> <id>` | closes one entry; `list` prints each open entry's id |
+| `count` | the open total, which `write-snapshot.sh` carries to the board (never `AWAITING.md`) |
+
+Role agents add their own; `plan-architect` and `code-architect` are read-only and list each
+under a `## Refactor opportunities` heading in their report, which the PM records. **No
+script turns an entry into work**: the owner does, with `/loopd:new-project`, then closes it.
+No `provenance:` and no `status:` — each line carries who found it and whether it is open.
 
 # Task lifecycle
 
@@ -1327,6 +1354,7 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `roleEffort` | **yes**, and **seeded** on the same terms as `roleTiers` (local first, tracked second, merged per entry) — effort is spend too. An entry may name a plugin agent with no `roleTiers` entry (`failure-analyst`) | no `effort` is passed: `resolve-effort.sh` prints nothing and exits 0. An unknown level exits 1 and `/loopd:welcome check` names it |
 | `maxAgentsInFlight` | **yes** — how many agents **this machine** can carry (below) | the tracked value; absent from both, `resolve-max-agents.sh` prints nothing and exits 1, and the caller applies the fallback its own document states |
 | `maxRepeatedToolCalls` | **yes** — a doom loop is a spend, and how tolerant a machine is of one is a per-machine call | **off**: `agent-control.sh` hashes, counts and writes nothing, so a bundle that predates the key is unaffected. Set it (the seed ships **3**) and an armed instance refuses one agent's Nth identical tool call with a `deny`, never a kill. **Reach:** enforced by `agent-control.sh` for an in-session subagent (on `agent_id`) and a top-level `claude --bg --agent` role session (on `session_id`), never the PM tick or the owner's own session; a role session's clock and counter restart when step 4 runs `control.sh round` before a resume (`docs/pm-design.md`) |
+| `stuckSignature` | **yes** — a shadow counter's cost and noise are a per-machine call, like the doom loop's | **off**: `agent-control.sh` hashes, counts and writes nothing beyond one cache line. `true` (the seed) ⇒ C=18 calls, N=3 repeats, E=8 errors; an object `{calls, repeats, errors}` overrides any of them. An armed instance then writes one `stuck-signature` line per agent or role round to `control.log` and **denies nothing**. Same reach as `maxRepeatedToolCalls`; registered on `PostToolUseFailure` |
 | `maxAgentMinutes` | **yes** — an hour of agent is a spend, and how long one machine tolerates is a per-machine call | **45**, for every role `roleMinutes` does not name: past it an armed instance refuses the agent's next tool call with a `deny` that says to commit, push, open or update the PR and report. `Read`/`Grep`/`Glob`, the subagent handback that delivers its report, a role session's edit of the task document whose `session:` names it, and a shell command made only of `git add\|commit\|push`, `commit-as.sh`, `cd` and `gh pr create\|edit\|view\|checks` stay allowed so that report is accurate; `0` (or anything not a positive integer) is off. **Reach:** enforced by `agent-control.sh` for an in-session subagent (on `agent_id`) and a top-level `claude --bg --agent` role session (on `session_id`), never the PM tick or the owner's own session (`docs/pm-design.md`) |
 | `maxIdleMinutes` | **yes** — how long one machine keeps a finished turn resident is a per-machine call | **120**: the tick's `session-sweep.sh` runs `claude stop` on an open task's live, not-`blocked` `claude --bg` session whose last assistant turn is older; the task stays open, the stop keeps it resumable and frees its slot. `0` (or anything not a positive integer) is off |
 | `maxBgRoundMinutes` | **yes** — the same call for a round that never ends | **240** — overturning stop-leaking-bg-sessions D3's 24 hours on 2026-11-02, when the longest healthy round was ~1h19m and a hung `pty.spawn` round held `busy` 1h50m: the same sweep stops an open task's `busy` session whose current round — its last text user turn, never a `tool_result` — began earlier, and files a `👉 do` hand-off through `session-handoff.sh --busy`. The only bound that stops a `busy` row; `0` (or anything not a positive integer) is off |

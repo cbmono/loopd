@@ -54,6 +54,7 @@ jobs:
         run: |
           export TMPDIR="${RUNNER_TEMP:-/tmp}"
           mkdir -p "$TMPDIR"
+          export LOOPD_TEST_JOBS="$(getconf _NPROCESSORS_ONLN)"
           tests/run.sh --deep
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -99,6 +100,7 @@ jobs:
         run: |
           export TMPDIR="${RUNNER_TEMP:-/tmp}"
           mkdir -p "$TMPDIR"
+          export LOOPD_TEST_JOBS="$(getconf _NPROCESSORS_ONLN)"
           tests/run.sh --all
 
   # The `# iced` tier: harnesses whose subject is on hold. tests/run.sh keeps them out of
@@ -120,4 +122,5 @@ jobs:
         run: |
           export TMPDIR="${RUNNER_TEMP:-/tmp}"
           mkdir -p "$TMPDIR"
+          export LOOPD_TEST_JOBS="$(getconf _NPROCESSORS_ONLN)"
           tests/run.sh --iced

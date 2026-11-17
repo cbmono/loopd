@@ -1,7 +1,7 @@
 ---
 name: answer
 disable-model-invocation: true
-description: Answer the PM's pending open_questions interactively — gather the unanswered questions (all projects, one project, or one task), ask them in one batch, then fold the answers back into the tasks (clearing them). Given a blocked task, take your one decision and return it to ready. In-session convenience instead of editing each task file by hand.
+description: Answer the PM's pending open_questions interactively — gather the unanswered questions (all projects, one project, or one task), ask them one at a time, then fold the answers back into the tasks (clearing them). Given a blocked task, take your one decision and return it to ready. In-session convenience instead of editing each task file by hand.
 argument-hint: "[<project-slug> | projects/<slug> | <task path> [Q<n>] <n | more | later | text> | <blocked task path> [<decision>]]  omit for every project"
 allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh:*), Read, Edit, Glob, Grep, AskUserQuestion
 ---
@@ -63,8 +63,8 @@ committed as you. Exit 3 and 4 read as above. It never dispatches: the next tick
 1. **Gather.** Within the scope above, collect every task with a non-empty
    `open_questions` list. For each entry (numbered `Q1:`, `Q2:`, …) record the task path
    + question text.
-2. **Ask.** Present them with `AskUserQuestion`, batched (max 4 per call — loop if there
-   are more), grouped by task so the context is clear. **Show each question's recommendation
+2. **Ask.** Present them with `AskUserQuestion`, one question per call, in task order so
+   the context is clear. **Show each question's recommendation
    beside it** — the `Recommendation:` line of its `### Q<n>` block, or `no recommendation`
    when the block has none — and offer the block's `Options:` in order, option 1 first and
    labelled `(Recommended)`: picking it takes the recommendation, as `answer.sh … 1` does.
