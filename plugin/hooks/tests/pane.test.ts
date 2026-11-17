@@ -233,7 +233,7 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRE
     'NEEDS YOU (3)',
     ' ',
     '1. answer   alpha · Decide the colour',
-    '2. merge    alpha · Merge me',
+    '2. merge    alpha · Merge me r#8',
     '3. close    beta',
     ' ',
     '─'.repeat(45),
@@ -251,7 +251,8 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRE
   expect(text).not.toContain('never drawn')
   expect(text).not.toContain('example-user-007')
   expect(text).not.toContain('Q1')
-  expect(text).not.toContain('github.com')
+  // A PR url is a Link's target, never drawn text; the kit's `text` counts the href, the rows do not.
+  expect(rows.join('\n')).not.toContain('github.com')
   // One plain copy Button per PROJECTS name and NEEDS YOU verb, keyed by row index and with
   // no hotkey or autofocus; then the three operator buttons, in order, and no Tick.
   const buttons = await ui.findAll({ type: 'Button' })
@@ -957,6 +958,43 @@ test('NEEDS YOU is numbered, slug-prefixed, last, and wraps under its text to th
   expect(r2[3]).toBe(' '.repeat(36) + '1 min ago')
   expect(r2.slice(-7)).toEqual(['NEEDS YOU (1)', ' ', '1. unblock  leaner-prompts · Judge the trims', ' ', '─'.repeat(45), ' ', ' '])
   await ui2.unmount()
+})
+
+test('NEEDS YOU rows end with each PR as <bare repo>#<n>, a Link to its url, within 45 columns', ONLY, async ($, on) => {
+  const pr = (repo: string, number: number, url = 'https://github.com/' + repo + '/pull/' + number) => ({ repo, number, url })
+  const t = (id: string, title: string, awaiting: string, prs: unknown[]) => ({ id, title, status: 'in-review', in_flight: false, awaiting, prs })
+  const snap = {
+    ...SNAP, counts: { projects: 1, tasks: 4, awaiting: 4 },
+    projects: [{ slug: 'ship', title: 'Ship', status: 'active', awaiting_close: false, phase_progress: { done: 0, total: 0 }, tasks: [
+      t('task-001', 'Merge me', 'merge', [pr('cbmono/loopd', 577)]),
+      t('task-002', 'Merge the pane rows that link their pull requests', 'merge', [pr('cbmono/loopd', 578), pr('cbmono/other-repo', 12)]),
+      t('task-003', 'Decide the colour', 'answer', []),
+      t('task-004', 'Odd url', 'merge', [pr('o/r', 9, 'javascript:alert(1)')]),
+    ] }],
+    awaiting_items: ['task-001', 'task-002', 'task-003', 'task-004'].map((task, i) => ({ verb: i === 2 ? 'answer' : 'merge', slug: 'ship', task })),
+  }
+  const w = world(snap)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED + 60000 })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = await rowsOf(ui)
+  expect(section(rows, 'NEEDS YOU')).toEqual([
+    '1. merge    ship · Merge me loopd#577',
+    '2. merge    ship · Merge the pane rows that',
+    '            link their pull requests',
+    '            loopd#578 other-repo#12',
+    '3. answer   ship · Decide the colour',
+    '4. merge    ship · Odd url r#9',
+  ])
+  for (const r of rows) expect(cols(r)).toBeLessThanOrEqual(45)
+  const links = (await ui.findAll({ type: 'Link' })).map((l: any) => [l.props.href, flat(l)])
+  expect(links).toEqual([
+    ['https://github.com/cbmono/loopd/pull/577', 'loopd#577'],
+    ['https://github.com/cbmono/loopd/pull/578', 'loopd#578'],
+    ['https://github.com/cbmono/other-repo/pull/12', 'other-repo#12'],
+  ])
+  await ui.unmount()
 })
 
 // The owner's case: a long IN PROGRESS and IN REVIEW title beside a role, and a short row.
@@ -1887,10 +1925,10 @@ test('SAME NUMBERS: every section count is the value counts.json gives, and NEED
     ' ', ' ', 'IN REVIEW (1)', ' ', '   software-engineer  Merge me',
     ' ', ' ', 'NEEDS YOU (7)', ' ',
     '1. grant     alpha · Decide the colour',
-    '2. do        alpha · Ship the widget',
+    '2. do        alpha · Ship the widget r#7',
     '3. answer    alpha · Decide the colour',
     '4. review    beta',
-    '5. merge     alpha · Merge me',
+    '5. merge     alpha · Merge me r#8',
     '6. close     beta',
     '7. continue  gamma',
     ' ', '─'.repeat(45), ' ', ' ',
@@ -1924,7 +1962,7 @@ test('COUNTS UNAVAILABLE: no counts.json keeps the layout with ? and one hint un
   expect(rows).toContain('   software-engineer  Ship the widget' + ' '.repeat(7) + '?')
   expect(rows).toContain('● alpha' + ' '.repeat(28) + '2 need you')      // labels stay with no counts.json, as the bar's
   expect(rows.slice(rows.indexOf('NEEDS YOU (?)'))).toEqual(['NEEDS YOU (?)', ' ',
-    '1. answer   alpha · Decide the colour', '2. merge    alpha · Merge me', '3. close    beta', ' ', '─'.repeat(45), ' ', ' ', HINT])
+    '1. answer   alpha · Decide the colour', '2. merge    alpha · Merge me r#8', '3. close    beta', ' ', '─'.repeat(45), ' ', ' ', HINT])
   expect(rows.filter(r => r === HINT)).toHaveLength(1)
   expect(rows.join('\n')).not.toContain('.loopd/counts.json')
   await ui.unmount()

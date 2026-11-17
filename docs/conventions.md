@@ -403,6 +403,19 @@ nothing. The hook still writes no task document: the breach lands in `control.lo
 next `project-manager` tick maps the `agent_id` to a task, writes one `# Notes` line and
 emits at most one queue row.
 
+**Beside it, a counter that only watches — the stuck signature.** The doom loop cannot see
+an agent that varies its command while failing the same way, because a failure lives in the
+result, and the result reaches a hook only as `PostToolUseFailure`'s `error` (measured on
+2.1.325; a failed call fires no PostToolUse). So this script is registered on that event
+too. `stuckSignature` is **off when absent from both config layers** (one cache line is
+written, nothing else); `true` takes C=18 calls, N=3 repeats, E=8 errors (TokenEconomizer's
+gate and the doom loop's N), and an object overrides any of them. A signature is the tool,
+the exit code and the first error line with paths, hashes and numbers stripped, kept as a
+fingerprint in a ring of the last 64; past C calls, N of one fingerprint or E failures
+writes **one** `stuck-signature` line per agent or role round, naming the arm and the
+counts, never the output, and **denies nothing**. Whether it ever denies is decided from
+two weeks of those lines, each matched to how its round ended.
+
 **A second breaker with no beat either — the wall clock.** The doom loop catches an agent
 that has stopped making progress; on 2026-09-13 a whole wave ran over an hour while
 progressing, and nothing in the harness could say so or stop it. `maxAgentMinutes` is that

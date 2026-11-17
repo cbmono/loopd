@@ -8,7 +8,8 @@
 #                                  [--checker-login <l>] [--author-login <l>]
 #          pr-verdict-clearance.sh --self-test
 #
-#   0 agree · 1 disagree (worker ✓, checker FAIL) · 2 unknown · 3 checker table
+#   0 agree · 1 disagree (worker ✓, checker FAIL; on a PR, one `disagreement:` line on
+#   stdout for qa-disagreement.sh) · 2 unknown · 3 checker table
 #   malformed · 4 the checker posted under the PR author's own login, with no trailer
 #   matching a recorded qa-reviewer dispatch (qa-dispatch.sh) at this head
 #
@@ -219,6 +220,7 @@ EOF
       echo "DISAGREEMENT on criterion $i — the worker passed itself, the checker did not:" >&2
       echo "  worker : $wrow" >&2
       echo "  checker: $crow" >&2
+      DISPUTED="${DISPUTED:+$DISPUTED,}$i"
       bad=1
     elif [ "$wv" = "CRS" ] && [ "$cv" = "PASS" ]; then
       echo "note: criterion $i is ✗ for the worker and PASS for the checker — not a route," >&2
@@ -400,6 +402,7 @@ if [ -n "$SAME" ]; then
     DISPATCHED=yes
   fi
 fi
+DISPUTED=""
 decide "$(scan "$TMPD/rbody" worker)" "$(scan "$TMPD/rchk" checker)" "$CLOGIN" "$ALOGIN" "$DISPATCHED"; DRC=$?
 
 # The clearance record the PreToolUse hook reads offline (ai-bridge-v3/task-044). Host mode
@@ -415,6 +418,11 @@ if [ "$DRC" -eq 1 ] && [ "${EDITED:-true}" = false ] && [ -n "$CREATED" ] \
    && { [ -z "$SAME" ] || { [ "$T_NONCE" != - ] && [ "$CARRIERS" = 1 ] && dispatch_ok "$T_SHA"; }; }; then
   AT=(--at "$CREATED")
   echo "note: the checker table is from $T_SHA, head is $HEAD_SHA — its FAIL is recorded at $(safe "$CREATED")." >&2
+fi
+# The tick passes these words to qa-disagreement.sh open (step-4-advance.md, exit-1 row).
+if [ "$DRC" -eq 1 ] && [ -n "$HEAD_SHA" ] && [ -n "$URL" ]; then
+  printf 'disagreement: --pr %s --head %s --checker %s --criteria %s\n' \
+    "$URL" "$HEAD_SHA" "${T_SHA:--}" "$DISPUTED"
 fi
 if { [ "$DRC" -eq 0 ] || [ "$DRC" -eq 1 ]; } && [ -n "$HEAD_SHA" ] && [ -n "$URL" ]; then
   FAIL_FLAG=(); [ "$DRC" -eq 1 ] && FAIL_FLAG=(--fail)

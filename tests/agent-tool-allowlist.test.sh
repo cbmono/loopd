@@ -213,7 +213,7 @@ MENTION_RE="\`($VOCAB)\`"
 # `SubagentStart` joined them in ai-bridge-v3/task-039 on the same precedent again: the
 # wall-clock cap needs an exact start time, so `agent-control.sh` is registered on that
 # event too and `plugin/README.md` names it.
-NOT_A_TOOL='SessionStart|SessionEnd|PreToolUse|UserPromptSubmit|SubagentStart|SubagentStop|WorktreeCreate|WorktreeRemove|Makefile|Explore'
+NOT_A_TOOL='SessionStart|SessionEnd|PreToolUse|PostToolUseFailure|UserPromptSubmit|SubagentStart|SubagentStop|WorktreeCreate|WorktreeRemove|Makefile|Explore'
 
 # Rule 2, DERIVED: OKF's document types, from the schema that defines them. `seed/SCHEMA.md`
 # writes each as a `## type: <Name>` heading, so the registry is machine-readable and a new
