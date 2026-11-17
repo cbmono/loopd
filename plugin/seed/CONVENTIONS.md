@@ -232,7 +232,7 @@ Two numbers: **`maxPrLoc`** (**absent that key, 500**) and **`maxPrFiles`** (**a
 key, 100**) in `instance.config.json`. Count as the host does —
 `git diff --shortstat origin/<default>` and `git diff --numstat origin/<default> | wc -l`.
 Past either, **open the PR anyway** with one `⚠️` line naming the figure and the split you
-would make. It is never a review finding. Detail: `conventions/pr-body.md` → "PR size is a
+would make. It is never a review finding. Check: `scripts/pr-size.sh`. Detail: `conventions/pr-body.md` → "PR size is a
 heuristic, never a gate" — when your diff is past either number.
 
 ### A repo with a VERSION file at its root
@@ -260,7 +260,7 @@ has no CodeRabbit integration.
 Measure what you added to the repo's own machinery before opening the PR
 (`git diff --numstat origin/main -- 'plugin/**/*.sh' | awk '{a+=$1} END{print a+0}'`).
 **At or above ~150 added lines, flag it as one `⚠️` line naming the figure** and let the
-owner decide; never a block. Detail: `conventions/pr-body.md` → "Don't grow the harness
+owner decide; never a block. Check: `scripts/pr-size.sh`. Detail: `conventions/pr-body.md` → "Don't grow the harness
 without a reason" — when your diff adds ~150 lines or more there.
 
 ## Tests and evidence
