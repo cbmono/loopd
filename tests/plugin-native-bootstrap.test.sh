@@ -103,8 +103,8 @@ for ev in d["hooks"].values():
     for g in ev:
         for h in g["hooks"]:
             print(h["command"])' "$REPO/plugin/hooks/hooks.json" 2>/dev/null)"
-ok "hooks.json registers sixteen commands" "$(printf '%s\n' "$HOOKCMDS" | grep -c . | tr -d ' ')" 16
-ok "…naming twelve distinct scripts"     "$(printf '%s\n' "$HOOKCMDS" | sort -u | grep -c . | tr -d ' ')" 12
+ok "hooks.json registers seventeen commands" "$(printf '%s\n' "$HOOKCMDS" | grep -c . | tr -d ' ')" 17
+ok "…naming thirteen distinct scripts"     "$(printf '%s\n' "$HOOKCMDS" | sort -u | grep -c . | tr -d ' ')" 13
 ok "…every one through \${CLAUDE_PLUGIN_ROOT}" \
    "$(printf '%s\n' "$HOOKCMDS" | grep -cv '^"\${CLAUDE_PLUGIN_ROOT}/hooks/[a-z-]*\.sh"' | tr -d ' ')" 0
 HOOKMISS=""
