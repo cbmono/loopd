@@ -274,8 +274,7 @@ without a reason" — when your diff adds ~150 lines or more there.
 **Locally, run the tests your change touches, plus anything that exercises the file you
 edited**, and **do not run the full suite locally as a matter of course** — the required
 check runs everything on a clean machine. Where the repo ships a diff-selecting runner,
-**use it** — `tests/run.sh --changed` in `cbmono/loopd`, whose `--all` runs once before the
-PR is opened. You still test your own branch before every push. A full local run is legitimate only when your change touches
+**use it** — `tests/run.sh --changed` in `cbmono/loopd`, whose full suite is CI's. You still test your own branch before every push. A full local run is legitimate only when your change touches
 **shared machinery every test loads**, and then **the PR body must state why**. **Do not
 poll a long-running local run.** Detail: `conventions/testing.md` → "The full suite belongs
 to CI" — before you start a full local run.
@@ -478,7 +477,7 @@ repo's package manager has one, and pushes early. **Check `pwd` before you creat
 `claude --worktree` session is already there. Otherwise `git worktree add <path> -b
 <branch> origin/<default-branch>`; the `EnterWorktree` tool may be unavailable to you. **Scratch files go in `<worktree>/tmp/`, never a shared scratchpad**, and only on
 a path the repo ignores (`git check-ignore -q`). Detail: `conventions/repos.md` →
-"Parallel-safety" — when your brief names no worktree, or `tmp/` is not ignored.
+"Parallel-safety" — when your brief names no worktree, or `tmp/` is not ignored. Check: `hooks/write-path.sh`.
 
 ### Browser (only if the project opts in)
 
@@ -510,7 +509,7 @@ If present, `codegraph` is for **TypeScript blast radius only** (`codegraph impa
 
 **Every file you write has a home inside the project, and `~` is never one of them.** A build
 task once left a human-facing labelling sheet and its instructions in a folder under `~`,
-where no reviewer, no `AWAITING.md` row and no other clone could see them.
+where no reviewer, no `AWAITING.md` row and no other clone could see them. Check: `hooks/write-path.sh`.
 
 | What the file is | Where it goes |
 |---|---|

@@ -93,7 +93,7 @@ blocked session. This is for background sessions only: interactive ones keep the
    green first (check `package.json`, `Makefile`, CI config); if you can't get them
    green, report the failure and **don't** open the PR. **Where the repo ships a runner
    that selects on the diff — `tests/run.sh --changed` in `cbmono/loopd` — that is
-   the default while you work, and its `--all` runs once before you open the PR.** **Self-review your diff and fix
+   the default; the full suite is CI's, so run `--all` only when the human asks.** **Self-review your diff and fix
    what it flags** (per the shared conventions) before opening it. PR body: the required
    short shape — opening with the literal heading `## Description`, then a
    one-sentence TL;DR, the task's `acceptance_criteria` as a `✓`/`✗` table with how each
