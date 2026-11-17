@@ -8,8 +8,8 @@
 # precondition 1 and calls in here for every PR it is about to clear, exactly as it calls
 # `review-clearance.sh`.
 #
-#   Usage: pr-body-clearance.sh <pr> [--repo <owner>/<name>] [--head <sha>]
-#          pr-body-clearance.sh --body-file <path>   (decide on a local draft)
+#   Usage: pr-body-clearance.sh <pr> [--repo <owner>/<name>] [--head <sha>] [--ui]
+#          pr-body-clearance.sh --body-file <path> [--ui]   (decide on a local draft)
 #          pr-body-clearance.sh --self-test          (prove this script RUNS)
 #
 # WHY THIS EXISTS — `CONVENTIONS.md` has required a short, shaped PR body since the rule
@@ -195,6 +195,12 @@
 #      refused at 1, and so is a body without the section (owner decision, 2026-11-09).
 #      Its rows are not charged against the ceiling, up to `CRITERION_ALLOWANCE` each.
 #
+#   9. `--ui` — THE CALLER SAYS THE PR IS UI (the task's `ui: true`, or its diff touches
+#      the repo's `uiGlobs`); this file reads only the body, so it cannot know. With it, the
+#      `Verified:` line or a criteria row names a screenshot path, or a `✗` row says why
+#      there is none — refused at 1 otherwise. `conventions/pr-body.md` →
+#      "UI evidence: a screenshot per changed screen".
+#
 # WHAT THIS DOES NOT DO, AND WHOSE JOB THAT IS. It answers "is the criteria table there
 # and well-formed", never "is every row `✓`". WHETHER EVERY ROW IS `✓` STAYS
 # `AUTONOMY.md` PRECONDITION 3 / `SCHEMA.md` CLAUSE 7 — an unverified criterion blocking
@@ -214,8 +220,8 @@
 #   1  the body is readable and a required element is MISSING, INCOMPLETE or CONTRADICTED
 #      BY THE TABLE. stderr names every one of them — the TL;DR line, the `Verified:`
 #      line (absent, or present and citing nothing), the criteria table, its heading's
-#      tally (absent, disagreeing with the rows, or leaving `✗`s unexplained), and any
-#      `### Notes` bullet that does not lead with its claim
+#      tally (absent, disagreeing with the rows, or leaving `✗`s unexplained), any
+#      `### Notes` bullet that does not lead with its claim, and under `--ui` the screenshot
 #   2  usage error, or the environment cannot answer (no `gh`/`jq`, an unreadable PR, an
 #      unreadable body file, a pattern table that will not compile, or a `--head` that no
 #      longer matches the PR) — UNKNOWN, and unknown is never clearance
@@ -314,6 +320,13 @@ VERIFIED_CITATIONS='
 \]\([^)[:space:]]+\)
 https?://[^[:space:]<>]+
 '
+
+# --- table 9: what a SCREENSHOT path looks like, under `--ui` (element 9) -------
+# Matched case-insensitively on the `Verified:` line and the criteria rows. A screenshot
+# lives in the bundle's gitignored `deliverables/local/` and never reaches the host, so
+# the gate can check that a path is named, not that a reviewer can open it.
+SCREENSHOT_PATH='deliverables/local/[^[:space:]|()<>`]*screenshot'
+UI=0
 
 # --- table 3: the two-sided bound on one criteria row's EVIDENCE cell ----------
 # Bytes, under `LC_ALL=C`. Both numbers are midpoints of a measured empty band, not round
@@ -455,8 +468,8 @@ char_count() { # <file>
 }
 
 usage() {
-  echo "Usage: $(basename "$0") <pr> [--repo <owner>/<name>] [--head <sha>]" >&2
-  echo "       $(basename "$0") --body-file <path>   (decide on a local draft)" >&2
+  echo "Usage: $(basename "$0") <pr> [--repo <owner>/<name>] [--head <sha>] [--ui]" >&2
+  echo "       $(basename "$0") --body-file <path> [--ui]   (decide on a local draft)" >&2
   echo "       $(basename "$0") --self-test          (prove this script RUNS)" >&2
   exit 2
 }
@@ -478,6 +491,7 @@ validate_tables() {
 $(rows "$TLDR_MARKERS")
 $(rows "$VERIFIED_MARKERS")
 $(rows "$VERIFIED_CITATIONS")
+$SCREENSHOT_PATH
 EOF
   [ -z "$bad" ] || {
     echo "error: these rows in this script's ERE tables are not valid POSIX EREs, so" >&2
@@ -584,6 +598,47 @@ EOF
 $(rows "$VERIFIED_MARKERS")
 EOF
   [ "$seen" -eq 1 ] && return 3
+  return 1
+}
+
+# --- element 9: under `--ui`, a screenshot path or the `✗` row that waives it --
+#   0 a screenshot path on the Verified line or a criteria data row, or a data row whose
+#     STATUS CELL is `✗` naming the screenshot (the `✗` sends the PR to a human)   1 neither
+# The status cell is a cell holding only the mark, as in `table_scan`: a header such as
+# `| ✓/✗ | Evidence (screenshot) |` or a `✓` row quoting a `✗` would otherwise waive it.
+crit_rows() { # <rendered-body> -> "<chk|crs><TAB><row>" per table data row with a status cell
+  LC_ALL=C awk -v chk="$CRITERIA_MARK_VERIFIED" -v crs="$CRITERIA_MARK_UNVERIFIED" '
+    {
+      t = $0
+      if (!match(t, /^ *[|]/) || RLENGTH > 4) { intable = 0; prev = ""; next }
+      if (!intable) {
+        if (prev != "" && t ~ /^[ |:-]+$/ && t ~ /-/) intable = 1
+        else prev = t
+        next
+      }
+      s = t; gsub(/[\\][|]/, "", s); n = split(s, c, "|"); st = ""; both = 0
+      for (i = 2; i <= n; i++) {
+        v = c[i]; gsub(/[*_` ~]/, "", v)
+        if (v == chk) { if (st == "crs") both = 1; st = "chk" }
+        else if (v == crs) { if (st == "chk") both = 1; st = "crs" }
+      }
+      if (st != "" && !both) print st "\t" t
+    }
+  ' "$1"
+}
+
+has_screenshot() { # <rendered-body>
+  local pat lines crit
+  lines="$(while IFS= read -r pat; do
+             [ -n "$pat" ] && grep -Ei "$pat" "$1" 2>/dev/null
+           done <<EOF
+$(rows "$VERIFIED_MARKERS")
+EOF
+)"
+  crit="$(crit_rows "$1")"
+  printf '%s\n%s\n' "$lines" "$(printf '%s\n' "$crit" | cut -f2-)" \
+    | grep -Eiq "$SCREENSHOT_PATH" && return 0
+  printf '%s\n' "$crit" | awk -F'\t' '$1 == "crs"' | grep -iq screenshot && return 0
   return 1
 }
 
@@ -1067,7 +1122,7 @@ EOF
 # draft) answer identically. <label> only names the subject in the messages.
 decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too long
   local raw="$1" rendered="$2" label="$3" tldr verified scan tstate tally tkind rc
-  local nscan nstate bare_n bare_txt dstate dunshaped
+  local nscan nstate bare_n bare_txt dstate dunshaped shot
   local tab; tab="$(printf '\t')"
   has_tldr "$rendered"; tldr=$?
   [ "$tldr" -eq 2 ] && return 2
@@ -1089,13 +1144,15 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
   dstate="$(decided_scan "$rendered" | awk -F'\t' '$1 == "decided" { print $2; n = $3; exit } END { if (n != "") print n }')"
   dunshaped="$(printf '%s\n' "$dstate" | sed -n 2p)"; dstate="$(printf '%s\n' "$dstate" | sed -n 1p)"
   case "$dstate" in absent|rows|none|empty|both|many|bare|unshaped) : ;; *) return 2 ;; esac
+  shot=0
+  [ "$UI" -eq 1 ] && { has_screenshot "$rendered"; shot=$?; }
 
   # STRUCTURE IS DECIDED BEFORE THE ROW BOUND, AND THAT ORDER IS THE POINT. Exit 1 says a
   # required element is missing; exit 3 says every element is there and one row is out of
   # bounds. Reporting the second while the first is unresolved would tell an author to
   # trim rows of a table the gate has not agreed exists.
   if [ "$tldr" -eq 0 ] && [ "$verified" -eq 0 ] && [ "$tstate" = ok ] \
-     && [ "$tkind" = ok ] && [ "$nstate" != bare ] \
+     && [ "$tkind" = ok ] && [ "$nstate" != bare ] && [ "$shot" -eq 0 ] \
      && case "$dstate" in rows|none) true ;; *) false ;; esac; then
     report_rows "$scan" "$label" || return $?
     report_concision "$raw" "$nscan" "$label" || return $?
@@ -1197,6 +1254,11 @@ EOF
            echo "        why. Write 'none — <why>', e.g. 'none — every choice is named by a" >&2
            echo "        criterion or an answered question'." >&2 ;;
   esac
+  [ "$shot" -eq 0 ] || {
+    echo "        MISSING: the screenshot (--ui). Name its path under deliverables/local/," >&2
+    echo "        containing 'screenshot', on the Verified line or a criteria row — or, with" >&2
+    echo "        no runnable app, a ✗ row saying why there is no screenshot." >&2
+  }
   echo "        This is the STRUCTURE refusal. Length is a separate check with a" >&2
   echo "        separate code (4). See $AB_CONVENTIONS → \"The PR body shape\"." >&2
   return "$rc"
@@ -1398,6 +1460,13 @@ if [ "${1:-}" = "--self-test" ]; then
   st_raw 1 "…two none lines" "${ST_BODY[@]}" '### Decided without asking' "$ST_DECIDED" "$ST_DECIDED"
   st_raw 1 "…a row without its shape" "${ST_BODY[@]}" '### Decided without asking' '- done'
 
+  # ELEMENT 9. A copy whose screenshot check no longer fires answers 0 on the refusal.
+  UI=1
+  st_probe 1 "a --ui body with no screenshot" "${ST_BODY[@]}"
+  st_probe 0 "…and one naming it" "${ST_BODY[@]}" \
+    'Verified: see `p/deliverables/local/screenshot-1.png`.'
+  UI=0
+
   printf '%s\n' "$SELFTEST_OK"
   exit 0
 fi
@@ -1409,6 +1478,7 @@ while [ "$#" -gt 0 ]; do
     --repo)      repo="${2:-}";      [ -n "$repo" ] || usage; shift 2 ;;
     --head)      want_head="${2:-}"; [ -n "$want_head" ] || usage; shift 2 ;;
     --body-file) body_file="${2:-}"; [ -n "$body_file" ] || usage; shift 2 ;;
+    --ui)        UI=1; shift ;;
     -h|--help)   usage ;;
     -*) echo "error: unknown option '$1'" >&2; usage ;;
     *) [ -z "$pr" ] || { echo "error: unexpected argument '$1'" >&2; usage; }
