@@ -132,9 +132,9 @@ recommend with reasons and do NOT act; `?` explain; `st` status.
 - **A list a tick, agent report or board refresh has replaced since you printed it is
   reprinted, numbered, before you act on a number.**
 - **A number that could fit an earlier list whose items are done: confirm the mapping
-  in one line before acting** (`2 = promote task-004?`).
-- **Agent-raised questions go to the owner one at a time** via `/loopd:answer`, the
-  `### Q<n>` recommendation as option 1 — **never answered on the owner's behalf.**
+  in one line before acting.**
+- **Agent-raised questions go to the owner one at a time**, the `### Q<n>`
+  recommendation as option 1 — **never answered on the owner's behalf.**
 
 ## Ad-hoc requests vs. the project loop
 **Tracked work** (anything that becomes a PR or a `projects/` deliverable) flows
@@ -234,6 +234,7 @@ The brief's `## Knowledge` rows first, then `grep -i` the capped `knowledge/inde
 or `knowledge/`; never cite a **Superseded** row. Detail: `.claude/rules/knowledge-base.md`.
 
 ## Data handling
+- **No customer PII** in task docs, logs, PRs.
 - Set your default units and route authoritative data questions to the owning
   team in `knowledge/teams/` (customize this line for your group).
 

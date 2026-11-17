@@ -28,8 +28,8 @@ section() { # <file> — the `## Reporting progress` body, flattened
 
 CARVE='**Promote and merge are never inferred: act on either only when the reply types `prom` or `mrg`; a bare number whose glyph is promote or merge gets a one-line confirmation and no action**'
 STALE='reprinted, numbered, before you act on a number.'
-CONFIRM='could fit an earlier list whose items are done: confirm the mapping in one line before acting**'
-ONEBYONE='**Agent-raised questions go to the owner one at a time** via `/loopd:answer`, the `### Q<n>` recommendation as option 1 — **never answered on the owner'"'"'s behalf.**'
+CONFIRM='could fit an earlier list whose items are done: confirm the mapping in one line before acting.**'
+ONEBYONE='**Agent-raised questions go to the owner one at a time**, the `### Q<n>` recommendation as option 1 — **never answered on the owner'"'"'s behalf.**'
 RECOMMEND='one line per item, ending `Recommend: <answer> — <reason>`'
 
 S="$(section "$SEED")"
