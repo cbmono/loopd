@@ -25,7 +25,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    reasoning in `# Notes`. For **`kind: build`** also resolve `target_repo` (confirm
    it exists under `<reposRoot>/`), write `target_repo` as `<org>/<repo>` — a bare name
    takes the instance's `org`, an explicit `<owner>/<repo>` stays as given — and suggest an
-   `assignee` (see `agents/index.md`).
+   `assignee` (see `agents/index.md`), and set `ui: true` when the task changes a screen a
+   human looks at — the PR then carries a screenshot (`SCHEMA.md` → `ui:`).
    For **`kind: research`** instead turn the project's `deliverables` into concrete,
    reviewable `acceptance_criteria` — no `target_repo`, no code `assignee`. **Before you
    write any `open_questions` entry**, run

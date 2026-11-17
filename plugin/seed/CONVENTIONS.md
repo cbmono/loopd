@@ -221,6 +221,11 @@ It does not replace the gate — `required-checks.sh` reads what the host serves
 `conventions/pr-body.md` → "Run the shape reader on your draft" — when a refusal's
 message does not tell you the fix.
 
+**A UI PR** (task `ui: true`, or a diff touching the repo's `uiGlobs`) adds `--ui`: a
+screenshot path under the bundle's `deliverables/local/`, never pushed, test data only.
+Detail: `conventions/pr-body.md` → "UI evidence: a screenshot per changed screen" — when
+the task sets `ui: true` or your diff touches a UI glob.
+
 ### PR size is a heuristic, never a gate
 
 Two numbers: **`maxPrLoc`** (**absent that key, 500**) and **`maxPrFiles`** (**absent that
