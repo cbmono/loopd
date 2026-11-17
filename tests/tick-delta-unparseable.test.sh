@@ -34,8 +34,8 @@ chmod +x "$S"/*.sh "$BIN/gh"
 SH="$S/tick-delta.sh"; TD() { PATH="$BIN:$PATH" "$SH" "$@" --instance "$INST"; }
 REASON="$INST/$AB_TICK_START/digest-stderr"
 
-GOODP=$'---\ntype: Project\nstatus: active\nautonomy: gated\ndecisions: [ "D1: keep it small" ]\n---\n'
-BADP=$'---\ntype: Project\nstatus: active\nautonomy: gated\ndecisions:\n  - "D1: keep it small" trailing\n---\n'
+GOODP=$'---\ntype: Project\nstatus: active\nadvisor_notes: [ "2026-11-16T00:00:00Z · advisor: project critique — no concerns · saw: " ]\nautonomy: gated\ndecisions: [ "D1: keep it small" ]\n---\n'
+BADP=$'---\ntype: Project\nstatus: active\nadvisor_notes: [ "2026-11-16T00:00:00Z · advisor: project critique — no concerns · saw: " ]\nautonomy: gated\ndecisions:\n  - "D1: keep it small" trailing\n---\n'
 GOODT=$'---\ntype: Task\nkind: build\nstatus: blocked\nopen_questions: [ "Q1: which store?" ]\n---\n'
 BADT=$'---\ntype: Task\nkind: build\nstatus: blocked\nopen_questions: [ "Q1: unterminated\n---\n'
 put() { printf '%s' "$2" > "$INST/$1"; }

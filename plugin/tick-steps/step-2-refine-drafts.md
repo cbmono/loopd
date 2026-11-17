@@ -161,8 +161,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    edges and trust boundaries as `subgraph`s, then the sections below reading it: what is
    new, what changes, what is reused. **No internal hostnames, no secrets and no customer PII
    in design.md** — the board links it, so name a component by its role, never by its
-   address. The approach critique reads design.md when it runs and may challenge it in
-   `advisor_notes`.
+   address. The project critique below reads design.md and may challenge it in
+   `project.md` `advisor_notes`.
    **Readable at a glance — a human reads design.md to decide whether to promote.**
    The diagram: `flowchart TB`, about 12 nodes at most; **a node label is 24 characters or
    fewer** (common renderers clip longer ones mid-word) and an edge label 3 words or fewer
@@ -206,10 +206,41 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **Every redraw of design.md — the unmapped-task redraw, a stale `inputs_hash:` or an
    overturned `D<n>` — rewrites `pre_mortem:` and `inputs_hash:`, and nothing else does.**
 
+   **Project critique — once per `kind: build` project with a design.md, advisory.**
+   A project whose `design.md` exists and whose `project.md` `advisor_notes` holds no
+   project-critique receipt gets one background `loopd:plan-architect` dispatch on the
+   whole project, in the tick that finds it so — a design.md drawn before this rule
+   included. Never on a `kind: research` project. **Its brief:** `project.md`'s `need:`,
+   `success_criteria` and `decisions:`; design.md's diagram and `pre_mortem:`; every
+   task's title and `acceptance_criteria`; and the ask to label `pre-mortem:` any concern
+   that restates design.md's `pre_mortem:`.
+   **The receipt is `project.md` `advisor_notes`, each entry ending ` · saw: <task ids>`**
+   — the ids the brief carried, space-separated: one entry per concern,
+   `<ISO 8601> · <the concern, as a question> · saw: …`, or one
+   `<ISO 8601> · advisor: project critique — no concerns · saw: …`. The approach
+   critique's receipt rules below apply unchanged, `not run (<reason>)` (also ending
+   ` · saw: …`) and its one retry included. Entries stay after triage: they are the
+   receipt the rerun rule reads.
+   **It runs again only when design.md's `tasks:` maps a task id missing from the newest
+   receipt's `saw:` list**, after any redraw this tick owes, at most once per tick per
+   project.
+   **Triage writes one `* <ISO 8601> triage: …` line under `project.md`'s `# Notes`**, by
+   the approach critique's rule: RESOLVE a concern only on evidence the critic could have
+   read, else ESCALATE it as an `advisor:` `open_questions` entry on each task it names —
+   the project's first `draft` when it names none, else its first task not `done` or
+   `cancelled`; with none left, the triage line records it, because no task remains for it
+   to change. **A `pre-mortem:` concern is always escalated** while a task is open. The one
+   retry counts only `not run` receipts whose `saw:` list matches the newest receipt's.
+   `tick-delta.sh check` reports an untriaged, `not run` or unlaunched project critique as
+   a `DELTA` whatever its tasks' statuses. It gates no promotion. It is launched in the
+   same message as this tick's approach critiques, counts against `maxAgentsInFlight`
+   (absent ⇒ 4) the same way, and resolves its model and effort the same way.
+
    **Approach critique — MANDATORY on its trigger, advisory in what it may decide.**
    For a genuinely complex **`kind: build`** task — spans multiple files/services, or
    its `acceptance_criteria` had to be heavily inferred — you **must** dispatch the
-   `loopd:plan-architect` agent on the task's `# Context` + `acceptance_criteria`,
+   `loopd:plan-architect` agent on the task's `# Context` + `acceptance_criteria`, plus
+   its project's `need:`, `success_criteria` and its sibling tasks' titles,
    **before the human is asked to promote**. It ships in the `loopd` plugin beside you
    and resolves only under that namespace — a bare `plan-architect` does NOT resolve;
    skip silently if absent (an older plugin that does not ship it): mandatory on its

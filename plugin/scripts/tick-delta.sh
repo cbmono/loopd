@@ -70,6 +70,9 @@
 #                           a ` --- `-answered `decisions:` entry, an immediate DELTA: step 2
 #                           owes its fold, and a tick whose tasks are all promoted has no draft
 #                           to name step 2 otherwise.
+#   critique owed <project.md> untriaged|not-run|unlaunched
+#                           a build project's design.md critique (step 2), an immediate DELTA
+#                           whatever its tasks' statuses.
 #   merge hold              not a line: a `hold`/`unknown` mark merge-queue.sh keeps under
 #                           AB_MERGE_HOLDS for a PR still on an in-flight task is an immediate
 #                           DELTA, because a default-branch run finishing moves nothing above.
@@ -592,6 +595,13 @@ $prs"
     done
     [ "$mode" = digest ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && step6=1
     [ "$redraw" = 1 ] && { printf 'redraw owed %s\n' "${d#"$inst"/}design.md"; step2=1; }
+    if [ -f "${d}design.md" ] && [ "$(fmfirst "$p" kind | grep -oE '^[a-z]+')" != research ]; then
+      r="$(project_critique "$p" "$mapped")"; rc=$?
+      case $rc in
+        0) printf 'critique owed projects/%s/project.md %s\n' "$(basename "$d")" "$r"; step2=1 ;;
+        2) cause "could not read advisor_notes in projects/$(basename "$d")/project.md"; return 1 ;;
+      esac
+    fi
     # Stale inputs: design.md records the design-inputs.sh fingerprint it was drawn from
     # (`inputs_hash:`); an answered question, a decision or a reworded criterion moves it.
     # A design.md without the key predates it and is never reported stale.
@@ -694,6 +704,22 @@ rerun_owed() { # <file> -> 0 owed, 1 not, 2 unreadable
   [ -n "$nr" ] && [ "$(printf '%s\n' "$nr" | wc -l)" -eq 1 ] || return 1
   rest="$(printf '%s\n' "$notes" | grep . | grep -vE "$CRITIQUE_NOT_RUN" | sed 's/[[:space:]].*//' | sort | tail -n1)"
   [ -z "$rest" ] || [[ "$rest" < "${nr%% *}" ]]
+}
+project_critique() { # <project.md> <mapped task ids> -> prints why; 0 owed, 1 not, 2 unreadable
+  local notes saw id nr
+  untriaged "$1"; case $? in 0) echo untriaged; return 0 ;; 2) return 2 ;; esac
+  [ "$(fmcount "$1" advisor_notes)" -gt 0 ] || { echo unlaunched; return 0; }
+  notes="$(bash "$FOLD" --list "$1" advisor_notes 2>/dev/null)" || return 2
+  saw="$(printf '%s\n' "$notes" | grep -F ' · saw: ' | sort | tail -n1)"
+  [ -n "$saw" ] || { echo unlaunched; return 0; }
+  nr="$(printf '%s\n' "$notes" | S="${saw##* · saw: }" awk -F ' · saw: ' 'NF > 1 && $NF == ENVIRON["S"]' \
+        | grep -cE "$CRITIQUE_NOT_RUN")"
+  [ "$nr" = 1 ] && grep -qE "$CRITIQUE_NOT_RUN" <<<"$saw" && { echo not-run; return 0; }
+  saw=" $(printf '%s\n' "${saw##* · saw: }" | grep -oE 'task-[0-9]+' | tr '\n' ' ')"
+  for id in $2; do
+    case "$saw" in *" $id "*) ;; *) echo unlaunched; return 0 ;; esac
+  done
+  return 1
 }
 owed_work() {
   local t p cap crc n
@@ -817,6 +843,12 @@ case "$cmd" in
       echo "DELTA: ${rd%/design.md} changed what its $rd was drawn from (a decision, a criterion or an answer) — step 2 owes it a redraw."
       exit 1
     fi
+    pc="$(printf '%s\n' "$FP" | sed -n 's/^critique owed //p' | head -n1)"
+    case "${pc##* }" in
+      untriaged)  echo "DELTA: ${pc% *} has an untriaged project critique — step 2 owes it a triage."; exit 1 ;;
+      not-run)    echo "DELTA: ${pc% *} project critique not run — re-dispatch owed"; exit 1 ;;
+      unlaunched) echo "DELTA: ${pc% *} has a design.md task no project critique saw — step 2 owes one."; exit 1 ;;
+    esac
     [ -f "$STATE" ] || fail2 "no $STATE_NAME record yet (first tick, or an upgrade)"
     OLD="$(grep -v '^#' "$STATE" | grep -v '^recorded:' || true)"
     [ -n "$OLD" ] || fail2 "$STATE_NAME is empty or unreadable"
