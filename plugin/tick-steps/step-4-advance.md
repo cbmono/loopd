@@ -82,7 +82,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    - **Resume it only when a round is OWED** — a rule in this step sends that task's
      agent a message this tick: a missing criteria table, a `rebase-pr.sh` exit 3, a
      `qa-reviewer` re-run on a malformed checker table (below). That message is the resume's,
-     by the two calls below, and **only to the session that round addresses**: when the
+     by the three calls below, and **only to the session that round addresses**: when the
      role on the task's last `* DISPATCH` line is not the round's role, the round is a
      fresh dispatch as step 3 spawns it. **Write no `* DISPATCH` line for the resume** —
      its transcript opens with a copy of the round it continues, so settling it would
@@ -115,7 +115,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
    **Exit 0** prints `owed <uuid> <id>` and `answer: <text>`: the latest hand-off names the
    task's `session:`, its `Q<n>: do:` entry is answered, no `woke`/`resumed` note follows it,
-   and the session is `stopped` or `done`. Resume it by the two calls below with the message
+   and the session is `stopped` or `done`. Resume it by the three calls below with the message
    `The human finished hand-off <id>: <text>. Carry on with this task.`, read the id back with
    `resume-id`, and write the `woke`/`resumed` note — that note, or the `resume launched` one
    below, is what makes the next tick answer `not-owed already-resumed`. **Exit 1** (`not-owed <why>`) — nothing to send. A
@@ -143,10 +143,15 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    and `claude logs <the session's first field>` first: the work is usually already
    committed, and one message asking it to open the PR on what it has recovers it — the
    same task and same PR,
-   which is the resume step 3 allows. **The resume is two calls:
+   which is the resume step 3 allows. **The resume is three calls:
    `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh full <the recorded session>`, then
+   `${CLAUDE_PLUGIN_ROOT}/scripts/control.sh round <the UUID full printed>`, then
    `cd <worktree> && claude --bg --resume <the UUID full printed> '<the message>'`**,
-   and nothing else: the session keeps the agent, model, permission mode and add-dir it
+   and nothing else. `round` restarts the role session's `maxAgentMinutes` clock and
+   repeat counter (nothing in the hook payload marks a new round, and without it the
+   resumed round inherits the last one's elapsed time); it is a no-op on an unarmed
+   bundle, and it leaves a `halt` or `gate` on that id standing until `control.sh clear`.
+   The resume itself takes nothing else: the session keeps the agent, model, permission mode and add-dir it
    was spawned with, and passing any of them starts a COPY under a new id (measured on
    2.1.296). Its `--effort` is one of those saved options: a flag-free wake of a stopped
    session ran at the spawn's level, and a copy ran at the model default (2.1.310). `full` runs on every recorded value, so a task

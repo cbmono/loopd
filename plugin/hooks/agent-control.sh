@@ -33,11 +33,11 @@
 #     all-or-nothing failure the measurement exists to have avoided.
 #
 # ---------------------------------------------------------- WHY A ROLE SESSION TOO
-# The exception is a top-level `claude --bg --agent <plugin>:<role>` session — every
-# role agent the tick dispatches. It carries `agent_type` and no `agent_id` (measured on
-# 2.1.325, tests/fixtures/hook-payloads/), so it is matched on all of: no `agent_id`;
-# `agent_type` `<ns>:<role>` naming an agent this plugin ships, other than
-# `project-manager` (the tick stays unbounded, bg-role-agent-guards D1); and a
+# The exception is a top-level `claude --bg --agent <plugin>:<role>` session launched in a
+# linked worktree — how the tick dispatches a role agent. It carries `agent_type` and no
+# `agent_id` (measured on 2.1.325, tests/fixtures/hook-payloads/), so it is matched on all
+# of: no `agent_id`; `agent_type` `<this plugin>:<role>` naming an agent this plugin ships,
+# other than `project-manager` (the tick stays unbounded, bg-role-agent-guards D1); and a
 # CLAUDE_PROJECT_DIR that is not itself a bundle, i.e. the bundle was reached through
 # `.git/loopd-bundle`. Its `session_id` then stands in for `agent_id` everywhere — the
 # roster, the counters, the directives — which a role session may use because it has no
@@ -129,13 +129,14 @@
 # start time is the `SubagentStart` record under `agents.d/` and NOTHING else: no record ⇒
 # the cap is off for that agent and `control.log` says `elapsed=unknown`. The transcript is
 # never a clock — it is the parent session's, so its age is the session's (task-029).
-# A role session has no SubagentStart: its clock starts at its round's first PreToolUse and
-# restarts when `prompt_id` changes. A resume (step 4) is a new message, i.e. a new prompt
-# in the same session (session_id and agent_type unchanged, measured), and no stop event
-# reaches a `--bg` session, so the prompt is the only round boundary in the payload. No
-# `prompt_id` ⇒ no clock, as for a missing SubagentStart. Past the cap a role session may
-# also Edit/Write a task document under the bundle's `projects/*/tasks/`: that is where it
-# records `pr:` and its result, which a subagent hands back instead.
+# A role session has no SubagentStart: its clock starts at its first PreToolUse with no
+# record, and only `control.sh round <session>` — which step 4 runs before every resume —
+# clears that record (and the repeat counter), so the resumed round starts fresh. Nothing in
+# the payload marks a round: a resume keeps `session_id` and `agent_type` (measured), and
+# `prompt_id` changes on every wake from idle, a background task's notification included
+# (QA on loopd#568), so keying on it restarted the clock mid-round. Past the cap a role
+# session may also Edit/Write the one task document whose `session:` names it: that is
+# where it records `pr:` and its result, which a subagent hands back instead.
 #
 # ------------------------------------------------------------------------ BOUNDED
 # Unbounded per-call state in front of every tool call is its own hazard, so the
@@ -376,26 +377,25 @@ cap_allows() {
 }
 
 cap_task_doc() {
-  local f d
+  local f d s
   f="$(printf '%s' "$payload" | jq -r '.tool_input.file_path // ""' 2>/dev/null)" || return 1
-  case "$f" in /*.md) ;; *) return 1 ;; esac
+  case "$f" in /?*/*.md) ;; *) return 1 ;; esac
   case "$f" in */../*|*/./*) return 1 ;; esac
-  [ ! -L "$f" ] || return 1
+  [ -f "$f" ] && [ ! -L "$f" ] || return 1
   d="$(cd "${f%/*}" 2>/dev/null && pwd -P)" || return 1
   d="${d#"$root"/projects/}"
-  case "$d" in */*/*|/*) return 1 ;; ?*/tasks) return 0 ;; esac
-  return 1
+  case "$d" in */*/*|/*) return 1 ;; ?*/tasks) ;; *) return 1 ;; esac
+  s="$(awk 'NR == 1 && $0 != "---" { exit } NR > 1 && $0 == "---" { exit }
+            /^session:/ { sub(/^session:[[:space:]]*/, ""); gsub(/["\047\r ]/, ""); print; exit }' "$f" 2>/dev/null)"
+  [ -n "$s" ] && [ "$s" = "$session_id" ]
 }
 
 role_round_start() {
-  local f s p
-  [ -n "$prompt_id" ] || return 0
+  local f
   f="$(cap_file)" || return 0
-  s=""; p=""
-  [ ! -r "$f" ] || read -r s p < "$f" 2>/dev/null || true
-  [ -z "$s" ] || [ "$p" != "$prompt_id" ] || return 0
+  [ ! -e "$f" ] || return 0
   mkdir -p "$AGENTSTATE" 2>/dev/null || true
-  { printf '%s %s\n' "$epoch" "$prompt_id" > "$f" && rm -f "${f%.started}.capped" "${f%.started}.unclocked"; } 2>/dev/null || true
+  { printf '%s\n' "$epoch" > "$f" && rm -f "${f%.started}.capped" "${f%.started}.unclocked"; } 2>/dev/null || true
 }
 
 # One file per agent_id, under a name NOTHING else can produce. Sanitising an id to
@@ -484,16 +484,15 @@ command -v jq >/dev/null 2>&1 || {
 # TRAILING newlines, which is harmless here: only `hook_event` is last, and an empty
 # one is read as PreToolUse below.
 fields="$(printf '%s' "$payload" \
-  | jq -r '[(.agent_id // ""), (.agent_type // ""), (.tool_name // ""), (.session_id // ""), (.prompt_id // ""), (.hook_event_name // "")] | .[]' 2>/dev/null)" || fields=""
+  | jq -r '[(.agent_id // ""), (.agent_type // ""), (.tool_name // ""), (.session_id // ""), (.hook_event_name // "")] | .[]' 2>/dev/null)" || fields=""
 [ -n "$fields" ] || { note "fail-open: unparseable PreToolUse payload"; exit 0; }
 
-agent_id=""; agent_type=""; tool_name=""; session_id=""; prompt_id=""; hook_event=""
+agent_id=""; agent_type=""; tool_name=""; session_id=""; hook_event=""
 {
   IFS='' read -r agent_id || true
   IFS='' read -r agent_type || true
   IFS='' read -r tool_name || true
   IFS='' read -r session_id || true
-  IFS='' read -r prompt_id || true
   IFS='' read -r hook_event || true
 } <<EOF
 $fields
@@ -519,6 +518,8 @@ if [ -z "$agent_id" ]; then
   [ -f "$(dirname "$0")/../agents/${agent_type##*:}.md" ] || exit 0
   [ ! -f "${CLAUDE_PROJECT_DIR:-$PWD}/instance.config.json" ] || exit 0
   case "$session_id" in ''|*[!A-Za-z0-9._-]*) exit 0 ;; esac
+  [ "${#session_id}" -le 64 ] || exit 0
+  [ "${agent_type%:*}" = "$(jq -r '.name // ""' "$(dirname "$0")/../.claude-plugin/plugin.json" 2>/dev/null)" ] || exit 0
   agent_id="$session_id"; role_session=1
 fi
 
@@ -564,7 +565,7 @@ if [ "$CAP_N" != off ]; then
     if [ "$mark" != .unclocked ] && [ ! -e "$mark" ]; then
       mkdir -p "$AGENTSTATE" 2>/dev/null || true
       : > "$mark" 2>/dev/null || true
-      note clock-unknown "$agent_id" "$agent_type" "$tool_name" "elapsed=unknown budget=${CAP_N}m (no SubagentStart record or prompt_id)"
+      note clock-unknown "$agent_id" "$agent_type" "$tool_name" "elapsed=unknown budget=${CAP_N}m (no SubagentStart record)"
     fi
   else
     elapsed=$(( (epoch - started) / 60 ))

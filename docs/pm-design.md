@@ -710,13 +710,15 @@ both directions.
 **What that does NOT change, since the bg-role-agent-guards project: the doom-loop and
 wall-clock bounds reach top-level `--bg` role sessions too.** That project reverses the
 2026-10-04 decision to leave them unbounded. `agent-control.sh` matches a role session on
-no `agent_id`, an `agent_type` naming a role this plugin ships other than `project-manager`,
-and a bundle reached through `.git/loopd-bundle`; its `session_id` stands in for `agent_id`,
-so `control.sh halt <session>` reaches it too. Its clock starts at the round's first
-`PreToolUse` and restarts when `prompt_id` changes, which is what a `--resume` with a
-message does. The PM tick and the owner's own session are never matched (D1: the tick
-stays unbounded). Past the cap a role session may also edit its task document, where it
-records `pr:`.
+no `agent_id`, an `agent_type` `<this plugin>:<role>` other than `project-manager`, and a
+bundle reached through `.git/loopd-bundle` (so a session launched in a linked worktree, not
+in the bundle); its `session_id` stands in for `agent_id`, so `control.sh halt <session>`
+reaches it too, and stays until `control.sh clear`, across a resume. Its clock starts at
+its first `PreToolUse` and restarts only when step 4 runs `control.sh round <session>`
+before a resume: the payload marks no round, and `prompt_id` changes on every wake from
+idle, a background task's notification included (QA on loopd#568). The PM tick and the
+owner's own session are never matched (D1: the tick stays unbounded). Past the cap a role
+session may also edit the task document whose `session:` names it, where it records `pr:`.
 
 **Why the child runs in auto mode, and why it used to run in `bypassPermissions`.**
 task-026 measured that a prefix allowlist cannot cover a real tick and that hooks fire
