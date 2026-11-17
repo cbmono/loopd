@@ -50,6 +50,7 @@ MD
 g add -A; g commit -q -m prose
 OUT="$(bash "$RS" -C "$W")"; rc=$?
 echo "== a branch naming the tokens only in prose =="
+ok "the prose branch's diff is not empty"               "$(git -C "$W" diff --name-only trunk...prose)" notes.md
 ok "exit 0, nothing reported"                           "$rc:$(has 'reserved-scan: 0 ')" 0:yes
 
 g checkout -q -b code trunk
@@ -89,6 +90,35 @@ ok "a skip marker"                                      "$(has 'src/c.py:1: +@py
 ok "a bats skip"                                        "$(has 'src/d.bats:2: +skip "flaky"')" yes
 ok "a removed token, old-side line"                     "$(has 'old.ts:3: -// eslint-disable-next-line')" yes
 ok "a token on an unchanged base line is not reported"  "$(has '@ts-ignore')" no
+
+g checkout -q -b mid trunk
+printf 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\n' > "$W/mid.py"; g add -A; g commit -q -m base-mid
+g checkout -q -b mid2 mid
+printf 'l1\nl2\nl3\nl4\nself.skipTest("later")\nl6\nl7\nl8\n@pytest.mark.xfail\nl9\nl10\n' > "$W/mid.py"
+printf 'jobs:\n  t:\n    continue-on-error: false\n' > "$W/ok.yml"
+g add -A; g commit -q -m mid2
+echo "== mid-file hits keep their new-side line under any diff config =="
+OUT="$(bash "$RS" -C "$W" mid...mid2)"; rc=$?; want="$OUT"
+ok "a replaced line, new-side line 5"                   "$(has 'mid.py:5: +self.skipTest("later")')" yes
+ok "an inserted line, new-side line 9"                  "$(has 'mid.py:9: +@pytest.mark.xfail')" yes
+ok "the removed line is not a token"                    "$(has 'mid.py:5: -')" no
+ok "continue-on-error: false is not reported"           "$(has 'ok.yml')" no
+OUT="$(GIT_DIFF_OPTS=--unified=3 bash "$RS" -C "$W" mid...mid2)"
+ok "GIT_DIFF_OPTS=--unified=3 changes nothing"          "$([ "$OUT" = "$want" ] && echo same || echo differs)" same
+OUT="$(GIT_CONFIG_COUNT=3 GIT_CONFIG_KEY_0=diff.interHunkContext GIT_CONFIG_VALUE_0=3 \
+  GIT_CONFIG_KEY_1=diff.noprefix GIT_CONFIG_VALUE_1=true GIT_CONFIG_KEY_2=diff.context GIT_CONFIG_VALUE_2=5 \
+  bash "$RS" -C "$W" mid...mid2)"
+ok "interHunkContext, noprefix, context change nothing" "$([ "$OUT" = "$want" ] && echo same || echo differs)" same
+
+g checkout -q -b hide trunk
+printf '*.ts -diff\n*.js diff=hide\n' > "$W/.gitattributes"
+printf '// @ts-ignore\n' > "$W/hid.ts"; printf 'x(); // eslint-disable-line\n' > "$W/hid.js"
+g add -A; g commit -q -m hide
+OUT="$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=diff.hide.textconv GIT_CONFIG_VALUE_0=true bash "$RS" -C "$W" trunk...hide)"; rc=$?
+echo "== a branch whose .gitattributes would hide its tokens =="
+ok "exit 1"                                             "$rc" 1
+ok "-diff does not hide a token"                        "$(has 'hid.ts:1: +// @ts-ignore')" yes
+ok "a textconv does not hide a token"                   "$(has 'hid.js:1: +x(); // eslint-disable-line')" yes
 
 echo "== unknown is exit 2 =="
 OUT="$(bash "$RS" -C "$W" trunk...trunk)"; rc=$?

@@ -20,17 +20,20 @@ if [ -z "$range" ]; then
     unknown "origin/HEAD is not set in $dir; pass a <range>"
   range="$def...HEAD"
 fi
-diff="$(git -C "$dir" -c core.quotePath=false diff --no-color --no-ext-diff -U0 "$range" -- 2>/dev/null)" ||
+unset GIT_DIFF_OPTS GIT_EXTERNAL_DIFF
+diff="$(git -C "$dir" -c core.quotePath=false diff --no-color --no-ext-diff --text --no-textconv --no-relative \
+  -U0 --inter-hunk-context=0 --src-prefix=a/ --dst-prefix=b/ "$range" -- 2>/dev/null)" ||
   unknown "git diff $range failed in $dir"
 
 printf '%s\n' "$diff" | LC_ALL=C awk -v range="$range" '
 function prose(p) { return p ~ /\.(md|markdown|mdx|txt|rst|adoc|asciidoc)$/ }
 function reserved(s, p) {
-  if (s ~ /eslint-disable|@ts-ignore|@ts-expect-error|continue-on-error/) return 1
+  if (s ~ /eslint-disable|@ts-ignore|@ts-expect-error/) return 1
+  if (s ~ /continue-on-error/ && s !~ /continue-on-error[ \t]*:[ \t]*false/) return 1
   if (s ~ /#[ \t]*shellcheck[ \t]+disable=/) return 1
   if (s ~ /(^|[^A-Za-z0-9_$])(it|test|describe|context|suite|bench|this|mark|unittest|pytest)\.skip(If|if|Unless)?([^A-Za-z0-9_]|$)/) return 1
   if (s ~ /(^|[^A-Za-z0-9_$.])(xit|xdescribe|xtest|xcontext)[ \t]*\(/) return 1
-  if (s ~ /mark\.xfail|@Disabled|@Ignore([^A-Za-z0-9_]|$)|#\[ignore\]|(^|[^A-Za-z0-9_])t\.Skip(Now|f)?\(/) return 1
+  if (s ~ /mark\.xfail|@Disabled|@Ignore([^A-Za-z0-9_]|$)|#\[ignore[^A-Za-z0-9_]|\.skipTest\(|(^|[^A-Za-z0-9_])[tb]\.Skip(Now|f)?\(/) return 1
   return p ~ /\.bats$/ && s ~ /^[ \t]*skip([ \t]|$)/
 }
 function hit(sign, p, n, s) { sub(/^[ \t]+/, "", s); out[++nout] = p ":" n ": " sign s }
@@ -46,6 +49,7 @@ hdr && /^\+\+\+ / { np = substr($0, 5); sub(/^b\//, "", np); next }
 hdr { next }
 /^\+/ { s = substr($0, 2); if (!prose(np) && reserved(s, np)) hit("+", np, nl, s); nl++; next }
 /^-/ { s = substr($0, 2); if (!prose(op) && reserved(s, op)) hit("-", op, ol, s); ol++; next }
+/^ / { ol++; nl++ }
 END {
   printf "reserved-scan: %d added (+) or removed (-) line(s) carrying a reserved decision token in %s (report only)\n", nout, range
   for (i = 1; i <= nout; i++) print out[i]
