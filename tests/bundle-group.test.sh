@@ -238,6 +238,7 @@ ok "codeWorkspace is a key the machinery knows" \
 MUT="$TMP/mutant"; mkdir -p "$MUT"
 cp -R "$(cd "$(dirname "$BRIDGE_INSTALL")/../.." && pwd)/plugin" "$MUT/plugin"
 sed -i.bak 's|^\[ -e "\$TARGET/\$AB_SCHEMA" \] && WS_STAMPED=yes$|: # mutant|' "$MUT/plugin/scripts/init-bundle.sh"
+sed -i.bak 's|^WS_STAMPED="\$WS_PRE_STAMPED"$|WS_STAMPED=no|' "$MUT/plugin/scripts/init-bundle.sh"
 ok "the mutant really disables the marker" "$(grep -c '^: # mutant$' "$MUT/plugin/scripts/init-bundle.sh")" 1
 WM="$TMP/g/_loopd-mutant"; mkdir -p "$WM"
 ( cd "$WM" && git init -q . ) 2>/dev/null || true

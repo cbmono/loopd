@@ -388,6 +388,12 @@ WS_GROUP="$(ab_group "$TARGET")"
 WS_NAME="${WS_GROUP}.code-workspace"
 case "$WS_GROUP" in */*) WS_NAME="" ;; esac
 
+# Stamp evidence for the workspace rule below, captured BEFORE the sweep removes a legacy
+# template link: a symlink-era bundle is a refresh even once its SCHEMA link is gone.
+WS_PRE_STAMPED=no
+{ [ -e "$TARGET/$AB_SCHEMA" ] || [ -L "$TARGET/$AB_SCHEMA" ] || [ -e "$TARGET/SCHEMA.md" ] \
+  || [ -L "$TARGET/SCHEMA.md" ]; } && WS_PRE_STAMPED=yes
+
 # =========================================================================================
 # THE CONVERSION SWEEP — a symlink-era bundle becomes a plugin-native one, in place.
 # =========================================================================================
@@ -535,8 +541,8 @@ FIRST_STAMP=no
 # here: a config written by hand BEFORE the first stamp (to set `group`, or the
 # `codeWorkspace: false` opt-out below) would read as a refresh and seed nothing. So the
 # marker is the one the --org path already uses for "a bundle is here" — the stamped
-# SCHEMA — read before step 1 seeds it (and after STEP 0, which moves a legacy one in).
-WS_STAMPED=no
+# SCHEMA — read before step 1 seeds it, plus the evidence taken before STEP 0 removed a legacy link.
+WS_STAMPED="$WS_PRE_STAMPED"
 [ -e "$TARGET/$AB_SCHEMA" ] && WS_STAMPED=yes
 # The opt-out, through the one config reader (both layers). Anything but a literal `false`
 # — absent, unreadable, no python3 — keeps the default: seed on the first stamp.
