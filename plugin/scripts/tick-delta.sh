@@ -417,6 +417,9 @@ inputs_state() { # <project.md> -> waiting | arrived | ready
   case $? in 1) echo waiting ;; 3) echo arrived ;; *) echo ready ;; esac
 }
 PAUSED="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/project-paused.sh"
+# A project's kind, YAML quotes and leading space off: `kind: "research"` is research. An
+# omitted kind prints nothing, which every caller reads as build (the schema's default).
+pkind() { fmfirst "$1" kind | tr -d "\"'" | sed 's/^[[:space:]]*//' | grep -oE '^[a-z]+'; }
 VFACTS="$(dirname "${BASH_SOURCE[0]}")/verified-facts.sh"
 # Asked once per project, and only when it has an unrefined draft. Exit 1 alone is paused:
 # a gate that cannot answer counts as active, so the doubt costs a full tick, never a refine.
@@ -618,10 +621,10 @@ $prs"
     # Every draft refined and no design.md is owed work too (2026-11-18: a build project's
     # drafts were refined in one pass, and IDLE ticks never drew its design). Never recorded.
     if [ "$nref" -gt 0 ] && [ "$unref" = 0 ] && [ ! -f "${d}design.md" ] \
-       && [ "$(fmfirst "$p" kind | grep -oE '^[a-z]+')" != research ] && ! paused_now; then
+       && [ "$(pkind "$p")" != research ] && ! paused_now; then
       printf 'design owed %sdesign.md\n' "${d#"$inst"/}"; step2=1
     fi
-    if [ -f "${d}design.md" ] && [ "$(fmfirst "$p" kind | grep -oE '^[a-z]+')" != research ]; then
+    if [ -f "${d}design.md" ] && [ "$(pkind "$p")" != research ]; then
       r="$(project_critique "$p" "$mapped")"; rc=$?
       case $rc in
         0) printf 'critique owed projects/%s/project.md %s\n' "$(basename "$d")" "$r"; step2=1 ;;

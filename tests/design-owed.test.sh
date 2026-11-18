@@ -45,6 +45,7 @@ digest() { "$INST/scripts/tick-delta.sh" digest --instance "$INST" 2>/dev/null; 
 check() { local out rc; out="$("$INST/scripts/tick-delta.sh" check --instance "$INST" 2>&1)"; rc=$?
           printf 'rc:%s %s' "$rc" "$(head -1 <<<"$out")"; }
 record() { "$INST/scripts/tick-delta.sh" record --instance "$INST" >/dev/null 2>&1; }
+recorded() { record; echo $?; }
 names_step2() { local d; d="$(digest)"; case "$(grep '^steps:' <<<"$d")" in *step-2-refine-drafts.md*) echo yes ;; *) echo no ;; esac; }
 critique() { # the project-level critique receipt, so `critique owed` stays out of the IDLE case
   project build active 'advisor_notes:\n  - "2026-11-01T10:00:00Z · advisor: project critique — no concerns · saw: task-001 task-002"\n'; }
@@ -58,7 +59,7 @@ ok "…naming the project's design.md"                   "$(digest | sed -n 's/^
 ok "…and the steps line names step 2"                  "$(names_step2)" yes
 
 echo "== check: a clean recorded tree owing a design is never IDLE =="
-record
+ok "record exits 0"                                    "$(recorded)" 0
 ok "clean and recorded → DELTA, exit 1" "$(check)" \
    "rc:1 DELTA: design owed projects/a — every draft is refined; step 2 owes its design.md."
 
@@ -72,6 +73,13 @@ echo "== never on research, paused or inputs-waiting =="
 project research active; commit; record
 ok "a research project → no design owed line"          "$(digest | grep -c '^design owed ')" 0
 ok "…and check does not name one"                      "$(check | grep -c 'design owed')" 0
+project '"research"' active; commit; record
+ok "a quoted kind: \"research\" → no design owed line"  "$(digest | grep -c '^design owed ')" 0
+ok "…and check does not name one"                      "$(check | grep -c 'design owed')" 0
+project "'research'" active; commit; record
+ok "a single-quoted kind → no design owed line"        "$(digest | grep -c '^design owed ')" 0
+printf -- '---\ntype: Project\nstatus: active\n---\n' > "$P/project.md"; commit
+ok "an omitted kind is build → design owed"            "$(digest | grep -c '^design owed ')" 1
 project build paused; commit; record
 ok "a paused project → no design owed line"            "$(digest | grep -c '^design owed ')" 0
 ok "…and IDLE"                                         "$(check | cut -c1-10)" "rc:0 IDLE:"
@@ -88,8 +96,8 @@ ok "a project with no task at all → no design owed line" "$(digest | grep -c '
 
 echo "== build-awaiting.sh: the approve row says no design yet =="
 refined task-001-a.md
-approve_row() { : > "$TMP/AWAITING.md"; bash "$INST/scripts/build-awaiting.sh" --instance "$INST" --out "$TMP/AWAITING.md" >/dev/null 2>&1
-                grep -F '**approve**' "$TMP/AWAITING.md"; }
+rendered() { : > "$TMP/AWAITING.md"; bash "$INST/scripts/build-awaiting.sh" --instance "$INST" --out "$TMP/AWAITING.md" >/dev/null 2>&1; echo $?; }
+approve_row() { rendered >/dev/null; grep -F '**approve**' "$TMP/AWAITING.md"; }
 row="$(approve_row)"
 ok "no design.md → the approve row stays"              "$(printf '%s\n' "$row" | grep -c '^\* ✅ \*\*approve\*\*')" 1
 ok "…marked no design yet"                             "$(printf '%s\n' "$row" | grep -c ' · no design yet · ')" 1
@@ -97,7 +105,16 @@ design; row="$(approve_row)"
 ok "design.md present → not marked"                    "$(printf '%s\n' "$row" | grep -c 'no design yet')" 0
 ok "…and the row links it instead"                     "$(printf '%s\n' "$row" | grep -c '\[design\](/projects/a/design.md)')" 1
 rm -f "$P/design.md"; project research active
-ok "a research draft → never marked"                   "$(approve_row | grep -c 'no design yet')" 0
+ok "a research project renders (exit 0)"               "$(rendered)" 0
+row="$(grep -F '**approve**' "$TMP/AWAITING.md")"
+ok "…with its approve row"                             "$(printf '%s\n' "$row" | grep -c '^\* ✅ \*\*approve\*\*')" 1
+ok "…never marked no design yet"                       "$(printf '%s\n' "$row" | grep -c 'no design yet')" 0
+project '"research"' active
+ok "a quoted research kind → never marked"             "$(approve_row | grep -c 'no design yet')" 0
+printf -- '---\ntype: Task\nkind: research\nstatus: draft\nacceptance_criteria: [ "x" ]\n---\n' > "$P/tasks/task-001-a.md"
+project build active
+ok "a research-kind draft in a build project follows the project" "$(approve_row | grep -c 'no design yet')" 1
+refined task-001-a.md
 
 echo "== mutant: without the design owed print the harness fails =="
 project build active; refined task-002-b.md; commit

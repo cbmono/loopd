@@ -313,10 +313,11 @@ facts_mark() { # <file> <rel> -> "unverified · ", "stale · " or nothing
 
 # A build draft whose project has no design.md yet: step 2 owes it (`design owed`), and the
 # row says so rather than withhold the promote, which stays the human's.
+# The PROJECT's kind decides, as in tick-delta.sh: design.md is drawn once per build project.
 design_mark() { # <task> <project.md> -> "no design yet · " or nothing
-  local k; [ -z "$cur_design" ] || return 0
-  k="$(fmfirst "$1" kind)"; [ -n "$k" ] || k="$(fmfirst "$2" kind)"
-  [ "${k%% *}" = research ] || printf 'no design yet · '
+  [ -z "$cur_design" ] || return 0
+  [ "$(fmfirst "$2" kind | tr -d "\"'" | sed 's/^[[:space:]]*//' | grep -oE '^[a-z]+')" = research ] \
+    || printf 'no design yet · '
 }
 
 # A row is `* <glyph> **<verb>** — [<title>](<link>) · <trailer>` and nothing else. One

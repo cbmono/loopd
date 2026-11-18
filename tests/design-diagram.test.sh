@@ -96,6 +96,7 @@ cp "$P/design.md" "$TMP/design.keep"; rm "$P/design.md"; task p1 task-004-d "D" 
 out="$(TD check)"
 ok "no design.md ⇒ no redraw DELTA" "$(printf '%s\n' "$out" | grep -c 'does not map')" 0
 ok "…but design owed, every draft being refined" "$(printf '%s\n' "$out" | grep -c '^DELTA: design owed projects/p1 ')" 1
+ok "…and the digest itself carries no redraw owed line" "$(TD digest | grep -c '^redraw owed projects/p1/design.md')" 0
 rm "$P/tasks/task-004-d.md"; cp "$TMP/design.keep" "$P/design.md"; settle restore
 
 echo; echo "== design-inputs.sh: what the fingerprint sees, and what it ignores =="
