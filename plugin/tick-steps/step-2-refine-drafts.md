@@ -26,6 +26,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **Each `fold owed <task>` line is likewise owed**: bake the answer in and run
    `fold-answers.sh` on it (below), or name it in the close line as
    `fold deferred: <task> <reason>`. Any label counts — `Q<n>:`, `advisor:` or none.
+   **Each `design owed <project>/design.md` line is owed too**: draw it this tick (the design
+   diagram below, then the project critique), or name it in the close line as
+   `design: not written (<project>: <reason>)`.
 
    **Refine drafts.** For each `draft` whose `acceptance_criteria` are empty/thin
    (not yet refined): enrich it, add concrete `acceptance_criteria`, and record

@@ -79,6 +79,8 @@ ok "no argument ⇒ usage 2"                              "$(vf)" " 2"
 ok "no task document is rewritten"                      "$(cat "$P"/tasks/*.md | cksum)" "$before"
 
 echo "== promote-row marks =="
+# The design drawn, so a row's only mark is the facts one (design-owed.test.sh owns the other).
+: > "$P/design.md"
 touch "$B/$AB_AWAITING"
 bash "$BA" --instance "$B" --facts "$P/tasks/t-stale.md=stale" --facts "$P/tasks/t-nofetch.md=unknown" \
   --facts "$P/tasks/t-present.md=verified" --facts "$P/tasks/t-research.md=missing" >/dev/null

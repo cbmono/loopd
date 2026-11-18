@@ -26,7 +26,9 @@ for f in tick-delta.sh bundle-paths.sh fold-answers.sh web-queue.sh agent-sessio
 done
 cp "$S"/*.py "$INST/scripts/"; cp -R "$S/lib" "$INST/scripts/lib"
 cp -R "$REPO/plugin/tick-steps" "$INST/tick-steps"
-printf -- '---\ntype: Project\nstatus: active\n---\n' > "$INST/projects/p/project.md"
+# The design drawn and critiqued: a refined draft with none would be `design owed` instead.
+printf -- '---\ntype: Project\nstatus: active\nadvisor_notes: [ "2026-11-01T09:00:00Z · advisor: project critique — no concerns · saw: " ]\n---\n' > "$INST/projects/p/project.md"
+: > "$INST/projects/p/design.md"
 printf '/%s\n' "$AB_STATE_DIR" > "$INST/.gitignore"; printf '{}\n' > "$INST/instance.config.json"
 GIT -C "$INST" init -q
 

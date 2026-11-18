@@ -50,7 +50,10 @@ cp "$REPO/plugin/scripts/fold-answers.sh" "$INST/scripts/fold-answers.sh"
 SH="$INST/scripts/tick-delta.sh"
 
 task() { printf -- '---\ntype: Task\nkind: build\nstatus: %s\npr: []\nacceptance_criteria: [ "x" ]\n---\n' "$2" > "$1"; }
-printf 'type: Project\nstatus: active\nautonomy: gated\n' > "$INST/projects/quiet-proj/project.md"
+# Its design drawn and critiqued: a refined draft with none would be `design owed`, never IDLE.
+printf -- '---\ntype: Project\nstatus: active\nautonomy: gated\nadvisor_notes: [ "2026-09-06T07:00:00Z · advisor: project critique — no concerns · saw: " ]\n---\n' \
+  > "$INST/projects/quiet-proj/project.md"
+: > "$INST/projects/quiet-proj/design.md"
 task "$INST/projects/quiet-proj/tasks/t1.md" draft
 task "$INST/projects/quiet-proj/tasks/t2.md" "done"
 printf '* TICK 2026-09-06T08:00:00Z closed — nothing to do\n' > "$INST/$AB_LEDGER"
