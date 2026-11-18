@@ -151,6 +151,22 @@ ok "…and returns a blocked task to ready through answer.sh" \
   "$(ge1 "$(grep -c '`unblock.sh`' "$SK/answer/SKILL.md")")" yes
 ok "fanout is for INDEPENDENT asks" \
   "$(ge1 "$(grep -ci 'independent' "$SK/fanout/SKILL.md")")" yes
+# A brief telling a background agent to `commit-as.sh human` and push was refused by the
+# auto-mode classifier as unauthorized access (2026-11-18). Scoped to step 3, where the
+# brief is written; the mutant proves the scope reads the rule, not the whole file.
+fanout_step3() { awk '/^3\. \*\*Brief/{f=1} /^4\. /{f=0} f' "${1:-$SK/fanout/SKILL.md}"; }
+fanout_rule() { # [file]
+  local s; s="$(fanout_step3 "${1:-}")"
+  grep -qF 'never commits as the human' <<<"$s" && grep -qF 'never runs `commit-as.sh human` or' <<<"$s" \
+    && grep -qF 'pushes' <<<"$s" && grep -qF 'uncommitted' <<<"$s" \
+    && grep -qF '`loopd:<role>` agent may commit as' <<<"$s" && echo yes || echo no
+}
+ok "fanout's step 3: a fanned-out agent never commits as the human" "$(fanout_rule)" yes
+FMUT="$(mktemp)"; grep -v 'never commits as the human' "$SK/fanout/SKILL.md" >"$FMUT"
+ok "…and a skill without that line fails the pin (mutant)" "$(fanout_rule "$FMUT")" no
+awk '/never commits as the human/{print "4. moved"} {print}' "$SK/fanout/SKILL.md" >"$FMUT"
+ok "…and the rule moved out of step 3 fails it too (mutant)" "$(fanout_rule "$FMUT")" no
+rm -f "$FMUT"
 ok "new-project keeps the scaffold review's declared fallback" \
   "$(ge1 "$(grep -ci 'fallback' "$SK/new-project/SKILL.md")")" yes
 ok "…and the build/research asymmetry (clis from a flag or empty)" \
