@@ -61,7 +61,7 @@ LOCAL_ORDER = ["$schema", "ownerGithubUser", "authorEmail", "reposRoot", "worktr
                "boardInstances", "boardArtifactUrl", "boardPort", "models", "roleTiers",
                "roleEffort",
                "maxAgentsInFlight", "maxRepeatedToolCalls", "stuckSignature", "maxAgentMinutes", "roleMinutes",
-               "maxIdleMinutes", "maxBgRoundMinutes", "minFreeDiskGb", "minFreeMemGb",
+               "maxIdleMinutes", "maxStalledMinutes", "maxBgRoundMinutes", "minFreeDiskGb", "minFreeMemGb",
                "commitAttribution", "reclaimIgnoreOk"]
 
 # The overridable keys whose TRACKED copy is NOT a documented fallback. That column is the

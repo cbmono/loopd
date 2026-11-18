@@ -980,7 +980,17 @@ the worktree root — a done task's own row is `session-handoff.sh`'s), `idle` p
 turns either off), both clocked from the transcript
 (`startedAt` counts idle days; a `tool_result` is not a new round) and both only for a
 session an open task records. A row with no `kind` or no `state` is never selected — the
-human's interactive session carries no `state`. The IDLE fast path runs it too, and
+human's interactive session carries no `state`. **Since 2026-11-18 a fourth class, `stalled`,
+comes first**: an idle session whose last turn and whose newest open PR's head commit are both
+older than `maxStalledMinutes` (absent ⇒ 30), with no child in flight, no required check pending
+at that head and not a `qa-reviewer`'s. One observed round sat 50 minutes on an unanswered
+review thread while five ticks called it working. The heads are `tick-delta.sh`'s own PR read,
+saved under `.tick-start/heads` and removed before each read, so a failed read stops nothing
+early. The sweep counts each stop with `stall-counter.sh` (`pr head still <sha>`, so a new head
+restarts the count), escalates at `maxStallRounds`, and step 4 resumes the session once with no
+`AWAITING.md` row: the stop was the whole fix in the observed case, and a do row would have
+parked it on the human. A pending reviewer does not exempt it — that was the observed case.
+The IDLE fast path runs it too, and
 `tick-reap.sh` never does: the launcher's reaper answers only for its own tick. **The core
 prompt's step-5 pointer names it, not only the step file** — the first 4.3.0 tick reflected
 no merge, never opened `step-5-reflect-merges.md`, and left a reaped tick live (2026-11-02).

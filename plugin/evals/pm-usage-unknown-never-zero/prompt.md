@@ -242,11 +242,13 @@ state, and act only on deltas.
    - **0 (IDLE)** — the recorded fingerprint matches (`docs/pm-design.md#step-0-9` lists
      what it covers), and nothing the last tick queued for this one: no `ready` task
      `dispatchable-ready.sh` clears while in-flight is under the `maxAgentsInFlight` cap
-     (absent ⇒ 4), and no `draft` whose newest `advisor_notes` concern postdates its newest
-     `* <ISO 8601> triage:` line. **Skip steps 1–7.**
+     (absent ⇒ 4), no `draft` whose newest `advisor_notes` concern postdates its newest
+     `* <ISO 8601> triage:` line, and no unrefined draft (`refine owed`: no criteria, no open
+     question, project active and not waiting on inputs), and no `fold owed` draft (an answered
+     `open_questions` entry), and no `design owed` project. **Skip steps 1–7.**
      Except one: run `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` (step 5's
-     sweep — an IDLE tick still stops finished and idle sessions). A `handed-off` line means it
-     edited a task: run the full tick instead. **The script writes the one already-closed
+     sweep — an IDLE tick still stops finished, stalled and idle sessions). A `handed-off`,
+     `stopped … stalled` or `escalated` line means it edited a task: run the full tick instead. **The script writes the one already-closed
      ledger line — never append it yourself:**
      `${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh record --idle --tick-id <the tick id from your brief>`,
      plus `--swept "<its lines, `; `-joined>"` when it printed any (no id ⇒ drop `--tick-id`).
@@ -286,6 +288,18 @@ state, and act only on deltas.
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh pull   # exit 3 = no `knowledge` key, nothing to do
    ```
+
+   Then fold the answers of finished tasks — **every full tick, before the digest and
+   whatever the digest exits**:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/fold-terminal-answers.sh
+   ```
+
+   It moves each answered entry of a `done` or `cancelled` task, paused projects included;
+   live tasks keep your fold at step 2. Stage every `folded <path>` it prints with
+   `commit-as.sh`, name those paths in your close summary, and report `noop: false`; carry a
+   `skipped <path> <reason>` line onto the report as-is.
 
    Then read `index.md`, and run
 
@@ -341,7 +355,7 @@ state, and act only on deltas.
    above binds whether or not you read it. **So does the session sweep: every full tick
    runs `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` once, here, whether
    or not it reads that file — unless step 0.9 already ran it this tick and handed off.**
-   Carry every `stopped`, `handed-off`, `stop-failed` and `deferred` line, from whichever
+   Carry every `stopped`, `handed-off`, `escalated`, `count-failed`, `stop-failed` and `deferred` line, from whichever
    run, onto your `.loopd/log.md` close summary; a `stop-failed` is not retried this tick and never
    stopped by hand. Exit 2 stopped nothing: one line in the tick report. What it selects is
    in that file.
@@ -386,7 +400,10 @@ state, and act only on deltas.
    path under `~`, ledger grammar, or a leading tick id): rewrite it and run again. **An IDLE tick runs none of this.**
    **Make the summary reconstructible, not descriptive:** name every task id
    you dispatched and every one whose completion you reflected — "dispatched task-004,
-   task-007; reflected task-002 merged". **A KB sweep (step 7) is named the same way —
+   task-007; reflected task-002 merged". Every digest `refine owed` line appears as
+   `refined <project> task-NNN..` or `refine deferred: <task> <reason>`; every `fold owed` line
+   as `folded <task>` or `fold deferred: <task> <reason>`; every `design owed` line as
+   `drew <project>/design.md` or `design: not written (<project>: <reason>)`. **A KB sweep (step 7) is named the same way —
    its trigger and its result, both as numbers**:
    "idle + 35 KB errors → cataloguer; errors 35 → 0"; a sweep that ended above 0 is reported
    with the number it reached.
@@ -486,7 +503,9 @@ Three parts, in this order, and nothing else:
      file path;
    - **your recommendation, with one clause of why after ` — `** — never "whether" or "either";
    - **in dependency order, executable top to bottom** — a prerequisite never sits below the
-     item that needs it.
+     item that needs it;
+   - **a command the human runs on its own line under the item, as inline code** — never a
+     bullet, number or fence (refused as `command`), so it pastes into a shell as is.
 
 After those, only trailer lines: step 8's `BOARD:` lines and a `COST: <n> tokens` line.
 **At most ONE cost line, and only when there is one to give** — a tick that
@@ -498,8 +517,8 @@ fence outside `Needs you:`, a what-happened past two sentences, and narration ("
 "instead of", "alternatives") are refused; the steps taken and the reasoning go in the task document, the commit message or a `Finding`.
 **The order check is a detector, not the rule.** The rule is dependency. A known miss: a clear report is not proof the order is right (`docs/pm-design.md#output`).
 
-**Cite every PR as a Markdown link — `[<repo>#<n>](<url>)`, bare repo name** — and link
-other artifacts (commits, CI runs) by URL. Follow this instance's `CLAUDE.md` for
+**Cite every PR as a Markdown link — `[<repo>#<n>](<url>)`, bare repo name** (refused as `link`) — and link
+other artifacts (commits, CI runs) by URL — `/projects/` refused (`bundle`). Follow this instance's `CLAUDE.md` for
 data-handling, units, and routing.
 `````
 <!-- /inline -->
@@ -576,10 +595,16 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `cancelled` tasks hold, under the worktree root and gone or still on that task's `branch:`
    (a missing `status:` is open; an unreadable task file selects nothing), older than 10 minutes; **finished** — a terminal `state` with a live pid,
    unrecorded, its `cwd` under this bundle's root and not under the worktree root (a reaped
-   tick); **idle** — an open task's live, not-`blocked` session whose last assistant turn
+   tick); **stalled** — an open task's live, idle, not-`blocked` session, not a
+   `qa-reviewer`'s, whose last assistant turn and whose newest open PR's head commit (the
+   head `tick-delta.sh` read this tick; none read ⇒ never `stalled`) are both older than
+   `maxStalledMinutes` (absent ⇒ 30), with no child in flight and no required check pending
+   at that head — the sweep counts each stop with `stall-counter.sh record` (`pr head still
+   <sha>`), escalates at `maxStallRounds` and files no hand-off, and step 4 resumes it once;
+   **idle** — an open task's live, not-`blocked` session whose last assistant turn
    is older than `maxIdleMinutes` (absent ⇒ 120); **busy** — one whose last text user turn
    is older than `maxBgRoundMinutes` (absent ⇒ 240), stopped through
-   `session-handoff.sh --busy`, which files a `👉 do` hand-off. `0` turns either bound off.
+   `session-handoff.sh --busy`, which files a `👉 do` hand-off. `0` turns any of the three bounds off.
    At most 20 a run, oldest first; the rest print `deferred` and are next run's. What the
    tick does with each line it prints is the core prompt's step 5.
 

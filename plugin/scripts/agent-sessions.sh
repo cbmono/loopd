@@ -56,7 +56,10 @@
 #                                                first: `dead` as above; `finished` terminal, live
 #                                                pid, cwd under the bundle root, unrecorded;
 #                                                `idle`/`busy` an open task's live session past
-#                                                maxIdleMinutes (120) / maxBgRoundMinutes (240)
+#                                                maxIdleMinutes (120) / maxBgRoundMinutes (240);
+#                                                `stalled` idle past maxStalledMinutes (30) with
+#                                                its newest open PR's head (tick-delta.sh's
+#                                                AB_TICK_START/heads) as old, then `<head sha>`
 #   agent-sessions.sh worker <session-id> [--roster <file>]
 #                                             -> `worker <short> <pid>`: the daemon's live
 #                                                process for it (roster.json); exit 1 none
@@ -73,7 +76,7 @@
 # tests/resume-full-id.test.sh, tests/blocked-recorded.test.sh and tests/dead-session-sweep.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,67p' "$0" >&2; exit 2; }
+usage() { sed -n '3,70p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 here="$(dirname "${BASH_SOURCE[0]:-$0}")"
@@ -396,7 +399,7 @@ PY
       . "$here/bundle-paths.sh" || exit 2
       self="${CLAUDE_CODE_SESSION_ID:-} $(sed -n 's/^session:[[:space:]]*//p' "$root/$AB_LOCK" 2>/dev/null)"
       skip="$self"
-      for k in maxIdleMinutes:120 maxBgRoundMinutes:240; do
+      for k in maxIdleMinutes:120 maxBgRoundMinutes:240 maxStalledMinutes:30; do
         v="$(bash "$here/resolve-config.sh" --instance "$root" "${k%%:*}" 2>/dev/null)" || v=""
         bounds="$bounds ${v:-${k#*:}}"
       done
@@ -437,7 +440,8 @@ PY
       || { echo "agent-sessions: a task file is unreadable — nothing selected" >&2; exit 2; } ;; esac
     skip="$skip $(printf '%s\n' "$recs" | cut -f1)"
     out="$(python3 "$here/agent-sessions-classify.py" "$json" "$root" "$wtroot" "$TERMINAL" "$summary" "$tasks" \
-      "$skip" "$recs" "$self" "$bounds" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects")" \
+      "$skip" "$recs" "$self" "$bounds" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects" \
+      "$root/${AB_TICK_START:-}/heads" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/jobs")" \
       || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
     case "$mode" in view|working) printf '%s\n' "$out"; exit 0 ;; esac
     # The daemon's roster is the second liveness witness; an unreadable entry keeps the row.
@@ -536,6 +540,6 @@ PY
     exit 0
     ;;
 
-  -h|--help) sed -n '3,67p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,70p' "$0"; exit 0 ;;
   *) usage ;;
 esac

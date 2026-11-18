@@ -1,7 +1,8 @@
 # agent-sessions-classify.py — the one classifier behind `agent-sessions.sh view|working|dead-ids|
 # stop-ids`: reads one `claude agents --json --all` listing and prints that mode's rows.
 #   python3 agent-sessions-classify.py <listing-json> <root> <wtroot> <terminal> <summary> <tasks>
-#                                      <skip> <recs> <self-ids> <bounds> <projects-dir>
+#                                      <skip> <recs> <self-ids> <bounds> <projects-dir> <heads> <jobs-dir>
+# <heads> `<url> <state> <head> <committed ISO> <required pending>` per open PR (tick-delta.sh).
 # <tasks> `<worktree> TAB <status> TAB <branch> TAB <task file>` per task that records a worktree.
 # <summary> `counts`: `<working> <idle> <dead>`, `tick TAB <n>` (working sessions among
 # <self-ids>, the tick's), then `<word> TAB <json task path>` per task whose worktree holds a
@@ -11,7 +12,7 @@
 import glob, json, os, re, subprocess, sys, time, unicodedata
 from datetime import datetime
 from pid_alive import alive
-raw, root, wtroot, terminal, summary, tasks, skip, recs, self_ids, bounds, projects = sys.argv[1:12]
+raw, root, wtroot, terminal, summary, tasks, skip, recs, self_ids, bounds, projects, heads, jobs = sys.argv[1:14]
 try:
     rows = json.loads(raw)
 except Exception:
@@ -64,7 +65,7 @@ for line in recs.splitlines():
 
 def bound(v):
     return int(v) * 60 if re.fullmatch(r"[0-9]+", v) and int(v) > 0 else None
-idle_s, busy_s = (bound(v) for v in (bounds.split() + ["", ""])[:2])
+idle_s, busy_s, stall_s = (bound(v) for v in (bounds.split() + ["", "", ""])[:3])
 
 def user_text(e):
     c = (e.get("message") or {}).get("content") if isinstance(e.get("message"), dict) else None
@@ -91,6 +92,51 @@ def last_entry(sid, want):
     except (OSError, UnicodeDecodeError, ValueError):
         return None
     return True
+
+def iso(v):
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+def frontmatter(path):
+    try:
+        lines = open(path, encoding="utf-8").read().split("\n")
+    except (OSError, UnicodeDecodeError):
+        return None
+    if not lines or lines[0] != "---" or "---" not in lines[1:]:
+        return None
+    return lines[1:lines.index("---", 1)]
+
+# Every doubt is no: an unread head, a PR missing from the read, an unread job record.
+def stalled(r, path, now):
+    fm = frontmatter(path)
+    if fm is None or any(re.match(r"assignee:\s*['\"]?qa-reviewer\b", l) for l in fm):
+        return None
+    urls, on = [], False
+    for l in fm:
+        on = l.startswith("pr:") or (on and (l[:1] in (" ", "-")))
+        if on:
+            urls += re.findall(r"https?://[^\s,'\"\]]+/pull/[0-9]+", l)
+    try:
+        read = {f[0]: f[1:] for f in (l.split() for l in open(heads, encoding="utf-8")) if len(f) == 5}
+    except (OSError, UnicodeDecodeError):
+        return None
+    if not urls or any(u not in read for u in urls):
+        return None
+    live = [read[u] for u in urls if read[u][0] == "OPEN"]
+    if not live:
+        return None
+    _, head, at, pending = live[-1]
+    t = iso(at)
+    if t is None or now - t < stall_s or pending != "0" or not re.fullmatch(r"[0-9a-f]{7,40}", head):
+        return None
+    try:
+        d = json.load(open(os.path.join(jobs, str(r.get("id") or r["sessionId"].split("-")[0]), "state.json"), encoding="utf-8"))
+        n = d["inFlight"]["tasks"]
+    except Exception:
+        return None
+    return head if isinstance(n, int) and not isinstance(n, bool) and n == 0 else None
 
 # Display only — classification above reads the raw value, as `in-flight` does.
 # Every printed field comes from JSON or a file name, so no control character reaches a terminal.
@@ -132,9 +178,13 @@ for r in rows:
                 cls = "finished"
         elif hit and hit[0] not in ("done", "cancelled") and state not in terminal and state != "blocked":
             st, now = r.get("status"), time.time()
-            if st == "idle" and idle_s:
+            if st == "idle" and (idle_s or stall_s):
                 t = last_entry(sid, "assistant")
-                cls = "idle" if t is not None and now - t >= idle_s else None
+                head = stall_s and t is not None and now - t >= stall_s and stalled(r, hit[1], now)
+                if head:
+                    cls, hit = "stalled", (hit[0], hit[1] + " " + head)
+                elif idle_s and t is not None and now - t >= idle_s:
+                    cls = "idle"
             elif st == "busy" and busy_s:
                 t = last_entry(sid, "user")
                 cls = "busy" if t is not None and now - t >= busy_s else None

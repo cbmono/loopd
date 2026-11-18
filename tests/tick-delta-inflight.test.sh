@@ -3,7 +3,8 @@
 # tick-delta-inflight.test.sh — `tick-delta.sh check` lets an in-progress task whose session is
 # busy and unchanged go IDLE, and every in-flight fact that moves is still a DELTA: head SHA,
 # a check run, mergeable/mergeStateStatus, a review, the session's status, a stop coming due,
-# and an in-progress task with no live session (cheaper-tidier-ticks/task-006). Rows come from
+# and an in-progress task with no live session (cheaper-tidier-ticks/task-006); a session stalled on
+# its PR head is due from that same PR read (recover-stalled-role-sessions-sooner/task-001). Rows come from
 # `mk` in tests/session-sweep-bounds.test.sh, read out of that file rather than copied; `claude`
 # and `gh` are PATH stubs that log each call. Exit 0 pass, 1 fail, 2 setup.
 set -uo pipefail
@@ -132,6 +133,45 @@ nosess "an in-progress task whose session is done" 'BASE="${BASE/working busy/do
 nosess "an in-progress task whose session is stopped" 'BASE="${BASE/working busy/stopped busy}"; rows'
 nosess "an in-progress task whose session's process died" \
   'rows; python3 -c "import json,sys; p=sys.argv[1]; r=json.load(open(p)); [x.pop(\"pid\") for x in r if x[\"id\"]==\"a1a10001\"]; json.dump(r,open(p,\"w\"))" "$FIXTURE"'
+
+echo "== STALLED: the check's own PR read is the head stop-ids reads =="
+mkdir -p "$TMP/cfg/jobs/b2b20002"; printf '{"inFlight":{"tasks":0}}\n' > "$TMP/cfg/jobs/b2b20002/state.json"
+cpr() { # <n> <committed m ago> [harness-suite status] [CodeRabbit state]
+  prj "$1"; python3 - "$GHDIR/$1" "$2" "${3:-COMPLETED}" "${4:-SUCCESS}" <<'PY2'
+import json, sys, time
+from datetime import datetime, timezone
+p, m, hs, cr = sys.argv[1], float(sys.argv[2]), sys.argv[3], sys.argv[4]
+d = json.load(open(p)); c = d["data"]["repository"]["pullRequest"]["commits"]["nodes"][0]["commit"]
+c["committedDate"] = datetime.fromtimestamp(time.time() - m * 60, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+for n in c["statusCheckRollup"]["contexts"]["nodes"]:
+    if n["__typename"] == "CheckRun": n.update(status=hs, isRequired=True)
+    else: n.update(state=cr, isRequired=False)
+json.dump(d, open(p, "w"))
+PY2
+}
+stall() { base; cpr 2 45 "$@"; BASE="${BASE/working idle background 3 20 60/working idle background 3 40 60}"; rows; }
+stall; ok "an idle session on a 45m-old head is a DELTA" "$(run)" "rc:1 DELTA: the f"
+ok "…naming it due as stalled" "$(bash "$TD" check --instance "$B" 2>&1 | grep -c "now: *due $(u b2b20002) stalled\$")" 1
+ok "…from the same one gh call per PR" "$(: > "$CALLS"; bash "$TD" check --instance "$B" >/dev/null 2>&1; grep -c '^gh api graphql' "$CALLS")" 2
+ok "…which it saved as the heads stop-ids reads" "$(grep -cE "^$URL/2 OPEN abc1234 [0-9T:Z-]+ 0\$" "$B/$AB_TICK_START/heads")" 1
+ok "…and stop-ids selects it as stalled" "$(awk '$4 == "stalled"' <<<"$(AB_SESSIONS_LISTING="$FIXTURE" bash "$S/agent-sessions.sh" stop-ids "$B" 2>/dev/null)" | wc -l | tr -d ' ')" 1
+stall IN_PROGRESS; ok "a required check in progress at the head: pending 1, nothing due" \
+   "$(bash "$TD" check --instance "$B" >/dev/null 2>&1; awk -v u="$URL/2" '$1 == u { print $5 }' "$B/$AB_TICK_START/heads"):$(awk '$4 == "stalled"' <<<"$(AB_SESSIONS_LISTING="$FIXTURE" bash "$S/agent-sessions.sh" stop-ids "$B" 2>/dev/null)" | wc -l | tr -d ' ')" "1:0"
+stall COMPLETED PENDING; ok "a pending reviewer that is not required counts 0" \
+   "$(bash "$TD" check --instance "$B" >/dev/null 2>&1; awk -v u="$URL/2" '$1 == u { print $5 }' "$B/$AB_TICK_START/heads")" 0
+stall; mv "$GHDIR/1" "$GHDIR/1.off"
+ok "a failed PR read cannot answer, and leaves no heads" "$(run | cut -c1-4):$(ls "$B/$AB_TICK_START/heads" 2>/dev/null | wc -l | tr -d ' ')" "rc:2:0"
+mv "$GHDIR/1.off" "$GHDIR/1"
+left() { # <what> <expected run> — a previous tick's stalled heads, then this tick fails before its read
+  stall; bash "$TD" check --instance "$B" >/dev/null 2>&1; eval "$3"
+  ok "$1 leaves no earlier tick's heads" "$(run | cut -c1-4):$(ls "$B/$AB_TICK_START/heads" 2>/dev/null | wc -l | tr -d ' ')" "$2:0"
+  ok "…so stop-ids selects nothing as stalled" "$(awk '$4 == "stalled"' <<<"$(AB_SESSIONS_LISTING="$FIXTURE" bash "$S/agent-sessions.sh" stop-ids "$B" 2>/dev/null)" | wc -l | tr -d ' ')" 0
+  eval "$4"
+}
+left "a walk failing before the PR read" rc:2 'mkdir "$B/projects/q"' 'rmdir "$B/projects/q"'
+left "a dirty tree's early DELTA" rc:1 'printf x >> "$B/projects/p/project.md"' 'GIT -C "$B" checkout -q -- projects'
+stall; bash "$TD" check --instance "$B" >/dev/null 2>&1; bash "$TD" record --instance "$B" >/dev/null 2>&1
+ok "record removes the tick's heads" "$(ls "$B/$AB_TICK_START/heads" 2>/dev/null | wc -l | tr -d ' ')" 0
 
 echo "== UNKNOWN MERGE STATE is fingerprinted as-is =="
 base; prj 1 abc1234 SUCCESS UNKNOWN UNKNOWN; rec
