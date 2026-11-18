@@ -224,6 +224,10 @@ type Counts = {
   state: 'absent' | 'unreadable' | 'ok'
   mtimeMs: number
   in_progress: N; in_review: N; working: N; idle: N; dead: N; tick: N; need_you: N
+  // In-session (Agent-tool) subagents whose transcript moved lately: `claude agents` never
+  // lists them, so `working` above leaves them out. Display only: drawn, never a slot.
+  in_session: number
+  in_session_agents: { type: string; description: string }[]
   queue: string
   tasks: Record<string, string> | null
   status: Record<string, string> | null   // task path → in-progress | in-review, off the task documents
@@ -231,7 +235,7 @@ type Counts = {
   plugin_version: string   // the plugin whose status line wrote the file; '' when absent or not x.y.z
   latest_version: string   // the marketplace's, as the banner's update check last saw it; '' likewise
 }
-const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, queue: '', tasks: null, status: null, written_at: '', plugin_version: '', latest_version: '' }
+const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, in_session: 0, in_session_agents: [], queue: '', tasks: null, status: null, written_at: '', plugin_version: '', latest_version: '' }
 const SEMVER = /^\d+\.\d+\.\d+$/
 const TASK_KEY = /^projects\/([^/]+)\/tasks\/([^/]+)\.md$/
 
@@ -346,6 +350,9 @@ function readCounts(text: unknown, m: number): Counts {
   return {
     state: 'ok', mtimeMs: m, in_progress: nint(o.in_progress), in_review: nint(o.in_review),
     working: nint(se.working), idle: nint(se.idle), dead: nint(se.dead), tick: nint(se.tick_working), need_you: nint(o.need_you),
+    in_session: nint(se.in_session) || 0,
+    in_session_agents: arr(o.in_session_agents).map(a => obj(a)).filter((a): a is Record<string, unknown> => !!a)
+      .map(a => ({ type: str(a.type) || 'agent', description: str(a.description) })),
     queue: str(o.queue), tasks, status, written_at: str(o.written_at),
     plugin_version: SEMVER.test(str(o.plugin_version)) ? str(o.plugin_version) : '',
     latest_version: SEMVER.test(str(o.latest_version)) ? str(o.latest_version) : '',
@@ -682,15 +689,26 @@ function draw($: any, e: any, now: number): any {
     rows.push(heading('IN PROGRESS', own(c.in_progress, progress), WORK, true))
     rows.push(line(' '))
     // The tick is a working session but no task, so it is named apart: `1 working (tick)`, `2 working (1 tick)`.
-    const tick = c.tick !== null && c.tick > 0 && c.working !== null && c.tick <= c.working ? c.tick : 0
-    const ticks = tick ? (tick === c.working ? ' (tick)' : ' (' + tick + ' tick)') : ''
-    rows.push(row(seg('   '), seg(nstr(c.working) + ' working' + ticks, WORK), seg(' · ', MUTED), seg(nstr(c.idle) + ' idle', MUTED), seg(' · ', MUTED), seg(nstr(c.dead) + ' dead', NEEDS_YOU)))
+    // In-session subagents work too (counts.sh, display only), so they join the working count:
+    // `?` stays `?`, never a number made of the part that was read.
+    const inSession = c.state === 'ok' ? c.in_session_agents : []
+    const working: N = c.working === null ? null : c.working + (c.state === 'ok' ? c.in_session : 0)
+    const tick = c.tick !== null && c.tick > 0 && working !== null && c.tick <= working ? c.tick : 0
+    const ticks = tick ? (tick === working ? ' (tick)' : ' (' + tick + ' tick)') : ''
+    rows.push(row(seg('   '), seg(nstr(working) + ' working' + ticks, WORK), seg(' · ', MUTED), seg(nstr(c.idle) + ' idle', MUTED), seg(' · ', MUTED), seg(nstr(c.dead) + ' dead', NEEDS_YOU)))
     rows.push(line(' '))
-    if (mine(progress).length === 0) rows.push(line(tick ? '   no task in progress — tick running' : '   nothing right now', MUTED))
+    if (mine(progress).length === 0 && inSession.length === 0) rows.push(line(tick ? '   no task in progress — tick running' : '   nothing right now', MUTED))
     for (const { path, head, title: text } of mine(progress)) {
       const word = c.tasks === null ? '?' : c.tasks[path] || '—'
       const [title, ...more] = wrap(text, Math.max(1, W - cols(head)), ROW_LINES, Math.max(1, W - cols(head) - cols(word) - 2))
       rows.push(row(seg(head, WORK), seg(title, TEXT), seg(gap(cols(head) + cols(title) + cols(word))), seg(word, LOOK[word] || MUTED)))
+      for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
+    }
+    // One row per in-session subagent, marked `in-session` where a task row names its session's word.
+    for (const a of inSession) {
+      const head = '   ' + a.type + '  ', word = 'in-session'
+      const [title, ...more] = wrap(a.description || '—', Math.max(1, W - cols(head)), ROW_LINES, Math.max(1, W - cols(head) - cols(word) - 2))
+      rows.push(row(seg(head, WORK), seg(title, TEXT), seg(gap(cols(head) + cols(title) + cols(word))), seg(word, MUTED)))
       for (const l of more) rows.push(row(seg(' '.repeat(cols(head))), seg(l, TEXT)))
     }
     othersLine(progress)

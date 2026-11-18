@@ -5,7 +5,7 @@
 #
 #   memory-stale.sh [--instance DIR]      (default: $CLAUDE_PROJECT_DIR, else $PWD)
 #
-# Memory dir: ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/<pwd -P, every non-[A-Za-z0-9] -> ->/memory.
+# Memory dir: <ab_project_dir of the bundle root>/memory (bundle-paths.sh spells the key).
 # Exit: 0 dir read (listed or not) · 2 UNKNOWN, dir unresolvable or missing · 3 usage.
 # Reasoning: article-batch-8-hygiene/task-004, project.md D2/D3/D7.
 set -uo pipefail
@@ -20,8 +20,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 real="$(cd "$root" 2>/dev/null && pwd -P)" || { echo "UNKNOWN: bundle root $root does not resolve"; exit 2; }
-mem="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$(printf '%s' "$real" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')/memory"
+mem="$(ab_project_dir "$real")/memory"
 [ -d "$mem" ] || { echo "UNKNOWN: no memory dir at $mem"; exit 2; }
 
 ver="$(tr -d '[:space:]' < "$(dirname "${BASH_SOURCE[0]:-$0}")/../VERSION" 2>/dev/null)"

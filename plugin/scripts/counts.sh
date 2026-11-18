@@ -7,7 +7,11 @@
 #                           unknown), CNT_QUEUE (on|off|unreadable) and
 #                           CNT_TASKS (`<word> TAB <json task path>` lines, or `?`) and
 #                           CNT_STATUS (the same, `in-progress`/`in-review`, or `?`)
-#   ab_write_counts <root>  writes them to AB_COUNTS (temp + mv), `?` as null, no free text,
+#                           CNT_IN_SESSION (in-session Agent-tool subagents whose transcript
+#                           moved lately, never `?`) and CNT_IN_SESSION_ROWS (`<agentType>
+#                           TAB <description>` lines) — DISPLAY ONLY, kept out of CNT_WORKING
+#   ab_write_counts <root>  writes them to AB_COUNTS (temp + mv), `?` as null, no free text
+#                           but the in-session agents' one-line descriptions,
 #                           plus plugin_version (this plugin's VERSION; omitted unless x.y.z)
 #                           and latest_version (check-template-version.sh's last marketplace
 #                           answer, from the plugin's data dir; omitted unless x.y.z)
@@ -19,6 +23,7 @@ ab_counts() {
   local here; here="$(dirname "${BASH_SOURCE[0]:-$0}")"
   CNT_IN_PROGRESS='?'; CNT_IN_REVIEW='?'; CNT_NEED_YOU='?'; CNT_QUEUE=off
   CNT_WORKING='?'; CNT_IDLE='?'; CNT_DEAD='?'; CNT_TICK='?'; CNT_TASKS='?'; CNT_STATUS='?'
+  CNT_IN_SESSION=0; CNT_IN_SESSION_ROWS=""
   read -r CNT_EPOCH CNT_AT <<<"$(date -u '+%s %Y-%m-%dT%H:%M:%SZ')"
 
   # Task frontmatter, directly — never SNAPSHOT.json, which no redraw writes. One awk pass,
@@ -58,6 +63,11 @@ ab_counts() {
     agents="$(bash "$here/agent-sessions.sh" view "$root" --counts </dev/null 2>/dev/null)" || agents='?'
     a_rest="v3 ${agents%%$'\n'*}"
     case "$agents" in *$'\n'*) agents="${agents#*$'\n'}"$'\n' ;; *) agents="" ;; esac
+    # In-session subagents ride the same cache as `in-session TAB <type> TAB <description>`
+    # rows, whatever the listing said: `claude agents` never lists them (agent-sessions.sh).
+    while IFS= read -r l; do
+      [ -n "$l" ] && agents="${agents}in-session"$'\t'"$l"$'\n'
+    done <<<"$(bash "$here/agent-sessions.sh" in-session "$root" </dev/null 2>/dev/null)"
     if mkdir -p "${a_cache%/*}" 2>/dev/null; then
       printf '%s %s\n%s' "$CNT_EPOCH" "$a_rest" "$agents" > "$a_cache.$$" 2>/dev/null \
         && mv -f "$a_cache.$$" "$a_cache" 2>/dev/null
@@ -72,6 +82,11 @@ ab_counts() {
         *) CNT_TASKS="" ;;
       esac ;;
   esac
+  while IFS= read -r l; do
+    case "$l" in "in-session"$'\t'*)
+      CNT_IN_SESSION=$((CNT_IN_SESSION + 1)); CNT_IN_SESSION_ROWS="$CNT_IN_SESSION_ROWS${l#in-session$'\t'}"$'\n' ;;
+    esac
+  done <<<"$agents"
   if [ "$CNT_TASKS" != '?' ]; then
     while IFS= read -r l; do
       t="${l#*$'\t'}"
@@ -115,8 +130,21 @@ _ab_jmap() {
   printf -v "$1" '%s}' "$m"
 }
 
+# `<type> TAB <description>` lines to a JSON array of {type, description}. The helper already
+# took out every control character, so a backslash and a quote are all there is to escape.
+_ab_jagents() {
+  local l t x sep="" m="["
+  while IFS= read -r l; do
+    [ -n "$l" ] || continue
+    t="${l%%$'\t'*}"; x="${l#*$'\t'}"
+    t="${t//\\/\\\\}"; t="${t//\"/\\\"}"; x="${x//\\/\\\\}"; x="${x//\"/\\\"}"
+    m="$m$sep{\"type\":\"$t\",\"description\":\"$x\"}"; sep=","
+  done <<<"$2"
+  printf -v "$1" '%s]' "$m"
+}
+
 ab_write_counts() {
-  local f="$1/$AB_COUNTS" tasks status p r w i d k n v="" ver="" pr pd mk ca pl
+  local f="$1/$AB_COUNTS" tasks status agents p r w i d k n s v="" ver="" pr pd mk ca pl
   [ -d "${f%/*}" ] || return 0
   # Until /loopd:init adds the ignore line, a broad `git add` would commit this per-clone file.
   # Read .gitignore rather than ask git: the status line never runs git.
@@ -124,6 +152,7 @@ ab_write_counts() {
   _ab_jnum p "$CNT_IN_PROGRESS"; _ab_jnum r "$CNT_IN_REVIEW"; _ab_jnum n "$CNT_NEED_YOU"
   _ab_jnum w "$CNT_WORKING"; _ab_jnum i "$CNT_IDLE"; _ab_jnum d "$CNT_DEAD"; _ab_jnum k "$CNT_TICK"
   _ab_jmap tasks "$CNT_TASKS"; _ab_jmap status "$CNT_STATUS"
+  _ab_jnum s "${CNT_IN_SESSION:-0}"; _ab_jagents agents "${CNT_IN_SESSION_ROWS:-}"
   { IFS= read -r v < "$(dirname "${BASH_SOURCE[0]:-$0}")/../VERSION"; } 2>/dev/null
   [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && ver="\"plugin_version\":\"$v\","
   # <plugins>/cache/<mkt>/<name>/<version> ⇒ <plugins>/data/<name>-<mkt>, as check-template-version.sh derives it.
@@ -132,8 +161,8 @@ ab_write_counts() {
     v=""; { IFS= read -r v < "$pl/data/${pd##*/}-${mk##*/}/latest-version"; } 2>/dev/null
     [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && ver="$ver\"latest_version\":\"$v\","
   fi
-  printf '{"in_progress":%s,"in_review":%s,"sessions":{"working":%s,"idle":%s,"dead":%s,"tick_working":%s},"need_you":%s,"queue":"%s","task_sessions":%s,"task_status":%s,%s"written_at":"%s"}\n' \
-    "$p" "$r" "$w" "$i" "$d" "$k" "$n" "$CNT_QUEUE" "$tasks" "$status" "$ver" "$CNT_AT" > "$f.$$" 2>/dev/null && mv -f "$f.$$" "$f" 2>/dev/null
+  printf '{"in_progress":%s,"in_review":%s,"sessions":{"working":%s,"idle":%s,"dead":%s,"tick_working":%s,"in_session":%s},"need_you":%s,"queue":"%s","task_sessions":%s,"task_status":%s,"in_session_agents":%s,%s"written_at":"%s"}\n' \
+    "$p" "$r" "$w" "$i" "$d" "$k" "$s" "$n" "$CNT_QUEUE" "$tasks" "$status" "$agents" "$ver" "$CNT_AT" > "$f.$$" 2>/dev/null && mv -f "$f.$$" "$f" 2>/dev/null
   rm -f "$f.$$" 2>/dev/null
   return 0
 }

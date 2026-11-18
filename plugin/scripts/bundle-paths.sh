@@ -151,6 +151,14 @@ ab_refresh_stamp() { # <root>
   local r="${1:-.}"
   printf '%s/loopd/refresh%s\n' "${XDG_CACHE_HOME:-$HOME/.cache}" "${r//\//_}"
 }
+# Claude Code's per-project folder for a working directory — a Claude Code internal, spelled
+# here once: <config>/projects/<pwd -P, every non-[A-Za-z0-9] -> ->. memory-stale.sh reads
+# its memory/, `agent-sessions.sh in-session` its <session>/subagents/.
+ab_project_dir() { # <dir> — prints it; exit 1 when <dir> does not resolve
+  local r
+  r="$(cd -P -- "${1:-.}" 2>/dev/null && pwd -P)" || return 1
+  printf '%s/projects/%s\n' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "$(printf '%s' "$r" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')"
+}
 
 # Every AB_* path now has a PARENT DIRECTORY, which the pre-3.0 root spellings did not.
 # A writer that skipped this reported "the instance root is not writable" on a perfectly

@@ -32,6 +32,10 @@
 #   agent-sessions.sh in-flight <bundle-root> -> how many recorded sessions still hold a
 #                                                slot, on stdout; one line per recorded
 #                                                session on stderr
+#   agent-sessions.sh in-session <bundle-root> [--window <s>]
+#                                             -> `<agentType> TAB <description>` per in-session
+#                                                (Agent-tool) subagent whose transcript moved in
+#                                                the window (120); DISPLAY ONLY, never a slot
 #   agent-sessions.sh view <bundle-root> [--summary|--counts]
 #                                             -> this bundle's background sessions, one
 #                                                row each: task, state, process, age, id;
@@ -69,7 +73,7 @@
 # tests/resume-full-id.test.sh, tests/blocked-recorded.test.sh and tests/dead-session-sweep.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,63p' "$0" >&2; exit 2; }
+usage() { sed -n '3,67p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 here="$(dirname "${BASH_SOURCE[0]:-$0}")"
@@ -498,6 +502,40 @@ PY
     echo "copy $uuid"
     ;;
 
-  -h|--help) sed -n '3,63p' "$0"; exit 0 ;;
+  # An Agent-tool subagent runs inside a session, so `claude agents` never lists it; its
+  # transcript (<project dir>/<session>/subagents/agent-<id>.jsonl, a Claude Code internal)
+  # moving is the only sign it works. DISPLAY ONLY — the pane and the status band: nothing
+  # here holds a slot, so in-flight, stop-ids, dead-ids and the sweep never read it.
+  # No folder, no meta, a parse failure: nothing, exit 0.
+  in-session)
+    [ $# -eq 2 ] || [ $# -eq 4 ] || usage
+    win=120
+    if [ $# -eq 4 ]; then [ "$3" = "--window" ] || usage; win="$4"; fi
+    case "$win" in ''|*[!0-9]*) usage ;; esac
+    . "$here/bundle-paths.sh" || exit 0
+    dir="$(ab_project_dir "$2")" || exit 0
+    [ -d "$dir" ] || exit 0
+    python3 - "$dir" "$win" <<'PY' || true
+import glob, json, os, re, sys, time
+d, win, now = sys.argv[1], int(sys.argv[2]), time.time()
+for f in sorted(glob.glob(os.path.join(glob.escape(d), "*", "subagents", "agent-*.jsonl"))):
+    try:
+        if now - os.stat(f).st_mtime > win:
+            continue
+        with open(f[:-len(".jsonl")] + ".meta.json", encoding="utf-8") as fh:
+            m = json.load(fh)
+    except (OSError, ValueError):
+        continue
+    if not isinstance(m, dict):
+        continue
+    kind = re.sub(r"[^A-Za-z0-9:_.-]", "", str(m.get("agentType") or "")) or "agent"
+    desc = m.get("description")
+    desc = " ".join(re.sub(r"[\x00-\x1f\x7f]", " ", desc).split())[:120] if isinstance(desc, str) else ""
+    print(kind + "\t" + desc)
+PY
+    exit 0
+    ;;
+
+  -h|--help) sed -n '3,67p' "$0"; exit 0 ;;
   *) usage ;;
 esac

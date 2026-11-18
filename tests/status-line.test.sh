@@ -267,7 +267,7 @@ seed_agents "$D" "2 3";       ok "an older version's two counts read ?, never th
 seed_agents "$D" "v2 2 0 0";  ok "…and so does the v2 format, which carries no per-task words" \
    "$(run --instance "$D" --color never | awk -F ' · ' '{print $4}')" "? working"
 NG="$TMP/no-green"; cp -R "$REPO/plugin/scripts" "$NG"
-sed 's/"\$C_GREEN")" "\$CNT_WORKING working/"$C_BLUE")" "$CNT_WORKING working/' "$SL" > "$NG/status-line.sh"
+sed 's/"\$C_GREEN")" "\$w working/"$C_BLUE")" "$w working/' "$SL" > "$NG/status-line.sh"
 seed_agents "$D" "v3 2 0 0"
 ok "…mutant: painting it blue again is caught" \
    "$(sgr_of "$(SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NG/status-line.sh" --instance "$D" --color always </dev/null 2>/dev/null)" 'working')" 94
@@ -407,7 +407,7 @@ ok "a lock naming an idle session (a lingering lock) ⇒ tick_working 0" "$(J 'd
 rm -f "$S/$AB_LOCK"
 ok "written_at is a UTC stamp" "$(J 'd["written_at"]' | grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$')" 1
 ok "the keys are exactly the contract" "$(J '",".join(sorted(d))')" \
-   "in_progress,in_review,need_you,plugin_version,queue,sessions,task_sessions,task_status,written_at"
+   "in_progress,in_review,in_session_agents,need_you,plugin_version,queue,sessions,task_sessions,task_status,written_at"
 ok "plugin_version is the plugin's own VERSION" "$(J 'd["plugin_version"]')" "$(cat "$REPO/plugin/VERSION")"
 # A copy of the plugin, so its VERSION can differ, be junk or be gone without touching the checkout.
 mkdir -p "$TMP/plug" && cp -R "$REPO/plugin/scripts" "$REPO/plugin/.claude-plugin" "$TMP/plug/"
@@ -421,7 +421,7 @@ done
 rm -f "$TMP/plug/VERSION"; alt
 ok "no VERSION ⇒ the key is omitted" "$(J '"plugin_version" in d')" False
 ok "…and the rest of the contract is unchanged" "$(J '",".join(sorted(d))')" \
-   "in_progress,in_review,need_you,queue,sessions,task_sessions,task_status,written_at"
+   "in_progress,in_review,in_session_agents,need_you,queue,sessions,task_sessions,task_status,written_at"
 ok "a checkout has no plugin data dir ⇒ no latest_version" "$(J '"latest_version" in d')" False
 # An install's shape, so the data dir check-template-version.sh writes is where counts.sh looks.
 INST_V="$TMP/plugins/cache/mkt/loopd/9.8.7"; LATEST="$TMP/plugins/data/loopd-mkt/latest-version"
@@ -434,7 +434,7 @@ printf '9.9.0\n' > "$LATEST"; inst
 ok "latest_version is the data dir's latest-version" "$(J 'd.get("latest_version")')" 9.9.0
 ok "…beside plugin_version" "$(J 'd.get("plugin_version")')" 9.8.7
 ok "…and the keys are the contract plus the two versions" "$(J '",".join(sorted(d))')" \
-   "in_progress,in_review,latest_version,need_you,plugin_version,queue,sessions,task_sessions,task_status,written_at"
+   "in_progress,in_review,in_session_agents,latest_version,need_you,plugin_version,queue,sessions,task_sessions,task_status,written_at"
 printf '9.9\n' > "$LATEST"; inst
 ok "a latest-version that is not x.y.z ⇒ omitted, the file still JSON" "$(J '"latest_version" in d')" False
 ok "no AWAITING text and no task title reaches it (planted sentinel)" "$(grep -c "$SENT" "$CJ" | tr -d ' ')" 0
