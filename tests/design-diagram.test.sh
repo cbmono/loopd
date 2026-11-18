@@ -102,7 +102,7 @@ rm "$P/tasks/task-004-d.md"; cp "$TMP/design.keep" "$P/design.md"; settle restor
 echo; echo "== design-inputs.sh: what the fingerprint sees, and what it ignores =="
 DI() { bash "$S/design-inputs.sh" "$P"; }
 qtask() { # <open_questions entries> <answered_questions entries> [status]
-  printf -- '---\ntype: Task\ntitle: "A"\nkind: build\nstatus: %s\nacceptance_criteria: [ "x" ]\nopen_questions: [ %s ]\nanswered_questions: [ %s ]\ntimestamp: 2026-10-28T00:00:00Z\n---\n' \
+  printf -- '---\ntype: Task\ntitle: "A"\nkind: build\nstatus: %s\nacceptance_criteria: [ "x" ]\nopen_questions: [ %s ]\nanswered_questions: [ %s ]\ntimestamp: 2026-10-28T00:00:00Z\n---\n\n# Notes\n\n* 2099-01-01T00:00:00Z refine: baked.\n' \
     "${3:-draft}" "$1" "$2" > "$P/tasks/task-001-a.md"; }
 qtask '"Q1: which store?"' ''; h0="$(DI)"
 ok "prints 16 hex characters" "$(printf '%s' "$h0" | grep -cE '^[0-9a-f]{16}$')" 1

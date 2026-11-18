@@ -2,8 +2,10 @@
 #
 # answer.sh — answer one open question of one task: option n, free text, or `more`.
 #
-#   Usage: answer.sh [--instance DIR] [--first] <task-doc> [Q<n>] <n | more | later | --text <answer> | --text-file <path> | <answer>...>
+#   Usage: answer.sh [--instance DIR] [--first | --grant] <task-doc> [Q<n>] <n | more | later | --text <answer> | --text-file <path> | <answer>...>
 #
+# `--grant` records the owner's conditional grant as one stamped `# Notes` line through
+# unblock.sh: no status, no list, no promotion.
 # No Q<n> ⇒ the first unanswered entry. A bare integer is an option of its `### Q<n>` block.
 # `--text-file` reads the answer from a file, so no caller has to put free text in an argument.
 # `later` appends `<task path>#Q<n>` to AB_ANSWER_LATER; neither it nor `more` edits a tracked file.
@@ -22,11 +24,12 @@ usage() { sed -n '5p' "$0" >&2; exit 2; }
 refuse() { echo "$*"; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "answer: python3 is required" >&2; exit 2; }
 
-inst="."; doc=""; label=""; forced=0; first=0; words=(); text_file=""
+inst="."; doc=""; label=""; forced=0; first=0; grant=0; words=(); text_file=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) [ $# -ge 2 ] || usage; inst="$2"; shift 2 ;;
     --first)    first=1; shift ;;
+    --grant)    grant=1; shift ;;
     --text)     forced=1; shift; words+=("$@"); break ;;
     --text-file) [ $# -eq 2 ] || usage; forced=1; text_file="$2"; words=(file); shift 2 ;;
     -h|--help)  usage ;;
@@ -44,6 +47,12 @@ if [ -n "$text_file" ]; then
   reply="$(tr '\n\r\t' '   ' < "$text_file")"
 fi
 task="$(basename "$doc" .md)"
+if [ "$grant" -eq 1 ]; then
+  [ "$first" -eq 0 ] || usage
+  reply="${label:+$label${reply:+ }}$reply"
+  [ -n "${reply// /}" ] || usage
+  exec bash "$HERE/unblock.sh" --instance "$inst" "$doc" --grant "$reply"
+fi
 
 open_list="$(bash "$HERE/fold-answers.sh" --list "$doc" open_questions)" || exit 3
 status="$(awk 'NR==1{if($0!="---")exit;next} $0=="---"{exit} /^status:/{sub(/^status:[ \t]*/,"");gsub(/["\047 \t\r]/,"");print;exit}' "$doc")"

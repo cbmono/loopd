@@ -69,6 +69,8 @@ draft 'advisor: Should the cache be per tenant? --- yes: per tenant'; commit
 ( cd "$INST" && bash scripts/fold-answers.sh "$T" ) >/dev/null 2>&1
 ok "fold-answers.sh folds it (exit 0 above) → no fold owed line" "$(digest | grep -c '^fold owed ')" 0
 commit; record
+ok "…but its bake is owed until step 2's refine receipt" "$(check | grep -cF "rc:1 DELTA: refine owed $T")" 1
+printf '\n# Notes\n\n* %s refine: baked.\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$INST/$T"; commit; record
 ok "…and IDLE"                                        "$(check | cut -c1-10)" "rc:0 IDLE:"
 
 echo "== record --close: a skipped render is noted =="

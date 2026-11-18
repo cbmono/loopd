@@ -290,5 +290,22 @@ ok "a task that left in-review clears it too" "$(bash "$QD" clear "$DT")/$(opens
 ok "…and open refuses there (exit 1)" \
    "$(bash "$QD" open "$DT" --pr "$U" --head "$H2" --checker "$H2" --criteria 1 >/dev/null; echo $?)" 1
 
+echo
+echo "== a recorded grant trails its task's row, display-only =="
+G="$TMP/grant"; inst "$G"; : > "$G/$AB_AWAITING"
+task "$G" task-001-a "Clean draft" draft '"x"' ''
+GT="$G/projects/demo/tasks/task-001-a.md"
+bash "$REPO/plugin/scripts/answer.sh" --instance "$G" --grant "$GT" wait for CI >/dev/null 2>&1
+bash "$REPO/plugin/scripts/answer.sh" --instance "$G" --grant "$GT" 'then *promote*' >/dev/null 2>&1
+bash "$SH" --instance "$G" >/dev/null 2>&1
+grow="$(grep '^\* ' "$G/$AB_AWAITING")"
+ok "the newest grant trails the row, escaped" "$([[ "$grow" == *' · grant: then \*promote\*' ]] && echo yes || echo "$grow")" yes
+ok "…the older one is not shown" "$(grep -c 'wait for CI' "$G/$AB_AWAITING" | tr -d ' ')" 0
+ok "…it is still the one approve row" "$(grep -c '^\* ✅ \*\*approve\*\*' "$G/$AB_AWAITING" | tr -d ' ')/$(grep -c '^\* ' "$G/$AB_AWAITING" | tr -d ' ')" 1/1
+ok "…and the draft stays draft" "$(sed -n 's/^status: //p' "$GT")" draft
+sed -i.bak 's/: grant — /: granted — /' "$GT"
+bash "$SH" --instance "$G" >/dev/null 2>&1
+ok "mutant: no grant line -> no grant text" "$(grep -c ' · grant: ' "$G/$AB_AWAITING" | tr -d ' ')" 0
+
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

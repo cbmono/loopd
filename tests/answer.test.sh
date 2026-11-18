@@ -207,6 +207,22 @@ ok "answered_questions holds option 1"       "$(lastans "$B" | sed 's/^.*· //')
 ok "…and the answer is committed"            "$(git -C "$B" log -1 --format=%s),$(git -C "$B" status --porcelain | wc -l | tr -d ' ')" "docs: answer Q1 on task-001-x,0"
 
 echo
+echo "== GRANT: one stamped # Notes line, committed and pushed; no status, no list =="
+B="$(fixture grant)"
+cp "$B/$TASK_REL" "$TMP/grant.before"
+printf 'wait for "CI", then `promote`\n' > "$TMP/grant.txt"
+OUT="$(cd "$B" && bash "$SH" --grant "$TASK_REL" --text-file "$TMP/grant.txt" 2>&1)"; RC=$?
+ok "--grant --text-file exits 0"             "$RC" 0
+ok "one grant line, stamped by the login"    "$(grep -cE '^- [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z by example-user-007: grant — wait for "CI", then `promote`$' "$B/$TASK_REL")" 1
+ok "…and no line changed or removed"         "$(diff "$TMP/grant.before" "$B/$TASK_REL" | grep -c '^<' | tr -d ' ')" 0
+ok "the commit is the human's, pushed"       "$(git -C "$B" log -1 --format='%an <%ae>'),$(git -C "$B.git" log -1 --format=%s main)" \
+   "Example Human <u7@example.com>,docs: grant on task-001-x"
+(cd "$B" && bash "$SH" --grant "$TASK_REL" then promote >/dev/null 2>&1)
+ok "words work too, status and questions untouched" \
+   "$(grep -c ': grant — then promote$' "$B/$TASK_REL"),$(sed -n 's/^status: //p' "$B/$TASK_REL"),$(openq "$B" | wc -l | tr -d ' ')" "1,draft,2"
+ok "--grant with --first is a usage error"   "$(cd "$B" && bash "$SH" --grant --first "$TASK_REL" x >/dev/null 2>&1; echo $?)" 2
+
+echo
 echo "== THE SKILL routes arguments to the script =="
 ok "the skill may run answer.sh"             "$(grep -c 'scripts/answer.sh' "$SKILL" | awk '{print ($1>0)?"yes":"no"}')" yes
 ok "…and stays human-invoked only"           "$(grep -c '^disable-model-invocation: true' "$SKILL" | tr -d ' ')" 1

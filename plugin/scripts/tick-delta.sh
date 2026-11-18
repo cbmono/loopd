@@ -91,7 +91,8 @@
 # (path, status, kind, assignee, dependency/open-question counts, criteria filled or
 # not, worktree recorded or not), an `inputs waiting|arrived <project.md>` line for a project
 # on `inputs: later` (project-inputs.sh), a `refine owed <task>` line per draft with no
-# `acceptance_criteria` and no `open_questions` outside a paused or inputs-waiting project
+# `acceptance_criteria` and no `open_questions`, or with an `answered_questions` stamp newer
+# than its last triage or refine receipt (rebake_owed), outside a paused or inputs-waiting project
 # (`check` is a DELTA on one, so a clean tree never idles past it; `record` never writes
 # it), a `fold owed <task>` line per draft with a ` --- `-answered `open_questions` entry (any
 # label; same `check`/`record` rule), a `design owed <project>/design.md` line per non-research
@@ -582,6 +583,9 @@ fingerprint() { # <probe|digest>
         if [ "$(fmcount "$f" acceptance_criteria)" -gt 0 ]; then
           nref=$((nref + 1))
           [ "$mode" = digest ] && draft_owes "$f" "$d" && step2=1
+          if [ "$(fmcount "$f" open_questions)" = 0 ] && { rebake_owed "$f"; [ $? != 1 ]; } && ! paused_now; then
+            printf 'refine owed %s\n' "${f#"$inst"/}"; step2=1
+          fi
         else
           unref=1
           [ "$(fmcount "$f" open_questions)" = 0 ] && ! paused_now && { printf 'refine owed %s\n' "${f#"$inst"/}"; step2=1; }
@@ -724,6 +728,18 @@ untriaged() { # <file> -> 0 untriaged, 1 not, 2 unreadable
               n && /^\* [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[^ ]* triage:/ {print $2}' "$1" | sort | tail -n1)"
   [ -z "$tri" ] || [[ "$con" > "$tri" ]]
 }
+# A refined draft owes a re-bake when an `answered_questions` stamp postdates its newest
+# `* <ISO 8601> triage:` or `refine:` line under `# Notes`: answer.sh moves, it never bakes.
+rebake_owed() { # <file> -> 0 owed, 1 not, 2 unreadable
+  [ "$(fmcount "$1" answered_questions)" -gt 0 ] || return 1
+  local ans rec
+  ans="$(bash "$FOLD" --list "$1" answered_questions 2>/dev/null)" || return 2
+  ans="$(printf '%s\n' "$ans" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[^ ]*' | sort | tail -n1)"
+  [ -n "$ans" ] || return 1
+  rec="$(awk '/^# /{n = ($0 ~ /^# Notes[[:space:]]*$/); next}
+              n && /^\* [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[^ ]* (triage|refine):/ {print $2}' "$1" | sort | tail -n1)"
+  [ -z "$rec" ] || [[ "$ans" > "$rec" ]]
+}
 # Owed while the only `not run` receipt is the newest entry; a second one ends the retries.
 rerun_owed() { # <file> -> 0 owed, 1 not, 2 unreadable
   [ "$(fmcount "$1" advisor_notes)" -gt 0 ] || return 1
@@ -861,7 +877,7 @@ case "$cmd" in
     ro="$(printf '%s\n' "$FP" | sed -n 's/^refine owed //p')"
     if [ -n "$ro" ]; then
       n="$(printf '%s\n' "$ro" | wc -l | tr -d ' ')"
-      echo "DELTA: refine owed $(head -n1 <<<"$ro")$([ "$n" -gt 1 ] && echo " (+$((n - 1)) more)") — an unrefined draft; step 2 owes its refine."
+      echo "DELTA: refine owed $(head -n1 <<<"$ro")$([ "$n" -gt 1 ] && echo " (+$((n - 1)) more)") — a draft to refine; step 2 owes it."
       exit 1
     fi
     dw="$(printf '%s\n' "$FP" | sed -n 's/^design owed //p')"
