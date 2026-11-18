@@ -163,7 +163,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    (more than one session matches) and exit 2 (none, or unknown) leave the task as it is —
    name it in the tick report and surface it as a 🔴 item. Resume only a session
    `agent-sessions.sh state` calls `done`, or `stopped` after the tick's own stop of a
-   recorded round or a hand-off — never one still `blocked` or `working`. **Read the id off what
+   recorded round, a hand-off or a stalled stop — never one still `blocked` or `working`. **Read the id off what
    the resume printed, before the tick moves on:**
    `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh resume-id <the UUID> '<everything the resume printed>'`.
    A flag-free resume prints `note: woke session <short> with its saved options (…)` then
@@ -197,6 +197,18 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    park on the same prompt, so it stays the human's. **Exit 2** is unknown: change
    nothing. The never-wait rule and the no-re-dispatch rule above are unchanged — this
    is a read at the sweep, and no `check-dispatch.sh` verdict is a fallback.
+
+   **A STALLED STOP is resumed on the next tick — once, with no `AWAITING.md` row.** The
+   session sweep stops an open task's `stalled` session (idle on a PR head older than
+   `maxStalledMinutes`, absent ⇒ 30), counts it with `stall-counter.sh record` and writes a
+   `stalled stop <uuid> · pr head still <sha>` line under `# Notes`. For each task whose
+   newest `stalled stop`, `woke` or `resumed` note is a `stalled stop` naming its `session:`,
+   whose status is not `blocked`, and whose session `agent-sessions.sh state` calls
+   `stopped`: resume it by the three calls above with the message `The tick stopped this
+   session: PR head <sha> has not moved in maxStalledMinutes. Answer every open review
+   thread, push, and update the task.`, read the id back with `resume-id` and write the
+   `woke`/`resumed` note, which is what makes it once. At `maxStallRounds` the sweep has
+   already stopped it and escalated it to `blocked`: resume nothing.
 
    **An `in-progress` task nobody reported on: ask the session, not the disk.** Run
    `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>` over **every** build `in-progress` task, not

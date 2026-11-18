@@ -68,10 +68,16 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `cancelled` tasks hold, under the worktree root and gone or still on that task's `branch:`
    (a missing `status:` is open; an unreadable task file selects nothing), older than 10 minutes; **finished** — a terminal `state` with a live pid,
    unrecorded, its `cwd` under this bundle's root and not under the worktree root (a reaped
-   tick); **idle** — an open task's live, not-`blocked` session whose last assistant turn
+   tick); **stalled** — an open task's live, idle, not-`blocked` session, not a
+   `qa-reviewer`'s, whose last assistant turn and whose newest open PR's head commit (the
+   head `tick-delta.sh` read this tick; none read ⇒ never `stalled`) are both older than
+   `maxStalledMinutes` (absent ⇒ 30), with no child in flight and no required check pending
+   at that head — the sweep counts each stop with `stall-counter.sh record` (`pr head still
+   <sha>`), escalates at `maxStallRounds` and files no hand-off, and step 4 resumes it once;
+   **idle** — an open task's live, not-`blocked` session whose last assistant turn
    is older than `maxIdleMinutes` (absent ⇒ 120); **busy** — one whose last text user turn
    is older than `maxBgRoundMinutes` (absent ⇒ 240), stopped through
-   `session-handoff.sh --busy`, which files a `👉 do` hand-off. `0` turns either bound off.
+   `session-handoff.sh --busy`, which files a `👉 do` hand-off. `0` turns any of the three bounds off.
    At most 20 a run, oldest first; the rest print `deferred` and are next run's. What the
    tick does with each line it prints is the core prompt's step 5.
 

@@ -2,8 +2,9 @@
 #
 # session-sweep-bounds.test.sh — `session-sweep.sh` stops this bundle's finished sessions that
 # still hold a pid, an open task's session idle past maxIdleMinutes, and one busy past
-# maxBgRoundMinutes (with a hand-off); `session-handoff.sh` stops a done task's live row
-# (stop-leaking-bg-sessions/task-001). `claude` is a PATH stub: `stop` logs, marks the row
+# maxBgRoundMinutes (with a hand-off), one idle past maxStalledMinutes on a still PR head (counted,
+# escalated at the cap); `session-handoff.sh` stops a done task's live row
+# (stop-leaking-bg-sessions/task-001, recover-stalled-role-sessions-sooner/task-001). `claude` is a PATH stub: `stop` logs, marks the row
 # stopped and drops its pid. Exit 0 pass, 1 fail, 2 setup.
 set -uo pipefail
 
@@ -36,7 +37,7 @@ cat > "$TMP/bin/claude" <<'STUB'
 #!/usr/bin/env bash
 case "${1:-}" in
   agents) cat "$FIXTURE" ;;
-  stop) printf '%s\n' "$2" >> "$STOPS"
+  stop) printf '%s\n' "$2" >> "$STOPS"; [ -z "${PEEK:-}" ] || sed -n 's/^status: //p' "$PEEK" >> "$STOPS.peek"
         python3 -c 'import json,os,sys; p,w=sys.argv[1:]; k=os.environ.get("KEEP_PID"); rows=json.load(open(p))
 for r in rows:
     if r.get("sessionId","").split("-")[0]==w:
@@ -161,6 +162,72 @@ mk "$TMP/cap.spec"; rep="$(sweep)"
 ok "21 eligible: 20 stops" "$(wc -l < "$STOPS" | tr -d ' ')" 20
 ok "…the youngest is listed deferred" "$(grep -c '^deferred f2000021 ' <<<"$rep")" 1
 ok "…and stopped next run" "$(sweep >/dev/null; stops)" "f2000021"
+
+echo "== STALLED: idle on a still PR head past maxStalledMinutes (key absent: 30) =="
+HD="$B/.loopd/.tick-start"; PRU=https://github.com/example-org/example-repo/pull; SID=5a110001
+iso() { python3 -c 'import sys,time; from datetime import datetime,timezone; print(datetime.fromtimestamp(time.time()-float(sys.argv[1])*60, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))' "$1"; }
+stask() { # <pr-n…|-> [assignee]
+  { printf -- '---\ntype: Task\nstatus: in-review\nassignee: %s\nworktree: %s/task-011-s\nsession: %s\npr:' "${2:-software-engineer}" "$WT" "$(u $SID)"
+    [ "$1" = - ] && printf ' []\n' || for n in $1; do printf '\n  - %s/%s' "$PRU" "$n"; done
+    printf '\nopen_questions: [ ]\n---\n\n# Notes\n'; } > "$T/task-011-s.md"; }
+job() { mkdir -p "$TMP/cfg/jobs/$SID"; printf '{"state":"idle","inFlight":{"tasks":%s}}\n' "$1" > "$TMP/cfg/jobs/$SID/state.json"; }
+heads() { mkdir -p "$HD"; printf '%s/11 %s %s %s %s\n' "$PRU" "${1:-OPEN}" "${2:-5a1ead01}" "$(iso "${3:-45}")" "${4:-0}" > "$HD/heads"; }
+srow() { printf '%s %s/task-011-s working %s background 2 %s 50\n5e1f0001 %s done idle background 1\n' \
+  $SID "$WT" "${1:-idle}" "${2:-40}" "$B" > "$TMP/s.spec"; mk "$TMP/s.spec"; }
+fm() { sed -n "s/^$1: //p" "$T/task-011-s.md"; }
+fresh() { stask "${1:-11}" "${2:-}"; job "${3:-0}"; heads; srow; }
+
+fresh; rep="$(sweep)"
+ok "a working+idle session, head 45m old, last turn 40m: stopped" "$(stops)" "$SID"
+ok "…printing 'stopped <short> (<age>) stalled'" "$(grep -c "^stopped $SID (2h) stalled\$" <<<"$rep")" 1
+ok "…stall-counter counts 1 on the head sha" "$(fm stall_count)|$(fm last_blocker)" '1|"pr head still 5a1ead01"'
+ok "…one 'stalled stop' # Notes line naming the session" "$(grep -c "stalled stop $(u $SID) · pr head still 5a1ead01" "$T/task-011-s.md")" 1
+ok "…no do row: no hand-off record, no Q entry" "$(ls "$B/.loopd/.handoffs" 2>/dev/null | grep -c "^$SID"):$(grep -c 'Q1: do:' "$T/task-011-s.md")" "0:0"
+ok "…and the task stays open" "$(fm status)" in-review
+srow; rm -f "$STOPS.peek"; rep="$(PEEK="$T/task-011-s.md" sweep)"
+ok "a second stall on the same head: stopped again" "$(stops)" "$SID"
+ok "…stopped while the task was still open, then escalated" "$(cat "$STOPS.peek"):$(fm status)" "in-review:blocked"
+ok "…count 2 = maxStallRounds, one 'escalated' line" "$(fm stall_count):$(grep -c "^escalated $SID (2h) stalled\$" <<<"$rep")" "2:1"
+ok "…one stalled-rounds note" "$(grep -c 'Stalled 2/2 rounds on the same blocker' "$T/task-011-s.md")" 1
+stask 11; printf 'stall_count: 1\nlast_blocker: "pr head still 5a1ead00"\n' > "$TMP/f"
+sed -i.bak "/^session:/r $TMP/f" "$T/task-011-s.md"; srow; sweep >/dev/null
+ok "a new head resets the count through the changed blocker" "$(fm stall_count)|$(fm last_blocker)" '1|"pr head still 5a1ead01"'
+fresh; srow idle 125; rep="$(sweep)"
+ok "past both bounds, stalled outranks idle" "$(grep -c "^stopped $SID (2h) stalled\$" <<<"$rep")" 1
+
+echo "== STALLED GUARD: each selects nothing =="
+g() { local rep; rep="$(sweep)"; ok "no stop: $1" "$(stops):$(grep -c stall_count "$T/task-011-s.md")" ":0"; }
+fresh; heads OPEN 5a1ead01 25; g "the head 25m old, inside the bound"
+fresh; srow idle 20; g "the last assistant turn 20m old, inside the bound"
+fresh; heads OPEN 5a1ead02 5; g "the head moved 5m ago"
+fresh; srow busy; g "the session is busy, not idle"
+fresh 11 "" 1; srow; g "a child (fork, Agent, background shell) in flight"
+fresh; rm -f "$TMP/cfg/jobs/$SID/state.json"; g "no job record to read its children from"
+fresh; heads OPEN 5a1ead01 45 1; g "a required check pending at the head"
+fresh; heads MERGED; g "no open PR in pr: (the one listed merged)"
+fresh -; g "an empty pr:"
+fresh "11 12"; g "a pr: entry the head read never saw"
+fresh; rm -f "$HD/heads"; g "the head read failed (no heads file)"
+fresh 11 qa-reviewer; g "a qa-reviewer session"
+fresh; printf '{ "maxStalledMinutes": 0 }\n' > "$B/instance.config.local.json"; g "maxStalledMinutes 0"
+rm -f "$B/instance.config.local.json"
+fresh; rm -f "$HD/heads"; srow idle 125; rep="$(sweep)"
+ok "with no head read the session still falls to idle at 120" "$(grep -c "^stopped $SID (2h) idle\$" <<<"$rep")" 1
+printf '{ "maxStalledMinutes": 45 }\n' > "$B/instance.config.local.json"
+ok "normalise-config reads maxStalledMinutes as per-machine" \
+   "$(bash "$S/normalise-config.sh" "$B" 2>&1 | grep -c 'maxStalledMinutes')" 0
+rm -f "$B/instance.config.local.json" "$T/task-011-s.md"
+
+echo "== the stalled stop's recovery is a resume, never a do row =="
+STEP4="$REPO/plugin/tick-steps/step-4-advance.md"
+para="$(awk '/A STALLED STOP is resumed/,/^$/' "$STEP4")"
+ok "step 4 names the sweep's stalled stop as a resume trigger" "$(grep -q 'stalled stop' <<<"$para" && echo yes)" yes
+ok "…and routes it through no hand-off" "$(grep -c 'session-handoff\|👉' <<<"$para" | tr -d ' ')" 0
+ok "the sweep calls session-handoff.sh once, on the busy branch only" \
+   "$(grep -v '^#' "$SWEEP" | grep -c 'session-handoff'):$(grep -v '^#' "$SWEEP" | grep -B1 'session-handoff' | grep -c '"$cls" = busy')" "1:1"
+for f in "$STEP5" "$PM" "$REPO/plugin/evals/pm-usage-unknown-never-zero/prompt.md"; do
+  ok "${f#"$REPO"/} lists the stalled class" "$(grep -q '\*\*stalled\*\*\|stopped … stalled' "$f" && echo yes)" yes
+done
 
 echo "== the tick runs the sweep on every tick =="
 ok "step 5 names session-sweep.sh" "$(grep -c 'scripts/session-sweep.sh' "$STEP5" | tr -d ' ')" 1

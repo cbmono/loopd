@@ -235,8 +235,8 @@ state, and act only on deltas.
      question, project active and not waiting on inputs), and no `fold owed` draft (an answered
      `open_questions` entry), and no `design owed` project. **Skip steps 1–7.**
      Except one: run `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` (step 5's
-     sweep — an IDLE tick still stops finished and idle sessions). A `handed-off` line means it
-     edited a task: run the full tick instead. **The script writes the one already-closed
+     sweep — an IDLE tick still stops finished, stalled and idle sessions). A `handed-off`,
+     `stopped … stalled` or `escalated` line means it edited a task: run the full tick instead. **The script writes the one already-closed
      ledger line — never append it yourself:**
      `${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh record --idle --tick-id <the tick id from your brief>`,
      plus `--swept "<its lines, `; `-joined>"` when it printed any (no id ⇒ drop `--tick-id`).
@@ -343,7 +343,7 @@ state, and act only on deltas.
    above binds whether or not you read it. **So does the session sweep: every full tick
    runs `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` once, here, whether
    or not it reads that file — unless step 0.9 already ran it this tick and handed off.**
-   Carry every `stopped`, `handed-off`, `stop-failed` and `deferred` line, from whichever
+   Carry every `stopped`, `handed-off`, `escalated`, `count-failed`, `stop-failed` and `deferred` line, from whichever
    run, onto your `.loopd/log.md` close summary; a `stop-failed` is not retried this tick and never
    stopped by hand. Exit 2 stopped nothing: one line in the tick report. What it selects is
    in that file.

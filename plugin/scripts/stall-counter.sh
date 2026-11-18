@@ -3,11 +3,11 @@
 # is escalated to the human instead of re-dispatched. PM-owned fields on the task doc:
 # stall_count (consecutive rounds on one blocker) and last_blocker. Progress resets it:
 # a changed blocker, a human edit (a capped task back in draft/ready), or --progress from
-# the tick (PR activity it observed). Usage: record <task> --blocker <text> [--progress] |
-# escalate <task> | status <task> | reset <task> (stall_count 0, last_blocker kept). Exit: 0
-# under the cap (count on stdout), 1 at/over the cap (do not dispatch; run escalate), 2
-# cannot answer, 3 write failed (temp-file writes, nothing partial). Reasoning:
-# ai-bridge-next/task-011 and its Finding.
+# the tick (PR activity it observed). Usage: record <task> --blocker <text> [--progress]
+# [--note <# Notes bullet>] | escalate <task> | status <task> | reset <task> (stall_count 0,
+# last_blocker kept). Exit: 0 under the cap (count on stdout), 1 at/over the cap (do not
+# dispatch; run escalate), 2 cannot answer, 3 write failed (temp-file writes, nothing
+# partial). Reasoning: ai-bridge-next/task-011 and its Finding.
 set -uo pipefail
 
 # THE SELF PATH IS RESOLVED THROUGH THE SYMLINK, the same idiom and the same reason as
@@ -21,7 +21,7 @@ HERE="$(cd -- "$(dirname -- "$SELF")" 2>/dev/null && pwd -P)" || HERE=""
 DEFAULT_MAX=2
 
 usage() {
-  sed -n '6,9p' "$0" >&2
+  sed -n '6,10p' "$0" >&2
   exit 2
 }
 
@@ -183,12 +183,14 @@ case "$CMD" in record|escalate|status|reset) ;; -h|--help|'') usage ;; *) echo "
 TASK="${1:-}"; [ -n "$TASK" ] || usage; shift
 [ -f "$TASK" ] || { echo "stall-counter: no such task document: $TASK" >&2; exit 2; }
 
-BLOCKER=""; HAVE_BLOCKER=no; PROGRESS=no
+BLOCKER=""; HAVE_BLOCKER=no; PROGRESS=no; NOTE_ARG=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --blocker) [ $# -ge 2 ] || { echo "stall-counter: --blocker needs a value" >&2; exit 2; }
                BLOCKER="$2"; HAVE_BLOCKER=yes; shift 2 ;;
     --progress) PROGRESS=yes; shift ;;
+    --note) [ $# -ge 2 ] || { echo "stall-counter: --note needs a value" >&2; exit 2; }
+            NOTE_ARG="$2"; shift 2 ;;
     *) echo "stall-counter: unexpected argument '$1'" >&2; usage ;;
   esac
 done
@@ -248,6 +250,7 @@ case "$CMD" in
     fi
     set_field "$TASK" stall_count "$COUNT" || { echo "stall-counter: could not write stall_count" >&2; exit 3; }
     set_field "$TASK" last_blocker "$(yaml_quote "$NEW")" || { echo "stall-counter: could not write last_blocker" >&2; exit 3; }
+    [ -z "$NOTE_ARG" ] || append_note "$TASK" "$NOTE_ARG" "$NOTE_ARG" || { echo "stall-counter: could not write # Notes" >&2; exit 3; }
     if [ "$COUNT" -ge "$MAX" ]; then
       printf 'ESCALATE  stall %s/%s — %s: %s\n' "$COUNT" "$MAX" "$why" "$NEW"
       exit 1

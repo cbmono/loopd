@@ -59,6 +59,9 @@
 #                           `claude` is not on PATH, so a clone without the CLI keeps its fast path.
 #   due <uuid> <class>      `agent-sessions.sh stop-ids` over that same listing, minus its moving
 #                           age: a stop coming due with time alone is a DELTA once per crossing.
+#                           Its `stalled` class reads the `pr` read's heads, which `check` and
+#                           `digest` save as `<url> <state> <head> <committed> <required pending>`
+#                           under AB_TICK_START/heads, removed first so a failed read leaves none.
 #   web queue               not a line: an unconsumed web-board entry (web-queue.sh pending)
 #                           is an immediate DELTA, because the queue is gitignored and moves
 #                           nothing above — and the tick's step 0.95 is what consumes it.
@@ -469,8 +472,9 @@ PR_QUERY='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pull
   state headRefOid reviewDecision mergeable mergeStateStatus reviews(last:1){totalCount nodes{id state}}
   reviewThreads(first:100){totalCount nodes{isResolved}}
   comments(last:1){nodes{id author{login}}}
-  commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){totalCount nodes{__typename
-    ... on CheckRun{name status conclusion} ... on StatusContext{context state description}}}}}}}}}}'
+  commits(last:1){nodes{commit{committedDate statusCheckRollup{contexts(first:100){totalCount nodes{__typename
+    ... on CheckRun{name status conclusion isRequired(pullRequestNumber:$n)}
+    ... on StatusContext{context state description isRequired(pullRequestNumber:$n)}}}}}}}}}}'
 PR_JQ='.data.repository.pullRequest as $p
 | ($p.reviews.nodes // [] | last) as $r
 | ($p.commits.nodes // [] | last) as $c
@@ -494,10 +498,13 @@ PR_JQ='.data.repository.pullRequest as $p
         "comments=\($k.id // "-"):\($k.author.login // "-")",
         "status=\([$s[] | if .__typename == "CheckRun" then [.name, .status, (.conclusion // "-")]
                           else [.context, .state, .description] end] | sort | tojson)"] | join(" ")
+       + "\t\($c.commit.committedDate // "-") \([$s[] | select(.isRequired == true and
+           (if .__typename == "CheckRun" then .status != "COMPLETED" else .state == "PENDING" or .state == "EXPECTED" end))] | length)"
   end'
 
 PR_RE='[A-Z]+ [0-9a-f]+ [A-Z_]+ merge=[A-Z_]+/[A-Z_]+ threads=[0-9]+ reviews=[0-9]+:[^ ]+:([A-Z_]+|-) comments=[^ :]+:[^ :]+ status=\[.*\]'
 START="$inst/$AB_TICK_START/pr"
+HEADS="$inst/$AB_TICK_START/heads"
 
 fingerprint() { # <probe|digest>
   local mode="$1"
@@ -660,6 +667,38 @@ $prs"
     printf 'checkpoint %s\n' "$(printf '%s\n' "$due" | cut -f1 | grep . | tr '\n' ' ')"
   fi
 
+  # Every open-PR fact comes from the HOST, via gh's own --jq (no local jq needed). A
+  # failure on any one PR poisons the whole fingerprint — better no answer than a match
+  # built on a hole.
+  # Read before the sessions: `stop-ids` takes its PR heads from this read (the `stalled` class).
+  local u line host owner repo num hst hsha prout="" heads=""
+  [ "$cmd" = record ] || rm -f "$HEADS" 2>/dev/null
+  for u in $(printf '%s\n' "$urls" | grep . | sort -u); do
+    if [ "$cmd" = record ]; then
+      line="$(U="$u" awk '$1 == "pr" && $2 == ENVIRON["U"] { print; exit }' "$START" 2>/dev/null)"
+      printf '%s\n' "${line#pr "$u" }" | grep -Eqx -- "$PR_RE" || line="pr $u unread"
+      prout="$prout$line"$'\n'
+      continue
+    fi
+    command -v gh >/dev/null 2>&1 || { cause "gh not found, and $u is open"; return 1; }
+    IFS=/ read -r host owner repo _ num <<<"${u#https://}"
+    case "$num" in ''|*[!0-9]*) cause "bad PR URL $u"; return 1 ;; esac
+    # GraphQL, not `gh pr view`: its statusCheckRollup drops a commit status's description,
+    # the only field that tells a rate-limited reviewer's SUCCESS from a completed review.
+    line="$(gh api graphql --hostname "$host" -f o="$owner" -f r="$repo" -F n="$num" \
+            -f query="$PR_QUERY" --jq "$PR_JQ" 2>"$PERR")" \
+      || { cause "gh PR query failed for $u: $(head -n1 "$PERR")"; return 1; }
+    case "$line" in *$'\n'*) cause "gh PR query for $u answered more than one line"; return 1 ;; esac
+    printf '%s\n' "${line%%$'\t'*}" | grep -Eqx -- "$PR_RE" || { cause "gh PR query for $u answered an unreadable shape"; return 1; }
+    read -r hst hsha _ <<<"$line"
+    heads="$heads$u $hst $hsha ${line#*$'\t'}"$'\n'
+    prout="${prout}pr $u ${line%%$'\t'*}"$'\n'
+  done
+  if [ "$cmd" != record ] && mkdir -p "$(dirname "$HEADS")" 2>/dev/null; then
+    { [ -e "$(dirname "$HEADS")/.gitignore" ] || printf '*\n' > "$(dirname "$HEADS")/.gitignore"; } 2>/dev/null
+    { printf '%s' "$heads" > "$HEADS.$$" && mv "$HEADS.$$" "$HEADS"; } 2>/dev/null
+  fi
+
   if [ -n "$sids" ]; then
     if command -v claude >/dev/null 2>&1; then
       local states e ss
@@ -679,29 +718,8 @@ $prs"
     fi
   fi
 
-  # Every open-PR fact comes from the HOST, via gh's own --jq (no local jq needed). A
-  # failure on any one PR poisons the whole fingerprint — better no answer than a match
-  # built on a hole.
-  local u line host owner repo num
-  for u in $(printf '%s\n' "$urls" | grep . | sort -u); do
-    if [ "$cmd" = record ]; then
-      line="$(U="$u" awk '$1 == "pr" && $2 == ENVIRON["U"] { print; exit }' "$START" 2>/dev/null)"
-      printf '%s\n' "${line#pr "$u" }" | grep -Eqx -- "$PR_RE" || line="pr $u unread"
-      printf '%s\n' "$line"
-      continue
-    fi
-    command -v gh >/dev/null 2>&1 || { cause "gh not found, and $u is open"; return 1; }
-    IFS=/ read -r host owner repo _ num <<<"${u#https://}"
-    case "$num" in ''|*[!0-9]*) cause "bad PR URL $u"; return 1 ;; esac
-    # GraphQL, not `gh pr view`: its statusCheckRollup drops a commit status's description,
-    # the only field that tells a rate-limited reviewer's SUCCESS from a completed review.
-    line="$(gh api graphql --hostname "$host" -f o="$owner" -f r="$repo" -F n="$num" \
-            -f query="$PR_QUERY" --jq "$PR_JQ" 2>"$PERR")" \
-      || { cause "gh PR query failed for $u: $(head -n1 "$PERR")"; return 1; }
-    case "$line" in *$'\n'*) cause "gh PR query for $u answered more than one line"; return 1 ;; esac
-    printf '%s\n' "$line" | grep -Eqx -- "$PR_RE" || { cause "gh PR query for $u answered an unreadable shape"; return 1; }
-    printf 'pr %s %s\n' "$u" "$line"
-  done
+  printf '%s' "$prout"
+
   # Emitted from INSIDE the walk: the caller reads this function through a command
   # substitution, so a flag set here never survives to the caller's scope.
   [ "$mode" = digest ] && { steps_line || { cause "no tick-steps directory beside the script"; return 1; }; }
