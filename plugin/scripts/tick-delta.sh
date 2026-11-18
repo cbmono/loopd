@@ -93,7 +93,8 @@
 # on `inputs: later` (project-inputs.sh), a `refine owed <task>` line per draft with no
 # `acceptance_criteria` and no `open_questions` outside a paused or inputs-waiting project
 # (`check` is a DELTA on one, so a clean tree never idles past it; `record` never writes
-# it), and every open PR's host facts — so step 1's N
+# it), a `fold owed <task>` line per draft with a ` --- `-answered `open_questions` entry (any
+# label; same `check`/`record` rule), and every open PR's host facts — so step 1's N
 # frontmatter reads and per-PR `gh` round-trips become one read. It changes NOTHING
 # about what the tick may act on: the digest is the enumeration, never the judgement,
 # and the tick still opens every document it acts on. A `status: done` project is
@@ -281,6 +282,14 @@ if [ "$close_set" -eq 1 ]; then
   suffix="$("$FMT" fmt --tokens "$tokens" --tools "$tools" --duration-ms "$ms")" \
     || { echo "tick-delta: $FMT could not format the usage numbers." >&2; exit 2; }
   line="* TICK $ts$by close: $close"
+  # A note, never a refusal: an AWAITING.md last written before this tick opened is a render
+  # (step 8) the tick skipped, and nothing else on disk would say so.
+  if [ -f "$inst/$AB_AWAITING" ] && ! perl -MTime::Local -e '
+       my @s = stat $ARGV[0] or exit 0;
+       $ARGV[1] =~ /^(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+)Z$/ or exit 0;
+       exit($s[9] >= timegm($6, $5, $4, $3, $2 - 1, $1) ? 0 : 1)' "$inst/$AB_AWAITING" "$ts" 2>/dev/null; then
+    line="$line; awaiting not rendered"
+  fi
   [ "$suffix" = "usage UNKNOWN" ] || line="$line · $suffix"
   # After the usage suffix, so agent-usage.sh's first `tokens=` match is still the real one.
   # Only a reason file written since this tick's open line is this tick's.
@@ -492,7 +501,7 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs urls="" ntask nterm wtp sid sids="" ipsids="" dl redraw mapped b inw rc r rel bad="" held prel
+  local p d pst f st prs urls="" ntask nterm wtp sid sids="" ipsids="" dl redraw mapped b inw rc r rel bad="" held prel ao
   skip() { # <instance-relative path> <reason>
     case "$bad" in *"|$1|"*) return 0 ;; esac
     bad="$bad|$1|"; step2=1
@@ -551,6 +560,17 @@ fingerprint() { # <probe|digest>
          && [ "${mapped#* "$b" }" = "$mapped" ] && [ "$(fmcount "$f" acceptance_criteria)" -gt 0 ]; then
         redraw=1
       fi
+      # An answered question on a draft is owed work too (2026-11-18: an in-place `advisor:`
+      # answer sat unfolded behind IDLE ticks). Parsed once here; the digest reuses it below.
+      ao=""
+      if [ "$cmd" != record ] && { [ "$st" = draft ] || [ "$mode" = digest ]; }; then
+        answered_open "$f"; ao=$?
+        case $ao in
+          0) [ "$st" = draft ] && { printf 'fold owed %s\n' "${f#"$inst"/}"; step2=1; } ;;
+          3) skip "${f#"$inst"/}" "$(perr)" ;;
+          2) cause "fold-answers.sh could not read open_questions in ${f#"$inst"/}: $(perr)"; return 1 ;;
+        esac
+      fi
       # An unrefined draft is owed work, so a clean tree cannot idle past it. Never recorded:
       # `check` short-circuits on it, and the refine itself moves HEAD.
       if [ "$st" = draft ] && [ "$inw" != waiting ] && [ "$cmd" != record ]; then
@@ -574,11 +594,7 @@ fingerprint() { # <probe|digest>
           done|cancelled) nterm=$((nterm + 1)) ;;
         esac
         # An answered hand-off owes its task a resume (step 4), whatever the status.
-        answered_open "$f"; case $? in
-          0) step2=1; grep -qF 'needs handed off' "$f" && step4=1 ;;
-          3) skip "${f#"$inst"/}" "$(perr)" ;;
-          2) cause "fold-answers.sh could not read open_questions in ${f#"$inst"/}: $(perr)"; return 1 ;;
-        esac
+        [ "$ao" = 0 ] && { step2=1; grep -qF 'needs handed off' "$f" && step4=1; }
       fi
       case "$st" in in-progress|in-review|blocked)
         sid="$(fmfirst "$f" session | sed 's/#.*$//' | tr -d "\"' \r")"
@@ -823,6 +839,12 @@ case "$cmd" in
         exit 1
       fi
     done
+    fo="$(printf '%s\n' "$FP" | sed -n 's/^fold owed //p')"
+    if [ -n "$fo" ]; then
+      n="$(printf '%s\n' "$fo" | wc -l | tr -d ' ')"
+      echo "DELTA: fold owed $(head -n1 <<<"$fo")$([ "$n" -gt 1 ] && echo " (+$((n - 1)) more)") — an answered question; step 2 owes its fold."
+      exit 1
+    fi
     ro="$(printf '%s\n' "$FP" | sed -n 's/^refine owed //p')"
     if [ -n "$ro" ]; then
       n="$(printf '%s\n' "$ro" | wc -l | tr -d ' ')"

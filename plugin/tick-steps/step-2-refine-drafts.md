@@ -23,6 +23,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **Each digest line `refine owed <task>` is work this tick owes**: refine it below, or
    name it in the close line as `refine deferred: <task> <reason>`. `check` reads no tick
    IDLE while one stands, so a skipped refine comes back every tick until it is done.
+   **Each `fold owed <task>` line is likewise owed**: bake the answer in and run
+   `fold-answers.sh` on it (below), or name it in the close line as
+   `fold deferred: <task> <reason>`. Any label counts — `Q<n>:`, `advisor:` or none.
 
    **Refine drafts.** For each `draft` whose `acceptance_criteria` are empty/thin
    (not yet refined): enrich it, add concrete `acceptance_criteria`, and record

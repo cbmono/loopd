@@ -45,6 +45,8 @@ cp "$SRC" "$INST/scripts/tick-delta.sh"; chmod +x "$INST/scripts/tick-delta.sh"
 # The mutants and copies run from a staged directory, and the script sources its sibling
 # resolver (ai-bridge-v3/task-031) — without it they exit 2 before reaching their subject.
 cp "$REPO/plugin/scripts/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"; cp -R "$REPO/plugin/scripts/lib" "$INST/scripts/lib"
+# `check` parses a draft's open_questions for a `fold owed` answer, through its sibling parser.
+cp "$REPO/plugin/scripts/fold-answers.sh" "$INST/scripts/fold-answers.sh"
 SH="$INST/scripts/tick-delta.sh"
 
 task() { printf -- '---\ntype: Task\nkind: build\nstatus: %s\npr: []\nacceptance_criteria: [ "x" ]\n---\n' "$2" > "$1"; }
