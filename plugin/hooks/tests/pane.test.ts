@@ -2114,6 +2114,43 @@ test('TICK: a working tick is named apart from task sessions, and with no task i
   await ui.unmount()
 })
 
+test('IN-SESSION: an in-session subagent joins the working count and gets its own row; none leaves the band as it was', ONLY, async ($, on) => {
+  const idle = needSnap('x')   // no task in progress
+  const one = [{ type: 'general-purpose', description: 'Design owed' }]
+  const cases: [any, Record<string, number>, unknown[], string, string][] = [
+    // Nothing in progress but one subagent: counted, its row replaces `nothing right now`.
+    [idle, { working: 0, idle: 1, dead: 0, tick_working: 0, in_session: 1 }, one,
+      '   1 working · 1 idle · 0 dead', '   general-purpose  Design owed' + ' '.repeat(4) + 'in-session'],
+    // Beside the tick: the tick is no longer the whole working count.
+    [idle, { working: 1, idle: 0, dead: 0, tick_working: 1, in_session: 1 }, one,
+      '   2 working (1 tick) · 0 idle · 0 dead', '   general-purpose  Design owed' + ' '.repeat(4) + 'in-session'],
+    // Under a task row, never instead of it.
+    [SNAP, { working: 1, idle: 1, dead: 0, tick_working: 0, in_session: 1 }, one,
+      '   2 working · 1 idle · 0 dead', '   software-engineer  Ship the' + ' '.repeat(8) + 'working'],
+    // None: the band and the empty line exactly as before.
+    [idle, { working: 0, idle: 1, dead: 0, tick_working: 0, in_session: 0 }, [],
+      '   0 working · 1 idle · 0 dead', '   nothing right now'],
+  ]
+  const w = world(idle)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  let m = 3000
+  for (const [snap, sessions, agents, band, first] of cases) {
+    w.files.set(SNAPSHOT, { text: JSON.stringify(snap), mtimeMs: m++ })
+    w.files.set(COUNTS, { text: JSON.stringify({ ...(countsOf(snap) as any), sessions, in_session_agents: agents }), mtimeMs: m++ })
+    await ui.press({ key: 'refresh' })
+    const rows = await rowsOf(ui)
+    const at = rows.indexOf(band)
+    expect([band, at > -1]).toEqual([band, true])
+    expect(rows[at + 2]).toBe(first)
+    expect(rows.filter(r => r.endsWith('in-session')).length).toBe(agents.length)
+    if (agents.length) expect(rows).not.toContain('   nothing right now')
+  }
+  await ui.unmount()
+})
+
 test('a zero in_review still draws IN REVIEW (0)', ONLY, async ($, on) => {
   const w = world(SNAP, true, { ...FIXTURE_COUNTS, in_review: 0 })
   stubs(on, w)

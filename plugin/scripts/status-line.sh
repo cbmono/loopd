@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # status-line.sh — one line for Claude Code's `statusLine`: what is in progress and in
-# review, how many bg sessions are working, idle or dead, what waits on the human, a held
-# lock, when the last tick was. Each run also writes those numbers to AB_COUNTS (counts.sh).
+# review, how many bg sessions (and in-session subagents) are working, idle or dead, what
+# waits on the human, a held lock, when the last tick was. Each run also writes those
+# numbers to AB_COUNTS (counts.sh).
 #
 #   status-line.sh [--instance DIR] [--color auto|always|never]
 #
@@ -22,7 +23,7 @@ while [ $# -gt 0 ]; do
     --instance=*) INST="${1#--instance=}"; shift ;;
     --color) shift; COLOR="${1:-auto}"; shift || true ;;
     --color=*) COLOR="${1#--color=}"; shift ;;
-    -h|--help) sed -n '2,10p' "$0" >&2; exit 3 ;;
+    -h|--help) sed -n '2,11p' "$0" >&2; exit 3 ;;
     *) echo "status-line: unknown option: $1" >&2; exit 3 ;;
   esac
 done
@@ -125,7 +126,9 @@ printf '%s%s' "$SEP" "$(paint "$(n_colour "$CNT_IN_PROGRESS" "$C_BLUE")" "$CNT_I
 if [ "$CNT_WORKING" = "$UNKNOWN" ]; then
   printf '%s%s' "$SEP" "$(paint "$C_PINK" "$UNKNOWN working · $UNKNOWN idle · $UNKNOWN dead")"
 else
-  printf '%s%s' "$SEP" "$(paint "$(n_colour "$CNT_WORKING" "$C_GREEN")" "$CNT_WORKING working")"
+  # In-session subagents (counts.sh, display only) work too, so the band counts them.
+  w=$((CNT_WORKING + ${CNT_IN_SESSION:-0}))
+  printf '%s%s' "$SEP" "$(paint "$(n_colour "$w" "$C_GREEN")" "$w working")"
   printf '%s%s' "$SEP" "$(paint "$(n_colour "$CNT_IDLE" "")" "$CNT_IDLE idle")"
   printf '%s%s' "$SEP" "$(paint "$(n_colour "$CNT_DEAD" "$C_PINK")" "$CNT_DEAD dead")"
 fi
