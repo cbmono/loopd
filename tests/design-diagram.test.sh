@@ -132,18 +132,21 @@ chmod 644 "$P/tasks/task-001-a.md"
 cp "$TMP/a.keep" "$P/tasks/task-001-a.md"
 
 echo; echo "== tick-delta.sh: the stale-inputs DELTA =="
+# Answers arrive FOLDED here: an unfolded one on a draft is `fold owed`, a DELTA of its own.
+fq() { qtask '' "\"2026-11-07T13:43:09Z by example-user-007 · Q1: which store? --- $1\""; }
+fq "local disk"
 withhash() { design "$MAP2, \"api → task-003\""; sed -i.bak "s/^tasks: /inputs_hash: $1\\
 tasks: /" "$P/design.md"; rm -f "$P/design.md.bak"; }
 withhash "$(DI)"; settle stamped
 ok "inputs_hash: current ⇒ IDLE" "$(TD check >/dev/null; echo $?)" 0
-qtask '"Q1: which store? --- an S3 bucket"' ''; settle answered
+fq "an S3 bucket"; settle answered
 out="$(TD check)"; rc=$?
 ok "an answer after the draw ⇒ DELTA, exit 1" "$rc" 1
 ok "…naming the project and why" "$(printf '%s\n' "$out" | grep -c '^DELTA: projects/p1 changed what its projects/p1/design.md was drawn from')" 1
 ok "…and the digest names step 2" "$(TD digest | grep '^steps:' | grep -c step-2-refine-drafts.md)" 1
 withhash "$(DI)"; settle restamped
 ok "restamped ⇒ IDLE again" "$(TD check >/dev/null; echo $?)" 0
-design "$MAP2, \"api → task-003\""; qtask '"Q1: which store? --- a third answer"' ''; settle legacy
+design "$MAP2, \"api → task-003\""; fq "a third answer"; settle legacy
 ok "no inputs_hash: ⇒ never stale" "$(TD check >/dev/null; echo $?)" 0
 withhash "0000000000000000"
 printf -- '---\ntype: Task\nstatus: draft\nacceptance_criteria: [ "x" ]\nopen_questions: [ "unterminated\n---\n' > "$P/tasks/task-001-a.md"; settle broken

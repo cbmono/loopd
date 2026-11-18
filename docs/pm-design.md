@@ -314,7 +314,7 @@ still in `project-manager.md`; these are the reasons that travelled with it.
   to run is a step nobody should pay to read. The `steps:` line is derived from the same
   walk that prints the enumeration — an unrefined draft (a `refine owed` line), a refined
   draft step 2 still owes (critique, fact check, design.md), or a ` --- `-answered entry
-  names step 2, a
+  (on a draft, a `fold owed` line) names step 2, a
   `ready` task names step 3, and so on. The digest fails toward the behaviour that was
   always correct: a tick that skipped a step on a refusal would skip it silently. Step 7
   is never named because whether the knowledge base is owed a pass is not on disk before
@@ -449,7 +449,9 @@ The safety argument has one load-bearing direction: a false DELTA costs one full
 no record, no `gh`, a probe error, an `in-progress` task with no `session:` or one that
 is not `working`/`blocked`, any dirty tracked file, any
 untracked file under `projects/`, an unrefined draft (`refine owed`; 2026-11-17: a
-new project's five drafts sat unrefined behind IDLE ticks once the tree went clean) —
+new project's five drafts sat unrefined behind IDLE ticks once the tree went clean), a draft
+with an answered question (`fold owed`; 2026-11-18: an in-place `advisor:` answer sat
+unfolded behind IDLE ticks) —
 resolves to the full tick, and the fingerprint holds
 exactly the facts whose movement creates tick work: bundle HEAD, per-task status, each
 PR on an `in-progress` or `in-review` task's head SHA, state, review decision,
