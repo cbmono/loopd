@@ -94,7 +94,9 @@
 # `acceptance_criteria` and no `open_questions` outside a paused or inputs-waiting project
 # (`check` is a DELTA on one, so a clean tree never idles past it; `record` never writes
 # it), a `fold owed <task>` line per draft with a ` --- `-answered `open_questions` entry (any
-# label; same `check`/`record` rule), and every open PR's host facts — so step 1's N
+# label; same `check`/`record` rule), a `design owed <project>/design.md` line per non-research
+# project with a refined draft, no unrefined one and no design.md (same rule; never paused or
+# inputs-waiting), and every open PR's host facts — so step 1's N
 # frontmatter reads and per-PR `gh` round-trips become one read. It changes NOTHING
 # about what the tick may act on: the digest is the enumeration, never the judgement,
 # and the tick still opens every document it acts on. A `status: done` project is
@@ -415,6 +417,9 @@ inputs_state() { # <project.md> -> waiting | arrived | ready
   case $? in 1) echo waiting ;; 3) echo arrived ;; *) echo ready ;; esac
 }
 PAUSED="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/project-paused.sh"
+# A project's kind, YAML quotes and leading space off: `kind: "research"` is research. An
+# omitted kind prints nothing, which every caller reads as build (the schema's default).
+pkind() { fmfirst "$1" kind | tr -d "\"'" | sed 's/^[[:space:]]*//' | grep -oE '^[a-z]+'; }
 VFACTS="$(dirname "${BASH_SOURCE[0]}")/verified-facts.sh"
 # Asked once per project, and only when it has an unrefined draft. Exit 1 alone is paused:
 # a gate that cannot answer counts as active, so the doubt costs a full tick, never a refine.
@@ -501,7 +506,7 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs urls="" ntask nterm wtp sid sids="" ipsids="" dl redraw mapped b inw rc r rel bad="" held prel ao
+  local p d pst f st prs urls="" ntask nterm wtp sid sids="" ipsids="" dl redraw mapped b inw rc r rel bad="" held prel ao nref unref
   skip() { # <instance-relative path> <reason>
     case "$bad" in *"|$1|"*) return 0 ;; esac
     bad="$bad|$1|"; step2=1
@@ -543,7 +548,7 @@ fingerprint() { # <probe|digest>
       fi
     fi
 
-    ntask=0; nterm=0; redraw=0; mapped=""; held=""; prel="projects/$(basename "$d")/project.md"
+    ntask=0; nterm=0; redraw=0; mapped=""; held=""; nref=0; unref=0; prel="projects/$(basename "$d")/project.md"
     [ -f "${d}design.md" ] && mapped=" $(fmlist "${d}design.md" tasks text | grep -oE 'task-[0-9]+' | tr '\n' ' ')"
     for f in "$d"tasks/*.md; do
       [ -f "$f" ] || continue
@@ -575,9 +580,11 @@ fingerprint() { # <probe|digest>
       # `check` short-circuits on it, and the refine itself moves HEAD.
       if [ "$st" = draft ] && [ "$inw" != waiting ] && [ "$cmd" != record ]; then
         if [ "$(fmcount "$f" acceptance_criteria)" -gt 0 ]; then
+          nref=$((nref + 1))
           [ "$mode" = digest ] && draft_owes "$f" "$d" && step2=1
-        elif [ "$(fmcount "$f" open_questions)" = 0 ] && ! paused_now; then
-          printf 'refine owed %s\n' "${f#"$inst"/}"; step2=1
+        else
+          unref=1
+          [ "$(fmcount "$f" open_questions)" = 0 ] && ! paused_now && { printf 'refine owed %s\n' "${f#"$inst"/}"; step2=1; }
         fi
       fi
       # Step 5's reclaim retry: nothing else on disk moves while an own-session refusal waits.
@@ -611,7 +618,13 @@ $prs"
     done
     [ "$mode" = digest ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && step6=1
     [ "$redraw" = 1 ] && { printf 'redraw owed %s\n' "${d#"$inst"/}design.md"; step2=1; }
-    if [ -f "${d}design.md" ] && [ "$(fmfirst "$p" kind | grep -oE '^[a-z]+')" != research ]; then
+    # Every draft refined and no design.md is owed work too (2026-11-18: a build project's
+    # drafts were refined in one pass, and IDLE ticks never drew its design). Never recorded.
+    if [ "$nref" -gt 0 ] && [ "$unref" = 0 ] && [ ! -f "${d}design.md" ] \
+       && [ "$(pkind "$p")" != research ] && ! paused_now; then
+      printf 'design owed %sdesign.md\n' "${d#"$inst"/}"; step2=1
+    fi
+    if [ -f "${d}design.md" ] && [ "$(pkind "$p")" != research ]; then
       r="$(project_critique "$p" "$mapped")"; rc=$?
       case $rc in
         0) printf 'critique owed projects/%s/project.md %s\n' "$(basename "$d")" "$r"; step2=1 ;;
@@ -849,6 +862,12 @@ case "$cmd" in
     if [ -n "$ro" ]; then
       n="$(printf '%s\n' "$ro" | wc -l | tr -d ' ')"
       echo "DELTA: refine owed $(head -n1 <<<"$ro")$([ "$n" -gt 1 ] && echo " (+$((n - 1)) more)") — an unrefined draft; step 2 owes its refine."
+      exit 1
+    fi
+    dw="$(printf '%s\n' "$FP" | sed -n 's/^design owed //p')"
+    if [ -n "$dw" ]; then
+      n="$(printf '%s\n' "$dw" | wc -l | tr -d ' ')"
+      echo "DELTA: design owed $(head -n1 <<<"$dw" | sed 's|/design.md$||')$([ "$n" -gt 1 ] && echo " (+$((n - 1)) more)") — every draft is refined; step 2 owes its design.md."
       exit 1
     fi
     if grep -q '^reclaim owed ' <<<"$FP"; then

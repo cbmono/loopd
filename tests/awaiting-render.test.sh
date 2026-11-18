@@ -63,7 +63,7 @@ Last refreshed: <ISO>.
 * 🧰 **grant** — [Has questions](/projects/demo/tasks/task-002-b.md) · Q2: install the foo CLI (no recommendation)
 * ⛔ **unblock** — [Stuck](/projects/demo/tasks/task-003-c.md) · waiting on a host account
 * ❓ **answer** — [Has questions](/projects/demo/tasks/task-002-b.md) · Q1: which colour? (no recommendation)
-* ✅ **approve** — [Clean draft](/projects/demo/tasks/task-001-a.md) · unverified · refined & clean, promote `draft → ready`
+* ✅ **approve** — [Clean draft](/projects/demo/tasks/task-001-a.md) · unverified · no design yet · refined & clean, promote `draft → ready`
 * 🔀 **merge** — [Green](/projects/demo/tasks/task-004-d.md) · [ai-bridge#7](https://github.com/cbmono/ai-bridge/pull/7)
 WANT
 sed -E 's/^Last refreshed: .*$/Last refreshed: <ISO>./' "$B/$AB_AWAITING" > "$TMP/got"
@@ -199,7 +199,7 @@ ok "do: the whole row"           "$(row_is "* 👉 **do** — [Deploy](/projects
 ok "review: the decision is the recommendation" \
    "$(row_is '* 👀 **review** — [Demo](/projects/demo/project.md) · D1: no cache — alternatives: redis; why: low load; reversible: yes (recommended: ok)')" 1
 ok "approve: one row, display-only, nothing added" \
-   "$(row_is '* ✅ **approve** — [Clean](/projects/demo/tasks/task-003-c.md) · unverified · refined & clean, promote `draft → ready`')" 1
+   "$(row_is '* ✅ **approve** — [Clean](/projects/demo/tasks/task-003-c.md) · unverified · no design yet · refined & clean, promote `draft → ready`')" 1
 bash "$SH" --instance "$R" --trailer "$R/projects/demo/tasks/task-001-a.md=pick a colour and a font" >/dev/null 2>&1
 ok "a trailer replaces the questions, once, never their recommendations" \
    "$(row_is '* ❓ **answer** — [Recs](/projects/demo/tasks/task-001-a.md) · pick a colour and a font (Q1 recommended: Blue, the \`brand\` colour; Q3 no recommendation)')" 1

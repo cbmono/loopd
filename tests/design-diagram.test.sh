@@ -81,6 +81,8 @@ design "$MAP2"
 echo; echo "== tick-delta.sh: the redraw DELTA =="
 TD() { bash "$S/tick-delta.sh" "$@" --instance "$I" 2>&1; }
 settle() { GIT add -A; GIT commit -qm "$1" >/dev/null 2>&1; TD record >/dev/null; }
+# p2's drafts are refined too: undrawn, it would be `design owed` and no check here IDLE.
+printf -- '---\ntype: Design\ntasks: [ "z → task-001" ]\n---\n' > "$I/projects/p2/design.md"
 settle base
 ok "every refined task mapped ⇒ IDLE" "$(TD check >/dev/null; echo $?)" 0
 task p1 task-003-c "C" '"y"'; settle refine-c
@@ -91,7 +93,10 @@ ok "…and the digest names step 2" "$(TD digest | grep '^steps:' | grep -c step
 design "$MAP2, \"api → task-003\""; settle redraw
 ok "redrawn ⇒ IDLE again" "$(TD check >/dev/null; echo $?)" 0
 cp "$P/design.md" "$TMP/design.keep"; rm "$P/design.md"; task p1 task-004-d "D" '"z"'; settle no-design
-ok "no design.md ⇒ no redraw DELTA" "$(TD check >/dev/null; echo $?)" 0
+out="$(TD check)"
+ok "no design.md ⇒ no redraw DELTA" "$(printf '%s\n' "$out" | grep -c 'does not map')" 0
+ok "…but design owed, every draft being refined" "$(printf '%s\n' "$out" | grep -c '^DELTA: design owed projects/p1 ')" 1
+ok "…and the digest itself carries no redraw owed line" "$(TD digest | grep -c '^redraw owed projects/p1/design.md')" 0
 rm "$P/tasks/task-004-d.md"; cp "$TMP/design.keep" "$P/design.md"; settle restore
 
 echo; echo "== design-inputs.sh: what the fingerprint sees, and what it ignores =="
@@ -154,6 +159,7 @@ ok "an unparseable input ⇒ DELTA naming it, the full tick runs" "$(TD check 2>
 cp "$TMP/a.keep" "$P/tasks/task-001-a.md"; cp "$TMP/design.keep" "$P/design.md"; settle restore-2
 
 echo; echo "== build-awaiting.sh: one link per project, on its first promote row =="
+rm -f "$I/projects/p2/design.md"
 aw() { : > "$I/$AB_AWAITING"; bash "$S/build-awaiting.sh" --instance "$I" "$@" >/dev/null 2>&1; grep '^\* ' "$I/$AB_AWAITING"; }
 DEF=' · refined & clean, promote `draft → ready`'
 LINK=' · [design](/projects/p1/design.md)'
@@ -161,13 +167,15 @@ rows="$(aw)"
 ok "DEF_APPROVE row: the first promote row carries the link" "$(printf '%s\n' "$rows" | sed -n 1p)" \
   "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md) · unverified$DEF$LINK"
 ok "…exactly once per project" "$(printf '%s\n' "$rows" | grep -c 'design.md')" 1
-ok "…and a project with no design.md links nothing" "$(printf '%s\n' "$rows" | grep -F 'task-001-z' | grep -c design)" 0
+ok "…and a project with no design.md links nothing" "$(printf '%s\n' "$rows" | grep -F 'task-001-z' | grep -c '\[design\]')" 0
 rows="$(aw --trailer "$P/tasks/task-001-a.md=an agent sentence")"
 ok "agent-trailer row: the link follows the trailer" "$(printf '%s\n' "$rows" | sed -n 1p)" \
   "* ✅ **approve** — [A](/projects/p1/tasks/task-001-a.md) · unverified · an agent sentence$LINK"
 with="$(aw)"; rm "$P/design.md"; without="$(aw)"
-ok "no design.md ⇒ every row byte-identical to the link-free render" "$without" "$(printf '%s\n' "$with" | while IFS= read -r l; do printf '%s\n' "${l%"$LINK"}"; done)"
-ok "…and no row names design" "$(printf '%s\n' "$without" | grep -c design)" 0
+# Byte-identical but for the `no design yet` mark an undrawn build project's rows carry.
+ok "no design.md ⇒ every row byte-identical to the link-free render" "${without// · no design yet/}" \
+  "$(printf '%s\n' "$with" | while IFS= read -r l; do l="${l%"$LINK"}"; printf '%s\n' "${l// · no design yet/}"; done)"
+ok "…and no row links design" "$(printf '%s\n' "$without" | grep -c '\[design\]')" 0
 cp "$TMP/design.keep" "$P/design.md"
 
 echo; echo "== build-awaiting.sh: pre_mortem: after the link =="

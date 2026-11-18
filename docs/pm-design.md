@@ -451,7 +451,9 @@ is not `working`/`blocked`, any dirty tracked file, any
 untracked file under `projects/`, an unrefined draft (`refine owed`; 2026-11-17: a
 new project's five drafts sat unrefined behind IDLE ticks once the tree went clean), a draft
 with an answered question (`fold owed`; 2026-11-18: an in-place `advisor:` answer sat
-unfolded behind IDLE ticks) —
+unfolded behind IDLE ticks), a build project with every draft refined and no design.md
+(`design owed`, which needs at least one refined draft and never fires on a paused or
+inputs-waiting project; 2026-11-18: a project's design was never drawn behind IDLE ticks) —
 resolves to the full tick, and the fingerprint holds
 exactly the facts whose movement creates tick work: bundle HEAD, per-task status, each
 PR on an `in-progress` or `in-review` task's head SHA, state, review decision,

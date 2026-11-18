@@ -233,7 +233,7 @@ state, and act only on deltas.
      (absent ⇒ 4), no `draft` whose newest `advisor_notes` concern postdates its newest
      `* <ISO 8601> triage:` line, and no unrefined draft (`refine owed`: no criteria, no open
      question, project active and not waiting on inputs), and no `fold owed` draft (an answered
-     `open_questions` entry). **Skip steps 1–7.**
+     `open_questions` entry), and no `design owed` project. **Skip steps 1–7.**
      Except one: run `${CLAUDE_PLUGIN_ROOT}/scripts/session-sweep.sh <bundle-root>` (step 5's
      sweep — an IDLE tick still stops finished and idle sessions). A `handed-off` line means it
      edited a task: run the full tick instead. **The script writes the one already-closed
@@ -390,7 +390,8 @@ state, and act only on deltas.
    you dispatched and every one whose completion you reflected — "dispatched task-004,
    task-007; reflected task-002 merged". Every digest `refine owed` line appears as
    `refined <project> task-NNN..` or `refine deferred: <task> <reason>`; every `fold owed` line
-   as `folded <task>` or `fold deferred: <task> <reason>`. **A KB sweep (step 7) is named the same way —
+   as `folded <task>` or `fold deferred: <task> <reason>`; every `design owed` line as
+   `drew <project>/design.md` or `design: not written (<project>: <reason>)`. **A KB sweep (step 7) is named the same way —
    its trigger and its result, both as numbers**:
    "idle + 35 KB errors → cataloguer; errors 35 → 0"; a sweep that ended above 0 is reported
    with the number it reached.

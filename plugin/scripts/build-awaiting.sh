@@ -48,6 +48,7 @@
 # A build draft's `approve` row is marked `unverified` (no `## Verified facts`, or a facts
 # verdict of unknown) or `stale`. The verdict is verified-facts.sh's, passed in with --facts:
 # this script never runs git. With no --facts it reads presence only. Never on research.
+# It is marked `no design yet` while its project has no design.md (never on research).
 #
 # GENERIC PLUGIN FILE — no org, repo or path literals.
 set -uo pipefail
@@ -310,6 +311,15 @@ facts_mark() { # <file> <rel> -> "unverified · ", "stale · " or nothing
   esac
 }
 
+# A build draft whose project has no design.md yet: step 2 owes it (`design owed`), and the
+# row says so rather than withhold the promote, which stays the human's.
+# The PROJECT's kind decides, as in tick-delta.sh: design.md is drawn once per build project.
+design_mark() { # <task> <project.md> -> "no design yet · " or nothing
+  [ -z "$cur_design" ] || return 0
+  [ "$(fmfirst "$2" kind | tr -d "\"'" | sed 's/^[[:space:]]*//' | grep -oE '^[a-z]+')" = research ] \
+    || printf 'no design yet · '
+}
+
 # A row is `* <glyph> **<verb>** — [<title>](<link>) · <trailer>` and nothing else. One
 # writer for every row, so a new verb cannot arrive with a new marker: session-banner.sh
 # greps the `* ` literally.
@@ -424,7 +434,7 @@ EOF
         # refined draft is the human's promote.
         crit="$(entries "$f" acceptance_criteria)" || fail3 "cannot read acceptance_criteria in $rel"
         if [ "$qn" = 0 ] && [ -n "$crit" ]; then
-          add "✅" approve "$t" "$rel" "$(facts_mark "$f" "$rel")${trail:-$DEF_APPROVE}"
+          add "✅" approve "$t" "$rel" "$(facts_mark "$f" "$rel")$(design_mark "$f" "$pm")${trail:-$DEF_APPROVE}"
         fi ;;
       blocked)
         add "⛔" unblock "$t" "$rel" "${trail:-$DEF_UNBLOCK}" ;;
