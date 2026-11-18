@@ -154,8 +154,9 @@ stall; ok "an idle session on a 45m-old head is a DELTA" "$(run)" "rc:1 DELTA: t
 ok "…naming it due as stalled" "$(bash "$TD" check --instance "$B" 2>&1 | grep -c "now: *due $(u b2b20002) stalled\$")" 1
 ok "…from the same one gh call per PR" "$(: > "$CALLS"; bash "$TD" check --instance "$B" >/dev/null 2>&1; grep -c '^gh api graphql' "$CALLS")" 2
 ok "…which it saved as the heads stop-ids reads" "$(grep -cE "^$URL/2 OPEN abc1234 [0-9T:Z-]+ 0\$" "$B/$AB_TICK_START/heads")" 1
+ok "…and stop-ids selects it as stalled" "$(awk '$4 == "stalled"' <<<"$(AB_SESSIONS_LISTING="$FIXTURE" bash "$S/agent-sessions.sh" stop-ids "$B" 2>/dev/null)" | wc -l | tr -d ' ')" 1
 stall IN_PROGRESS; ok "a required check in progress at the head: pending 1, nothing due" \
-   "$(bash "$TD" check --instance "$B" >/dev/null 2>&1; awk -v u="$URL/2" '$1 == u { print $5 }' "$B/$AB_TICK_START/heads"):$(grep -c ' stalled$' <<<"$(AB_SESSIONS_LISTING="$FIXTURE" bash "$S/agent-sessions.sh" stop-ids "$B" 2>/dev/null)")" "1:0"
+   "$(bash "$TD" check --instance "$B" >/dev/null 2>&1; awk -v u="$URL/2" '$1 == u { print $5 }' "$B/$AB_TICK_START/heads"):$(awk '$4 == "stalled"' <<<"$(AB_SESSIONS_LISTING="$FIXTURE" bash "$S/agent-sessions.sh" stop-ids "$B" 2>/dev/null)" | wc -l | tr -d ' ')" "1:0"
 stall COMPLETED PENDING; ok "a pending reviewer that is not required counts 0" \
    "$(bash "$TD" check --instance "$B" >/dev/null 2>&1; awk -v u="$URL/2" '$1 == u { print $5 }' "$B/$AB_TICK_START/heads")" 0
 stall; mv "$GHDIR/1" "$GHDIR/1.off"
@@ -164,7 +165,7 @@ mv "$GHDIR/1.off" "$GHDIR/1"
 left() { # <what> <expected run> — a previous tick's stalled heads, then this tick fails before its read
   stall; bash "$TD" check --instance "$B" >/dev/null 2>&1; eval "$3"
   ok "$1 leaves no earlier tick's heads" "$(run | cut -c1-4):$(ls "$B/$AB_TICK_START/heads" 2>/dev/null | wc -l | tr -d ' ')" "$2:0"
-  ok "…so stop-ids selects nothing as stalled" "$(grep -c ' stalled$' <<<"$(AB_SESSIONS_LISTING="$FIXTURE" bash "$S/agent-sessions.sh" stop-ids "$B" 2>/dev/null)")" 0
+  ok "…so stop-ids selects nothing as stalled" "$(awk '$4 == "stalled"' <<<"$(AB_SESSIONS_LISTING="$FIXTURE" bash "$S/agent-sessions.sh" stop-ids "$B" 2>/dev/null)" | wc -l | tr -d ' ')" 0
   eval "$4"
 }
 left "a walk failing before the PR read" rc:2 'mkdir "$B/projects/q"' 'rmdir "$B/projects/q"'
