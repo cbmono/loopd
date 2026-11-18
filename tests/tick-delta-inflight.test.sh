@@ -161,6 +161,16 @@ stall COMPLETED PENDING; ok "a pending reviewer that is not required counts 0" \
 stall; mv "$GHDIR/1" "$GHDIR/1.off"
 ok "a failed PR read cannot answer, and leaves no heads" "$(run | cut -c1-4):$(ls "$B/$AB_TICK_START/heads" 2>/dev/null | wc -l | tr -d ' ')" "rc:2:0"
 mv "$GHDIR/1.off" "$GHDIR/1"
+left() { # <what> <expected run> — a previous tick's stalled heads, then this tick fails before its read
+  stall; bash "$TD" check --instance "$B" >/dev/null 2>&1; eval "$3"
+  ok "$1 leaves no earlier tick's heads" "$(run | cut -c1-4):$(ls "$B/$AB_TICK_START/heads" 2>/dev/null | wc -l | tr -d ' ')" "$2:0"
+  ok "…so stop-ids selects nothing as stalled" "$(grep -c ' stalled$' <<<"$(AB_SESSIONS_LISTING="$FIXTURE" bash "$S/agent-sessions.sh" stop-ids "$B" 2>/dev/null)")" 0
+  eval "$4"
+}
+left "a walk failing before the PR read" rc:2 'mkdir "$B/projects/q"' 'rmdir "$B/projects/q"'
+left "a dirty tree's early DELTA" rc:1 'printf x >> "$B/projects/p/project.md"' 'GIT -C "$B" checkout -q -- projects'
+stall; bash "$TD" check --instance "$B" >/dev/null 2>&1; bash "$TD" record --instance "$B" >/dev/null 2>&1
+ok "record removes the tick's heads" "$(ls "$B/$AB_TICK_START/heads" 2>/dev/null | wc -l | tr -d ' ')" 0
 
 echo "== UNKNOWN MERGE STATE is fingerprinted as-is =="
 base; prj 1 abc1234 SUCCESS UNKNOWN UNKNOWN; rec

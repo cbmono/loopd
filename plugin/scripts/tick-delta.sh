@@ -61,7 +61,8 @@
 #                           age: a stop coming due with time alone is a DELTA once per crossing.
 #                           Its `stalled` class reads the `pr` read's heads, which `check` and
 #                           `digest` save as `<url> <state> <head> <committed> <required pending>`
-#                           under AB_TICK_START/heads, removed first so a failed read leaves none.
+#                           under AB_TICK_START/heads: removed before any read and by `record`, so a
+#                           tick that fails anywhere leaves none.
 #   web queue               not a line: an unconsumed web-board entry (web-queue.sh pending)
 #                           is an immediate DELTA, because the queue is gitignored and moves
 #                           nothing above — and the tick's step 0.95 is what consumes it.
@@ -193,6 +194,8 @@ STATE="$inst/$STATE_NAME"
 
 REASON="$inst/$AB_TICK_START/digest-stderr"
 SKIPPED="$inst/$AB_TICK_START/unparseable"
+HEADS="$inst/$AB_TICK_START/heads"
+[ "$cmd" = record ] || rm -f "$HEADS" 2>/dev/null
 note() {
   printf '%s\n' "$1" >&2
   [ "$cmd" = digest ] && printf '%s\n' "$1" >> "$REASON" 2>/dev/null
@@ -504,7 +507,6 @@ PR_JQ='.data.repository.pullRequest as $p
 
 PR_RE='[A-Z]+ [0-9a-f]+ [A-Z_]+ merge=[A-Z_]+/[A-Z_]+ threads=[0-9]+ reviews=[0-9]+:[^ ]+:([A-Z_]+|-) comments=[^ :]+:[^ :]+ status=\[.*\]'
 START="$inst/$AB_TICK_START/pr"
-HEADS="$inst/$AB_TICK_START/heads"
 
 fingerprint() { # <probe|digest>
   local mode="$1"
@@ -672,7 +674,6 @@ $prs"
   # built on a hole.
   # Read before the sessions: `stop-ids` takes its PR heads from this read (the `stalled` class).
   local u line host owner repo num hst hsha prout="" heads=""
-  [ "$cmd" = record ] || rm -f "$HEADS" 2>/dev/null
   for u in $(printf '%s\n' "$urls" | grep . | sort -u); do
     if [ "$cmd" = record ]; then
       line="$(U="$u" awk '$1 == "pr" && $2 == ENVIRON["U"] { print; exit }' "$START" 2>/dev/null)"
@@ -834,7 +835,7 @@ case "$cmd" in
       printf '%s\n' "$FP"
     } > "$tmp" || { rm -f "$tmp" 2>/dev/null; fail2 "cannot write $STATE"; }
     mv "$tmp" "$STATE" || { rm -f "$tmp" 2>/dev/null; fail2 "cannot write $STATE"; }
-    rm -f "$START" "$SKIPPED"
+    rm -f "$START" "$SKIPPED" "$HEADS"
     exit 0
     ;;
   check)
