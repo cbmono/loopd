@@ -36,7 +36,10 @@ of independent asks the user has already given in this turn.
 3. **Brief each agent fully.** Subagents have **none** of this conversation's
    context — write each a complete, standalone prompt (goal, exact files/paths,
    acceptance, "report back X"). They inherit this bundle's rules (no PII, metric
-   units, data-question routing) from `CLAUDE.md`.
+   units, data-question routing) from `CLAUDE.md`. **It never commits as the human:** in
+   this bundle it never runs `commit-as.sh human` or pushes — it reports its edited paths,
+   uncommitted, and you review and commit them here. A `loopd:<role>` agent may commit as
+   its own role by explicit path; product-repo work goes branch → PR as usual.
 4. **Dispatch in one message.** Spawn all units as **`general-purpose` agents with
    `run_in_background: true`** in a single turn so they run concurrently. Use a more
    specific agent type when one fits (e.g. `loopd:deep-bug-scan`, `Explore`, or one of this
