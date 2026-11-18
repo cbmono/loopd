@@ -388,6 +388,12 @@ WS_GROUP="$(ab_group "$TARGET")"
 WS_NAME="${WS_GROUP}.code-workspace"
 case "$WS_GROUP" in */*) WS_NAME="" ;; esac
 
+# Stamp evidence for the workspace rule below, captured BEFORE the sweep removes a legacy
+# template link: a symlink-era bundle is a refresh even once its SCHEMA link is gone.
+WS_PRE_STAMPED=no
+{ [ -e "$TARGET/$AB_SCHEMA" ] || [ -L "$TARGET/$AB_SCHEMA" ] || [ -e "$TARGET/SCHEMA.md" ] \
+  || [ -L "$TARGET/SCHEMA.md" ]; } && WS_PRE_STAMPED=yes
+
 # =========================================================================================
 # THE CONVERSION SWEEP — a symlink-era bundle becomes a plugin-native one, in place.
 # =========================================================================================
@@ -529,6 +535,23 @@ cfg_bool() { # <key> <default> <config-path>
 FIRST_STAMP=no
 [ -e "$TARGET/instance.config.json" ] || FIRST_STAMP=yes
 
+# THE WORKSPACE FILE IS SEEDED ON A BUNDLE'S FIRST STAMP ONLY. Seeded whenever absent, a
+# deleted `<group>.code-workspace` came back on every /loopd:update — a human's `rm` undone
+# by the machinery, several times on one live bundle. FIRST_STAMP is the wrong question
+# here: a config written by hand BEFORE the first stamp (to set `group`, or the
+# `codeWorkspace: false` opt-out below) would read as a refresh and seed nothing. So the
+# marker is the one the --org path already uses for "a bundle is here" — the stamped
+# SCHEMA — read before step 1 seeds it, plus the evidence taken before STEP 0 removed a legacy link.
+WS_STAMPED="$WS_PRE_STAMPED"
+[ -e "$TARGET/$AB_SCHEMA" ] && WS_STAMPED=yes
+# The opt-out, through the one config reader (both layers). Anything but a literal `false`
+# — absent, unreadable, no python3 — keeps the default: seed on the first stamp.
+WS_OPT_OUT=no
+if [ -f "$BIN_DIR/resolve-config.sh" ] \
+   && [ "$(bash "$BIN_DIR/resolve-config.sh" --instance "$TARGET" codeWorkspace 2>/dev/null || true)" = false ]; then
+  WS_OPT_OUT=yes
+fi
+
 # Does this file parse as JSON?  0 = yes, 1 = NO, 2 = no parser on this machine.
 # The three answers are distinguished on purpose: "we could not check" must never be
 # reported as "it is fine" — the required-checks.sh discipline, applied to a write.
@@ -583,6 +606,10 @@ if [ -d "$SEED_SRC" ]; then
       existing="$(find "$TARGET" -maxdepth 1 -name '*.code-workspace' 2>/dev/null | head -1)"
       if [ -n "$existing" ]; then
         echo "  keep  $(basename "$existing") (workspace exists)"
+      elif [ "$WS_OPT_OUT" = yes ]; then
+        echo "  skip  ${WS_NAME:-<group>.code-workspace} (codeWorkspace: false)"
+      elif [ "$WS_STAMPED" = yes ]; then
+        echo "  skip  ${WS_NAME:-<group>.code-workspace} (not re-seeded on a refresh; delete-proof)"
       elif [ -z "$WS_NAME" ]; then
         echo "  warn  group '$WS_GROUP' is not a file name; no .code-workspace seeded — fix \`group\` in instance.config.json" >&2
       else

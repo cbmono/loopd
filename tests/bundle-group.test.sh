@@ -206,5 +206,47 @@ for p in _ai-bridge- _loopd-; do
 done
 
 echo
+echo "== 6. the workspace file is seeded on the FIRST stamp only — a deleted one stays deleted =="
+# Seeded whenever absent, a human's `rm Alteos.code-workspace` came back on every
+# /loopd:update. The marker is the stamped SCHEMA, so a hand-written config before the
+# first stamp (§5's `chosen` case) still counts as a first stamp.
+ws_count() { ls "$1"/*.code-workspace 2>/dev/null | wc -l | tr -d ' '; }
+WR="$TMP/g/_loopd-refresh"; mkdir -p "$WR"
+( cd "$WR" && git init -q . ) 2>/dev/null || true
+bash "$BRIDGE_INSTALL" "$WR" >/dev/null 2>&1 </dev/null
+ok "a first stamp seeds the workspace file" "$(ws_count "$WR")" 1
+rm -f "$WR"/*.code-workspace
+WROUT="$(bash "$BRIDGE_INSTALL" "$WR" 2>&1 </dev/null)"
+ok "a refresh after the human deleted it does not re-create it" "$(ws_count "$WR")" 0
+ok "…and says so in one line" \
+  "$(printf '%s\n' "$WROUT" | grep -c 'skip  refresh.code-workspace (not re-seeded on a refresh; delete-proof)')" 1
+printf '{ "hand": "made" }\n' > "$WR/mine.code-workspace"
+WROUT="$(bash "$BRIDGE_INSTALL" "$WR" 2>&1 </dev/null)"
+ok "an existing workspace file is kept byte for byte" "$(cat "$WR/mine.code-workspace")" '{ "hand": "made" }'
+ok "…and reported as kept" "$(printf '%s\n' "$WROUT" | grep -c 'keep  mine.code-workspace (workspace exists)')" 1
+WO="$TMP/g/_loopd-optout"; mkdir -p "$WO"
+printf '{ "org": "fixture-org", "codeWorkspace": false }\n' > "$WO/instance.config.json"
+( cd "$WO" && git init -q . ) 2>/dev/null || true
+WOOUT="$(bash "$BRIDGE_INSTALL" "$WO" 2>&1 </dev/null)"
+ok "codeWorkspace: false seeds nothing, even on a first stamp" "$(ws_count "$WO")" 0
+ok "…and says why" "$(printf '%s\n' "$WOOUT" | grep -c 'skip  optout.code-workspace (codeWorkspace: false)')" 1
+ok "codeWorkspace is a key the machinery knows" \
+  "$(bash "$CHECK" check --instance "$WO" --template "$TPL" 2>&1 | grep -c 'nothing reads.*codeWorkspace')" 0
+
+# NON-VACUITY. The refresh assertion must fail against the old behaviour: a copy of the
+# installer whose stamped-marker check is disabled re-creates the deleted file.
+MUT="$TMP/mutant"; mkdir -p "$MUT"
+cp -R "$(cd "$(dirname "$BRIDGE_INSTALL")/../.." && pwd)/plugin" "$MUT/plugin"
+sed -i.bak 's|^\[ -e "\$TARGET/\$AB_SCHEMA" \] && WS_STAMPED=yes$|: # mutant|' "$MUT/plugin/scripts/init-bundle.sh"
+sed -i.bak 's|^WS_STAMPED="\$WS_PRE_STAMPED"$|WS_STAMPED=no|' "$MUT/plugin/scripts/init-bundle.sh"
+ok "the mutant really disables the marker" "$(grep -c '^: # mutant$' "$MUT/plugin/scripts/init-bundle.sh")" 1
+WM="$TMP/g/_loopd-mutant"; mkdir -p "$WM"
+( cd "$WM" && git init -q . ) 2>/dev/null || true
+bash "$MUT/plugin/scripts/init-bundle.sh" "$WM" >/dev/null 2>&1 </dev/null
+rm -f "$WM"/*.code-workspace
+bash "$MUT/plugin/scripts/init-bundle.sh" "$WM" >/dev/null 2>&1 </dev/null
+ok "…and the mutant re-creates the deleted file (the check above can fail)" "$(ws_count "$WM")" 1
+
+echo
 printf '  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

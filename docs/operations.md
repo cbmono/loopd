@@ -1836,6 +1836,8 @@ repo > *Open in Integrated Terminal* still overrides it, so per-repo terminals w
 setting ships **commented out** in `plugin/seed/bridge.code-workspace`, so an unstamped copy just
 loses the pin rather than pointing terminals at a directory that doesn't exist (which
 blocks terminal launch outright).
+**It is seeded on the bundle's first stamp only** (no stamped `.loopd/SCHEMA.md` yet): a refresh
+never re-creates a deleted one, and `"codeWorkspace": false` in `instance.config.json` seeds none at all.
 
 **`repos/`.** Created and refreshed by **`scripts/link-repos.sh`** (run by `/loopd:init`;
 run it again on its own after cloning a repo — no full refresh needed). It links every
