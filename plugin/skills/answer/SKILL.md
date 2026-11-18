@@ -43,7 +43,7 @@ the record. `more` prints the next stored depth (1, then 2, then 3) and changes 
 - **Exit 5** — `more` is past the stored depths: answer the question yourself, here, from
   the task document and its sources, one level deeper than depth 3. Write nothing.
 - **Exit 1** — relay its one sentence and stop. **Exit 3** — the move was refused,
-  nothing written. **Exit 4** — the answer is recorded but not pushed: relay the line
+  nothing written. **Exit 4** — the answer is recorded, but its commit or push failed: relay the line
   and stop; a rebase it did not start is left alone. **Exit 6** — `more` or `later` could not save
   its record: relay the line and stop. Never force-push, never resolve a rebase for the human.
 
@@ -73,16 +73,16 @@ committed as you. Exit 3 and 4 read as above. It never dispatches: the next tick
    selections are then recorded as ONE answer (step 3).
 3. **Record.** One `answer.sh` call per answer, in the order asked — **never edit the task
    doc yourself** (no `Edit`, perl or sed):
-   - a picked option `k`: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path> Q<n> <k>`;
-   - free text, or a `multiSelect` answer joined into one line (the picked options' texts,
-     `; `-separated): `Write` it to `<bundle root>/tmp/answer.txt` (gitignored), then
+   - a picked option `k` of the stored `### Q<n>` block: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path> Q<n> <k>`;
+   - free text, an option you proposed (no stored block), or a `multiSelect` answer joined
+     into one line (the picked options' texts, `; `-separated): `Write` it to `<bundle root>/tmp/answer.txt` (gitignored), then
      `… answer.sh <task path> Q<n> --text-file <that path>` — never as an argument;
    - an unlabelled entry: `answer.sh --first <task path> …` only while it is the task's first
      open entry; otherwise record nothing and name it in the report, to be asked by name.
    `answer.sh` stamps the moved line `by <login>`, commits it as you and pushes; it bakes
    nothing into the body — the next tick re-bakes it into the criteria (`refine owed`).
    **Any non-zero exit at answer k of N stops here**: report which answers were recorded
-   (exit 4: answer k is committed but not pushed) and which were not, and leave the rest
+   (exit 4: answer k is recorded; relay its line, which says whether the commit or only the push failed) and which were not, and leave the rest
    for a re-ask. Never retry, never edit the doc by hand.
 4. **Report** which tasks became clean (empty `open_questions`). Under `gated` they're
    now promotable by the human; where the project delegates promotion (`AUTONOMY.md`), a later `/loopd:dispatch` tick re-bakes

@@ -13,7 +13,7 @@
 # decision (`more`, `later` or a bare integer only with --text); refused while it still has an
 # open question. `--first` answers its first open question instead, numbered or not.
 # Exit: 0 done · 1 refused, one sentence · 2 usage · 3 the move refused, nothing written
-#       4 committed, but the commit, rebase or push failed — nothing forced · 5 `more` is past the stored depths
+#       4 recorded, but the commit, rebase or push failed — nothing forced · 5 `more` is past the stored depths
 #       6 `more` or `later` could not save its record, nothing printed
 # Reasoning: simple-board/task-002; the blocked route, article-batch-8-hygiene/task-013.
 set -uo pipefail
