@@ -50,6 +50,9 @@
 # this script never runs git. With no --facts it reads presence only. Never on research.
 # It is marked `no design yet` while its project has no design.md (never on research).
 #
+# A task's newest `# Notes` grant (`answer.sh --grant`) trails each of its rows as display-only
+# text: it never adds, drops or reorders a row, and only a typed `prom` or `mrg` acts.
+#
 # GENERIC PLUGIN FILE — no org, repo or path literals.
 set -uo pipefail
 
@@ -225,6 +228,19 @@ $(entries "$1" open_questions || true)
 EOF
 }
 
+grant_of() { # <file> -> " · grant: <text>" for the newest grant line under `# Notes`, or nothing
+  awk '/^# /{n = ($0 ~ /^# Notes[[:space:]]*$/); next}
+       n && /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[^ ]* by [^ ]*: grant — / && $2 >= t {t = $2; g = $0}
+       END {print g}' "$1" | python3 -c '
+import re, sys
+v = sys.stdin.read().strip().split(": grant — ", 1)
+v = v[1].strip() if len(v) == 2 else ""
+if len(v) > 160:
+    cut = v.rfind(" ", 0, 160); v = v[:cut if cut > 0 else 160].rstrip() + " …"
+if v: print(" · grant: " + re.sub(r"([\\`*_\[\]()<>|~!#])", r"\\\1", v), end="")
+' 2>/dev/null || true
+}
+
 # Escaped with the trailers' set, so a link or `**` in a title cannot pose as the row's own.
 title_of() { # <file>
   local t; t="$(fmfirst "$1" title)"
@@ -325,12 +341,12 @@ design_mark() { # <task> <project.md> -> "no design yet · " or nothing
 # greps the `* ` literally.
 row() { printf '* %s **%s** — [%s](%s) · %s\n' "$1" "$2" "$3" "$4" "$5"; }
 
-row_txt=(); row_node=(); row_sev=(); row_design=(); cur_design=""
+row_txt=(); row_node=(); row_sev=(); row_design=(); cur_design=""; cur_grant=""
 node_lines=""; node=0
 sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; do) echo 2 ;; answer) echo 3 ;; review) echo 4 ;;
                         approve) echo 5 ;; merge) echo 6 ;; close) echo 7 ;; continue) echo 8 ;; inputs) echo 9 ;;
                         *) echo 10 ;; esac; }
-add() { row_txt+=("$(row "$@")"); row_node+=("$node"); row_sev+=("$(sev_of "$2")")
+add() { row_txt+=("$(row "$1" "$2" "$3" "$4" "$5$cur_grant")"); row_node+=("$node"); row_sev+=("$(sev_of "$2")")
         [ "$2" = approve ] && row_design+=("$cur_design") || row_design+=(""); }
 # A live task becomes a sort node whether or not it renders a row, so an edge through an
 # in-progress or other-owner task still orders what it separates.
@@ -375,8 +391,10 @@ for pm in "$inst"/projects/*/project.md; do
   cur_design=""; [ -f "$(dirname "$pm")/design.md" ] && cur_design="${pm%project.md}design.md" && cur_design="${cur_design#"$inst"}"
 
   for f in "$(dirname "$pm")"/tasks/*.md; do
+    cur_grant=""
     [ -f "$f" ] || continue
     [ -r "$f" ] || fail3 "cannot read $f"
+    cur_grant="$(grant_of "$f")"
     rel="${f#"$inst"}"
     st="$(fmfirst "$f" status)"; st="${st%% *}"
     ntask=$((ntask + 1))
@@ -440,6 +458,7 @@ EOF
         add "⛔" unblock "$t" "$rel" "${trail:-$DEF_UNBLOCK}" ;;
     esac
   done
+  cur_grant=""
 
   if [ "$held" = 0 ] && grep -q '^decisions:' "$pm" && mine "$pm"; then
     dlist="$(entries "$pm" decisions)" || fail3 "cannot read decisions in ${pm#"$inst"}"

@@ -254,7 +254,7 @@ ok "PM's ledger line names the login it ran as" \
 ok "…the idle line too, via the script" "$(hasf "$PM" 'tick-delta.sh record --idle')" yes
 ok "…and the close keeps it"          "$(hasf "$PM" 'copies its timestamp and its `by <login>`')" yes
 ok "PM stamps a project closeout"     "$(hasf "$S6" 'stamped `by <login>` from')" yes
-ok "/${PN}:answer writes the by"  "$(hasf "$ANSWER" 'then ` by <login> · `')" yes
+ok "/${PN}:answer's by comes from answer.sh" "$(hasf "$ANSWER" '`answer.sh` stamps the moved line `by <login>`')" yes
 ok "…and may actually run the resolver" \
    "$(hasf "$ANSWER" 'scripts/decision-stamp.sh:*)')" yes
 ok "/${PN}:close-project writes the by" "$(hasf "$CLOSE" '`by <login>`, naming the')" yes

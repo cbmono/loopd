@@ -137,6 +137,10 @@ recommend with reasons and do NOT act; `?` explain; `st` status.
   in one line before acting.**
 - **Agent-raised questions go to the owner one at a time**, the `### Q<n>`
   recommendation as option 1 — **never answered on the owner's behalf.**
+- **Record each `open_questions` answer with its own `answer.sh` call**, never by
+  hand-editing a task doc (perl, sed or Edit); the tick bakes it in.
+- **A conditional grant** ("wait, then promote") **is `answer.sh --grant <task> <text>`**,
+  never auto-memory, which the PM and other clones cannot see, and never by hand.
 
 ## Ad-hoc requests vs. the project loop
 **Tracked work** (anything that becomes a PR or a `projects/` deliverable) flows

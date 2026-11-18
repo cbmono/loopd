@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# refine-owed.test.sh — an unrefined draft is owed work: the digest names it and step 2,
-# and `tick-delta.sh check` never reads a clean tree IDLE past it.
+# refine-owed.test.sh — an unrefined draft, or one answered since its last bake, is owed work:
+# the digest names it and step 2, and `tick-delta.sh check` never reads a clean tree IDLE past it.
 #
 # Why (2026-11-17): a new project's five drafts sat unrefined. The digest named step 2 for
 # every draft, refined or not, so a busy tick read it as noise; and `check` had no rule for
@@ -64,6 +64,25 @@ printf -- '---\ntype: Task\nkind: build\nstatus: draft\nacceptance_criteria: [ "
 commit
 ok "a refined build draft with no critique receipt still names step 2" "$(names_step2)" yes
 ok "…without being refine owed"                                     "$(digest | grep -c '^refine owed ')" 0
+refined projects/a/tasks/t2.md; commit
+
+echo "== digest: an answer recorded after the last bake owes a re-refine =="
+answered() { # <task> <notes line> — refined, with one answer stamped 2026-11-02T10:00:00Z
+  refined "$1"
+  python3 - "$INST/$1" "$2" <<'PY2'
+import sys
+p, note = sys.argv[1], sys.argv[2]
+s = open(p).read().replace("---\n\n", 'answered_questions:\n  - "2026-11-02T10:00:00Z by example-user-007 · Q1: which region? --- eu"\n---\n\n', 1)
+open(p, "w").write(s + "\n# Notes\n\n" + note + "\n")
+PY2
+}
+answered projects/a/tasks/t2.md '* 2026-11-01T12:00:00Z triage: no concerns.'; commit
+ok "answer newer than the triage receipt → refine owed"            "$(digest | sed -n 's/^refine owed //p')" projects/a/tasks/t2.md
+ok "…and step 2 is named"                                          "$(names_step2)" yes
+answered projects/a/tasks/t2.md '* 2026-11-02T11:00:00Z refine: baked Q1 into criteria.'; commit
+ok "a refine receipt after the answer → not owed"                  "$(digest | grep -c '^refine owed ')" 0
+answered projects/a/tasks/t2.md '- 2026-11-03T00:00:00Z by example-user-007: grant — then promote'; commit
+ok "a grant is no receipt: the answer is still owed its bake"      "$(digest | grep -c '^refine owed ')" 1
 refined projects/a/tasks/t2.md; commit
 
 echo "== check: a clean tree with an unrefined draft is never IDLE =="

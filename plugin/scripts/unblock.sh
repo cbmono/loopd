@@ -2,10 +2,11 @@
 #
 # unblock.sh — return one `blocked` task to `ready`, carrying the person's decision.
 #
-#   Usage: unblock.sh [--instance DIR] <task-doc> [--decision <words>...]
+#   Usage: unblock.sh [--instance DIR] <task-doc> [--decision | --grant <words>...]
 #
 # No --decision: print last_blocker and the escalation note, write nothing. With one: a
 # `# Notes` line stamped `by <login>`, stall_count 0, status ready, committed as the human.
+# --grant: only the `grant —` line, on any status, committed and pushed the same way.
 # Exit: 0 done · 1 refused, one sentence · 2 usage · 3 a write failed · 4 committed, but the
 #       commit or push failed — nothing forced. Reasoning: interactive-board/task-003.
 set -uo pipefail
@@ -15,11 +16,12 @@ usage() { sed -n '5p' "$0" >&2; exit 2; }
 refuse() { echo "$*"; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "unblock: python3 is required" >&2; exit 2; }
 
-inst="."; doc=""; decided=0; words=()
+inst="."; doc=""; decided=0; kind=unblocked; words=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) [ $# -ge 2 ] || usage; inst="$2"; shift 2 ;;
     --decision) decided=1; shift; words+=("$@"); break ;;
+    --grant)    decided=1; kind=grant; shift; words+=("$@"); break ;;
     -h|--help)  usage ;;
     *) [ -z "$doc" ] || usage; doc="$1"; shift ;;
   esac
@@ -49,7 +51,7 @@ PY
 }
 
 status="$(fm status)"
-[ "$status" = blocked ] || refuse "$task is ${status:-without a status}, not blocked — there is nothing to unblock."
+[ "$kind" = grant ] || [ "$status" = blocked ] || refuse "$task is ${status:-without a status}, not blocked — there is nothing to unblock."
 
 if [ "$decided" -eq 0 ]; then
   echo "$task is blocked."
@@ -63,20 +65,21 @@ decision="$(printf '%s ' ${words[@]+"${words[@]}"} | tr '\n\t\r' '   ' | sed 's/
 
 login="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --self 2>/dev/null)"
 [ -n "$login" ] || login="<unknown>"
-line="- $(date -u +%Y-%m-%dT%H:%M:%SZ) by $login: unblocked — $decision"
+line="- $(date -u +%Y-%m-%dT%H:%M:%SZ) by $login: $kind — $decision"
 
 # Retry-safe: the counter reset is idempotent, and the note and `status: ready` land in ONE
 # atomic replace, so a failure leaves the task blocked with no note and a retry writes it once.
-bash "$HERE/stall-counter.sh" reset "$doc" >/dev/null || { echo "unblock: could not reset the stall counter" >&2; exit 3; }
-python3 - "$doc" "$line" <<'PY' || { echo "unblock: could not write the decision and status: ready" >&2; exit 3; }
+[ "$kind" = grant ] || bash "$HERE/stall-counter.sh" reset "$doc" >/dev/null || { echo "unblock: could not reset the stall counter" >&2; exit 3; }
+python3 - "$doc" "$line" "$kind" <<'PY' || { echo "unblock: could not write the $kind line" >&2; exit 3; }
 import os, re, shutil, sys, tempfile
-path, note = sys.argv[1], sys.argv[2]
+path, note, kind = sys.argv[1], sys.argv[2], sys.argv[3]
 lines = open(path, encoding="utf-8").read().rstrip("\n").split("\n")
 close = next((i for i in range(1, len(lines)) if lines[i] == "---"), 0)
 st = next((i for i in range(1, close) if re.match(r"status:", lines[i])), None)
 if st is None:
     sys.exit(1)
-lines[st] = "status: ready"
+if kind != "grant":
+    lines[st] = "status: ready"
 at = next((i for i, l in enumerate(lines) if l.rstrip() == "# Notes"), None)
 if at is None:
     lines += ["", "# Notes", "", note]
@@ -96,11 +99,12 @@ except BaseException:
         os.unlink(tmp)
     raise
 PY
-echo "unblocked $task: back to ready with your decision — the next tick dispatches it."
+if [ "$kind" = grant ]; then subj="grant on $task"; echo "grant recorded on $task: $decision"
+else subj="unblock $task"; echo "unblocked $task: back to ready with your decision — the next tick dispatches it."; fi
 
 dir="$(cd "$(dirname "$doc")" && pwd -P)"
 root="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || { echo "not a git work tree: nothing committed"; exit 0; }
-( cd "$root" && bash "$HERE/commit-as.sh" human "docs: unblock $task" --stage -- "$dir/$(basename "$doc")" >/dev/null ) ||
+( cd "$root" && bash "$HERE/commit-as.sh" human "docs: $subj" --stage -- "$dir/$(basename "$doc")" >/dev/null ) ||
   { echo "unblock: recorded, but the commit failed — commit it by hand" >&2; exit 4; }
 bash "$HERE/push-commit.sh" "$root"; rc=$?
 [ ! -f "$inst/instance.config.json" ] || ( cd "$inst" && bash "$HERE/write-snapshot.sh" --quiet >/dev/null )

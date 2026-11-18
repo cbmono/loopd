@@ -23,6 +23,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **Each digest line `refine owed <task>` is work this tick owes**: refine it below, or
    name it in the close line as `refine deferred: <task> <reason>`. `check` reads no tick
    IDLE while one stands, so a skipped refine comes back every tick until it is done.
+   On a draft that already has criteria it means an `answered_questions` entry is newer than its
+   last `* <ISO 8601> triage:` or `refine:` line: bake that answer into `acceptance_criteria`,
+   then write one `* <ISO 8601> refine: <what changed>` line under `# Notes`. **No promotion
+   while it stands.**
    **Each `fold owed <task>` line is likewise owed**: bake the answer in and run
    `fold-answers.sh` on it (below), or name it in the close line as
    `fold deferred: <task> <reason>`. Any label counts — `Q<n>:`, `advisor:` or none.
@@ -102,8 +106,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    state where one entry appears in both lists** (exit 4), which is the failure that
    silently blocks a draft forever; exit 3 is a list it could not round-trip. Either way it
    changes nothing and the tick reports the line it printed. Exit 0 having moved nothing
-   means nothing was answered. A **moot** question is answered the same way, with the
-   reason as its answer. `open_questions` still holds only questions awaiting an answer, so
+   means nothing was answered; having moved one, write the `* <ISO 8601> refine:` receipt.
+   A **moot** question is answered the same way, with the reason as its answer. `open_questions` still holds only questions awaiting an answer, so
    a `draft` becomes clean once **that** list empties.
 
    **Never hand-edit either list.** They are quoted YAML lists carrying backticks,
