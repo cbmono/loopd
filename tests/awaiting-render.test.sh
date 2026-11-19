@@ -307,5 +307,62 @@ sed -i.bak 's/: grant — /: granted — /' "$GT"
 bash "$SH" --instance "$G" >/dev/null 2>&1
 ok "mutant: no grant line -> no grant text" "$(grep -c ' · grant: ' "$G/$AB_AWAITING" | tr -d ' ')" 0
 
+# =====================================================================================
+# THE --merge VALUE IS A SCRIPT'S, NOT THE TICK'S: review-next.sh --merge-row prints it only
+# on merge-path, and merge-path needs a live read showing 0 unresolved non-author threads.
+# =====================================================================================
+echo
+echo "== the merge row comes from review-next.sh --merge-row, and open threads leave none =="
+MR="$TMP/mergerow"; inst "$MR"; : > "$MR/$AB_AWAITING"
+printf '{ "org": "demo", "coderabbitRounds": 0, "qaRounds": 0 }\n' > "$MR/instance.config.json"
+task "$MR" task-004-d "Green" in-review '"x"' ''
+MRT="$MR/projects/demo/tasks/task-004-d.md"; RF="$TMP/rnfix"; mkdir -p "$RF" "$TMP/rnbin"
+RH=8f40f2ed565a31e141f5ae54a6935ad0810314c4
+jq -n --arg h "$RH" '{url:"https://github.com/octo/demo/pull/7", number:7, headRefOid:$h, headRefName:"b",
+  baseRefName:"main", headRepository:{name:"demo"}, headRepositoryOwner:{login:"octo"},
+  author:{login:"dev"}, mergeable:"MERGEABLE", mergeStateStatus:"CLEAN", commits:[]}' > "$RF/pr"
+printf '[]\n' > "$RF/empty"; printf '[{"sha":"%s"}]\n' "$RH" > "$RF/commits"
+{ printf '#!/usr/bin/env bash\nRF=%q\n' "$RF"; cat <<'STUB'
+f=""; p=""; for a in "$@"; do [ "$p" = --jq ] && f="$a"; p="$a"; done
+out() { if [ -n "$f" ]; then jq -r "$f" "$1"; else cat "$1"; fi; }
+case " $* " in
+  " pr view "*) out "$RF/pr" ;;
+  *" graphql "*) [ -f "$RF/fail" ] && exit 1; cat "$RF/threads" ;;
+  *"/actions/workflows "*) ;;
+  *"/branches/"*) echo '{}' ;;
+  *"/pulls/7/commits"*) out "$RF/commits" ;;
+  *"/pulls/7/reviews"*|*"/issues/7/comments"*) out "$RF/empty" ;;
+  *) echo "stub: unhandled gh $*" >&2; exit 99 ;;
+esac
+STUB
+} > "$TMP/rnbin/gh"; chmod +x "$TMP/rnbin/gh"
+rthreads() { # <login>... — one unresolved thread per login, read at the head
+  jq -n --arg h "$RH" '{data:{repository:{pullRequest:{headRefOid:$h, reviewThreads:{pageInfo:{hasNextPage:false},
+    nodes:[$ARGS.positional[] | {isResolved:false, path:"a.sh", line:1,
+           comments:{nodes:[{author:{login:.}, url:"https://example.invalid/t", body:"look"}]}}]}}}}}' \
+    --args "$@" > "$RF/threads"
+}
+render_from_rn() { # -> "<review-next exit> <merge rows>"
+  local v rc
+  v="$(PATH="$TMP/rnbin:$PATH" CLAUDE_PROJECT_DIR="$MR" bash "$REPO/plugin/scripts/review-next.sh" 7 \
+       --repo octo/demo --instance "$MR" --merge-row "$MRT" 2>/dev/null)"; rc=$?
+  bash "$SH" --instance "$MR" ${v:+--merge "$v"} >/dev/null 2>&1
+  echo "$rc $(grep -c '^\* 🔀' "$MR/$AB_AWAITING" | tr -d ' ')"
+}
+rthreads
+ok "guard: green, 0 unresolved threads -> exit 0 and one merge row" "$(render_from_rn)" "0 1"
+ok "…linking the PR" "$(grep -c '^\* 🔀 .*\[demo#7\](https://github.com/octo/demo/pull/7)' "$MR/$AB_AWAITING" | tr -d ' ')" 1
+"$(dirname "$0")/../plugin/scripts/review-clearance.sh" --match-reviewer example-user-007 >/dev/null 2>&1
+ok "the other account is in no REVIEWERS row (a second reviewer)" "$?" 1
+rthreads example-user-007 example-user-007
+ok "green, 0 CodeRabbit threads, 2 open from another account -> no merge row" "$(render_from_rn)" "1 0"
+rthreads dev
+ok "the PR author's own open thread -> merge row" "$(render_from_rn)" "0 1"
+: > "$RF/fail"
+ok "the thread read fails -> unknown (exit 2), no merge row" "$(render_from_rn)" "2 0"
+rm -f "$RF/fail"
+ok "step 8 passes the value through: the tick judges no eligibility" \
+   "$(grep -c 'merge-eligibility is this tick.s judgement' "$REPO/plugin/tick-steps/step-8-render.md" | tr -d ' ')/$(grep -c 'review-next.sh <pr> --repo <org>/<repo> --head <sha> --merge-row <task-path>' "$REPO/plugin/tick-steps/step-8-render.md" | tr -d ' ')" 0/1
+
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

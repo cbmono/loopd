@@ -457,6 +457,17 @@ else
   [ "$crc" -eq 0 ] || past_last "$crc" || refuse_clearance "no independent review clears PR $pr" "$crc"
 fi
 
+# --- and no review thread from anyone but the PR author is still open --------
+if "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --head "$head_sha" --threads >/dev/null 2>"$clearance_err"
+then trc=0; else trc=$?; fi
+if [ "$trc" -ne 0 ]; then
+  echo "refuse: PR $pr has review threads not by its author that are unresolved or unread" >&2
+  echo "        (review-clearance.sh --threads exit $trc). Fix or answer each, then resolve it:" >&2
+  sed 's/^/        /' "$clearance_err" >&2
+  if [ "$trc" -eq 6 ]; then exit 1; fi
+  exit 2
+fi
+
 # --- and a body nobody can read is not a merge anybody can decide ------------
 # THE THIRD PRECONDITION, AND IT IS HERE FOR THE SAME REASON THE SECOND ONE IS.
 # `CONVENTIONS.md` requires a PR body of a specific shape — a TL;DR line and the task's

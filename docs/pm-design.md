@@ -915,6 +915,17 @@ and `yolo` alike, decided by `scripts/review-next.sh`. The measurement above sur
 it applies: the "currently processing" placeholder still holds, because a QA round on it
 would run QA on nearly every PR. Exit 5 is still surfaced for the human to fix the reviewer.
 
+**Amended on 2026-11-19: `merge-path` reads every non-author thread.** A merge row surfaced
+on a PR with seven unresolved threads, five from a second review bot that no `REVIEWERS` row
+names, because `merge-path` was decided from round counts and clause 9 counts only the
+clearing reviewer's threads. Now `review-next.sh` answers `merge-path` only when
+`review-clearance.sh --threads` — clause 9's read, counting every account but the PR author —
+answers 0; 6 is an `implementer-round` and an unreadable, truncated or moved-head read holds.
+`required-checks.sh` asks the same read before a yolo merge. The `--merge` value is
+`review-next.sh --merge-row`'s output, so the tick no longer judges eligibility. After the last
+round the fixer resolves what it addressed; no re-review is asked. Step 4 no longer exempts an
+externally cleared head from `pr-verdict-clearance.sh` exit 2 and 4.
+
 <a id="step-5"></a>
 ### Step 5 — why ONE script deletes a worktree, and pruning is still report-only
 

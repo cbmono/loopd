@@ -33,11 +33,15 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    question's recommendation is the script's too, read from its `### Q<n>` block and kept
    beside a trailer that replaces the question text — never restate it. You supply
    two things and nothing else: the trailing sentence of each row, which is per-tick prose
-   by design, and a `--merge` row per PR you have found verified and green at its current
-   head — merge-eligibility is this tick's judgement and is written down nowhere the script
-   can read. A `--merge` value may end in the `##mq1 …`/`##mq2 …` token `merge-queue.sh`
-   printed in step 4; the script turns it into one `> warning:` line under the row, and the
-   renderer itself never calls `gh`. A QA disagreement needs no flag: step 4's
+   by design, and the `--merge` values. **A `--merge` value is never yours to write**: pass
+   exactly what
+   `${CLAUDE_PLUGIN_ROOT}/scripts/review-next.sh <pr> --repo <org>/<repo> --head <sha> --merge-row <task-path>`
+   printed this tick, unchanged, and pass none where it printed nothing (exit 1 not
+   merge-path, exit 2 unknown). It prints only on `merge-path`, which needs a live read
+   showing 0 unresolved review threads not authored by the PR author, and it appends the
+   `##mq1 …`/`##mq2 …` token `merge-queue.sh` prints; the renderer turns that into one
+   `> warning:` line under the row, and itself never calls `gh`. Under `yolo` pass it only
+   where step 4 left the merge to the owner. A QA disagreement needs no flag: step 4's
    `qa-disagreement.sh` wrote it as a `Q<n>` entry, which renders as any `answer` row.
 
    **No `AWAITING.md` ⇒ it writes nothing and exits 0.** **Presence means rewrite, never

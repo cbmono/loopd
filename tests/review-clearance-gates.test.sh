@@ -324,6 +324,46 @@ THREADS_MORE=true
 expect "a second page, but page 1 HAS an open thread -> 6" 6
 
 echo
+echo "== --threads: clause 9's read for every account but the PR author =="
+# What review-next.sh and required-checks.sh gate merge-path on: 0 none · 6 some · 2 unknown.
+# No review is needed for the read, and no REVIEWERS row narrows it.
+thr() { write_pr; LAST_OUT="$("$SCRIPT" 42 --threads "$@" 2>&1)"; THR="rc=$?"; }
+setup "$CLEAN_HEAD"
+thr; ok "no thread at all -> 0" "$THR" rc=0
+says "  ...printing the count" "threads: 0"
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread true 'a.sh' 1 coderabbitai "$CR_URL" 'resolved'
+add_thread false 'b.sh' 2 dev "$CR_URL" 'note to self'
+thr; ok "a resolved thread and the author's own open one -> 0" "$THR" rc=0
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread false 'a.sh' 1 some-colleague "$CR_URL" 'second reviewer'
+add_thread false 'b.sh' 2 some-colleague "$CR_URL" 'second reviewer again'
+thr; ok "0 CodeRabbit threads, 2 open from an account in no table -> 6" "$THR" rc=6
+says "  ...counting both" "threads: 2"
+says "  ...naming each" "b.sh:2"
+expect "...while the clearing call still counts only the reviewer's (unchanged)" 0
+setup "$CLEAN_HEAD"; add_thread false 'a.sh' 1 "" "$CR_URL" 'deleted account'
+thr; ok "a deleted account's open thread counts -> 6" "$THR" rc=6
+setup "$CLEAN_HEAD"; add_thread false 'a.sh' 1 coderabbitai "$CR_URL" 'open'
+thr; ok "no review at all: the read still answers (no 3 first) -> 6" "$THR" rc=6
+setup "$CLEAN_HEAD"; write_pr; : > "$FIX/threads_broken"
+LAST_OUT="$("$SCRIPT" 42 --threads 2>&1)"; ok "the thread read fails -> 2, unknown" "rc=$?" rc=2
+says "  ...printing unknown, never 0" "threads: unknown"
+setup "$CLEAN_HEAD"; add_thread true 'a.sh' 1 coderabbitai "$CR_URL" 'resolved'; THREADS_MORE=true
+thr; ok "over 100 threads, none open on page 1 (truncated) -> 2" "$THR" rc=2
+says "  ...saying why" "truncated"
+setup "$CLEAN_HEAD"; add_thread false 'a.sh' 1 coderabbitai "$CR_URL" 'open'; THREADS_MORE=true
+thr; ok "...an open one on page 1 still answers 6" "$THR" rc=6
+setup "$CLEAN_HEAD"; THREADS_HEAD=0000000000000000000000000000000000000000
+thr; ok "the head moved between the reads -> 2" "$THR" rc=2
+setup "$CLEAN_HEAD"
+thr --head 1111111111111111111111111111111111111111; ok "--head that is not the PR's -> 2" "$THR" rc=2
+thr --head "$CLEAN_HEAD"; ok "--head that is the PR's -> 0" "$THR" rc=0
+thr --reviewer coderabbitai; ok "--threads with --reviewer is a usage error" "$THR" rc=2
+setup "$CLEAN_HEAD"; MERGEABLE=CONFLICTING
+thr; ok "a conflicting PR: the read is not the mergeability question -> 0" "$THR" rc=0
+
+echo
 echo "== the third part of the three-part change: the callers know codes 6 and 8 =="
 # ADDING AN EXIT CODE IS A THREE-PART CHANGE AND THE THIRD PART IS THE ONE THAT BREAKS.
 # `review-rounds.sh` lists the sibling's refusals as `1|3|4|5` over a FATAL `*` default, so

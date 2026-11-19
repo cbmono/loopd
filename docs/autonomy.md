@@ -206,7 +206,9 @@ its hash on disk), which both stops a second QA at the same head and is the only
 verdict under the PR author's own login counts (`SCHEMA.md` clause 8). Open threads at the
 head (exit 6) are an `implementer-round`; once a fix lands after the last round it merges
 with no re-review, bounded by `reviewFixMaxLines` (`AUTONOMY.md` → "Merge after the last
-round").
+round"). Every `merge-path`, that one included, needs a live read showing 0 unresolved
+review threads not authored by the PR author (`review-clearance.sh --threads`: 0 none, 6
+some, 2 unknown); 6 is an `implementer-round` and 2 a `hold`.
 
 **A 7 is tried by a script before it costs an agent.**
 `rebase-pr.sh <pr> --repo <org>/<repo> --dir <clone>` rebases in a throwaway worktree and

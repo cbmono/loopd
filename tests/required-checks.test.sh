@@ -109,10 +109,11 @@ case "${1:-}" in
     # every clearing case in this file red for a reason none of them is about. Default is
     # no threads and no further page.
     if [ "${2:-}" = "graphql" ]; then
-      [ -f "$FIX/threads_json" ] || {
-        printf '{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}\n'
-        exit 0; }
-      cat "$FIX/threads_json"; exit 0
+      [ -f "$FIX/threads_fail" ] && { echo "graphql: 502" >&2; exit 1; }
+      t='{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}'
+      [ -f "$FIX/threads_json" ] && t="$(cat "$FIX/threads_json")"
+      h="$(jq -r '.headRefOid // empty' "$FIX/pr_json" 2>/dev/null)"
+      printf '%s' "$t" | jq -c --arg h "$h" '.data.repository.pullRequest.headRefOid //= $h'; exit 0
     fi
     # Three endpoints reach this stub. review-clearance.sh reads the REVIEW OBJECTS
     # (the only place a review's state and commit_id exist) and the ISSUE COMMENTS —
@@ -384,11 +385,11 @@ expect "required reviewer check + a real review -> clear" 0
 # The same recorded review that clears one case above, with a reviewer-authored thread left
 # unresolved — the sibling answers 6, and this gate refuses. The advice is what makes 6
 # worth its own code: exit 4 means ask for a review, exit 6 means DO NOT, you have one.
-open_thread() { # <isResolved>
-  jq -n --argjson r "$1" \
+open_thread() { # <isResolved> [<login>]
+  jq -n --argjson r "$1" --arg l "${2:-coderabbitai}" \
     '{data:{repository:{pullRequest:{reviewThreads:{pageInfo:{hasNextPage:false},
        nodes:[{isResolved:$r, path:"plugin/scripts/run.sh", line:42,
-               comments:{nodes:[{author:{login:"coderabbitai"},
+               comments:{nodes:[{author:{login:$l},
                                  url:"https://example.invalid/t/1",
                                  body:"`$dir` is unquoted here."}]}}]}}}}}' \
     > "$FIX/threads_json"
@@ -403,6 +404,14 @@ says   "  ...and telling the caller not to re-request" "do NOT request another o
 setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
 reviewer_pr "$CR_CLEAN"; open_thread true
 expect "...and the same fixture with the thread RESOLVED -> clear" 0
+# The yolo self-merge reads every non-author thread, not only the clearing reviewer's.
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_CLEAN"; open_thread false example-user-007
+expect "a real review, a thread from another account left open -> refuse" 1
+says   "  ...naming the --threads refusal" "review-clearance.sh --threads exit 6"
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_CLEAN"; open_thread false dev
+expect "...while the PR author's own open thread clears" 0
 
 # After the last round: where review-clearance refuses, review-next.sh --clear may still
 # clear the review half. A copy of the scripts with that one sibling stubbed, so each case
@@ -440,6 +449,12 @@ setup; checks "pass	Build" "pending	CodeRabbit"; declared "Build"; reviewer_pr "
 next_case "a refusal, pending CodeRabbit check not required, qa-zero -> clear" 0
 setup; checks "pass	Build"; declared "Build"; reviewer_pr ""; echo zero-zero > "$FIX/next"
 next_case "no reviewer signal (exit 3), zero-zero -> clear" 0
+setup; checks "pass	Build"; declared "Build"; reviewer_pr ""; echo zero-zero > "$FIX/next"; : > "$FIX/threads_fail"
+next_case "...the same, the thread read fails -> refuse as unknown" 2
+rm -f "$FIX/threads_fail"
+setup; checks "pass	Build" "fail	CodeRabbit"; declared "Build"; stale_review; echo last-round > "$FIX/next"
+open_thread false
+next_case "last-round, a thread left unresolved -> refuse" 1
 setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build"; reviewer_pr "$CR_CLEAN"; open_thread false
 echo last-round > "$FIX/next"; : > "$FIX/next_calls"
 next_case "exit 6 at the head is never asked about -> refuse" 1
