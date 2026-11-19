@@ -8,8 +8,7 @@
 #                         crd=<n> qad=<n> qlast=<none|pass|fail|unknown> qhead=<yes|no> qrec=<yes|no> thr=<n|unknown>
 #
 # Exit 0 decided · 2 unknown input (stdout still `hold`). The same answer under gated and yolo.
-# `merge-path` needs thr=0 (review-clearance.sh --threads); thr absent or unknown holds.
-# `--merge-row`: the whole build-awaiting.sh --merge value on merge-path, exit 0 · else nothing, 1 or 2.
+# merge-path needs thr=0 (review-clearance.sh --threads; absent/unknown holds). --merge-row: the --merge value, or nothing (1, 2).
 # `--clear` (required-checks.sh): may this head merge with no review at it? 0 yes — prints and
 # records last-round|qa-head|qa-zero|zero-zero — · 1 hold, the reason on stderr · 2 unknown.
 # Reasoning and the table: step-4-advance.md → "What next on a PR" and its merge-path row.

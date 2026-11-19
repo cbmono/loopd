@@ -84,7 +84,6 @@ for row in "zero-zero:rc=8 crr=0 qar=0 crd=0 qad=0" "review:rc=0 $base" \
            "last-round-qa:rc=1 class=declined crr=1 qar=1 crd=0 qad=1 qlast=fail qhead=no" \
            "last-round-coderabbit 4:rc=4 crr=1 qar=1 crd=1 qad=0" "last-round-coderabbit 8:rc=8 crr=1 qar=1 crd=1 qad=0" \
            "last-round-coderabbit 1:rc=1 class=declined crr=1 qar=1 crd=1 qad=0" "last-round-coderabbit 5:rc=5 class=declined crr=2 qar=1 crd=2 qad=0"; do
-  # shellcheck disable=SC2086
   { ok "${row%%:*}: 0 threads -> merge path"                "$(d ${row#*:} thr=0)" merge-path
     ok "${row%%:*}: thread read unknown -> hold"           "$(d ${row#*:} thr=unknown)" hold
     ok "${row%%:*}: 3 open threads -> implementer round"   "$(d ${row#*:} thr=3)" implementer-round
