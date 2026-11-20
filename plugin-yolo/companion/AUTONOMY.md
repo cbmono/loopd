@@ -254,12 +254,14 @@ not be able to talk the loop into a merge. Confirm all six and **abort if any fa
    `scripts/merge-hold.sh check <task-path> --head <verified-sha> --record --repo <org>/<repo> --pr <n>`
    exits **0**, run after step 4 saved this tick's session listing (`agent-sessions.sh save`).
    The task's session reading `working` or `blocked` holds (exit 1); so does an unanswered
-   `Q<n>: do: … hand-off` opened at this head before any merge — one from an earlier head, one
-   opened after a merge and a `do: deploy` entry never do. A listing absent, older than 30
-   minutes or unreadable, a `dead` or unrecognised state, and an unresolved spawn are
-   `session unknown` (exit 2), which holds too. It records one line at the head, re-written
-   each tick, and the hook refuses unless that line says `clear`, is under 30 minutes old and
-   no resume or dispatch note has reached the task since — a resume at the same head included.
+   `Q<n>: do: … hand-off` whose note names this head (or an unread one) — one from an earlier
+   head, one whose PRs had all merged and a `do: deploy` entry never do. A listing absent, older
+   than 30 minutes, unreadable or older than the task's last resume, a `dead` or unrecognised
+   state, and an unresolved spawn are `session unknown` (exit 2), which holds too. Every task
+   naming the PR is read. It records one line at the head, re-written each tick, and the hook
+   refuses unless that line says `clear`, is under 30 minutes old, no resume or dispatch note
+   has reached those tasks since — a resume at the same head included — and no hand-off is
+   open at the head when the hook itself reads them.
 
 Then merge that exact commit:
 `gh pr merge --squash --match-head-commit <verified-sha> <pr>` — which **aborts** on head

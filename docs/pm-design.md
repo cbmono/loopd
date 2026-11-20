@@ -931,19 +931,21 @@ read as clear because nothing else stood behind the exemption.
 **Amended on 2026-11-20: a live role session or a hand-off at the head holds the merge.** The
 same incident's row surfaced while its role agent was mid-round. Liveness exists only in the
 `claude agents` CLI, a 20 s-capped call, so step 4 saves ONE listing after its stop and resume
-sweep (`agent-sessions.sh save`) and `merge-hold.sh` reads it — no CLI call per render and no
+sweep (`agent-sessions.sh save`), with each task's round mark, and `merge-hold.sh` reads it
+— a task whose round moved after the save (a resume in a later review round) reads unknown — no CLI call per render and no
 tick-carried token, which would fail open the tick it is omitted. `working`/`blocked` hold;
 `done`, `gone`, `stopped` and the other terminal words do not, and a task with no session has
 nothing to hold. Unknown holds: no listing, one older than 30 minutes (one tick gap at the
 documented 10-minute cadence plus a long tick), `dead`, an unrecognised word, an unresolved
-spawn. A hand-off holds only when opened at the current head before any merge: every hand-off
+spawn. A hand-off holds only when opened at the current head of a PR not yet merged: every hand-off
 carries the same fixed text and many are post-merge jobs, so holding on all would deadlock the
 merge they wait for — `session-handoff.sh` now stamps each `pr:` URL's head (`merged`,
 `unknown`) on its note, and a note from before that holds nothing. The row is replaced by a
 `⏸ held` row naming the cause. Under `yolo` the hook cannot read the CLI, so the tick records
 the verdict as a receipt line at the head (precondition 6), re-written each tick; the hook
 refuses it once older than 30 minutes or once a resume or dispatch note reached the task, which
-is what catches a resume at the same head.
+is what catches a resume at the same head, and re-reads the task's hand-offs itself, offline.
+Record and verify read every task naming the PR, so a PR two tasks share is judged once.
 
 <a id="step-5"></a>
 ### Step 5 — why ONE script deletes a worktree, and pruning is still report-only

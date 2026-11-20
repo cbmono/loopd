@@ -67,11 +67,10 @@ names_pr() { # <task doc> — 0 when its `pr:` field carries this PR's URL
     | grep -Eq "/$repo_re/pull/$pr([^0-9]|$)"
 }
 
-modes=""; owners=""; docs=()
+modes=""; owners=""
 for task in "$bundle"/projects/*/tasks/*.md; do
   [ -f "$task" ] || continue
   names_pr "$task" || continue
-  docs+=("$task")
   proj="${task%/tasks/*}"
   case " $owners " in *" ${proj##*/} "*) continue ;; esac
   owners="${owners:+$owners }${proj##*/}"
@@ -105,7 +104,7 @@ receipt_err="$("$RECEIPT" verify ${unrev[@]+"${unrev[@]}"} --bundle "$bundle" --
 
 # 5. No live role session and no hand-off open at this head (AUTONOMY.md precondition 6).
 [ -x "$HOLD" ] || refuse "merge-hold.sh is missing, so no session or hand-off hold can be read"
-hold_err="$("$HOLD" verify --bundle "$bundle" --repo "$repo" --pr "$pr" --head "$head" "${docs[@]}" 2>&1)" \
+hold_err="$("$HOLD" verify --bundle "$bundle" --repo "$repo" --pr "$pr" --head "$head" 2>&1)" \
   || refuse "${hold_err:-no merge-hold.sh line for $repo#$pr at $head}"
 
 exit 0

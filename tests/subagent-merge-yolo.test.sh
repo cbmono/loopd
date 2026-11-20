@@ -107,8 +107,8 @@ forget() { rm -rf "${BUNDLE:?}/$AB_RECEIPTS"; }
 HOLD="$REPO/plugin/scripts/merge-hold.sh"
 hold_rec() { # <pr> <sha> [<nwo>] — the line the tick's `merge-hold.sh check --record` writes for the owning task
   local t
-  t="$(grep -lE "^pr:.*/${3:-$NWO}/pull/$1( |\])" "$BUNDLE"/projects/*/tasks/*.md 2>/dev/null | head -n 1)"
-  [ -n "$t" ] || return 0
+  t="$(grep -lE "^pr:.*/${3:-$NWO}/pull/$1( |\])" "$BUNDLE"/projects/*/tasks/*.md 2>/dev/null)"
+  t="${t%%$'\n'*}"; [ -n "$t" ] || return 0
   "$HOLD" check "$t" --head "$2" --instance "$BUNDLE" --record --repo "${3:-$NWO}" --pr "$1" >/dev/null 2>&1
   return 0
 }
@@ -308,7 +308,8 @@ echo
 echo "== a live role session or a hand-off open at the head holds the yolo merge (precondition 6) =="
 YT="$BUNDLE/projects/yolo-proj/tasks/task-001.md"; YSID=22222222-3333-4444-5555-666666666666
 YL="$BUNDLE/$AB_SESSIONS_SAVED"; mkdir -p "$(dirname "$YL")"
-ylisting() { printf '[{"sessionId":"%s","state":"%s","pid":%s}]\n' "$YSID" "$1" "$$" > "$YL"; }
+ylisting() { printf '[{"sessionId":"%s","state":"%s","pid":%s}]\n' "$YSID" "$1" "$$" > "$YL"
+             "$HOLD" marks "$BUNDLE" > "$(dirname "$YL")/marks"; }
 hold_line() { awk '$2 == "merge-hold.sh" { print $1 }' "$BUNDLE/$AB_RECEIPTS/cbmono-ai-bridge__pr226__$SHA"; }
 reason() { "$PERMIT" --bundle "$BUNDLE" --repo "$NWO" --pr 226 --head "$SHA" --role "$PM" 2>&1; }
 project yolo-proj yolo 226
@@ -342,6 +343,22 @@ ylisting working; record_all 226 "$SHA"
 ok "…and the resumed session re-read this tick is live ⇒ refused" "$(hold_line)/$(verdict "$MERGE" "$PM")" "live/deny:subagent_merge"
 ylisting stopped; record_all 226 "$SHA"
 ok "…until its round ends ⇒ permitted" "$(hold_line)/$(verdict "$MERGE" "$PM")" "clear/allow"
+printf '* woke %s\n' "$YSID" >> "$YT"; record_all 226 "$SHA"
+ok "a resume after the listing was saved, recorded after it ⇒ unknown, refused" "$(hold_line)/$(verdict "$MERGE" "$PM")" "unknown/deny:subagent_merge"
+ylisting stopped; record_all 226 "$SHA"
+ok "…until a later save reads it ⇒ permitted" "$(verdict "$MERGE" "$PM")" allow
+cp "$YT" "$YT.keep"
+printf '* 2026-11-20T11:00:00Z needs handed off %s · hand-off 22222222-ccccdddd · Q2 · session stopped by the tick · heads %s\n' "$YSID" "$SHA" >> "$YT"
+sed -i.bak "s/^open_questions: \[ /open_questions: [ \"Q2: do: finish the agent's hand-off 22222222-ccccdddd — its jobs are in AWAITING.md\", /" "$YT"
+ok "a hand-off opened at the head after the clear line ⇒ refused" "$(verdict "$MERGE" "$PM")/$(reason | grep -c 'hand-off is open')" "deny:subagent_merge/1"
+mv "$YT.keep" "$YT"
+mkdir -p "$BUNDLE/projects/yolo-proj/tasks"
+sed 's/^title: .*/title: "a sibling task"/' "$YT" > "$BUNDLE/projects/yolo-proj/tasks/task-002.md"
+ylisting stopped; record_all 226 "$SHA"
+ok "two tasks naming the PR: record and verify read the same set ⇒ permitted" "$(hold_line)/$(verdict "$MERGE" "$PM")" "clear/allow"
+ylisting working; record_all 226 "$SHA"
+ok "…and a live session on either holds it" "$(hold_line)/$(verdict "$MERGE" "$PM")" "live/deny:subagent_merge"
+rm -f "$BUNDLE/projects/yolo-proj/tasks/task-002.md"
 ok "required-checks.sh never reads the session or the hand-off" \
    "$(sed '/^GATE_FILES="$/,/^"$/d' "$REPO/plugin/scripts/required-checks.sh" | grep -cE 'merge-hold|agent-sessions|session-handoff')" 0
 project yolo-proj yolo 226; rm -f "$YL"

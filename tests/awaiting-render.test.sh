@@ -375,8 +375,9 @@ echo
 echo "== a live session or an open hand-off at the head holds the merge row, never silently =="
 SID=11111111-2222-3333-4444-555555555555; LST="$MR/$AB_SESSIONS_SAVED"; mkdir -p "$(dirname "$LST")"
 sleep 0 & DEADPID=$!; wait "$DEADPID"
-listing() { # <state> [<pid>]
-  printf '[{"sessionId":"%s","state":"%s","pid":%s}]\n' "$SID" "$1" "${2:-$$}" > "$LST"; }
+listing() { # <state> [<pid>] — the listing and the round marks, as agent-sessions.sh save writes them
+  printf '[{"sessionId":"%s","state":"%s","pid":%s}]\n' "$SID" "$1" "${2:-$$}" > "$LST"
+  bash "$REPO/plugin/scripts/merge-hold.sh" marks "$MR" > "$(dirname "$LST")/marks"; }
 with_session() { sed -i.bak "s/^status: in-review$/status: in-review\nsession: $SID/" "$MRT"; }
 held_row() { grep '^\* ⏸ \*\*held\*\*' "$MR/$AB_AWAITING"; }
 says_held() { # <why> -> "<held rows>/<why shown>"
@@ -403,6 +404,10 @@ rm -f "$LST"
 ok "no saved listing -> session unknown" "$(render_from_rn)/$(says_held 'session unknown')" "2 0/1/1"
 listing done; touch -t 202001010000 "$LST"
 ok "a stale listing (past one tick gap) -> session unknown" "$(render_from_rn)/$(says_held 'session unknown')" "2 0/1/1"
+listing done; printf '\n* woke %s\n' "$SID" >> "$MRT"
+ok "a resume after the listing was saved -> session unknown" "$(render_from_rn)/$(says_held 'session unknown')" "2 0/1/1"
+listing done
+ok "…until the next save reads it" "$(render_from_rn)" "0 1"
 listing done
 task "$MR" task-004-d "Green" in-review '"x"' ''
 ok "guard: no recorded session, no hand-off -> merge row" "$(render_from_rn)" "0 1"
@@ -427,6 +432,10 @@ handoff "$HQ" "$OH"
 ok "a hand-off from an earlier head -> merge row" "$(render_from_rn)" "0 1"
 handoff "$HQ" merged
 ok "a post-merge hand-off -> merge row" "$(render_from_rn)" "0 1"
+handoff "$HQ" "merged $OH"
+ok "…merged beside an earlier head -> merge row" "$(render_from_rn)" "0 1"
+handoff "$HQ" "merged $RH"
+ok "a sibling PR merged, this PR open at its head -> held" "$(render_from_rn)/$(says_held 'hand-off open')" "1 0/1/1"
 handoff "$HQ"
 ok "a hand-off with no heads field (before this change) -> merge row" "$(render_from_rn)" "0 1"
 handoff "$HQ --- done" "$RH"
@@ -434,8 +443,13 @@ ok "an answered hand-off at the head -> merge row" "$(render_from_rn)" "0 1"
 handoff "Q1: do: deploy the release once merged" "$RH"
 ok "a do: deploy entry -> merge row" "$(render_from_rn)" "0 1"
 task "$MR" task-004-d "Green" in-review '"x"' ''
-ok "step 4 saves the listing after its sweep, and step 8 passes every printed line" \
-   "$(grep -c 'agent-sessions.sh save' "$REPO/plugin/tick-steps/step-4-advance.md" | tr -d ' ')/$(grep -c 'one argument per line' "$REPO/plugin/tick-steps/step-8-render.md" | tr -d ' ')" 1/1
+S4="$REPO/plugin/tick-steps/step-4-advance.md"; S8="$REPO/plugin/tick-steps/step-8-render.md"
+first() { grep -nF -- "$2" "$1" | cut -d: -f1 | sed -n 1p; }
+ok "step 4 saves the listing after its stop and resume sweep" \
+   "$([ "$(first "$S4" 'agent-sessions.sh save')" -gt "$(first "$S4" 'session-handoff.sh --owed <task-path>')" ] \
+      && [ "$(first "$S4" 'agent-sessions.sh save')" -gt "$(first "$S4" 'agent-sessions.sh recorded <the task')" ] && echo after || echo before)" after
+ok "step 8 passes every printed --merge-row line, in order, as one argument" \
+   "$(tr -s '[:space:]' ' ' < "$S8" | grep -cF -- '--merge-row <task-path>` printed this tick, unchanged and in order, one argument per line')" 1
 
 echo
 echo "== --note is repeatable per row, and carries merge-queue.sh's tokens =="

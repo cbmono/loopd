@@ -124,9 +124,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
    **Save the session listing once, after the stop and resume sweep above** —
    `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh save <bundle root>` writes one `claude agents`
-   listing to the ignored `.loopd/.sessions/listing.json`. `merge-hold.sh` reads the task's
-   `session:` from it for the merge row (step 8) and for precondition 6 of a `yolo` merge, so
-   a session this tick resumed reads live. Older than 30 minutes, absent, or removed by exit 2
+   listing to the ignored `.loopd/.sessions/listing.json`, with each task's round mark beside
+   it. `merge-hold.sh` reads the task's `session:` from it for the merge row (step 8) and for
+   precondition 6 of a `yolo` merge, so a session this sweep resumed reads live, and one resumed
+   after the save (a review round below) reads `session unknown` until the next save. Older than 30 minutes, absent, or removed by exit 2
    (the listing unreadable) holds every merge row as `session unknown` until a tick saves one;
    nothing calls the CLI to fill the gap.
 

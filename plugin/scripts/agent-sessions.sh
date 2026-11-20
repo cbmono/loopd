@@ -11,8 +11,9 @@
 #   agent-sessions.sh listing [--timeout <s>] -> that listing's JSON, validated as `states` does;
 #                                                `AB_SESSIONS_LISTING=<file>` makes every mode read
 #                                                one saved listing instead of calling the CLI
-#   agent-sessions.sh save <bundle-root>      -> writes that listing to AB_SESSIONS_SAVED (step 4,
-#                                                after its sweep); exit 2 removes it instead
+#   agent-sessions.sh save <bundle-root>      -> writes that listing to AB_SESSIONS_SAVED and each
+#                                                task's round mark beside it (step 4, after its
+#                                                sweep); exit 2 removes both instead
 #   agent-sessions.sh row <session-id>        -> the one matching `claude agents` row as JSON;
 #                                                exit 1 several match, 3 none
 #   agent-sessions.sh full <session-id>       -> the full session UUID, for either spelling;
@@ -78,7 +79,7 @@
 # tests/resume-full-id.test.sh, tests/blocked-recorded.test.sh and tests/dead-session-sweep.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,72p' "$0" >&2; exit 2; }
+usage() { sed -n '3,73p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 here="$(dirname "${BASH_SOURCE[0]:-$0}")"
@@ -222,8 +223,10 @@ PY
     . "$here/bundle-paths.sh" || exit 2
     f="$2/$AB_SESSIONS_SAVED"; d="$(dirname "$f")"
     mkdir -p "$d" 2>/dev/null && { [ -f "$d/.gitignore" ] || printf '*\n' > "$d/.gitignore"; } || exit 2
-    if AB_SESSIONS_LISTING="" bash "$0" listing > "$f.$$" 2>/dev/null && mv -f "$f.$$" "$f"; then exit 0; fi
-    rm -f "$f.$$" "$f"
+    if AB_SESSIONS_LISTING="" bash "$0" listing > "$f.$$" 2>/dev/null \
+       && bash "$here/merge-hold.sh" marks "$2" > "$d/marks.$$" 2>/dev/null \
+       && mv -f "$d/marks.$$" "$d/marks" && mv -f "$f.$$" "$f"; then exit 0; fi
+    rm -f "$f.$$" "$f" "$d/marks.$$" "$d/marks"
     echo "agent-sessions: no listing saved — merge rows hold as session unknown until one is" >&2
     exit 2
     ;;
@@ -553,6 +556,6 @@ PY
     exit 0
     ;;
 
-  -h|--help) sed -n '3,72p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,73p' "$0"; exit 0 ;;
   *) usage ;;
 esac
