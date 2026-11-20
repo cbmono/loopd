@@ -923,8 +923,10 @@ clearing reviewer's threads. Now `review-next.sh` answers `merge-path` only when
 answers 0; 6 is an `implementer-round` and an unreadable, truncated or moved-head read holds.
 `required-checks.sh` asks the same read before a yolo merge. The `--merge` value is
 `review-next.sh --merge-row`'s output, so the tick no longer judges eligibility. After the last
-round the fixer resolves what it addressed; no re-review is asked. Step 4 no longer exempts an
-externally cleared head from `pr-verdict-clearance.sh` exit 2 and 4.
+round the fixer resolves what it addressed; no re-review is asked. Step 4 still exempts an
+externally cleared head from `pr-verdict-clearance.sh` exit 2 and 4 (the owner kept it,
+2026-11-20), now only behind that same 0-thread read — the incident's "verdict tables unknown"
+read as clear because nothing else stood behind the exemption.
 
 <a id="step-5"></a>
 ### Step 5 — why ONE script deletes a worktree, and pruning is still report-only
