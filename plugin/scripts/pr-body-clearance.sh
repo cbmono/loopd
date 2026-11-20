@@ -211,7 +211,8 @@
 # `AUTONOMY.md` PRECONDITION 3 / `SCHEMA.md` CLAUSE 7 — an unverified criterion blocking
 # clearance is an existing gate with an existing reader, and duplicating it here would
 # give the repo two answers to one question. This file closes the gap that nothing read
-# the body's SHAPE at all.
+# the body's SHAPE at all. It only carries the count: `criteria=M` on its pass receipt line,
+# which `merge-permit.sh` reads, and `--tally`'s line on the merge row.
 #
 # GENERIC PLUGIN FILE — ships inside the `loopd` plugin; nothing to edit per
 # instance. It takes no org, repo or vendor identity: those come from the arguments.

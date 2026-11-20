@@ -947,6 +947,15 @@ refuses it once older than 30 minutes or once a resume or dispatch note reached 
 is what catches a resume at the same head, and re-reads the task's hand-offs itself, offline.
 Record and verify read every task naming the PR, so a PR two tasks share is judged once.
 
+**Amended on 2026-11-21: a criteria `✗` prints on the merge row and holds a yolo merge.** The
+incident's row also hid a 6 ✓ / 4 ✗ tally. `review-next.sh --merge-row` adds
+`pr-body-clearance.sh --tally`'s line as a `--note` — its own parser, never a second regex, and
+`criteria: unknown` when nothing readable comes back. Under `yolo` `AUTONOMY.md` precondition 3
+was unenforced by script; the body's pass receipt now carries `criteria=M`, any other answer is
+a fail line, and `merge-permit.sh` refuses unless it reads `criteria=0`. The hook stays offline
+and the line head-keyed: step 4 re-runs the body gate every tick before a merge, so a same-head
+body edit is re-read in the tick that would merge.
+
 <a id="step-5"></a>
 ### Step 5 — why ONE script deletes a worktree, and pruning is still report-only
 
