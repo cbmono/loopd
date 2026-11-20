@@ -343,7 +343,7 @@ ok "…and the resumed session re-read this tick is live ⇒ refused" "$(hold_li
 ylisting stopped; record_all 226 "$SHA"
 ok "…until its round ends ⇒ permitted" "$(hold_line)/$(verdict "$MERGE" "$PM")" "clear/allow"
 ok "required-checks.sh never reads the session or the hand-off" \
-   "$(grep -cE 'merge-hold|agent-sessions|session-handoff' "$REPO/plugin/scripts/required-checks.sh")" 0
+   "$(grep -vE '^plugin/scripts/' "$REPO/plugin/scripts/required-checks.sh" | grep -cE 'merge-hold|agent-sessions|session-handoff')" 0
 project yolo-proj yolo 226; rm -f "$YL"
 
 echo

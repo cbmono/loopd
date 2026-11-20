@@ -378,7 +378,7 @@ row() { printf '* %s **%s** — [%s](%s) · %s\n' "$1" "$2" "$3" "$4" "$5"; }
 row_txt=(); row_node=(); row_sev=(); row_design=(); cur_design=""; cur_grant=""
 node_lines=""; node=0
 sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; do) echo 2 ;; answer) echo 3 ;; review) echo 4 ;;
-                        approve) echo 5 ;; merge|held) echo 6 ;; close) echo 7 ;; continue) echo 8 ;; inputs) echo 9 ;;
+                        approve) echo 5 ;; merge) echo 6 ;; held) echo 6 ;; close) echo 7 ;; continue) echo 8 ;; inputs) echo 9 ;;
                         *) echo 10 ;; esac; }
 add() { row_txt+=("$(row "$1" "$2" "$3" "$4" "$5$cur_grant")"); row_node+=("$node"); row_sev+=("$(sev_of "$2")")
         [ "$2" = approve ] && row_design+=("$cur_design") || row_design+=(""); }
