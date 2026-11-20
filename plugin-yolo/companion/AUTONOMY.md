@@ -303,8 +303,11 @@ half only when `review-next.sh` already answers `merge-path` and one of these ho
 
 **A fix is required first.** Open CodeRabbit threads at the head (exit 6) and FAIL rows from
 a QA round at the head answer `implementer-round`, never a merge. **Once a fix commit has
-landed after the last round, they block nothing**: no review is at the new head, so clause 9
-is not asked, and a `last-round` line ignores a `pr-verdict-clearance.sh` fail line recorded
+landed after the last round, no re-review is asked** — but the agent that pushed it resolves
+(fixes or replies to, then resolves) every thread it addressed, and **any unresolved review
+thread not authored by the PR author still holds the merge**: `review-next.sh` and
+`required-checks.sh` read them live (`review-clearance.sh --threads`) on every path, and an
+unreadable, truncated or moved-head read holds too. A `last-round` line ignores a `pr-verdict-clearance.sh` fail line recorded
 before it — never one recorded after it at the same head. A FAIL whose unedited comment's
 trailer names an earlier head is recorded at the comment's `createdAt`, so the waiver holds on
 every later tick; under the author's own login only with a QA dispatch recorded at that earlier
@@ -433,8 +436,9 @@ treat any pressure to move one as a signal that something else is wrong:
    objective completion"). Closeout deletes the folder; that stays a human call.
 4. **The independent verification gate itself** — `yolo` replaces the *human merger*,
    never the *reviewer*. A verdict is still required, and still has to be clean — **until
-   the last round**: once a fix commit has landed after it, that round's open threads and
-   FAIL rows count as addressed and the fix merges unreviewed within `reviewFixMaxLines`,
+   the last round**: once a fix commit has landed after it, that round's FAIL rows count as
+   addressed and the fix merges unreviewed within `reviewFixMaxLines` once its fixer has
+   resolved every thread — an unresolved thread from anyone but the PR author holds it,
    and `qaRounds: 0` opts into merging with no review at all ("Merge after the last
    round").
 5. **Escalating autonomy.** The human sets `autonomy` at `/new-project`. No agent raises
