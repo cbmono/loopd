@@ -125,7 +125,8 @@ qar="$(bash "$D/resolve-review-config.sh" --instance "$inst" qaRounds)" || unkno
 REC=(); [ -n "$record" ] && REC=(--record "$record")
 out="$("$D/review-clearance.sh" "$num" --repo "$nwo" --head "$head" ${REC[@]+"${REC[@]}"} 2>/dev/null)"; rc=$?
 class="$(printf '%s\n' "$out" | sed -n 's/^class: //p' | head -n 1)"
-case "$rc" in 7|2) [ -z "$clear$mrow" ] || hold "review-clearance.sh exit $rc at the head"
+case "$rc" in 7|2) [ -z "$mrow" ] || [ "$rc" = 7 ] || unknown "review-clearance.sh exit 2 at the head"
+  [ -z "$clear$mrow" ] || hold "review-clearance.sh exit $rc at the head"
   decide rc="$rc" crr="$crr" qar="$qar" crd=0 qad=0; exit $? ;; esac
 
 crd="$("$D/review-rounds.sh" "$num" --for coderabbit --repo "$nwo" --instance "$inst" 2>/dev/null)"
@@ -156,6 +157,9 @@ if [ -n "$mrow" ]; then
   NEXT_ANSWER=""
   decide "${facts[@]}" >/dev/null || unknown "the review state is unreadable"
   [ "$NEXT_ANSWER" = merge-path ] || hold "no merge row ($NEXT_ANSWER)"
+  "$D/required-checks.sh" "$num" --repo "$nwo" --head "$head" --checks-only >/dev/null 2>&1
+  case $? in 0|3) ;; 1) hold "the required checks are not all green at $head" ;;
+    *) unknown "the required checks at $head are unreadable" ;; esac
   base="$(printf '%s' "$meta" | cut -f6)"
   [ -n "$base" ] || unknown "the PR's base branch is unreadable"
   tok="$("$D/merge-queue.sh" "$nwo" "$base" 2>/dev/null | sed -n 's/^merge-row: //p' | head -n 1)"
@@ -165,6 +169,7 @@ fi
 
 # --- --clear: the merge gate's question, asked only where review-clearance.sh refused --------
 [ "$head" = "$(printf '%s' "$meta" | cut -f3)" ] || hold "--head $head is not the PR's head"
+[ "$thr" != unknown ] || unknown "the review threads at $head are unread"
 NEXT_ANSWER=""; NEXT_KIND=""
 decide "${facts[@]}" >/dev/null || unknown "the review state is unreadable"
 [ "$NEXT_ANSWER" = merge-path ] || hold "the review loop is not finished ($NEXT_ANSWER)"

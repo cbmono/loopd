@@ -48,6 +48,10 @@ case "${1:-}" in
         if grep -q body <<<"$(printf '%s\n' "$@")"; then
           [ -f "$FIX/pr_body_json" ] || { echo "no PR" >&2; exit 1; }
           cat "$FIX/pr_body_json"
+        elif grep -q headRepositoryOwner <<<"$(printf '%s\n' "$@")"; then
+          [ -f "$FIX/pr_json" ] || { echo "no PR" >&2; exit 1; }
+          f=""; p=""; for a in "$@"; do [ "$p" = --jq ] && f="$a"; p="$a"; done
+          jq -r "$f" "$FIX/pr_json"
         elif grep -q author <<<"$(printf '%s\n' "$@")"; then
           [ -f "$FIX/pr_json" ] || { echo "no PR" >&2; exit 1; }
           cat "$FIX/pr_json"
@@ -121,9 +125,11 @@ case "${1:-}" in
     # the artifact that must never be lost is a refusal, which is a comment.
     # required-checks.sh reads the declared list out of the repo's contents.
     case "$*" in
-      */pulls/*/reviews*|*/issues/*/comments*)
+      */pulls/*/reviews*|*/issues/*/comments*|*/pulls/*/commits*)
         src="$FIX/reviews_json"
         case "$*" in */issues/*/comments*) src="$FIX/comments_json" ;; esac
+        case "$*" in */pulls/*/commits*) src="$FIX/commits_json"
+          jq -n --slurpfile p "$FIX/pr_json" '[{sha: $p[0].headRefOid}]' > "$src" 2>/dev/null ;; esac
         [ -f "$src" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
         filter=""; prev=""
         for a in "$@"; do
@@ -147,6 +153,8 @@ esac
 STUB
 chmod +x "$TMP/bin/gh"
 export PATH="$TMP/bin:$PATH"
+mkdir -p "$TMP/bundle"; printf '{}\n' > "$TMP/bundle/instance.config.json"
+export CLAUDE_PROJECT_DIR="$TMP/bundle"
 
 HEAD_SHA="0c2592f7bb98d3de9a7a181d1762dfcaf80785d9"
 HAVE_JQ=0; command -v jq >/dev/null 2>&1 && HAVE_JQ=1
@@ -421,6 +429,7 @@ SC="$TMP/scripts"; cp -R "$(dirname "$SCRIPT")" "$SC"
 cat > "$SC/review-next.sh" <<'STUB'
 #!/usr/bin/env bash
 echo "--clear asked: $*" >> "$FIX/next_calls"
+[ -f "$FIX/next_unknown" ] && { echo "review-next: the review threads at X are unread — holding" >&2; echo hold; exit 2; }
 [ -f "$FIX/next" ] || { echo "review-next: hold for the human: the fix after the last round changes 301 lines since X, over reviewFixMaxLines (300)" >&2; exit 1; }
 cat "$FIX/next"
 STUB
@@ -455,6 +464,10 @@ rm -f "$FIX/threads_fail"
 setup; checks "pass	Build" "fail	CodeRabbit"; declared "Build"; stale_review; echo last-round > "$FIX/next"
 open_thread false
 next_case "last-round, a thread left unresolved -> refuse" 1
+setup; checks "pass	Build" "fail	CodeRabbit"; declared "Build"; stale_review; : > "$FIX/next_unknown"
+next_case "--clear answers unknown (exit 2) -> 2, not the stale-review 1" 2
+says "  ...passing its reason through" "the review threads at X are unread"
+rm -f "$FIX/next_unknown"
 setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build"; reviewer_pr "$CR_CLEAN"; open_thread false
 echo last-round > "$FIX/next"; : > "$FIX/next_calls"
 next_case "exit 6 at the head is never asked about -> refuse" 1
@@ -465,6 +478,18 @@ next_case "the host requires CodeRabbit's own check -> refuse, never waived" 1
 says "  ...saying the host refuses it anyway" "The host itself requires that reviewer's check"
 setup; checks "fail	Build" "pass	CodeRabbit"; declared "Build"; stale_review; echo last-round > "$FIX/next"
 next_case "a red required check still refuses past the last round" 1
+
+echo "== --checks-only: the required set's colours alone (review-next.sh --merge-row) =="
+setup; checks "pass	Build"; declared "Build"; reviewer_pr ""; diff_files plugin/scripts/review-next.sh
+expect "--checks-only: green, a gate-file edit and no review -> 0" 0 --checks-only
+setup; checks "fail	Build"; declared "Build"
+expect "--checks-only: a red required check -> 1" 1 --checks-only
+setup; checks "pending	Build"; declared "Build"
+expect "--checks-only: a pending required check -> 1" 1 --checks-only
+setup
+expect "--checks-only: no required set -> 3" 3 --checks-only
+setup; checks "pass	Build"; declared "Build"; diff_files plugin/scripts/review-next.sh
+expect "...while the full gate still refuses the gate-file edit -> 4" 4
 
 setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
 reviewer_pr "$CR_REFUSAL"

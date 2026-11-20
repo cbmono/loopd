@@ -37,8 +37,10 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    exactly what
    `${CLAUDE_PLUGIN_ROOT}/scripts/review-next.sh <pr> --repo <org>/<repo> --head <sha> --merge-row <task-path>`
    printed this tick, unchanged, and pass none where it printed nothing (exit 1 not
-   merge-path, exit 2 unknown). It prints only on `merge-path`, which needs a live read
-   showing 0 unresolved review threads not authored by the PR author, and it appends the
+   merge-path or a required check not green, exit 2 unknown). It prints only on
+   `merge-path`, which needs a live read showing 0 unresolved review threads not authored by
+   the PR author, and only once `required-checks.sh --checks-only` finds every required
+   check green at the head (or no required set at all); it appends the
    `##mq1 …`/`##mq2 …` token `merge-queue.sh` prints; the renderer turns that into one
    `> warning:` line under the row, and itself never calls `gh`. Under `yolo` pass it only
    where step 4 left the merge to the owner. A QA disagreement needs no flag: step 4's

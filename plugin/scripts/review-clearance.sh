@@ -942,13 +942,18 @@ check_clause9() {
   # DROPPED: a file-level finding would clear the gate. Measured on the first run of
   # tests/review-clearance-gates.test.sh's clause-9 section. `// "-"` keeps the column, and a
   # null `author` (a deleted account) is likewise `""` rather than absent.
+  # An empty login or URL is written `-`: IFS tab is whitespace, so `read` would merge an
+  # empty field into its neighbour and shift the body into the URL column.
+  printf '%s' "$json" | jq -e '.data.repository.pullRequest.reviewThreads.nodes
+      | type == "array" and all(.[]; type == "object" and (.isResolved | type) == "boolean")' \
+      >/dev/null 2>&1 || { clause9_state="unreadable"; return; }
   clause9_threads="$(printf '%s' "$json" | jq -r '
-      .data.repository.pullRequest.reviewThreads.nodes[]?
+      .data.repository.pullRequest.reviewThreads.nodes[]
       | select(.isResolved == false)
       | [ (.path // "(file-level)"),
           ((.line // "-") | tostring),
-          (.comments.nodes[0].author.login // ""),
-          (.comments.nodes[0].url // ""),
+          ((.comments.nodes[0].author.login // "") | if . == "" then "-" else . end),
+          ((.comments.nodes[0].url // "") | if . == "" then "-" else . end),
           ((.comments.nodes[0].body // "") | split("\n") | map(select(length>0))[0] // "")
         ] | @tsv' 2>/dev/null)" || { clause9_state="unreadable"; return; }
 
@@ -969,6 +974,7 @@ check_clause9() {
   open_n=""
   while IFS="$(printf '\t')" read -r p_ l_ who url_ first_; do
     [ -n "$p_" ] || continue
+    [ "$who" != - ] || who=""
     [ -n "$who" ] || [ -n "$threads_mode" ] || continue
     if [ -n "$threads_mode" ]; then :
     elif [ -n "$check_owners" ]; then
@@ -979,7 +985,7 @@ check_clause9() {
       match_reviewer "$who" || continue
     fi
     [ -z "$self_qa" ] && [ "$(norm "$who")" = "$(norm "$pr_author")" ] && continue
-    open_n="${open_n}${p_}	${l_:--}	${who}	${url_}	${first_}
+    open_n="${open_n}${p_}	${l_:--}	${who:--}	${url_:--}	${first_}
 "
   done <<EOF
 $clause9_threads

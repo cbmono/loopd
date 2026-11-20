@@ -322,11 +322,13 @@ jq -n --arg h "$RH" '{url:"https://github.com/octo/demo/pull/7", number:7, headR
   baseRefName:"main", headRepository:{name:"demo"}, headRepositoryOwner:{login:"octo"},
   author:{login:"dev"}, mergeable:"MERGEABLE", mergeStateStatus:"CLEAN", commits:[]}' > "$RF/pr"
 printf '[]\n' > "$RF/empty"; printf '[{"sha":"%s"}]\n' "$RH" > "$RF/commits"
+printf '[{"name":"CI","bucket":"pass"}]\n' > "$RF/checks"
 { printf '#!/usr/bin/env bash\nRF=%q\n' "$RF"; cat <<'STUB'
 f=""; p=""; for a in "$@"; do [ "$p" = --jq ] && f="$a"; p="$a"; done
 out() { if [ -n "$f" ]; then jq -r "$f" "$1"; else cat "$1"; fi; }
 case " $* " in
   " pr view "*) out "$RF/pr" ;;
+  " pr checks "*) out "$RF/checks" ;;
   *" graphql "*) [ -f "$RF/fail" ] && exit 1; cat "$RF/threads" ;;
   *"/actions/workflows "*) ;;
   *"/branches/"*) echo '{}' ;;
@@ -358,6 +360,9 @@ rthreads example-user-007 example-user-007
 ok "green, 0 CodeRabbit threads, 2 open from another account -> no merge row" "$(render_from_rn)" "1 0"
 rthreads dev
 ok "the PR author's own open thread -> merge row" "$(render_from_rn)" "0 1"
+rthreads; printf '[{"name":"CI","bucket":"fail"}]\n' > "$RF/checks"
+ok "0 threads but a required check red -> no merge row" "$(render_from_rn)" "1 0"
+printf '[{"name":"CI","bucket":"pass"}]\n' > "$RF/checks"
 : > "$RF/fail"
 ok "the thread read fails -> unknown (exit 2), no merge row" "$(render_from_rn)" "2 0"
 rm -f "$RF/fail"

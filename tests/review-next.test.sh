@@ -121,6 +121,7 @@ case " $* " in
 esac
 case "${1:-} ${2:-}" in
   "pr view") src="$FIX/pr_json" ;;
+  "pr checks") src="$FIX/checks_json"; [ -f "$src" ] || printf '[{"name":"CI","bucket":"pass"}]\n' > "$src" ;;
   "api graphql") [ -f "$FIX/threads_fail" ] && exit 1
                 t='{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}'
                 [ -f "$FIX/threads_json" ] && t="$(cat "$FIX/threads_json")"
@@ -350,6 +351,14 @@ ok "…--merge-row prints the whole --merge value" "$(mrow | tr '\n' ' ')" \
 ok "…carrying merge-queue.sh's merge-row token when it has one" "$(mrow | tr '\n' ' ')" \
    "projects/p/tasks/task-001-x.md=[widgets#42](https://github.com/acme/widgets/pull/42) ##mq2 branch main not found in acme/widgets rc=0 "
 rm -f "$FIX/no_branch"
+printf '[{"name":"CI","bucket":"fail"}]\n' > "$FIX/checks_json"
+ok "…a required check not green -> no merge row (exit 1)" "$(mrow)" rc=1
+printf '[{"name":"CI","bucket":"pending"}]\n' > "$FIX/checks_json"
+ok "…pending is not green either" "$(mrow)" rc=1
+rm -f "$FIX/checks_json"
+"$REAL_JQ" '.mergeable = "UNKNOWN"' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
+ok "…review-clearance exit 2 (mergeability unknown) -> exit 2, never 1" "$(mrow)" rc=2
+"$REAL_JQ" '.mergeable = "MERGEABLE"' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
 threads "$(thread coderabbitai true)" "$(thread example-user-007 false)" "$(thread example-user-007 false)"
 ok "green, 0 CodeRabbit threads, 2 open from another account -> no merge path" "$(live)" implementer-round
 ok "…and no merge row" "$(mrow)" rc=1
@@ -373,7 +382,12 @@ ok "guard: 0/0, the read answers 0 -> merge path" "$(live)" merge-path
 : > "$FIX/threads_fail"
 ok "0/0, the thread read fails -> hold, never merge path" "$(live)" hold
 ok "…--merge-row prints nothing and exits 2" "$(mrow)" rc=2
-ok "…--clear refuses" "$(clear)" rc=1
+ok "…--clear answers unknown (exit 2)" "$(clear | tail -n 1)" rc=2
+rm -f "$FIX/threads_fail"
+reviewed_at_x; cmpf ahead "$(f modified a.sh 6 2)"
+ok "guard: the real last-round waiver path clears" "$(clear | tr '\n' ' ')" "last-round rc=0 "
+: > "$FIX/threads_fail"
+ok "…the same waiver path, the thread read fails -> exit 2, no line" "$(clear | tail -n 1)/$(grep -c '^last-round ' "$RCPT" 2>/dev/null || true)" rc=2/1
 rm -f "$FIX/threads_fail"
 
 echo

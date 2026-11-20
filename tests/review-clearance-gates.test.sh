@@ -327,6 +327,10 @@ echo
 echo "== --threads: clause 9's read for every account but the PR author =="
 # What review-next.sh and required-checks.sh gate merge-path on: 0 none · 6 some · 2 unknown.
 # No review is needed for the read, and no REVIEWERS row narrows it.
+ok() { # <name> <actual> <expected>
+  if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
+  else printf '  FAIL  %-58s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi
+}
 thr() { write_pr; LAST_OUT="$("$SCRIPT" 42 --threads "$@" 2>&1)"; THR="rc=$?"; }
 setup "$CLEAN_HEAD"
 thr; ok "no thread at all -> 0" "$THR" rc=0
@@ -344,6 +348,22 @@ says "  ...naming each" "b.sh:2"
 expect "...while the clearing call still counts only the reviewer's (unchanged)" 0
 setup "$CLEAN_HEAD"; add_thread false 'a.sh' 1 "" "$CR_URL" 'deleted account'
 thr; ok "a deleted account's open thread counts -> 6" "$THR" rc=6
+LONG="$(printf 'ctl\033[2Jbody %0130d' 0)"
+setup "$CLEAN_HEAD"; add_thread false 'a.sh' 1 "" "$CR_URL" "$LONG"
+thr; line="$(grep -F '| a.sh:1' <<<"$LAST_OUT")"; body="$(grep -A1 -F '| a.sh:1' <<<"$LAST_OUT" | tail -n 1)"
+ok "a deleted account's thread keeps the URL in its column" "$([[ "$line" == *"(-)  $CR_URL" ]] && echo yes || echo "$line")" yes
+ok "…its body is printed with no control byte" "$(grep -c "$(printf '\033')" <<<"$body" | tr -d ' ')" 0
+ok "…and cut to 120 characters" "$(printf '%s' "${body#*|   }" | wc -c | tr -d ' ')" 120
+nodes_case() { # <name> <reviewThreads.nodes JSON> <want rc>
+  setup "$CLEAN_HEAD"; write_pr
+  "$REAL_JQ" --argjson n "$2" '.data.repository.pullRequest.reviewThreads.nodes = $n' "$FIX/threads_json" > "$FIX/t" \
+    && mv "$FIX/t" "$FIX/threads_json"
+  "$SCRIPT" 42 --threads >/dev/null 2>&1; ok "$1" "rc=$?" "$3"
+}
+nodes_case "reviewThreads.nodes null -> 2, never 0" null rc=2
+nodes_case "a null entry in nodes -> 2" '[null]' rc=2
+nodes_case "an entry with no Boolean isResolved -> 2" '[{"path":"a.sh"}]' rc=2
+nodes_case "an explicit empty list -> 0" '[]' rc=0
 setup "$CLEAN_HEAD"; add_thread false 'a.sh' 1 coderabbitai "$CR_URL" 'open'
 thr; ok "no review at all: the read still answers (no 3 first) -> 6" "$THR" rc=6
 setup "$CLEAN_HEAD"; write_pr; : > "$FIX/threads_broken"
