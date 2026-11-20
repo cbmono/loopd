@@ -5,7 +5,9 @@
 #
 #   Usage: build-awaiting.sh [--instance DIR] [--out FILE]
 #                            [--trailer <task-path>=<sentence>]...
-#                            [--merge   <task-path>=<pr markdown link>[ <merge-queue.sh merge-row token>]]...
+#                            [--merge   <task-path>=<pr markdown link>]...
+#                            [--held    <task-path>=<session-live|hand-off|session-unknown> <pr markdown link>]...
+#                            [--note    <task-path>=<one line under that task's merge or held row>]...
 #                            [--facts   <task-path>=<verified-facts.sh verdict>]...
 #
 # Exit: 0 rendered (or no AWAITING.md, which is the off switch) · 2 usage · 3 a path it
@@ -25,7 +27,7 @@
 #
 # ROW ORDER IS AN EXECUTION ORDER, read top to bottom, so it is sorted after the walk rather
 # than left in glob order: (1) a task's blocker above it, via `depends_on`, transitively
-# through tasks that have no row; (2) then grant, unblock, do, answer, review, approve, merge, close, continue, inputs;
+# through tasks that have no row; (2) then grant, unblock, do, answer, review, approve, merge and held, close, continue, inputs;
 # (3) then glob order, so an unchanged bundle renders the same page. A cycle or a reference
 # to no live task drops only that edge. The sort reorders `row()`'s output and never
 # composes or drops a row: a failed sort renders glob order.
@@ -58,11 +60,12 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
-usage() { echo "Usage: $(basename "$0") [--instance DIR] [--out FILE] [--trailer PATH=TEXT]... [--merge PATH=LINK]... [--facts PATH=VERDICT]..." >&2; exit 2; }
+usage() { echo "Usage: $(basename "$0") [--instance DIR] [--out FILE] [--trailer PATH=TEXT]... [--merge PATH=LINK]... [--held PATH=WHY LINK]... [--note PATH=TEXT]... [--facts PATH=VERDICT]..." >&2; exit 2; }
 fail3() { echo "build-awaiting: $1" >&2; exit 3; }
 
 inst="$PWD"; out=""
 trailer_paths=(); trailer_texts=(); merge_paths=(); merge_links=(); facts_paths=(); facts_verdicts=()
+hold_paths=(); hold_vals=(); note_paths=(); note_texts=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) [ $# -ge 2 ] || usage; inst="$2"; shift 2 ;;
@@ -73,6 +76,12 @@ while [ $# -gt 0 ]; do
     --merge)    [ $# -ge 2 ] || usage
                 case "$2" in *=*) ;; *) usage ;; esac
                 merge_paths+=("${2%%=*}");   merge_links+=("${2#*=}");   shift 2 ;;
+    --held)     [ $# -ge 2 ] || usage
+                case "${2#*=}" in session-live\ ?*|hand-off\ ?*|session-unknown\ ?*) ;; *) usage ;; esac
+                hold_paths+=("${2%%=*}");    hold_vals+=("${2#*=}");     shift 2 ;;
+    --note)     [ $# -ge 2 ] || usage
+                case "$2" in *=?*) ;; *) usage ;; esac
+                note_paths+=("${2%%=*}");    note_texts+=("$(printf '%s' "${2#*=}" | tr -d '\r\n')"); shift 2 ;;
     --facts)    [ $# -ge 2 ] || usage
                 case "${2#*=}" in verified|missing|stale|unknown|research) ;; *) usage ;; esac
                 facts_paths+=("${2%%=*}");   facts_verdicts+=("${2#*=}"); shift 2 ;;
@@ -93,6 +102,8 @@ norm() { # <path>
 for ((_i = 0; _i < ${#trailer_paths[@]}; _i++)); do trailer_paths[$_i]="$(norm "${trailer_paths[$_i]}")"; done
 for ((_i = 0; _i < ${#merge_paths[@]};   _i++)); do merge_paths[$_i]="$(norm "${merge_paths[$_i]}")"; done
 for ((_i = 0; _i < ${#facts_paths[@]};   _i++)); do facts_paths[$_i]="$(norm "${facts_paths[$_i]}")"; done
+for ((_i = 0; _i < ${#hold_paths[@]};    _i++)); do hold_paths[$_i]="$(norm "${hold_paths[$_i]}")"; done
+for ((_i = 0; _i < ${#note_paths[@]};    _i++)); do note_paths[$_i]="$(norm "${note_paths[$_i]}")"; done
 
 # ABSENCE IS THE OFF SWITCH, and it is the script's rule rather than the caller's — the
 # same shape write-snapshot.sh uses for SNAPSHOT.json. Never create the file.
@@ -284,9 +295,14 @@ waiting_inputs() { # <project.md>
   [ $? -eq 1 ]
 }
 
-lookup() { # <path> <"trailer"|"merge"|"facts">  -> prints the value, or nothing
+lookup() { # <path> <"trailer"|"merge"|"held"|"facts">  -> prints the value, or nothing
   local p="$1" kind="$2" i n
-  if [ "$kind" = facts ]; then
+  if [ "$kind" = held ]; then
+    n=${#hold_paths[@]}
+    for ((i = 0; i < n; i++)); do
+      [ "${hold_paths[$i]}" = "$p" ] && { printf '%s' "${hold_vals[$i]}"; return; }
+    done
+  elif [ "$kind" = facts ]; then
     n=${#facts_paths[@]}
     for ((i = 0; i < n; i++)); do
       [ "${facts_paths[$i]}" = "$p" ] && { printf '%s' "${facts_verdicts[$i]}"; return; }
@@ -304,17 +320,35 @@ lookup() { # <path> <"trailer"|"merge"|"facts">  -> prints the value, or nothing
   fi
 }
 
-# A merge-queue.sh `merge-row:` token rides the --merge value; it becomes one line under the row.
-mq_link=""; mq_warn=""
-mq_split() { # <--merge value> -> sets mq_link and mq_warn
-  local v="${1%% ##mq[12] *}" w; mq_warn=""; w="${1#"$v"}"
-  case "$w" in
-    ' ##mq1 '*) w="${w# ##mq1 }"; mq_warn="a ${w#* } run is in progress on ${w%% *}; merging now cancels it" ;;
-    ' ##mq2 '*) mq_warn="concurrency unknown: ${w# ##mq2 }" ;;
-  esac
-  [ -z "$mq_warn" ] || mq_warn="
-  > warning: $(printf '%s' "$mq_warn" | tr -d '\r\n')"
-  mq_link="$v"
+# Every --note for a task, in the order given, one `  > ` line each under its merge or held row;
+# a merge-queue.sh `merge-row:` token (`##mq1`/`##mq2`) reads as its warning.
+notes_of() { # <file> <rel>
+  local i n w
+  for ((i = 0; i < ${#note_paths[@]}; i++)); do
+    [ "${note_paths[$i]}" = "$1" ] || [ "${note_paths[$i]}" = "$2" ] || continue
+    n="${note_texts[$i]}"
+    case "$n" in
+      '##mq1 '*) w="${n#\#\#mq1 }"; n="warning: a ${w#* } run is in progress on ${w%% *}; merging now cancels it" ;;
+      '##mq2 '*) n="warning: concurrency unknown: ${n#\#\#mq2 }" ;;
+    esac
+    printf '\n  > %s' "$n"
+  done
+}
+
+merge_rows() { # <file> <rel> <title> <trailer> — the 🔀 merge row, or the ⏸ held row in its place
+  local m h why
+  m="$(lookup "$1" merge)"; [ -n "$m" ] || m="$(lookup "$2" merge)"
+  h="$(lookup "$1" held)"; [ -n "$h" ] || h="$(lookup "$2" held)"
+  if [ -n "$h" ]; then
+    case "${h%% *}" in
+      session-live) why="role session live — its round is still running; the row returns once it ends" ;;
+      hand-off) why="hand-off open — finish its do row first" ;;
+      *) why="session unknown — no fresh session listing (agent-sessions.sh save); the next tick reads it again" ;;
+    esac
+    add "⏸" held "$3" "$2" "${h#* } merge held: $why${4:+ · $4}$(notes_of "$1" "$2")"
+  elif [ -n "$m" ]; then
+    add "🔀" merge "$3" "$2" "$m${4:+ · $4}$(notes_of "$1" "$2")"
+  fi
 }
 
 facts_mark() { # <file> <rel> -> "unverified · ", "stale · " or nothing
@@ -344,7 +378,7 @@ row() { printf '* %s **%s** — [%s](%s) · %s\n' "$1" "$2" "$3" "$4" "$5"; }
 row_txt=(); row_node=(); row_sev=(); row_design=(); cur_design=""; cur_grant=""
 node_lines=""; node=0
 sev_of() { case "$1" in grant) echo 0 ;; unblock) echo 1 ;; do) echo 2 ;; answer) echo 3 ;; review) echo 4 ;;
-                        approve) echo 5 ;; merge) echo 6 ;; close) echo 7 ;; continue) echo 8 ;; inputs) echo 9 ;;
+                        approve) echo 5 ;; merge|held) echo 6 ;; close) echo 7 ;; continue) echo 8 ;; inputs) echo 9 ;;
                         *) echo 10 ;; esac; }
 add() { row_txt+=("$(row "$1" "$2" "$3" "$4" "$5$cur_grant")"); row_node+=("$node"); row_sev+=("$(sev_of "$2")")
         [ "$2" = approve ] && row_design+=("$cur_design") || row_design+=(""); }
@@ -411,10 +445,8 @@ for pm in "$inst"/projects/*/project.md; do
     mine "$f" || continue
     t="$(title_of "$f")"
     trail="$(lookup "$f" trailer)"; [ -n "$trail" ] || trail="$(lookup "$rel" trailer)"
-    mlink="$(lookup "$f" merge)"; [ -n "$mlink" ] || mlink="$(lookup "$rel" merge)"
-    mq_split "$mlink"
     if [ "$held" = 1 ]; then
-      [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${mq_link}${trail:+ · $trail}$mq_warn"
+      merge_rows "$f" "$rel" "$t" "$trail"
       continue
     fi
 
@@ -444,7 +476,7 @@ EOF
     if [ -n "$qs" ] && [ -n "$trail" ]; then add "❓" answer "$t" "$rel" "$trail${qr:+ ($qr)}"
     elif [ -n "$qs" ]; then add "❓" answer "$t" "$rel" "$qs"; fi
 
-    [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${mq_link}${trail:+ · $trail}$mq_warn"
+    merge_rows "$f" "$rel" "$t" "$trail"
 
     case "$st" in
       draft)

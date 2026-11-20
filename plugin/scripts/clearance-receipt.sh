@@ -5,6 +5,7 @@
 #
 #   clearance-receipt.sh record <script> [--kind internal|external] [--fail [--at YYYY-MM-DDTHH:MM:SSZ]] --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh record review-next.sh --unreviewed last-round|qa-head|qa-zero|zero-zero --repo O/R --pr N --head SHA [--bundle DIR]
+#   clearance-receipt.sh record merge-hold.sh --hold clear|live|hand-off|unknown --mark M --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh verify [--unreviewed] --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh path   --repo O/R --pr N --head SHA [--bundle DIR]
 #
@@ -24,12 +25,12 @@ CHECKER="pr-verdict-clearance.sh"
 KEEP_DAYS=14
 
 usage() {
-  sed -n '5,10p' "$0" | sed 's/^# \{0,1\}//' >&2
+  sed -n '5,11p' "$0" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
 mode="${1:-}"; [ $# -gt 0 ] && shift
-script=""; kind=""; result=pass; unrev=""; stamp=""
+script=""; kind=""; result=pass; unrev=""; stamp=""; mark=""
 case "$mode" in
   record) script="${1:-}"; [ -n "$script" ] || usage; shift ;;
   verify|path) ;;
@@ -54,10 +55,14 @@ while [ $# -gt 0 ]; do
         verify) unrev=yes; shift ;;
         *) usage ;;
       esac ;;
+    --hold)   [ "$mode" = record ] && [ "$script" = merge-hold.sh ] || usage
+              case "${2:-}" in clear|live|hand-off|unknown) result="$2" ;; *) usage ;; esac; shift 2 ;;
+    --mark)   [ "$mode" = record ] && [ $# -ge 2 ] || usage; mark="$(printf '%s' "$2" | tr -c 'A-Za-z0-9.,-' '-')"; shift 2 ;;
     -h|--help) usage ;;
     *) usage ;;
   esac
 done
+[ "$script" != merge-hold.sh ] || case "$result" in clear|live|hand-off|unknown) [ -n "$mark" ] ;; *) false ;; esac || usage
 
 # Only a fail line may carry --at: a backdated pass or a forward-dated waiver line clears.
 [ -z "$stamp" ] || [ "$result" = fail ] || usage
@@ -152,10 +157,10 @@ EOF
     {
       printf 'repo %s\npr %s\nhead %s\n' "$repo" "$pr" "$head"
       # One line per script AND kind: an internal run at this head cannot erase an external one.
-      [ -f "$file" ] && awk '$1 ~ /^(pass|fail|last-round|qa-head|qa-zero|zero-zero)$/ &&
+      [ -f "$file" ] && awk '$1 ~ /^(pass|fail|last-round|qa-head|qa-zero|zero-zero|clear|live|hand-off|unknown)$/ &&
         !($2 == s && ($4 == "external" ? "external" : "internal") == k)' \
         s="$script" k="${kind:-internal}" "$file"
-      printf '%s %s %s%s\n' "$result" "$script" "$stamp" "${kind:+ $kind}"
+      printf '%s %s %s%s\n' "$result" "$script" "$stamp" "${kind:+ $kind}${mark:+ $mark}"
     } > "$tmp" 2>/dev/null && mv -f "$tmp" "$file" 2>/dev/null
     rm -f "$tmp" 2>/dev/null
     find "$dir" -type f -mtime "+$KEEP_DAYS" -delete 2>/dev/null

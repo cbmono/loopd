@@ -8,7 +8,8 @@
 #                         crd=<n> qad=<n> qlast=<none|pass|fail|unknown> qhead=<yes|no> qrec=<yes|no> thr=<n|unknown>
 #
 # Exit 0 decided · 2 unknown input (stdout still `hold`). The same answer under gated and yolo.
-# merge-path needs thr=0 (review-clearance.sh --threads; absent/unknown holds). --merge-row: the --merge value, or nothing (1, 2).
+# merge-path needs thr=0 (review-clearance.sh --threads; absent/unknown holds). --merge-row: build-awaiting.sh's
+# arguments, one per line — `--merge`, `--held` (merge-hold.sh: 1 live or hand-off, 2 unknown) and `--note` — or nothing (1, 2).
 # `--clear` (required-checks.sh): may this head merge with no review at it? 0 yes — prints and
 # records last-round|qa-head|qa-zero|zero-zero — · 1 hold, the reason on stderr · 2 unknown.
 # Reasoning and the table: step-4-advance.md → "What next on a PR" and its merge-path row.
@@ -160,10 +161,20 @@ if [ -n "$mrow" ]; then
   "$D/required-checks.sh" "$num" --repo "$nwo" --head "$head" --checks-only >/dev/null 2>&1
   case $? in 0|3) ;; 1) hold "the required checks are not all green at $head" ;;
     *) unknown "the required checks at $head are unreadable" ;; esac
+  link="[${nwo##*/}#$num]($url)"
+  why="$("$D/merge-hold.sh" check "$mrow" --head "$head" --instance "$inst" 2>/dev/null)"; hrc=$?
+  case "$why" in
+    clear) ;;
+    "role session live") printf -- '--held\n%s=session-live %s\n' "$mrow" "$link"; exit 1 ;;
+    "hand-off open") printf -- '--held\n%s=hand-off %s\n' "$mrow" "$link"; exit 1 ;;
+    "session unknown") printf -- '--held\n%s=session-unknown %s\n' "$mrow" "$link"; exit 2 ;;
+    *) unknown "merge-hold.sh exit $hrc for $mrow" ;;
+  esac
   base="$(printf '%s' "$meta" | cut -f6)"
   [ -n "$base" ] || unknown "the PR's base branch is unreadable"
   tok="$("$D/merge-queue.sh" "$nwo" "$base" 2>/dev/null | sed -n 's/^merge-row: //p' | head -n 1)"
-  printf '%s=[%s#%s](%s)%s\n' "$mrow" "${nwo##*/}" "$num" "$url" "${tok:+ $tok}"
+  printf -- '--merge\n%s=%s\n' "$mrow" "$link"
+  [ -z "$tok" ] || printf -- '--note\n%s=%s\n' "$mrow" "$tok"
   exit 0
 fi
 
