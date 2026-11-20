@@ -263,7 +263,10 @@ ok "a mark for a PR on no in-flight task is not"            "$(TD check | grep -
 echo "== build-awaiting.sh: one warning line on a human merge row =="
 : > "$B/$AB_AWAITING"
 L='[example-repo#7](https://github.com/example-org/example-repo/pull/7)'
-aw() { bash "$REPO/plugin/scripts/build-awaiting.sh" --instance "$B" --merge "$B/projects/demo/tasks/t1.md=$1" >/dev/null 2>&1; cat "$B/$AB_AWAITING"; }
+aw() { # <link>[ <merge-row token>] — the token rides --note, as review-next.sh --merge-row prints it
+  local t="${1#"$L"}"
+  bash "$REPO/plugin/scripts/build-awaiting.sh" --instance "$B" --merge "$B/projects/demo/tasks/t1.md=$L" \
+    ${t:+--note "$B/projects/demo/tasks/t1.md=${t# }"} >/dev/null 2>&1; cat "$B/$AB_AWAITING"; }
 out="$(aw "$L ##mq1 main tests-Tests-refs/heads/main")"
 ok "exit 1: the in-progress warning"                        "$(grep -cxF '  > warning: a tests-Tests-refs/heads/main run is in progress on main; merging now cancels it' <<<"$out")" 1
 ok "…under the merge row, which keeps its link"             "$(awk -v l=" · $L" '/^\* 🔀 \*\*merge\*\*/ { r = substr($0, length($0) - length(l) + 1) == l; getline w; print r (w ~ /^  > warning: /) }' <<<"$out")" 11

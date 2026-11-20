@@ -345,11 +345,12 @@ mrow() { "$SCRIPT" 42 --repo acme/widgets --merge-row projects/p/tasks/task-001-
 RCS="$REPO/plugin/scripts/review-clearance.sh"
 "$REAL_JQ" '.baseRefName = "main"' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
 threads; ok "guard: CodeRabbit reviewed the head, 0 threads -> merge path" "$(live)" merge-path
-ok "…--merge-row prints the whole --merge value" "$(mrow | tr '\n' ' ')" \
-   "projects/p/tasks/task-001-x.md=[widgets#42](https://github.com/acme/widgets/pull/42) rc=0 "
+mkdir -p "$B/projects/p/tasks"; printf -- '---\ntype: Task\nstatus: in-review\n---\n' > "$B/projects/p/tasks/task-001-x.md"
+ok "…--merge-row prints build-awaiting.sh's arguments, one per line" "$(mrow | tr '\n' ' ')" \
+   "--merge projects/p/tasks/task-001-x.md=[widgets#42](https://github.com/acme/widgets/pull/42) rc=0 "
 : > "$FIX/no_branch"
-ok "…carrying merge-queue.sh's merge-row token when it has one" "$(mrow | tr '\n' ' ')" \
-   "projects/p/tasks/task-001-x.md=[widgets#42](https://github.com/acme/widgets/pull/42) ##mq2 branch main not found in acme/widgets rc=0 "
+ok "…merge-queue.sh's merge-row token as a --note when it has one" "$(mrow | tr '\n' ' ')" \
+   "--merge projects/p/tasks/task-001-x.md=[widgets#42](https://github.com/acme/widgets/pull/42) --note projects/p/tasks/task-001-x.md=##mq2 branch main not found in acme/widgets rc=0 "
 rm -f "$FIX/no_branch"
 printf '[{"name":"CI","bucket":"fail"}]\n' > "$FIX/checks_json"
 ok "…a required check not green -> no merge row (exit 1)" "$(mrow)" rc=1

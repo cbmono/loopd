@@ -25,7 +25,8 @@
 # text the tick wrote: ONE `Q<n>: do: …hand-off <id>…` entry in `open_questions`, its
 # `### Q<n>` block, and a `needs handed off <uuid> · hand-off <id> · Q<n>` `# Notes` line, in
 # one atomic write, ending `· heads <sha|merged|unknown>…` per `pr:` URL from tick-delta.sh's
-# heads file (merge-hold.sh holds a merge on one opened at its head). `<id>` is `<short>-<8 hex>` over the session, its `startedAt` and the
+# heads file (merge-hold.sh holds a merge on one opened at its head). `<id>` is
+# `<short>-<8 hex>` over the session, its `startedAt` and the
 # text, so a retry writes nothing twice and the next round's hand-off is a new entry.
 #
 # Exit 0 done · 1 not this script's case (`not-handed-off <why>`, `not-owed <why>`) · 2
@@ -49,7 +50,7 @@ while [ $# -gt 0 ]; do
     --jobs-dir) [ $# -ge 2 ] || usage; jobs="$2"; shift 2 ;;
     --owed)     owed=1; shift ;;
     --busy)     busy=1; shift ;;
-    -h|--help)  sed -n '3,37p' "$0"; exit 0 ;;
+    -h|--help)  sed -n '3,39p' "$0"; exit 0 ;;
     -*) usage ;;
     *) [ -z "$task" ] || usage; task="$1"; shift ;;
   esac

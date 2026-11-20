@@ -62,6 +62,7 @@ fi
 [ "$mode" = check ] && [ "${#tasks[@]}" = 1 ] || usage
 task="${tasks[0]}"
 [ -z "$record" ] || { [ -n "$repo" ] && [ -n "$pr" ]; } || usage
+case "$task" in /*) ;; *) [ -f "$task" ] || [ -z "$inst" ] || task="$inst/$task" ;; esac
 [ -f "$task" ] && [ -r "$task" ] || { echo "merge-hold: no readable task document: $task" >&2; exit 2; }
 [ -n "$inst" ] || inst="$(cd "$(dirname "$task")/../../.." 2>/dev/null && pwd)"
 

@@ -103,6 +103,10 @@ mk "$T/task-033-prompt.md" in-review "$U7"
 mk "$T/task-011-done.md" done "$U8"
 DISP='* DISPATCH 2026-10-21T09:00:00Z · %s · model opus · effort high · usage UNKNOWN\n'
 printf "$DISP" software-engineer >> "$T/task-022-sso.md"
+HH=0123456789abcdef0123456789abcdef01234567
+sed -i.bak 's#^status: in-review$#status: in-review\npr: [ https://github.com/octo/demo/pull/7, https://github.com/octo/demo/pull/8, https://github.com/octo/demo/pull/9 ]#' "$T/task-022-sso.md"
+mkdir -p "$B/.loopd/.tick-start"
+printf 'https://github.com/octo/demo/pull/7 OPEN %s 2026-10-21T08:00:00Z 0\nhttps://github.com/octo/demo/pull/8 MERGED %s 2026-10-21T08:00:00Z 0\n' "$HH" "$HH" > "$B/.loopd/.tick-start/heads"
 run() { ( cd "$B" && bash "$SH" "$@" --jobs-dir "$J" 2>/dev/null ); echo "rc=$?"; }
 one() { run "$@" | paste -sd ' ' -; }
 render() { printf '# Awaiting you\n' > "$AWF"; bash "$AW" --instance "$B" >/dev/null 2>&1 || echo "build-awaiting rc=$?" >&2; }
@@ -117,6 +121,8 @@ ok "…none of the agent's words in the task" "$(grep -cE 'terraform|simulate|SS
 ok "…its Q1 block (1 option, 3 depths)" \
    "$(bash "$FOLD" --block Q1 "$T/task-022-sso.md" | python3 -c 'import json, sys; b = json.load(sys.stdin); print(b["options"][0][1], len(b["depths"]))')" "done 3"
 ok "…one note" "$(cnt "$T/task-022-sso.md" "needs handed off $U1 · hand-off $ID1 · Q1 ·")" 1
+ok "…ending with each PR's head at the hand-off: open, merged, unread" \
+   "$(grep -c "· hand-off $ID1 · Q1 · session stopped by the tick · heads $HH merged unknown$" "$T/task-022-sso.md")" 1
 ok "…the status is unchanged" "$(grep -c '^status: in-review$' "$T/task-022-sso.md")" 1
 ok "…the text verbatim in the ignored store" "$(cat "$HO/$ID1.txt")" "$NEEDS1"
 ok "…which ignores itself" "$(cat "$HO/.gitignore")" '*'

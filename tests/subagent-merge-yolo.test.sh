@@ -101,8 +101,17 @@ record_all() { # <pr> <sha> [script...] — default: all four
   for s in $list; do
     "$RECEIPT" record "$s" --bundle "$BUNDLE" --repo "$NWO" --pr "$pr" --head "$sha" || return 1
   done
+  hold_rec "$pr" "$sha"
 }
 forget() { rm -rf "${BUNDLE:?}/$AB_RECEIPTS"; }
+HOLD="$REPO/plugin/scripts/merge-hold.sh"
+hold_rec() { # <pr> <sha> [<nwo>] — the line the tick's `merge-hold.sh check --record` writes for the owning task
+  local t
+  t="$(grep -lE "^pr:.*/${3:-$NWO}/pull/$1( |\])" "$BUNDLE"/projects/*/tasks/*.md 2>/dev/null | head -n 1)"
+  [ -n "$t" ] || return 0
+  "$HOLD" check "$t" --head "$2" --instance "$BUNDLE" --record --repo "${3:-$NWO}" --pr "$1" >/dev/null 2>&1
+  return 0
+}
 
 # -------------------------------------------------------------------------------- probes
 payload() { # <cwd> <command> <agent_type>
@@ -240,6 +249,7 @@ record_nwo2() { # <sha>
   for s in review-clearance.sh required-checks.sh pr-body-clearance.sh pr-verdict-clearance.sh; do
     "$RECEIPT" record "$s" --bundle "$BUNDLE" --repo "$NWO2" --pr 321 --head "$1" || return 1
   done
+  hold_rec 321 "$1" "$NWO2"
 }
 URL="https://github.com/$NWO2/pull/321"
 UMERGE="gh pr merge --squash --match-head-commit $SHA"
@@ -293,6 +303,48 @@ ok "a PR cannot raise its own project's autonomy from the target repo" \
 sed -i.bak 's/^autonomy: gated$/autonomy: yolo/' "$BUNDLE/projects/yolo-proj/project.md"
 ok "…and the bundle's own value is what decides" "$(verdict "$MERGE" "$PM")" "allow"
 rm -f "$GITREPO/instance.config.json" "$GITREPO/AUTONOMY.md"
+
+echo
+echo "== a live role session or a hand-off open at the head holds the yolo merge (precondition 6) =="
+YT="$BUNDLE/projects/yolo-proj/tasks/task-001.md"; YSID=22222222-3333-4444-5555-666666666666
+YL="$BUNDLE/$AB_SESSIONS_SAVED"; mkdir -p "$(dirname "$YL")"
+ylisting() { printf '[{"sessionId":"%s","state":"%s","pid":%s}]\n' "$YSID" "$1" "$$" > "$YL"; }
+hold_line() { awk '$2 == "merge-hold.sh" { print $1 }' "$BUNDLE/$AB_RECEIPTS/cbmono-ai-bridge__pr226__$SHA"; }
+reason() { "$PERMIT" --bundle "$BUNDLE" --repo "$NWO" --pr 226 --head "$SHA" --role "$PM" 2>&1; }
+project yolo-proj yolo 226
+sed -i.bak "s/^status: in-review$/status: in-review\nsession: $YSID/" "$YT"
+forget; ylisting done; record_all 226 "$SHA"
+ok "guard: the session done, no hand-off ⇒ a clear line, and the merge is permitted" "$(hold_line)/$(verdict "$MERGE" "$PM")" clear/allow
+sed -i.bak '/ merge-hold.sh /d' "$BUNDLE/$AB_RECEIPTS/cbmono-ai-bridge__pr226__$SHA"
+ok "no merge-hold.sh line ⇒ refused" "$(verdict "$MERGE" "$PM")" "deny:subagent_merge"
+ok "…naming the missing line" "$(reason | grep -c 'no merge-hold.sh line')" 1
+for st in working blocked; do
+  ylisting "$st"; record_all 226 "$SHA"
+  ok "session $st ⇒ a live line, and refused" "$(hold_line)/$(verdict "$MERGE" "$PM")" "live/deny:subagent_merge"
+done
+rm -f "$YL"; record_all 226 "$SHA"
+ok "no saved listing ⇒ an unknown line, and refused" "$(hold_line)/$(verdict "$MERGE" "$PM")" "unknown/deny:subagent_merge"
+ylisting done
+printf '\n# Notes\n\n* 2026-11-20T10:00:00Z needs handed off %s · hand-off 22222222-aaaabbbb · Q1 · session stopped by the tick · heads %s\n' "$YSID" "$SHA" >> "$YT"
+sed -i.bak "s/^session: $YSID$/session: $YSID\nopen_questions: [ \"Q1: do: finish the agent's hand-off 22222222-aaaabbbb — its jobs are in AWAITING.md\" ]/" "$YT"
+record_all 226 "$SHA"
+ok "a hand-off open at the head ⇒ a hand-off line, and refused" "$(hold_line)/$(verdict "$MERGE" "$PM")" "hand-off/deny:subagent_merge"
+sed -i.bak "s/^\* \(.*· heads \)$SHA$/* \1$OTHER_SHA/" "$YT"; record_all 226 "$SHA"
+ok "…from an earlier head ⇒ clear, and permitted" "$(hold_line)/$(verdict "$MERGE" "$PM")" "clear/allow"
+sed -i.bak 's/^\(clear merge-hold.sh \)[^ ]*/\12000-01-01T00:00:00Z/' "$BUNDLE/$AB_RECEIPTS/cbmono-ai-bridge__pr226__$SHA"
+ok "a clear line older than one tick gap ⇒ refused" "$(verdict "$MERGE" "$PM")/$(reason | grep -c 'older than')" "deny:subagent_merge/1"
+record_all 226 "$SHA"
+ok "…re-written this tick ⇒ permitted" "$(verdict "$MERGE" "$PM")" "allow"
+printf '* woke %s\n' "$YSID" >> "$YT"
+ok "a resume at the same head after the clear line ⇒ refused" "$(verdict "$MERGE" "$PM")" "deny:subagent_merge"
+ok "…naming the moved round" "$(reason | grep -c "round moved since the merge-hold.sh line")" 1
+ylisting working; record_all 226 "$SHA"
+ok "…and the resumed session re-read this tick is live ⇒ refused" "$(hold_line)/$(verdict "$MERGE" "$PM")" "live/deny:subagent_merge"
+ylisting stopped; record_all 226 "$SHA"
+ok "…until its round ends ⇒ permitted" "$(hold_line)/$(verdict "$MERGE" "$PM")" "clear/allow"
+ok "required-checks.sh never reads the session or the hand-off" \
+   "$(grep -cE 'merge-hold|agent-sessions|session-handoff' "$REPO/plugin/scripts/required-checks.sh")" 0
+project yolo-proj yolo 226; rm -f "$YL"
 
 echo
 echo "== the record is written by the clearance scripts, and read without network =="

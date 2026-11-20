@@ -25,7 +25,8 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 ROOTS="plugin/hooks/deny-destructive.sh plugin/scripts/merge-permit.sh"
-ALLOW="plugin/scripts/merge-queue.sh|decides yolo merge order: holds a merge while a default-branch run is pending (AUTONOMY.md precondition 5, tick step 4)"
+ALLOW="plugin/scripts/merge-queue.sh|decides yolo merge order: holds a merge while a default-branch run is pending (AUTONOMY.md precondition 5, tick step 4)
+plugin/scripts/session-handoff.sh|writes the heads field on a hand-off note, which merge-hold.sh holds a merge on (AUTONOMY.md precondition 6)"
 
 mapped() { # <tree> <file> — targets reached by a lookup no directory expression shows
   local tree="$1" f="$2" w n=0
@@ -184,7 +185,7 @@ ok "every file the merge path reaches is in GATE_FILES, every entry justified" "
 
 echo "== a yolo merge unknown twice at one head is the owner's (D3): the rule is in both files the tick reads =="
 says() { tr -s '[:space:]' ' ' < "$1" | grep -cF -- "$2"; }
-ROW='pass its merge-row token (`##mq2 <reason>`) to `build-awaiting.sh --merge` on that tick'
+ROW='pass its merge-row token (`##mq2 <reason>`) to `build-awaiting.sh --note` beside the PR'"'"'s `--merge` value on that tick'
 CLOSE="quotes the script's \`unknown: <reason>\` line verbatim, never the bare \`merge-queue exit 2\`"
 OLD=3  # spelled apart so the task's stale-bound grep stays empty on this file
 for f in plugin/tick-steps/step-4-advance.md plugin-yolo/companion/AUTONOMY.md; do
