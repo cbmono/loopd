@@ -11,7 +11,10 @@
 # (`AUTONOMY.md` → "Merge under `yolo`"); nothing else in the bundle may merge a PR
 # without it exiting 0.
 #
-#   Usage: required-checks.sh <pr> [--repo <owner>/<name>] [--head <sha>]
+#   Usage: required-checks.sh <pr> [--repo <owner>/<name>] [--head <sha>] [--checks-only]
+#
+# `--checks-only` (review-next.sh --merge-row): the required set and its colours alone —
+# no gate-file refusal, no review, no body. 0 green · 1 not green · 2 unknown · 3 no set.
 #
 # Exit codes — 0 is the ONLY clearance; every other code is a refusal:
 #
@@ -108,15 +111,16 @@ plugin-yolo/companion/AUTONOMY.md
 "
 
 usage() {
-  echo "Usage: $(basename "$0") <pr> [--repo <owner>/<name>] [--head <sha>]" >&2
+  echo "Usage: $(basename "$0") <pr> [--repo <owner>/<name>] [--head <sha>] [--checks-only]" >&2
   exit 2
 }
 
-pr=""; repo=""; want_head=""
+pr=""; repo=""; want_head=""; checks_only=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --repo) repo="${2:-}"; [ -n "$repo" ] || usage; shift 2 ;;
     --head) want_head="${2:-}"; [ -n "$want_head" ] || usage; shift 2 ;;
+    --checks-only) checks_only=yes; shift ;;
     -h|--help) usage ;;
     -*) echo "error: unknown option '$1'" >&2; usage ;;
     *) [ -z "$pr" ] || { echo "error: unexpected argument '$1'" >&2; usage; }
@@ -160,11 +164,14 @@ if [ -n "$want_head" ] && [ "$want_head" != "$head_sha" ]; then
   exit 1
 fi
 
-changed="$(gh pr diff "$pr" ${R[@]+"${R[@]}"} --name-only 2>/dev/null)" || {
-  echo "error: could not list the files PR $pr changes — refusing (fail closed)" >&2
-  exit 2
-}
-gate_hit="$(printf '%s\n' "$changed" | grep -Fxf <(printf '%s\n' "$GATE_FILES" | grep -v '^$') || true)"
+changed=""; gate_hit=""
+if [ -z "$checks_only" ]; then
+  changed="$(gh pr diff "$pr" ${R[@]+"${R[@]}"} --name-only 2>/dev/null)" || {
+    echo "error: could not list the files PR $pr changes — refusing (fail closed)" >&2
+    exit 2
+  }
+  gate_hit="$(printf '%s\n' "$changed" | grep -Fxf <(printf '%s\n' "$GATE_FILES" | grep -v '^$') || true)"
+fi
 if [ -n "$gate_hit" ]; then
   echo "refuse: PR $pr edits the merge gate itself ($(printf '%s' "$gate_hit" | tr '\n' ' ' | sed 's/ $//'))" >&2
   echo "        — a human decision. Surface it; do not auto-merge." >&2
@@ -235,7 +242,7 @@ if [ -z "$required" ]; then
     # A PR that rewrites the gate must not be cleared by the gate it rewrites. The
     # list is read from BASE, so an open PR cannot weaken its own merge — but merging
     # it would weaken every later one, and that is the human's decision to take.
-    if grep -Fxq -- "$DECLARED_PATH" <<<"$changed"; then
+    if [ -z "$checks_only" ] && grep -Fxq -- "$DECLARED_PATH" <<<"$changed"; then
       echo "refuse: PR $pr edits $DECLARED_PATH — a change to the merge gate itself is" >&2
       echo "        a human decision. Surface it; do not auto-merge." >&2
       exit 4
@@ -276,6 +283,10 @@ if [ -n "$problems" ]; then
   echo "        Pending: wait and ask again next tick. Failing or missing: surface the PR to" >&2
   echo "        the human with the list above. Do NOT merge around this gate." >&2
   exit 1
+fi
+if [ -n "$checks_only" ]; then
+  echo "ok: every required check passes on PR $pr (source: $source, head $head_sha)"
+  exit 0
 fi
 
 # --- a green check is never a review -----------------------------------------
@@ -388,11 +399,16 @@ clearance_for() { # [--for-check <name>] — 0, or the sibling's refusal code
 RECEIPT="$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh"
 NEXT="$(dirname "${BASH_SOURCE[0]:-$0}")/review-next.sh"
 past_last() { # <exit code of the sibling> — 0 where review-next.sh --clear clears this head
-  local path
+  local path nrc
   case "$1" in 1|3|4|5|8) ;; *) return 1 ;; esac
   if path="$("$NEXT" "$pr_num" --repo "$nwo" --head "$head_sha" --clear 2>>"$clearance_err")"; then
     echo "note: no review at head $head_sha, cleared by review-next.sh --clear ($path)" >&2
     return 0
+  else nrc=$?; fi
+  if [ "$nrc" -eq 2 ]; then
+    echo "error: review-next.sh --clear could not read what it needs for PR $pr (exit 2):" >&2
+    sed 's/^/        /' "$clearance_err" >&2
+    exit 2
   fi
   return 1
 }
@@ -455,6 +471,17 @@ EOF
 else
   if clearance_for; then crc=0; else crc=$?; fi
   [ "$crc" -eq 0 ] || past_last "$crc" || refuse_clearance "no independent review clears PR $pr" "$crc"
+fi
+
+# --- and no review thread from anyone but the PR author is still open --------
+if "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --head "$head_sha" --threads >/dev/null 2>"$clearance_err"
+then trc=0; else trc=$?; fi
+if [ "$trc" -ne 0 ]; then
+  echo "refuse: PR $pr has review threads not by its author that are unresolved or unread" >&2
+  echo "        (review-clearance.sh --threads exit $trc). Fix or answer each, then resolve it:" >&2
+  sed 's/^/        /' "$clearance_err" >&2
+  if [ "$trc" -eq 6 ]; then exit 1; fi
+  exit 2
 fi
 
 # --- and a body nobody can read is not a merge anybody can decide ------------

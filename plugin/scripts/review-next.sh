@@ -3,23 +3,25 @@
 # review-next.sh — what the tick does next on one in-review PR. One answer on stdout:
 # dispatch-qa · request-review · implementer-round · rebase-round · merge-path · hold.
 #
-#   Usage: review-next.sh <pr> [--repo <o>/<n>] [--head <sha>] [--record <task-doc>] [--instance <bundle>] [--clear]
+#   Usage: review-next.sh <pr> [--repo <o>/<n>] [--head <sha>] [--record <task-doc>] [--instance <bundle>] [--clear | --merge-row <task-path>]
 #          review-next.sh --decide rc=<0-8> class=<placeholder|declined|-> crr=<n> qar=<n> \
-#                         crd=<n> qad=<n> qlast=<none|pass|fail|unknown> qhead=<yes|no> qrec=<yes|no>
+#                         crd=<n> qad=<n> qlast=<none|pass|fail|unknown> qhead=<yes|no> qrec=<yes|no> thr=<n|unknown>
 #
 # Exit 0 decided · 2 unknown input (stdout still `hold`). The same answer under gated and yolo.
+# merge-path needs thr=0 (review-clearance.sh --threads; absent/unknown holds). --merge-row: the --merge value, or nothing (1, 2).
 # `--clear` (required-checks.sh): may this head merge with no review at it? 0 yes — prints and
 # records last-round|qa-head|qa-zero|zero-zero — · 1 hold, the reason on stderr · 2 unknown.
 # Reasoning and the table: step-4-advance.md → "What next on a PR" and its merge-path row.
 set -uo pipefail
 
 decide() {
-  local rc="" class="-" crr="" qar="" crd="" qad="" qlast="none" qhead="no" qrec="no" kv
+  local rc="" class="-" crr="" qar="" crd="" qad="" qlast="none" qhead="no" qrec="no" thr="unknown" kv
   for kv in "$@"; do
     case "$kv" in
       rc=*) rc="${kv#*=}" ;; class=*) class="${kv#*=}" ;; crr=*) crr="${kv#*=}" ;;
       qar=*) qar="${kv#*=}" ;; crd=*) crd="${kv#*=}" ;; qad=*) qad="${kv#*=}" ;;
       qlast=*) qlast="${kv#*=}" ;; qhead=*) qhead="${kv#*=}" ;; qrec=*) qrec="${kv#*=}" ;;
+      thr=*) thr="${kv#*=}" ;;
       *) echo "review-next: unknown fact '$kv'" >&2; echo hold; return 2 ;;
     esac
   done
@@ -28,10 +30,21 @@ decide() {
   for n in "$crr" "$qar" "$crd" "$qad"; do
     case "$n" in ''|*[!0-9]*) echo "review-next: crr, qar, crd and qad must be integers" >&2; echo hold; return 2 ;; esac
   done
+  case "$thr" in unknown) ;; ''|*[!0-9]*) echo "review-next: thr must be an integer or unknown" >&2; echo hold; return 2 ;; esac
 
   # NEXT_KIND is the merge-path kind --clear acts on: review (at the head), qa-head (a QA pass at
   # the head), last-round-coderabbit, last-round-qa, qa-zero or zero-zero.
-  say() { echo "review-next: $2" >&2; echo "$1"; NEXT_ANSWER="$1"; NEXT_KIND="${3:-}"; }
+  say() {
+    local a="$1" why="$2" k="${3:-}"
+    if [ "$a" = merge-path ]; then
+      case "$thr" in
+        0) ;;
+        unknown) a=hold; k=""; why="$why, but the review threads are unread (unknown)" ;;
+        *) a=implementer-round; k=""; why="$why, but $thr unresolved review thread(s) not by the PR author are open: fix or answer, then resolve each" ;;
+      esac
+    fi
+    echo "review-next: $why" >&2; echo "$a"; NEXT_ANSWER="$a"; NEXT_KIND="$k"
+  }
   [ "$rc" = 7 ] && { say rebase-round "the PR conflicts (exit 7)"; return 0; }
   [ "$rc" = 2 ] && { say hold "reviewer state unreadable (exit 2)"; return 0; }
   [ "$rc" = 6 ] && { say implementer-round "CodeRabbit's threads are open at the head (exit 6): address them, then merge"; return 0; }
@@ -73,20 +86,21 @@ decide() {
 
 if [ "${1:-}" = "--decide" ]; then shift; decide "$@"; exit $?; fi
 
-pr=""; repo=""; head=""; record=""; inst=""; clear=""
+pr=""; repo=""; head=""; record=""; inst=""; clear=""; mrow=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --clear) clear=yes; shift ;;
-    --repo|--head|--record|--instance)
+    --repo|--head|--record|--instance|--merge-row)
       [ $# -ge 2 ] && [ -n "$2" ] || { sed -n '6,8p' "$0" >&2; exit 2; }
-      case "$1" in --repo) repo="$2" ;; --head) head="$2" ;; --record) record="$2" ;; --instance) inst="$2" ;; esac
+      case "$1" in --repo) repo="$2" ;; --head) head="$2" ;; --record) record="$2" ;; --instance) inst="$2" ;;
+        --merge-row) mrow="$2" ;; esac
       shift 2 ;;
     -*) sed -n '6,8p' "$0" >&2; exit 2 ;;
     *) [ -z "$pr" ] || { sed -n '6,8p' "$0" >&2; exit 2; }; pr="$1"; shift ;;
   esac
 done
-[ -n "$pr" ] || { sed -n '6,8p' "$0" >&2; exit 2; }
-unknown() { echo "review-next: $1 — holding" >&2; echo hold; exit 2; }
+[ -n "$pr" ] && { [ -z "$clear" ] || [ -z "$mrow" ]; } || { sed -n '6,8p' "$0" >&2; exit 2; }
+unknown() { echo "review-next: $1 — holding" >&2; [ -n "$mrow" ] || echo hold; exit 2; }
 hold() { echo "review-next: hold for the human: $1" >&2; exit 1; }
 
 if [ -z "$inst" ]; then
@@ -96,9 +110,10 @@ fi
 D="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 R=(); [ -n "$repo" ] && R=(--repo "$repo")
 
-meta="$(gh pr view "$pr" ${R[@]+"${R[@]}"} --json url,number,headRefOid,headRefName,headRepository,headRepositoryOwner \
+meta="$(gh pr view "$pr" ${R[@]+"${R[@]}"} --json url,number,headRefOid,headRefName,headRepository,headRepositoryOwner,baseRefName \
         --jq '[.url, (.number|tostring), .headRefOid, (.headRefName // "" | @uri),
-               ((.headRepositoryOwner.login // "") + "/" + (.headRepository.name // ""))] | @tsv' 2>/dev/null)" || unknown "PR $pr is unreadable"
+               ((.headRepositoryOwner.login // "") + "/" + (.headRepository.name // "")),
+               (.baseRefName // "")] | @tsv' 2>/dev/null)" || unknown "PR $pr is unreadable"
 url="$(printf '%s' "$meta" | cut -f1)"; num="$(printf '%s' "$meta" | cut -f2)"
 [ -n "$head" ] || head="$(printf '%s' "$meta" | cut -f3)"
 nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')"
@@ -110,7 +125,8 @@ qar="$(bash "$D/resolve-review-config.sh" --instance "$inst" qaRounds)" || unkno
 REC=(); [ -n "$record" ] && REC=(--record "$record")
 out="$("$D/review-clearance.sh" "$num" --repo "$nwo" --head "$head" ${REC[@]+"${REC[@]}"} 2>/dev/null)"; rc=$?
 class="$(printf '%s\n' "$out" | sed -n 's/^class: //p' | head -n 1)"
-case "$rc" in 7|2) [ -z "$clear" ] || hold "review-clearance.sh exit $rc at the head"
+case "$rc" in 7|2) [ -z "$mrow" ] || [ "$rc" = 7 ] || unknown "review-clearance.sh exit 2 at the head"
+  [ -z "$clear$mrow" ] || hold "review-clearance.sh exit $rc at the head"
   decide rc="$rc" crr="$crr" qar="$qar" crd=0 qad=0; exit $? ;; esac
 
 crd="$("$D/review-rounds.sh" "$num" --for coderabbit --repo "$nwo" --instance "$inst" 2>/dev/null)"
@@ -127,12 +143,33 @@ fi
 "$D/qa-dispatch.sh" check --repo "$nwo" --pr "$num" --head "$head" --instance "$inst" >/dev/null 2>&1
 case $? in 0) qrec=yes ;; 1) qrec=no ;; *) unknown "QA dispatch records unreadable" ;; esac
 
+tout="$("$D/review-clearance.sh" "$num" --repo "$nwo" --head "$head" --threads 2>/dev/null)"
+case $? in 0|6) thr="$(printf '%s\n' "$tout" | sed -n 's/^threads: //p' | head -n 1)" ;; *) thr=unknown ;; esac
+case "$thr" in ''|*[!0-9]*) thr=unknown ;; esac
+
 facts=(rc="$rc" class="${class:--}" crr="$crr" qar="$qar" crd="$crd" qad="$qad" \
-       qlast="$qlast" qhead="$qhead" qrec="$qrec")
-[ -n "$clear" ] || { decide "${facts[@]}"; exit $?; }
+       qlast="$qlast" qhead="$qhead" qrec="$qrec" thr="$thr")
+[ -n "$clear$mrow" ] || { decide "${facts[@]}"; exit $?; }
+
+# --- --merge-row: the 🔀 row's whole --merge value, or nothing --------------------------------
+if [ -n "$mrow" ]; then
+  [ "$thr" != unknown ] || unknown "the review threads at $head are unread"
+  NEXT_ANSWER=""
+  decide "${facts[@]}" >/dev/null || unknown "the review state is unreadable"
+  [ "$NEXT_ANSWER" = merge-path ] || hold "no merge row ($NEXT_ANSWER)"
+  "$D/required-checks.sh" "$num" --repo "$nwo" --head "$head" --checks-only >/dev/null 2>&1
+  case $? in 0|3) ;; 1) hold "the required checks are not all green at $head" ;;
+    *) unknown "the required checks at $head are unreadable" ;; esac
+  base="$(printf '%s' "$meta" | cut -f6)"
+  [ -n "$base" ] || unknown "the PR's base branch is unreadable"
+  tok="$("$D/merge-queue.sh" "$nwo" "$base" 2>/dev/null | sed -n 's/^merge-row: //p' | head -n 1)"
+  printf '%s=[%s#%s](%s)%s\n' "$mrow" "${nwo##*/}" "$num" "$url" "${tok:+ $tok}"
+  exit 0
+fi
 
 # --- --clear: the merge gate's question, asked only where review-clearance.sh refused --------
 [ "$head" = "$(printf '%s' "$meta" | cut -f3)" ] || hold "--head $head is not the PR's head"
+[ "$thr" != unknown ] || unknown "the review threads at $head are unread"
 NEXT_ANSWER=""; NEXT_KIND=""
 decide "${facts[@]}" >/dev/null || unknown "the review state is unreadable"
 [ "$NEXT_ANSWER" = merge-path ] || hold "the review loop is not finished ($NEXT_ANSWER)"

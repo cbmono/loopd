@@ -15,8 +15,8 @@ ok() { # <name> <actual> <expected>
   if [ "$2" = "$3" ]; then printf '  PASS  %-66s (%s)\n' "$1" "$2"; pass=$((pass+1))
   else printf '  FAIL  %-66s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi
 }
-d() { "$SCRIPT" --decide "$@" 2>/dev/null; }
-# Defaults: coderabbitRounds 1, qaRounds 1, no rounds yet, no QA record.
+d() { "$SCRIPT" --decide thr=0 "$@" 2>/dev/null; }
+# Defaults: coderabbitRounds 1, qaRounds 1, no rounds yet, no QA record, 0 open threads.
 base="crr=1 qar=1 crd=0 qad=0 qlast=none qhead=no qrec=no"
 
 echo "== every review-clearance exit, at the defaults =="
@@ -76,6 +76,24 @@ ok "…the same with no reviewer signal (exit 3)"     "$(d rc=3 crr=0 qar=0 crd=
 ok "qaRounds 0, out of credits -> merge path, no QA" "$(d rc=5 class=declined crr=1 qar=0 crd=0 qad=0)" merge-path
 }
 
+echo "== the thread gate: merge-path needs a read showing 0 unresolved non-author threads =="
+# One row per merge-path branch: zero-zero, review, qa-head, qa-zero, last-round-qa, last-round-coderabbit.
+for row in "zero-zero:rc=8 crr=0 qar=0 crd=0 qad=0" "review:rc=0 $base" \
+           "qa-head:rc=1 class=declined crr=1 qar=2 crd=0 qad=1 qlast=pass qhead=yes qrec=yes" \
+           "qa-zero:rc=1 class=declined crr=1 qar=0 crd=0 qad=0" \
+           "last-round-qa:rc=1 class=declined crr=1 qar=1 crd=0 qad=1 qlast=fail qhead=no" \
+           "last-round-coderabbit 4:rc=4 crr=1 qar=1 crd=1 qad=0" "last-round-coderabbit 8:rc=8 crr=1 qar=1 crd=1 qad=0" \
+           "last-round-coderabbit 1:rc=1 class=declined crr=1 qar=1 crd=1 qad=0" "last-round-coderabbit 5:rc=5 class=declined crr=2 qar=1 crd=2 qad=0"; do
+  { ok "${row%%:*}: 0 threads -> merge path"                "$(d ${row#*:} thr=0)" merge-path
+    ok "${row%%:*}: thread read unknown -> hold"           "$(d ${row#*:} thr=unknown)" hold
+    ok "${row%%:*}: 3 open threads -> implementer round"   "$(d ${row#*:} thr=3)" implementer-round
+    ok "${row%%:*}: no thread fact at all -> hold, never 0" "$("$SCRIPT" --decide ${row#*:} 2>/dev/null)" hold; }
+done
+ok "a thread count that is not a number -> hold"     "$(d rc=0 $base thr=-1)" hold
+"$SCRIPT" --decide rc=0 $base thr=x >/dev/null 2>&1
+ok "…and exits 2"                                    "$?" 2
+ok "threads gate only merge-path: exit 4 stays request-review" "$(d rc=4 $base thr=unknown)" request-review
+
 echo "== unknown input holds =="
 ok "no rc -> hold"            "$(d crr=1 qar=1 crd=0 qad=0)" hold
 "$SCRIPT" --decide crr=1 qar=1 crd=0 qad=0 >/dev/null 2>&1
@@ -97,10 +115,18 @@ STUB
 cat >> "$TMP/bin/gh" <<'STUB'
 filter=""; prev=""
 for a in "$@"; do [ "$prev" = "--jq" ] && { filter="$a"; break; }; prev="$a"; done
+case " $* " in
+  *" repos/acme/widgets/actions/workflows "*) exit 0 ;;
+  *" repos/acme/widgets/branches/"*) [ -f "$FIX/no_branch" ] && { echo "HTTP 404" >&2; exit 1; }; echo '{}'; exit 0 ;;
+esac
 case "${1:-} ${2:-}" in
   "pr view") src="$FIX/pr_json" ;;
-  "api graphql") [ -f "$FIX/threads_json" ] && { cat "$FIX/threads_json"; exit 0; }
-                printf '{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}\n'; exit 0 ;;
+  "pr checks") src="$FIX/checks_json"; [ -f "$src" ] || printf '[{"name":"CI","bucket":"pass"}]\n' > "$src" ;;
+  "api graphql") [ -f "$FIX/threads_fail" ] && exit 1
+                t='{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}'
+                [ -f "$FIX/threads_json" ] && t="$(cat "$FIX/threads_json")"
+                printf '%s' "$t" | "$REAL_JQ" -c --slurpfile p "$FIX/pr_json" \
+                  '.data.repository.pullRequest.headRefOid //= $p[0].headRefOid'; exit 0 ;;
   *) case "${2:-}" in
        */compare/*) src="$FIX/compare_json" ;;
        /repos/acme/widgets/activity*) src="$FIX/activity_json" ;;
@@ -168,7 +194,8 @@ ok "--clear at a head that is not the PR's -> hold" "rc=$?" rc=1
 ok "a compare with no files array is unknown, never 0 lines" "$(clear | tail -n 1)" rc=2
 reviewed_at_x; cmpf ahead "$(f modified a.sh 6 2)"
 printf '%s\n' '{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[{"isResolved":false,"path":"a.sh","line":3,"comments":{"nodes":[{"author":{"login":"coderabbitai"},"url":"https://example.invalid/t/1","body":"quote it"}]}}]}}}}}' > "$FIX/threads_json"
-ok "threads still open from the last round, a fix after it -> clears" "$(clear | tr '\n' ' ')" "last-round rc=0 "
+ok "threads still open from the last round, a fix after it -> implementer round" "$(live)" implementer-round
+ok "…and --clear holds: the fixer resolves what it addressed" "$(clear)" rc=1
 reviewed_at_x; cmpf diverged "$(f modified a.sh 6 2)"
 ok "a rebase orphaned the reviewed commit (diverged) -> hold" "$(clear)" rc=1
 ok "…naming the rebase" "$(said 'orphaned the reviewed commit')" yes
@@ -232,8 +259,7 @@ ok "…over the cap from the QA round -> hold" "$(clear)" rc=1
 echo "== QA round 1 fixes: no waiver without a fix =="
 reviewed_at_x; cmpf ahead
 "$REAL_JQ" '.files = []' "$FIX/compare_json" > "$FIX/c" && mv "$FIX/c" "$FIX/compare_json"
-printf '%s\n' '{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[{"isResolved":false,"path":"a.sh","line":3,"comments":{"nodes":[{"author":{"login":"coderabbitai"},"url":"https://example.invalid/t/1","body":"quote it"}]}}]}}}}}' > "$FIX/threads_json"
-ok "1: an empty commit after the last round, threads open -> hold" "$(clear)/$(said 'no fix has landed')" rc=1/yes
+ok "1: an empty commit after the last round -> hold" "$(clear)/$(said 'no fix has landed')" rc=1/yes
 ok "…and writes no line" "$([ -f "$RCPT" ] && echo yes || echo no)" no
 reviewed_at_x; cmpf identical
 ok "1: compare identical after a CodeRabbit round -> hold" "$(clear)/$(said 'no fix has landed')" rc=1/yes
@@ -301,6 +327,68 @@ ok "fork pushed after the FAIL -> clears from the fork's record" "$(clear | tr '
 fail_after_push changes-requested 2020-01-01T01:00:01Z
 "$REAL_JQ" 'del(.headRepository)' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
 ok "the head repository unreadable -> unknown" "$(clear | tail -n 1)/$(grep -c last-round "$RCPT")" rc=2/0
+
+echo "== live: open threads from another non-author account hold the merge row =="
+reviewed_at_x; printf '{}\n' > "$B/instance.config.json"; printf '[{"sha":"%s"}]\n' "$H" > "$FIX/commits_json"
+"$REAL_JQ" -n --arg h "$H" --rawfile b "$TMP/review.md" \
+  '[{user:{login:"coderabbitai[bot]"}, state:"COMMENTED", commit_id:$h, body:$b}]' > "$FIX/reviews_json"
+thread() { # <login> <resolved> — one review thread opened by <login>
+  "$REAL_JQ" -cn --arg l "$1" --argjson r "$2" '{isResolved:$r, path:"a.sh", line:3,
+    comments:{nodes:[{author:{login:$l}, url:"https://example.invalid/t", body:"look"}]}}'
+}
+threads() { # [hasNextPage] <thread-json>...
+  local more=false; case "${1:-}" in true|false) more="$1"; shift ;; esac
+  "$REAL_JQ" -n --argjson m "$more" '{data:{repository:{pullRequest:{reviewThreads:{pageInfo:{hasNextPage:$m},
+    nodes:[$ARGS.positional[] | fromjson]}}}}}' --args "$@" > "$FIX/threads_json"
+}
+mrow() { "$SCRIPT" 42 --repo acme/widgets --merge-row projects/p/tasks/task-001-x.md 2>/dev/null; echo "rc=$?"; }
+RCS="$REPO/plugin/scripts/review-clearance.sh"
+"$REAL_JQ" '.baseRefName = "main"' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
+threads; ok "guard: CodeRabbit reviewed the head, 0 threads -> merge path" "$(live)" merge-path
+ok "…--merge-row prints the whole --merge value" "$(mrow | tr '\n' ' ')" \
+   "projects/p/tasks/task-001-x.md=[widgets#42](https://github.com/acme/widgets/pull/42) rc=0 "
+: > "$FIX/no_branch"
+ok "…carrying merge-queue.sh's merge-row token when it has one" "$(mrow | tr '\n' ' ')" \
+   "projects/p/tasks/task-001-x.md=[widgets#42](https://github.com/acme/widgets/pull/42) ##mq2 branch main not found in acme/widgets rc=0 "
+rm -f "$FIX/no_branch"
+printf '[{"name":"CI","bucket":"fail"}]\n' > "$FIX/checks_json"
+ok "…a required check not green -> no merge row (exit 1)" "$(mrow)" rc=1
+printf '[{"name":"CI","bucket":"pending"}]\n' > "$FIX/checks_json"
+ok "…pending is not green either" "$(mrow)" rc=1
+rm -f "$FIX/checks_json"
+"$REAL_JQ" '.mergeable = "UNKNOWN"' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
+ok "…review-clearance exit 2 (mergeability unknown) -> exit 2, never 1" "$(mrow)" rc=2
+"$REAL_JQ" '.mergeable = "MERGEABLE"' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
+threads "$(thread coderabbitai true)" "$(thread example-user-007 false)" "$(thread example-user-007 false)"
+ok "green, 0 CodeRabbit threads, 2 open from another account -> no merge path" "$(live)" implementer-round
+ok "…and no merge row" "$(mrow)" rc=1
+ok "…--threads counts them (exit 6)" "$("$RCS" 42 --repo acme/widgets --threads 2>/dev/null; echo "rc=$?")" "threads: 2"$'\n'"rc=6"
+threads "$(thread dev false)" "$(thread "" false)"
+ok "the PR author's own thread is not counted, a deleted account's is" \
+   "$("$RCS" 42 --repo acme/widgets --threads 2>/dev/null)" "threads: 1"
+threads "$(thread dev false)"
+ok "only the author's own thread open -> merge path" "$(live)" merge-path
+threads true "$(thread example-user-007 true)"
+ok "over 100 threads, none open on page 1 -> unknown, hold" "$(live)" hold
+ok "…--threads exits 2" "$("$RCS" 42 --repo acme/widgets --threads >/dev/null 2>&1; echo $?)" 2
+threads; "$REAL_JQ" -c '.data.repository.pullRequest.headRefOid = "0000000000000000000000000000000000000000"' "$FIX/threads_json" > "$FIX/t" && mv "$FIX/t" "$FIX/threads_json"
+ok "the head moved under the thread read -> unknown, hold" "$(live)" hold
+ok "--threads at a head that is not the PR's -> unknown" "$("$RCS" 42 --repo acme/widgets --head "$X" --threads >/dev/null 2>&1; echo $?)" 2
+ok "--threads refuses --reviewer (usage)" "$("$RCS" 42 --repo acme/widgets --threads --reviewer qa-bot >/dev/null 2>&1; echo $?)" 2
+
+echo "== live: a failed thread read holds =="
+reviewed_at_x; printf '[]\n' > "$FIX/reviews_json"; printf '{"coderabbitRounds": 0, "qaRounds": 0}\n' > "$B/instance.config.json"
+ok "guard: 0/0, the read answers 0 -> merge path" "$(live)" merge-path
+: > "$FIX/threads_fail"
+ok "0/0, the thread read fails -> hold, never merge path" "$(live)" hold
+ok "…--merge-row prints nothing and exits 2" "$(mrow)" rc=2
+ok "…--clear answers unknown (exit 2)" "$(clear | tail -n 1)" rc=2
+rm -f "$FIX/threads_fail"
+reviewed_at_x; cmpf ahead "$(f modified a.sh 6 2)"
+ok "guard: the real last-round waiver path clears" "$(clear | tr '\n' ' ')" "last-round rc=0 "
+: > "$FIX/threads_fail"
+ok "…the same waiver path, the thread read fails -> exit 2, no line" "$(clear | tail -n 1)/$(grep -c '^last-round ' "$RCPT" 2>/dev/null || true)" rc=2/1
+rm -f "$FIX/threads_fail"
 
 echo
 echo "pass=$pass fail=$fail"

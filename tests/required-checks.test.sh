@@ -48,6 +48,10 @@ case "${1:-}" in
         if grep -q body <<<"$(printf '%s\n' "$@")"; then
           [ -f "$FIX/pr_body_json" ] || { echo "no PR" >&2; exit 1; }
           cat "$FIX/pr_body_json"
+        elif grep -q headRepositoryOwner <<<"$(printf '%s\n' "$@")"; then
+          [ -f "$FIX/pr_json" ] || { echo "no PR" >&2; exit 1; }
+          f=""; p=""; for a in "$@"; do [ "$p" = --jq ] && f="$a"; p="$a"; done
+          jq -r "$f" "$FIX/pr_json"
         elif grep -q author <<<"$(printf '%s\n' "$@")"; then
           [ -f "$FIX/pr_json" ] || { echo "no PR" >&2; exit 1; }
           cat "$FIX/pr_json"
@@ -109,10 +113,11 @@ case "${1:-}" in
     # every clearing case in this file red for a reason none of them is about. Default is
     # no threads and no further page.
     if [ "${2:-}" = "graphql" ]; then
-      [ -f "$FIX/threads_json" ] || {
-        printf '{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}\n'
-        exit 0; }
-      cat "$FIX/threads_json"; exit 0
+      [ -f "$FIX/threads_fail" ] && { echo "graphql: 502" >&2; exit 1; }
+      t='{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}'
+      [ -f "$FIX/threads_json" ] && t="$(cat "$FIX/threads_json")"
+      h="$(jq -r '.headRefOid // empty' "$FIX/pr_json" 2>/dev/null)"
+      printf '%s' "$t" | jq -c --arg h "$h" '.data.repository.pullRequest.headRefOid //= $h'; exit 0
     fi
     # Three endpoints reach this stub. review-clearance.sh reads the REVIEW OBJECTS
     # (the only place a review's state and commit_id exist) and the ISSUE COMMENTS —
@@ -120,9 +125,11 @@ case "${1:-}" in
     # the artifact that must never be lost is a refusal, which is a comment.
     # required-checks.sh reads the declared list out of the repo's contents.
     case "$*" in
-      */pulls/*/reviews*|*/issues/*/comments*)
+      */pulls/*/reviews*|*/issues/*/comments*|*/pulls/*/commits*)
         src="$FIX/reviews_json"
         case "$*" in */issues/*/comments*) src="$FIX/comments_json" ;; esac
+        case "$*" in */pulls/*/commits*) src="$FIX/commits_json"
+          jq -n --slurpfile p "$FIX/pr_json" '[{sha: $p[0].headRefOid}]' > "$src" 2>/dev/null ;; esac
         [ -f "$src" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
         filter=""; prev=""
         for a in "$@"; do
@@ -146,6 +153,8 @@ esac
 STUB
 chmod +x "$TMP/bin/gh"
 export PATH="$TMP/bin:$PATH"
+mkdir -p "$TMP/bundle"; printf '{}\n' > "$TMP/bundle/instance.config.json"
+export CLAUDE_PROJECT_DIR="$TMP/bundle"
 
 HEAD_SHA="0c2592f7bb98d3de9a7a181d1762dfcaf80785d9"
 HAVE_JQ=0; command -v jq >/dev/null 2>&1 && HAVE_JQ=1
@@ -384,11 +393,11 @@ expect "required reviewer check + a real review -> clear" 0
 # The same recorded review that clears one case above, with a reviewer-authored thread left
 # unresolved — the sibling answers 6, and this gate refuses. The advice is what makes 6
 # worth its own code: exit 4 means ask for a review, exit 6 means DO NOT, you have one.
-open_thread() { # <isResolved>
-  jq -n --argjson r "$1" \
+open_thread() { # <isResolved> [<login>]
+  jq -n --argjson r "$1" --arg l "${2:-coderabbitai}" \
     '{data:{repository:{pullRequest:{reviewThreads:{pageInfo:{hasNextPage:false},
        nodes:[{isResolved:$r, path:"plugin/scripts/run.sh", line:42,
-               comments:{nodes:[{author:{login:"coderabbitai"},
+               comments:{nodes:[{author:{login:$l},
                                  url:"https://example.invalid/t/1",
                                  body:"`$dir` is unquoted here."}]}}]}}}}}' \
     > "$FIX/threads_json"
@@ -403,6 +412,14 @@ says   "  ...and telling the caller not to re-request" "do NOT request another o
 setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
 reviewer_pr "$CR_CLEAN"; open_thread true
 expect "...and the same fixture with the thread RESOLVED -> clear" 0
+# The yolo self-merge reads every non-author thread, not only the clearing reviewer's.
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_CLEAN"; open_thread false example-user-007
+expect "a real review, a thread from another account left open -> refuse" 1
+says   "  ...naming the --threads refusal" "review-clearance.sh --threads exit 6"
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_CLEAN"; open_thread false dev
+expect "...while the PR author's own open thread clears" 0
 
 # After the last round: where review-clearance refuses, review-next.sh --clear may still
 # clear the review half. A copy of the scripts with that one sibling stubbed, so each case
@@ -412,6 +429,7 @@ SC="$TMP/scripts"; cp -R "$(dirname "$SCRIPT")" "$SC"
 cat > "$SC/review-next.sh" <<'STUB'
 #!/usr/bin/env bash
 echo "--clear asked: $*" >> "$FIX/next_calls"
+[ -f "$FIX/next_unknown" ] && { echo "review-next: the review threads at X are unread — holding" >&2; echo hold; exit 2; }
 [ -f "$FIX/next" ] || { echo "review-next: hold for the human: the fix after the last round changes 301 lines since X, over reviewFixMaxLines (300)" >&2; exit 1; }
 cat "$FIX/next"
 STUB
@@ -440,6 +458,16 @@ setup; checks "pass	Build" "pending	CodeRabbit"; declared "Build"; reviewer_pr "
 next_case "a refusal, pending CodeRabbit check not required, qa-zero -> clear" 0
 setup; checks "pass	Build"; declared "Build"; reviewer_pr ""; echo zero-zero > "$FIX/next"
 next_case "no reviewer signal (exit 3), zero-zero -> clear" 0
+setup; checks "pass	Build"; declared "Build"; reviewer_pr ""; echo zero-zero > "$FIX/next"; : > "$FIX/threads_fail"
+next_case "...the same, the thread read fails -> refuse as unknown" 2
+rm -f "$FIX/threads_fail"
+setup; checks "pass	Build" "fail	CodeRabbit"; declared "Build"; stale_review; echo last-round > "$FIX/next"
+open_thread false
+next_case "last-round, a thread left unresolved -> refuse" 1
+setup; checks "pass	Build" "fail	CodeRabbit"; declared "Build"; stale_review; : > "$FIX/next_unknown"
+next_case "--clear answers unknown (exit 2) -> 2, not the stale-review 1" 2
+says "  ...passing its reason through" "the review threads at X are unread"
+rm -f "$FIX/next_unknown"
 setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build"; reviewer_pr "$CR_CLEAN"; open_thread false
 echo last-round > "$FIX/next"; : > "$FIX/next_calls"
 next_case "exit 6 at the head is never asked about -> refuse" 1
@@ -450,6 +478,18 @@ next_case "the host requires CodeRabbit's own check -> refuse, never waived" 1
 says "  ...saying the host refuses it anyway" "The host itself requires that reviewer's check"
 setup; checks "fail	Build" "pass	CodeRabbit"; declared "Build"; stale_review; echo last-round > "$FIX/next"
 next_case "a red required check still refuses past the last round" 1
+
+echo "== --checks-only: the required set's colours alone (review-next.sh --merge-row) =="
+setup; checks "pass	Build"; declared "Build"; reviewer_pr ""; diff_files plugin/scripts/review-next.sh
+expect "--checks-only: green, a gate-file edit and no review -> 0" 0 --checks-only
+setup; checks "fail	Build"; declared "Build"
+expect "--checks-only: a red required check -> 1" 1 --checks-only
+setup; checks "pending	Build"; declared "Build"
+expect "--checks-only: a pending required check -> 1" 1 --checks-only
+setup
+expect "--checks-only: no required set -> 3" 3 --checks-only
+setup; checks "pass	Build"; declared "Build"; diff_files plugin/scripts/review-next.sh
+expect "...while the full gate still refuses the gate-file edit -> 4" 4
 
 setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
 reviewer_pr "$CR_REFUSAL"

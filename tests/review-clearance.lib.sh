@@ -101,7 +101,7 @@ chmod +x "$TMP/bin/gh" "$TMP/bin/jq"
 export PATH="$TMP/bin:$PATH"
 
 # --- fixture builders ---------------------------------------------------------
-HEAD=""; AUTHOR=""; REVIEWS=""; COMMENTS=""; THREADS=""; THREADS_MORE=""
+HEAD=""; AUTHOR=""; REVIEWS=""; COMMENTS=""; THREADS=""; THREADS_MORE=""; THREADS_HEAD=""
 MERGEABLE=""; MERGE_STATE=""; HEAD_DATE=""
 
 setup() { # start from: a readable PR at <head> [pushed at <date>], authored by "dev"
@@ -116,7 +116,7 @@ setup() { # start from: a readable PR at <head> [pushed at <date>], authored by 
   MERGEABLE="MERGEABLE"; MERGE_STATE="CLEAN"
   # NO THREADS AND NO FURTHER PAGE is the default, so every case written before clause 9
   # existed keeps asking exactly the question it was written to ask.
-  THREADS='[]'; THREADS_MORE=false
+  THREADS='[]'; THREADS_MORE=false; THREADS_HEAD=""
 }
 
 body_file() { # <text...> -> a file holding it, so every artifact arrives the same way
@@ -172,8 +172,8 @@ write_pr() {
       commits:(if $hd == "" then [] else [{oid:$h, committedDate:$hd}] end)}' > "$FIX/pr_json"
   printf '%s' "$REVIEWS"  > "$FIX/reviews_json"
   printf '%s' "$COMMENTS" > "$FIX/comments_json"
-  "$REAL_JQ" -n --argjson t "$THREADS" --argjson more "$THREADS_MORE" \
-    '{data:{repository:{pullRequest:{reviewThreads:
+  "$REAL_JQ" -n --argjson t "$THREADS" --argjson more "$THREADS_MORE" --arg th "${THREADS_HEAD:-$HEAD}" \
+    '{data:{repository:{pullRequest:{headRefOid:$th, reviewThreads:
        {pageInfo:{hasNextPage:$more}, nodes:$t}}}}}' > "$FIX/threads_json"
 }
 

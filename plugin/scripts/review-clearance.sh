@@ -8,6 +8,7 @@
 #   Usage: review-clearance.sh <pr> [--repo <owner>/<name>] [--head <sha>]
 #                                           [--reviewer <login>] [--for-check <name>]
 #                                           [--no-merge-check] [--record <task-doc>]
+#          review-clearance.sh <pr> --threads [--repo <owner>/<name>] [--head <sha>]
 #          review-clearance.sh --match-check <check-name>
 #          review-clearance.sh --self-test
 #
@@ -559,6 +560,8 @@ usage() {
   echo "                       [--reviewer <login>] [--for-check <check-name>]" >&2
   echo "                       [--no-merge-check]   (round counting only, never a gate)" >&2
   echo "                       [--record <task-doc>] persist the mergeability read" >&2
+  echo "       $(basename "$0") <pr> --threads [--repo <o>/<n>] [--head <sha>]" >&2
+  echo "                       (unresolved threads not by the PR author: 0 none, 6 some, 2 unknown)" >&2
   echo "       $(basename "$0") --match-check <check-name>   (0 a reviewer's, 1 not)" >&2
   echo "       $(basename "$0") --self-test                  (prove this script RUNS)" >&2
   exit 2
@@ -793,7 +796,7 @@ if [ "${1:-}" = "--self-test" ]; then
 fi
 
 pr=""; repo=""; want_head=""; want_reviewer=""; for_check=""; skip_merge_check=""
-record_doc=""
+record_doc=""; threads_mode=""
 if [ "${1:-}" = "--match-check" ]; then
   [ -n "${2:-}" ] && [ "$#" -eq 2 ] || usage
   # A table that will not compile answers "not a reviewer's check" to every name, which
@@ -816,6 +819,7 @@ while [ "$#" -gt 0 ]; do
     --reviewer) want_reviewer="${2:-}";  [ -n "$want_reviewer" ] || usage; shift 2 ;;
     --for-check) for_check="${2:-}";     [ -n "$for_check" ] || usage; shift 2 ;;
     --no-merge-check) skip_merge_check=yes; shift ;;
+    --threads)  threads_mode=yes; shift ;;
     --record)   record_doc="${2:-}";     [ -n "$record_doc" ] || usage; shift 2 ;;
     -h|--help)  usage ;;
     -*) echo "error: unknown option '$1'" >&2; usage ;;
@@ -824,6 +828,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 [ -n "$pr" ] || usage
+[ -z "$threads_mode" ] || [ -z "$want_reviewer$for_check$record_doc$skip_merge_check" ] || usage
 
 # --- --for-check: whose review clears THIS required check ---------------------
 # Without it, "a review exists on this PR" is asked of every reviewer at once, so on a
@@ -872,6 +877,160 @@ validate_tables || exit 2
 # bash 3.2 (the macOS default) errors on "${arr[@]}" when arr is empty under `set -u`.
 R=()
 [ -n "$repo" ] && R=(--repo "$repo")
+
+# --- SCHEMA.md clause 9: no reviewer-authored thread is still unresolved ------
+#
+# Runs ONLY on the clearing path (see the decision block below) — a PR with no review to
+# begin with is refused for that, and reporting an open thread on top of it would bury the
+# answer the caller needs. So clause 9 is the LAST question asked, never the first.
+#
+# WHOSE THREADS COUNT. A thread whose FIRST comment was written by a known reviewer — a
+# login in REVIEWERS, or the one named with `--reviewer` — and never by the PR's own
+# author (SCHEMA clause 8: an author is not its own reviewer, and a thread it opened on
+# its own PR is a note to itself). The identity test is the SAME THREE-STEP NARROWING the
+# classifier loop uses, through the same `norm` — so a `[bot]` suffix or a casing
+# difference cannot smuggle a thread past it, and there is no second answer here to "whose
+# opinion counts".
+#
+# TABS AND NEWLINES CANNOT BREAK THE TSV, which matters because a thread body is arbitrary
+# user text: jq's `@tsv` escapes tab, newline, carriage return and backslash itself, so
+# every record below is exactly one line of exactly five fields.
+#
+# WHY GRAPHQL. `isResolved` exists nowhere in the REST API — not on a review, not on a
+# review comment, not on the PR. This is the one fact here that has no structured REST
+# source, and reading it is the whole point of the clause: "resolved" is exactly the state
+# a human sets and a body of prose cannot claim.
+#
+# IT FAILS CLOSED, IN BOTH ITS FAILURE DIRECTIONS, and they are different:
+#   * the query cannot be run or cannot be parsed  -> exit 2, unknown state, never
+#     clearance. `gh pr view` and `gh api` have already succeeded by the time this runs, so
+#     a GraphQL failure here is an anomaly and not a machine without network.
+#   * MORE THAN ONE PAGE of threads and none of the first 100 is open -> also exit 2, and
+#     this one is the subtle half. "No unresolved thread in the threads I could see" is not
+#     "no unresolved thread", and a 101-thread PR is exactly the large PR where an
+#     unanswered finding is most likely. An open thread found on page 1 still refuses at 6:
+#     that answer does not depend on the pages nobody read.
+clause9_threads=""      # one `path\tline\tlogin\turl\tfirst-line` record per open thread
+clause9_state=""        # ok | unreadable | truncated
+
+check_clause9() {
+  local q json total open_n p_ l_ who url_ first_
+  q='query($owner:String!,$name:String!,$number:Int!){
+       repository(owner:$owner,name:$name){
+         pullRequest(number:$number){
+           headRefOid
+           reviewThreads(first:100){
+             pageInfo{ hasNextPage }
+             nodes{
+               isResolved
+               path
+               line
+               comments(first:1){ nodes{ author{login} url body } }
+             }
+           }
+         }
+       }
+     }'
+  json="$(gh api graphql -F owner="${nwo%%/*}" -F name="${nwo##*/}" \
+            -F number="$pr_number" -f query="$q" 2>/dev/null)" || {
+    clause9_state="unreadable"; return; }
+
+  # EVERY COLUMN IS ALWAYS EMITTED, and `line` is why this is spelled out. A file-level
+  # thread has `line: null`, and `(.line // empty)` emits NO ELEMENT for it — so `@tsv`
+  # yields four fields instead of five and every field after it shifts one left. The login
+  # column then holds a URL, the reviewer test rejects it, and the thread is silently
+  # DROPPED: a file-level finding would clear the gate. Measured on the first run of
+  # tests/review-clearance-gates.test.sh's clause-9 section. `// "-"` keeps the column, and a
+  # null `author` (a deleted account) is likewise `""` rather than absent.
+  # An empty login or URL is written `-`: IFS tab is whitespace, so `read` would merge an
+  # empty field into its neighbour and shift the body into the URL column.
+  printf '%s' "$json" | jq -e '.data.repository.pullRequest.reviewThreads.nodes
+      | type == "array" and all(.[]; type == "object" and (.isResolved | type) == "boolean")' \
+      >/dev/null 2>&1 || { clause9_state="unreadable"; return; }
+  clause9_threads="$(printf '%s' "$json" | jq -r '
+      .data.repository.pullRequest.reviewThreads.nodes[]
+      | select(.isResolved == false)
+      | [ (.path // "(file-level)"),
+          ((.line // "-") | tostring),
+          ((.comments.nodes[0].author.login // "") | if . == "" then "-" else . end),
+          ((.comments.nodes[0].url // "") | if . == "" then "-" else . end),
+          ((.comments.nodes[0].body // "") | split("\n") | map(select(length>0))[0] // "")
+        ] | @tsv' 2>/dev/null)" || { clause9_state="unreadable"; return; }
+
+  total="$(printf '%s' "$json" | jq -r '
+      .data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' 2>/dev/null)" || total=""
+  case "$total" in true|false) ;; *) clause9_state="unreadable"; return ;; esac
+  if [ -n "$threads_mode" ] && [ "$(printf '%s' "$json" | jq -r '
+      .data.repository.pullRequest.headRefOid // ""' 2>/dev/null)" != "$head_sha" ]; then
+    clause9_state="moved"; return
+  fi
+
+  # WHOSE THREAD IT IS, DECIDED BY THE SAME THREE NARROWING STEPS THE CLASSIFIER LOOP USES
+  # — `--for-check` owners, else `--reviewer`, else the REVIEWERS table — and then clause 8
+  # on top. Copied in shape, not in authority: the tables and `norm` are the same objects,
+  # so there is no second answer to "whose opinion counts" for this file to drift from.
+  # A thread from an account in none of them is a teammate's, and a teammate's open thread
+  # is not the independent gate.
+  open_n=""
+  while IFS="$(printf '\t')" read -r p_ l_ who url_ first_; do
+    [ -n "$p_" ] || continue
+    [ "$who" != - ] || who=""
+    [ -n "$who" ] || [ -n "$threads_mode" ] || continue
+    if [ -n "$threads_mode" ]; then :
+    elif [ -n "$check_owners" ]; then
+      match_patterns "$who" "$check_owners" || continue
+    elif [ -n "$want_reviewer" ]; then
+      [ "$(norm "$who")" = "$(norm "$want_reviewer")" ] || continue
+    else
+      match_reviewer "$who" || continue
+    fi
+    [ -z "$self_qa" ] && [ "$(norm "$who")" = "$(norm "$pr_author")" ] && continue
+    open_n="${open_n}${p_}	${l_:--}	${who:--}	${url_:--}	${first_}
+"
+  done <<EOF
+$clause9_threads
+EOF
+  clause9_threads="$open_n"
+
+  if [ -n "$clause9_threads" ]; then clause9_state="ok"
+  elif [ "$total" = "true" ]; then clause9_state="truncated"
+  else clause9_state="ok"; fi
+}
+
+# `refuse_clause9` is called only where a clearance was otherwise about to be printed.
+refuse_clause9() { # <the clearance message that is being withheld>
+  if [ "$clause9_state" = "unreadable" ]; then
+    echo "error: PR $pr has a review at head $head_sha, but its review THREADS could not be" >&2
+    echo "       read, so $AB_SCHEMA clause 9 (no reviewer-authored thread still unresolved)" >&2
+    echo "       cannot be applied. A clause that cannot be applied is not a clause that" >&2
+    echo "       passes. Refusing (fail closed)." >&2
+    exit 2
+  fi
+  if [ "$clause9_state" = "truncated" ]; then
+    echo "error: PR $pr carries more review threads than one page, and none of the first" >&2
+    echo "       100 is unresolved. That is not the same answer as 'none is unresolved'," >&2
+    echo "       so clause 9 is UNKNOWN here rather than satisfied. Refusing (fail closed)." >&2
+    exit 2
+  fi
+  echo "refuse: PR $pr WAS reviewed at head $head_sha (${1#ok: }) — but $AB_SCHEMA clause 9" >&2
+  echo "        refuses it: the reviewer's own thread(s) below are still unresolved, so a" >&2
+  echo "        finding it raised has not been answered. DO NOT REQUEST ANOTHER REVIEW;" >&2
+  echo "        you already have one. Answer or fix each thread, resolve it, and push." >&2
+  list_clause9
+  exit 6
+}
+
+# UNTRUSTED TEXT, exactly as the refusal quotes above are: a thread body is written by
+# whoever can comment on the PR. Control characters are stripped before this reaches a
+# terminal so a body cannot repaint the screen or hide the lines under it, and the
+# opening line is cut to 120 characters so one thread cannot push the others off-screen.
+list_clause9() {
+  printf '%s' "$clause9_threads" | while IFS="$(printf '\t')" read -r p_ l_ who url_ first_; do
+    [ -n "$p_" ] || continue
+    printf '          | %s:%s  (%s)  %s\n' "$p_" "$l_" "$who" "$url_"
+    printf '          |   %s\n' "$(printf '%s' "$first_" | tr -d '\000-\010\013-\037' | cut -c1-120)"
+  done >&2
+}
 
 # --- the PR, and then its artifacts -------------------------------------------
 # `gh pr view` answers the PR's own facts and nothing else here. It does NOT expose a
@@ -953,6 +1112,23 @@ vendor_kind() { if match_reviewer "$1"; then echo external; else echo internal; 
   echo "       that cannot be applied is not a rule that passes. Refusing (fail closed)." >&2
   exit 2
 }
+
+# --- --threads: clause 9's read, counting every account but the PR author ---------
+if [ -n "$threads_mode" ]; then
+  self_qa=""
+  if [ -n "$want_head" ] && [ "$want_head" != "$head_sha" ]; then clause9_state="moved"
+  else check_clause9; fi
+  n="$(printf '%s' "$clause9_threads" | grep -c .)"
+  if [ "$clause9_state" = ok ]; then
+    echo "threads: $n"
+    [ "$n" -eq 0 ] && exit 0
+    echo "refuse: $n unresolved review thread(s) not by the PR author on PR $pr at $head_sha:" >&2
+    list_clause9; exit 6
+  fi
+  echo "threads: unknown"
+  echo "unknown: the review threads on PR $pr are $clause9_state at $head_sha — holding" >&2
+  exit 2
+fi
 
 # --- THE FIRST CHECK: can this PR merge at all? -------------------------------
 # Before any artifact is read, because no review makes a conflicting PR mergeable. See
@@ -1948,143 +2124,6 @@ if [ -z "$cleared_msg" ] && [ -n "$head_stamp" ]; then
     fi
   done < "$TMPD/head_markers"
 fi
-
-# --- SCHEMA.md clause 9: no reviewer-authored thread is still unresolved ------
-#
-# Runs ONLY on the clearing path (see the decision block below) — a PR with no review to
-# begin with is refused for that, and reporting an open thread on top of it would bury the
-# answer the caller needs. So clause 9 is the LAST question asked, never the first.
-#
-# WHOSE THREADS COUNT. A thread whose FIRST comment was written by a known reviewer — a
-# login in REVIEWERS, or the one named with `--reviewer` — and never by the PR's own
-# author (SCHEMA clause 8: an author is not its own reviewer, and a thread it opened on
-# its own PR is a note to itself). The identity test is the SAME THREE-STEP NARROWING the
-# classifier loop uses, through the same `norm` — so a `[bot]` suffix or a casing
-# difference cannot smuggle a thread past it, and there is no second answer here to "whose
-# opinion counts".
-#
-# TABS AND NEWLINES CANNOT BREAK THE TSV, which matters because a thread body is arbitrary
-# user text: jq's `@tsv` escapes tab, newline, carriage return and backslash itself, so
-# every record below is exactly one line of exactly five fields.
-#
-# WHY GRAPHQL. `isResolved` exists nowhere in the REST API — not on a review, not on a
-# review comment, not on the PR. This is the one fact here that has no structured REST
-# source, and reading it is the whole point of the clause: "resolved" is exactly the state
-# a human sets and a body of prose cannot claim.
-#
-# IT FAILS CLOSED, IN BOTH ITS FAILURE DIRECTIONS, and they are different:
-#   * the query cannot be run or cannot be parsed  -> exit 2, unknown state, never
-#     clearance. `gh pr view` and `gh api` have already succeeded by the time this runs, so
-#     a GraphQL failure here is an anomaly and not a machine without network.
-#   * MORE THAN ONE PAGE of threads and none of the first 100 is open -> also exit 2, and
-#     this one is the subtle half. "No unresolved thread in the threads I could see" is not
-#     "no unresolved thread", and a 101-thread PR is exactly the large PR where an
-#     unanswered finding is most likely. An open thread found on page 1 still refuses at 6:
-#     that answer does not depend on the pages nobody read.
-clause9_threads=""      # one `path\tline\tlogin\turl\tfirst-line` record per open thread
-clause9_state=""        # ok | unreadable | truncated
-
-check_clause9() {
-  local q json total open_n p_ l_ who url_ first_
-  q='query($owner:String!,$name:String!,$number:Int!){
-       repository(owner:$owner,name:$name){
-         pullRequest(number:$number){
-           reviewThreads(first:100){
-             pageInfo{ hasNextPage }
-             nodes{
-               isResolved
-               path
-               line
-               comments(first:1){ nodes{ author{login} url body } }
-             }
-           }
-         }
-       }
-     }'
-  json="$(gh api graphql -F owner="${nwo%%/*}" -F name="${nwo##*/}" \
-            -F number="$pr_number" -f query="$q" 2>/dev/null)" || {
-    clause9_state="unreadable"; return; }
-
-  # EVERY COLUMN IS ALWAYS EMITTED, and `line` is why this is spelled out. A file-level
-  # thread has `line: null`, and `(.line // empty)` emits NO ELEMENT for it — so `@tsv`
-  # yields four fields instead of five and every field after it shifts one left. The login
-  # column then holds a URL, the reviewer test rejects it, and the thread is silently
-  # DROPPED: a file-level finding would clear the gate. Measured on the first run of
-  # tests/review-clearance-gates.test.sh's clause-9 section. `// "-"` keeps the column, and a
-  # null `author` (a deleted account) is likewise `""` rather than absent.
-  clause9_threads="$(printf '%s' "$json" | jq -r '
-      .data.repository.pullRequest.reviewThreads.nodes[]?
-      | select(.isResolved == false)
-      | [ (.path // "(file-level)"),
-          ((.line // "-") | tostring),
-          (.comments.nodes[0].author.login // ""),
-          (.comments.nodes[0].url // ""),
-          ((.comments.nodes[0].body // "") | split("\n") | map(select(length>0))[0] // "")
-        ] | @tsv' 2>/dev/null)" || { clause9_state="unreadable"; return; }
-
-  total="$(printf '%s' "$json" | jq -r '
-      .data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' 2>/dev/null)" || total=""
-  case "$total" in true|false) ;; *) clause9_state="unreadable"; return ;; esac
-
-  # WHOSE THREAD IT IS, DECIDED BY THE SAME THREE NARROWING STEPS THE CLASSIFIER LOOP USES
-  # — `--for-check` owners, else `--reviewer`, else the REVIEWERS table — and then clause 8
-  # on top. Copied in shape, not in authority: the tables and `norm` are the same objects,
-  # so there is no second answer to "whose opinion counts" for this file to drift from.
-  # A thread from an account in none of them is a teammate's, and a teammate's open thread
-  # is not the independent gate.
-  open_n=""
-  while IFS="$(printf '\t')" read -r p_ l_ who url_ first_; do
-    [ -n "$who" ] || continue
-    if [ -n "$check_owners" ]; then
-      match_patterns "$who" "$check_owners" || continue
-    elif [ -n "$want_reviewer" ]; then
-      [ "$(norm "$who")" = "$(norm "$want_reviewer")" ] || continue
-    else
-      match_reviewer "$who" || continue
-    fi
-    [ -z "$self_qa" ] && [ "$(norm "$who")" = "$(norm "$pr_author")" ] && continue
-    open_n="${open_n}${p_}	${l_:--}	${who}	${url_}	${first_}
-"
-  done <<EOF
-$clause9_threads
-EOF
-  clause9_threads="$open_n"
-
-  if [ -n "$clause9_threads" ]; then clause9_state="ok"
-  elif [ "$total" = "true" ]; then clause9_state="truncated"
-  else clause9_state="ok"; fi
-}
-
-# `refuse_clause9` is called only where a clearance was otherwise about to be printed.
-refuse_clause9() { # <the clearance message that is being withheld>
-  if [ "$clause9_state" = "unreadable" ]; then
-    echo "error: PR $pr has a review at head $head_sha, but its review THREADS could not be" >&2
-    echo "       read, so $AB_SCHEMA clause 9 (no reviewer-authored thread still unresolved)" >&2
-    echo "       cannot be applied. A clause that cannot be applied is not a clause that" >&2
-    echo "       passes. Refusing (fail closed)." >&2
-    exit 2
-  fi
-  if [ "$clause9_state" = "truncated" ]; then
-    echo "error: PR $pr carries more review threads than one page, and none of the first" >&2
-    echo "       100 is unresolved. That is not the same answer as 'none is unresolved'," >&2
-    echo "       so clause 9 is UNKNOWN here rather than satisfied. Refusing (fail closed)." >&2
-    exit 2
-  fi
-  echo "refuse: PR $pr WAS reviewed at head $head_sha (${1#ok: }) — but $AB_SCHEMA clause 9" >&2
-  echo "        refuses it: the reviewer's own thread(s) below are still unresolved, so a" >&2
-  echo "        finding it raised has not been answered. DO NOT REQUEST ANOTHER REVIEW;" >&2
-  echo "        you already have one. Answer or fix each thread, resolve it, and push." >&2
-  # UNTRUSTED TEXT, exactly as the refusal quotes above are: a thread body is written by
-  # whoever can comment on the PR. Control characters are stripped before this reaches a
-  # terminal so a body cannot repaint the screen or hide the lines under it, and the
-  # opening line is cut to 120 characters so one thread cannot push the others off-screen.
-  printf '%s' "$clause9_threads" | while IFS="$(printf '\t')" read -r p_ l_ who url_ first_; do
-    [ -n "$p_" ] || continue
-    printf '          | %s:%s  (%s)  %s\n' "$p_" "$l_" "$who" "$url_"
-    printf '          |   %s\n' "$(printf '%s' "$first_" | tr -d '\000-\010\013-\037' | cut -c1-120)"
-  done >&2
-  exit 6
-}
 
 # --- the decision, taken once, over everything every artifact said ------------
 #
