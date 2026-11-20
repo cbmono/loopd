@@ -343,7 +343,8 @@ threads() { # [hasNextPage] <thread-json>...
 }
 mrow() { "$SCRIPT" 42 --repo acme/widgets --merge-row projects/p/tasks/task-001-x.md 2>/dev/null; echo "rc=$?"; }
 RCS="$REPO/plugin/scripts/review-clearance.sh"
-"$REAL_JQ" '.baseRefName = "main"' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
+"$REAL_JQ" --arg b $'### Criteria (1 ✓ / 0 ✗)\n\n| C | ✓ | By |\n|---|---|---|\n| a | ✓ | `a.test.sh` 3/0 |\n' \
+  '.baseRefName = "main" | .body = $b' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
 threads; ok "guard: CodeRabbit reviewed the head, 0 threads -> merge path" "$(live)" merge-path
 mkdir -p "$B/projects/p/tasks"; printf -- '---\ntype: Task\nstatus: in-review\n---\n' > "$B/projects/p/tasks/task-001-x.md"
 ok "…--merge-row prints build-awaiting.sh's arguments, one per line" "$(mrow | tr '\n' ' ')" \

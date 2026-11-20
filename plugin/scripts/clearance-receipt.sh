@@ -4,14 +4,16 @@
 # were checked against, so the PreToolUse hook can read them OFFLINE.
 #
 #   clearance-receipt.sh record <script> [--kind internal|external] [--fail [--at YYYY-MM-DDTHH:MM:SSZ]] --repo O/R --pr N --head SHA [--bundle DIR]
+#   clearance-receipt.sh record pr-body-clearance.sh --criteria M --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh record review-next.sh --unreviewed last-round|qa-head|qa-zero|zero-zero --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh record merge-hold.sh --hold clear|live|hand-off|unknown --mark M --repo O/R --pr N --head SHA [--bundle DIR]
-#   clearance-receipt.sh verify [--unreviewed] --repo O/R --pr N --head SHA [--bundle DIR]
+#   clearance-receipt.sh verify [--unreviewed] [--criteria] --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh path   --repo O/R --pr N --head SHA [--bundle DIR]
 #
 # Exit: 0 recorded / complete / printed · 1 absent or incomplete · 2 usage, or no bundle.
 # `record` never fails a caller: outside a bundle it exits 0 having written nothing.
 # An `--unreviewed` line is read only by `verify --unreviewed` (merge-permit.sh, `yolo` only).
+# `verify --criteria` also needs the pr-body-clearance.sh pass to carry `criteria=0` (precondition 3).
 # Reasoning: ai-bridge-v3/task-044, loopd-papercuts/task-010, loopd-papercuts/task-005.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
@@ -25,12 +27,12 @@ CHECKER="pr-verdict-clearance.sh"
 KEEP_DAYS=14
 
 usage() {
-  sed -n '5,11p' "$0" | sed 's/^# \{0,1\}//' >&2
+  sed -n '5,12p' "$0" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
 mode="${1:-}"; [ $# -gt 0 ] && shift
-script=""; kind=""; result=pass; unrev=""; stamp=""; mark=""
+script=""; kind=""; result=pass; unrev=""; stamp=""; mark=""; crit=""
 case "$mode" in
   record) script="${1:-}"; [ -n "$script" ] || usage; shift ;;
   verify|path) ;;
@@ -57,6 +59,13 @@ while [ $# -gt 0 ]; do
       esac ;;
     --hold)   [ "$mode" = record ] && [ "$script" = merge-hold.sh ] || usage
               case "${2:-}" in clear|live|hand-off|unknown) result="$2" ;; *) usage ;; esac; shift 2 ;;
+    --criteria)
+      case "$mode" in
+        record) [ "$script" = pr-body-clearance.sh ] || usage
+                case "${2:-}" in ''|*[!0-9]*) usage ;; esac; crit="criteria=$2"; shift 2 ;;
+        verify) crit=yes; shift ;;
+        *) usage ;;
+      esac ;;
     --mark)   [ "$mode" = record ] && [ $# -ge 2 ] || usage; mark="$(printf '%s' "$2" | tr -c 'A-Za-z0-9.,-' '-')"; shift 2 ;;
     -h|--help) usage ;;
     *) usage ;;
@@ -66,6 +75,7 @@ done
 
 # Only a fail line may carry --at: a backdated pass or a forward-dated waiver line clears.
 [ -z "$stamp" ] || [ "$result" = fail ] || usage
+[ "$mode" != record ] || [ -z "$crit" ] || [ "$result" = pass ] || usage
 case "$repo" in */*) ;; *) usage ;; esac
 case "$pr" in ''|*[!0-9]*) usage ;; esac
 case "$head" in [0-9a-fA-F][0-9a-fA-F]*) ;; *) usage ;; esac
@@ -139,7 +149,14 @@ EOF
       echo "clearance-receipt: $repo#$pr at $head has not passed: $missing" >&2
       exit 1
     }
-    exit 0
+    [ -z "$crit" ] && exit 0
+    m="$(awk '$1 == "pass" && $2 == "pr-body-clearance.sh" { c = ""; for (i = 4; i <= NF; i++) if ($i ~ /^criteria=[0-9]+$/) c = substr($i, 10) } END { print c }' "$file" 2>/dev/null)"
+    case "$m" in
+      0) exit 0 ;;
+      '') echo "clearance-receipt: the pr-body-clearance.sh pass at $head carries no criteria count (an older receipt): re-run it" >&2 ;;
+      *) echo "clearance-receipt: $repo#$pr at $head has $m ✗ criteria (AUTONOMY.md precondition 3): the owner merges" >&2 ;;
+    esac
+    exit 1
     ;;
 
   record)
@@ -160,7 +177,7 @@ EOF
       [ -f "$file" ] && awk '$1 ~ /^(pass|fail|last-round|qa-head|qa-zero|zero-zero|clear|live|hand-off|unknown)$/ &&
         !($2 == s && ($4 == "external" ? "external" : "internal") == k)' \
         s="$script" k="${kind:-internal}" "$file"
-      printf '%s %s %s%s\n' "$result" "$script" "$stamp" "${kind:+ $kind}${mark:+ $mark}"
+      printf '%s %s %s%s\n' "$result" "$script" "$stamp" "${kind:+ $kind}${mark:+ $mark}${crit:+ $crit}"
     } > "$tmp" 2>/dev/null && mv -f "$tmp" "$file" 2>/dev/null
     rm -f "$tmp" 2>/dev/null
     find "$dir" -type f -mtime "+$KEEP_DAYS" -delete 2>/dev/null

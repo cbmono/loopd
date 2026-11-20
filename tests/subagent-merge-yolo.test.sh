@@ -94,12 +94,14 @@ MD
 }
 autonomy_off() { rm -f "$BUNDLE/AUTONOMY.md"; }
 
-record_all() { # <pr> <sha> [script...] — default: all four
+CRIT=0
+crit_of() { [ "$1" != pr-body-clearance.sh ] || [ -z "$CRIT" ] || printf -- '--criteria %s' "$CRIT"; }
+record_all() { # <pr> <sha> [script...] — default: all four; pr-body's line carries $CRIT ✗ (empty: none)
   local pr="$1" sha="$2"; shift 2
   local list="$*" s
   [ -n "$list" ] || list="review-clearance.sh required-checks.sh pr-body-clearance.sh pr-verdict-clearance.sh"
   for s in $list; do
-    "$RECEIPT" record "$s" --bundle "$BUNDLE" --repo "$NWO" --pr "$pr" --head "$sha" || return 1
+    "$RECEIPT" record "$s" $(crit_of "$s") --bundle "$BUNDLE" --repo "$NWO" --pr "$pr" --head "$sha" || return 1
   done
   hold_rec "$pr" "$sha"
 }
@@ -247,7 +249,7 @@ printf -- '---\ntype: Task\ntitle: "a task"\nstatus: in-review\npr: [ https://gi
 record_nwo2() { # <sha>
   local s
   for s in review-clearance.sh required-checks.sh pr-body-clearance.sh pr-verdict-clearance.sh; do
-    "$RECEIPT" record "$s" --bundle "$BUNDLE" --repo "$NWO2" --pr 321 --head "$1" || return 1
+    "$RECEIPT" record "$s" $(crit_of "$s") --bundle "$BUNDLE" --repo "$NWO2" --pr 321 --head "$1" || return 1
   done
   hold_rec 321 "$1" "$NWO2"
 }
@@ -362,6 +364,20 @@ rm -f "$BUNDLE/projects/yolo-proj/tasks/task-002.md"
 ok "required-checks.sh never reads the session or the hand-off" \
    "$(sed '/^GATE_FILES="$/,/^"$/d' "$REPO/plugin/scripts/required-checks.sh" | grep -cE 'merge-hold|agent-sessions|session-handoff')" 0
 project yolo-proj yolo 226; rm -f "$YL"
+
+echo
+echo "== a criteria ✗ holds the yolo merge (precondition 3), read off the pr-body pass line =="
+forget; record_all 226 "$SHA"
+ok "guard: criteria=0 on the pr-body pass line ⇒ permitted" "$(verdict "$MERGE" "$PM")" allow
+CRIT=2; record_all 226 "$SHA"
+ok "criteria=2 ⇒ refused, naming the count" "$(verdict "$MERGE" "$PM")/$(reason | grep -c '2 ✗ criteria')" "deny:subagent_merge/1"
+CRIT=; record_all 226 "$SHA"
+ok "a pass line with no count (an older receipt) ⇒ refused" "$(verdict "$MERGE" "$PM")/$(reason | grep -c 'older receipt')" "deny:subagent_merge/1"
+CRIT=0
+ok "record --criteria from another script is a usage error" \
+   "$("$RECEIPT" record required-checks.sh --criteria 0 --bundle "$BUNDLE" --repo "$NWO" --pr 226 --head "$SHA" >/dev/null 2>&1; echo $?)" 2
+ok "…and on a fail line too" \
+   "$("$RECEIPT" record pr-body-clearance.sh --fail --criteria 0 --bundle "$BUNDLE" --repo "$NWO" --pr 226 --head "$SHA" >/dev/null 2>&1; echo $?)" 2
 
 echo
 echo "== the record is written by the clearance scripts, and read without network =="
@@ -490,6 +506,38 @@ STUB
   is "a PR editing merge-permit.sh ⇒ required-checks.sh exit 4" \
      "$(rc_exit plugin/scripts/merge-permit.sh)" 4
   is "…and plugin-name.sh, which names the merging role" "$(rc_exit plugin/scripts/plugin-name.sh)" 4
+
+  echo "== the real required-checks.sh writes the ✗ count, re-read on a same-head body edit =="
+  RQ="$TMP/rqbin"; mkdir -p "$RQ"
+  cat > "$RQ/gh" <<STUB
+#!/usr/bin/env bash
+f=""; p=""; for a in "\$@"; do [ "\$p" = --jq ] && f="\$a"; p="\$a"; done
+case "\$1 \$2" in
+  "pr diff") echo README.md ;;
+  "pr checks") printf '[{"name":"CI","bucket":"pass"}]' | if [ -n "\$f" ]; then "$REAL_JQ" -r "\$f"; else cat; fi ;;
+  "pr view") if [ -n "\$f" ]; then "$REAL_JQ" -r "\$f" "\$FIX/pr_json"; else exec "$TMP/bin/gh" "\$@"; fi ;;
+  *) exec "$TMP/bin/gh" "\$@" ;;
+esac
+STUB
+  chmod +x "$RQ/gh"
+  edit_body() { # <tally> <second mark> — the PR body as the host serves it, at the same head
+    local b; b="$(body_file '## Description' '' 'One sentence.' '' 'Verified: [run 1](https://example.invalid/r/1).' '' \
+      "### Criteria ($1)" '' '| Criterion | ✓ | Verified by |' '|---|---|---|' \
+      '| the retry backs off | ✓ | `foo.test.sh` 40/0 |' "| the cap holds | $2 | \`cap.test.sh\` 3/0 |" '' \
+      '### Decided without asking' '' 'none — the criteria name every choice.')"
+    "$REAL_JQ" --rawfile b "$b" '. + {body:$b, baseRefName:"main"}' "$FIX/pr_json" > "$FIX/pr_json.v" \
+      && mv "$FIX/pr_json.v" "$FIX/pr_json"
+    PATH="$RQ:$PATH" "$SCRIPTS/required-checks.sh" 42 --repo "$NWO" >/dev/null 2>&1; echo $?
+  }
+  crit() { awk '$1 ~ /^(pass|fail)$/ && $2 == "pr-body-clearance.sh" { print $1, $NF }' "$RCPT"; }
+  forget; setup "$H"; add_review coderabbitai COMMENTED "$H" "$CLEAN"; write_pr; hold_rec 42 "$H"
+  is "1 ✗ with a reason ⇒ required-checks.sh exit 0" "$(edit_body '1 ✓ / 1 ✗ — the cap is a later slice' ✗)" 0
+  is "…its pass line carries criteria=1" "$(crit)" "pass criteria=1"
+  is "…and the yolo merge is held" "$(permit)" 1
+  is "same head, the body edited to all ✓ ⇒ criteria=0" "$(edit_body '2 ✓ / 0 ✗' ✓)/$(crit)" "0/pass criteria=0"
+  is "…and the merge is permitted" "$(permit)" 0
+  is "same head, edited to an unexplained ✗ ⇒ exit 1" "$(edit_body '1 ✓ / 1 ✗' ✗)" 1
+  is "…which replaces the pass with a fail line, and holds" "$(crit | cut -d' ' -f1)/$(permit)" fail/1
 
   echo "== merge after the last round: a named receipt line, yolo only =="
   unrev() { # <name> [<head>] — the line review-next.sh --clear writes
