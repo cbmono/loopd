@@ -106,6 +106,14 @@ plugin/scripts/qa-dispatch.sh
 plugin/scripts/resolve-config.sh
 plugin/scripts/resolve-review-config.sh
 plugin/scripts/bundle-paths.sh
+plugin/scripts/merge-hold.sh
+plugin/scripts/agent-sessions.sh
+plugin/scripts/agent-sessions-classify.py
+plugin/scripts/pid_alive.py
+plugin/scripts/check-dispatch.sh
+plugin/scripts/decision-stamp.sh
+plugin/scripts/fold-answers.sh
+plugin/scripts/session-handoff.sh
 plugin/hooks/deny-destructive.sh
 plugin-yolo/companion/AUTONOMY.md
 "

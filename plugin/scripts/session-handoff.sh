@@ -24,7 +24,9 @@
 # ignored `$AB_HANDOFFS/<id>.txt`, which AWAITING.md renders — and the task gets only fixed
 # text the tick wrote: ONE `Q<n>: do: …hand-off <id>…` entry in `open_questions`, its
 # `### Q<n>` block, and a `needs handed off <uuid> · hand-off <id> · Q<n>` `# Notes` line, in
-# one atomic write. `<id>` is `<short>-<8 hex>` over the session, its `startedAt` and the
+# one atomic write, ending `· heads <sha|merged|unknown>…` per `pr:` URL from tick-delta.sh's
+# heads file (merge-hold.sh holds a merge on one opened at its head). `<id>` is
+# `<short>-<8 hex>` over the session, its `startedAt` and the
 # text, so a retry writes nothing twice and the next round's hand-off is a new entry.
 #
 # Exit 0 done · 1 not this script's case (`not-handed-off <why>`, `not-owed <why>`) · 2
@@ -48,7 +50,7 @@ while [ $# -gt 0 ]; do
     --jobs-dir) [ $# -ge 2 ] || usage; jobs="$2"; shift 2 ;;
     --owed)     owed=1; shift ;;
     --busy)     busy=1; shift ;;
-    -h|--help)  sed -n '3,37p' "$0"; exit 0 ;;
+    -h|--help)  sed -n '3,39p' "$0"; exit 0 ;;
     -*) usage ;;
     *) [ -z "$task" ] || usage; task="$1"; shift ;;
   esac
@@ -165,6 +167,17 @@ stop_it() { # -> 0 the stop landed, 3 it did not
   return 3
 }
 
+heads_at() { # -> one token per `pr:` URL: its head, `merged`, or `unknown`; `none` with no PR
+  local u l out=""
+  for u in $(awk '/^---[[:space:]]*$/ { fm++; if (fm == 2) exit; next }
+      fm == 1 && /^[A-Za-z_][A-Za-z0-9_-]*:/ { inpr = ($0 ~ /^pr:/) } fm == 1 && inpr' "$task" \
+      | grep -oE 'https://[^] ,"'"'"']+/pull/[0-9]+' | sort -u); do
+    l="$(U="$u" awk '$1 == ENVIRON["U"] { print $2, $3; exit }' "$root/$AB_TICK_START/heads" 2>/dev/null)"
+    case "$l" in MERGED\ *) out="$out merged" ;; [A-Z]*\ [0-9a-f]*) out="$out ${l#* }" ;; *) out="$out unknown" ;; esac
+  done
+  printf '%s' "${out# }"; [ -n "$out" ] || printf none
+}
+
 # ONE atomic write: the entry, its block and the note land together or not at all, on a
 # copy beside the task that replaces it only after it reads back.
 file_it() { # -> prints Q<n>
@@ -182,9 +195,9 @@ file_it() { # -> prints Q<n>
   bash "$HERE/fold-answers.sh" --add "$tmp" "$entry" >/dev/null || { rm -f "$tmp"; return 2; }
   local why="A role session ended its round with jobs only you can do"
   [ "$busy" = 1 ] && why="A role session's round ran past maxBgRoundMinutes"
-  python3 - "$tmp" "$n" "$hid" "$uuid" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$AB_HANDOFFS" "$why" <<'PY' || { rm -f "$tmp"; return 2; }
+  python3 - "$tmp" "$n" "$hid" "$uuid" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$AB_HANDOFFS" "$why" "$(heads_at)" <<'PY' || { rm -f "$tmp"; return 2; }
 import re, sys
-path, q, hid, uuid, now, store, why = sys.argv[1:8]
+path, q, hid, uuid, now, store, why, heads = sys.argv[1:9]
 src = open(path, encoding="utf-8").read()
 end = src.find("\n---", 3) + 4
 head, lines = src[:end], src[end:].split("\n")
@@ -213,7 +226,7 @@ append_to("## Question details", ["", "### " + q,
     "- Depth 1: %s (hand-off %s), and the tick stopped it." % (why, hid),
     "- Depth 2: The jobs are in AWAITING.md; the full text is `%s/%s.txt` on the clone that filed it, and `claude logs %s` shows the session." % (store, hid, uuid.split("-")[0]),
     "- Depth 3: Your answer is the resumed session's next message — `done`, or anything it should know first."])
-append_to("# Notes", ["* %s needs handed off %s · hand-off %s · %s · session stopped by the tick" % (now, uuid, hid, q)])
+append_to("# Notes", ["* %s needs handed off %s · hand-off %s · %s · session stopped by the tick · heads %s" % (now, uuid, hid, q, heads)])
 out = head + "\n".join(lines)
 open(path, "w", encoding="utf-8").write(out if out.endswith("\n") else out + "\n")
 PY

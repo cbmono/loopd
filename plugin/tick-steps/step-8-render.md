@@ -14,6 +14,7 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    ${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh \
      --trailer <task-path>='<the one sentence that ends that row>' \
      --merge   <task-path>='[<repo>#<n>](<pr-url>)' \
+     --note    <task-path>='<one line under that row>' \
      --facts   <task-path>=<verdict>
    ```
 
@@ -36,13 +37,18 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    by design, and the `--merge` values. **A `--merge` value is never yours to write**: pass
    exactly what
    `${CLAUDE_PLUGIN_ROOT}/scripts/review-next.sh <pr> --repo <org>/<repo> --head <sha> --merge-row <task-path>`
-   printed this tick, unchanged, and pass none where it printed nothing (exit 1 not
-   merge-path or a required check not green, exit 2 unknown). It prints only on
+   printed this tick, unchanged and in order, one argument per line — `--merge`, `--held` and
+   `--note` with their values — whatever its exit, and pass none where it printed nothing (exit 1 not
+   merge-path or a required check not green, exit 2 unknown). Where a merge row would be, it
+   prints `--held` instead while `merge-hold.sh` finds the task's role session live
+   (`working`/`blocked`, exit 1), a `Q<n>: do: … hand-off` opened at this head before any merge
+   (exit 1), or no fresh saved listing (`session unknown`, exit 2): one `⏸ **held**` row, in the
+   merge row's place and count, saying which. It prints only on
    `merge-path`, which needs a live read showing 0 unresolved review threads not authored by
    the PR author, and only once `required-checks.sh --checks-only` finds every required
    check green at the head (or no required set at all); it appends the
-   `##mq1 …`/`##mq2 …` token `merge-queue.sh` prints; the renderer turns that into one
-   `> warning:` line under the row, and itself never calls `gh`. Under `yolo` pass it only
+   `##mq1 …`/`##mq2 …` token `merge-queue.sh` prints as a `--note`; the renderer turns that into one
+   `> warning:` line under the row (every `--note` is one `  > ` line, in order), and itself never calls `gh`. Under `yolo` pass it only
    where step 4 left the merge to the owner. A QA disagreement needs no flag: step 4's
    `qa-disagreement.sh` wrote it as a `Q<n>` entry, which renders as any `answer` row.
 

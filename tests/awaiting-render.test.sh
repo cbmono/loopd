@@ -344,11 +344,12 @@ rthreads() { # <login>... — one unresolved thread per login, read at the head
            comments:{nodes:[{author:{login:.}, url:"https://example.invalid/t", body:"look"}]}}]}}}}}' \
     --args "$@" > "$RF/threads"
 }
-render_from_rn() { # -> "<review-next exit> <merge rows>"
-  local v rc
+render_from_rn() { # -> "<review-next exit> <merge rows>"; each printed line is one build-awaiting.sh argument
+  local v rc a=() l
   v="$(PATH="$TMP/rnbin:$PATH" CLAUDE_PROJECT_DIR="$MR" bash "$REPO/plugin/scripts/review-next.sh" 7 \
        --repo octo/demo --instance "$MR" --merge-row "$MRT" 2>/dev/null)"; rc=$?
-  bash "$SH" --instance "$MR" ${v:+--merge "$v"} >/dev/null 2>&1
+  while IFS= read -r l; do [ -n "$l" ] && a+=("$l"); done <<<"$v"
+  bash "$SH" --instance "$MR" ${a[@]+"${a[@]}"} >/dev/null 2>&1
   echo "$rc $(grep -c '^\* 🔀' "$MR/$AB_AWAITING" | tr -d ' ')"
 }
 rthreads
@@ -366,6 +367,107 @@ printf '[{"name":"CI","bucket":"pass"}]\n' > "$RF/checks"
 : > "$RF/fail"
 ok "the thread read fails -> unknown (exit 2), no merge row" "$(render_from_rn)" "2 0"
 rm -f "$RF/fail"
+# =====================================================================================
+# A LIVE ROLE SESSION OR A HAND-OFF OPEN AT THE HEAD HOLDS THE ROW, AND SAYS SO. The session
+# is read from the listing step 4 saves (agent-sessions.sh save), never from the CLI here.
+# =====================================================================================
+echo
+echo "== a live session or an open hand-off at the head holds the merge row, never silently =="
+SID=11111111-2222-3333-4444-555555555555; LST="$MR/$AB_SESSIONS_SAVED"; mkdir -p "$(dirname "$LST")"
+sleep 0 & DEADPID=$!; wait "$DEADPID"
+listing() { # <state> [<pid>] — the listing and the round marks, as agent-sessions.sh save writes them
+  printf '[{"sessionId":"%s","state":"%s","pid":%s}]\n' "$SID" "$1" "${2:-$$}" > "$LST"
+  bash "$REPO/plugin/scripts/merge-hold.sh" marks "$MR" > "$(dirname "$LST")/marks"; }
+with_session() { sed -i.bak "s/^status: in-review$/status: in-review\nsession: $SID/" "$MRT"; }
+held_row() { grep '^\* ⏸ \*\*held\*\*' "$MR/$AB_AWAITING"; }
+says_held() { # <why> -> "<held rows>/<why shown>"
+  echo "$(held_row | grep -c . | tr -d ' ')/$(held_row | grep -cF "[demo#7](https://github.com/octo/demo/pull/7) merge held: $1" | tr -d ' ')"; }
+task "$MR" task-004-d "Green" in-review '"x"' ''; with_session
+for st in working blocked; do
+  listing "$st"
+  ok "session $st -> no merge row (exit 1)" "$(render_from_rn)" "1 0"
+  ok "…the held row says role session live" "$(says_held 'role session live')" 1/1
+done
+for st in done gone stopped; do
+  listing "$st"
+  ok "guard: session $st -> merge row" "$(render_from_rn)" "0 1"
+  ok "…and no held row" "$(held_row | grep -c . | tr -d ' ')" 0
+done
+listing working "$DEADPID"
+ok "session working with no live pid (dead) -> no merge row (exit 2)" "$(render_from_rn)" "2 0"
+ok "…held as session unknown" "$(says_held 'session unknown')" 1/1
+listing paused
+ok "an unrecognised state -> session unknown" "$(render_from_rn)/$(says_held 'session unknown')" "2 0/1/1"
+printf 'not json\n' > "$LST"
+ok "the listing unreadable (states exit 2) -> session unknown" "$(render_from_rn)/$(says_held 'session unknown')" "2 0/1/1"
+rm -f "$LST"
+ok "no saved listing -> session unknown" "$(render_from_rn)/$(says_held 'session unknown')" "2 0/1/1"
+listing done; touch -t 202001010000 "$LST"
+ok "a stale listing (past one tick gap) -> session unknown" "$(render_from_rn)/$(says_held 'session unknown')" "2 0/1/1"
+listing done; printf '\n* woke %s\n' "$SID" >> "$MRT"
+ok "a resume after the listing was saved -> session unknown" "$(render_from_rn)/$(says_held 'session unknown')" "2 0/1/1"
+listing done
+ok "…until the next save reads it" "$(render_from_rn)" "0 1"
+listing done
+task "$MR" task-004-d "Green" in-review '"x"' ''
+ok "guard: no recorded session, no hand-off -> merge row" "$(render_from_rn)" "0 1"
+rm -f "$LST"
+ok "…even with no saved listing" "$(render_from_rn)" "0 1"
+printf '\n# Notes\n\n* spawned; session id unresolved: abc12345\n' >> "$MRT"
+ok "an empty session after an unresolved spawn -> session unknown" "$(render_from_rn)/$(says_held 'session unknown')" "2 0/1/1"
+OH=0123456789abcdef0123456789abcdef01234567
+handoff() { # <entry> <heads field> — one hand-off entry and its note
+  task "$MR" task-004-d "Green" in-review '"x"' "\"$1\""
+  printf '\n# Notes\n\n* 2026-11-20T10:00:00Z needs handed off %s · hand-off 11111111-aaaabbbb · Q1 · session stopped by the tick%s\n' \
+    "$SID" "${2:+ · heads $2}" >> "$MRT"
+}
+HQ="Q1: do: finish the agent's hand-off 11111111-aaaabbbb — its jobs are in AWAITING.md; answer done, or with what its next round should know"
+handoff "$HQ" "$RH"
+ok "a hand-off opened at the current head -> no merge row (exit 1)" "$(render_from_rn)" "1 0"
+ok "…the held row says hand-off open" "$(says_held 'hand-off open')" 1/1
+ok "…beside the hand-off's own do row" "$(grep -c '^\* 👉 \*\*do\*\*' "$MR/$AB_AWAITING" | tr -d ' ')" 1
+handoff "$HQ" unknown
+ok "a hand-off whose head was unread -> held" "$(render_from_rn)/$(says_held 'hand-off open')" "1 0/1/1"
+handoff "$HQ" "$OH"
+ok "a hand-off from an earlier head -> merge row" "$(render_from_rn)" "0 1"
+handoff "$HQ" merged
+ok "a post-merge hand-off -> merge row" "$(render_from_rn)" "0 1"
+handoff "$HQ" "merged $OH"
+ok "…merged beside an earlier head -> merge row" "$(render_from_rn)" "0 1"
+handoff "$HQ" "merged $RH"
+ok "a sibling PR merged, this PR open at its head -> held" "$(render_from_rn)/$(says_held 'hand-off open')" "1 0/1/1"
+handoff "$HQ"
+ok "a hand-off with no heads field (before this change) -> merge row" "$(render_from_rn)" "0 1"
+handoff "$HQ --- done" "$RH"
+ok "an answered hand-off at the head -> merge row" "$(render_from_rn)" "0 1"
+handoff "Q1: do: deploy the release once merged" "$RH"
+ok "a do: deploy entry -> merge row" "$(render_from_rn)" "0 1"
+task "$MR" task-004-d "Green" in-review '"x"' ''
+S4="$REPO/plugin/tick-steps/step-4-advance.md"; S8="$REPO/plugin/tick-steps/step-8-render.md"
+first() { grep -nF -- "$2" "$1" | cut -d: -f1 | sed -n 1p; }
+ok "step 4 saves the listing after its stop and resume sweep" \
+   "$([ "$(first "$S4" 'agent-sessions.sh save')" -gt "$(first "$S4" 'session-handoff.sh --owed <task-path>')" ] \
+      && [ "$(first "$S4" 'agent-sessions.sh save')" -gt "$(first "$S4" 'agent-sessions.sh recorded <the task')" ] && echo after || echo before)" after
+ok "step 8 passes every printed --merge-row line, in order, as one argument" \
+   "$(tr -s '[:space:]' ' ' < "$S8" | grep -cF -- '--merge-row <task-path>` printed this tick, unchanged and in order, one argument per line')" 1
+
+echo
+echo "== --note is repeatable per row, and carries merge-queue.sh's tokens =="
+N="$TMP/notes"; inst "$N"; : > "$N/$AB_AWAITING"
+task "$N" task-004-d "Green" in-review '"x"' ''; NT="$N/projects/demo/tasks/task-004-d.md"
+NL='[demo#7](https://github.com/octo/demo/pull/7)'
+bash "$SH" --instance "$N" --merge "$NT=$NL" --note "$NT=##mq1 main tests-Tests-refs/heads/main" \
+  --note "$NT=##mq2 gh could not list the workflows" --note "$NT=a third line" >/dev/null 2>&1
+ok "##mq1 still renders its warning under the merge row" \
+   "$(grep -cxF '  > warning: a tests-Tests-refs/heads/main run is in progress on main; merging now cancels it' "$N/$AB_AWAITING" | tr -d ' ')" 1
+ok "…##mq2 too" "$(grep -cxF '  > warning: concurrency unknown: gh could not list the workflows' "$N/$AB_AWAITING" | tr -d ' ')" 1
+ok "…and any other note as itself, in the order given" "$(grep '^  > ' "$N/$AB_AWAITING" | tail -n 1)" "  > a third line"
+ok "…under the one merge row, which keeps its link" "$(grep -c '^\* ' "$N/$AB_AWAITING" | tr -d ' ')/$(grep -cF "· $NL" "$N/$AB_AWAITING" | tr -d ' ')" 1/1
+bash "$SH" --instance "$N" --merge "$NT=$NL ##mq2 x" >/dev/null 2>&1
+ok "a token on the --merge value is no longer parsed" "$(grep -c '^  > ' "$N/$AB_AWAITING" | tr -d ' ')" 0
+ok "--held with an unknown reason is a usage error" \
+   "$(bash "$SH" --instance "$N" --held "$NT=busy $NL" >/dev/null 2>&1; echo $?)" 2
+
 ok "step 8 passes the value through: the tick judges no eligibility" \
    "$(grep -c 'merge-eligibility is this tick.s judgement' "$REPO/plugin/tick-steps/step-8-render.md" | tr -d ' ')/$(grep -c 'review-next.sh <pr> --repo <org>/<repo> --head <sha> --merge-row <task-path>' "$REPO/plugin/tick-steps/step-8-render.md" | tr -d ' ')" 0/1
 
