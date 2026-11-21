@@ -47,7 +47,9 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    `merge-path`, which needs a live read showing 0 unresolved review threads not authored by
    the PR author, and only once `required-checks.sh --checks-only` finds every required
    check green at the head (or no required set at all); it appends the
-   `##mq1 …`/`##mq2 …` token `merge-queue.sh` prints as a `--note`; the renderer turns that into one
+   `##mq1 …`/`##mq2 …` token `merge-queue.sh` prints as a `--note`, then the criteria line
+   `pr-body-clearance.sh --tally` prints (`M ✗ criteria: <reason>`, none for an all-`✓` tally,
+   `criteria: unknown (…)` when unreadable) as another; the renderer turns that into one
    `> warning:` line under the row (every `--note` is one `  > ` line, in order), and itself never calls `gh`. Under `yolo` pass it only
    where step 4 left the merge to the owner. A QA disagreement needs no flag: step 4's
    `qa-disagreement.sh` wrote it as a `Q<n>` entry, which renders as any `answer` row.

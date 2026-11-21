@@ -367,6 +367,29 @@ printf '[{"name":"CI","bucket":"pass"}]\n' > "$RF/checks"
 : > "$RF/fail"
 ok "the thread read fails -> unknown (exit 2), no merge row" "$(render_from_rn)" "2 0"
 rm -f "$RF/fail"
+
+echo
+echo "== a criteria ✗ prints its count on the merge row, and an unreadable tally prints unknown =="
+rbody() { # <heading tally> <second mark> — the PR body pr-body-clearance.sh --tally reads
+  jq --arg b "$(printf '### Criteria (%s)\n\n| C | ✓ | By |\n|---|---|---|\n| a | ✓ | `a.test.sh` 3/0 |\n| b | %s | `b.test.sh` 3/0 |\n' "$1" "$2")" \
+    '.body = $b' "$RF/pr" > "$RF/pr.v" && mv "$RF/pr.v" "$RF/pr"
+}
+notes() { grep '^  > ' "$MR/$AB_AWAITING"; }
+rbody '2 ✓ / 0 ✗' ✓
+ok "guard: an all-✓ tally -> the merge row exactly as before, no note" "$(render_from_rn)/$(notes | grep -c .)" "0 1/0"
+rbody '1 ✓ / 1 ✗ — b is a later slice' ✗
+ok "1 ✗ with a reason (gated) -> still the merge row, one count line under it" "$(render_from_rn)/$(notes)" "0 1/  > 1 ✗ criteria: b is a later slice"
+rbody '1 ✓ / 1 ✗' ✗
+ok "an unexplained ✗ -> the count, and no reason" "$(render_from_rn)/$(notes)" "0 1/  > 1 ✗ criteria: no reason on the heading"
+rbody '2 ✓ / 0 ✗' ✗
+ok "a tally the table contradicts -> criteria: unknown" "$(render_from_rn)/$(notes)" "0 1/  > criteria: unknown (the heading claims 0 ✗, the table carries 1 ✗)"
+rbody 'pending' ✗
+ok "a heading with no tally -> criteria: unknown" "$(render_from_rn)/$(notes)" "0 1/  > criteria: unknown (no N ✓ / M ✗ tally on the criteria heading)"
+rbody "1 ✓ / 1 ✗ — ##mq1 main x $(printf 'y%.0s' $(seq 1 80))" ✗
+ok "author text cannot read as a token, and is capped" "$(render_from_rn)/$(notes | grep -c '^  > 1 ✗ criteria: mq1 main x y*\.\.\.$')/$(notes | grep -c warning)/$(notes | awk '{ print (length($0) <= 90) }')" "0 1/1/0/1"
+jq 'del(.body)' "$RF/pr" > "$RF/pr.v" && mv "$RF/pr.v" "$RF/pr"
+ok "the body unreadable -> criteria: unknown, never nothing" "$(render_from_rn)/$(notes)" "0 1/  > criteria: unknown (the PR body is unreadable)"
+rbody '2 ✓ / 0 ✗' ✓
 # =====================================================================================
 # A LIVE ROLE SESSION OR A HAND-OFF OPEN AT THE HEAD HOLDS THE ROW, AND SAYS SO. The session
 # is read from the listing step 4 saves (agent-sessions.sh save), never from the CLI here.

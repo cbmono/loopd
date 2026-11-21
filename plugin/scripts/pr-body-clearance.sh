@@ -11,6 +11,11 @@
 #   Usage: pr-body-clearance.sh <pr> [--repo <owner>/<name>] [--head <sha>] [--ui]
 #          pr-body-clearance.sh --body-file <path> [--ui]   (decide on a local draft)
 #          pr-body-clearance.sh --self-test          (prove this script RUNS)
+#          pr-body-clearance.sh <pr> [--repo …] [--head <sha>] --tally   (review-next.sh --merge-row)
+#
+# `--tally` decides nothing and records nothing: it prints the 🔀 merge row's criteria line —
+# `M ✗ criteria: <heading reason>`, nothing for an all-✓ tally, or `criteria: unknown (<why>)` —
+# exit 0 for a readable tally, 1 for any other heading state, 2 unreadable.
 #
 # WHY THIS EXISTS — `CONVENTIONS.md` has required a short, shaped PR body since the rule
 # merged at 14:59 UTC on 2026-08-29. FIVE HOURS LATER an agent that had that rule — the
@@ -206,7 +211,8 @@
 # `AUTONOMY.md` PRECONDITION 3 / `SCHEMA.md` CLAUSE 7 — an unverified criterion blocking
 # clearance is an existing gate with an existing reader, and duplicating it here would
 # give the repo two answers to one question. This file closes the gap that nothing read
-# the body's SHAPE at all.
+# the body's SHAPE at all. It only carries the count: `criteria=M` on its pass receipt line,
+# which `merge-permit.sh` reads, and `--tally`'s line on the merge row.
 #
 # GENERIC PLUGIN FILE — ships inside the `loopd` plugin; nothing to edit per
 # instance. It takes no org, repo or vendor identity: those come from the arguments.
@@ -471,7 +477,31 @@ usage() {
   echo "Usage: $(basename "$0") <pr> [--repo <owner>/<name>] [--head <sha>] [--ui]" >&2
   echo "       $(basename "$0") --body-file <path> [--ui]   (decide on a local draft)" >&2
   echo "       $(basename "$0") --self-test          (prove this script RUNS)" >&2
+  echo "       $(basename "$0") <pr> [--repo <owner>/<name>] [--head <sha>] --tally" >&2
   exit 2
+}
+
+tally_line() { # <rendered-body> -> the merge row's criteria line; 0 tally ok, 1 another state, 2 unknown
+  local scan st t
+  scan="$(table_scan "$1")"
+  st="$(printf '%s\n' "$scan" | awk -F'\t' '$1 == "state" { print $2; exit }')"
+  t="$(printf '%s\n' "$scan" | awk -F'\t' '$1 == "tally" { print; exit }')"
+  case "$st" in
+    ok) ;;
+    unmarked|none) echo "criteria: unknown (no criteria table in the PR body)"; return 1 ;;
+    *) echo "criteria: unknown (the PR body is unreadable)"; return 2 ;;
+  esac
+  set -- "$(printf '%s' "$t" | cut -f2)" "$(printf '%s' "$t" | cut -f3)" "$(printf '%s' "$t" | cut -f4)" \
+         "$(printf '%s' "$t" | cut -f5)" "$(printf '%s' "$t" | cut -f6)"
+  case "$1" in
+    ok) [ "${3:-0}" -eq 0 ] || echo "$3 ✗ criteria: ${4:-no reason on the heading}"; return 0 ;;
+    unexplained) echo "$2 ✗ criteria: no reason on the heading" ;;
+    mismatch) echo "criteria: unknown (the heading claims $3 ✗, the table carries $5 ✗)" ;;
+    noheading) echo "criteria: unknown (no heading over the criteria table)" ;;
+    nottallied) echo "criteria: unknown (no N ✓ / M ✗ tally on the criteria heading)" ;;
+    *) echo "criteria: unknown (the PR body is unreadable)"; return 2 ;;
+  esac
+  return 1
 }
 
 # `rows <table>` strips comments and blank lines; every table is read through it, so a
@@ -769,7 +799,7 @@ decided_scan() { # <rendered-body>
 #                       one line per criteria row outside the bound. Emitted only for
 #                       rows that CARRY A MARK, so a continuation or spacer row inside
 #                       the table is never measured as if it were a criterion.
-#   tally<TAB>ok                                   the heading agrees with the rows
+#   tally<TAB>ok<TAB><✓><TAB><✗><TAB><reason>          the heading agrees with the rows
 #   tally<TAB>noheading                            no ATX heading above the table at all
 #   tally<TAB>nottallied<TAB><heading excerpt>     a heading, carrying no `N ✓ / M ✗`
 #   tally<TAB>mismatch<TAB><claimed ✓><TAB><claimed ✗><TAB><actual ✓><TAB><actual ✗><TAB><undecidable rows>
@@ -1023,7 +1053,9 @@ table_scan() { # <rendered-body>
         if (clcrs > 0 && rest == "") {
           printf "tally\tunexplained\t%d\t%s\n", clcrs, excerpt(crit_head); exit
         }
-        printf "tally\tok\n"
+        why = substr(crit_head, RSTART + RLENGTH)
+        sub(/^[^0-9A-Za-z]+/, "", why); sub(/[^0-9A-Za-z.]+$/, "", why)
+        printf "tally\tok\t%d\t%d\t%s\n", clchk, clcrs, excerpt(why)
       }
     }
   ' "$1"
@@ -1132,6 +1164,7 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
   case "$tstate" in ok|unmarked|none) : ;; *) return 2 ;; esac
   tally="$(printf '%s\n' "$scan" | awk -F'\t' '$1 == "tally" { print; exit }')"
   tkind="$(printf '%s\n' "$tally" | cut -f2)"
+  CRIT_CRS=""; [ "$tkind" = ok ] && CRIT_CRS="$(printf '%s\n' "$tally" | cut -f4)"
   # A `state ok` with no tally line at all is a scan that did not finish, which is unknown
   # rather than a verdict about the body.
   if [ "$tstate" = ok ]; then
@@ -1471,13 +1504,14 @@ if [ "${1:-}" = "--self-test" ]; then
 fi
 
 # --- argument parsing ---------------------------------------------------------
-pr=""; repo=""; want_head=""; body_file=""
+pr=""; repo=""; want_head=""; body_file=""; TALLY=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --repo)      repo="${2:-}";      [ -n "$repo" ] || usage; shift 2 ;;
     --head)      want_head="${2:-}"; [ -n "$want_head" ] || usage; shift 2 ;;
     --body-file) body_file="${2:-}"; [ -n "$body_file" ] || usage; shift 2 ;;
     --ui)        UI=1; shift ;;
+    --tally)     TALLY=1; shift ;;
     -h|--help)   usage ;;
     -*) echo "error: unknown option '$1'" >&2; usage ;;
     *) [ -z "$pr" ] || { echo "error: unexpected argument '$1'" >&2; usage; }
@@ -1517,6 +1551,7 @@ if [ -n "$body_file" ]; then
   report_length "$body_file" "$body_file"
   "$(dirname "${BASH_SOURCE[0]:-$0}")/wording-notes.sh" - < "$body_file" >&2 || true
   render_body "$body_file" "$TMPD/rendered"
+  [ "$TALLY" -eq 0 ] || { tally_line "$TMPD/rendered"; exit $?; }
   decide "$body_file" "$TMPD/rendered" "'$body_file'"
   exit $?
 fi
@@ -1575,21 +1610,22 @@ printf '%s' "$raw" | jq -j '.body // ""' > "$TMPD/body" 2>/dev/null || {
   exit 2
 }
 
+render_body "$TMPD/body" "$TMPD/rendered"
+[ "$TALLY" -eq 0 ] || { tally_line "$TMPD/rendered"; exit $?; }
 report_length "$TMPD/body" "PR $pr body"
 "$(dirname "${BASH_SOURCE[0]:-$0}")/wording-notes.sh" "$TMPD/body" >&2 || true
 
-render_body "$TMPD/body" "$TMPD/rendered"
 decide "$TMPD/body" "$TMPD/rendered" "the body of PR $pr ($url)"; drc=$?
 
 # The clearance record the PreToolUse hook reads offline (ai-bridge-v3/task-044). It is
 # written, never read, here — and it can only ever fail silently, so it cannot change the
-# answer this script just gave.
-if [ "$drc" -eq 0 ]; then
-  "$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record pr-body-clearance.sh \
-    --repo "$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')" \
-    --pr "$(printf '%s' "$raw" | jq -r '.number // ""' 2>/dev/null)" \
-    --head "$head_sha" >/dev/null 2>&1 || true
-fi
+# answer this script just gave. A pass carries the tally's ✗ count; any other answer is a
+# fail line, so a body edited at the same head cannot leave an earlier pass standing.
+REC=(--fail); [ "$drc" -eq 0 ] && REC=(--criteria "$CRIT_CRS")
+"$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record pr-body-clearance.sh "${REC[@]}" \
+  --repo "$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')" \
+  --pr "$(printf '%s' "$raw" | jq -r '.number // ""' 2>/dev/null)" \
+  --head "$head_sha" >/dev/null 2>&1 || true
 exit $drc
 
 # --- completeness sentinel — THIS MUST REMAIN THE LAST LINE OF THIS FILE -------

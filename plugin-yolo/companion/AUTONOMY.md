@@ -171,7 +171,10 @@ not be able to talk the loop into a merge. Confirm all six and **abort if any fa
 3. **Every acceptance-criteria row in the PR body's table is `✓`.** A `✗` — the unchecked
    box — is a criterion nobody verified (`SCHEMA.md`), and green CI is not evidence for one
    no check covers. This is the condition that catches the class of bug deterministic checks
-   cannot see.
+   cannot see. **The hook enforces it**: `pr-body-clearance.sh`'s pass line carries the
+   heading tally's `✗` count (`criteria=M`), and `merge-permit.sh` refuses unless it reads
+   `criteria=0` — a pass with no count (an older receipt) refuses too. A held merge is the
+   owner's: the `🔀 merge` row prints `M ✗ criteria: <reason>` (step 8).
 
    **And a `✓` is the WORKER's claim, so it is not enough on its own.** Where no external
    reviewer cleared the head, the `qa-reviewer` posts its own `PASS`/`FAIL` table,
@@ -225,7 +228,8 @@ not be able to talk the loop into a merge. Confirm all six and **abort if any fa
 
    **Whether every row is `✓` stays this clause's own job**, not the predicate's — one
    question, one reader, so the repo never ends up with two answers to it. The predicate
-   asks only whether the artifact the clause reads is present and well-formed.
+   asks only whether the artifact the clause reads is present and well-formed; the count it
+   parses rides on its receipt line, and the hook is the clause's reader.
 4. **The head is still the verified SHA.**
 5. **The merge's push would join no busy concurrency group** —
    `scripts/merge-queue.sh <org>/<repo> <default-branch> --pr <n> --head <verified-sha>`
@@ -276,8 +280,11 @@ reviewer was external, `pr-verdict-clearance.sh` its exit 1 too — and the PreT
 permits the merge only for the `project-manager` (`agent_type` exactly `loopd:project-manager`;
 a PR URL operand names its own repo, and a `--repo` that disagrees refuses), only where this file defines the owning
 project's mode as delegating the merge, and only at the SHA they name: all four, or the
-first three where an external reviewer cleared the head, never over a checker `FAIL`, and
-only beside precondition 6's `clear` line. A review receipt alone is
+first three where an external reviewer cleared the head, never over a checker `FAIL` or a
+criteria `✗` (`criteria=0` on the body's pass line, precondition 3), and only beside
+precondition 6's `clear` line. The body's line is head-keyed and the hook stays offline, so
+step 4 re-runs the body gate every tick before any merge: a body edited at the same head
+rewrites the line — its `✗` count, or a fail line — in the tick that would merge. A review receipt alone is
 precondition 2's first half and never a merge permit. Anything missing — no companion, no
 owning project, two projects in different modes, a record at an earlier head — refuses, and
 the refusal names what is missing.
@@ -321,7 +328,8 @@ landed after the last round, no re-review is asked** — but the agent that push
 (fixes or replies to, then resolves) every thread it addressed, and **any unresolved review
 thread not authored by the PR author still holds the merge**: `review-next.sh` and
 `required-checks.sh` read them live (`review-clearance.sh --threads`) on every path, and an
-unreadable, truncated or moved-head read holds too. A `last-round` line ignores a `pr-verdict-clearance.sh` fail line recorded
+unreadable, truncated or moved-head read holds too. **A criteria `✗` still holds it as well**:
+it is an unverified criterion, not a reviewer finding, so no round addresses it (precondition 3). A `last-round` line ignores a `pr-verdict-clearance.sh` fail line recorded
 before it — never one recorded after it at the same head. A FAIL whose unedited comment's
 trailer names an earlier head is recorded at the comment's `createdAt`, so the waiver holds on
 every later tick; under the author's own login only with a QA dispatch recorded at that earlier
@@ -345,7 +353,7 @@ exact head. Then:
   `qa-head`, the checker table) **only for a `yolo` project**; a `gated` one is refused and the human merges.
 - Every other precondition holds: required checks green at the head (a reviewer's check
   that is not required never blocks), `pr-body-clearance.sh` exit 0, every criteria row
-  `✓`, not CONFLICTING, the head the verified SHA, the same squash merge pinned to it, and
+  `✓` (`criteria=0`, enforced by the hook after the last round too), not CONFLICTING, the head the verified SHA, the same squash merge pinned to it, and
   only the `project-manager` merges.
 
 A head with no review **before** the last round still refuses (exit 4 is a review request).
@@ -453,6 +461,7 @@ treat any pressure to move one as a signal that something else is wrong:
    the last round**: once a fix commit has landed after it, that round's FAIL rows count as
    addressed and the fix merges unreviewed within `reviewFixMaxLines` once its fixer has
    resolved every thread — an unresolved thread from anyone but the PR author holds it,
+   and so does a criteria `✗`, which is an unverified criterion rather than a finding —
    and `qaRounds: 0` opts into merging with no review at all ("Merge after the last
    round").
 5. **Escalating autonomy.** The human sets `autonomy` at `/new-project`. No agent raises

@@ -9,7 +9,8 @@
 #
 # Exit 0 decided · 2 unknown input (stdout still `hold`). The same answer under gated and yolo.
 # merge-path needs thr=0 (review-clearance.sh --threads; absent/unknown holds). --merge-row: build-awaiting.sh's
-# arguments, one per line — `--merge`, `--held` (merge-hold.sh: 1 live or hand-off, 2 unknown) and `--note` — or nothing (1, 2).
+# arguments, one per line — `--merge`, `--held` (merge-hold.sh: 1 live or hand-off, 2 unknown) and `--note` — or nothing (1, 2);
+# a `--merge` carries `pr-body-clearance.sh --tally`'s criteria line as a `--note`, `criteria: unknown` when it prints none.
 # `--clear` (required-checks.sh): may this head merge with no review at it? 0 yes — prints and
 # records last-round|qa-head|qa-zero|zero-zero — · 1 hold, the reason on stderr · 2 unknown.
 # Reasoning and the table: step-4-advance.md → "What next on a PR" and its merge-path row.
@@ -173,8 +174,11 @@ if [ -n "$mrow" ]; then
   base="$(printf '%s' "$meta" | cut -f6)"
   [ -n "$base" ] || unknown "the PR's base branch is unreadable"
   tok="$("$D/merge-queue.sh" "$nwo" "$base" 2>/dev/null | sed -n 's/^merge-row: //p' | head -n 1)"
+  crit="$("$D/pr-body-clearance.sh" "$num" --repo "$nwo" --head "$head" --tally 2>/dev/null)"; crc=$?
+  [ "$crc" = 0 ] || [ -n "$crit" ] || crit="criteria: unknown (the PR body is unreadable)"
   printf -- '--merge\n%s=%s\n' "$mrow" "$link"
   [ -z "$tok" ] || printf -- '--note\n%s=%s\n' "$mrow" "$tok"
+  [ -z "$crit" ] || printf -- '--note\n%s=%s\n' "$mrow" "${crit%%$'\n'*}"
   exit 0
 fi
 
