@@ -7,6 +7,7 @@
 #   clearance-receipt.sh record pr-body-clearance.sh --criteria M --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh record review-next.sh --unreviewed last-round|qa-head|qa-zero|zero-zero --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh record merge-hold.sh --hold clear|live|hand-off|unknown --mark M --repo O/R --pr N --head SHA [--bundle DIR]
+#   clearance-receipt.sh record dependent-prs.sh --dependents clear|dependent|unknown --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh verify [--unreviewed] [--criteria] --repo O/R --pr N --head SHA [--bundle DIR]
 #   clearance-receipt.sh path   --repo O/R --pr N --head SHA [--bundle DIR]
 #
@@ -27,7 +28,7 @@ CHECKER="pr-verdict-clearance.sh"
 KEEP_DAYS=14
 
 usage() {
-  sed -n '5,12p' "$0" | sed 's/^# \{0,1\}//' >&2
+  sed -n '5,13p' "$0" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
@@ -59,6 +60,8 @@ while [ $# -gt 0 ]; do
       esac ;;
     --hold)   [ "$mode" = record ] && [ "$script" = merge-hold.sh ] || usage
               case "${2:-}" in clear|live|hand-off|unknown) result="$2" ;; *) usage ;; esac; shift 2 ;;
+    --dependents) [ "$mode" = record ] && [ "$script" = dependent-prs.sh ] || usage
+              case "${2:-}" in clear|dependent|unknown) result="$2" ;; *) usage ;; esac; shift 2 ;;
     --criteria)
       case "$mode" in
         record) [ "$script" = pr-body-clearance.sh ] || usage
@@ -72,6 +75,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ "$script" != merge-hold.sh ] || case "$result" in clear|live|hand-off|unknown) [ -n "$mark" ] ;; *) false ;; esac || usage
+[ "$script" != dependent-prs.sh ] || case "$result" in clear|dependent|unknown) ;; *) false ;; esac || usage
 
 # Only a fail line may carry --at: a backdated pass or a forward-dated waiver line clears.
 [ -z "$stamp" ] || [ "$result" = fail ] || usage
@@ -174,7 +178,7 @@ EOF
     {
       printf 'repo %s\npr %s\nhead %s\n' "$repo" "$pr" "$head"
       # One line per script AND kind: an internal run at this head cannot erase an external one.
-      [ -f "$file" ] && awk '$1 ~ /^(pass|fail|last-round|qa-head|qa-zero|zero-zero|clear|live|hand-off|unknown)$/ &&
+      [ -f "$file" ] && awk '$1 ~ /^(pass|fail|last-round|qa-head|qa-zero|zero-zero|clear|live|hand-off|dependent|unknown)$/ &&
         !($2 == s && ($4 == "external" ? "external" : "internal") == k)' \
         s="$script" k="${kind:-internal}" "$file"
       printf '%s %s %s%s\n' "$result" "$script" "$stamp" "${kind:+ $kind}${mark:+ $mark}${crit:+ $crit}"

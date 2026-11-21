@@ -117,6 +117,7 @@ filter=""; prev=""
 for a in "$@"; do [ "$prev" = "--jq" ] && { filter="$a"; break; }; prev="$a"; done
 case " $* " in
   *" repos/acme/widgets/actions/workflows "*) exit 0 ;;
+  " api repos/acme/widgets --jq "*) printf '{"delete_branch_on_merge":false}' | "$REAL_JQ" -r "$filter"; exit 0 ;;
   *" repos/acme/widgets/branches/"*) [ -f "$FIX/no_branch" ] && { echo "HTTP 404" >&2; exit 1; }; echo '{}'; exit 0 ;;
 esac
 case "${1:-} ${2:-}" in
@@ -145,7 +146,7 @@ B="$TMP/bundle"; mkdir -p "$B"; printf '{}\n' > "$B/instance.config.json"
 export CLAUDE_PROJECT_DIR="$B"
 "$REAL_JQ" -n --arg h "$H" '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
   headRepository:{name:"widgets"}, headRepositoryOwner:{login:"acme"},
-  author:{login:"dev"}, mergeable:"MERGEABLE", mergeStateStatus:"CLEAN", commits:[]}' > "$FIX/pr_json"
+  isCrossRepository:false, author:{login:"dev"}, mergeable:"MERGEABLE", mergeStateStatus:"CLEAN", commits:[]}' > "$FIX/pr_json"
 printf '[{"sha":"%s"}]\n' "$H" > "$FIX/commits_json"
 printf '[]\n' > "$FIX/reviews_json"
 "$REAL_JQ" -n --rawfile b "$FIXTURES/rate-limit-refusal.pr30.md" '[{user:{login:"coderabbitai[bot]"}, body:$b}]' \

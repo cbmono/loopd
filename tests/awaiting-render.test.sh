@@ -319,15 +319,19 @@ task "$MR" task-004-d "Green" in-review '"x"' ''
 MRT="$MR/projects/demo/tasks/task-004-d.md"; RF="$TMP/rnfix"; mkdir -p "$RF" "$TMP/rnbin"
 RH=8f40f2ed565a31e141f5ae54a6935ad0810314c4
 jq -n --arg h "$RH" '{url:"https://github.com/octo/demo/pull/7", number:7, headRefOid:$h, headRefName:"b",
-  baseRefName:"main", headRepository:{name:"demo"}, headRepositoryOwner:{login:"octo"},
+  baseRefName:"main", headRepository:{name:"demo"}, headRepositoryOwner:{login:"octo"}, isCrossRepository:false,
   author:{login:"dev"}, mergeable:"MERGEABLE", mergeStateStatus:"CLEAN", commits:[]}' > "$RF/pr"
 printf '[]\n' > "$RF/empty"; printf '[{"sha":"%s"}]\n' "$RH" > "$RF/commits"
 printf '[{"name":"CI","bucket":"pass"}]\n' > "$RF/checks"
+printf '{"delete_branch_on_merge":true}\n' > "$RF/repo"; printf '[]\n' > "$RF/deps"
 { printf '#!/usr/bin/env bash\nRF=%q\n' "$RF"; cat <<'STUB'
 f=""; p=""; for a in "$@"; do [ "$p" = --jq ] && f="$a"; p="$a"; done
 out() { if [ -n "$f" ]; then jq -r "$f" "$1"; else cat "$1"; fi; }
+printf '%s\n' "$*" >> "$RF/calls"
 case " $* " in
   " pr view "*) out "$RF/pr" ;;
+  " api repos/octo/demo --jq "*) [ -f "$RF/repofail" ] && exit 1; out "$RF/repo" ;;
+  *"/pulls?state=open&"*) [ -f "$RF/depsfail" ] && exit 1; out "$RF/deps" ;;
   " pr checks "*) out "$RF/checks" ;;
   *" graphql "*) [ -f "$RF/fail" ] && exit 1; cat "$RF/threads" ;;
   *"/actions/workflows "*) ;;
@@ -390,6 +394,57 @@ ok "author text cannot read as a token, and is capped" "$(render_from_rn)/$(note
 jq 'del(.body)' "$RF/pr" > "$RF/pr.v" && mv "$RF/pr.v" "$RF/pr"
 ok "the body unreadable -> criteria: unknown, never nothing" "$(render_from_rn)/$(notes)" "0 1/  > criteria: unknown (the PR body is unreadable)"
 rbody '2 ✓ / 0 ✗' ✓
+
+echo
+echo "== an open PR based on the head branch, where merging auto-deletes it, prints on the merge row =="
+deps() { # <base ref> <base repo> <number>... — the open PRs the REST list answers
+  local r="$1" b="$2"; shift 2
+  jq -n --arg r "$r" --arg b "$b" '[$ARGS.positional[] | {number: (. | tonumber),
+    html_url: ("https://github.com/" + $b + "/pull/" + .), base: {ref: $r, repo: {full_name: $b}}}]' --args "$@" > "$RF/deps"
+}
+setref() { jq --arg r "$1" --argjson c "${2:-false}" '.headRefName = $r | .isCrossRepository = $c' "$RF/pr" > "$RF/pr.v" && mv "$RF/pr.v" "$RF/pr"; }
+dbm() { printf '{"delete_branch_on_merge":%s}\n' "$1" > "$RF/repo"; }
+DN='  > dependent PR [demo#12](https://github.com/octo/demo/pull/12) will be retargeted on merge'
+rm -f "$RF/calls"
+ok "guard: auto-delete on, no PR based on the head -> the merge row exactly as before" "$(render_from_rn)/$(notes | grep -c .)" "0 1/0"
+ok "…reading the setting and the list once each" \
+   "$(grep -c 'delete_branch_on_merge' "$RF/calls")/$(grep -c 'pulls?state=open&base=b&' "$RF/calls")" 1/1
+deps b octo/demo 12; dbm false
+ok "guard: auto-delete off, a PR based on the head -> the merge row exactly as before" "$(render_from_rn)/$(notes | grep -c .)" "0 1/0"
+dbm true
+ok "auto-delete on, one PR based on the head -> the merge row, naming it" "$(render_from_rn)/$(notes)" "0 1/$DN"
+deps b octo/demo 12 13
+ok "several -> one line each, in order" "$(render_from_rn)/$(notes | sed -n 2p)" "0 1/  > dependent PR [demo#13](https://github.com/octo/demo/pull/13) will be retargeted on merge"
+deps b octo/fork 12
+ok "a same-named base in another repository is not this head" "$(render_from_rn)/$(notes | grep -c .)" "0 1/0"
+deps b octo/demo 7
+ok "the PR itself is never its own dependent" "$(render_from_rn)/$(notes | grep -c .)" "0 1/0"
+deps b octo/demo 12; setref b true
+ok "a fork's head branch: no PR here is based on it -> nothing" "$(render_from_rn)/$(notes | grep -c .)" "0 1/0"
+deps -x octo/demo 12; setref -x; rm -f "$RF/calls"
+ok "a head branch named like an option is a query value, never a flag" \
+   "$(render_from_rn)/$(notes)/$(grep -c 'pulls?state=open&base=-x&per_page=100' "$RF/calls")" "0 1/$DN/1"
+deps feat/a octo/demo 12; setref feat/a; rm -f "$RF/calls"
+ok "…and a slash in it is encoded" "$(render_from_rn)/$(grep -c 'base=feat%2Fa&' "$RF/calls")" "0 1/1"
+setref b; deps b octo/demo 12
+: > "$RF/repofail"
+ok "the setting unreadable -> dependent PRs: unknown on the row, never silence" \
+   "$(render_from_rn)/$(notes)" "0 1/  > dependent PRs: unknown (delete_branch_on_merge is unreadable)"
+ok "…and nothing counts toward merge-queue.sh's bound" "$(ls -A "$MR/$AB_MERGE_HOLDS" 2>/dev/null | grep -c .)" 0
+rm -f "$RF/repofail"; printf '{}\n' > "$RF/repo"
+ok "the setting absent from the answer -> unknown, never false" \
+   "$(render_from_rn)/$(notes)" "0 1/  > dependent PRs: unknown (delete_branch_on_merge is unreadable)"
+dbm true; : > "$RF/depsfail"
+ok "the list unreadable -> dependent PRs: unknown on the row" \
+   "$(render_from_rn)/$(notes)" "0 1/  > dependent PRs: unknown (the open PRs based on its head branch are unreadable)"
+ok "…and nothing counts toward merge-queue.sh's bound" "$(ls -A "$MR/$AB_MERGE_HOLDS" 2>/dev/null | grep -c .)" 0
+rm -f "$RF/depsfail"
+mkdir -p "$TMP/nogh"; printf '#!/usr/bin/env bash\n: > %q\nexit 1\n' "$TMP/nogh/called" > "$TMP/nogh/gh"; chmod +x "$TMP/nogh/gh"
+PATH="$TMP/nogh:$PATH" bash "$SH" --instance "$MR" --merge "$MRT=[demo#7](https://github.com/octo/demo/pull/7)" \
+  --note "$MRT=${DN#  > }" --note "$MRT=dependent PRs: unknown (x)" >/dev/null 2>&1
+ok "build-awaiting.sh renders the dependent lines and calls no gh" \
+   "$(notes | grep -c dependent)/$([ -e "$TMP/nogh/called" ] && echo called || echo none)" "2/none"
+printf '[]\n' > "$RF/deps"
 # =====================================================================================
 # A LIVE ROLE SESSION OR A HAND-OFF OPEN AT THE HEAD HOLDS THE ROW, AND SAYS SO. The session
 # is read from the listing step 4 saves (agent-sessions.sh save), never from the CLI here.
