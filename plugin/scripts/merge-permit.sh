@@ -15,6 +15,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)" || exit 2
 RESOLVE_AUTONOMY="$HERE/resolve-autonomy.sh"
 RECEIPT="$HERE/clearance-receipt.sh"
 HOLD="$HERE/merge-hold.sh"
+DEPS="$HERE/dependent-prs.sh"
 
 # The tick, and nothing else. `review-clearance.sh` exit 0 is precondition 2's first half
 # and the qa-reviewer earns one on nearly every reviewed PR, so without this a
@@ -107,5 +108,10 @@ receipt_err="$("$RECEIPT" verify ${unrev[@]+"${unrev[@]}"} --criteria --bundle "
 [ -x "$HOLD" ] || refuse "merge-hold.sh is missing, so no session or hand-off hold can be read"
 hold_err="$("$HOLD" verify --bundle "$bundle" --repo "$repo" --pr "$pr" --head "$head" 2>&1)" \
   || refuse "${hold_err:-no merge-hold.sh line for $repo#$pr at $head}"
+
+# 6. No open PR based on its head branch, and no unknown read of one (AUTONOMY.md precondition 7).
+[ -x "$DEPS" ] || refuse "dependent-prs.sh is missing, so no dependent-PR hold can be read"
+deps_err="$("$DEPS" verify --bundle "$bundle" --repo "$repo" --pr "$pr" --head "$head" 2>&1)" \
+  || refuse "${deps_err:-no dependent-prs.sh line for $repo#$pr at $head}"
 
 exit 0

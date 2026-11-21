@@ -114,6 +114,7 @@ plugin/scripts/check-dispatch.sh
 plugin/scripts/decision-stamp.sh
 plugin/scripts/fold-answers.sh
 plugin/scripts/session-handoff.sh
+plugin/scripts/dependent-prs.sh
 plugin/hooks/deny-destructive.sh
 plugin-yolo/companion/AUTONOMY.md
 "

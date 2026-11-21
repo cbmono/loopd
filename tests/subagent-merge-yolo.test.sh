@@ -107,8 +107,9 @@ record_all() { # <pr> <sha> [script...] — default: all four; pr-body's line ca
 }
 forget() { rm -rf "${BUNDLE:?}/$AB_RECEIPTS"; }
 HOLD="$REPO/plugin/scripts/merge-hold.sh"
-hold_rec() { # <pr> <sha> [<nwo>] — the line the tick's `merge-hold.sh check --record` writes for the owning task
+hold_rec() { # <pr> <sha> [<nwo>] — the lines the tick's `merge-hold.sh check --record` and `dependent-prs.sh check --record` write
   local t
+  "$RECEIPT" record dependent-prs.sh --dependents clear --bundle "$BUNDLE" --repo "${3:-$NWO}" --pr "$1" --head "$2"
   t="$(grep -lE "^pr:.*/${3:-$NWO}/pull/$1( |\])" "$BUNDLE"/projects/*/tasks/*.md 2>/dev/null)"
   t="${t%%$'\n'*}"; [ -n "$t" ] || return 0
   "$HOLD" check "$t" --head "$2" --instance "$BUNDLE" --record --repo "${3:-$NWO}" --pr "$1" >/dev/null 2>&1
@@ -364,6 +365,54 @@ rm -f "$BUNDLE/projects/yolo-proj/tasks/task-002.md"
 ok "required-checks.sh never reads the session or the hand-off" \
    "$(sed '/^GATE_FILES="$/,/^"$/d' "$REPO/plugin/scripts/required-checks.sh" | grep -cE 'merge-hold|agent-sessions|session-handoff')" 0
 project yolo-proj yolo 226; rm -f "$YL"
+
+echo
+echo "== an open PR based on the head branch, or an unknown read, holds the yolo merge (precondition 7) =="
+DEPS="$REPO/plugin/scripts/dependent-prs.sh"; DF="$TMP/depfix"; mkdir -p "$DF/bin"
+printf '{"headRefName":"feat/x","isCrossRepository":false}\n' > "$DF/pr"
+printf '{"delete_branch_on_merge":true}\n' > "$DF/repo"; printf '[]\n' > "$DF/deps"
+{ printf '#!/usr/bin/env bash\nDF=%q\n' "$DF"; cat <<'STUB'
+f=""; p=""; for a in "$@"; do [ "$p" = --jq ] && f="$a"; p="$a"; done
+case " $* " in
+  " pr view "*) jq -r "$f" "$DF/pr" ;;
+  *"/pulls?state=open&"*) [ -f "$DF/fail" ] && exit 1; jq -r "$f" "$DF/deps" ;;
+  " api repos/"*) jq -r "$f" "$DF/repo" ;;
+  *) exit 99 ;;
+esac
+STUB
+} > "$DF/bin/gh"; chmod +x "$DF/bin/gh"
+dep_tick() { # the tick's precondition 7 at this head -> its exit
+  PATH="$DF/bin:$PATH" "$DEPS" check 226 --repo "$NWO" --head "$SHA" --record --bundle "$BUNDLE" >/dev/null 2>&1; echo $?; }
+dep_line() { awk '$2 == "dependent-prs.sh" { print $1 }' "$BUNDLE/$AB_RECEIPTS/cbmono-ai-bridge__pr226__$SHA"; }
+dependent() { printf '[{"number":227,"html_url":"https://github.com/%s/pull/227","base":{"ref":"feat/x","repo":{"full_name":"%s"}}}]\n' "$NWO" "$NWO" > "$DF/deps"; }
+project yolo-proj yolo 226; forget; record_all 226 "$SHA"
+ok "guard: no PR based on the head ⇒ a clear line, and permitted" "$(dep_tick)/$(dep_line)/$(verdict "$MERGE" "$PM")" "0/clear/allow"
+sed -i.bak '/ dependent-prs.sh /d' "$BUNDLE/$AB_RECEIPTS/cbmono-ai-bridge__pr226__$SHA"
+ok "no dependent-prs.sh line ⇒ refused, naming it" "$(verdict "$MERGE" "$PM")/$(reason | grep -c 'no dependent-prs.sh line')" "deny:subagent_merge/1"
+dependent
+ok "a PR based on the head ⇒ a dependent line, and refused" "$(dep_tick)/$(dep_line)/$(verdict "$MERGE" "$PM")" "1/dependent/deny:subagent_merge"
+ok "…naming the retarget" "$(reason | grep -c 'would be retargeted')" 1
+printf '{"delete_branch_on_merge":false}\n' > "$DF/repo"
+ok "auto-delete off ⇒ clear, and permitted" "$(dep_tick)/$(dep_line)/$(verdict "$MERGE" "$PM")" "0/clear/allow"
+printf '{}\n' > "$DF/repo"
+ok "the setting unreadable ⇒ an unknown line, and refused" "$(dep_tick)/$(dep_line)/$(verdict "$MERGE" "$PM")" "2/unknown/deny:subagent_merge"
+printf '{"delete_branch_on_merge":true}\n' > "$DF/repo"; : > "$DF/fail"
+ok "the list unreadable ⇒ an unknown line, and refused" "$(dep_tick)/$(dep_line)/$(verdict "$MERGE" "$PM")" "2/unknown/deny:subagent_merge"
+rm -f "$DF/fail"; printf '[]\n' > "$DF/deps"
+ok "a clear read this tick ⇒ permitted" "$(dep_tick)/$(verdict "$MERGE" "$PM")" "0/allow"
+dependent
+ok "a dependent PR opened at the same head, re-read next tick ⇒ refused" "$(dep_tick)/$(dep_line)/$(verdict "$MERGE" "$PM")" "1/dependent/deny:subagent_merge"
+printf '[]\n' > "$DF/deps"; dep_tick >/dev/null
+sed -i.bak 's/^\(clear dependent-prs.sh \)[^ ]*/\12000-01-01T00:00:00Z/' "$BUNDLE/$AB_RECEIPTS/cbmono-ai-bridge__pr226__$SHA"
+ok "a clear line older than one tick gap ⇒ refused" "$(verdict "$MERGE" "$PM")/$(reason | grep -c 'dependent-prs.sh line .* older than')" "deny:subagent_merge/1"
+ok "…re-written this tick ⇒ permitted" "$(dep_tick)/$(verdict "$MERGE" "$PM")" "0/allow"
+dependent; dep_tick >/dev/null
+sed -i.bak 's/^autonomy: yolo$/autonomy: gated/' "$BUNDLE/projects/yolo-proj/project.md"
+ok "gated: refused as the human's merge, not as a dependent hold" \
+   "$(reason | grep -c 'the human merges')/$(reason | grep -c 'retargeted')" "1/0"
+ok "record --dependents from another script is a usage error" \
+   "$("$RECEIPT" record merge-hold.sh --dependents clear --bundle "$BUNDLE" --repo "$NWO" --pr 226 --head "$SHA" >/dev/null 2>&1; echo $?)" 2
+project yolo-proj yolo 226
 
 echo
 echo "== a criteria ✗ holds the yolo merge (precondition 3), read off the pr-body pass line =="

@@ -956,6 +956,23 @@ a fail line, and `merge-permit.sh` refuses unless it reads `criteria=0`. The hoo
 and the line head-keyed: step 4 re-runs the body gate every tick before a merge, so a same-head
 body edit is re-read in the tick that would merge.
 
+**Amended on 2026-11-21: an open PR based on the head branch prints on the merge row and holds a
+yolo merge.** The same incident had a probe PR based on the head branch, in a repo that
+auto-deletes merged heads. GitHub [documents](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/merging-a-pull-request)
+that deleting a merged head **retargets** every open PR in the same repository based on it to the
+merged PR's base; it does not close them (deleting a branch by hand while a PR is open does). The
+incident's probe PR suffered neither: it was closed by hand about 15 hours before its base merged.
+So the harm is a retarget, worded so on the row. `dependent-prs.sh` reads the setting and the
+open PRs whose base is the head branch, by exact name in this repository only — a fork's head
+branch lives in the fork, which no PR here can be based on, and a same-named base elsewhere is a
+different branch. `review-next.sh --merge-row` prints one `--note` per dependent, and
+`dependent PRs: unknown (…)` when either read fails — a note, so nothing reaches
+`merge-queue.sh`'s bound. Under `yolo` both hold (D7, amending D6's failure clause): a self-merge
+leaves no row to print an unknown on. Precondition 7 records the verdict at the head each tick and
+the hook refuses a line that is missing, not `clear` or older than 30 minutes, which is what
+catches a dependent opened at the same head. Branch protection, which can stop the deletion, is
+not read: a protected long-lived head warns and holds, failing closed.
+
 <a id="step-5"></a>
 ### Step 5 — why ONE script deletes a worktree, and pruning is still report-only
 
