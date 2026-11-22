@@ -69,11 +69,12 @@ q="$(jq -rn --arg r "$ref" '$r | @uri')" || unknown "the head branch name cannot
 list="$(gh api "repos/$repo/pulls?state=open&base=$q&per_page=100" --paginate \
         --jq '.[] | [(.number | tostring), (.html_url // ""), (.base.ref // ""), (.base.repo.full_name // "")] | @tsv' 2>/dev/null)" \
   || unknown "the open PRs based on its head branch are unreadable"
-n=0
+lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+lrepo="$(lc "$repo")"; n=0
 while IFS=$'\t' read -r num url base brepo; do
-  [ -n "$num" ] && [ "$base" = "$ref" ] && [ "$brepo" = "$repo" ] && [ "$num" != "$pr" ] || continue
+  [ -n "$num" ] && [ "$base" = "$ref" ] && [ "$(lc "$brepo")" = "$lrepo" ] && [ "$num" != "$pr" ] || continue
   case "$num" in *[!0-9]*) continue ;; esac
-  case "$url" in "https://"*"/$repo/pull/$num") ;; *) unknown "PR $num lists no URL in $repo" ;; esac
+  case "$(lc "$url")" in "https://"*"/$lrepo/pull/$num") ;; *) unknown "PR $num lists no URL in $repo" ;; esac
   echo "dependent PR [${repo##*/}#$num]($url) will be retargeted on merge"; n=$((n + 1))
 done <<<"$list"
 [ "$n" -eq 0 ] && finish clear 0

@@ -330,7 +330,7 @@ out() { if [ -n "$f" ]; then jq -r "$f" "$1"; else cat "$1"; fi; }
 printf '%s\n' "$*" >> "$RF/calls"
 case " $* " in
   " pr view "*) out "$RF/pr" ;;
-  " api repos/octo/demo --jq "*) [ -f "$RF/repofail" ] && exit 1; out "$RF/repo" ;;
+  " api repos/"*"/demo --jq "*) [ -f "$RF/repofail" ] && exit 1; out "$RF/repo" ;;
   *"/pulls?state=open&"*) [ -f "$RF/depsfail" ] && exit 1; out "$RF/deps" ;;
   " pr checks "*) out "$RF/checks" ;;
   *" graphql "*) [ -f "$RF/fail" ] && exit 1; cat "$RF/threads" ;;
@@ -417,6 +417,12 @@ deps b octo/demo 12 13
 ok "several -> one line each, in order" "$(render_from_rn)/$(notes | sed -n 2p)" "0 1/  > dependent PR [demo#13](https://github.com/octo/demo/pull/13) will be retargeted on merge"
 deps b octo/fork 12
 ok "a same-named base in another repository is not this head" "$(render_from_rn)/$(notes | grep -c .)" "0 1/0"
+deps b Octo/Demo 12
+ok "the repository's name in another case is the same repository" "$(PATH="$TMP/rnbin:$PATH" bash "$REPO/plugin/scripts/dependent-prs.sh" check 7 --repo OCTO/demo --head "$RH"; echo "rc=$?")" \
+   "dependent PR [demo#12](https://github.com/Octo/Demo/pull/12) will be retargeted on merge
+rc=1"
+deps B octo/demo 12
+ok "…but a branch in another case is another branch" "$(render_from_rn)/$(notes | grep -c .)" "0 1/0"
 deps b octo/demo 7
 ok "the PR itself is never its own dependent" "$(render_from_rn)/$(notes | grep -c .)" "0 1/0"
 deps b octo/demo 12; setref b true
