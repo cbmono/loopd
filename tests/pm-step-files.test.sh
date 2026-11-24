@@ -172,8 +172,20 @@ echo
 echo "== the core tells a tick what to do when the digest cannot answer =="
 ok "any exit but 0 reads ALL of them" "$(has "$CORE" 'read ALL of them')" yes
 ok "…and an empty line means none"    "$(has "$CORE" 'this tick has work for none of them')" yes
-ok "step 8's render half is predicated on the artifacts" \
-   "$(has "$CORE" '`AWAITING.md` or `SNAPSHOT.json` present at the bundle root')" yes
+AB_AW="$(bash "$REPO/plugin/scripts/bundle-paths.sh" AB_AWAITING)"
+AB_SN="$(bash "$REPO/plugin/scripts/bundle-paths.sh" AB_SNAPSHOT)"
+trigger() { perl -0ne 'print "$1\n" while /\Q'"$2"'\E(.*?)\Q'"$3"'\E/sg' "$1"; }
+named() { grep -o '`[^`]*`' | tr -d '`' | sort | tr '\n' ' '; }
+want="$(printf '%s\n%s\n' "$AB_AW" "$AB_SN" | sort | tr '\n' ' ')"
+ok "step 8's render half is predicated on bundle-paths.sh's artifacts" \
+   "$(trigger "$CORE" '**Step 8'"'"'s render half is predicated on the two artifacts themselves**' \
+      'both absent is the off switch' | named)" "$want"
+ok "…and step 8's pointer reads them there, and nowhere else" \
+   "$(trigger "$CORE" 'only where this instance' '⇒ read' | named)" "$want"
+sed 's#`\.loopd/AWAITING\.md`#`AWAITING.md`#g' "$CORE" > "$TMP/root-core.md"
+ok "…and a pointer naming the root path fails that comparison" \
+   "$([ "$(trigger "$TMP/root-core.md" 'only where this instance' '⇒ read' | named)" = "$want" ] \
+      && echo matches || echo differs)" differs
 ok "an IDLE tick reads no step file at all" "$(has "$CORE" 'reads none of these files')" yes
 ok "…and step 0.9 is what skips 1-7"       "$(has "$CORE" '**Skip steps 1–7.**')" yes
 # The mechanical half of the same claim: the `steps:` line exists on `digest` ONLY, and an

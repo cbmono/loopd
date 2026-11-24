@@ -114,7 +114,7 @@ never that there is nothing to do.
 
 **Step 7 is the exception and the digest never names it**: its own pointer below carries
 the trigger. **Step 8's render half is predicated on the two artifacts themselves** —
-`AWAITING.md` or `SNAPSHOT.json` at the bundle root; both absent is the off switch for
+`.loopd/AWAITING.md` or `.loopd/SNAPSHOT.json`; both absent is the off switch for
 both. **An IDLE tick (step 0.9) reads none of these files, step 7's included.**
 
 ## One loop tick
@@ -428,7 +428,7 @@ state, and act only on deltas.
    step 0 — including re-checking `git status --porcelain` rather than trusting the
    exit code. **Never force-push a shared bundle.**
    **Refresh the awaiting-you queue, the snapshot and the board — only where this instance
-   has them.** `AWAITING.md` or `SNAPSHOT.json` present at the bundle root ⇒ read
+   has them.** `.loopd/AWAITING.md` or `.loopd/SNAPSHOT.json` present ⇒ read
    `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-8-render.md` and follow it, after the commit and
    the sync above. Neither present ⇒ this half of step 8 is not owed: skip it in silence.
 

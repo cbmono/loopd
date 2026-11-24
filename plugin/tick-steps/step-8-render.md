@@ -1,11 +1,11 @@
 # Step 8 (render half) — the queue, the snapshot and the board
 
-**Loaded on demand.** The core prompt reads this file on a full tick when `AWAITING.md`
-or `SNAPSHOT.json` exists at the bundle root — the two artifacts this half writes. The
+**Loaded on demand.** The core prompt reads this file on a full tick when `.loopd/AWAITING.md`
+or `.loopd/SNAPSHOT.json` exists — the two artifacts this half writes. The
 commit-and-sync half of step 8 is in the core and runs every tick, before this one.
 
    **Refresh the awaiting-you queue — only if it already exists, on every full tick.** If
-   `AWAITING.md` is present at the bundle root, rewrite it with the renderer, **`noop: true`
+   `.loopd/AWAITING.md` is present, rewrite it with the renderer, **`noop: true`
    ticks included**: an answer is a commit, the commit makes a full tick that may change
    nothing else, and only a render takes the answered row off the page. **You never format
    the page**:
