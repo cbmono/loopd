@@ -78,8 +78,9 @@ GIT -C "$INST" init -q
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm init
 
 # The gh stub: `gh api graphql ... -F n=<n> ... --jq <filter>` runs the script's OWN filter
-# over the canned GraphQL answer in $GHDIR/<n>, or fails when $GHDIR/<n>.fail exists. Each
-# call's leading arguments are logged to $GHDIR/calls.
+# over the canned GraphQL answer in $GHDIR/<n>, or fails when $GHDIR/<n>.fail exists. A
+# page request `-f c=<cursor>` is answered from $GHDIR/<n>.<cursor>. Each call's leading
+# arguments are logged to $GHDIR/calls.
 command -v jq >/dev/null 2>&1 || { echo "tick-delta.test: jq is required to run the stub's --jq" >&2; exit 2; }
 GHDIR="$TMP/gh"; mkdir -p "$GHDIR"
 BIN="$TMP/bin"; mkdir -p "$BIN"
@@ -90,6 +91,7 @@ n=""; filter="."
 while [ $# -gt 0 ]; do
   case "$1" in
     -F) case "$2" in n=*) n="${2#n=}" ;; esac; shift 2 ;;
+    -f) case "$2" in c=*) n="$n.${2#c=}" ;; esac; shift 2 ;;
     --jq) filter="$2"; shift 2 ;;
     *) shift ;;
   esac
@@ -312,20 +314,63 @@ echo "== an unreadable new value is no answer: exit 2, and the record is never a
 T100="$(jq -nc '{totalCount: 100, nodes: [range(100) | {isResolved: true}]}')"
 prj 7 OPEN abc1234 NONE "" "" "" "" "$T100"
 ok "100 threads, all fetched, are readable (control)" "$(WITH digest | grep -c '^pr .* threads=0 ')" 1
-for bad in 'reviews missing|null|'"$DONE_ST" \
-           'a counted review with no node|{"totalCount":1,"nodes":[]}|'"$DONE_ST" \
-           'a review with no state|{"totalCount":1,"nodes":[{"id":"PRR_one"}]}|'"$DONE_ST" \
-           'a status context with no state|'"$REV1"'|[{"__typename":"StatusContext","context":"CodeRabbit","description":"x"}]' \
-           'a head with no commit object|'"$REV1"'|null' \
-           'reviewThreads missing|'"$REV1"'|'"$DONE_ST"'|null' \
-           'a thread with no isResolved|'"$REV1"'|'"$DONE_ST"'|{"totalCount":1,"nodes":[{}]}' \
-           '101 threads, 100 fetched (D2)|'"$REV1"'|'"$DONE_ST"'|'"$(jq -c '.totalCount = 101' <<<"$T100")"; do
-  IFS='|' read -r what revs stat thr <<<"$bad"
+why() { WITH check 2>&1 | sed -n 's#^CANNOT ANSWER: could not complete the fingerprint: gh PR query for https://github.com/example-org/example-repo/pull/7: ##p' | sed 's/ — run the full tick\.$//'; }
+for bad in 'reviews missing|null|'"$DONE_ST"'||no review count' \
+           'a counted review with no node|{"totalCount":1,"nodes":[]}|'"$DONE_ST"'||a counted review with no id or state' \
+           'a review with no state|{"totalCount":1,"nodes":[{"id":"PRR_one"}]}|'"$DONE_ST"'||a counted review with no id or state' \
+           'a status context with no state|'"$REV1"'|[{"__typename":"StatusContext","context":"CodeRabbit","description":"x"}]||a status context with no name or state' \
+           'a head with no commit object|'"$REV1"'|null||no head commit object' \
+           'reviewThreads missing|'"$REV1"'|'"$DONE_ST"'|null|no review thread count' \
+           'a thread with no isResolved|'"$REV1"'|'"$DONE_ST"'|{"totalCount":1,"nodes":[{}]}|a review thread with no isResolved' \
+           '101 threads, 100 on the only page|'"$REV1"'|'"$DONE_ST"'|'"$(jq -c '.totalCount = 101' <<<"$T100")"'|101 review threads, 100 read (no next page)'; do
+  IFS='|' read -r what revs stat thr want <<<"$bad"
   prj 7 OPEN abc1234 NONE "$revs" "$stat" "" "" "$thr"
   [ "$what" = 'a head with no commit object' ] && sed -i.bak 's/{"commit":{"statusCheckRollup":[^}]*}}}*/{}/' "$GHDIR/7"
   ok "$what makes check exit 2"                 "$(run check)" "rc:2 CANNOT ANSWE"
+  ok "…naming the first failed guard"           "$(why)" "$want"
   WITH record 2>/dev/null; ok "…and a tick that never read it records it unread" "$?:$(grep -c '^pr .*/pull/7 unread$' "$INST/$AB_STATE_DIR")" "0:1"
 done
+prj 7 OPEN abc1234 NONE '{"totalCount":"x"}' "$DONE_ST" "" "" '{"totalCount":"x"}'
+ok "two failed guards: the first in order is the one named" "$(why)" "no review count"
+
+echo "== past 100: every page is read, up to the D3 bound of ten =="
+ctx() { jq -nc --argjson a "$1" --argjson b "$2" '[range($a; $b) | {__typename: "CheckRun", name: "c\(.)",
+  status: (if . == 204 then "IN_PROGRESS" else "COMPLETED" end), conclusion: "SUCCESS", isRequired: true}]'; }
+conn() { # <totalCount> <next-cursor|-> <nodes>
+  jq -nc --argjson t "$1" --arg c "$2" --argjson n "$3" \
+    '{totalCount: $t, pageInfo: {hasNextPage: ($c != "-"), endCursor: (if $c == "-" then null else $c end)}, nodes: $n}'; }
+ctxpage() { # <cursor> <totalCount> <next-cursor|-> <nodes>
+  jq -nc --argjson x "$(conn "$2" "$3" "$4")" \
+    '{data: {repository: {pullRequest: {headRefOid: "abc1234", commits: {nodes: [{commit: {statusCheckRollup: {contexts: $x}}}]}}}}}' > "$GHDIR/7.$1"; }
+thrpage() { # <cursor> <totalCount> <next-cursor|-> <nodes>
+  jq -nc --argjson x "$(conn "$2" "$3" "$4")" '{data: {repository: {pullRequest: {headRefOid: "abc1234", reviewThreads: $x}}}}' > "$GHDIR/7.$1"; }
+paged() { # <contexts totalCount> <threads-json> — page 1 of 205 (or more) contexts, cursor p2
+  prj 7 OPEN abc1234 NONE "$REV1" "$(ctx 0 100)" "" "" "$2"
+  jq -c --argjson x "$(conn "$1" p2 "$(ctx 0 100)")" '.data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.contexts = $x' \
+    "$GHDIR/7" > "$GHDIR/7.t" && mv "$GHDIR/7.t" "$GHDIR/7"; }
+rm -f "$GHDIR"/7.*
+paged 205 "$NOREV"; ctxpage p2 205 p3 "$(ctx 100 200)"; ctxpage p3 205 - "$(ctx 200 205)"
+: > "$GHDIR/calls"; out="$(WITH digest 2>&1)"; rc=$?
+ok "205 status contexts, three pages: digest exit 0" "$rc" 0
+ok "…every context is in the status line" "$(grep '^pr .*/pull/7 ' <<<"$out" | grep -o '\["c[0-9]*"' | sort -u | wc -l | tr -d ' ')" 205
+ok "…the required pending count is taken over every page" "$(awk '$1 ~ /pull\/7$/ { print $NF }' "$INST/$AB_TICK_START/heads")" 1
+ok "…in three gh calls" "$(wc -l < "$GHDIR/calls" | tr -d ' ')" 3
+OPEN1='{"isResolved":false}'
+paged 205 "$(conn 101 t2 "$(jq -c '.nodes' <<<"$T100")")"
+ctxpage p2 205 p3 "$(ctx 100 200)"; ctxpage p3 205 - "$(ctx 200 205)"; thrpage t2 101 - "[$OPEN1]"
+ok "101 review threads, two pages: the open one on page 2 is counted" "$(WITH digest 2>&1 | grep -c '^pr .*/pull/7 .* threads=1 ')" 1
+rm -f "$GHDIR/7.p3"
+ok "page 3 failing: exit 2" "$(run check)" "rc:2 CANNOT ANSWE"
+ok "…naming the count read, the total and why" "$(why)" "205 status contexts at the head, 200 read (page 3 unreadable)"
+paged 205 "$NOREV"; jq -c '.data.repository.pullRequest.headRefOid = "def5678"' <<<"$(cat "$GHDIR/7.p2")" > "$GHDIR/7.p2.t" && mv "$GHDIR/7.p2.t" "$GHDIR/7.p2"
+ok "a page read at another head is unreadable" "$(why)" "205 status contexts at the head, 100 read (page 2 unreadable)"
+paged 1001 "$NOREV"; for i in 2 3 4 5 6 7 8 9 10; do ctxpage "p$i" 1001 "p$((i + 1))" "$(ctx 0 100)"; done
+ok "1001 contexts, an eleventh page owed: exit 2 at the bound" "$(run check)" "rc:2 CANNOT ANSWE"
+ok "…naming it" "$(why)" "1001 status contexts at the head, 1000 read (page bound 10 reached)"
+rm -f "$GHDIR"/7.*
+prj 7 OPEN abc1234 NONE "$REV1" "$(ctx 0 99)" "" "" "$T100"
+: > "$GHDIR/calls"; WITH digest >/dev/null 2>&1
+ok "guard: under 100 contexts and threads, one gh call per digest" "$(wc -l < "$GHDIR/calls" | tr -d ' ')" 1
 prj 7 OPEN abc1234 NONE
 ok "…which no readable answer matches: DELTA"   "$(run check)" "rc:1 DELTA: the f"
 WITH record

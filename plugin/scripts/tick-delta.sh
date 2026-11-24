@@ -49,8 +49,8 @@
 #                           every PR on an `in-progress`/`in-review` task, from the host: a
 #                           pushed head, a merge, a close, a review decision, mergeability
 #                           (UNKNOWN as-is), its unresolved review threads (a thread resolved
-#                           with no new head; past the 100 fetched it is unreadable, never a
-#                           truncated count), a new review (a COMMENTED one moves no decision), a
+#                           with no new head; paged 100 at a time, PR_PAGES at most, and a read
+#                           that stops short is unreadable, never a truncated count), a new review (a COMMENTED one moves no decision), a
 #                           new issue comment (a reviewer's rate-limit reply is one), or a
 #                           check run's or status context's state (a status's description too:
 #                           a rate-limited reviewer still says SUCCESS).
@@ -472,13 +472,19 @@ steps_line() {
   printf 'steps:%s\n' "$out"
 }
 
+CTX_NODES='totalCount pageInfo{hasNextPage endCursor} nodes{__typename
+    ... on CheckRun{name status conclusion isRequired(pullRequestNumber:$n)}
+    ... on StatusContext{context state description isRequired(pullRequestNumber:$n)}}'
 PR_QUERY='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
   state headRefOid reviewDecision mergeable mergeStateStatus reviews(last:1){totalCount nodes{id state}}
-  reviewThreads(first:100){totalCount nodes{isResolved}}
+  reviewThreads(first:100){totalCount pageInfo{hasNextPage endCursor} nodes{isResolved}}
   comments(last:1){nodes{id author{login}}}
-  commits(last:1){nodes{commit{committedDate statusCheckRollup{contexts(first:100){totalCount nodes{__typename
-    ... on CheckRun{name status conclusion isRequired(pullRequestNumber:$n)}
-    ... on StatusContext{context state description isRequired(pullRequestNumber:$n)}}}}}}}}}}'
+  commits(last:1){nodes{commit{committedDate statusCheckRollup{contexts(first:100){'"$CTX_NODES"'}}}}}}}}'
+CTX_PAGE='query($o:String!,$r:String!,$n:Int!,$c:String!){repository(owner:$o,name:$r){pullRequest(number:$n){
+  headRefOid commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100,after:$c){'"$CTX_NODES"'}}}}}}}}'
+THR_PAGE='query($o:String!,$r:String!,$n:Int!,$c:String!){repository(owner:$o,name:$r){pullRequest(number:$n){
+  headRefOid reviewThreads(first:100,after:$c){totalCount pageInfo{hasNextPage endCursor} nodes{isResolved}}}}}'
+PR_PAGES=10
 PR_JQ='.data.repository.pullRequest as $p
 | ($p.reviews.nodes // [] | last) as $r
 | ($p.commits.nodes // [] | last) as $c
@@ -486,16 +492,31 @@ PR_JQ='.data.repository.pullRequest as $p
 | ($c.commit.statusCheckRollup.contexts // {totalCount: 0, nodes: []}) as $x
 | ($x.nodes // []) as $s
 | $p.reviewThreads as $t
-| if ($p | type) != "object" or ($p.reviews.totalCount | type) != "number" or ($c.commit | type) != "object"
-     or ($p.reviews.totalCount > 0 and (($r.id // "") == "" or ($r.state // "") == ""))
-     or ($p.mergeable | type) != "string" or ($p.mergeStateStatus | type) != "string"
-     or ($s | type) != "array" or ($x.totalCount | type) != "number" or $x.totalCount > ($s | length)
-     or any($s[]; if .__typename == "CheckRun" then (.name | type) != "string" or (.status | type) != "string"
+| (if ($p | type) != "object" then "no pullRequest object"
+   elif ($p.reviews.totalCount | type) != "number" then "no review count"
+   elif ($c.commit | type) != "object" then "no head commit object"
+   elif $p.reviews.totalCount > 0 and (($r.id // "") == "" or ($r.state // "") == "") then "a counted review with no id or state"
+   elif ($p.mergeable | type) != "string" then "no mergeable state"
+   elif ($p.mergeStateStatus | type) != "string" then "no merge state status"
+   elif ($s | type) != "array" then "status contexts not a list"
+   elif ($x.totalCount | type) != "number" then "no status context count"
+   elif $x.totalCount > ($s | length) then
+     (if $x.pageInfo.hasNextPage == true then "PAGED"
+      else "\($x.totalCount) status contexts at the head, \($s | length) read (no next page)" end)
+   elif any($s[]; if .__typename == "CheckRun" then (.name | type) != "string" or (.status | type) != "string"
                   elif .__typename == "StatusContext" then (.state | type) != "string" else true end)
-     or ($p.comments.nodes | type) != "array" or ($k != null and ($k.id // "") == "")
-     or ($t.totalCount | type) != "number" or ($t.nodes | type) != "array" or $t.totalCount > ($t.nodes | length)
-     or any($t.nodes[]; (.isResolved | type) != "boolean")
-  then "UNREADABLE"
+     then "a status context with no name or state"
+   elif ($p.comments.nodes | type) != "array" then "comments not a list"
+   elif $k != null and ($k.id // "") == "" then "a comment with no id"
+   elif ($t.totalCount | type) != "number" then "no review thread count"
+   elif ($t.nodes | type) != "array" then "review threads not a list"
+   elif $t.totalCount > ($t.nodes | length) then
+     (if $t.pageInfo.hasNextPage == true then "PAGED"
+      else "\($t.totalCount) review threads, \($t.nodes | length) read (no next page)" end)
+   elif any($t.nodes[]; (.isResolved | type) != "boolean") then "a review thread with no isResolved"
+   else "" end) as $why
+| if $why == "PAGED" then "PAGED\t\(tojson)"
+  elif $why != "" then "UNREADABLE\t\($why)"
   else [$p.state, $p.headRefOid, ($p.reviewDecision // "NONE"), "merge=\($p.mergeable)/\($p.mergeStateStatus)",
         "threads=\([$t.nodes[] | select(.isResolved | not)] | length)",
         "reviews=\($p.reviews.totalCount):\($r.id // "-"):\($r.state // "-")",
@@ -505,6 +526,30 @@ PR_JQ='.data.repository.pullRequest as $p
        + "\t\($c.commit.committedDate // "-") \([$s[] | select(.isRequired == true and
            (if .__typename == "CheckRun" then .status != "COMPLETED" else .state == "PENDING" or .state == "EXPECTED" end))] | length)"
   end'
+
+pr_pages() { # <PAGED JSON> -> the PR_JQ line over every page, or why the read stopped (exit 1)
+  local json="$1" conn q what n c count page
+  command -v jq >/dev/null 2>&1 || { printf 'more than 100 status contexts or review threads, and no jq to merge their pages'; return 1; }
+  for conn in '.data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.contexts' \
+              '.data.repository.pullRequest.reviewThreads'; do
+    case "$conn" in *contexts) q="$CTX_PAGE"; what="status contexts at the head" ;; *) q="$THR_PAGE"; what="review threads" ;; esac
+    n=1
+    while [ "$(jq -r "$conn.pageInfo.hasNextPage" <<<"$json" 2>/dev/null)" = true ]; do
+      count="$(jq -r "$conn | \"\\(.totalCount) $what, \\(.nodes | length) read\"" <<<"$json" 2>/dev/null)"
+      [ "$n" -lt "$PR_PAGES" ] || { printf '%s (page bound %s reached)' "$count" "$PR_PAGES"; return 1; }
+      n=$((n + 1))
+      c="$(jq -r "$conn.pageInfo.endCursor // \"\"" <<<"$json" 2>/dev/null)"
+      [ -n "$c" ] || { printf '%s (page %s has no cursor)' "$count" "$n"; return 1; }
+      page="$(gh api graphql --hostname "$host" -f o="$owner" -f r="$repo" -F n="$num" -f c="$c" -f query="$q" 2>/dev/null)" \
+        && json="$(printf '%s\n%s\n' "$json" "$page" | jq -cs ".[0].data.repository.pullRequest.headRefOid as \$h
+             | (.[1] | $conn) as \$q | .[1].data.repository.pullRequest.headRefOid as \$qh
+             | if \$qh != \$h or (\$q.nodes | type) != \"array\" or (\$q.pageInfo.hasNextPage | type) != \"boolean\" then error
+               else .[0] | $conn |= (.nodes += \$q.nodes | .pageInfo = \$q.pageInfo) end" 2>/dev/null)" \
+        || { printf '%s (page %s unreadable)' "$count" "$n"; return 1; }
+    done
+  done
+  jq -r "$PR_JQ" <<<"$json" 2>/dev/null | grep -v '^PAGED' || { printf 'its pages did not merge'; return 1; }
+}
 
 PR_RE='[A-Z]+ [0-9a-f]+ [A-Z_]+ merge=[A-Z_]+/[A-Z_]+ threads=[0-9]+ reviews=[0-9]+:[^ ]+:([A-Z_]+|-) comments=[^ :]+:[^ :]+ status=\[.*\]'
 START="$inst/$AB_TICK_START/pr"
@@ -694,6 +739,8 @@ $prs"
             -f query="$PR_QUERY" --jq "$PR_JQ" 2>"$PERR")" \
       || { cause "gh PR query failed for $u: $(head -n1 "$PERR")"; return 1; }
     case "$line" in *$'\n'*) cause "gh PR query for $u answered more than one line"; return 1 ;; esac
+    case "$line" in PAGED$'\t'*) line="$(pr_pages "${line#PAGED$'\t'}")" || { cause "gh PR query for $u: $line"; return 1; } ;; esac
+    case "$line" in UNREADABLE$'\t'*) cause "gh PR query for $u: ${line#UNREADABLE$'\t'}"; return 1 ;; esac
     printf '%s\n' "${line%%$'\t'*}" | grep -Eqx -- "$PR_RE" || { cause "gh PR query for $u answered an unreadable shape"; return 1; }
     read -r hst hsha _ <<<"$line"
     heads="$heads$u $hst $hsha ${line#*$'\t'}"$'\n'

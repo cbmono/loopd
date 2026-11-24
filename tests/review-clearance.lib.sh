@@ -70,8 +70,10 @@ esac
 # every clearing case in this file going red for a reason none of them is about.
 if [ "${1:-} ${2:-}" = "api graphql" ]; then
   [ -f "$FIX/threads_broken" ] && { echo "gh: Bad gateway (HTTP 502)" >&2; exit 1; }
-  [ -f "$FIX/threads_json" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
-  cat "$FIX/threads_json"; exit 0
+  page=threads_json
+  for a in "$@"; do case "$a" in after=*) page="threads_json.${a#after=}" ;; esac; done
+  [ -f "$FIX/$page" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+  cat "$FIX/$page"; exit 0
 fi
 if [ "${1:-}" = "api" ]; then
   src="$FIX/reviews_json"; broken="$FIX/reviews_broken"
@@ -101,7 +103,7 @@ chmod +x "$TMP/bin/gh" "$TMP/bin/jq"
 export PATH="$TMP/bin:$PATH"
 
 # --- fixture builders ---------------------------------------------------------
-HEAD=""; AUTHOR=""; REVIEWS=""; COMMENTS=""; THREADS=""; THREADS_MORE=""; THREADS_HEAD=""
+HEAD=""; AUTHOR=""; REVIEWS=""; COMMENTS=""; THREADS=""; THREADS_MORE=""; THREADS_HEAD=""; THREADS_TOTAL=""
 MERGEABLE=""; MERGE_STATE=""; HEAD_DATE=""
 
 setup() { # start from: a readable PR at <head> [pushed at <date>], authored by "dev"
@@ -116,7 +118,7 @@ setup() { # start from: a readable PR at <head> [pushed at <date>], authored by 
   MERGEABLE="MERGEABLE"; MERGE_STATE="CLEAN"
   # NO THREADS AND NO FURTHER PAGE is the default, so every case written before clause 9
   # existed keeps asking exactly the question it was written to ask.
-  THREADS='[]'; THREADS_MORE=false; THREADS_HEAD=""
+  THREADS='[]'; THREADS_MORE=false; THREADS_HEAD=""; THREADS_TOTAL=""
 }
 
 body_file() { # <text...> -> a file holding it, so every artifact arrives the same way
@@ -173,8 +175,16 @@ write_pr() {
   printf '%s' "$REVIEWS"  > "$FIX/reviews_json"
   printf '%s' "$COMMENTS" > "$FIX/comments_json"
   "$REAL_JQ" -n --argjson t "$THREADS" --argjson more "$THREADS_MORE" --arg th "${THREADS_HEAD:-$HEAD}" \
+              --arg tc "${THREADS_TOTAL:-}" \
     '{data:{repository:{pullRequest:{headRefOid:$th, reviewThreads:
-       {pageInfo:{hasNextPage:$more}, nodes:$t}}}}}' > "$FIX/threads_json"
+       {totalCount:(if $tc == "" then ($t | length) else ($tc | tonumber) end), pageInfo:{hasNextPage:$more, endCursor:(if $more then "p2" else null end)}, nodes:$t}}}}}' > "$FIX/threads_json"
+}
+
+add_page() { # <cursor> <next-cursor|-> <threads-json> — the page `after:<cursor>` serves
+  "$REAL_JQ" -n --argjson t "$3" --arg nx "$2" --arg th "${THREADS_HEAD:-$HEAD}" \
+    '{data:{repository:{pullRequest:{headRefOid:$th, reviewThreads:{
+       pageInfo:{hasNextPage:($nx != "-"), endCursor:(if $nx == "-" then null else $nx end)}, nodes:$t}}}}}' \
+    > "$FIX/threads_json.$1"
 }
 
 # A WHOLE PR AS THE HOST SERVED IT, rather than assembled from the builders above: the
