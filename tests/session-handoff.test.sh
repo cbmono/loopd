@@ -162,7 +162,8 @@ ok "the answer folds, and the row leaves the queue" "$(grep -c 'task-022-sso' "$
 OWED="$(cd "$B" && bash "$SH" --owed "$T/task-022-sso.md" 2>/dev/null)"
 ok "owed: the stopped session, with the answer" "$OWED" "owed $U1 $ID1
 round: resume
-answer: done, and the SSO profile is labs-admin"
+answer: done, and the SSO profile is labs-admin
+tag: for hand-off $ID1"
 RES="$(PATH="$PATH" claude --bg --resume "$(bash "$SESS" full a8b4344d)" "The human finished hand-off $ID1: done. Carry on with this task.")"
 ok "the resume went to the FULL id, flag-free" "$(cnt "$TMP/calls" "resume $U1 The human finished hand-off $ID1")" 1
 ok "…and resume-id reads it as the same session" "$(bash "$SESS" resume-id "$U1" "$RES")" "same $U1"
@@ -300,6 +301,21 @@ sed -i.bak '/^\* DISPATCH /d; s/^\(\* .*needs handed off.*\)$/\1\
 ok "…a DISPATCH only BELOW it counts for nothing" "$(one --owed "$QF")" "rc=2"
 all_blocked
 
+echo "== the tag: line round-trips: '<verb> <uuid> ' plus its text reads delivered =="
+agents blocked blocked blocked blocked done stopped blocked blocked
+qa "$QF" "send it back" software-engineer qa-reviewer
+ok "a dispatch round prints the tag: line too" "$(run --owed "$QF" | sed -n 4p)" "tag: for hand-off f6f6f6f6-0000bbbb"
+for v in woke resumed dispatched; do
+  if [ "$v" = dispatched ]; then qa "$QF" "send it back" software-engineer qa-reviewer
+  else qa "$QF" "send it back" qa-reviewer software-engineer; fi
+  TAG="$(run --owed "$QF" | sed -n 4p)"
+  printf '* 2026-10-21T11:00:00Z %s 0d15ea5e-0000-4000-8000-00000000000a %s\n' "$v" "${TAG#tag: }" >> "$QF"
+  ok "…'$v <uuid> ' + the tag: text: delivered" "$(one --owed "$QF")" "not-owed already-resumed rc=1"
+done
+M0="$(mark)"; printf '* dispatched 0d15ea5e-0000-4000-8000-00000000000a %s\n' "${TAG#tag: }" >> "$MT"
+ok "…and the dispatched note moves merge-hold.sh's round mark" "$([ "$(mark)" != "$M0" ] && echo moved)" moved
+all_blocked
+
 echo "== W1: the next Q number counts advisor: entries and ### headings =="
 mk "$T/task-051-advisor.md" in-review "$U3" '[ "advisor: Q1: which db?" ]'
 printf -- '\n## Question details\n\n### Q1\nRecommendation: pg\nOptions:\n1. pg\nContext:\n- Depth 1: a\n- Depth 2: b\n- Depth 3: c\n' >> "$T/task-051-advisor.md"
@@ -348,8 +364,18 @@ ok "…and runs it" "$(cnt "$S4" 'scripts/session-handoff.sh --owed <task-path>'
 ok "…and sends a QA hand-off's answer to a fresh round" "$(cnt "$S4" 'dispatch a fresh `loopd:<role>` round as step 3 spawns it')" 1
 ok "step 5 stops a done task's session through it" "$(cnt "$S5" 'scripts/session-handoff.sh <task-path>')" 1
 ok "…filing a pending needs first" "$(cnt "$S5" '**A `needs` it still holds is filed first**')" 1
+tagged() { [ "$(cnt "$1" 'tag: for hand-off <id>')" = 1 ] && echo yes || echo no; }
+ok "…and has the delivery note copy the tag: line" "$(tagged "$S4")" yes
+sed 's/tag: for hand-off <id>//' "$S4" > "$TMP/s4-untagged.md"
+ok "…a step 4 without it fails that check" "$(tagged "$TMP/s4-untagged.md")" no
+ok "…a hand-off resume writes the tagged note instead of the bare one" \
+   "$(cnt "$S4" '**the tagged note is written in place of the bare `woke`/`resumed` note the calls below write, never beside it**')" 1
 ok "no line in either runs claude rm" "$(cat "$S4" "$S5" | grep -E 'claude rm' | grep -vcE 'Never `claude rm`|never `claude rm`|`rm` is the human' | tr -d ' ')" 0
 ok "the board says promotion only for a draft" "$(grep -c 'if t.get("status") == "draft" else' "$BOARD")" 1
+
+echo "== the header's ranges =="
+ok "--help ends with the header's last line" "$(bash "$SH" --help | tail -1)" "# string did not. Reasoning: docs/pm-design.md#step-4. Verified by tests/session-handoff.test.sh."
+ok "usage ends with the synopsis's last line" "$(bash "$SH" 2>&1 | tail -1 | sed 's/^# *//')" "the task's \`assignee:\`, or \`not-owed accepted\` on \`done\`/\`accept\`"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

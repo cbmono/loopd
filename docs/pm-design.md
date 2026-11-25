@@ -860,7 +860,7 @@ a new entry. **After the human answers, the round is a RESUME**: same task and s
 `CONVENTIONS.md`'s resume case, and `session-handoff.sh --owed` is the one read that says so
 from a `stopped` session, which the `recorded` read never reaches. It counts a resume note
 only when the note names the hand-off (`for hand-off <id>`): a bare `woke <uuid>` from a CI-fix
-resume of the same session read as delivery and swallowed the answer (2026-11-25). **Unless a checker filed it**: a `qa-reviewer` writes no code, so resuming it on "send it back to the implementer" spent a round that changed nothing (loopd#587, 2026-11-17); its answered hand-off is a fresh round of the task's `assignee:`, and `done`/`accept` owes none. **A done task's
+resume of the same session read as delivery and swallowed the answer (2026-11-25). `--owed` prints that tag as its `tag:` line, which step 4 copies into the note rather than composing it, so the writer and the reader share one string. **Unless a checker filed it**: a `qa-reviewer` writes no code, so resuming it on "send it back to the implementer" spent a round that changed nothing (loopd#587, 2026-11-17); its answered hand-off is a fresh round of the task's `assignee:`, and `done`/`accept` owes none. **A done task's
 hand-off outlives the `done`**: jobs meant for after the merge are the measured case, so
 `AWAITING.md` keeps the row until it is answered, and step 5 files a pending `needs` before
 it stops the session.

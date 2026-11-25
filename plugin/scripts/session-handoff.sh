@@ -14,8 +14,9 @@
 #                                or `busy past maxBgRoundMinutes — stopped` when it has none
 #   session-handoff.sh --owed <task-doc>
 #                             -> `owed <uuid> <id>`, `round: resume` or `round: dispatch
-#                                <assignee>`, then `answer: <text>`: the human answered the
-#                                latest hand-off of the task's current session, no note
+#                                <assignee>`, `answer: <text>`, then `tag: for hand-off <id>`,
+#                                which the delivery note carries after `<verb> <uuid> `: the
+#                                human answered the latest hand-off of the task's current session, no note
 #                                delivered it since, and the session has ended. A `qa-reviewer` filer
 #                                (last `* DISPATCH` above the hand-off) gets a fresh round of
 #                                the task's `assignee:`, or `not-owed accepted` on `done`/`accept`
@@ -41,7 +42,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
-usage() { sed -n '7,21p' "$0" >&2; exit 2; }
+usage() { sed -n '7,22p' "$0" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "session-handoff: python3 is required" >&2; exit 2; }
 
 task=""; jobs="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/jobs"; owed=0; busy=0
@@ -50,7 +51,7 @@ while [ $# -gt 0 ]; do
     --jobs-dir) [ $# -ge 2 ] || usage; jobs="$2"; shift 2 ;;
     --owed)     owed=1; shift ;;
     --busy)     busy=1; shift ;;
-    -h|--help)  sed -n '3,39p' "$0"; exit 0 ;;
+    -h|--help)  sed -n '3,40p' "$0"; exit 0 ;;
     -*) usage ;;
     *) [ -z "$task" ] || usage; task="$1"; shift ;;
   esac
@@ -109,7 +110,7 @@ for e in answered.splitlines() + open_q.splitlines():
                 print("not-owed accepted"); sys.exit(1)
             else:
                 rnd = "dispatch " + assignee
-            print("owed %s %s" % (uuid, hid)); print("round: " + rnd); print("answer: " + ans.strip()); sys.exit(0)
+            print("owed %s %s" % (uuid, hid)); print("round: " + rnd); print("answer: " + ans.strip()); print("tag: for hand-off " + hid); sys.exit(0)
 print("not-owed unanswered"); sys.exit(1)
 PY
   exit $?
