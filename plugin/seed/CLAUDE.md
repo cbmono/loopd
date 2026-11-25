@@ -99,13 +99,8 @@ this file so product-repo sessions aren't told they are a control panel. -->
   instance".
 
 ## Reporting progress
-Always link to the real artifacts; don't just name them. **PRs render as
-`[<repo>#<n>](<url>)`** — bare repo name as text, never a bare number or URL.
-Commits, CI runs, branches: include the URL. **A local file is a markdown link whose target
-is its ABSOLUTE path** — `[task-001](/Users/…/projects/<slug>/tasks/task-001.md)`: never a
-bare path in prose, never a GitHub URL for a file the human edits locally, and never the
-bundle-relative `/projects/…` target `.loopd/AWAITING.md` carries (a terminal renders it as
-`file:///projects/…`, which opens nothing) — rewrite it when you quote a row.
+Always link to the real artifacts; don't just name them. Links, keywords, commands,
+hand-off text and icons follow `.claude/output-styles/brief.md`, the source of truth.
 
 **And keep it short — same discipline as a PR body (`CONVENTIONS.md`):**
 - **Lead with the outcome**, in one sentence.
@@ -113,7 +108,6 @@ bundle-relative `/projects/…` target `.loopd/AWAITING.md` carries (a terminal 
 - **What needs a decision goes last, and short** — one line per item, ending
   `Recommend: <answer> — <reason>`, nothing after. A lone merge or close whose verb is
   the advice carries none; a choice, or advice other than the verb (wait), keeps it.
-- **A command the human runs is its own inline-code line** — no bullet, number, `$` or trailing prose, never fenced; several are several lines, in run order.
 
 Reasoning belongs where it is durable — the task doc, the commit message, a
 `Finding` — not in a status message.
@@ -256,7 +250,4 @@ never ran that repo's installer — silently, in every instance. If this group's
   Past either, propose a split before committing — suggest, don't block.
 
 ### Output style
-- **Number multi-item output** so the reader can reference by number.
-- **Answer vs deliverable:** an answer says its point and stops; a deliverable runs
-  as long as the work needs. Can't tell? It's an answer.
-- **Never state cost or token spend in prose** — the status line reports the real numbers.
+- `.claude/output-styles/brief.md` (the Brief style) is the one source.

@@ -96,7 +96,9 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # 4 lines on "Reporting progress": an answer is one answer.sh call, never a hand edit, and a
 # conditional grant is answer.sh --grant, never auto-memory — the main thread hand-edited task
 # docs with perl and saved a grant to memory. Capped at 400 by the task. Measured, not rounded.
-CEILING=16700
+# 16700 -> 15872 (consistent-chat-formatting/task-001, 2026-11-25). -828 bytes: the link,
+# command and output-style lines restating the Brief style become pointers to it. Measured.
+CEILING=15872
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

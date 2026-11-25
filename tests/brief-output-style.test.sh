@@ -132,9 +132,58 @@ ok "another style ⇒ ✓, not ⚠"             "$(saw "$out" '✓')" yes
 ok "…naming the chosen one"               "$(saw "$out" 'output style: Explanatory')" yes
 ok "…and where the seed's Brief is"       "$(saw "$out" '.claude/output-styles/brief.md')" yes
 
+# =======================================================================================
+echo "== 3. Links, keywords, hand-off text, clean copy and the icon set; CLAUDE.md points here =="
+# =======================================================================================
+SEED_CLAUDE="$REPO/plugin/seed/CLAUDE.md"
+ok "the style stays at or under 90 lines" "$([ "$(wc -l < "$STYLE")" -le 90 ] && echo yes || echo no)" yes
+ok "keywords go in inline code"           "$(has "$STYLE" '**Keywords go in inline code**: task ids, branches, file names, config keys, command names.')" yes
+ok "every PR, run, URL and local file is a link" "$(has "$STYLE" 'Every PR, run, URL and local file is a markdown link')" yes
+ok "…bare URLs only inside copy-ready text" "$(has "$STYLE" 'Never a bare URL, except inside copy-ready text.')" yes
+ok "a linked keyword keeps an inline-code label" "$(has "$STYLE" '[`task-001`](/Users/…/task-001.md). A branch or commit links to its GitHub URL.')" yes
+ok "a command is always its own inline-code line" "$(has "$STYLE" '**A command is always its own inline-code line**')" yes
+ok "reply shorthand is inline code, as typed" "$(has "$STYLE" '`prom 10 11`, `mrg`, `go`, `ok`, `1 n 2`')" yes
+ok "recap items open with a bold label, Needs-you items with their verb" "$(has "$STYLE" '**Each numbered `Done so far` item opens with a short bold label**')" yes
+ok "a hand-off block sits above Needs you" "$(has "$STYLE" '**A hand-off block sits above `Needs you:`**')" yes
+ok "tick reports are exempt"              "$(has "$STYLE" '**Tick reports are exempt from hand-off blocks, clean copy and recap labels**')" yes
+ok "hand-off text: a label line, then plain paragraphs" "$(has "$STYLE" 'no `>` blockquote, no indentation, no bullets.')" yes
+ok "nothing copy-ready is quoted or indented" "$(has "$STYLE" '**Never a `>` quote or indentation for anything meant to be copied.**')" yes
+ok "clean copy is interactive only"       "$(has "$STYLE" 'in an interactive session only, never a background tick or subagent.')" yes
+ok "…checks tmp/copy is ignored first"    "$(has "$STYLE" '`git check-ignore -q tmp/copy`')" yes
+ok "…clears old files, writes with the Write tool, text only" "$(has "$STYLE" 'Delete `tmp/copy/copy-*.txt`, then write `tmp/copy/copy-1.txt`, `copy-2.txt` … with the Write tool, one per block: the text only, never its label line.')" yes
+ok "…pbcopy is named"                     "$([ "$(grep -c pbcopy "$STYLE")" -ge 1 ] && echo yes || echo no)" yes
+ok "…several blocks: one pbcopy line each, run with !" "$(has "$STYLE" 'one `pbcopy < <abs path>` line each, which the human runs with `!`')" yes
+ok "…no pbcopy: print the path"           "$(has "$STYLE" 'No `pbcopy` on this machine: print each file'"'"'s absolute path instead.')" yes
+ok "the seed settings allow exactly one pbcopy form" "$(jq -r '[.permissions.allow[] | select(test("pbcopy"))] | join("|")' "$SETTINGS")" 'Bash(pbcopy < tmp/copy/copy-*.txt)'
+ok "…the form the style runs"             "$(has "$STYLE" 'run `pbcopy < tmp/copy/copy-1.txt` from the bundle root')" yes
+# LC_ALL=C: a UTF-8 collation can rank distinct emoji equal, and sort -u then merges them.
+ok "five new icons, distinct"             "$(grep -o -E '📋|🌐|🔗|🔍|⚠️' "$STYLE" | LC_ALL=C sort -u | wc -l | tr -d ' ')" 5
+ok "…each listed once with its meaning"   "$(grep -c -F -- '- ⚠️ don'"'"'t do this yet · 📋 a message to send to a person · 🌐 a Claude in Chrome prompt · 🔗 a link the human must open · 🔍 something to check by eye and report back.' "$STYLE" | tr -d ' ')" 1
+ok "only the 13 start a line, never a command line" "$(has "$STYLE" '**Only these 13 may start a line**, and a command line carries none')" yes
+ok "a board glyph is named mid-sentence only" "$(has "$STYLE" 'a relayed `AWAITING.md` row starts with one of the 13 and names its board glyph mid-line.')" yes
+
+example() { awk '/^## Hand-off example$/{f=1; next} f && /^## /{exit} f && NF' "$1"; }
+EX="$(example "$STYLE")"
+ok "the hand-off example has a label line, then text" "$(head -1 <<<"$EX")" '📋 **WhatsApp → <name>**'
+ok "…at least one plain paragraph under it" "$([ "$(wc -l <<<"$EX")" -ge 2 ] && echo yes || echo no)" yes
+ok "…no > line, indentation or bullet in it" "$(grep -c -E '^(>|[[:space:]]|[-*+] |[0-9]+\. )' <<<"$EX" | tr -d ' ')" 0
+ok "…and exactly one example heading"     "$(grep -c '^## Hand-off example$' "$STYLE" | tr -d ' ')" 1
+awk '/^## Hand-off example$/{print; print ""; print "> quoted"; next} 1' "$STYLE" > "$TMP/mutant-style.md"
+ok "mutant: a > line in the example -> check FAILS" "$(grep -c -E '^(>|[[:space:]]|[-*+] |[0-9]+\. )' <<<"$(example "$TMP/mutant-style.md")" | tr -d ' ')" 1
+
+# brief.md is the source of truth; a phrase kept in seed CLAUDE.md must say the same here.
+SHARED=('Always link to the real artifacts' 'Lead with the outcome' '`prom` or `mrg`')
+flat() { tr '\n' ' ' < "$1" | tr -s ' '; }
+agree() { local p n=0; for p in "${SHARED[@]}"; do [ "$(saw "$(flat "$1")" "$p")" = yes ] && [ "$(saw "$(flat "$2")" "$p")" = yes ] && n=$((n+1)); done; echo "$n"; }
+ok "each shared phrase is in both seed CLAUDE.md and the style" "$(agree "$SEED_CLAUDE" "$STYLE")" "${#SHARED[@]}"
+grep -vF 'Always link to the real artifacts' "$STYLE" > "$TMP/mutant-noshare.md"
+ok "mutant: a shared phrase gone from the style -> check FAILS" "$(agree "$SEED_CLAUDE" "$TMP/mutant-noshare.md")" "$(( ${#SHARED[@]} - 1 ))"
+ok "seed CLAUDE.md names the style as the source" "$(grep -c -F '.claude/output-styles/brief.md' "$SEED_CLAUDE" | tr -d ' ')" 2
+ok "…and its Output style section is one pointer line" "$(awk '/^### Output style$/{f=1; next} f && /^#/{exit} f && NF' "$SEED_CLAUDE" | wc -l | tr -d ' ')" 1
+
 echo
 total=$((pass + fail))
-ok "exactly 35 assertions ran"            "$total" 35
+ok "exactly 68 assertions ran"            "$total" 68
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
