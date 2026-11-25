@@ -31,10 +31,11 @@ PLAIN="$TMP/plain"; mkdir -p "$PLAIN"
 REGCMD="$(jq -r '.hooks.PreToolUse[] | select(.hooks[].command | test("write-path.sh")) | .hooks[].command' "$HOOKSJSON")"
 # run <project-dir> <tool> <file_path> [cwd] — prints "<rc>|<stdout><stderr>"
 run() {
-  local out rc
-  out="$(jq -cn --arg t "$2" --arg f "$3" --arg c "${4:-$1}" \
-           '{hook_event_name:"PreToolUse", tool_name:$t, cwd:$c, tool_input:{file_path:$f}}' \
-    | CLAUDE_PLUGIN_ROOT="$REPO/plugin" CLAUDE_PROJECT_DIR="$1" bash -c "exec ${REGCMD}" 2>&1)"; rc=$?
+  local payload out rc
+  payload="$(jq -cn --arg t "$2" --arg f "$3" --arg c "${4:-$1}" \
+           '{hook_event_name:"PreToolUse", tool_name:$t, cwd:$c, tool_input:{file_path:$f}}')" && [ -n "$payload" ] \
+    || { echo "run: building the jq payload failed" >&2; printf 'payload-failed|'; return; }
+  out="$(CLAUDE_PLUGIN_ROOT="$REPO/plugin" CLAUDE_PROJECT_DIR="$1" bash -c "exec ${REGCMD}" 2>&1 <<<"$payload")"; rc=$?
   printf '%s|%s' "$rc" "$out"
 }
 reported() { local r; r="$(run "$@")"; printf '%s' "${r#*|}" | jq -e '.systemMessage | test("write-path")' >/dev/null 2>&1 && echo reported || echo "silent:${r%%|*}"; }
