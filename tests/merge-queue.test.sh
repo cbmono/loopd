@@ -124,6 +124,36 @@ ok "gh failing to list the runs is exit 2"                  "$(rc)" 2
 fixture fork; run in_progress 51 pull_request feat-z
 ok "a run whose group needs a missing PR number is unknown" "$(rc)" 2
 
+echo "== the cond && x || y ternary: evaluated case-insensitively, anything else unknown =="
+tern() { # <name> <group> -> a fixture whose only workflow sets that concurrency group
+  fixture "$1"
+  printf 'name: CI\non:\n  push:\n    branches: [main]\n  pull_request:\n  pull_request_target:\nconcurrency:\n  group: %s\njobs:\n  b:\n    runs-on: x\n' "$2" > "$FIX/files/tests.yml"
+}
+grp() { mq | sed -n "s/^hold: group '\([^']*\)'.*/\1/p"; }
+IDIOM="grp-\${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}"
+tern idiom "$IDIOM"; run in_progress 101 push main
+ok "the idiom under push is grp-refs/heads/main: hold"      "$(rc)$(grp)" 1grp-refs/heads/main
+tern idiompr "$IDIOM"; run in_progress 102 pull_request feat-x 5
+ok "a pull_request run's PR-number group: clear"            "$(rc)" 0
+tern idiomprt "$IDIOM"; run in_progress 103 pull_request_target feat-x 5
+ok "a pull_request_target run on main: hold"                "$(rc)$(grp)" 1grp-refs/heads/main
+tern case "c-\${{ github.event_name == 'PUSH' && 'p' || 'q' }}"; run in_progress 104 push main
+ok "== compares case-insensitively"                         "$(grp)" c-p
+tern ne "c-\${{ github.event_name != 'pull_request' && 'p' || 'q' }}"; run in_progress 105 push main
+ok "!= takes the middle when it differs"                    "$(grp)" c-p
+tern fall "c-\${{ github.event_name == 'push' && github.head_ref || github.ref }}"; run in_progress 106 push main
+ok "an empty middle falls through to the right"             "$(grp)" c-refs/heads/main
+tern nopr "$IDIOM"; run in_progress 107 pull_request feat-z
+ok "a pull_request run with no PR number: unknown"          "$(rc)" 2
+tern nobase "c-\${{ github.base_ref == 'main' && 'p' || github.ref }}"; run in_progress 108 pull_request feat-z
+ok "a comparison on an unknown base_ref: unknown"           "$(rc)" 2
+for e in "github.event_name == 'a&&b' && 'p' || 'q'" "github.event_name == 'a||b' && 'p' || 'q'" \
+  "github.event_name = 'push' && 'p' || 'q'" "(github.event_name == 'push') && 'p' || 'q'" \
+  "github.event_name == 'push' && !github.head_ref || 'q'"; do
+  tern odd "c-\${{ $e }}"
+  ok "unknown: ${e:0:52}"                                   "$(mq | grep -c "^unknown: .* — bash cannot evaluate it")" 1
+done
+
 echo "== a queued run with no jobs on a deleted branch is skipped; any doubt stays unknown =="
 fixture ghost; run queued 81 pull_request pane-gone; : > "$FIX/gone.pane-gone"
 ok "jobless, branch gone: skipped, clear (exit 0)"          "$(rc)" 0
