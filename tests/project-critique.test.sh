@@ -51,7 +51,7 @@ ok "the task critique's brief sees the project" \
 echo "== tick-delta.sh check =="
 INST="$TMP/inst"; P=projects/p/project.md
 mkdir -p "$INST/projects/p/tasks" "$INST/scripts"
-for f in tick-delta.sh bundle-paths.sh fold-answers.sh web-queue.sh agent-sessions.sh design-inputs.sh \
+for f in tick-delta.sh bundle-paths.sh fold-answers.sh web-queue.sh agent-sessions.sh design-inputs.sh close-delay.sh \
          dispatchable-ready.sh resolve-max-agents.sh resolve-config.sh task-owner.sh project-paused.sh; do
   cp "$S/$f" "$INST/scripts/$f"
 done

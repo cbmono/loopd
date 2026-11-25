@@ -4,8 +4,12 @@
 it on its `steps:` line (`project-manager.md` → "Step files"). Every rule in the core
 prompt still binds here — both authority gates, the ownership gate, the UNKNOWN rule.
 
-6. **Close completed projects (propose only — human-gated).** For each project whose
-   tasks are **all** terminal (`done`/`cancelled`) and hold no unanswered `Q<n>: do:`
+6. **Close completed projects (propose only — human-gated).** For each project the digest
+   names on a `close due <project.md>` line — its tasks **all** terminal (`done`/`cancelled`)
+   and `closeAfterDays` (5 when absent) past since the last went terminal (`SCHEMA.md` →
+   "Closing a finished project after a delay") — and only those, on a digest fallback run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/close-delay.sh <slug>` per all-terminal project and act
+   only on a `due` answer. If it holds no unanswered `Q<n>: do:`
    entry (a deploy or a hand-off — its row outlives `done`), do **not** close it yourself —
    surface it as a 🔴 *Awaiting you* item. Only on the human's OK (in-session or via
    `/close-project <slug>`) run closeout, in order (`SCHEMA.md` "Project & objective

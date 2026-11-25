@@ -81,6 +81,9 @@
 #   merge hold              not a line: a `hold`/`unknown` mark merge-queue.sh keeps under
 #                           AB_MERGE_HOLDS for a PR still on an in-flight task is an immediate
 #                           DELTA, because a default-branch run finishing moves nothing above.
+#   close-due <project.md>...  the all-terminal projects whose closeAfterDays has passed
+#                           (close-delay.sh), printed even when empty: a close coming due with
+#                           time alone is a DELTA once per crossing.
 #   queue/snapshot <present|absent>
 #                           the two artifacts' presence — a stamp that recreates
 #                           AWAITING.md needs one full tick to populate it.
@@ -102,7 +105,8 @@
 # it), a `fold owed <task>` line per draft with a ` --- `-answered `open_questions` entry (any
 # label; same `check`/`record` rule), a `design owed <project>/design.md` line per non-research
 # project with a refined draft, no unrefined one and no design.md (same rule; never paused or
-# inputs-waiting), and every open PR's host facts — so step 1's N
+# inputs-waiting), a `close due <project.md>` line per all-terminal project past
+# `closeAfterDays` — the only projects step 6 acts on — and every open PR's host facts — so step 1's N
 # frontmatter reads and per-PR `gh` round-trips become one read. It changes NOTHING
 # about what the tick may act on: the digest is the enumeration, never the judgement,
 # and the tick still opens every document it acts on. A `status: done` project is
@@ -414,6 +418,7 @@ step2=0 step3=0 step4=0 step5=0 step6=0
 FOLD="$(dirname "${BASH_SOURCE[0]}")/fold-answers.sh"
 DESIGN_INPUTS="$(dirname "${BASH_SOURCE[0]}")/design-inputs.sh"
 CKPT="$(dirname "${BASH_SOURCE[0]}")/continue-checkpoint.sh"
+CLOSE_DELAY="$(dirname "${BASH_SOURCE[0]}")/close-delay.sh"
 INPUTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/project-inputs.sh"   # absolute: it runs from the instance root
 # `inputs: later` (project-inputs.sh): 1 WAITING keeps the project's drafts from naming step 2
 # — refine has nothing to do until its files land — and 3 ARRIVED names step 2, which owes
@@ -562,7 +567,7 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs urls="" ntask nterm wtp sid sids="" ipsids="" dl redraw mapped b inw rc r rel bad="" held prel ao nref unref
+  local p d pst f st prs urls="" ntask nterm closable="" cdue="" cdv wtp sid sids="" ipsids="" dl redraw mapped b inw rc r rel bad="" held prel ao nref unref
   skip() { # <instance-relative path> <reason>
     case "$bad" in *"|$1|"*) return 0 ;; esac
     bad="$bad|$1|"; step2=1
@@ -651,13 +656,13 @@ fingerprint() { # <probe|digest>
          && ! grep -qF 'worktree retained:' "$f"; then
         printf 'reclaim owed %s\n' "${f#"$inst"/}"; step5=1
       fi
+      ntask=$((ntask + 1))
+      case "${st:-unset}" in done|cancelled) nterm=$((nterm + 1)) ;; esac
       if [ "$mode" = digest ]; then
-        ntask=$((ntask + 1))
         case "${st:-unset}" in
           ready)       step3=1 ;;
           in-progress) step4=1 ;;
           in-review)   step4=1; step5=1 ;;
-          done|cancelled) nterm=$((nterm + 1)) ;;
         esac
         # An answered hand-off owes its task a resume (step 4), whatever the status.
         [ "$ao" = 0 ] && { step2=1; grep -qF 'needs handed off' "$f" && step4=1; }
@@ -675,7 +680,7 @@ fingerprint() { # <probe|digest>
 $prs"
       fi
     done
-    [ "$mode" = digest ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && step6=1
+    [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && closable="$closable $(basename "$d")"
     [ "$redraw" = 1 ] && { printf 'redraw owed %s\n' "${d#"$inst"/}design.md"; step2=1; }
     # Every draft refined and no design.md is owed work too (2026-11-18: a build project's
     # drafts were refined in one pass, and IDLE ticks never drew its design). Never recorded.
@@ -718,6 +723,18 @@ $prs"
     local due; due="$(bash "$CKPT" --instance "$inst" 2>/dev/null)" || { cause "continue-checkpoint.sh failed"; return 1; }
     printf 'checkpoint %s\n' "$(printf '%s\n' "$due" | cut -f1 | grep . | tr '\n' ' ')"
   fi
+
+  # A close comes due with time alone too (closeAfterDays). Its DUE SET is printed even when
+  # empty and whether or not AWAITING.md exists, so the tick the delay ends reads DELTA. Only
+  # step 6 acts on a `close due` line. A failing close-delay.sh counts the project as due.
+  for p in $closable; do
+    cdv="$(bash "$CLOSE_DELAY" --instance "$inst" "$p" 2>"$PERR")" \
+      || note "close-delay.sh failed for projects/$p: $(head -n1 "$PERR") — counted as due"
+    [ "$(printf '%s\n' "$cdv" | cut -f3)" = held ] && continue
+    cdue="$cdue projects/$p/project.md"
+    [ "$mode" = digest ] && { printf 'close due projects/%s/project.md\n' "$p"; step6=1; }
+  done
+  printf 'close-due%s\n' "$cdue"
 
   # Every open-PR fact comes from the HOST, via gh's own --jq (no local jq needed). A
   # failure on any one PR poisons the whole fingerprint — better no answer than a match

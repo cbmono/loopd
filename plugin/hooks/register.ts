@@ -203,6 +203,7 @@ type Project = {
   title: string
   status: string
   awaiting_close: boolean
+  closable: boolean
   phase_done: number
   phase_total: number
   mine: boolean          // write-snapshot.sh's task-owner.sh verdict; absent (an older snapshot) is mine
@@ -315,6 +316,8 @@ function shape(json: unknown): Board | null {
     rows.push({
       slug: str(po.slug), ref: raw(po.slug), title: str(po.title), status: str(po.status),
       awaiting_close: po.awaiting_close === true,
+      // A snapshot older than closeAfterDays has no `closable`: its awaiting_close said the same.
+      closable: typeof po.closable === 'boolean' ? po.closable : po.awaiting_close === true,
       phase_done: toint(pp.done), phase_total: toint(pp.total), mine: po.mine !== false, owner: login(po.owner), tasks,
     })
   }
@@ -647,22 +650,22 @@ function draw($: any, e: any, now: number): any {
       if (group === 1) {
         if (k === 0 || ranked[k - 1].group !== 1) rows.push(line(' '))
         const live = p.tasks.filter(t => t.status !== 'cancelled')
-        const state = p.awaiting_close ? 'done' : p.status === 'paused' ? 'paused' : active && live.length ? live.filter(t => t.status === 'done').length + '/' + live.length : ''
+        const state = p.closable ? 'done' : p.status === 'paused' ? 'paused' : active && live.length ? live.filter(t => t.status === 'done').length + '/' + live.length : ''
         const right = [p.owner ? '@' + p.owner : '', state].filter(Boolean).join('  ')
         const title = fit(p.slug, W - 2 - (right ? cols(right) + 1 : 0))
-        rows.push(pressRow(seg((p.awaiting_close ? '✓' : active ? '●' : p.status === 'paused' ? '○' : '·') + ' ', MUTED),
+        rows.push(pressRow(seg((p.closable ? '✓' : active ? '●' : p.status === 'paused' ? '○' : '·') + ' ', MUTED),
           copyButton('copy-project-' + k, title, MUTED, okRef(p.ref) ? p.ref : ''), right ? seg(gap(2 + cols(title) + cols(right)) + right, MUTED) : null))
         return
       }
       rows.push(line(' '))
-      // awaiting_close is finished work waiting on /loopd:close-project; status done is a closed, retained folder.
-      const [glyph, look] = p.awaiting_close ? ['✓', DONE] : active ? ['●', WORK] : p.status === 'paused' ? ['○', MUTED] : p.status === 'done' ? ['✓', MUTED] : ['·', MUTED]
+      // closable is finished work, its close a NEEDS YOU row once closeAfterDays pass; status done is a closed, retained folder.
+      const [glyph, look] = p.closable ? ['✓', DONE] : active ? ['●', WORK] : p.status === 'paused' ? ['○', MUTED] : p.status === 'done' ? ['✓', MUTED] : ['·', MUTED]
       const tail: [string, Record<string, unknown>][] = []
       if (n) tail.push([needYou(n), NEEDS_YOU])
       // Off task_sessions, never the snapshot: the PM tick has no key there, so it never marks a project.
       const ts = counts.state === 'ok' ? counts.tasks : null
       if (group === 0 && ts && Object.entries(ts).some(([k, s]) => s === 'working' && (k.match(TASK_KEY) || [])[1] === p.ref)) tail.push(['running', DONE])
-      if (p.awaiting_close) tail.push(['done', DONE])
+      if (p.closable) tail.push(['done', DONE])
       else if (p.status === 'paused') tail.push(['paused', MUTED])
       else if (p.status === 'done') tail.push(['closed', MUTED])
       const tailCols = cols(tail.map(([s]) => s).join(' · '))

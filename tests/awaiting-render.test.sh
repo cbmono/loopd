@@ -555,5 +555,54 @@ ok "--held with an unknown reason is a usage error" \
 ok "step 8 passes the value through: the tick judges no eligibility" \
    "$(grep -c 'merge-eligibility is this tick.s judgement' "$REPO/plugin/tick-steps/step-8-render.md" | tr -d ' ')/$(grep -c 'review-next.sh <pr> --repo <org>/<repo> --head <sha> --merge-row <task-path>' "$REPO/plugin/tick-steps/step-8-render.md" | tr -d ' ')" 0/1
 
+echo
+echo "== closeAfterDays holds the close row; the day comes from git, in UTC =="
+g() { git -C "$1" -c user.name=t -c user.email=t@example.com -c core.excludesFile=/dev/null "${@:2}"; }
+at() { # <dir> <committer date> <status> [<extra body line>] — commit task-001-a at that status
+  printf -- '---\ntype: Task\ntitle: "Shipped"\nstatus: %s\n---\n%s\n' "$3" "${4:-}" > "$1/projects/demo/tasks/task-001-a.md"
+  g "$1" add -A >/dev/null && GIT_COMMITTER_DATE="$2" g "$1" commit -qm "$3" >/dev/null
+}
+closed_on() { # <dir> <pinned today> -> 1 with a close row, 0 without
+  CHECKPOINT_TODAY="$2" bash "$SH" --instance "$1" >/dev/null 2>&1
+  grep -c '^\* 🏁' "$1/$AB_AWAITING" | tr -d ' '
+}
+H="$TMP/held"; inst "$H"; g "$H" init -q
+at "$H" '2026-11-01T12:00:00Z' in-review
+# 01:00 at +05:00 is 20:00 UTC the day before: the day is 2026-11-09, never the local 11-10.
+at "$H" '2026-11-10T01:00:00+05:00' done
+: > "$H/$AB_AWAITING"
+ok "inside the delay (3 of 5 days): no close row"  "$(closed_on "$H" 2026-11-12)" 0
+ok "on the day it ends (5 of 5, UTC): the row"      "$(closed_on "$H" 2026-11-14)" 1
+printf '{ "org": "demo", "closeAfterDays": 0 }\n' > "$H/instance.config.json"
+ok "closeAfterDays: 0 ⇒ the row at once"            "$(closed_on "$H" 2026-11-09)" 1
+printf '{ "org": "demo", "closeAfterDays": null }\n' > "$H/instance.config.json"
+ok "…null counts as absent, so 5"                   "$(closed_on "$H" 2026-11-12)" 0
+printf '{ "org": "demo" }\n' > "$H/instance.config.json"
+at "$H" '2026-11-20T12:00:00Z' done 'a later note'
+ok "a later non-status edit keeps the day"          "$(closed_on "$H" 2026-11-14)" 1
+at "$H" '2026-11-21T12:00:00Z' in-progress
+at "$H" '2026-11-22T12:00:00Z' done
+ok "reverted then re-set: day of the re-set"        "$(closed_on "$H" 2026-11-26)" 0
+ok "…and the row 5 days after it"                   "$(closed_on "$H" 2026-11-27)" 1
+mkdir -p "$TMP/broken"; cp -R "$REPO/plugin/scripts/." "$TMP/broken/"
+printf '#!/usr/bin/env bash\nexit 3\n' > "$TMP/broken/close-delay.sh"
+CHECKPOINT_TODAY=2026-11-23 bash "$TMP/broken/build-awaiting.sh" --instance "$H" >/dev/null 2>&1
+ok "a failing helper shows the row"                 "$(grep -c '^\* 🏁' "$H/$AB_AWAITING" | tr -d ' ')" 1
+printf -- '---\ntype: Task\ntitle: "Later"\nstatus: done\n---\n' > "$H/projects/demo/tasks/task-002-b.md"
+ok "an untracked terminal task: day is today"       "$(closed_on "$H" 2026-12-31)" 0
+g "$H" add -A >/dev/null; GIT_COMMITTER_DATE='2026-11-23T12:00:00Z' g "$H" commit -qm b >/dev/null
+printf -- '---\ntype: Task\ntitle: "Later"\nstatus: draft\n---\n' > "$H/projects/demo/tasks/task-002-b.md"
+GIT_COMMITTER_DATE='2026-11-23T12:00:00Z' g "$H" commit -qam c >/dev/null
+printf -- '---\ntype: Task\ntitle: "Later"\nstatus: done\n---\n' > "$H/projects/demo/tasks/task-002-b.md"
+ok "an uncommitted terminal status: today"          "$(closed_on "$H" 2026-12-31)" 0
+Z="$TMP/zero"; inst "$Z"; g "$Z" init -q; task "$Z" task-001-a "Shipped" done '"x"' ''; : > "$Z/$AB_AWAITING"
+ok "zero commits ⇒ the row at once"                 "$(closed_on "$Z" 2026-11-01)" 1
+at "$Z" '2026-11-01T12:00:00Z' in-review; at "$Z" '2026-11-02T12:00:00Z' done
+git clone -q --depth 1 "file://$Z" "$TMP/shallow" 2>/dev/null; : > "$TMP/shallow/$AB_AWAITING"
+ok "a shallow clone ⇒ the row at once"              "$(closed_on "$TMP/shallow" 2026-11-01)" 1
+ok "…while Z itself, inside the delay, holds it"    "$(closed_on "$Z" 2026-11-03)" 0
+blob="$(g "$Z" rev-parse HEAD:projects/demo/tasks/task-001-a.md)"; rm -f "$Z/.git/objects/${blob:0:2}/${blob:2}"
+ok "an unreadable blob at HEAD fails open: the row" "$(closed_on "$Z" 2026-11-03)" 1
+
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

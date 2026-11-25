@@ -192,7 +192,8 @@ when every task is terminal, so a project that never finishes was never asked at
 * **Every active project, and a time-boxed one sooner.** A project is due when either key
   is crossed or its `timebox:` has run out. A label is not needed to be asked. `paused`
   and `done` projects are never asked: a pause already answers it. A project whose tasks
-  are all terminal gets the `🏁 close` row instead.
+  are all terminal gets the `🏁 close` row instead, once `closeAfterDays` has passed
+  ("Closing a finished project after a delay").
 * **Report-only.** It never pauses, closes or deprioritises a project, and it rewrites no
   document.
 * **Once.** The row stands until the human answers, like every other row. It is one row,
@@ -1373,7 +1374,7 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `coderabbitRounds` | **no** — a merge policy both clones must agree on | **1**: `review-rounds.sh --for coderabbit` refuses another external-reviewer round once one PR has had one. Any integer ≥ 0 (`0` runs none); anything else — `true`, `"1"`, `-1`, `1.0` — makes `resolve-review-config.sh` exit 1 naming the key, and `/loopd:welcome check` warns |
 | `qaRounds` | **no** — a merge policy both clones must agree on | **1**: `review-rounds.sh --for qa` refuses another `qa-reviewer` round once one PR has had one. Values as `coderabbitRounds`. **`0` is an opt-in to unreviewed merges**: with a CodeRabbit refusal, or with `coderabbitRounds` `0` too, a `yolo` project merges a PR nobody reviewed once its required checks are green — and a refusal is read from comment text, so a misread comment can open such a merge (`AUTONOMY.md` → "Merge after the last round") |
 | `reviewFixMaxLines` | **no** — a merge policy both clones must agree on | **300** changed lines (added plus deleted) since the last reviewed commit; over it a fix holds for the human. Read by `review-next.sh --clear`, which `required-checks.sh` asks (`AUTONOMY.md` → "Merge after the last round"). Values as `coderabbitRounds` |
-| everything else | no — shared facts (`org`, `group`, `maxPrLoc`, `maxPrFiles`, `continueAfterTasks`, `continueAfterDays`, `defaultRepo`, `codegraphSkip`, …) | as documented per key (`continueAfterTasks`/`continueAfterDays`: off) |
+| everything else | no — shared facts (`org`, `group`, `maxPrLoc`, `maxPrFiles`, `continueAfterTasks`, `continueAfterDays`, `closeAfterDays`, `defaultRepo`, `codegraphSkip`, …) | as documented per key (`continueAfterTasks`/`continueAfterDays`: off; `closeAfterDays`: 5) |
 
 **`models`, `roleTiers` and `maxAgentsInFlight` moved into this table on 2026-08-29.** They
 are **spend and capacity**, not shared facts: which model a human pays for, and how many
@@ -1545,6 +1546,30 @@ becomes a **close candidate**: the PM surfaces it under 🔴 *Awaiting you* and
 **proposes** closing it — it **never** closes a project autonomously. Closing
 removes work from the queue and deletes the folder, so it is a human call, like
 the two task gates.
+
+**Closing a finished project after a delay.** The `🏁 close` row and the tick's close
+proposal wait `closeAfterDays` days after the project's last task went terminal, so a
+follow-up has time to surface. `scripts/close-delay.sh` answers the day and whether it
+has passed; each caller keeps its own closable test.
+
+* **The key.** Tracked, never per-machine. **Absent ⇒ 5**, and so is a value that is not a
+  whole number. **Only `0` turns the delay off** — unlike `continueAfterDays`, whose
+  `null` is off.
+* **The day, from git.** Per task, the newest commit whose version has a terminal
+  `status:` and whose predecessor's does not, its committer date (`%ct`) as a UTC day; the
+  project's day is its latest task's. A later note on a done task moves nothing, and a
+  status reverted then re-set counts from the re-set.
+* **Terminal on disk but not at `HEAD`** (untracked or uncommitted) ⇒ today. **No history
+  to read** — the bundle is not the top of its own work tree, has no commit, or is a
+  shallow clone ⇒ the delay has passed at once.
+* **Fails open.** A helper or config read that fails counts every closable project as
+  past the delay, which is the behaviour before the key.
+* **Who reads it.** `build-awaiting.sh` (the row), `tick-delta.sh` (one `close due
+  <project.md>` digest line per project past it, the only ones step 6 acts on, and a
+  `close-due` fingerprint line so the day it ends is a DELTA), and `write-snapshot.sh`
+  (`closable` = every task terminal; `awaiting_close` = closable and past the delay). The
+  pane may show a closable project as done before then. `/loopd:close-project` ignores
+  it: the human can close inside the delay.
 
 **Every task that is not terminal at closeout becomes `cancelled`** (a `--force`
 closeout is how one gets there), with a one-line reason in the task body. `cancelled`

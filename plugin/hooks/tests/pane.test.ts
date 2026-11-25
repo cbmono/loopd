@@ -960,6 +960,31 @@ test('NEEDS YOU is numbered, slug-prefixed, last, and wraps under its text to th
   await ui2.unmount()
 })
 
+test('a closable project inside closeAfterDays shows done in PROJECTS and no close row in NEEDS YOU', ONLY, async ($, on) => {
+  const snap = needSnap('Judge the trims')
+  const held = { ...snap, projects: snap.projects.map(p => p.slug === 'article-batch-8-hygiene' ? { ...p, closable: true, awaiting_close: false } : { ...p, closable: false }) }
+  const w = world(held)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED + 60000 })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const rows = await rowsOf(ui)
+  expect(rows).toContain('✓ article-batch-8-hygiene' + ' '.repeat(16) + 'done')
+  expect(rows.slice(-7)).toEqual(['NEEDS YOU (1)', ' ', '1. unblock  leaner-prompts · Judge the trims', ' ', '─'.repeat(45), ' ', ' '])
+  await ui.unmount()
+
+  // Past the delay, `closable` and `awaiting_close` agree and the close row is back.
+  const due = { ...held, projects: held.projects.map(p => p.closable ? { ...p, awaiting_close: true } : p) }
+  w.files.set(SNAPSHOT, { text: JSON.stringify(due), mtimeMs: 2000 })
+  w.files.set(COUNTS, { text: JSON.stringify(countsOf(due)), mtimeMs: 2000 })
+  const ui2 = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  await ui2.press({ key: 'refresh' })
+  const r2 = await rowsOf(ui2)
+  expect(r2).toContain('✓ article-batch-8-hygiene' + ' '.repeat(16) + 'done')
+  expect(r2).toContain('2. close    article-batch-8-hygiene')
+  await ui2.unmount()
+})
+
 test('NEEDS YOU rows end with each PR as <bare repo>#<n>, a Link to its url, within 45 columns', ONLY, async ($, on) => {
   const pr = (repo: string, number: number, url = 'https://github.com/' + repo + '/pull/' + number) => ({ repo, number, url })
   const t = (id: string, title: string, awaiting: string, prs: unknown[]) => ({ id, title, status: 'in-review', in_flight: false, awaiting, prs })
