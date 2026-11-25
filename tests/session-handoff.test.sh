@@ -166,7 +166,7 @@ answer: done, and the SSO profile is labs-admin"
 RES="$(PATH="$PATH" claude --bg --resume "$(bash "$SESS" full a8b4344d)" "The human finished hand-off $ID1: done. Carry on with this task.")"
 ok "the resume went to the FULL id, flag-free" "$(cnt "$TMP/calls" "resume $U1 The human finished hand-off $ID1")" 1
 ok "…and resume-id reads it as the same session" "$(bash "$SESS" resume-id "$U1" "$RES")" "same $U1"
-printf '* 2026-10-21T10:00:00Z woke %s\n' "$U1" >> "$T/task-022-sso.md"
+printf '* 2026-10-21T10:00:00Z woke %s for hand-off %s\n' "$U1" "$ID1" >> "$T/task-022-sso.md"
 ok "after the woke note: not owed again" "$(one --owed "$T/task-022-sso.md")" "not-owed already-resumed rc=1"
 STARTED=1791557999999; all_blocked
 job "$U1" 'merge terraform#867 now'
@@ -230,6 +230,39 @@ printf 'resume launched; session id unresolved: 0badc0de\n' >> "$T/task-050-laun
 ok "after 'resume launched': not owed" "$(one --owed "$T/task-050-launched.md")" "not-owed already-resumed rc=1"
 agents blocked blocked blocked blocked done done blocked blocked
 ok "…nor on the next tick, once the old session reads done" "$(one --owed "$T/task-050-launched.md")" "not-owed already-resumed rc=1"
+all_blocked
+
+echo "== D1: only a note naming THIS hand-off delivers it =="
+tied() { # <file> <note>... — a stopped U6 session's answered hand-off f6f6f6f6-0000cccc
+  local f="$1" n; shift
+  mk "$f" in-progress "$U6"
+  printf "$DISP" software-engineer >> "$f"
+  printf '* 2026-10-21T09:00:00Z needs handed off %s · hand-off f6f6f6f6-0000cccc · Q1 · session stopped by the tick\n' "$U6" >> "$f"
+  for n; do printf '%s\n' "$n" >> "$f"; done
+  bash "$FOLD" --add "$f" "Q1: do: finish the agent's hand-off f6f6f6f6-0000cccc — x" >/dev/null
+  sed -i.bak 's/^  - "\(Q1: do: .*\)"$/  - "\1 --- done"/' "$f"
+  one --owed "$f" | cut -d' ' -f1-2
+}
+agents blocked blocked blocked blocked done stopped blocked blocked
+TF="$T/task-054-tied.md"
+ok "an unrelated resumed note, then the answer: owed" "$(tied "$TF" '* resumed 0d15ea5e-0000-4000-8000-00000000000b')" "owed $U6"
+ok "the same session woken bare (a CI fix) before the answer: owed" "$(tied "$TF" "* woke $U6")" "owed $U6"
+ok "a note for ANOTHER hand-off: owed" "$(tied "$TF" "* 2026-10-21T10:00:00Z woke $U6 for hand-off f6f6f6f6-0000dddd")" "owed $U6"
+ok "…nor one whose id only starts with this one's" "$(tied "$TF" "* woke $U6 for hand-off f6f6f6f6-0000ccccee")" "owed $U6"
+ok "woke … for hand-off <this id>: delivered" "$(tied "$TF" "* woke $U6 for hand-off f6f6f6f6-0000cccc")" "not-owed already-resumed"
+ok "resumed … for hand-off <this id>: delivered" "$(tied "$TF" "* resumed 0d15ea5e-0000-4000-8000-00000000000b for hand-off f6f6f6f6-0000cccc")" "not-owed already-resumed"
+MB="$TMP/mh"; MT="$MB/projects/demo/tasks/task-055-mark.md"; mkdir -p "$(dirname "$MT")"; cp "$B/instance.config.json" "$MB/"
+mk "$MT" in-review "$U6"
+mark() { bash "$REPO/plugin/scripts/merge-hold.sh" marks "$MB" 2>/dev/null | awk '{ print $2 }'; }
+M0="$(mark)"; printf '* 2026-10-21T10:00:00Z an unrelated note\n' >> "$MT"
+ok "merge-hold.sh's round mark: an unrelated note leaves it" "$(mark)" "$M0"
+for n in "woke $U6 for hand-off f6f6f6f6-0000cccc" "resumed $U1 for hand-off f6f6f6f6-0000cccc" \
+         "dispatched $U1 for hand-off f6f6f6f6-0000cccc" 'resume launched; session id unresolved: 0badc0de' \
+         'spawned; session id unresolved: 0d15ea5e'; do
+  M0="$(mark)"; printf '* %s\n' "$n" >> "$MT"
+  ok "…'${n%% *} … ${n##* }' moves it" "$([ "$(mark)" != "$M0" ] && echo moved)" moved
+done
+rm -f "$TF" "$TF.bak"
 all_blocked
 
 echo "== a QA-filed hand-off: the answer goes to a fresh implementer, never back to the checker =="
