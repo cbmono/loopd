@@ -8,6 +8,7 @@
 #                         crd=<n> qad=<n> qlast=<none|pass|fail|unknown> qhead=<yes|no> qrec=<yes|no> thr=<n|unknown>
 #
 # Exit 0 decided · 2 unknown input (stdout still `hold`). The same answer under gated and yolo.
+# A --head of 7-39 hex is expanded to the PR's head it prefixes; anything else not 40 hex is unknown.
 # merge-path needs thr=0 (review-clearance.sh --threads; absent/unknown holds). --merge-row: build-awaiting.sh's
 # arguments, one per line — `--merge`, `--held` (merge-hold.sh: 1 live or hand-off, 2 unknown) and `--note` — or nothing (1, 2);
 # a `--merge` carries `pr-body-clearance.sh --tally`'s criteria line as a `--note`, `criteria: unknown` when it prints none,
@@ -105,6 +106,8 @@ done
 [ -n "$pr" ] && { [ -z "$clear" ] || [ -z "$mrow" ]; } || { sed -n '6,8p' "$0" >&2; exit 2; }
 unknown() { echo "review-next: $1 — holding" >&2; [ -n "$mrow" ] || echo hold; exit 2; }
 hold() { echo "review-next: hold for the human: $1" >&2; exit 1; }
+[ -z "$head" ] || [[ "$head" =~ ^[0-9a-f]{7,40}$ ]] \
+  || unknown "--head $(printf '%s' "$head" | tr -d '[:cntrl:]') is not 7-40 lowercase hex"
 
 if [ -z "$inst" ]; then
   if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -f "$CLAUDE_PROJECT_DIR/instance.config.json" ]; then inst="$CLAUDE_PROJECT_DIR"
@@ -118,7 +121,11 @@ meta="$(gh pr view "$pr" ${R[@]+"${R[@]}"} --json url,number,headRefOid,headRefN
                ((.headRepositoryOwner.login // "") + "/" + (.headRepository.name // "")),
                (.baseRefName // "")] | @tsv' 2>/dev/null)" || unknown "PR $pr is unreadable"
 url="$(printf '%s' "$meta" | cut -f1)"; num="$(printf '%s' "$meta" | cut -f2)"
-[ -n "$head" ] || head="$(printf '%s' "$meta" | cut -f3)"
+prhead="$(printf '%s' "$meta" | cut -f3)"
+if [ -z "$head" ]; then head="$prhead"
+elif [ "${#head}" -lt 40 ]; then
+  case "$prhead" in "$head"?*) head="$prhead" ;; *) unknown "--head $head is not a prefix of the PR's head ${prhead:-(unread)}" ;; esac
+fi
 nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')"
 [ -n "$num" ] && [ -n "$head" ] && [ "$nwo" != "$url" ] || unknown "PR $pr is unreadable"
 
@@ -143,8 +150,9 @@ if [ -n "$last" ]; then
   case "${last#* }" in pass) qlast=pass ;; changes-requested) qlast=fail ;; *) qlast=unknown ;; esac
   [ "${last%% *}" = "$head" ] && qhead=yes
 fi
-"$D/qa-dispatch.sh" check --repo "$nwo" --pr "$num" --head "$head" --instance "$inst" >/dev/null 2>&1
-case $? in 0) qrec=yes ;; 1) qrec=no ;; *) unknown "QA dispatch records unreadable" ;; esac
+qerr="$("$D/qa-dispatch.sh" check --repo "$nwo" --pr "$num" --head "$head" --instance "$inst" 2>&1 >/dev/null)"; qrc=$?
+qerr="$(printf '%s\n' "$qerr" | head -n 1 | tr -d '[:cntrl:]' | cut -c1-200)"
+case $qrc in 0) qrec=yes ;; 1) qrec=no ;; *) unknown "${qerr:-qa-dispatch.sh exit $qrc}" ;; esac
 
 tout="$("$D/review-clearance.sh" "$num" --repo "$nwo" --head "$head" --threads 2>/dev/null)"
 case $? in 0|6) thr="$(printf '%s\n' "$tout" | sed -n 's/^threads: //p' | head -n 1)" ;; *) thr=unknown ;; esac
@@ -187,7 +195,7 @@ if [ -n "$mrow" ]; then
 fi
 
 # --- --clear: the merge gate's question, asked only where review-clearance.sh refused --------
-[ "$head" = "$(printf '%s' "$meta" | cut -f3)" ] || hold "--head $head is not the PR's head"
+[ "$head" = "$prhead" ] || hold "--head $head is not the PR's head"
 [ "$thr" != unknown ] || unknown "the review threads at $head are unread"
 NEXT_ANSWER=""; NEXT_KIND=""
 decide "${facts[@]}" >/dev/null || unknown "the review state is unreadable"

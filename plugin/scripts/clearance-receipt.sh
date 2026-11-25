@@ -82,7 +82,8 @@ done
 [ "$mode" != record ] || [ -z "$crit" ] || [ "$result" = pass ] || usage
 case "$repo" in */*) ;; *) usage ;; esac
 case "$pr" in ''|*[!0-9]*) usage ;; esac
-case "$head" in [0-9a-fA-F][0-9a-fA-F]*) ;; *) usage ;; esac
+[ -n "$head" ] || usage
+[[ "$head" =~ ^[0-9a-f]{40}$ ]] || { echo "clearance-receipt: --head $(printf '%s' "$head" | tr -d '[:cntrl:]') is not a 40-character lowercase hex sha" >&2; exit 2; }
 
 # The bundle root, in the order a caller can be sure of: the flag, then the session's own
 # project dir, then the first ancestor carrying the marker.

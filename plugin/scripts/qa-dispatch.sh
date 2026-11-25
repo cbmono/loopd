@@ -31,7 +31,8 @@ done
 case "$cmd" in mint|check) ;; *) usage ;; esac
 printf '%s' "$repo" | grep -Eqx '[a-z0-9._-]+/[a-z0-9._-]+' || usage
 printf '%s' "$pr" | grep -Eqx '[0-9]+' || usage
-printf '%s' "$head" | grep -Eqx '[0-9a-f]{40}' || usage
+[ -n "$head" ] || usage
+[[ "$head" =~ ^[0-9a-f]{40}$ ]] || { echo "qa-dispatch: --head $(printf '%s' "$head" | tr -d '[:cntrl:]') is not a 40-character lowercase hex sha" >&2; exit 2; }
 
 if [ -z "$inst" ]; then
   if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -f "$CLAUDE_PROJECT_DIR/instance.config.json" ]; then

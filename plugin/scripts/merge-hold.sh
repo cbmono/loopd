@@ -109,6 +109,11 @@ if [ "$mode" = marks ]; then
   exit 0
 fi
 [ -n "$head" ] || usage
+if ! [[ "$head" =~ ^[0-9a-f]{40}$ ]]; then
+  badhead="merge-hold: --head $(printf '%s' "$head" | tr -d '[:cntrl:]') is not a 40-character lowercase hex sha"
+  if [ "$mode" = verify ]; then echo "$badhead"; else echo "$badhead" >&2; fi
+  exit 2
+fi
 
 if [ "$mode" = verify ]; then
   [ -n "$inst" ] && [ -n "$repo" ] && [ -n "$pr" ] || usage
