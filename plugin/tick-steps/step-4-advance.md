@@ -113,11 +113,11 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    ${CLAUDE_PLUGIN_ROOT}/scripts/session-handoff.sh --owed <task-path>
    ```
 
-   **Exit 0** prints `owed <uuid> <id>`, `round: …` and `answer: <text>`: the latest hand-off names the
+   **Exit 0** prints `owed <uuid> <id>`, `round: …`, `answer: <text>` and `tag: for hand-off <id>`; every delivery note below is `<verb> <uuid> ` followed by that line's text after `tag: `, copied, never composed. The latest hand-off names the
    task's `session:`, its `Q<n>: do:` entry is answered, no `woke`/`resumed`/`dispatched … for hand-off <id>` note follows it,
-   and the session is `stopped` or `done`. **`round: dispatch <role>` means a `qa-reviewer` filed it, and a checker writes no code — never resume it: dispatch a fresh `loopd:<role>` round as step 3 spawns it, its brief carrying the answer verbatim, the `.loopd/.handoffs/<id>.txt` path and the PR's QA verdict comment URL, and write `dispatched <uuid> for hand-off <id>` under `# Notes` — or, when its id is unresolved, step 3's `spawned; session id unresolved` note, which `--owed` reads the same way.** On `round: resume`, resume it by the three calls below with the message
+   and the session is `stopped` or `done`. **`round: dispatch <role>` means a `qa-reviewer` filed it, and a checker writes no code — never resume it: dispatch a fresh `loopd:<role>` round as step 3 spawns it, its brief carrying the answer verbatim, the `.loopd/.handoffs/<id>.txt` path and the PR's QA verdict comment URL, and write `dispatched <uuid> ` followed by the `tag:` line's text after `tag: ` under `# Notes` — or, when its id is unresolved, step 3's `spawned; session id unresolved` note, which `--owed` reads the same way.** On `round: resume`, resume it by the three calls below with the message
    `The human finished hand-off <id>: <text>. Carry on with this task.`, read the id back with
-   `resume-id`, and write the note as `woke <uuid> for hand-off <id>` / `resumed <uuid> for hand-off <id>` — that note, or the `resume launched` one
+   `resume-id`, and write `woke <uuid> ` / `resumed <uuid> ` followed by the `tag:` line's text after `tag: ` — **the tagged note is written in place of the bare `woke`/`resumed` note the calls below write, never beside it**. That note, or the `resume launched` one
    below, is what makes the next tick answer `not-owed already-resumed`; a bare `woke`/`resumed` note does not. **Exit 1** (`not-owed <why>`, `accepted` for a QA hand-off answered exactly `done` or `accept`) — nothing to send. **Exit 2** — no `* DISPATCH` role above the hand-off: unknown, change nothing. A
    `done` task is never owed: its hand-off row stays in `AWAITING.md` until answered, and
    the answer is the human's record, not a round.
