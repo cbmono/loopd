@@ -251,11 +251,17 @@ ok "a note for ANOTHER hand-off: owed" "$(tied "$TF" "* 2026-10-21T10:00:00Z wok
 ok "…nor one whose id only starts with this one's" "$(tied "$TF" "* woke $U6 for hand-off f6f6f6f6-0000ccccee")" "owed $U6"
 ok "woke … for hand-off <this id>: delivered" "$(tied "$TF" "* woke $U6 for hand-off f6f6f6f6-0000cccc")" "not-owed already-resumed"
 ok "resumed … for hand-off <this id>: delivered" "$(tied "$TF" "* resumed 0d15ea5e-0000-4000-8000-00000000000b for hand-off f6f6f6f6-0000cccc")" "not-owed already-resumed"
-MP="$(python3 -c 'import re, sys; m = re.findall(r"grep -cE \x27(\^\\\* DISPATCH [^\x27]*)\x27", open(sys.argv[1]).read()); print(m[0] if len(m) == 1 else "")' "$REPO/plugin/scripts/merge-hold.sh")"
-ok "merge-hold.sh's round-mark pattern is found once" "$([ -n "$MP" ] && echo yes)" yes
-ok "…and still counts every delivery note form" "$(printf '%s\n' "* woke $U6 for hand-off f6f6f6f6-0000cccc" \
-   "* resumed $U1 for hand-off f6f6f6f6-0000cccc" "* dispatched $U1 for hand-off f6f6f6f6-0000cccc" \
-   'resume launched; session id unresolved: 0badc0de' '* spawned; session id unresolved: 0d15ea5e' | grep -cE "$MP")" 5
+MB="$TMP/mh"; MT="$MB/projects/demo/tasks/task-055-mark.md"; mkdir -p "$(dirname "$MT")"; cp "$B/instance.config.json" "$MB/"
+mk "$MT" in-review "$U6"
+mark() { bash "$REPO/plugin/scripts/merge-hold.sh" marks "$MB" 2>/dev/null | awk '{ print $2 }'; }
+M0="$(mark)"; printf '* 2026-10-21T10:00:00Z an unrelated note\n' >> "$MT"
+ok "merge-hold.sh's round mark: an unrelated note leaves it" "$(mark)" "$M0"
+for n in "woke $U6 for hand-off f6f6f6f6-0000cccc" "resumed $U1 for hand-off f6f6f6f6-0000cccc" \
+         "dispatched $U1 for hand-off f6f6f6f6-0000cccc" 'resume launched; session id unresolved: 0badc0de' \
+         'spawned; session id unresolved: 0d15ea5e'; do
+  M0="$(mark)"; printf '* %s\n' "$n" >> "$MT"
+  ok "…'${n%% *} … ${n##* }' moves it" "$([ "$(mark)" != "$M0" ] && echo moved)" moved
+done
 rm -f "$TF" "$TF.bak"
 all_blocked
 
