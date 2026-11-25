@@ -171,7 +171,6 @@ ok "…and exactly one example heading"     "$(grep -c '^## Hand-off example$' "
 awk '/^## Hand-off example$/{print; print ""; print "> quoted"; next} 1' "$STYLE" > "$TMP/mutant-style.md"
 ok "mutant: a > line in the example -> check FAILS" "$(grep -c -E '^(>|[[:space:]]|[-*+] |[0-9]+\. )' <<<"$(example "$TMP/mutant-style.md")" | tr -d ' ')" 1
 
-# brief.md is the source of truth; a phrase kept in seed CLAUDE.md must say the same here.
 SHARED=('Always link to the real artifacts' 'Lead with the outcome' '`prom` or `mrg`')
 flat() { tr '\n' ' ' < "$1" | tr -s ' '; }
 agree() { local p n=0; for p in "${SHARED[@]}"; do [ "$(saw "$(flat "$1")" "$p")" = yes ] && [ "$(saw "$(flat "$2")" "$p")" = yes ] && n=$((n+1)); done; echo "$n"; }
