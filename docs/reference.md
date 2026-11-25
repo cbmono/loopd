@@ -290,7 +290,7 @@ human decision unblocks.
 | ❓ | answer |
 | 🔀 | merge |
 | ⛔ | unblock |
-| 🏁 | close |
+| 🏁 | close — `closeAfterDays` (5 when absent; `0` = at once) after the project's last task went terminal |
 | 👉 | do — a hand-off only you can carry out, filed by the tick |
 | ⏳ | continue — only where `continueAfterTasks`/`continueAfterDays` is set (absent ⇒ off) |
 
@@ -595,6 +595,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `link-repos.sh` | refreshes `<instance>/repos/`, and writes each linked repo's `.git/loopd-bundle` — the marker the plugin's safety hooks follow from a role agent's worktree back to this bundle | yes |
 | `index-kb.sh` | builds local CodeGraph indexes for the group's repos (code intelligence — **not** the knowledge base) | yes |
 | `continue-checkpoint.sh` | names each active project past `continueAfterTasks`/`continueAfterDays` (absent ⇒ off) or its `timebox:`, for `build-awaiting.sh`'s `continue` row and `tick-delta.sh`'s fingerprint | no |
+| `close-delay.sh` | answers, per project slug, the UTC day its last task went terminal (from git) and whether `closeAfterDays` (5 when absent) has passed, for `build-awaiting.sh`'s `close` row, `tick-delta.sh`'s `close due` lines and `write-snapshot.sh`'s `awaiting_close` | no |
 | `build-awaiting.sh` | renders `AWAITING.md` — the heading and its count, the `* ` marker `session-banner.sh` greps literally, the glyph, the verb and the link — from the task documents, never `SNAPSHOT.json`. It classifies `grant` against `answer` from the `open_questions` entry itself, puts each question's `Recommendation:` beside it (`no recommendation` when its block has none) and ends a `👀 review` row `(recommended: ok)`, narrows to this clone's human with `task-owner.sh`, takes each row's trailing sentence as a `--trailer`, and marks a build draft's `approve` row `unverified` or `stale` from the `--facts` verdict `verified-facts.sh` printed. No `AWAITING.md` ⇒ it writes nothing and exits 0 | yes, that file (gitignored) |
 | `build-kb-index.sh` | regenerates `knowledge/index.md` from document frontmatter; `--check` fails on a doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a status outside `{current, superseded, corrected}`, a tag outside `knowledge/vocab.md`, a dangling supersession edge, or (as a warning, an error under `--strict`) a bundle-relative link in `knowledge/**` or a `source:` path token that resolves to nothing | yes, that index |
 | `kb-sync.sh` | mounts, reads and writes a knowledge base held in another repository (`knowledge` in `instance.config.json`) — `mount` clones it into `knowledge/` as a nested, gitignored clone, `pull` fast-forwards it under a named timeout, `status` reports unpushed KB commits, and `commit` is the one bounded write transaction: rebase, regenerate the index, commit, push, one retry, then stop and report. Absent the key it exits 3 and touches nothing | yes, the mounted KB (never the bundle) |

@@ -106,7 +106,8 @@ echo "== 3. THE DIGEST NAMES A STEP ONLY WHEN THE TICK HAS WORK FOR IT =="
 inst() { # <dir> <task-status> [extra-frontmatter-line]
   mkdir -p "$1/projects/demo/tasks"
   ( cd "$1" && git init -q . && git config user.email t@e && git config user.name t ) >/dev/null 2>&1
-  printf '{ "org": "demo" }\n' > "$1/instance.config.json"
+  # closeAfterDays 0: a task committed a moment ago is past the delay, so step 6 is named.
+  printf '{ "org": "demo", "closeAfterDays": 0 }\n' > "$1/instance.config.json"
   printf '# SCHEMA\n' > "$1/SCHEMA.md"
   printf -- '---\ntype: Project\ntitle: "Demo"\nstatus: active\n---\n' > "$1/projects/demo/project.md"
   printf -- '---\ntype: Task\ntitle: "T"\nstatus: %s\nkind: build\nacceptance_criteria: [ "x" ]\nopen_questions: [ %s ]\n---\n' \
@@ -129,6 +130,8 @@ V="$TMP/review";   inst "$V" in-review
 ok "an in-review task names 4 and 5"  "$(steps_for "$V")" "step-4-advance.md step-5-reflect-merges.md "
 T="$TMP/term";     inst "$T" done
 ok "an all-terminal project names step 6" "$(steps_for "$T")" "step-6-close-projects.md "
+H="$TMP/held";     inst "$H" done; printf '{ "org": "demo" }\n' > "$H/instance.config.json"
+ok "…but not inside closeAfterDays (5 when absent)" "$(steps_for "$H")" ""
 # The digest carries open-question COUNTS and never whether one was ANSWERED, which is the
 # only thing that names step 2 on a task past draft. So the predicate reads the entry.
 A="$TMP/answered"; inst "$A" in-review '"Q1: colour? --- blue"'

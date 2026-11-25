@@ -45,7 +45,7 @@ cp "$(dirname "$SRC")/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"
 cp "$(dirname "$SRC")/fold-answers.sh" "$INST/scripts/fold-answers.sh"
 cp "$(dirname "$SRC")/web-queue.sh" "$INST/scripts/web-queue.sh"
 cp "$(dirname "$SRC")/agent-sessions.sh" "$(dirname "$SRC")"/*.py "$INST/scripts/"; cp -R "$(dirname "$SRC")/lib" "$INST/scripts/lib"
-for f in dispatchable-ready.sh resolve-max-agents.sh resolve-config.sh; do cp "$(dirname "$SRC")/$f" "$INST/scripts/$f"; done
+for f in dispatchable-ready.sh resolve-max-agents.sh resolve-config.sh close-delay.sh; do cp "$(dirname "$SRC")/$f" "$INST/scripts/$f"; done
 # The two gates log each call to $GATELOG, so the cost order can be asserted.
 GATELOG="$TMP/gates"; export GATELOG; : > "$GATELOG"
 for g in task-owner project-paused; do
@@ -588,7 +588,7 @@ ok "…and one whose bare-id depends_on is done" "$(crun1)" "$DREADY_MSG"
 sed -i.bak 's/^status: done/status: cancelled/' "$INST/projects/proj-d/tasks/d0.md"; rm -f "$INST/projects/proj-d/tasks/d0.md.bak"; cr cancelled-dep
 ok "…or cancelled (terminal, as step 3 reads it)" "$(crun1)" "$DREADY_MSG"
 ok "…while record wrote no owed-work line: every line is a fingerprint key" \
-   "$(grep -v '^#' "$INST/$AB_STATE_DIR" | grep -cvE '^(recorded:|head|queue|snapshot|task|unmonitored|pr|session|sessions|due|checkpoint|reclaim) ')" 0
+   "$(grep -v '^#' "$INST/$AB_STATE_DIR" | grep -cvE '^(recorded:|head|queue|snapshot|task|unmonitored|pr|session|sessions|due|checkpoint|reclaim|close-due)( |$)')" 0
 
 : > "$GATELOG"; : > "$CLDIR/calls"
 for c in "unmet depends_on|depends_on: [ /projects/proj-a/tasks/t2.md ]\n" \
@@ -688,6 +688,30 @@ for bad in 'tick-20261113T084450Z-d9ad ended' 'x idle — fingerprint unchanged 
 done
 mkdir -p "$TMP/noledger"
 ok "no ledger ⇒ exit 2, never a new file"         "$("$SRC" record --idle --instance "$TMP/noledger" >/dev/null 2>&1; echo $?):$(ls "$TMP/noledger" "$TMP/noledger/$AB_DIR" | grep -c 'log.md')" 2:0
+
+echo "== closeAfterDays: a close coming due with time alone moves the fingerprint =="
+CD="$TMP/closedue"; mkdir -p "$CD/projects/fin/tasks" "$CD/projects/run/tasks" "$CD/$AB_DIR"
+printf '{ "org": "demo" }\n' > "$CD/instance.config.json"; printf '/%s/\n' "$AB_DIR" > "$CD/.gitignore"
+for pj in fin run; do printf -- '---\ntype: Project\nstatus: active\n---\n' > "$CD/projects/$pj/project.md"; done
+task "$CD/projects/run/tasks/t1.md" blocked
+task "$CD/projects/fin/tasks/t1.md" in-review
+GIT -C "$CD" init -q; GIT -C "$CD" add -A; GIT_COMMITTER_DATE='2026-11-01T12:00:00Z' GIT -C "$CD" commit -qm a
+task "$CD/projects/fin/tasks/t1.md" done; GIT -C "$CD" add -A; GIT_COMMITTER_DATE='2026-11-10T12:00:00Z' GIT -C "$CD" commit -qm b
+cdr() { CHECKPOINT_TODAY="$1" "$SRC" "$2" --instance "$CD" 2>"$TMP/cd.err"; }
+ok "check's fingerprint carries close-due with no AWAITING.md, even when empty" \
+   "$(CHECKPOINT_TODAY=2026-11-12 "$SRC" record --instance "$CD" >/dev/null 2>&1; grep -c '^close-due$' "$CD/$AB_STATE_DIR")" 1
+ok "…so a record without the line (an upgrade) is a DELTA" \
+   "$(sed -i.bak '/^close-due/d' "$CD/$AB_STATE_DIR"; cdr 2026-11-12 check >/dev/null; echo $?)" 1
+cdr 2026-11-12 record >/dev/null
+ok "inside the delay: IDLE"                        "$(cdr 2026-11-14 check | cut -c1-5)" IDLE:
+ok "the day it ends: DELTA naming the project"     "$(cdr 2026-11-15 check | grep -c '^  now:  close-due projects/fin/project.md$')" 1
+ok "the digest: one close due line, for fin only"  "$(cdr 2026-11-15 digest | grep '^close due ')" "close due projects/fin/project.md"
+ok "…and step 6 named only then"                   "$(cdr 2026-11-14 digest | grep '^steps:' | grep -c step-6):$(cdr 2026-11-15 digest | grep '^steps:' | grep -c step-6)" 0:1
+mkdir -p "$TMP/cdbroken"; cp -R "$REPO/plugin/scripts/." "$TMP/cdbroken/"; cp -R "$REPO/plugin/tick-steps" "$TMP/tick-steps"
+printf '#!/usr/bin/env bash\necho boom >&2; exit 3\n' > "$TMP/cdbroken/close-delay.sh"
+CHECKPOINT_TODAY=2026-11-12 bash "$TMP/cdbroken/tick-delta.sh" digest --instance "$CD" > "$TMP/cd.out" 2>"$TMP/cd.err"; rc=$?
+ok "a failing helper: exit 0, the project counted due" "$rc:$(grep -c '^close due projects/fin/project.md$' "$TMP/cd.out")" 0:1
+ok "…and a named cause on stderr"                  "$(grep -c 'close-delay.sh failed for projects/fin: boom' "$TMP/cd.err")" 1
 
 echo "== plumbing =="
 ok "not a git repo is exit 2"    "$(mkdir -p "$TMP/plain"; "$SH" check --instance "$TMP/plain" >/dev/null 2>&1; echo $?)" 2

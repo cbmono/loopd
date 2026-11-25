@@ -924,7 +924,7 @@ echo "== the field allowlist =="
 # `owner` is in this set DELIBERATELY and is the only identity field that is — see the
 # header. Removing it here is how the reversal would get silently undone, so the writer's
 # own header, this line, and per-owner-board.test.sh all have to move together.
-ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting backlog slug title description kind status autonomy owner mine deliverable_paths awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions open_question_ids advisor_notes depends_on prs pr_mergeable repo number url design '
+ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting backlog slug title description kind status autonomy owner mine deliverable_paths closable awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions open_question_ids advisor_notes depends_on prs pr_mergeable repo number url design '
 extra_keys() { # <json file> <allowed> -> the keys present but not allowed
   python3 - "$1" "$2" <<'PYK'
 import json, sys
@@ -1161,6 +1161,22 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 p={p["slug"]:p for p in d["projects"]}
 sys.exit(0 if p["finished"]["awaiting_close"] and not p["empty"]["awaiting_close"] else 1)' "$SNAP")"
+assert "…and is closable (no git history: past closeAfterDays at once)" "$(yes_if python3 -c '
+import json,sys
+p={p["slug"]:p for p in json.load(open(sys.argv[1]))["projects"]}
+sys.exit(0 if p["finished"]["closable"] and not p["empty"]["closable"] else 1)' "$SNAP")"
+HC="$TMP/group/_loopd-held"; mkdir -p "$HC/projects/fin/tasks" "$HC/$AB_DIR"
+echo '{ "org": "fixture-org" }' > "$HC/instance.config.json"; : > "$HC/$AB_SNAPSHOT"
+printf -- '---\ntype: Project\ntitle: Fin\nstatus: active\n---\n' > "$HC/projects/fin/project.md"
+printf -- '---\ntype: Task\ntitle: Done\nstatus: done\n---\n' > "$HC/projects/fin/tasks/task-001.md"
+( cd "$HC" && git init -q . && git -c user.name=t -c user.email=t@example.com -c core.excludesFile=/dev/null add projects instance.config.json \
+  && git -c user.name=t -c user.email=t@example.com commit -qm done ) >/dev/null 2>&1
+held_flags() { ( cd "$HC" && bash "$WRITER" --quiet ) && python3 -c '
+import json,sys; d=json.load(open(sys.argv[1])); p=d["projects"][0]
+print("%s/%s/%s" % (p["closable"], p["awaiting_close"], d["counts"]["awaiting"]))' "$HC/$AB_SNAPSHOT"; }
+assert "done today, inside closeAfterDays: closable, no close awaited, not counted" "$(eq "$(held_flags)" True/False/0)"
+echo '{ "org": "fixture-org", "closeAfterDays": 0 }' > "$HC/instance.config.json"
+assert "…closeAfterDays 0: the close is awaited and counted"                       "$(eq "$(held_flags)" True/True/1)"
 assert "phase progress counts done vs total"     "$(fhas '"phase_progress": {"done": 1, "total": 2}' "$SNAP")"
 
 echo "== a DONE project is read no further than its frontmatter =="

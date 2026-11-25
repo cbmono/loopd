@@ -135,6 +135,7 @@ d["reclaimIgnoreOk"] = ["target"]
 d["coderabbitRounds"] = 2
 d["continueAfterTasks"] = 16
 d["continueAfterDays"] = 20
+d["closeAfterDays"] = 7
 PY
 RC="$(norm "$I")"
 ok "a dirty pair exits 1"                     "$RC" 1
@@ -150,6 +151,7 @@ ok "…nor a local reclaimIgnoreOk"                    "$(finding MISPLACED recl
 ok "a local coderabbitRounds is MISPLACED"           "$(finding MISPLACED coderabbitRounds)" yes
 ok "…and so is continueAfterTasks"                   "$(finding MISPLACED continueAfterTasks)" yes
 ok "…and so is continueAfterDays"                    "$(finding MISPLACED continueAfterDays)" yes
+ok "…and so is closeAfterDays"                       "$(finding MISPLACED closeAfterDays)" yes
 ok "report mode wrote nothing"                "$(jget "$I/$TCFG" reposRoot)" /abs/path/on/one/machine
 RC="$(norm "$I" --apply)"
 ok "--apply exits 0"                          "$RC" 0
@@ -197,7 +199,7 @@ echo
 echo "-- 2. MISSING adds seed keys; \$doc keys are never added, and a bundle's own is kept"
 I="$(newinst 3)"
 jedit "$I/$TCFG" <<'PY'
-for k in ("maxPrFiles", "maxStallRounds", "commitAttribution", "$commitAttribution", "authorEmail", "people"):
+for k in ("maxPrFiles", "maxStallRounds", "commitAttribution", "$commitAttribution", "authorEmail", "people", "closeAfterDays"):
     d.pop(k, None)
 d["$mine"] = "a note this bundle wrote itself"
 PY
@@ -205,6 +207,8 @@ norm "$I" >/dev/null
 ok "a key added since 1.x is MISSING"         "$(finding MISSING maxPrFiles)" yes
 ok "…and so is maxStallRounds"                "$(finding MISSING maxStallRounds)" yes
 ok "…and commitAttribution"                   "$(finding MISSING commitAttribution)" yes
+# Absent reads as 5, the seed's value, but it is reported so the bundle shows the delay it runs.
+ok "…and closeAfterDays (not ABSENT_IS_SEED)"  "$(finding MISSING closeAfterDays)" yes
 ok "the seed's \$doc key is NOT reported"      "$(grep -c 'MISSING *\$' "$TMP/out")" 0
 ok "a placeholder-valued key (authorEmail) is NOT added" "$(finding MISSING authorEmail)" no
 ok "…nor the example people map"             "$(finding MISSING people)" no
