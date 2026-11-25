@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # fold-owed.test.sh — an answered question on a draft is owed work: the digest names it and
-# step 2, `tick-delta.sh check` never reads a clean tree IDLE past it, and a close whose tick
-# never rendered AWAITING.md says so.
+# step 2, `tick-delta.sh check` never reads a clean tree IDLE past it, and a close names the
+# previous full tick when that tick never rendered AWAITING.md.
 #
 # Why (2026-11-18): a human answered a refined draft's only open question in place (an
 # unlabelled `advisor:` entry). The digest named step 2 but no task, the tick read step 2's
@@ -73,18 +73,29 @@ ok "…but its bake is owed until step 2's refine receipt" "$(check | grep -cF "
 printf '\n# Notes\n\n* %s refine: baked.\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$INST/$T"; commit; record
 ok "…and IDLE"                                        "$(check | cut -c1-10)" "rc:0 IDLE:"
 
-echo "== record --close: a skipped render is noted =="
-L="$INST/$AB_LEDGER"; W="$INST/$AB_AWAITING"
-close_line() { # <open ts> <awaiting mtime, touch -t form>
-  printf '* TICK %s by me open: go\n' "$1" > "$L"; : > "$W"; touch -t "$2" "$W"
-  "$INST/scripts/tick-delta.sh" record --instance "$INST" --close "did things" >/dev/null 2>&1
-  case "$(grep ' close: ' "$L")" in *"; awaiting not rendered"*) echo noted ;; '') echo no-close ;; *) echo clean ;; esac; }
-ok "AWAITING.md older than the open line → noted"     "$(close_line 2026-11-18T10:00:00Z 202601010000)" noted
-ok "AWAITING.md written after the open line → clean"  "$(TZ=UTC close_line 2026-01-01T00:00:00Z "$(TZ=UTC date +%Y%m%d%H%M)")" clean
+echo "== record --close: the previous full tick's skipped render is noted =="
+L="$INST/$AB_LEDGER"; W="$INST/$AB_AWAITING"; T0=2026-11-18T10:00:00Z
+PAIR="* TICK $T0 by me open: go
+* TICK $T0 by me close: went"
+note() { # <ledger lines before this tick's open> -> noted|clean|wrong|no-close
+  printf '%s\n* TICK 2026-11-18T11:00:00Z by me open: go\n' "$1" > "$L"
+  "$INST/scripts/tick-delta.sh" record --instance "$INST" --tick 2026-11-18T11:00:00Z --close "did things" >/dev/null 2>&1
+  case "$(grep '11:00:00Z by me close: ' "$L")" in
+    *"; awaiting not rendered by $T0 "*|*"; awaiting not rendered by $T0") echo noted ;;
+    *"awaiting not rendered"*) echo wrong ;; '') echo no-close ;; *) echo clean ;; esac; }
+: > "$W"; TZ=UTC touch -t 202611180959 "$W"; ( cd "$INST" && bash scripts/build-awaiting.sh ) >/dev/null 2>&1
+ok "build-awaiting.sh run after T → clean"           "$(note "$PAIR")" clean
+TZ=UTC touch -t 202611180959 "$W"
+ok "AWAITING.md backdated before T → noted, naming T" "$(note "$PAIR")" noted
+ok "an IDLE line after T is skipped → still T"        "$(note "$PAIR
+* TICK 2026-11-18T10:30:00Z by me idle — fingerprint unchanged (tick-delta)")" noted
+ok "a reaped close with no open is skipped → still T" "$(note "$PAIR
+* TICK 2026-11-18T10:40:00Z by me close: tick-x ended with no ledger entry (tick-reap)")" noted
+ok "a dead tick's open with no close is skipped"      "$(note "$PAIR
+* TICK 2026-11-18T10:45:00Z by me open: died")" noted
+ok "no earlier full tick → clean"                     "$(note "* TICK 2026-11-18T10:30:00Z by me idle — fingerprint unchanged (tick-delta)")" clean
 rm -f "$W"
-printf '* TICK 2026-11-18T10:00:00Z by me open: go\n' > "$L"
-"$INST/scripts/tick-delta.sh" record --instance "$INST" --close "did things" >/dev/null 2>&1
-ok "no AWAITING.md at all → clean"                    "$(grep -c 'awaiting not rendered' "$L")" 0
+ok "no AWAITING.md at all → clean"                    "$(note "$PAIR")" clean
 
 echo "== mutant: without the fold owed print the harness fails =="
 draft 'advisor: Should the cache be per tenant? --- yes: per tenant'; commit
