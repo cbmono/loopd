@@ -74,9 +74,8 @@ printf '\n# Notes\n\n* %s refine: baked.\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> 
 ok "…and IDLE"                                        "$(check | cut -c1-10)" "rc:0 IDLE:"
 
 echo "== record --close: the previous full tick's skipped render is noted =="
-L="$INST/$AB_LEDGER"; W="$INST/$AB_AWAITING"; T0=2026-11-18T10:00:00Z
-PAIR="* TICK $T0 by me open: go
-* TICK $T0 by me close: went"
+L="$INST/$AB_LEDGER"; W="$INST/$AB_AWAITING"; T0=2026-11-18T10:00:00Z; NL=$'\n'
+PAIR="* TICK $T0 by me open: go${NL}* TICK $T0 by me close: went"
 note() { # <ledger lines before this tick's open> -> noted|clean|wrong|no-close
   printf '%s\n* TICK 2026-11-18T11:00:00Z by me open: go\n' "$1" > "$L"
   "$INST/scripts/tick-delta.sh" record --instance "$INST" --tick 2026-11-18T11:00:00Z --close "did things" >/dev/null 2>&1
@@ -87,12 +86,9 @@ note() { # <ledger lines before this tick's open> -> noted|clean|wrong|no-close
 ok "build-awaiting.sh run after T → clean"           "$(note "$PAIR")" clean
 TZ=UTC touch -t 202611180959 "$W"
 ok "AWAITING.md backdated before T → noted, naming T" "$(note "$PAIR")" noted
-ok "an IDLE line after T is skipped → still T"        "$(note "$PAIR
-* TICK 2026-11-18T10:30:00Z by me idle — fingerprint unchanged (tick-delta)")" noted
-ok "a reaped close with no open is skipped → still T" "$(note "$PAIR
-* TICK 2026-11-18T10:40:00Z by me close: tick-x ended with no ledger entry (tick-reap)")" noted
-ok "a dead tick's open with no close is skipped"      "$(note "$PAIR
-* TICK 2026-11-18T10:45:00Z by me open: died")" noted
+ok "an IDLE line after T is skipped → still T"        "$(note "$PAIR${NL}* TICK 2026-11-18T10:30:00Z by me idle — fingerprint unchanged (tick-delta)")" noted
+ok "a reaped close with no open is skipped → still T" "$(note "$PAIR${NL}* TICK 2026-11-18T10:40:00Z by me close: tick-x ended with no ledger entry (tick-reap)")" noted
+ok "a dead tick's open with no close is skipped"      "$(note "$PAIR${NL}* TICK 2026-11-18T10:45:00Z by me open: died")" noted
 ok "no earlier full tick → clean"                     "$(note "* TICK 2026-11-18T10:30:00Z by me idle — fingerprint unchanged (tick-delta)")" clean
 rm -f "$W"
 ok "no AWAITING.md at all → clean"                    "$(note "$PAIR")" clean
