@@ -307,14 +307,31 @@ LAST_OUT="$("$SCRIPT" 42 2>&1)"; rc=$?
 assert "the thread list unreadable -> 2, not a clearance" "$([ "$rc" -eq 2 ] && echo 0 || echo 1)"
 says   "  ...saying which clause cannot be applied" "clause 9"
 
-# MORE THAN ONE PAGE OF THREADS, AND NONE OF THE FIRST 100 OPEN. "No unresolved thread in
-# the threads I could see" is not "no unresolved thread", and a 101-thread PR is exactly
-# the large PR where an unanswered finding hides. Unknown, so 2.
+# A READ THAT STOPS SHORT, AND NONE OF THE THREADS READ OPEN. "No unresolved thread in
+# the threads I could see" is not "no unresolved thread". Unknown, so 2.
 setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
 add_thread true 'a.sh' 1 coderabbitai "$CR_URL" 'resolved'
-THREADS_MORE=true
-expect "a second page of threads, none of page 1 open -> 2" 2
+THREADS_MORE=true; THREADS_TOTAL=205
+expect "page 2 of the threads unreadable, none of page 1 open -> 2" 2
 says   "  ...saying it is unknown rather than satisfied" "UNKNOWN"
+says   "  ...naming the count read, the total and why" "205 review threads, 1 read (page 2 unreadable)"
+
+RESOLVED="$("$REAL_JQ" -cn --arg u "$CR_URL" '{isResolved:true, path:"r.sh", line:1, comments:{nodes:[{author:{login:"coderabbitai"}, url:$u, body:"ok"}]}}')"
+OPEN2="$("$REAL_JQ" -cn --arg u "$CR_URL" '{isResolved:false, path:"p2.sh", line:5, comments:{nodes:[{author:{login:"coderabbitai"}, url:$u, body:"open on page two"}]}}')"
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread true 'a.sh' 1 coderabbitai "$CR_URL" 'resolved'; THREADS_MORE=true
+add_page p2 p3 "[$RESOLVED]"; add_page p3 - "[$OPEN2]"
+expect "an open thread on page 3 -> 6" 6
+says   "  ...naming it" "p2.sh:5"
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread true 'a.sh' 1 coderabbitai "$CR_URL" 'resolved'; THREADS_MORE=true
+add_page p2 p3 "[$RESOLVED]"; add_page p3 - "[$RESOLVED]"
+expect "every thread resolved across three pages -> clear" 0
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread true 'a.sh' 1 coderabbitai "$CR_URL" 'resolved'; THREADS_MORE=true; THREADS_TOTAL=1001
+for i in 2 3 4 5 6 7 8 9 10; do add_page "p$i" "p$((i + 1))" "[$RESOLVED]"; done
+expect "ten pages read and an eleventh owed (D3 bound) -> 2" 2
+says   "  ...naming the bound" "1001 review threads, 10 read (page bound 10 reached)"
 
 # ...but an OPEN thread on page 1 still refuses at 6: that answer does not depend on the
 # pages nobody read, so falling back to "unknown" would lose a fact already established.
@@ -370,8 +387,12 @@ setup "$CLEAN_HEAD"; write_pr; : > "$FIX/threads_broken"
 LAST_OUT="$("$SCRIPT" 42 --threads 2>&1)"; ok "the thread read fails -> 2, unknown" "rc=$?" rc=2
 says "  ...printing unknown, never 0" "threads: unknown"
 setup "$CLEAN_HEAD"; add_thread true 'a.sh' 1 coderabbitai "$CR_URL" 'resolved'; THREADS_MORE=true
-thr; ok "over 100 threads, none open on page 1 (truncated) -> 2" "$THR" rc=2
-says "  ...saying why" "truncated"
+thr; ok "page 2 unreadable, none open on page 1 (truncated) -> 2" "$THR" rc=2
+says "  ...saying why" "truncated at $CLEAN_HEAD (1 review threads, 1 read (page 2 unreadable))"
+setup "$CLEAN_HEAD"; add_thread true 'a.sh' 1 coderabbitai "$CR_URL" 'resolved'; THREADS_MORE=true
+add_page p2 - "[$OPEN2]"
+thr; ok "an open thread on page 2 is counted -> 6" "$THR" rc=6
+says "  ...as one" "threads: 1"
 setup "$CLEAN_HEAD"; add_thread false 'a.sh' 1 coderabbitai "$CR_URL" 'open'; THREADS_MORE=true
 thr; ok "...an open one on page 1 still answers 6" "$THR" rc=6
 setup "$CLEAN_HEAD"; THREADS_HEAD=0000000000000000000000000000000000000000

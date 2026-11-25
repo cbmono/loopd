@@ -415,6 +415,26 @@ ok "record --dependents from another script is a usage error" \
 project yolo-proj yolo 226
 
 echo
+echo "== a --head that is not 40 lowercase hex is refused by name, exit 2 =="
+QAD="$REPO/plugin/scripts/qa-dispatch.sh"; S7="${SHA:0:7}"
+bad40() { printf '%s: --head %s is not a 40-character lowercase hex sha' "$1" "$S7"; }
+run_bad() { "$@" 2>"$TMP/bad.err" >"$TMP/bad.out"; printf '%s|%s|%s' "$?" "$(cat "$TMP/bad.out")" "$(cat "$TMP/bad.err")"; }
+for sub in mint check; do
+  ok "qa-dispatch.sh $sub --head <7 hex> ⇒ 2, the reason on stderr" \
+     "$(run_bad "$QAD" "$sub" --repo "$NWO" --pr 226 --head "$S7" --instance "$BUNDLE")" "2||$(bad40 qa-dispatch)"
+done
+ok "merge-hold.sh check --head <7 hex> ⇒ 2, the reason on stderr" \
+   "$(run_bad "$HOLD" check "$YT" --head "$S7" --instance "$BUNDLE")" "2||$(bad40 merge-hold)"
+ok "merge-hold.sh verify --head <7 hex> ⇒ 2, the reason on stdout" \
+   "$(run_bad "$HOLD" verify --bundle "$BUNDLE" --repo "$NWO" --pr 226 --head "$S7")" "2|$(bad40 merge-hold)|"
+forget
+for m in "record review-clearance.sh" "record merge-hold.sh --hold clear --mark x" "verify" "path"; do
+  ok "clearance-receipt.sh $m --head <7 hex> ⇒ 2, the reason on stderr" \
+     "$(run_bad "$RECEIPT" $m --bundle "$BUNDLE" --repo "$NWO" --pr 226 --head "$S7")" "2||$(bad40 clearance-receipt)"
+done
+ok "…and no receipt file is named or written" "$(find "$BUNDLE/$AB_RECEIPTS" -type f 2>/dev/null | grep -c .)" 0
+
+echo
 echo "== a criteria ✗ holds the yolo merge (precondition 3), read off the pr-body pass line =="
 forget; record_all 226 "$SHA"
 ok "guard: criteria=0 on the pr-body pass line ⇒ permitted" "$(verdict "$MERGE" "$PM")" allow

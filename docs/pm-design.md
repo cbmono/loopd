@@ -459,7 +459,8 @@ exactly the facts whose movement creates tick work: bundle HEAD, per-task status
 PR on an `in-progress` or `in-review` task's head SHA, state, review decision,
 `mergeable`/`mergeStateStatus` (UNKNOWN as-is: a push costs one extra full tick while the
 host computes it), its unresolved review-thread count (a thread resolved with no new head
-moves nothing else here; past the 100 fetched the line is unreadable, never a truncated
+moves nothing else here; contexts and threads are paged 100 at a time up to ten pages, and
+a read that stops short is unreadable with its count and cause named, never a truncated
 count), review count with the latest review's id and
 state (a COMMENTED review moves no decision), the latest issue comment's id and author
 (a reviewer's rate-limit reply is one; a review-thread reply already mints a review),

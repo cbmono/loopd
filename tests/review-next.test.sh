@@ -152,6 +152,18 @@ printf '[]\n' > "$FIX/reviews_json"
 "$REAL_JQ" -n --rawfile b "$FIXTURES/rate-limit-refusal.pr30.md" '[{user:{login:"coderabbitai[bot]"}, body:$b}]' \
   > "$FIX/comments_json"
 live() { "$SCRIPT" 42 --repo acme/widgets 2>/dev/null; }
+STAGE="$TMP/stage"; mkdir -p "$STAGE"; export HEADLOG="$TMP/heads"
+for s in "$REPO"/plugin/scripts/*; do ln -s "$s" "$STAGE/"; done
+for s in review-clearance.sh qa-dispatch.sh merge-hold.sh; do
+  rm "$STAGE/$s"
+  printf '#!/usr/bin/env bash\nh=""; p=""; for a in "$@"; do [ "$p" = --head ] && h="$a"; p="$a"; done\n' > "$STAGE/$s"
+  printf 'echo "%s $h" >> "$HEADLOG"\n[ -z "${QA_EXIT:-}" ] || [ %s != qa-dispatch.sh ] || exit "$QA_EXIT"\nexec "%s" "$@"\n' \
+    "$s" "$s" "$REPO/plugin/scripts/$s" >> "$STAGE/$s"
+  chmod +x "$STAGE/$s"
+done
+staged() { : > "$HEADLOG"; "$STAGE/review-next.sh" 42 --repo acme/widgets "$@" 2>"$TMP/staged.err"; echo "rc=$?"; }
+gates() { awk 'NF == 2' "$HEADLOG" | sort -u | tr '\n' '|'; }
+S7="${H:0:7}"
 ok "tick 1: the recorded rate limit -> dispatch QA" "$(live)" dispatch-qa
 n="$("$REPO/plugin/scripts/qa-dispatch.sh" mint --repo acme/widgets --pr 42 --head "$H")"
 ok "tick 2: the dispatch record at the head -> hold, no second QA" "$(live)" hold
@@ -189,6 +201,10 @@ reviewed_at_x; cmpf ahead "$(f modified a.sh 6 2)" "$(f added b.md 2 0)"
 ok "past CodeRabbit's last round, decision -> merge path" "$(live)" merge-path
 ok "ahead, 10 of 300 lines -> clears as last-round" "$(clear | tr '\n' ' ')" "last-round rc=0 "
 ok "…and writes the named receipt line at the head" "$(grep -c '^last-round review-next.sh ' "$RCPT")" 1
+reviewed_at_x; cmpf ahead "$(f modified a.sh 6 2)" "$(f added b.md 2 0)"
+ok "--clear --head <7 hex> clears as the full sha" "$(staged --clear --head "$S7" | tr '\n' ' ')" "last-round rc=0 "
+ok "…the full sha reaching every gate" "$(gates)" "qa-dispatch.sh $H|review-clearance.sh $H|"
+ok "…and the receipt line at the full head" "$(grep -c '^last-round review-next.sh ' "$RCPT")" 1
 "$SCRIPT" 42 --repo acme/widgets --head "$X" --clear >/dev/null 2>&1
 ok "--clear at a head that is not the PR's -> hold" "rc=$?" rc=1
 "$REAL_JQ" 'del(.files)' "$FIX/compare_json" > "$FIX/c" && mv "$FIX/c" "$FIX/compare_json"
@@ -227,6 +243,8 @@ ok "…but --clear holds: no review object pins it" "$(clear)/$(said 'only its e
 reviewed_at_x; printf '{"coderabbitRounds": 2}\n' > "$B/instance.config.json"; cmpf ahead "$(f modified a.sh 6 2)"
 ok "before the last round, no review at the head -> request a review" "$(live)" request-review
 ok "…and --clear refuses (exit 4 stands)" "$(clear)/$(said 'not finished (request-review)')" rc=1/yes
+X40="$(printf '%s' "$H" | tr 0-9a-f 1-9a-f0)"
+ok "a full sha that is not the head keeps today's path: request-review" "$(staged --head "$X40" | tr '\n' ' ')" "request-review rc=0 "
 
 reviewed_at_x; printf '[{"sha":"%s"}]\n' "$X" > "$FIX/commits_json"
 "$REAL_JQ" --arg x "$X" '.headRefOid = $x' "$FIX/pr_json" > "$FIX/p" && mv "$FIX/p" "$FIX/pr_json"
@@ -350,6 +368,36 @@ threads; ok "guard: CodeRabbit reviewed the head, 0 threads -> merge path" "$(li
 mkdir -p "$B/projects/p/tasks"; printf -- '---\ntype: Task\nstatus: in-review\n---\n' > "$B/projects/p/tasks/task-001-x.md"
 ok "…--merge-row prints build-awaiting.sh's arguments, one per line" "$(mrow | tr '\n' ' ')" \
    "--merge projects/p/tasks/task-001-x.md=[widgets#42](https://github.com/acme/widgets/pull/42) rc=0 "
+
+echo "== --head: a 7-39 hex prefix of the PR's head is that head; anything else not 40 hex is unknown =="
+full="$(staged --head "$H")"
+ok "plain: --head <7 hex> answers as the full sha" "$(staged --head "$S7")" "$full"
+ok "…the full sha reaching every gate" "$(gates)" "qa-dispatch.sh $H|review-clearance.sh $H|"
+ok "plain: --head <39 hex> too" "$(staged --head "${H:0:39}")" "$full"
+MR=(--merge-row projects/p/tasks/task-001-x.md)
+full="$(staged "${MR[@]}" --head "$H")"
+ok "--merge-row: --head <7 hex> answers as the full sha" "$(staged "${MR[@]}" --head "$S7")" "$full"
+ok "…the full sha reaching every gate" "$(gates)" "merge-hold.sh $H|qa-dispatch.sh $H|review-clearance.sh $H|"
+U7="$(printf '%s' "$S7" | tr a-f A-F)"
+for bad in "nothex1:is not 7-40 lowercase hex" "${H:0:6}:is not 7-40 lowercase hex" "$U7:is not 7-40 lowercase hex" \
+           "${H}0:is not 7-40 lowercase hex" "deadbee:is not a prefix of the PR's head $H"; do
+  h="${bad%%:*}"
+  ok "--head $h -> hold, exit 2" "$(staged --head "$h" | tr '\n' ' ')" "hold rc=2 "
+  ok "…one line naming it and why" "$(cat "$TMP/staged.err")" "review-next: --head $h ${bad#*:} — holding"
+  ok "…reaching no gate" "$(gates)" ""
+done
+ok "--merge-row --head deadbee -> nothing, exit 2" "$(staged "${MR[@]}" --head deadbee)" rc=2
+
+echo "== a qa-dispatch.sh failure carries its reason into the hold =="
+QD="$B/.loopd/.qa-dispatch"; mkdir -p "$QD"; touch "$QD/records"; chmod 000 "$QD/records"
+if [ -r "$QD/records" ]; then echo "  (running as root: the unreadable-file case cannot be built; skipped)"
+else
+  ok "unreadable dispatch records -> hold, exit 2" "$(staged --head "$H" | tr '\n' ' ')" "hold rc=2 "
+  ok "…naming qa-dispatch.sh's own line" "$(cat "$TMP/staged.err")" "review-next: qa-dispatch: $QD/records is unreadable — holding"
+fi
+chmod 644 "$QD/records"
+ok "a silent qa-dispatch.sh exit 3 -> hold" "$(QA_EXIT=3 staged --head "$H" | tr '\n' ' ')" "hold rc=2 "
+ok "…naming its exit" "$(cat "$TMP/staged.err")" "review-next: qa-dispatch.sh exit 3 — holding"
 : > "$FIX/no_branch"
 ok "…merge-queue.sh's merge-row token as a --note when it has one" "$(mrow | tr '\n' ' ')" \
    "--merge projects/p/tasks/task-001-x.md=[widgets#42](https://github.com/acme/widgets/pull/42) --note projects/p/tasks/task-001-x.md=##mq2 branch main not found in acme/widgets rc=0 "

@@ -905,22 +905,26 @@ R=()
 #   * the query cannot be run or cannot be parsed  -> exit 2, unknown state, never
 #     clearance. `gh pr view` and `gh api` have already succeeded by the time this runs, so
 #     a GraphQL failure here is an anomaly and not a machine without network.
-#   * MORE THAN ONE PAGE of threads and none of the first 100 is open -> also exit 2, and
-#     this one is the subtle half. "No unresolved thread in the threads I could see" is not
-#     "no unresolved thread", and a 101-thread PR is exactly the large PR where an
-#     unanswered finding is most likely. An open thread found on page 1 still refuses at 6:
-#     that answer does not depend on the pages nobody read.
+#   * a read that STOPS SHORT — threads are paged 100 at a time up to CLAUSE9_PAGES, and a
+#     later page that fails, or the bound itself, ends it — with none of the threads read
+#     open -> also exit 2, naming the count read and why. This is the subtle half. "No
+#     unresolved thread in the threads I could see" is not "no unresolved thread". An open
+#     thread found on a page read still refuses at 6: that answer does not depend on the
+#     pages nobody read.
 clause9_threads=""      # one `path\tline\tlogin\turl\tfirst-line` record per open thread
 clause9_state=""        # ok | unreadable | truncated
+clause9_cause=""        # why a truncated read stopped, e.g. `205 review threads, 100 read (page 2 unreadable)`
+CLAUSE9_PAGES=10
 
 check_clause9() {
-  local q json total open_n p_ l_ who url_ first_
-  q='query($owner:String!,$name:String!,$number:Int!){
+  local q json page total open_n p_ l_ who url_ first_ n=1 after="" ph count
+  q='query($owner:String!,$name:String!,$number:Int!,$after:String){
        repository(owner:$owner,name:$name){
          pullRequest(number:$number){
            headRefOid
-           reviewThreads(first:100){
-             pageInfo{ hasNextPage }
+           reviewThreads(first:100,after:$after){
+             totalCount
+             pageInfo{ hasNextPage endCursor }
              nodes{
                isResolved
                path
@@ -931,9 +935,27 @@ check_clause9() {
          }
        }
      }'
+  clause9_cause=""
   json="$(gh api graphql -F owner="${nwo%%/*}" -F name="${nwo##*/}" \
             -F number="$pr_number" -f query="$q" 2>/dev/null)" || {
     clause9_state="unreadable"; return; }
+  ph="$(printf '%s' "$json" | jq -r '.data.repository.pullRequest.headRefOid // ""' 2>/dev/null)"
+  while [ "$(printf '%s' "$json" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' 2>/dev/null)" = true ]; do
+    count="$(printf '%s' "$json" | jq -r '.data.repository.pullRequest.reviewThreads | "\(.totalCount // "more") review threads, \(.nodes | length) read"' 2>/dev/null)"
+    after="$(printf '%s' "$json" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor // ""' 2>/dev/null)"
+    [ "$n" -lt "$CLAUSE9_PAGES" ] || { clause9_cause="$count (page bound $CLAUSE9_PAGES reached)"; break; }
+    n=$((n + 1))
+    [ -n "$after" ] || { clause9_cause="$count (page $n has no cursor)"; break; }
+    page="$(gh api graphql -F owner="${nwo%%/*}" -F name="${nwo##*/}" \
+              -F number="$pr_number" -f after="$after" -f query="$q" 2>/dev/null)" \
+      && printf '%s' "$page" | jq -e --arg h "$ph" '.data.repository.pullRequest
+           | (.headRefOid // "") == $h and (.reviewThreads.nodes | type) == "array"
+             and (.reviewThreads.pageInfo.hasNextPage | type) == "boolean"' >/dev/null 2>&1 \
+      || { clause9_cause="$count (page $n unreadable)"; break; }
+    json="$(printf '%s\n%s\n' "$json" "$page" | jq -cs '.[1].data.repository.pullRequest.reviewThreads as $p
+             | .[0] | .data.repository.pullRequest.reviewThreads |= (.nodes += $p.nodes | .pageInfo = $p.pageInfo)' 2>/dev/null)" \
+      || { clause9_state="unreadable"; return; }
+  done
 
   # EVERY COLUMN IS ALWAYS EMITTED, and `line` is why this is spelled out. A file-level
   # thread has `line: null`, and `(.line // empty)` emits NO ELEMENT for it — so `@tsv`
@@ -1007,8 +1029,8 @@ refuse_clause9() { # <the clearance message that is being withheld>
     exit 2
   fi
   if [ "$clause9_state" = "truncated" ]; then
-    echo "error: PR $pr carries more review threads than one page, and none of the first" >&2
-    echo "       100 is unresolved. That is not the same answer as 'none is unresolved'," >&2
+    echo "error: PR $pr's review threads were not all read ($clause9_cause), and none of" >&2
+    echo "       those read is unresolved. That is not the same answer as 'none is unresolved'," >&2
     echo "       so clause 9 is UNKNOWN here rather than satisfied. Refusing (fail closed)." >&2
     exit 2
   fi
@@ -1126,7 +1148,7 @@ if [ -n "$threads_mode" ]; then
     list_clause9; exit 6
   fi
   echo "threads: unknown"
-  echo "unknown: the review threads on PR $pr are $clause9_state at $head_sha — holding" >&2
+  echo "unknown: the review threads on PR $pr are $clause9_state at $head_sha${clause9_cause:+ ($clause9_cause)} — holding" >&2
   exit 2
 fi
 
