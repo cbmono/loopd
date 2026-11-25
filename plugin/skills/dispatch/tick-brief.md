@@ -88,7 +88,7 @@ Three rules this spawn adds, each because the launcher reads nothing but your le
   job. **Run it only when your in-flight count is zero** — the `PRUNE_ACTIVE_MINUTES`
   mtime veto (default 120) is a backstop, not the guard, and does not apply to reclaim.
 - **Project close is human-gated.** The PM only *proposes* closing (all tasks
-  terminal); the human confirms (or runs `/close-project`). The folder step is always
+  terminal and `closeAfterDays`, 5 when absent, past — a `close due` digest line); the human confirms (or runs `/close-project`). The folder step is always
   `${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug> --apply`, never a hand-written `rm`;
   `retain: true` keeps the folder as the record (`SCHEMA.md`). Never close
   autonomously.

@@ -561,7 +561,7 @@ advisor_note_count() { # <frontmatter>
 # BOTH exits already have in hand, before the loop forks on `$p_status`, so — unlike
 # the phase/task JSON — it never differs between the two call sites and adding a
 # parameter for it would say otherwise.
-project_stanza() { # <awaiting_close> <ph_done> <ph_total> <phases_json> <tasks_json>
+project_stanza() { # <closable> <awaiting_close> <ph_done> <ph_total> <phases_json> <tasks_json>
   printf '%s' "
     {
       \"slug\": $(jstr "$slug"),
@@ -572,10 +572,11 @@ project_stanza() { # <awaiting_close> <ph_done> <ph_total> <phases_json> <tasks_
       \"autonomy\": $(jstr "$p_autonomy"),
       \"owner\": $(jstr "$p_owner"),
       \"mine\": $p_mine,
-      \"awaiting_close\": $1,
-      \"phase_progress\": {\"done\": $2, \"total\": $3},
-      \"phases\": [$4],
-      \"tasks\": [$5],
+      \"closable\": $1,
+      \"awaiting_close\": $2,
+      \"phase_progress\": {\"done\": $3, \"total\": $4},
+      \"phases\": [$5],
+      \"tasks\": [$6],
       \"deliverable_paths\": [$p_deliverable_paths_json]$p_design_json
     }"
 }
@@ -641,10 +642,10 @@ while IFS= read -r pfile; do
   # the phase and task WALKS, not of the project. A retained project is a reference card
   # on the board (its deliverables are listed from `deliverable_paths:` in project.md),
   # and a project omitted from the snapshot entirely could not be rendered at all.
-  # `awaiting_close` is false by definition here: a done project is already closed.
+  # `closable` and `awaiting_close` are false by definition here: a done project is already closed.
   if [[ "$p_status" == "done" ]]; then
     projects_n=$((projects_n+1))
-    projects_json="$projects_json${projects_json:+,}$(project_stanza false 0 0 '' '')"
+    projects_json="$projects_json${projects_json:+,}$(project_stanza false false 0 0 '' '')"
     continue
   fi
 
@@ -762,16 +763,20 @@ EOF
 $(find "$pdir/tasks" -maxdepth 1 -name '*.md' 2>/dev/null | grep -vE '/(index|log)\.md$' | sort || true)
 EOF
 
-  # A close proposal, same rule as the PM's step 6: every task terminal, at least
-  # one task, project not already done. Never an action — the board only shows it.
-  awaiting_close=false
+  # A close proposal, same rule as the PM's step 6: every task terminal, at least one task,
+  # project not already done (`closable`), and `closeAfterDays` past (`awaiting_close`); a
+  # close-delay.sh that fails counts as past. Never an action — the board only shows it.
+  closable=false; awaiting_close=false
   if [[ $p_held -eq 0 && $t_count -gt 0 && $t_terminal -eq $t_count && "$p_status" != "done" ]]; then
-    awaiting_close=true; awaiting_total=$((awaiting_total+1))
+    closable=true
+    if [[ "$(bash "$HERE/close-delay.sh" "$slug" 2>/dev/null | cut -f3)" != held ]]; then
+      awaiting_close=true; awaiting_total=$((awaiting_total+1))
+    fi
   fi
 
   projects_n=$((projects_n+1))
   projects_json="$projects_json${projects_json:+,}$(project_stanza \
-    "$awaiting_close" "$ph_done" "$ph_total" "$phases_json" "$tasks_json")"
+    "$closable" "$awaiting_close" "$ph_done" "$ph_total" "$phases_json" "$tasks_json")"
 done <<EOF
 $PROJECT_FILES
 EOF

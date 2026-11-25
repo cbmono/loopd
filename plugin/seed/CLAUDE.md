@@ -43,7 +43,7 @@ ls -d ~/.claude/plugins/cache/*/loopd/*/scripts | sort -V | tail -1
 |---|---|
 | See state & advance work (refine drafts, dispatch `ready` tasks, reflect merges) | **`/loopd:dispatch`** — the serial loop, a tick every 10m; `once` = one tick, `stop` ends it; "DRY RUN" previews. |
 | Start a new project | **`/loopd:new-project <description>`** — build (code → PRs), or `kind=research` for docs/decks/assets (no repo). |
-| Close a finished project | **`/loopd:close-project <slug>`** — when its tasks are all done/cancelled. Removes the folder (git history + KB are the record) unless `project.md` says `retain: true`. The PM flags candidates; you run it. |
+| Close a finished project | **`/loopd:close-project <slug>`** — when its tasks are all done/cancelled. Removes the folder (git history + KB are the record) unless `project.md` says `retain: true`. The PM flags candidates `closeAfterDays` (5 when absent) after the last task went terminal; you run it, earlier if you like. |
 | What needs you | **`/loopd:whats-up`** |
 | Answer questions; unblock a task | **`/loopd:answer [<task> <answer>]`** |
 | Fan ad-hoc asks out to background agents | **`/loopd:fanout`** — or give ≥2 independent asks at once |

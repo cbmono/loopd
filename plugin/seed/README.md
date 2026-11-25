@@ -121,7 +121,8 @@ then promote `draft → ready`. (To hand-roll one instead, copy the shape in `SC
 
 ## Finish a project
 When a project's tasks are all `done`/`cancelled`, the PM flags it in the awaiting-you queue as
-**ready to close** — it never closes one on its own. Close it with:
+**ready to close** once `closeAfterDays` (5 when absent) have passed — it never closes one on its
+own, and you can close it sooner. Close it with:
 ```
 /loopd:close-project <slug>
 ```
@@ -192,7 +193,7 @@ its verb and a real link:
 * 👀 **review** — a technical decision refine made on your behalf (`decisions:` in `project.md`); append ` --- ok` to keep it, or your choice to overturn it
 * 🔀 **merge** — a PR in review
 * ⛔ **unblock** — a blocked task
-* 🏁 **close** — a project whose tasks are all terminal
+* 🏁 **close** — a project whose tasks are all terminal, `closeAfterDays` (5 when absent; `0` = at once) after the last went terminal
 * ⏳ **continue** — a running project past `continueAfterTasks`/`continueAfterDays` or its `timebox:`; both keys absent ⇒ never
 
 In-flight and upcoming work is deliberately **not** here: it needs no decision from

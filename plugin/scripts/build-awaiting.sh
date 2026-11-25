@@ -409,6 +409,8 @@ DEF_CLOSE='all tasks terminal → `/close-project '
 # The `continue` row's sentence is the script's, not the model's: it carries the one line the
 # human pastes to answer, and a per-tick rewording would lose it.
 due="$(bash "$HERE/continue-checkpoint.sh" --instance "$inst" 2>/dev/null)" || due=""
+# Only an answered `held` holds the close row: a helper that fails shows it, as before the delay.
+close_held() { [ "$(bash "$HERE/close-delay.sh" --instance "$inst" "$1" 2>/dev/null | cut -f3)" = held ]; }
 
 for pm in "$inst"/projects/*/project.md; do
   [ -f "$pm" ] || continue
@@ -504,7 +506,7 @@ $dlist
 EOF
   fi
 
-  if [ "$held" = 0 ] && [ "$owed" = 0 ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && mine "$pm"; then
+  if [ "$held" = 0 ] && [ "$owed" = 0 ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && mine "$pm" && ! close_held "$slug"; then
     add_node "$pm" "${pm#"$inst"}" "$slug"
     pt="$(title_of "$pm")"; ptrail="$(lookup "$pm" trailer)"
     add "🏁" close "$pt" "${pm#"$inst"}" "${ptrail:-$DEF_CLOSE$slug\`}"
