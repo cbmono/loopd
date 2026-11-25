@@ -173,15 +173,32 @@ ctx() {
   [ "$v" = "$UNK" ] && return 1
   printf '%s' "$v"
 }
-seg() { # one ${{ }} body: `a || b || 'lit'` over ctx() names
-  local s="$1" op v
+opd() { # one operand: a quoted literal or a ctx() name
+  local o="$1"; o="${o#"${o%%[! ]*}"}"; o="${o%"${o##*[! ]}"}"
+  case "$o" in \'*\') o="${o#\'}"; o="${o%\'}"; [ "$o" = "${o#*\'}" ] && printf '%s' "$o" ;; *) ctx "$o" ;; esac
+}
+seg() { # one ${{ }} body: `a || b || 'lit'` over ctx() names, optionally led by `<ctx> ==|!= 'lit' && x ||`
+  local s="$1" t n o l m v c re="^ *([A-Za-z0-9_.]+) *([=!]=) *'([^']*)' *&&(.*)$"
+  t="$s"
+  while [ "$t" != "${t#*\'}" ]; do
+    t="${t#*\'}"; [ "$t" != "${t#*\'}" ] || return 1
+    case "${t%%\'*}" in *'&&'*|*'||'*) return 1 ;; esac
+    t="${t#*\'}"
+  done
+  if [[ "$s" =~ $re ]]; then
+    n="${BASH_REMATCH[1]}"; o="${BASH_REMATCH[2]}"; l="${BASH_REMATCH[3]}"; s="${BASH_REMATCH[4]}"
+    case "$n" in github.run_*|github.sha|github.event.pull_request.number|github.event.number) return 1 ;; esac
+    case "$l$s" in *'&&'*|*'('*|*'='*|*'!'*|*'<'*|*'>'*|*'['*) return 1 ;; esac
+    [ "$s" != "${s#*||}" ] || return 1
+    v="$(ctx "$n")" && m="$(opd "${s%%||*}")" || return 1
+    shopt -s nocasematch; [[ "$v" == "$l" ]]; c=$?; shopt -u nocasematch
+    [ "$o" = '!=' ] && c=$((!c))
+    [ "$c" = 0 ] && [ -n "$m" ] && { printf '%s' "$m"; return 0; }
+    s="${s#*||}"
+  fi
   case "$s" in *'&&'*|*'('*|*'='*|*'!'*|*'<'*|*'>'*|*'['*) return 1 ;; esac
   while :; do
-    op="${s%%||*}"; op="${op#"${op%%[! ]*}"}"; op="${op%"${op##*[! ]}"}"
-    case "$op" in
-      \'*\') v="${op#\'}"; v="${v%\'}" ;;
-      *) v="$(ctx "$op")" || return 1 ;;
-    esac
+    v="$(opd "${s%%||*}")" || return 1
     [ -n "$v" ] && { printf '%s' "$v"; return 0; }
     [ "$s" = "${s#*||}" ] && return 0
     s="${s#*||}"
