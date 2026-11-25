@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "mcp__claude-in-chrome__*"
+      "mcp__claude-in-chrome__*",
+      "Bash(pbcopy < tmp/copy/copy-1.txt)"
     ],
     "deny": [
       "Bash(rm -rf /)",
