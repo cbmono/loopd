@@ -15,8 +15,8 @@
 #   session-handoff.sh --owed <task-doc>
 #                             -> `owed <uuid> <id>`, `round: resume` or `round: dispatch
 #                                <assignee>`, then `answer: <text>`: the human answered the
-#                                latest hand-off of the task's current session, nothing resumed
-#                                it since, and the session has ended. A `qa-reviewer` filer
+#                                latest hand-off of the task's current session, no note
+#                                delivered it since, and the session has ended. A `qa-reviewer` filer
 #                                (last `* DISPATCH` above the hand-off) gets a fresh round of
 #                                the task's `assignee:`, or `not-owed accepted` on `done`/`accept`
 #
@@ -89,10 +89,11 @@ if not last:
 i, uuid, hid, q = last
 if not (uuid == sid or uuid.split("-")[0] == sid.split("-")[0]):
     print("not-owed session-replaced"); sys.exit(1)
-# Step 4 writes `woke`/`resumed <uuid>` after a resume, or `resume launched; …` when it
-# could not read the id back; `dispatched … for hand-off`, or step 3's `spawned; session id
-# unresolved`, after a fresh round — every one of them means this hand-off was answered.
-if any(re.search(r"\b(woke|resumed) [0-9a-f]{8}|\bresume launched\b|\bdispatched [0-9a-f-]{8,} for hand-off |\bspawned; session id unresolved\b", l) for l in notes[i + 1:]):
+# Step 4 writes `woke`/`resumed`/`dispatched <uuid> for hand-off <id>` when it delivers
+# this hand-off, or `resume launched; …` / step 3's `spawned; session id unresolved` when it
+# could not read the id back. A bare `woke <uuid>` is a resume for another reason.
+delivered = r"\b(woke|resumed|dispatched) [0-9a-f-]{8,} for hand-off " + re.escape(hid) + r"(?![0-9a-f-])"
+if any(re.search(delivered + r"|\bresume launched\b|\bspawned; session id unresolved\b", l) for l in notes[i + 1:]):
     print("not-owed already-resumed"); sys.exit(1)
 for e in answered.splitlines() + open_q.splitlines():
     body = re.sub(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z by [^\n]*? · ", "", e, count=1)
