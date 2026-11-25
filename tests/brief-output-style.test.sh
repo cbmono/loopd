@@ -154,7 +154,7 @@ ok "…clears old files, writes with the Write tool, text only" "$(has "$STYLE" 
 ok "…pbcopy is named"                     "$([ "$(grep -c pbcopy "$STYLE")" -ge 1 ] && echo yes || echo no)" yes
 ok "…several blocks: one pbcopy line each, run with !" "$(has "$STYLE" 'one `pbcopy < <abs path>` line each, which the human runs with `!`')" yes
 ok "…no pbcopy: print the path"           "$(has "$STYLE" 'No `pbcopy` on this machine: print each file'"'"'s absolute path instead.')" yes
-ok "the seed settings allow exactly one pbcopy form" "$(jq -r '[.permissions.allow[] | select(test("pbcopy"))] | join("|")' "$SETTINGS")" 'Bash(pbcopy < tmp/copy/copy-*.txt)'
+ok "the seed settings allow exactly one pbcopy form" "$(jq -r '[.permissions.allow[] | select(test("pbcopy"))] | join("|")' "$SETTINGS")" 'Bash(pbcopy < tmp/copy/copy-1.txt)'
 ok "…the form the style runs"             "$(has "$STYLE" 'run `pbcopy < tmp/copy/copy-1.txt` from the bundle root')" yes
 # LC_ALL=C: a UTF-8 collation can rank distinct emoji equal, and sort -u then merges them.
 ok "five new icons, distinct"             "$(grep -o -E '📋|🌐|🔗|🔍|⚠️' "$STYLE" | LC_ALL=C sort -u | wc -l | tr -d ' ')" 5
