@@ -175,7 +175,7 @@ ctx() {
 }
 opd() { # one operand: a quoted literal or a ctx() name
   local o="$1"; o="${o#"${o%%[! ]*}"}"; o="${o%"${o##*[! ]}"}"
-  case "$o" in \'*\') o="${o#\'}"; printf '%s' "${o%\'}" ;; *) ctx "$o" ;; esac
+  case "$o" in \'*\') o="${o#\'}"; o="${o%\'}"; [ "$o" = "${o#*\'}" ] && printf '%s' "$o" ;; *) ctx "$o" ;; esac
 }
 seg() { # one ${{ }} body: `a || b || 'lit'` over ctx() names, optionally led by `<ctx> ==|!= 'lit' && x ||`
   local s="$1" t n o l m v c re="^ *([A-Za-z0-9_.]+) *([=!]=) *'([^']*)' *&&(.*)$"

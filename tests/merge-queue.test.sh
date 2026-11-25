@@ -149,7 +149,7 @@ tern nobase "c-\${{ github.base_ref == 'main' && 'p' || github.ref }}"; run in_p
 ok "a comparison on an unknown base_ref: unknown"           "$(rc)" 2
 for e in "github.event_name == 'a&&b' && 'p' || 'q'" "github.event_name == 'a||b' && 'p' || 'q'" \
   "github.event_name = 'push' && 'p' || 'q'" "(github.event_name == 'push') && 'p' || 'q'" \
-  "github.event_name == 'push' && !github.head_ref || 'q'"; do
+  "github.event_name == 'push' && !github.head_ref || 'q'" "'it''s' || github.ref"; do
   tern odd "c-\${{ $e }}"
   ok "unknown: ${e:0:52}"                                   "$(mq | grep -c "^unknown: .* — bash cannot evaluate it")" 1
 done
