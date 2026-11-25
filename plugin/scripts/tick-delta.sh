@@ -296,13 +296,21 @@ if [ "$close_set" -eq 1 ]; then
   suffix="$("$FMT" fmt --tokens "$tokens" --tools "$tools" --duration-ms "$ms")" \
     || { echo "tick-delta: $FMT could not format the usage numbers." >&2; exit 2; }
   line="* TICK $ts$by close: $close"
-  # A note, never a refusal: an AWAITING.md last written before this tick opened is a render
-  # (step 8) the tick skipped, and nothing else on disk would say so.
-  if [ -f "$inst/$AB_AWAITING" ] && ! perl -MTime::Local -e '
+  # A note, never a refusal, and one tick late: step 8 renders AWAITING.md after this close,
+  # so it is the PREVIOUS full tick (an open and a close at one timestamp; IDLE and reaped
+  # lines have no pair) that an AWAITING.md older than its open line says skipped the render.
+  prev="$(CUR="$ts" awk '
+    /^\* TICK / {
+      o = index($0, " open: "); c = index($0, " close: ")
+      if (c > 0 && (o == 0 || c < o)) closed[$3] = 1; else if (o > 0) opened[$3] = 1
+    }
+    END { for (t in closed) if ((t in opened) && t < ENVIRON["CUR"] && t > best) best = t; print best }
+  ' "$LOG")"
+  if [ -n "$prev" ] && [ -f "$inst/$AB_AWAITING" ] && ! perl -MTime::Local -e '
        my @s = stat $ARGV[0] or exit 0;
        $ARGV[1] =~ /^(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+)Z$/ or exit 0;
-       exit($s[9] >= timegm($6, $5, $4, $3, $2 - 1, $1) ? 0 : 1)' "$inst/$AB_AWAITING" "$ts" 2>/dev/null; then
-    line="$line; awaiting not rendered"
+       exit($s[9] >= timegm($6, $5, $4, $3, $2 - 1, $1) ? 0 : 1)' "$inst/$AB_AWAITING" "$prev" 2>/dev/null; then
+    line="$line; awaiting not rendered by $prev"
   fi
   [ "$suffix" = "usage UNKNOWN" ] || line="$line · $suffix"
   # After the usage suffix, so agent-usage.sh's first `tokens=` match is still the real one.
