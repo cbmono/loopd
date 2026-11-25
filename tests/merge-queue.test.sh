@@ -147,6 +147,8 @@ tern nopr "$IDIOM"; run in_progress 107 pull_request feat-z
 ok "a pull_request run with no PR number: unknown"          "$(rc)" 2
 tern nobase "c-\${{ github.base_ref == 'main' && 'p' || github.ref }}"; run in_progress 108 pull_request feat-z
 ok "a comparison on an unknown base_ref: unknown"           "$(rc)" 2
+tern prnum "c-\${{ github.event.pull_request.number == '5.0' && 'main' || github.ref_name }}"; run in_progress 109 pull_request feat-x 5
+ok "a comparison on a PR number (GitHub coerces it): unknown" "$(rc)" 2
 for e in "github.event_name == 'a&&b' && 'p' || 'q'" "github.event_name == 'a||b' && 'p' || 'q'" \
   "github.event_name = 'push' && 'p' || 'q'" "(github.event_name == 'push') && 'p' || 'q'" \
   "github.event_name == 'push' && !github.head_ref || 'q'" "'it''s' || github.ref"; do

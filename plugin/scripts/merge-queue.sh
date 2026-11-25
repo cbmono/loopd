@@ -187,7 +187,7 @@ seg() { # one ${{ }} body: `a || b || 'lit'` over ctx() names, optionally led by
   done
   if [[ "$s" =~ $re ]]; then
     n="${BASH_REMATCH[1]}"; o="${BASH_REMATCH[2]}"; l="${BASH_REMATCH[3]}"; s="${BASH_REMATCH[4]}"
-    case "$n" in github.run_*|github.sha) return 1 ;; esac
+    case "$n" in github.run_*|github.sha|github.event.pull_request.number|github.event.number) return 1 ;; esac
     case "$l$s" in *'&&'*|*'('*|*'='*|*'!'*|*'<'*|*'>'*|*'['*) return 1 ;; esac
     [ "$s" != "${s#*||}" ] || return 1
     v="$(ctx "$n")" && m="$(opd "${s%%||*}")" || return 1
