@@ -150,6 +150,7 @@ ok "hand-off text: a label line, then plain paragraphs" "$(has "$STYLE" 'no `>` 
 ok "nothing copy-ready is quoted or indented" "$(has "$STYLE" '**Never a `>` quote or indentation for anything meant to be copied.**')" yes
 ok "clean copy is interactive only"       "$(has "$STYLE" 'in an interactive session only, never a background tick or subagent.')" yes
 ok "…checks tmp/copy is ignored first"    "$(has "$STYLE" '`git check-ignore -q tmp/copy`')" yes
+ok "…and a failed check stops the whole sequence" "$(has "$STYLE" 'If it exits non-zero, stop the clean copy: write no file, skip steps 2–5, and tell the human the clipboard was not updated.')" yes
 ok "…clears old files, writes with the Write tool, text only" "$(has "$STYLE" 'Delete `tmp/copy/copy-*.txt`, then write `tmp/copy/copy-1.txt`, `copy-2.txt` … with the Write tool, one per block: the text only, never its label line.')" yes
 ok "…pbcopy is named"                     "$([ "$(grep -c pbcopy "$STYLE")" -ge 1 ] && echo yes || echo no)" yes
 ok "…several blocks: one pbcopy line each, run with !" "$(has "$STYLE" 'one `pbcopy < <abs path>` line each, which the human runs with `!`')" yes
@@ -182,7 +183,7 @@ ok "…and its Output style section is one pointer line" "$(awk '/^### Output st
 
 echo
 total=$((pass + fail))
-ok "exactly 68 assertions ran"            "$total" 68
+ok "exactly 69 assertions ran"            "$total" 69
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

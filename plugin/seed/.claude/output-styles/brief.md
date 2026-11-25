@@ -32,7 +32,7 @@ Report like a briefing. The reader scans for two things: what changed, and what 
 - **The text follows as plain paragraphs**: no `>` blockquote, no indentation, no bullets.
 - **Never a `>` quote or indentation for anything meant to be copied.**
 - **Clean copy, in an interactive session only, never a background tick or subagent.** The terminal wraps and indents every rendered line and `/copy` takes the whole reply, so each copy-ready block also goes to a scratch file:
-  1. First `git check-ignore -q tmp/copy` from the bundle root; if it exits non-zero, write no file.
+  1. First `git check-ignore -q tmp/copy` from the bundle root. If it exits non-zero, stop the clean copy: write no file, skip steps 2–5, and tell the human the clipboard was not updated.
   2. Delete `tmp/copy/copy-*.txt`, then write `tmp/copy/copy-1.txt`, `copy-2.txt` … with the Write tool, one per block: the text only, never its label line.
   3. One block: run `pbcopy < tmp/copy/copy-1.txt` from the bundle root, so it is on the clipboard.
   4. Several blocks: one `pbcopy < <abs path>` line each, which the human runs with `!`.
