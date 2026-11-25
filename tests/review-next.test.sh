@@ -152,7 +152,6 @@ printf '[]\n' > "$FIX/reviews_json"
 "$REAL_JQ" -n --rawfile b "$FIXTURES/rate-limit-refusal.pr30.md" '[{user:{login:"coderabbitai[bot]"}, body:$b}]' \
   > "$FIX/comments_json"
 live() { "$SCRIPT" 42 --repo acme/widgets 2>/dev/null; }
-# A staged copy whose three head-taking siblings log the --head they were given to $HEADLOG.
 STAGE="$TMP/stage"; mkdir -p "$STAGE"; export HEADLOG="$TMP/heads"
 for s in "$REPO"/plugin/scripts/*; do ln -s "$s" "$STAGE/"; done
 for s in review-clearance.sh qa-dispatch.sh merge-hold.sh; do

@@ -50,7 +50,8 @@
 #                           pushed head, a merge, a close, a review decision, mergeability
 #                           (UNKNOWN as-is), its unresolved review threads (a thread resolved
 #                           with no new head; paged 100 at a time, PR_PAGES at most, and a read
-#                           that stops short is unreadable, never a truncated count), a new review (a COMMENTED one moves no decision), a
+#                           that stops short is unreadable, never a truncated count), a new
+#                           review (a COMMENTED one moves no decision), a
 #                           new issue comment (a reviewer's rate-limit reply is one), or a
 #                           check run's or status context's state (a status's description too:
 #                           a rate-limited reviewer still says SUCCESS).

@@ -316,7 +316,6 @@ expect "page 2 of the threads unreadable, none of page 1 open -> 2" 2
 says   "  ...saying it is unknown rather than satisfied" "UNKNOWN"
 says   "  ...naming the count read, the total and why" "205 review threads, 1 read (page 2 unreadable)"
 
-# PAGED IN FULL: every page is read, so a PR past 100 threads is answered, not held.
 RESOLVED="$("$REAL_JQ" -cn --arg u "$CR_URL" '{isResolved:true, path:"r.sh", line:1, comments:{nodes:[{author:{login:"coderabbitai"}, url:$u, body:"ok"}]}}')"
 OPEN2="$("$REAL_JQ" -cn --arg u "$CR_URL" '{isResolved:false, path:"p2.sh", line:5, comments:{nodes:[{author:{login:"coderabbitai"}, url:$u, body:"open on page two"}]}}')"
 setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
