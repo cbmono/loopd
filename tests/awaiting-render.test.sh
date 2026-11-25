@@ -600,6 +600,9 @@ ok "zero commits ⇒ the row at once"                 "$(closed_on "$Z" 2026-11-
 at "$Z" '2026-11-01T12:00:00Z' in-review; at "$Z" '2026-11-02T12:00:00Z' done
 git clone -q --depth 1 "file://$Z" "$TMP/shallow" 2>/dev/null; : > "$TMP/shallow/$AB_AWAITING"
 ok "a shallow clone ⇒ the row at once"              "$(closed_on "$TMP/shallow" 2026-11-01)" 1
+ok "…while Z itself, inside the delay, holds it"    "$(closed_on "$Z" 2026-11-03)" 0
+blob="$(g "$Z" rev-parse HEAD:projects/demo/tasks/task-001-a.md)"; rm -f "$Z/.git/objects/${blob:0:2}/${blob:2}"
+ok "an unreadable blob at HEAD fails open: the row" "$(closed_on "$Z" 2026-11-03)" 1
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

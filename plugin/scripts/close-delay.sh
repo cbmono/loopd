@@ -53,16 +53,26 @@ if [ "$(git -C "$inst" rev-parse --show-toplevel 2>/dev/null)" = "$(cd "$inst" &
 fi
 
 # The day a task went terminal: the newest commit whose version is terminal and whose
-# predecessor's is not. Terminal on disk but not at HEAD (untracked, uncommitted) => today.
+# predecessor's is not. Not at HEAD, or not terminal there (untracked, uncommitted) => today.
+# A read git cannot answer prints `-`: no history, so the row shows (fail open).
 task_day() { # <instance-relative path>
-  git -C "$inst" show "HEAD:./$1" 2>/dev/null | terminal || { echo "$today"; return; }
-  local c ct prev=""
+  local t v c ct prev="" log
+  t="$(git -C "$inst" ls-tree HEAD -- "$1" 2>/dev/null)" || { echo -; return; }
+  [ -n "$t" ] || { echo "$today"; return; }
+  v="$(git -C "$inst" show "HEAD:./$1" 2>/dev/null)" || { echo -; return; }
+  printf '%s\n' "$v" | terminal || { echo "$today"; return; }
+  log="$(git -C "$inst" log --format='%H %ct' -- "$1" 2>/dev/null)" || { echo -; return; }
   while read -r c ct; do
-    if git -C "$inst" show "$c:./$1" 2>/dev/null | terminal; then prev="$ct"; else break; fi
+    [ -n "$c" ] || continue
+    t="$(git -C "$inst" ls-tree "$c" -- "$1" 2>/dev/null)" || { echo -; return; }
+    [ -n "$t" ] || break
+    v="$(git -C "$inst" show "$c:./$1" 2>/dev/null)" || { echo -; return; }
+    printf '%s\n' "$v" | terminal || break
+    prev="$ct"
   done <<EOF
-$(git -C "$inst" log --format='%H %ct' -- "$1" 2>/dev/null)
+$log
 EOF
-  [ -n "$prev" ] && echo $((prev / 86400)) || echo "$today"
+  [ -n "$prev" ] && echo $((prev / 86400)) || echo -
 }
 
 for slug in "$@"; do
@@ -71,10 +81,11 @@ for slug in "$@"; do
     for f in "$inst/projects/$slug/tasks"/*.md; do
       [ -f "$f" ] || continue
       d="$(task_day "${f#"$inst"/}")"
+      [ "$d" = - ] && { day=-; break; }
       { [ -z "$day" ] || [ "$d" -gt "$day" ]; } && day="$d"
     done
   fi
-  if [ -z "$day" ]; then
+  if [ -z "$day" ] || [ "$day" = - ]; then
     printf '%s\t-\tdue\n' "$slug"
   else
     { [ "$delay" = 0 ] || [ $((today - day)) -ge "$delay" ]; } && v=due || v=held
