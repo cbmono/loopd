@@ -1,0 +1,114 @@
+agent-sessions.sh writing save writes the session listing and round marks merge-hold.sh reads
+agent-usage.sh writing appends usage lines to a task doc
+answer.sh writing answers a task's question and commits through unblock.sh
+board-serve.sh writing binds a local port and renders into a caller-chosen --out
+build-awaiting.sh writing writes AWAITING.md or a caller-chosen --out
+build-board.sh writing writes the board page to a caller-chosen --out
+build-kb-index.sh writing regenerates knowledge/index.md
+bundle-paths.sh read-only
+check-dispatch.sh writing reaches agent-sessions.sh, merge-hold.sh and fold-answers.sh, which write
+check-template-version.sh writing fetches the marketplace clone and caches its version outside the bundle
+cite-check.sh read-only
+clearance-receipt.sh writing record writes the merge gate's clearance receipt
+cli-theme.sh read-only
+close-delay.sh read-only
+close-project-folder.sh writing --apply removes or freezes a project folder
+comment-check.sh read-only
+commit-as.sh writing commits and pushes the bundle
+commit-shape.sh read-only
+continue-checkpoint.sh read-only
+control.sh writing halt, gate and steer write the kill-switch state its hook reads
+counts.sh writing writes counts.json, which the pane mod reads
+decision-stamp.sh read-only
+dependent-prs.sh writing --record writes a clearance receipt
+deploy-mode.sh read-only
+deprecation-windows.sh read-only
+design-inputs.sh writing reaches fold-answers.sh, which rewrites task docs
+dispatch-brief.sh writing reaches kb-select.sh, whose --record appends to a task doc
+dispatchable-ready.sh read-only
+do-not-repeat.sh writing appends to a task's do_not_repeat
+fold-answers.sh writing moves answered questions within a task doc
+fold-terminal-answers.sh writing rewrites done and cancelled task docs
+index-kb.sh writing builds a codegraph index inside each product repo
+init-bundle.sh writing stamps the bundle, its settings and its git config
+kb-apply.sh writing applies a reflection report and commits it
+kb-compare.sh read-only
+kb-migrate.sh writing moves knowledge/ into another repo and commits both
+kb-select.sh writing --record appends a KNOWLEDGE line to a task doc
+kb-stale.sh read-only
+kb-sweep-due.sh writing stamps the sweep cadence the tick obeys
+kb-sync.sh writing commits and pushes the knowledge repo
+kb-usage.sh writing stores the citation record the reflector reads
+kb-words.sh read-only
+ledger.sh writing appends a ledger entry to a knowledge doc
+link-repos.sh writing links repos/ and marks each repo's git dir outside the bundle
+memory-stale.sh read-only
+merge-hold.sh writing --record writes a clearance receipt
+merge-permit.sh writing reaches clearance-receipt.sh and merge-hold.sh, which write gate state
+merge-queue.sh read-only
+metrics.sh writing writes METRICS.json, and reaches agent-usage.sh
+migrate-bundle.sh writing --apply rewrites bundle documents
+new-project-file.sh writing creates and commits a project
+new-project-form.sh writing keeps and removes the new-project form file
+normalise-config.sh writing --apply rewrites and stages the tracked config
+papercuts.sh writing appends to knowledge/papercuts.md
+plugin-name.sh read-only
+pr-body-clearance.sh writing records a clearance receipt for the PR it reads
+pr-comment-clearance.sh read-only
+pr-quality.sh read-only
+pr-size.sh read-only
+pr-verdict-clearance.sh writing records a clearance receipt for the PR it reads
+print-board.sh read-only
+project-inputs.sh writing --release rewrites a project's inputs field
+project-paused.sh read-only
+prompt-cost.sh read-only
+prune-worktrees.sh read-only
+prune-wt.sh writing removes git worktrees
+push-commit.sh writing rebases and pushes a branch
+qa-disagreement.sh writing writes a question on a task doc
+qa-dispatch.sh writing mint records the QA dispatch the merge gate checks
+question-sweep.sh writing --apply appends sweep notes to task docs
+rebase-pr.sh writing rebases and pushes a PR branch
+reclaim-worktree.sh writing removes a task's worktree
+refactor-backlog.sh writing appends to knowledge/backlog
+reflect-deploy.sh writing writes a deploy question into a task doc
+refresh-seeds.sh writing --apply merges seed files, settings included, into the bundle
+refresh-state.sh writing writes counts.json and SNAPSHOT.json
+release-bump.sh writing bumps the version and commits on the default branch
+report-clearance.sh read-only
+required-checks.sh writing records a clearance receipt for the PR it clears
+reserved-scan.sh read-only
+resolve-autonomy.sh read-only
+resolve-config.sh read-only
+resolve-effort.sh read-only
+resolve-max-agents.sh read-only
+resolve-model.sh read-only
+resolve-review-config.sh read-only
+resource-gate.sh read-only
+review-clearance.sh writing records a clearance receipt and --record writes a task doc
+review-next.sh writing records a clearance receipt
+review-rounds.sh writing reaches review-clearance.sh and qa-dispatch.sh, which write gate state
+role-signature.sh read-only
+script-classes.sh read-only
+service-doc.sh read-only
+session-handoff.sh writing runs claude stop and files a hand-off note
+session-sweep.sh writing runs claude stop
+session-usage.sh writing --settle fills a task doc's usage line
+spawn-preflight.sh read-only
+stall-counter.sh writing writes stall_count on a task doc
+status-line.sh writing writes counts.json through counts.sh
+task-owner.sh read-only
+tick-delta.sh writing record appends to the ledger and the fingerprint
+tick-lock.sh writing acquire and release write the tick lock
+tick-reap.sh writing runs claude stop and releases the tick lock
+tick-spawn.sh writing starts a claude --bg session
+unblock.sh writing commits and pushes a task doc
+update-plugin.sh writing updates the installed plugin outside the bundle
+validate-bundle.sh writing reaches build-kb-index.sh, which regenerates knowledge/index.md
+verified-facts.sh writing fetches into the product clone outside the bundle
+watch-board.sh writing renders the board into a caller-chosen --out
+web-queue.sh writing append and consume write the answer queue
+welcome.sh writing check --fetch fetches the marketplace clone, and fix stamps the bundle through init-bundle.sh
+whats-up.sh writing reaches tick-lock.sh and agent-sessions.sh, which write the lock and session marks
+wording-notes.sh read-only
+write-snapshot.sh writing writes SNAPSHOT.json, which the board and the pane mod read
