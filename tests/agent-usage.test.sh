@@ -233,6 +233,12 @@ ok 'a close summary quoting open: still counts'  "$("$AU" series --instance "$TM
 mkdir -p "$TMP/i7/$AB_DIR"; : > "$TMP/i7/$AB_LEDGER"
 ok "an empty ledger says UNKNOWN, not nothing"    "$("$AU" series --instance "$TMP/i7" | grep -c '^UNKNOWN — no TICK or DISPATCH lines')" 1
 ok "no readable log.md is exit 2"                 "$("$AU" series --instance "$TMP/i7/nope" >/dev/null 2>&1; echo $?)" 2
+ok "a bundle with no task docs is exit 0"         "$("$AU" series --instance "$TMP/i6" >/dev/null 2>&1; echo $?)" 0
+mkdir -p "$TMP/i6/projects/p/tasks"; printf '* DISPATCH 2026-01-05T00:00:00Z · r · model m · usage UNKNOWN\n' > "$TMP/i6/projects/p/tasks/t.md"
+chmod 000 "$TMP/i6/projects/p/tasks/t.md"
+if [ -r "$TMP/i6/projects/p/tasks/t.md" ]; then echo "  SKIP  an unreadable task doc (running as root)"
+else ok "an unreadable task doc is exit 2, never a silent 0" "$("$AU" series --instance "$TMP/i6" >/dev/null 2>&1; echo $?)" 2; fi
+chmod 644 "$TMP/i6/projects/p/tasks/t.md"
 
 echo "== tokens, never money — and no transcript on this path =="
 FEATURE=("$AU" "$TD")

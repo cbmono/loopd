@@ -16,7 +16,9 @@ root="$1"
 [ -f "$root/instance.config.json" ] && [ -d "$root/$AB_DIR" ] || die 3 "not a bundle root: $root"
 [ -f "$root/$AB_SNAPSHOT" ] || exit 0
 command -v jq >/dev/null 2>&1 || die 2 "jq not found — METRICS.json not written, previous file kept"
-[ "$(jq -r '.board == false' "$root/instance.config.json" 2>/dev/null)" = true ] && exit 0
+board="$(jq -r '.board == false' "$root/instance.config.json" 2>/dev/null)" \
+  || die 2 "cannot parse instance.config.json — METRICS.json not written, previous file kept"
+[ "$board" = true ] && exit 0
 
 now="${METRICS_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 out="$root/$AB_METRICS"
@@ -88,7 +90,8 @@ if [ "${#tasks[@]}" -gt 0 ]; then
     fm < 2 && /^---[[:space:]]*$/ { fm++; next }
     fm == 1 {
       if ($0 ~ /^[A-Za-z_]+:/) {
-        list = ""; f = $1; sub(/:$/, "", f); v = $0; sub(/^[A-Za-z_]+:[[:space:]]*/, "", v)
+        list = ""; f = $1; sub(/:$/, "", f); v = $0; sub(/^[A-Za-z_]+:[[:space:]]*/, "", v); sub(/[[:space:]]+$/, "", v)
+        if (v ~ /^".*"$/ || v ~ /^\047.*\047$/) v = substr(v, 2, length(v) - 2)
         if (f == "status") status = v
         else if (f == "timestamp") created = v
         else if (f == "stall_count") stall = v + 0
@@ -137,7 +140,7 @@ if [ "${#stores[@]}" -gt 0 ]; then
   jq -c '[to_entries[] | select((.key | startswith("loopd.usage.")) and (.key | endswith(".ended") | not))
           | .value | select(type == "object" and ([.input, .cacheWrite, .output] | all(type == "number")))]
          | {k: "store", sessions: length, tokens: (map(.input + .cacheWrite + .output) | add // 0)}' \
-    "${stores[@]}" >> "$rec" 2>/dev/null || echo '{"k":"store","sessions":null,"tokens":null}' >> "$rec"
+    "${stores[@]}" >> "$rec" 2>/dev/null || die 2 "cannot read the usage store — METRICS.json not written, previous file kept"
 fi
 
 { printf '{"k":"holds","names":['
@@ -209,7 +212,8 @@ recs("s") as $s | recs("tick") as $ticks | recs("t") as $tasks | recs("d") as $d
 | ($totals | map(.merged_prs) | add // 0) as $tprs
 | ($totals | map(.tokens) | total) as $ttok
 | (if $tprs == 0 then null else ($ttok / $tprs | round) end) as $perpr
-| ($done | map(.fix_rounds // empty)) as $fix
+| ($done | map(select(.fix_rounds != null))) as $fixed
+| ($fixed | map(.fix_rounds)) as $fix
 | (ratio($bg; (if $bg == null or $sup == null then null else $bg + $sup end))) as $share
 | (if ($store | length) == 0 then {sessions: null, tokens: null}
    else {sessions: ($store | map(.sessions) | if any(. == null) then null else add end),
@@ -247,7 +251,7 @@ recs("s") as $s | recs("tick") as $ticks | recs("t") as $tasks | recs("d") as $d
     supervision: $sup, role_agents: $bg,
     supervision_ticks: ($s | map(.ticks) | add // 0), supervision_ticks_measured: ($s | map(.ticks_measured) | add // 0),
     merged_prs: {totals: ($totals | length), prs: $tprs, tokens: $ttok, per_pr: $perpr,
-      fix_rounds: ($fix | total), fix_rounds_per_pr: (if ($done | length) == 0 then null else ($fix | add // 0) / ($done | length) | r1 end)}},
+      fix_rounds: ($fix | total), fix_rounds_per_pr: (($fixed | map(.merged_prs) | add // 0) as $n | if $n == 0 then null else ($fix | add) / $n | r1 end)}},
   idle_tick_spend: {source: "ledger", stale: false, unit: "tokens",
     ticks: ($ticks | length), idle_ticks: ($idle | length), idle_share: ratio($idle | length; $ticks | length),
     measured: ($idlem | length), tokens_measured: ($idlem | map(.tokens) | total),

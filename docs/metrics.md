@@ -12,7 +12,8 @@ compute nothing. This page is the contract they code against.
   `write-snapshot.sh`. An IDLE tick and `refresh-state.sh` never run it, so the figures move
   at the next full tick.
 * **Atomic:** written to a temp file under `.loopd/` and moved into place. Any failure (no
-  `jq`, an unreadable input, a failed `agent-usage.sh series`) prints a `metrics:` error, exits
+  `jq`, an unreadable task document, a config or usage store that does not parse, a failed
+  `agent-usage.sh series`) prints a `metrics:` error, exits
   2 and leaves the previous file untouched.
 * **Derived:** gitignored and recomputed from scratch on every run, so a deleted file is
   rebuilt by the next one. Nothing walks git history.

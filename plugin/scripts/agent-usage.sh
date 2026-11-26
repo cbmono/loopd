@@ -145,7 +145,7 @@ case "$cmd" in
     [ -d "$inst" ] || die2 "no such instance directory: $inst"
     [ -r "$inst/$AB_LEDGER" ] || die2 "no readable $inst/$AB_LEDGER"
     { cat "$inst/$AB_LEDGER"
-      for f in "$inst"/projects/*/tasks/*.md; do if [ -r "$f" ]; then cat "$f"; fi; done
+      for f in "$inst"/projects/*/tasks/*.md; do [ -e "$f" ] || continue; cat "$f" || exit 2; done
     } | awk '
       function val(s, k,   r) {
         if (match(s, k "=[0-9]+")) { r = substr(s, RSTART, RLENGTH); sub(/^[a-z]+=/, "", r); return r + 0 }

@@ -38,8 +38,8 @@ LOG
 cat > "$T/task-001-done.md" <<EOF
 ---
 type: Task
-status: done
-timestamp: 2026-10-01T00:00:00Z
+status: "done"
+timestamp: "2026-10-01T00:00:00Z"
 stall_count: 0
 open_questions: [ ]
 answered_questions:
@@ -128,6 +128,15 @@ ok "a removed project keeps its ledger figures" "$(q '.projects.gone | [.state, 
 cp "$F" "$TMP/first.json"; rm -f "$F"; bash "$M" "$B"
 ok "a deleted METRICS.json rebuilds byte-identical" "$(cmp -s "$F" "$TMP/first.json" && echo same)" same
 
+ok "a quoted frontmatter scalar is unquoted" "$(q '.tasks["alpha/task-001-done"] | [.status, .created]')" '["done","2026-10-01T00:00:00Z"]'
+
+echo "== fix rounds are per merged PR, not per task =="
+R="$TMP/rounds"; mkdir -p "$R/.loopd" "$R/projects/p/tasks"; echo '{}' > "$R/instance.config.json"; echo '{}' > "$R/.loopd/SNAPSHOT.json"
+grep '^\* TICK' "$B/.loopd/log.md" > "$R/.loopd/log.md"
+printf -- '---\nstatus: done\n---\n# Notes\n\n* TOTAL 2026-10-01T10:00:00Z · rounds=3 · usage tokens=10 tools=1 ms=1 · %s/1 %s/2\n' "$U" "$U" > "$R/projects/p/tasks/task-001.md"
+bash "$M" "$R"
+ok "three rounds over two PRs is one fix round per PR" "$(jq -c '[.tokens.merged_prs.fix_rounds, .tokens.merged_prs.fix_rounds_per_pr]' "$R/.loopd/METRICS.json")" '[2,1]'
+
 echo "== an idle ledger with no usage is unknown, never zero =="
 I="$TMP/idle"; mkdir -p "$I/.loopd"; echo '{}' > "$I/instance.config.json"; echo '{}' > "$I/.loopd/SNAPSHOT.json"
 grep 'idle — fingerprint unchanged (tick-delta)' "$B/.loopd/log.md" > "$I/.loopd/log.md"
@@ -157,6 +166,19 @@ err="$(PATH="$TMP/nojq" "$BASH" "$M" "$B" 2>&1)"; rc=$?
 ok "without jq: exit 2" "$rc" 2
 ok "…a named error" "$(printf '%s' "$err" | grep -c 'jq not found')" 1
 ok "…and the previous file kept" "$(cmp -s "$F" "$TMP/before.json" && echo kept)" kept
+fails_kept() { # <label> — metrics.sh exits 2 and leaves the previous file
+  bash "$M" "$B" 2>/dev/null; ok "$1: exit 2" "$?" 2
+  ok "$1: previous file kept" "$(cmp -s "$F" "$TMP/before.json" && echo kept)" kept
+}
+cp "$B/instance.config.json" "$TMP/cfg.json"; echo '{ "board": ' > "$B/instance.config.json"
+fails_kept "a config that does not parse"; cp "$TMP/cfg.json" "$B/instance.config.json"
+echo '{ not json' > "$CLAUDE_CONFIG_DIR/plugins/store/loopd_broken.json"
+fails_kept "a usage store that does not parse"; rm "$CLAUDE_CONFIG_DIR/plugins/store/loopd_broken.json"
+chmod 000 "$T/task-003-other.md"
+if [ -r "$T/task-003-other.md" ]; then echo "  SKIP  an unreadable task doc (running as root)"
+else fails_kept "an unreadable task document"; fi
+chmod 644 "$T/task-003-other.md"
+bash "$M" "$B"; ok "the normal path still writes after each refusal" "$(cmp -s "$F" "$TMP/before.json" && echo same)" same
 
 echo "== the key allowlist =="
 ALLOWED='schema_version generated_at headline delegation_share tokens_per_merged_pr idle_tick_spend top_block_cause self_merge_rate
