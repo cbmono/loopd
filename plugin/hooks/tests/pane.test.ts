@@ -12,6 +12,7 @@ const CONFIG = CWD + '/instance.config.json'
 const SNAPSHOT = CWD + '/.loopd/SNAPSHOT.json'
 const COUNTS = CWD + '/.loopd/counts.json'
 const STAMPED = CWD + '/.loopd/seed-base/VERSION'
+const METRICS = CWD + '/.loopd/METRICS.json'
 const PANE_ID = 'loopd-board'
 
 // What Claude Code passes a ui.render hook for this pane, apart from the surface.
@@ -83,6 +84,8 @@ type World = {
   submitted: unknown[]
   prompted: unknown[]
   reads: number
+  readOf?: string[]
+  statOf?: string[]
   opened: number
   closed: number
   registered: string[]
@@ -112,6 +115,7 @@ function stubs(on: any, w: World, placed = true, hold?: () => Promise<void>) {
   on('fs.exists', (_$: any, e: any) => ({ value: w.files.has(e.path) }))
   on('fs.stat', (_$: any, e: any) => {
     const f = w.files.get(e.path)
+    if (w.statOf) w.statOf.push(e.path)
     return f ? { value: { kind: 'file', size: f.text.length, mtimeMs: f.mtimeMs, isLink: false } } : { deny: 'ENOENT' }
   })
   on('fs.list', (_$: any, e: any) => {
@@ -128,6 +132,7 @@ function stubs(on: any, w: World, placed = true, hold?: () => Promise<void>) {
   on('fs.read', (_$: any, e: any) => {
     const f = w.files.get(e.path)
     w.reads += 1
+    if (w.readOf) w.readOf.push(e.path)
     if (w.failReads && w.failReads.delete(e.path)) return { deny: 'EACCES' }
     return f ? { value: f.text } : { deny: 'ENOENT' }
   })
@@ -173,7 +178,7 @@ async function shown(ui: any): Promise<string> {
 // (never the operator buttons' Box), its coloured segments joined.
 function flat(n: any): string { return typeof n === 'string' ? n : n && n.children ? n.children.map(flat).join('') : '' }
 async function rowsOf(ui: any): Promise<string[]> {
-  return (await ui.drawn()).children.filter((c: any) => c.type === 'Text' || (c.type === 'Box' && c.props.key !== 'buttons')).map(flat)
+  return (await ui.drawn()).children.filter((c: any) => c.type === 'Text' || (c.type === 'Box' && c.props.key !== 'buttons' && c.props.key !== 'views')).map(flat)
 }
 const cols = (s: string) => Array.from(s).length
 // The banner's mark, the brand line cut to the width beside row 2, the rule to the edge beside row 3.
@@ -257,6 +262,7 @@ test('/pane draws the approved layout at 45 columns: header, PROJECTS, IN PROGRE
   // no hotkey or autofocus; then the three operator buttons, in order, and no Tick.
   const buttons = await ui.findAll({ type: 'Button' })
   expect(buttons.map((b: any) => [b.key, b.props.label, b.props.hotkey, b.props.plain, b.props.autoFocus])).toEqual([
+    ['view-projects', 'Projects', undefined, true, undefined], ['view-metrics', 'Metrics', undefined, true, undefined],
     ...['alpha', 'beta', 'gamma', 'zeta', 'delta', 'epsilon'].map((s, i) => ['copy-project-' + i, s, undefined, true, undefined]),
     ...['answer', 'merge', 'close'].map((s, i) => ['copy-need-' + i, s, undefined, true, undefined]),
     ['answer', '✎ Answer Questions', undefined, true, undefined], ['refresh', '↻ Refresh', undefined, true, undefined],
@@ -1200,6 +1206,223 @@ test('a non-interactive session registers the command and says nothing', ONLY, a
   expect(w.logged).toEqual([])
   expect(w.reads).toBe(0)
   expect(w.submitted).toEqual([])
+})
+
+// ---------------------------------------------------------------- the Metrics view
+// Shape: docs/metrics.md
+const MET = {
+  schema_version: 1,
+  generated_at: '2026-10-08T00:50:03Z',
+  headline: {
+    delegation_share: '62% role agents', tokens_per_merged_pr: '132k',
+    idle_tick_spend: '? (548 idle ticks, none measured)', top_block_cause: 'owner · 3', self_merge_rate: '—',
+  },
+  delegation: { source: 'ledger+dispatch', stale: false, share_role_agents: 0.62 },
+  time: { source: 'task docs+ledger', stale: false },
+  tokens: { source: 'ledger+total', stale: false, merged_prs: { per_pr: 132000 } },
+  idle_tick_spend: { source: 'ledger', stale: false, idle_ticks: 548, measured: 0 },
+  blocked_by_cause: { source: 'task docs+merge holds', stale: false, top: 'owner' },
+  owner_response: { source: 'answered_questions', stale: false },
+  self_merge: { source: 'none', stale: false },
+  quality: { source: 'none', stale: false },
+  kb_efficiency: { source: 'citations+total', stale: false, label: 'estimate' },
+  tasks: {}, projects: {},
+  periods: { '2026-08': { ticks: 10 }, '2026-09': { ticks: 20 }, '2026-10': { ticks: 30 } },
+}
+function metricsWorld(snapshot: unknown | null = SNAP, met: unknown | null = MET): World {
+  const w = world(snapshot)
+  if (met !== null) w.files.set(METRICS, { text: typeof met === 'string' ? met : JSON.stringify(met), mtimeMs: 700 })
+  w.readOf = []; w.statOf = []
+  return w
+}
+async function screen(ui: any): Promise<string[]> {
+  return (await ui.drawn()).children.flatMap((c: any) =>
+    c.props && c.props.key === 'views' ? c.children.map(flat)
+      : c.props && c.props.key === 'buttons' ? [c.children.map(flat).join(' '.repeat(c.props.columnGap))]
+        : [flat(c)])
+}
+const metricsRows = async (ui: any) => (await screen(ui)).slice(2, -5)
+async function showMetrics($: any, w: World, view: any = NARROW) {
+  await open($)
+  const ui = await $.ui.mount({ ...view, surface: 'terminal' })
+  await ui.press({ key: 'view-metrics' })
+  return ui
+}
+const metricsReads = (w: World) => w.readOf!.filter(p => p === METRICS).length
+
+test('METRICS VIEW: Projects and Metrics are plain buttons with no hotkey; Projects opens, Metrics draws the headline at 45 columns', ONLY, async ($, on) => {
+  const w = metricsWorld()
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  const first = await screen(ui)
+  expect(first.slice(0, 3)).toEqual(['▸ Projects    Metrics', ' ', header(45)[0]])
+  expect(w.statOf).not.toContain(METRICS)
+  const views = (await ui.findAll({ type: 'Button' })).filter((b: any) => String(b.key).startsWith('view-'))
+  expect(views.map((b: any) => [b.key, b.props.label, b.props.hotkey, b.props.plain])).toEqual([
+    ['view-projects', 'Projects', undefined, true], ['view-metrics', 'Metrics', undefined, true]])
+
+  await ui.press({ key: 'view-metrics' })
+  const drawn = await screen(ui)
+  expect(drawn).toEqual([
+    '  Projects  ▸ Metrics',
+    ' ',
+    'METRICS' + ' '.repeat(28) + '12 min ago',
+    ' ',
+    'Delegation' + ' '.repeat(20) + '62% role agents',
+    'Tokens per merged PR' + ' '.repeat(21) + '132k',
+    'Idle-tick spend',
+    '   ? (548 idle ticks, none measured)',
+    'Top block cause' + ' '.repeat(21) + 'owner · 3',
+    'Self-merge rate' + ' '.repeat(29) + '—',
+    ' ',
+    '─'.repeat(45),
+    ' ',
+    '✎ Answer Questions  ↻ Refresh  ✕ Close Pane',
+    ' ',
+  ])
+  for (const r of drawn) expect(cols(r)).toBeLessThanOrEqual(45)
+  expect(drawn.join('\n')).not.toMatch(/2026-0|trend/)
+  expect(await ui.find({ key: 'view-metrics' }).then((b: any) => b.props.hotkey)).toBeUndefined()
+  const before = w.reads
+  await ui.press({ key: 'view-metrics' })
+  expect(w.reads).toBe(before)
+  await ui.press({ key: 'view-projects' })
+  expect((await screen(ui)).slice(0, 2)).toEqual(['▸ Projects    Metrics', ' '])
+  expect(await shown(ui)).toContain('PROJECTS (6)')
+  await ui.unmount()
+})
+
+const METRICS_LINES: [string, unknown, RegExp][] = [
+  ['absent', null, /^metrics OFF — no \.loopd\/METRICS\.json\. The board switch turns them on: \.loopd\/SNAPSHOT\.json present and `board` not false in instance\.config\.json\.$/],
+  ['not JSON', '{ not json', /^\.loopd\/METRICS\.json is not valid JSON — the next metrics\.sh run overwrites it$/],
+  ['an array', '[1, 2]', /^\.loopd\/METRICS\.json is not a JSON object/],
+  ['schema_version 2', { ...MET, schema_version: 2 }, /^\.loopd\/METRICS\.json has schema_version 2; this pane reads 1$/],
+  ['schema_version "1"', { ...MET, schema_version: '1' }, /^\.loopd\/METRICS\.json has schema_version "1"; this pane reads 1$/],
+  ['no schema_version', { headline: MET.headline }, /^\.loopd\/METRICS\.json has schema_version none; this pane reads 1$/],
+]
+for (const [name, met, want] of METRICS_LINES) {
+  test('METRICS VIEW: ' + name + ' is one line, naming no tick', ONLY, async ($, on) => {
+    const w = metricsWorld(SNAP, met)
+    stubs(on, w)
+    mock.clock(on, { now: GENERATED })
+    const ui = await showMetrics($, w)
+    const body = await metricsRows(ui)
+    expect(body).toHaveLength(1)
+    expect(body[0]).toMatch(want)
+    expect(body[0]).not.toMatch(/tick/i)
+    await ui.unmount()
+  })
+}
+
+test('METRICS VIEW: source none draws —, stale draws the figure marked stale, unknown and junk draw ?, never 0, and no value is cut', ONLY, async ($, on) => {
+  const met = {
+    ...MET,
+    headline: { delegation_share: null, tokens_per_merged_pr: 0, idle_tick_spend: '? (123456789 idle ticks, none measured)', top_block_cause: '0', self_merge_rate: 'never drawn' },
+    tokens: { source: 'ledger+total', stale: true },
+    blocked_by_cause: { source: 'none', stale: false },
+    idle_tick_spend: 'not an object',
+  }
+  const w = metricsWorld(SNAP, met)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w, { ...PANE, props: { ...PANE.props, bodyColumns: 24 } })
+  const body = await metricsRows(ui)
+  expect(body).toEqual([
+    'METRICS   12 min ago',
+    ' ',
+    'Delegation' + ' '.repeat(9) + '?',
+    'Tokens per merged PR',
+    '   ? · stale',
+    'Idle-tick spend',
+    '   ? (123456789 idle',
+    '   ticks, none',
+    '   measured)',
+    'Top block cause' + ' '.repeat(4) + '—',
+    'Self-merge rate' + ' '.repeat(4) + '—',
+  ])
+  for (const r of body) expect(cols(r)).toBeLessThanOrEqual(20)
+  expect(body.join('\n')).not.toMatch(/\b0\b|never drawn/)
+  await ui.unmount()
+})
+
+test('METRICS VIEW: its own read state and age, so it draws under a malformed SNAPSHOT.json', ONLY, async ($, on) => {
+  const w = metricsWorld('{ broken')
+  stubs(on, w)
+  mock.clock(on, { now: Date.parse(MET.generated_at) + 3 * 3600000 })
+  const ui = await showMetrics($, w)
+  const body = await metricsRows(ui)
+  expect(body[0]).toBe('METRICS' + ' '.repeat(31) + '3 h ago')
+  expect(body).toContain('Tokens per merged PR' + ' '.repeat(21) + '132k')
+  await ui.press({ key: 'view-projects' })
+  expect(await metricsRows(ui)).toEqual(['.loopd/SNAPSHOT.json is not valid JSON — the next write-snapshot.sh run overwrites it'])
+  await ui.unmount()
+})
+
+test('METRICS VIEW: a closed and reopened pane opens on Projects again', ONLY, async ($, on) => {
+  const w = metricsWorld()
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w)
+  expect((await screen(ui))[0]).toBe('  Projects  ▸ Metrics')
+  await ui.unmount()
+  await $.command.run({ command: 'pane', args: 'close' })
+  await open($)
+  const again = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  expect((await screen(again))[0]).toBe('▸ Projects    Metrics')
+  await again.unmount()
+})
+
+test('METRICS GUARD: a cd into another bundle reads its METRICS.json, even at the same mtime', ONLY, async ($, on) => {
+  const OTHER = '/work/_loopd-other'
+  const w = metricsWorld()
+  w.files.set(OTHER + '/instance.config.json', { text: '{}', mtimeMs: 1 })
+  w.files.set(OTHER + '/.loopd/SNAPSHOT.json', { text: JSON.stringify(SNAP), mtimeMs: 1000 })
+  w.files.set(OTHER + '/.loopd/METRICS.json', { text: JSON.stringify({ ...MET, headline: { ...MET.headline, tokens_per_merged_pr: '9k' } }), mtimeMs: 700 })
+  w.root = '/work/not-a-bundle'
+  stubs(on, w)
+  const clock = mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w)
+  expect((await metricsRows(ui)).join('\n')).toContain('132k')
+  w.cwd = OTHER
+  await clock.advance(5000)
+  expect((await metricsRows(ui)).join('\n')).toContain('9k')
+  await ui.unmount()
+})
+
+test('METRICS GUARD: stat-ed only while shown; an unchanged mtime reads it 0 times in 3 polls, a moved one once, Refresh once', ONLY, async ($, on) => {
+  const w = metricsWorld()
+  stubs(on, w)
+  const clock = mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  await clock.advance(5000)
+  await clock.advance(5000)
+  expect([w.statOf!.includes(METRICS), metricsReads(w)]).toEqual([false, 0])
+  await ui.press({ key: 'view-metrics' })
+  expect(metricsReads(w)).toBe(1)
+  const stats = () => w.statOf!.filter(p => p === METRICS).length
+  const s0 = stats()
+  await clock.advance(5000)
+  await clock.advance(5000)
+  await clock.advance(5000)
+  expect([metricsReads(w), stats() - s0]).toEqual([1, 3])
+  w.files.set(METRICS, { text: JSON.stringify({ ...MET, headline: { ...MET.headline, tokens_per_merged_pr: '140k' } }), mtimeMs: 900 })
+  await clock.advance(5000)
+  expect(metricsReads(w)).toBe(2)
+  expect((await metricsRows(ui)).join('\n')).toContain('140k')
+  await clock.advance(5000)
+  expect(metricsReads(w)).toBe(2)
+  await ui.press({ key: 'refresh' })
+  expect(metricsReads(w)).toBe(3)
+  await ui.press({ key: 'view-projects' })
+  const s1 = stats()
+  await clock.advance(5000)
+  await clock.advance(5000)
+  expect([stats(), metricsReads(w)]).toEqual([s1, 3])
+  expect(w.submitted).toEqual([])
+  await ui.unmount()
 })
 
 // ---------------------------------------------------------------- simple mode
@@ -2423,5 +2646,21 @@ test('RUNNING: only the PM tick working, or task_sessions unreadable, draws no `
   rows = projectRows(all)
   expect(rows.join('\n')).not.toMatch(/running|\?/)
   expect(rows).toContain(edge('● asking', '2 need you'))
+  await ui.unmount()
+})
+
+test('SIMPLE HAS NO SWITCH: no Projects or Metrics button, and METRICS.json is never touched', SIMPLE, async ($, on) => {
+  const w = bundle()
+  w.files.set(METRICS, { text: JSON.stringify(MET), mtimeMs: 700 })
+  w.readOf = []; w.statOf = []
+  stubs(on, w)
+  const clock = mock.clock(on)
+  await open($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await clock.advance(5000)
+  const keys = (await ui.findAll({ type: 'Button' })).map((b: any) => String(b.key))
+  expect(keys.filter(k => k.startsWith('view-'))).toEqual([])
+  expect(await everything(ui)).not.toMatch(/Metrics|METRICS/)
+  expect([...w.statOf!, ...w.readOf!]).not.toContain(METRICS)
   await ui.unmount()
 })

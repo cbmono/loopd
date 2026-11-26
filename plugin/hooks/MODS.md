@@ -45,7 +45,7 @@ does. `paneMode` decides what it draws:
 
 | `paneMode` | Draws | Reads |
 |---|---|---|
-| `operator` (default) | the board below, with Answer Questions, Refresh and Close Pane | the snapshot, its numbers from `counts.json`, and `org` and the stamped version for its header |
+| `operator` (default) | a `Projects` \| `Metrics` switch over the board below or the Metrics view, with Answer Questions, Refresh and Close Pane | the snapshot, its numbers from `counts.json`, and `org` and the stamped version for its header; `METRICS.json` while the Metrics view is shown |
 | `simple` | an inbox — questions, stuck tasks, progress — and a form to start a project; nothing else | the task documents and the form |
 
 `paneMode` is **free text** in `/config`: the manifest declares no `options` list, because
@@ -58,8 +58,8 @@ typo, an empty field — draws `operator`, never an error. `tests/mods.test.sh` 
 
 The **fourth renderer** over the one board contract, `plugin/scripts/write-snapshot.sh` →
 `.loopd/SNAPSHOT.json` (`docs/conventions.md` §11 in `cbmono/loopd`). It reads the snapshot
-and `.loopd/counts.json`, plus `org` and the stamped version for its header, and never the
-rest of the bundle, so the snapshot
+and `.loopd/counts.json`, plus `org` and the stamped version for its header, `.loopd/METRICS.json`
+for the Metrics view (below), and never the rest of the bundle, so the snapshot
 writer's field allowlist holds here without being re-implemented: nothing this pane shows
 is anything those files do not already carry. Its numbers — in progress, in review, sessions by state, need you — come from
 `.loopd/counts.json`, which `status-line.sh` writes on every redraw through `counts.sh`, the
@@ -69,6 +69,7 @@ owner's task is placed in IN PROGRESS or IN REVIEW: that heading counts only the
 
 | Section | From |
 |---|---|
+| switch | the pane's first row, in both views: `Projects` and `Metrics`, two plain buttons with no hotkey, the active one led by a peach `▸` and drawn bold peach, the other grey — `▸ Projects    Metrics`, `  Projects  ▸ Metrics`, so neither label moves. `Projects` is the view on every open; pressing the active one does nothing. A blank line under it. The Metrics view is the section below |
 | header | the welcome banner's mark (`LOGO_ROWS`, kept once in `register.ts` and read by `session-banner.sh`; pink `#ff7ac2` gate and `◀━`, blue `#5ea2ff` tube); beside row 2 `loopd v<version> · <group> · org: <org>`, the version being counts.json's `plugin_version` (the plugin whose status line wrote the file) when present, else the stamped version; a part it cannot read is left out (neither version ⇒ `loopd`), the group and org are what the width cuts with `…` (dropped whole when under two of their characters would show); beside row 3 a rule to the edge. Under the mark one line, the age at its right (the need-you count is NEEDS YOU's, not the header's): counts.json's `written_at` when the file parses and that is a valid timestamp (the bar rewrites it on every redraw, so it is live), else the snapshot's `generated_at`, which an idle tick leaves old: `just now`, `N min ago`, `N h ago` under 48 h, then `N d ago`; `age unknown` when it is unparseable or in the future. With counts.json absent or unparseable the layout stays, every number from it is `?`, and the info line under the buttons reads `counts unavailable — run /loopd:init` |
 | PROJECTS (N) | one line per project, by folder `slug` (never `title`), a blank line between projects; pressing a name copies its slug: `●` active, `○` paused; `✓ … done` in green for a project with `closable` — every task terminal, `awaiting_close` from an older snapshot without it (its close is a NEEDS YOU row once `closeAfterDays` pass — 5 when absent, `0` = at once — not counted here); `✓ … closed` in grey for `status: done` (only a retained folder is in the snapshot). `N need you` counts its `awaiting_items` other than `close` (an older snapshot: its tasks' AWAITING verbs), only when N > 0. On your own projects that are not closed, `running` in green after any such count (`N need you · running`) while any of the project's keys in counts.json `task_sessions` is `working` — never for the PM tick, which has no key there, and never when `task_sessions` is absent. Needs-you first, then active, paused, done, snapshot order within each. Under each active project a 10-cell bar and `done/total` off its tasks' `status` (`cancelled` not counted; none, no bar), and `phase_progress` only when it has phases. **Other owners**: a project whose snapshot `mine` is `false` (write-snapshot.sh's `task-owner.sh` verdict — the board's resolution, project `owner:` → tracked `defaultOwner` → unowned is mine; an owner with no `ownerGithubUser` here is not) follows your own after one blank line, one grey line each, no bar: `@<owner>` (only when `owner` is a GitHub login) and `done/total`, `paused` or `done` at the right. `status: done` projects stay last, whoever owns them; no `mine` key is yours |
 | IN PROGRESS (N) | N is counts.json's `in_progress`, `(0)` drawn; a blank line, then `W working · I idle · D dead` from its `sessions`, the dispatch tick named apart off `sessions.tick_working` (the working session `.loopd/.tick-lock` records): `1 working (tick)` when it is the only one, `2 working (1 tick)` beside role sessions. One row per task counts.json's `task_status` names `in-progress` (the task documents, as the count is — never the snapshot's `status`, which a tick writes; with no `task_status`, the snapshot's): `assignee` (a **role**, never a person), `title`, and its session word from `task_sessions` — `working`, `idle`, `dead`, or `—` when none is recorded; a task the snapshot lacks is `<slug> · <task id>`, no role; a task of another owner's project (task `owner:` is not in the snapshot) is not listed and leaves N, which then counts the rows listed: after the rows, one grey line `+<n> by @<owner>` per owner, joined by ` · ` in counts.json's order and wrapped between entries, never cut, `another owner` for an owner that is not a login, absent when there is none; then one row per in-session agent in counts.json's `in_session_agents` — `<type>  <description>` and the word `in-session` — whose count `sessions.in_session` joins `W` (inferred from transcript activity, `agent-sessions.sh in-session`; display only); with no own row and no in-session agent `no task in progress — tick running` while the tick works, and `nothing right now`. Body rows indent 3 columns |
@@ -76,6 +77,7 @@ owner's task is placed in IN PROGRESS or IN REVIEW: that heading counts only the
 | NEEDS YOU (N) | last, next to the buttons. N is counts.json's `need_you`; rows numbered `1.`–`N.`, one per `awaiting_items` entry in AWAITING.md's order — every verb, `👉 do` and `👀 review` included — as `<slug> · <title>` (the title looked up by task id), or `<slug>` on a project row. A task row ends with each of its snapshot `prs` as `<bare repo>#<n>` (`loopd#577`), on the title's last line when it fits, else on the next: a kit `Link` to the PR's `url`, which the terminal draws as an OSC 8 hyperlink where it supports one and, where it does not, as the text followed by the url, dimmed; a url that is not printable `http(s)` is plain text. An older snapshot without `awaiting_items`: one row per task whose `awaiting` is a verb, and one `close <slug>` per project with `awaiting_close` (print-board.sh's rule). Pressing a row's verb copies `projects/<slug>/tasks/<id>.md` (a task with no snapshot row too), or `<slug>` on a project row; none is a dim `nothing`. `awaiting_items: null` (AWAITING.md unreadable) is unknown: `(?)`, no rows, no fallback. Drawn at `(0)`; hidden only with the queue off, which also drops every PROJECTS `N need you` |
 | buttons | a blank line, a `─` rule of the pane's width, a blank line, the three buttons (plain, no `[ ]`), a blank line |
 | info line | under the buttons, so they never move, starting where they do; the latest of `copied: <ref>`, `copy sent <ref>` (the copy's result did not say), `copy failed: <reason>`, `copy refused: bad ref` or `answer refused: <reason>`, for 10 s after it is set (the poll redraws it away) and until the next re-read; else `answer queued` while an Answer run waits for the session to go idle; else the counts-unavailable hint. Cut to the width |
+| METRICS | the Metrics view, in place of everything from the header to NEEDS YOU: `METRICS` with the age of `METRICS.json`'s own `generated_at` at its right (the header age rule), a blank line, then one row per `headline` value — Delegation, Tokens per merged PR, Idle-tick spend, Top block cause, Self-merge rate — the label left and the value right, or the value on the next lines, indented 3 and wrapped by word, when both do not fit. A value is drawn as `metrics.sh` wrote it: the pane computes and formats nothing. Its family's `source` `none` draws `—`, whatever the headline says; `"stale": true` adds ` · stale`; `null`, a missing value or one that is not a string draws `?`, never 0. The headline carries no trend, so none is drawn (`docs/metrics.md`). Absent: one line, `metrics OFF`, naming the board switch that turns it on (D1: `METRICS.json` is written only where the snapshot is and `board` is not false, so there is no board-off case of its own). Unreadable, not a JSON object or a `schema_version` other than `1`: one line, as for the snapshot. It has its own read state, so it draws while the snapshot is absent or malformed |
 | update line | the pane's last line, under the info line when one shows, else under the buttons' blank line: `Update available! Run: /loopd:update, then /reload-plugins` in the mark's pink `#ff7ac2`, the two commands bold, when counts.json's `latest_version` is newer (numeric per field) than its `plugin_version`; absent when equal, older, or either is missing or not `x.y.z`. Too wide, it breaks after `/loopd:update,`, then after `Run:`, never inside a command |
 
 The pane is padded 2 columns left and right; every row is drawn inside that, so width is the
@@ -92,8 +94,8 @@ blue `#33658A` the rule, green `#76d6a4` done, grey quiet. The kit's `Button` dr
 `✎ Answer Questions`, deep blue `↻ Refresh`, plum `#9A348E` `✕ Close Pane`, each leading with
 a monochrome symbol, the row indented 2 columns. Hover on a `plain` button was not measured: the kit's test mount draws no frame.
 
-Not drawn, because the snapshot does not carry it: a round number, a session id, a usage
-line, any question or blocker **text**, any document body, any author
+Not drawn on the board, because the snapshot does not carry it: a round number, a session id, a usage
+line (the Metrics view draws `METRICS.json`'s five headline values and nothing else from it), any question or blocker **text**, any document body, any author
 identity (`owner` is in the file for the HTML board's partitioning and is deliberately not
 drawn here), any URL. The two things that would make those appear are a field added to the
 writer — read its header first — or a second reader of the bundle, which this must never be.
@@ -104,12 +106,14 @@ already read and a newline cannot forge a row), whitespace controls become one s
 every number passes one `toint()`, so a `"tasks": "many"` draws as `0` and never throws.
 **A number is never truncated**: a clipped count is a wrong count.
 
-The pane redraws from its two files every **5 seconds**, by `stat` first and `read` only
-when a file's mtime moved, and also when an age it shows would change; Refresh re-reads both
+The pane redraws from its two files — three while the Metrics view is shown, which alone
+`stat`s `METRICS.json` — every **5 seconds**, by `stat` first and `read` only
+when a file's mtime moved, and also when an age it shows would change; Refresh re-reads them
 and runs nothing; the poll starts when the pane opens — or, after a reload that left the pane
 up, on its first draw — and stops when it closes.
 
-**What keeps the two files current is outside the mod**, which starts no process. The shell
+**What keeps the files current is outside the mod**, which starts no process. `METRICS.json` is
+rewritten by `metrics.sh` at a full tick's step 8 and by nothing below (`docs/metrics.md`). The shell
 hook `hooks/refresh-state.sh` runs at a session's Stop, SubagentStop and UserPromptSubmit —
 the main session, the tick's and every role session (a linked worktree reaches its bundle by
 the `loopd-bundle` marker, trusted only when that bundle's `repos/` links the repo back; the
@@ -129,8 +133,9 @@ its label (owner, 2026-11-11: no hints), so each is pressed, never keyed.
 | Button | Does |
 |---|---|
 | **Answer Questions** | `$.command.run({ command: 'loopd:answer' })` — runs `/loopd:answer` once in **this** session, as if you had typed it. The engine queues a plugin's command run until the session is idle, so this is idle-only by contract. (Not `$.prompt.submit`: the host refuses a prompt text that begins with `/`, measured on 2.1.293.) A refused run is drawn on the info line as `answer refused: <reason>`, never swallowed. **It is the human pressing a key at their own prompt, not automation**: nothing here runs on a timer, and no message goes to another session. One press, one queued run; a second press while one is queued is ignored and the info line says `answer queued`. |
-| **Refresh** | re-read the snapshot and `counts.json` now, mtime or not; it runs nothing. The snapshot is rewritten by each tick, `/loopd:board`, `hooks/refresh-state.sh` after any session's turn on the bundle, and — right after their commit — `answer.sh`, `unblock.sh`, `new-project-file.sh` and the `new-project`, `close-project` and `handoff` skills, so an in-session change needs no tick to show here. |
+| **Refresh** | re-read the snapshot and `counts.json` now — and `METRICS.json` while the Metrics view is shown — mtime or not; it runs nothing. The snapshot is rewritten by each tick, `/loopd:board`, `hooks/refresh-state.sh` after any session's turn on the bundle, and — right after their commit — `answer.sh`, `unblock.sh`, `new-project-file.sh` and the `new-project`, `close-project` and `handoff` skills, so an in-session change needs no tick to show here. |
 | **Close Pane** | `$.ui.close({ id: 'loopd-board' })`, the path `/pane close` takes; the poll stops. |
+| **Projects**, **Metrics** | switch the view; it runs nothing and reads only what the view draws. `simple` mode has neither |
 | a PROJECTS name, a NEEDS YOU verb | `$.ui.copy({ text, surface })` — the pane's **one outward action**: the slug or task path, built from the snapshot's `slug` and `id`, onto the clipboard of the surface the press came from, so you can paste it into the session with your reply. A slug or id that is not a folder-name shape (empty, `/`, `..`, whitespace) is never copied. |
 
 Where no surface places the pane (a terminal under the width floor, a `claude -p` run),
@@ -243,8 +248,8 @@ file names. The pane alone looks first in the directory the session started in,
 and uses the cwd only when that holds no `instance.config.json`; `<cwd>` below is whichever
 of the two it chose. Every path literal the module spells is in this table; `tests/mods.test.sh` in
 `cbmono/loopd` asserts it, and that a module which lists a directory spells its walk as a
-quoted glob. The `.loopd/SNAPSHOT.json`, `.loopd/counts.json`, `.loopd/.answer-later` and
-`.loopd/.new-project/form.json` spellings are `AB_SNAPSHOT`, `AB_COUNTS`, `AB_ANSWER_LATER` and
+quoted glob. The `.loopd/SNAPSHOT.json`, `.loopd/counts.json`, `.loopd/METRICS.json`, `.loopd/.answer-later` and
+`.loopd/.new-project/form.json` spellings are `AB_SNAPSHOT`, `AB_COUNTS`, `AB_METRICS`, `AB_ANSWER_LATER` and
 `AB_NEW_PROJECT_FORM` in `plugin/scripts/bundle-paths.sh`; `.git`, `commondir` and `loopd-bundle`
 are git's and `link-repos.sh`'s.
 
@@ -253,6 +258,7 @@ are git's and `link-repos.sh`'s.
 | `<cwd>/instance.config.json` | pane, signal | `exists` (pane: the start directory's, then the cwd's); pane (`operator`) also `read` on open and Refresh | the cwd is a loopd bundle. Pane: absent ⇒ *not a loopd bundle* and nothing else; its `org` is the header's `org:`. Signal: present ⇒ this is the PM side; a `turn.complete` here signals nothing |
 | `.loopd/SNAPSHOT.json` | pane (`operator`) | `stat` every poll, `read` when the mtime moved | the board. Absent ⇒ *board OFF* with the `touch` that turns it on (absence is the off switch — conventions 3 and 11) and nothing else. Unparseable ⇒ one line, and the next `write-snapshot.sh` run overwrites it |
 | `.loopd/counts.json` | pane (`operator`) | `stat` every poll, `read` when the mtime moved | the four numbers, session totals, per-task session words and per-task `in-progress`/`in-review` status `status-line.sh` writes on every redraw, and `plugin_version`, that plugin's own `VERSION`, for the header, and `latest_version`, the marketplace's as `check-template-version.sh` last read it, for the update line (each omitted unless `x.y.z`). Absent or unparseable ⇒ those numbers draw `?` |
+| `.loopd/METRICS.json` | pane (`operator`) | `stat` every poll while the Metrics view is shown, `read` when the mtime moved, on Refresh and on switching to the view unread | the five `headline` values, each family's `source` and `stale`, `schema_version` and `generated_at` (`docs/metrics.md`); nothing else is drawn. Absent ⇒ *metrics OFF* and the board switch; unparseable or another `schema_version` ⇒ one line |
 | `.loopd/seed-base/VERSION` | pane (`operator`) | `read` on open and Refresh | the version `/loopd:init` last stamped (`$AB_DIR/seed-base/VERSION`), shown as the header's `v<version>` when counts.json carries no `plugin_version` — a mod cannot read the plugin's own `VERSION`, so that one arrives through counts.json. Absent or not `x.y.z` ⇒ left out |
 | `projects/*/project.md` | pane (`simple`) | `list`, `read` | `title`, `status`, `autonomy` and `timestamp` |
 | `projects/*/tasks/*.md` | pane (`simple`) | `list`, `read` | `title`, `status`, `timestamp`, `stall_count`, `open_questions` and the `### Q<n>` blocks. Listed every poll, read when an mtime moved. A list it cannot parse is drawn as *could not read*, never guessed |

@@ -154,6 +154,16 @@ const TITLE = 'loopd board'
 const SNAPSHOT = '.loopd/SNAPSHOT.json'
 // AB_COUNTS: the status line writes it on every redraw, so these numbers are the bar's.
 const COUNTS = '.loopd/counts.json'
+// AB_METRICS; schema: docs/metrics.md
+const METRICS = '.loopd/METRICS.json'
+const METRICS_VERSION = 1
+const HEADLINE = [
+  ['delegation_share', 'delegation', 'Delegation'],
+  ['tokens_per_merged_pr', 'tokens', 'Tokens per merged PR'],
+  ['idle_tick_spend', 'idle_tick_spend', 'Idle-tick spend'],
+  ['top_block_cause', 'blocked_by_cause', 'Top block cause'],
+  ['self_merge_rate', 'self_merge', 'Self-merge rate'],
+] as const
 // The version /loopd:init last stamped (`$AB_DIR/seed-base/VERSION`); the plugin root is not readable from here.
 const STAMPED = '.loopd/seed-base/VERSION'
 // THE MARK, the welcome banner's and the pane's: `indent|pink|blue` a row, split by position,
@@ -236,6 +246,15 @@ type Counts = {
   plugin_version: string   // the plugin whose status line wrote the file; '' when absent or not x.y.z
   latest_version: string   // the marketplace's, as the banner's update check last saw it; '' likewise
 }
+type Metrics = {
+  state: 'unread' | 'absent' | 'malformed' | 'ok'
+  path: string
+  mtimeMs: number
+  detail: string
+  generated_at: string
+  rows: { label: string; value: string; stale: boolean }[]
+}
+const NO_METRICS: Metrics = { state: 'unread', path: '', mtimeMs: -1, detail: '', generated_at: '', rows: [] }
 const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, in_session: 0, in_session_agents: [], queue: '', tasks: null, status: null, written_at: '', plugin_version: '', latest_version: '' }
 const SEMVER = /^\d+\.\d+\.\d+$/
 const TASK_KEY = /^projects\/([^/]+)\/tasks\/([^/]+)\.md$/
@@ -246,6 +265,8 @@ let board: Board | null = null
 let detail = ''          // the one line a non-ok kind shows
 let mtimeMs = -1         // the snapshot's mtime at the last read; -1 = never read
 let counts: Counts = NO_COUNTS
+let view: 'projects' | 'metrics' = 'projects'
+let metrics: Metrics = NO_METRICS
 let reads = 0            // how many times the file was actually read (the poll skips an unchanged one)
 let timer: { cancel: () => void } | null = null
 let answerQueued = false
@@ -376,6 +397,42 @@ async function refreshCounts($: any, root: string, force: boolean): Promise<void
   counts = readCounts(text, m)
 }
 
+function readMetrics(text: unknown, path: string, m: number): Metrics {
+  const bad = (d: string): Metrics => ({ ...NO_METRICS, state: 'malformed', path, mtimeMs: m, detail: d })
+  if (typeof text !== 'string') return bad('could not read ' + METRICS)
+  let j: unknown
+  try { j = JSON.parse(text) } catch { return bad(METRICS + ' is not valid JSON — the next metrics.sh run overwrites it') }
+  const o = obj(j)
+  if (!o) return bad(METRICS + ' is not a JSON object — the next metrics.sh run overwrites it')
+  if (o.schema_version !== METRICS_VERSION) {
+    return bad(METRICS + ' has schema_version ' + cut(clean(JSON.stringify(o.schema_version) ?? 'none'), 12) + '; this pane reads ' + METRICS_VERSION)
+  }
+  const head = obj(o.headline) || {}
+  const rows = HEADLINE.map(([key, family, label]) => {
+    const f = obj(o[family])
+    if (f && f.source === 'none') return { label, value: '—', stale: false }
+    const v = typeof head[key] === 'string' ? clean(head[key]) : ''
+    return { label, value: v || '?', stale: !!f && f.stale === true }
+  })
+  return { state: 'ok', path, mtimeMs: m, detail: '', generated_at: str(o.generated_at), rows }
+}
+async function refreshMetrics($: any, root: string, force: boolean): Promise<void> {
+  const path = root + '/' + METRICS
+  let st: any = null
+  try { st = await $.fs.stat(path) } catch { st = null }
+  if (!st || st.kind !== 'file') {
+    if (metrics.state !== 'absent') reads += 1
+    metrics = { ...NO_METRICS, state: 'absent', detail: 'metrics OFF — no ' + METRICS + '. The board switch turns them on: ' + SNAPSHOT + ' present and `board` not false in ' + CONFIG + '.' }
+    return
+  }
+  const m = typeof st.mtimeMs === 'number' ? st.mtimeMs : -2
+  if (!force && (metrics.state === 'ok' || metrics.state === 'malformed') && path === metrics.path && m === metrics.mtimeMs) return
+  let text: unknown = null
+  try { text = await $.fs.read(path) } catch { text = null }
+  reads += 1
+  metrics = readMetrics(text, path, m)
+}
+
 // org from the tracked config, the version /loopd:init stamped; either unreadable is ''.
 async function readBrand($: any, root: string): Promise<void> {
   let org = '', version = ''
@@ -406,10 +463,11 @@ async function paneRoot($: any): Promise<{ root: string; cwd: string | null }> {
 // field, a vanished file or a refused call costs one line in the pane, never a throw.
 async function refresh($: any, force: boolean): Promise<void> {
   const at = await paneRoot($)
-  if (at.cwd === null) { kind = 'malformed'; board = null; detail = 'cannot read the working directory'; return }
-  if (!at.root) { kind = 'not-bundle'; board = null; detail = 'not a loopd bundle — no ' + CONFIG + ' in ' + clean(at.cwd); mtimeMs = -1; return }
+  if (at.cwd === null) { kind = 'malformed'; board = null; detail = 'cannot read the working directory'; metrics = NO_METRICS; return }
+  if (!at.root) { kind = 'not-bundle'; board = null; detail = 'not a loopd bundle — no ' + CONFIG + ' in ' + clean(at.cwd); mtimeMs = -1; metrics = NO_METRICS; return }
   const root = at.root
   await refreshCounts($, root, force)
+  if (view === 'metrics') await refreshMetrics($, root, force)
   const path = root + '/' + SNAPSHOT
   let st: any = null
   try { st = await $.fs.stat(path) } catch { st = null }
@@ -497,7 +555,8 @@ function newer(a: string, b: string): boolean {
 }
 const updateDue = () => counts.state === 'ok' && !!counts.plugin_version && !!counts.latest_version && newer(counts.latest_version, counts.plugin_version)
 // What the poll compares: an age or a note's expiry changing redraws.
-function ageKey(now: number): string { return (board ? headAge(now, board) : '') + '|' + noteLive(now) }
+const metricsAge = (now: number) => metrics.state === 'ok' ? age(now, metrics.generated_at) : ''
+function ageKey(now: number): string { return (view === 'metrics' ? metricsAge(now) : board ? headAge(now, board) : '') + '|' + noteLive(now) }
 
 function summary(): string {
   if (kind !== 'ok' || !board) return detail
@@ -539,12 +598,42 @@ function draw($: any, e: any, now: number): any {
   const W = (toint(e && e.props ? e.props.bodyColumns : 0) || WIDTH) - 2 * PAD
   const fit = (s: string, room: number) => cut(s, Math.max(1, room))
   shownAge = ageKey(now)
+  const gap = (used: number) => ' '.repeat(Math.max(1, W - used))
 
-  if (kind !== 'ok' || !board) {
+  const pick = (v: typeof view) => async () => {
+    if (view === v) return
+    view = v
+    try { await reread($, false) } catch { /* the next poll reads again */ }
+    try { $.ui.invalidate('ui.render') } catch { /* no surface to redraw */ }
+  }
+  const tab = (v: typeof view, s: string) => [seg(view === v ? '▸ ' : '  ', HEAD),
+    Button({ key: 'view-' + v, label: s, plain: true, children: [Text({ ...(view === v ? { ...HEAD, bold: true } : MUTED), children: [s] })], onPress: pick(v) })]
+  rows.push(Box({ key: 'views', flexDirection: 'column', children: [
+    Box({ flexDirection: 'row', children: [...tab('projects', 'Projects'), seg('  '), ...tab('metrics', 'Metrics')].filter(Boolean) }),
+    line(' '),
+  ] }))
+
+  if (view === 'metrics') {
+    if (metrics.state === 'unread') rows.push(line(kind === 'not-bundle' || kind === 'malformed' ? detail : 'loopd metrics: reading…', { dimColor: kind === 'unread' }))
+    else if (metrics.state !== 'ok') rows.push(line(metrics.detail))
+    else {
+      const a = metricsAge(now)
+      rows.push(row(seg('METRICS', { ...HEAD, bold: true }), seg(gap(7 + cols(a))), seg(a, MUTED)))
+      rows.push(line(' '))
+      for (const { label, value, stale } of metrics.rows) {
+        const v = stale ? value + ' · stale' : value
+        const look = value === '—' || value === '?' ? MUTED : TEXT
+        if (cols(label) + 2 + cols(v) <= W) rows.push(row(seg(label, MUTED), seg(gap(cols(label) + cols(v))), seg(v, look)))
+        else {
+          rows.push(line(label, MUTED))
+          for (const l of wrap(v, Math.max(1, W - 3), Infinity)) rows.push(row(seg('   '), seg(l, look)))
+        }
+      }
+    }
+  } else if (kind !== 'ok' || !board) {
     rows.push(line(kind === 'unread' ? 'loopd board: reading…' : detail, { dimColor: kind === 'unread' }))
   } else {
     const b = board
-    const gap = (used: number) => ' '.repeat(Math.max(1, W - used))
     const needs = (t: Task) => (VERBS as readonly string[]).includes(t.awaiting)
     const pathOf = (slug: string, task: string) => okRef(slug) && okRef(task) ? PROJECTS_DIR + '/' + slug + '/' + TASKS_DIR + '/' + task + TASK_SUFFIX : ''
     const taskPath = (p: Project, t: { ref: string }) => pathOf(p.ref, t.ref)
@@ -1366,6 +1455,7 @@ function registerPane(on: any) {
       if (open) { try { await $.ui.close({ id: PANE }) } catch { /* already gone */ } }
       return {}
     }
+    view = 'projects'
     await reread($, true)
     let placed = false
     try { const r = await $.ui.open({ id: PANE, title: TITLE }); placed = !!(r && r.isPlaced === true) } catch { placed = false }
