@@ -1643,6 +1643,10 @@ selects. The welcome check's
 `output-style` row says which half is missing and prints the one-line fix; it writes neither
 — config is the human's, and a different style chosen on purpose is reported as `✓` with
 its name, never as a problem. `tests/brief-output-style.test.sh` pins all four states.
+The `clean-copy-rule` row reports a bundle whose `.claude/settings.json` and
+`.claude/settings.local.json` both lack the exact `Bash(pbcopy < tmp/copy/copy-1.txt)`
+allow rule the style's clean-copy step runs, and prints the rule to add; it writes neither
+file, and it is silent on a machine without `pbcopy` or a bundle with no `settings.json`.
 
 ### Per-instance settings
 

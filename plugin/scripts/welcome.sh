@@ -124,6 +124,7 @@ config-layers|ambiguous|no
 config-unknown-keys|ambiguous|yes
 review-config|ambiguous|yes
 output-style|ambiguous|no
+clean-copy-rule|ambiguous|no
 tick-lock|human|yes
 orphan-processes|human|yes
 memory-stale|human|no
@@ -1034,6 +1035,50 @@ PY
 }
 
 # =========================================================================================
+# CHECK 6c — clean-copy-rule (AMBIGUOUS — never repaired; banner:no)
+# =========================================================================================
+# THE FACT: whether the bundle's `.claude/settings.json` or `.claude/settings.local.json`
+# allows the exact clean-copy command the Brief style runs (seed `brief.md`, step 3).
+# Silent where it cannot matter: no `pbcopy` on this machine, or no bundle settings.json.
+check_clean_copy_rule() {
+  _warned=0
+  local rule='Bash(pbcopy < tmp/copy/copy-1.txt)' settings="$ROOT/.claude/settings.json" has=""
+  command -v pbcopy >/dev/null 2>&1 || return 0
+  [ -f "$settings" ] || return 0
+  if ! command -v python3 >/dev/null 2>&1; then
+    good "clean-copy rule: not judged (python3 absent)"
+    return 0
+  fi
+  has="$(python3 - "$rule" "$settings" "$ROOT/.claude/settings.local.json" <<'PY' 2>/dev/null
+import json,os,sys
+rule,files=sys.argv[1],sys.argv[2:]
+found=False
+for p in files:
+    if not os.path.exists(p):
+        continue
+    try:
+        d=json.load(open(p))
+    except Exception:
+        print("unparseable:"+p); sys.exit()
+    perms=d.get("permissions") if isinstance(d,dict) else None
+    allow=perms.get("allow") if isinstance(perms,dict) else None
+    if isinstance(allow,list) and rule in allow:
+        found=True
+print("yes" if found else "no")
+PY
+)"
+  case "$has" in
+    yes) good "clean-copy rule: $rule is allowed" ;;
+    no)
+      warn "clean-copy rule: neither .claude/settings.json nor .claude/settings.local.json allows $rule"
+      hint "add \"$rule\" to permissions.allow in $settings" ;;
+    unparseable:*) note "clean-copy rule: not judged — ${has#unparseable:} does not parse as JSON" ;;
+    *) note "clean-copy rule: not judged — the JSON reader gave no answer for $settings" ;;
+  esac
+  return "$_warned"
+}
+
+# =========================================================================================
 # CHECK 7 — tick-lock (HUMAN — SHIP-BLOCKER: never repaired)
 # =========================================================================================
 # THE FACT: whether an `/<plugin>:dispatch` tick lock is held, claimed, or past its staleness
@@ -1437,7 +1482,7 @@ if [ "$FORM" = check ]; then
       printf '%s\n' "$out" | grep -e '^⚠' -e '^    ↳'
       continue
     fi
-    printf '%s\n' "$out"
+    [ -n "$out" ] && printf '%s\n' "$out"
   done <<EOF
 $(rows_for "$mode")
 EOF
