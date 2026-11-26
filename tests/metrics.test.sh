@@ -206,6 +206,29 @@ mkdir "$TMP/nogh"; ln -s "$(command -v jq)" "$TMP/nogh/jq"
 ok "…not even with gh missing" "$(PATH="$TMP/nogh:/usr/bin:/bin" "$BASH" "$M" "$B"; echo "$?:$(q .quality.stale)")" "0:false"
 ok "a PR no task names leaves the cache" "$(printf '{}' > "$B/.loopd/.pr-cache/o__r__1.json"; bash "$M" "$B"; [ -e "$B/.loopd/.pr-cache/o__r__1.json" ] && echo kept || echo pruned)" pruned
 
+echo "== review round: fair reads, qualified merges, local identity, unreadable tick cost =="
+N="$TMP/fair"; mkdir -p "$N/.loopd" "$N/projects/p/tasks"; echo '{}' > "$N/instance.config.json"; echo '{}' > "$N/.loopd/SNAPSHOT.json"
+printf '* TICK 2026-10-01T01:00:00Z by example-user-007 open: tick-5 · full walk\n' > "$N/.loopd/log.md"
+printf -- '---\nstatus: in-review\npr: [ %s/8, %s/11 ]\n---\n' "$U" "$U" > "$N/projects/p/tasks/task-001.md"
+ghpr 11 OPEN 2026-10-04T00:00:00Z null 2026-10-04T01:00:00Z 2026-10-04T01:00:00Z 0
+calls; METRICS_GH_MAX_PRS=1 bash "$M" "$N"; first="$(grep -o 'pr view [0-9]*' "$GHFX/calls")"
+calls; METRICS_GH_MAX_PRS=1 bash "$M" "$N"; second="$(grep -o 'pr view [0-9]*' "$GHFX/calls")"
+ok "at the read cap, the least recently read open PR goes next" "$(printf '%s\n%s\n' "$first" "$second" | sort | tr '\n' ' ')" "pr view 11 pr view 8 "
+ok "no identity and no row: ticks without a row is unknown" "$(jq -c .tokens.pm_ticks.ticks_without_row "$N/.loopd/METRICS.json")" null
+echo '{"ownerGithubUser": "example-user-007"}' > "$N/instance.config.local.json"; bash "$M" "$N"
+ok "…with ownerGithubUser it is counted" "$(jq -c .tokens.pm_ticks.ticks_without_row "$N/.loopd/METRICS.json")" 1
+Q="$TMP/qual"; mkdir -p "$Q/.loopd" "$Q/projects/p/tasks"; echo '{}' > "$Q/instance.config.json"; echo '{}' > "$Q/.loopd/SNAPSHOT.json"
+printf -- '---\nstatus: done\npr: [ %s/9, https://github.com/example-user-008/widget/pull/9 ]\n---\n' "$U" > "$Q/projects/p/tasks/task-001.md"
+printf '* TICK 2026-10-01T01:00:00Z by example-user-007 close: merged widget#9 under yolo\n' > "$Q/.loopd/log.md"
+bash "$M" "$Q"; ok "an ambiguous repo name attributes no merge" "$(jq -c '[.self_merge.merged_prs, .self_merge.loop]' "$Q/.loopd/METRICS.json")" '[2,0]'
+printf '* TICK 2026-10-01T01:00:00Z by example-user-007 close: merged example-user-008/widget#9 under yolo\n' > "$Q/.loopd/log.md"
+bash "$M" "$Q"; ok "an owner-qualified merge attributes only that repo" "$(jq -c '.self_merge.not_self_merged | keys' "$Q/.loopd/METRICS.json")" '["example-user-007/widget#9"]'
+cp "$F" "$TMP/tc.json"; chmod 000 "$B/.loopd/.tick-cost/ticks.tsv"
+if [ -r "$B/.loopd/.tick-cost/ticks.tsv" ]; then echo "  SKIP  an unreadable tick-cost file (running as root)"
+else bash "$M" "$B" 2>/dev/null; ok "an unreadable tick-cost file exits 2" "$?" 2
+  ok "…and keeps the previous file" "$(cmp -s "$F" "$TMP/tc.json" && echo kept)" kept; fi
+chmod 644 "$B/.loopd/.tick-cost/ticks.tsv"
+
 echo "== main session is unattributed and never summed =="
 ok "main session label and figure" "$(q '.delegation.main_session | [.label, .tokens]')" '["unattributed (machine-wide)",60]'
 ok "supervision is the ledger alone" "$(q .tokens.supervision)" 1050

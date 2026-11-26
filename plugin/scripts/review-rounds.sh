@@ -141,8 +141,8 @@
 # `--verdicts` (qa), `<sha> <verdict>` per QA round. Everything else is stderr. No
 # PR text is echoed — the sibling quotes untrusted bodies where that is useful.
 #
-# `--cache <dir>` (count mode with `--repo`): a merged or closed PR's count is stored in
-# <dir>/<owner>__<name>__<n>.json and answered from there with no `gh` read; an open PR's never is.
+# `--cache <dir>` (count mode with `--repo`): a MERGED PR's count is stored in
+# <dir>/<owner>__<name>__<n>.json and answered from there with no `gh` read; any other PR's never is.
 #
 # Verified by tests/review-rounds.test.sh.
 #
@@ -195,10 +195,10 @@ CAP="$(bash "$(dirname "${BASH_SOURCE[0]:-$0}")/resolve-review-config.sh" --inst
 
 cfile=""
 case "$pr" in *[!0-9]*) ;; *) [ -n "$cache" ] && [ -n "$repo" ] && [ -z "$last" ] && cfile="$cache/${repo%%/*}__${repo#*/}__$pr.json" ;; esac
-if [ -n "$cfile" ] && rounds="$(jq -er --arg f "$for" '.rounds[$f] | numbers' "$cfile" 2>/dev/null)"; then
+if [ -n "$cfile" ] && rounds="$(jq -er --arg f "$for" 'select(.rounds_state == "MERGED") | .rounds[$f] | numbers' "$cfile" 2>/dev/null)"; then
   printf '%s\n' "$rounds"
-  [ "$rounds" -lt "$CAP" ] && { echo "ok: PR $pr ($repo) closed with $rounds $for round(s) (cached); $cap_key is $CAP." >&2; exit 0; }
-  echo "refuse: PR $pr ($repo) closed with $rounds $for round(s) (cached); $cap_key is $CAP." >&2
+  [ "$rounds" -lt "$CAP" ] && { echo "ok: PR $pr ($repo) merged with $rounds $for round(s) (cached); $cap_key is $CAP." >&2; exit 0; }
+  echo "refuse: PR $pr ($repo) merged with $rounds $for round(s) (cached); $cap_key is $CAP." >&2
   exit 1
 fi
 
@@ -489,9 +489,9 @@ while IFS= read -r sha; do
 done < "$TMPD/commits"
 
 pstate="$(printf '%s' "$raw" | jq -r '.state // ""' 2>/dev/null)"
-if [ -n "$cfile" ] && { [ "$pstate" = MERGED ] || [ "$pstate" = CLOSED ]; } && t="$(mktemp "$cfile.XXXXXX" 2>/dev/null)"; then
+if [ -n "$cfile" ] && [ "$pstate" = MERGED ] && t="$(mktemp "$cfile.XXXXXX" 2>/dev/null)"; then
   { jq -e objects "$cfile" 2>/dev/null || echo '{"v":1}'; } \
-    | jq --arg f "$for" --argjson n "$rounds" '.rounds[$f] = $n' > "$t" 2>/dev/null && mv "$t" "$cfile" || rm -f "$t"
+    | jq --arg f "$for" --argjson n "$rounds" '.rounds[$f] = $n | .rounds_state = "MERGED"' > "$t" 2>/dev/null && mv "$t" "$cfile" || rm -f "$t"
 fi
 
 if [ "$last" = verdicts ]; then

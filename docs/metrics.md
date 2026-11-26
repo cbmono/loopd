@@ -24,7 +24,8 @@ compute nothing. This page is the contract they code against.
   a run whose named PRs are all closed makes no `gh` call. An open PR is re-read every run.
   A PR the host answers with a 404 is cached as `MISSING` and never retried. An entry no
   task names is deleted. At most `METRICS_GH_MAX_PRS` (**20** when unset) PRs are read per
-  run; the rest wait for the next run and count in `quality.prs_named`, not `prs_read`.
+  run, least recently read first, so a deferred PR gets the next run's turn; until read it
+  counts in `quality.prs_named`, not `prs_read`.
 * **Offline:** a failed `gh` read (no `gh`, offline, rate-limited) still exits 0. The `gh`
   figures are the previous file's, each marked `"stale": true`. With no previous file they
   come from the cache, also marked stale.
@@ -87,7 +88,8 @@ stands: `?` is unknown and `—` is no source.
   the ledger's `open:` and idle tick ids joined to the tick-cost rows. `ticks` joined,
   `measured`, `unknown` (a row saying `unknown`), `tokens` over the measured ones, and
   `ticks_without_row`: this clone's ledger ticks with no row (before the writer, or a lock
-  freed without `tick-reap.sh`). Another login's ticks are excluded.
+  freed without `tick-reap.sh`). This clone is `ownerGithubUser`, else the logins of its
+  joined ticks; with neither it is `null`. Another login's ticks are excluded.
 * **`idle_tick_spend`.** Covers the ledger's `idle` lines. `tokens_measured` sums only the
   idle ticks measured: a tick-cost row's tokens first, else the idle line's usage.
   `unmeasured_share` is the share with neither, and those ticks are unknown, never zero.
@@ -109,7 +111,8 @@ stands: `?` is unknown and `—` is no source.
   latest of `createdAt`, its last commit and its last review. `needs_you_to_action_hours`
   reads `source: none`.
 * **`self_merge`** (`source: gh+ledger`). Over the merged PRs read: `loop` counts those a
-  ledger close line names as `merged <repo>#<n> under yolo`, `owner` the rest, `rate` is
+  ledger close line names as `merged <owner>/<repo>#<n> under yolo` (or `<repo>#<n>`, counted
+  only when no other named PR shares that repo name and number), `owner` the rest, `rate` is
   loop/merged. `not_self_merged` maps each owner merge (`<owner>/<repo>#<n>`) to a reason
   and `reasons` counts them: `gated` (its project's `autonomy:` is not `yolo`),
   `criteria` (its body has a `✗` row), else `unknown`. `gh` cannot tell the loop's merge

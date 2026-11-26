@@ -66,8 +66,9 @@ awk "$AWK_LIB"'
       measured($0) ? val($0, "tokens") : "null", q(id), q($5)
     s = $0
     while (match(s, /merged [A-Za-z0-9._\/-]+#[0-9]+ under yolo/)) {
-      m = substr(s, RSTART + 7, RLENGTH - 18); sub(/.*\//, "", m); split(m, mm, "#")
-      printf "{\"k\":\"ym\",\"repo\":%s,\"n\":%d}\n", q(mm[1]), mm[2]; s = substr(s, RSTART + RLENGTH)
+      m = substr(s, RSTART + 7, RLENGTH - 18); split(m, mm, "#"); ow = ""
+      if (index(mm[1], "/")) { ow = mm[1]; sub(/\/.*/, "", ow); sub(/.*\//, "", mm[1]) }
+      printf "{\"k\":\"ym\",\"owner\":%s,\"repo\":%s,\"n\":%d}\n", q(ow), q(mm[1]), mm[2]; s = substr(s, RSTART + RLENGTH)
     }
     next
   }
@@ -161,14 +162,15 @@ projs=("$root"/projects/*/project.md)
   fm == 1 && /^autonomy:/ { v = $2; gsub(/["\047]/, "", v); printf "{\"k\":\"auto\",\"slug\":%s,\"mode\":%s}\n", q(slug), q(v) }' \
   "${projs[@]}" >> "$rec" || die 2 "cannot read the project documents"
 
-if [ -r "$root/$AB_TICK_COST/ticks.tsv" ]; then
+if [ -e "$root/$AB_TICK_COST/ticks.tsv" ]; then
+  [ -r "$root/$AB_TICK_COST/ticks.tsv" ] || die 2 "cannot read $AB_TICK_COST/ticks.tsv — METRICS.json not written, previous file kept"
   awk "$AWK_LIB"'
     function num(s) { return s ~ /^[0-9]+$/ ? s : "null" }
     NF >= 4 && $1 ~ /^tick-/ { printf "{\"k\":\"cost\",\"id\":%s,\"tokens\":%s}\n", q($1), num($2) }' FS='\t' "$root/$AB_TICK_COST/ticks.tsv" >> "$rec" \
     || die 2 "cannot read $AB_TICK_COST/ticks.tsv"
 fi
 
-cache="$root/$AB_PR_CACHE"; ghfail=false; reads=0
+cache="$root/$AB_PR_CACHE"; ghfail=false
 mkdir -p "$cache" && { [ -e "$cache/.gitignore" ] || printf '*\n' > "$cache/.gitignore"; } \
   || die 2 "cannot write $AB_PR_CACHE — METRICS.json not written, previous file kept"
 jq -r 'select(.k == "t") | (.prs + .pr_field)[]' "$rec" \
@@ -182,8 +184,11 @@ put() { # <cache file> <jq filter> [jq args] — merged into the entry, atomical
 while read -r o r n; do
   f="$cache/${o}__${r}__$n.json"
   jq -e "$FROZEN" "$f" >/dev/null 2>&1 && continue
-  [ "$reads" -lt "${METRICS_GH_MAX_PRS:-20}" ] || continue
-  reads=$((reads + 1))
+  printf '%s %s %s %s\n' "$(jq -r '.read_at // "-" | strings' "$f" 2>/dev/null || echo -)" "$o" "$r" "$n"
+done < "$work/named" | sort | head -n "${METRICS_GH_MAX_PRS:-20}" > "$work/due"
+while read -r _ o r n; do
+  f="$cache/${o}__${r}__$n.json"
+  put "$f" --arg t "$now" '.read_at = $t' || { ghfail=true; continue; }
   command -v gh >/dev/null 2>&1 || { ghfail=true; continue; }
   if ! v="$(gh pr view "$n" -R "$o/$r" --json state,createdAt,mergedAt,closedAt,mergedBy,author,commits,reviews 2>"$work/gherr")"; then
     if grep -qE 'Could not resolve to a PullRequest|HTTP 404|Not Found' "$work/gherr"; then put "$f" '.pr = {state: "MISSING"}' || ghfail=true
@@ -201,7 +206,7 @@ while read -r o r n; do
   jq -e '.rounds.coderabbit | numbers' "$f" >/dev/null 2>&1 \
     || { bash "$HERE/review-rounds.sh" "$n" --for coderabbit --repo "$o/$r" --instance "$root" --cache "$cache" >/dev/null 2>&1
          [ "$?" -le 1 ] || ghfail=true; }
-done < "$work/named"
+done < "$work/due"
 for f in "$cache"/*__*__*.json; do
   k="${f##*/}"; k="${k%.json}"; grep -qxF "${k//__/ }" "$work/named" || rm -f "$f"
 done
@@ -210,6 +215,8 @@ while read -r o r n; do
 done < "$work/named" >> "$rec"
 printf '{"k":"named","n":%d}\n' "$(grep -c . "$work/named")" >> "$rec"
 
+self="$(jq -r '.ownerGithubUser // empty | strings' "$root/instance.config.local.json" 2>/dev/null)"
+[ -n "$self" ] || self="$(jq -r '.ownerGithubUser // empty | strings' "$root/instance.config.json" 2>/dev/null)"
 prev="$work/prev.json"
 jq -e 'objects | select(.schema_version == 2)' "$out" > "$prev" 2>/dev/null || : > "$prev"
 
@@ -241,13 +248,15 @@ recs("s") as $s | recs("tick") as $ticks | recs("t") as $tasks | recs("d") as $d
 | (recs("cost") | map({key: .id, value: .tokens}) | from_entries) as $CT
 | (recs("pr") | map({key: .ref, value: .}) | from_entries) as $PR
 | (recs("auto") | map({key: .slug, value: .mode}) | from_entries) as $AUTO
-| ($ym | map("\(.repo)#\(.n)") | unique) as $YM
+| ($ym | map(select(.owner != null) | "\(.owner)/\(.repo)#\(.n)") | unique) as $YMQ
+| ($ym | map(select(.owner == null) | "\(.repo)#\(.n)") | unique) as $YMB
+| ($PR | keys | map(split("/")[1]) | group_by(.) | map({key: .[0], value: length}) | from_entries) as $BN
 | ($tasks | map(.project as $p | (.prs + .pr_field)[] | {key: prref, value: $p}) | from_entries) as $PP
 | def tickcost($l): ($l | map(select(.id != null and (.id as $i | $CT | has($i))))) as $j
     | {ticks: ($j | length), measured: ($j | map(select($CT[.id] != null)) | length),
        unknown: ($j | map(select($CT[.id] == null)) | length), tokens: ($j | map($CT[.id] // empty) | total)};
   ($opens + ($ticks | map(select(.idle and .id != null)))) as $ltk
-| ($ltk | map(select(.id as $i | $CT | has($i))) | map(.login) | unique) as $mine
+| (if $self != "" then [$self] else $ltk | map(select(.id as $i | $CT | has($i))) | map(.login) | unique end) as $mine
 | ($cites | map({key: .source, value: .kept}) | from_entries) as $C
 | (if ($s | map(.ticks_measured) | add // 0) == 0 then null else ($s | map(.tick_tokens // 0) | add) end) as $sup
 | (if ($s | map(.dispatches_measured) | add // 0) == 0 then null else ($s | map(.dispatch_tokens // 0) | add) end) as $bg
@@ -285,7 +294,8 @@ recs("s") as $s | recs("tick") as $ticks | recs("t") as $tasks | recs("d") as $d
         merged_prs: ($pt | map(.merged_prs // empty) | total)}}) | from_entries) as $P
 | ($ticks | map(select(.idle) | if .id != null and $CT[.id] != null then .tokens = $CT[.id] else . end)) as $idle
 | ($PR | to_entries | map(.value) | map(select(.pr.state == "MERGED"))
-   | map(. + {loop: ((.ref | split("/")[1]) as $s | $YM | index([$s]) != null)})) as $M
+   | map(. + {loop: (.ref as $r | ($r | split("/")[1]) as $b
+       | ($YMQ | index([$r]) != null) or (($YMB | index([$b]) != null) and $BN[$b] == 1))})) as $M
 | ($M | map(select(.loop | not)) | map({key: .ref, value: (($AUTO[$PP[.ref] // ""] // null) as $a
     | if $a != null and $a != "yolo" then "gated"
       elif ((.quality.x_rows // "0") | tonumber? // 0) > 0 then "criteria" else "unknown" end)}) | from_entries) as $NOT
@@ -348,7 +358,8 @@ recs("s") as $s | recs("tick") as $ticks | recs("t") as $tasks | recs("d") as $d
     supervision_ticks: ($s | map(.ticks) | add // 0), supervision_ticks_measured: ($s | map(.ticks_measured) | add // 0),
     merged_prs: {totals: ($totals | length), prs: $tprs, tokens: $ttok, per_pr: $perpr,
       fix_rounds: ($fix | total), fix_rounds_per_pr: (($fixed | map(.merged_prs) | add // 0) as $n | if $n == 0 then null else ($fix | add) / $n | r1 end)},
-    pm_ticks: ({source: "tick-cost", ticks_without_row: ($ltk | map(select((.login as $l | $mine | index([$l])) and (.id as $i | $CT | has($i) | not))) | length)}
+    pm_ticks: ({source: "tick-cost", ticks_without_row: (if ($mine | length) == 0 then null
+      else $ltk | map(select((.login as $l | $mine | index([$l])) and (.id as $i | $CT | has($i) | not))) | length end)}
       + tickcost($ltk))},
   idle_tick_spend: {source: "ledger", stale: false, unit: "tokens",
     ticks: ($ticks | length), idle_ticks: ($idle | length), idle_share: ratio($idle | length; $ticks | length),
@@ -395,7 +406,7 @@ recs("s") as $s | recs("tick") as $ticks | recs("t") as $tasks | recs("d") as $d
 JQ
 
 tmp="$(mktemp "$root/$AB_DIR/.METRICS.json.XXXXXX")" || die 2 "cannot write under $root/$AB_DIR"
-if ! jq -n --slurpfile r "$rec" --slurpfile prev "$prev" --argjson ghfail "$ghfail" --arg now "$now" "$PROG" > "$tmp" 2>"$work/err" \
+if ! jq -n --slurpfile r "$rec" --slurpfile prev "$prev" --argjson ghfail "$ghfail" --arg self "$self" --arg now "$now" "$PROG" > "$tmp" 2>"$work/err" \
    || ! jq -e '.schema_version' "$tmp" >/dev/null 2>&1; then
   rm -f "$tmp"; die 2 "could not compute ($(head -c 200 "$work/err")) — previous file kept"
 fi
