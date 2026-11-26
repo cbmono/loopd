@@ -564,6 +564,36 @@ assert "no heading ⇒ the trailing text is body, and it CONFLICTS" \
 assert "…and report mode left that file untouched" \
   "$(hasnt '## A section new in seed v4' "$(cat "$MDN/CLAUDE.md")")"
 
+echo "== .claude/settings.json is merged like any seed file, the bundle's statusLine kept =="
+SET="$TMP/group/_ai-bridge-settings"
+mkdir -p "$SET"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$SET" > "$TMP/install-settings.out" 2>&1
+( cd "$SET" && git init -q -b main . && git add -A && gc "settings instance init" )
+assert "the stamp wrote statusLine into the bundle's settings.json" \
+  "$(yes_if grep -q '"statusLine"' "$SET/.claude/settings.json")"
+SEED_SET="$TPL/plugin/seed/.claude/settings.json"
+NEW_RULE='Bash(echo seed-v5-rule)'
+RULE="$NEW_RULE" python3 - "$SEED_SET" <<'PY'
+import json, os, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["permissions"]["allow"].append(os.environ["RULE"])
+open(p, "w").write(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
+PY
+( cd "$TPL" && git add -A && gc "template, seed v5 — a new permissions.allow rule" )
+
+SET_REPORT="$(bash "$UPGRADE" "$SET" 2>&1)"
+assert "the seed rule is PORTABLE onto the stamped settings.json" \
+  "$(has 'PORTABLE  .claude/settings.json' "$SET_REPORT")"
+SET_APPLY="$(bash "$UPGRADE" "$SET" --apply 2>&1)"
+assert "--apply merges it"                       "$(has 'PORTED    .claude/settings.json' "$SET_APPLY")"
+assert "…and the merged file parses as JSON" \
+  "$(yes_if python3 -m json.tool "$SET/.claude/settings.json")"
+set_json() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("\n".join(d["permissions"]["allow"]) if sys.argv[2]=="allow" else d.get("statusLine",{}).get("command",""))' "$SET/.claude/settings.json" "$1"; }
+assert "…the new allow rule reached the bundle"  "$(yes_if grep -qxF "$NEW_RULE" <<<"$(set_json allow)")"
+assert "…the bundle's own statusLine was kept"   "$(has 'loopd-statusline.sh$' "$(set_json statusLine)")"
+assert "…with no conflict marker written"        "$(hasnt '<<<<<<<' "$(cat "$SET/.claude/settings.json")")"
+
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]

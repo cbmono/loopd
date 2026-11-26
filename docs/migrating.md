@@ -335,8 +335,8 @@ listed. The optional `~/.claude` config layer is retired (2026-10-28): a link it
 
 The `Needs you:` reporting contract ships in the seed as `.claude/output-styles/brief.md`,
 selected by `"outputStyle": "Brief"` in the seed `.claude/settings.json`. A bundle stamped
-**before 2026-10-28** gets the file on its next `/loopd:init` but not the key — that file is
-copied once and never merged. Add it by hand:
+**before 2026-10-28** gets the file on its next `/loopd:init`, and the key from that stamp's
+seed merge of `.claude/settings.json` — unless the merge conflicts with your edits. Then add it by hand:
 
 ```json
 "outputStyle": "Brief"

@@ -527,6 +527,7 @@ while IFS= read -r rel; do
   # repair an uncommitted config for exactly that reason (its `config-uncommitted` row is
   # `ambiguous` and has no fixer at all), so a merge here would be the same write arriving
   # by another door. It is REPORTED, with the diff to run, and never touched.
+  # `.claude/settings.json` is not one of them: it is seed content and takes the 3-way merge below.
   case "$rel" in
     knowledge/index.md)
       # DECIDABLE, class `derived`. The KB index is regenerated from frontmatter, so the
