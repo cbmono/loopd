@@ -1072,7 +1072,8 @@ PY
     no)
       warn "clean-copy rule: neither .claude/settings.json nor .claude/settings.local.json allows $rule"
       hint "add \"$rule\" to permissions.allow in $settings" ;;
-    *) note "clean-copy rule: not judged — $settings does not parse as JSON" ;;
+    unparseable) note "clean-copy rule: not judged — $settings does not parse as JSON" ;;
+    *) note "clean-copy rule: not judged — the JSON reader gave no answer for $settings" ;;
   esac
   return "$_warned"
 }
