@@ -1209,8 +1209,7 @@ test('a non-interactive session registers the command and says nothing', ONLY, a
 })
 
 // ---------------------------------------------------------------- the Metrics view
-// METRICS.json as metrics.sh writes it (docs/metrics.md): a ready headline block, one object
-// per family, three monthly buckets. The pane draws the headline and nothing else.
+// Shape: docs/metrics.md
 const MET = {
   schema_version: 1,
   generated_at: '2026-10-08T00:50:03Z',
@@ -1236,7 +1235,6 @@ function metricsWorld(snapshot: unknown | null = SNAP, met: unknown | null = MET
   w.readOf = []; w.statOf = []
   return w
 }
-// The pane as a terminal draws it: the switch row and its blank, the buttons joined by their gap.
 async function screen(ui: any): Promise<string[]> {
   return (await ui.drawn()).children.flatMap((c: any) =>
     c.props && c.props.key === 'views' ? c.children.map(flat)
@@ -1285,10 +1283,8 @@ test('METRICS VIEW: Projects and Metrics are plain buttons with no hotkey; Proje
     ' ',
   ])
   for (const r of drawn) expect(cols(r)).toBeLessThanOrEqual(45)
-  // Three monthly buckets, but the headline carries no trend: none is drawn.
   expect(drawn.join('\n')).not.toMatch(/2026-0|trend/)
   expect(await ui.find({ key: 'view-metrics' }).then((b: any) => b.props.hotkey)).toBeUndefined()
-  // The active button is a no-op; Projects draws the board again.
   const before = w.reads
   await ui.press({ key: 'view-metrics' })
   expect(w.reads).toBe(before)
@@ -1389,7 +1385,6 @@ test('METRICS GUARD: stat-ed only while shown; an unchanged mtime reads it 0 tim
   expect(metricsReads(w)).toBe(2)
   await ui.press({ key: 'refresh' })
   expect(metricsReads(w)).toBe(3)
-  // Back on Projects the poll stops stat-ing it.
   await ui.press({ key: 'view-projects' })
   const s1 = stats()
   await clock.advance(5000)

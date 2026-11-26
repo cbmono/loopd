@@ -154,7 +154,7 @@ const TITLE = 'loopd board'
 const SNAPSHOT = '.loopd/SNAPSHOT.json'
 // AB_COUNTS: the status line writes it on every redraw, so these numbers are the bar's.
 const COUNTS = '.loopd/counts.json'
-// AB_METRICS: metrics.sh writes it; the Metrics view draws its headline block as given.
+// AB_METRICS; schema: docs/metrics.md
 const METRICS = '.loopd/METRICS.json'
 const METRICS_VERSION = 1
 const HEADLINE = [
