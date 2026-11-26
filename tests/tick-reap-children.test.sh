@@ -147,6 +147,25 @@ ok "the child finished ⇒ reaped and stopped" "$RC:$(locked):$(grep -c '^stop 1
 spawned; closed; listing blocked; job none; reap
 ok "no readable record ⇒ stopped as today" "$RC:$(stops0)" "0:1"
 
+echo "== the tick's own usage goes to AB_TICK_COST, unknown never 0 =="
+TC="$B/.loopd/.tick-cost/ticks.tsv"
+ok "a reap with usage UNKNOWN writes unknown" "$(cut -f1-4 "$TC" | tail -1)" "$ID	unknown	unknown	unknown"
+ok "…in a directory that ignores itself" "$(cat "$B/.loopd/.tick-cost/.gitignore")" "*"
+mkdir -p "$CLAUDE_CONFIG_DIR/plugins/store"
+spawned; closed; SID="$(awk '/^session:/ { print $2 }' "$B/.loopd/.tick-lock")"
+printf '{"loopd.usage.%s":{"input":100,"cacheWrite":20,"output":3,"cacheRead":9,"ms":4000,"toolErrors":0,"tools":{"Bash":2}}}\n' "$SID" \
+  > "$CLAUDE_CONFIG_DIR/plugins/store/loopd_t.json"
+listing blocked; job blocked; reap
+ok "a measured reap writes its own tokens, tools and ms" "$RC:$(cut -f1-4 "$B/.loopd/.tick-cost/ticks.tsv")" "0:$ID	123	2	4000"
+ok "…and still prints COST:" "$(has "$OUT" 'COST: ')" yes
+rm -f "$CLAUDE_CONFIG_DIR/plugins/store/loopd_t.json"
+spawned; closed; listing blocked; job blocked
+mkdir -p "$B/.loopd/.tick-cost"; printf 'old\tunknown\tunknown\tunknown\tx\n%.0s' 1 2 3 > "$B/.loopd/.tick-cost/ticks.tsv"
+TICK_COST_ROWS=2 reap
+ok "the file is bounded to the newest rows" "$(wc -l < "$B/.loopd/.tick-cost/ticks.tsv" | tr -d ' '):$(tail -1 "$B/.loopd/.tick-cost/ticks.tsv" | cut -f1)" "2:$ID"
+spawned; closed; listing blocked; job blocked; mkdir -p "$B/.loopd/.tick-cost/ticks.tsv"; reap
+ok "a write that fails changes neither exit nor lock" "$RC:$(locked)" "0:no"
+
 echo "== the turn-over stop (no ledger entry) spares a live child too =="
 spawned; printf '# Log\n' > "$B/.loopd/log.md"; { git -C "$B" add -A && git -C "$B" -c user.name=t -c user.email=t@example.com commit -qm rm; } >/dev/null 2>&1
 backdate 300; listing blocked "" working idle; job fork-live; reap

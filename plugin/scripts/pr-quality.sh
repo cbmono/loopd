@@ -5,20 +5,23 @@
 # rows, counted apart, `-` where that reviewer never reviewed; stall escalations from the
 # tick ledger (TICK close lines naming ESCALATE) inside each window's merge span.
 #
-#   pr-quality.sh --repo <owner/name> [--limit 40] [--window 20] [--ledger <log.md>] [--rows]
+#   pr-quality.sh --repo <owner/name> [--limit 40 | --pr <n>] [--window 20] [--ledger <log.md>] [--rows] [--cache <dir>]
 #
-# Exit: 0 printed · 1 the host could not answer · 3 usage. Reasoning: leaner-prompts/task-001.
+# --pr reads one merged PR; --cache reuses and stores each merged PR's row in <dir>/<owner>__<name>__<n>.json.
+# Exit: 0 printed · 1 the host could not answer, or --pr is not merged · 3 usage. Reasoning: leaner-prompts/task-001.
 set -uo pipefail
-usage() { sed -n '2,10p' "$0" >&2; exit 3; }
-repo=""; limit=40; window=20; ledger=""; rows=no
+usage() { sed -n '2,11p' "$0" >&2; exit 3; }
+repo=""; limit=40; window=20; ledger=""; rows=no; one=""; cache=""
 while [ $# -gt 0 ]; do
-  case "$1" in --repo|--limit|--window|--ledger) [ $# -ge 2 ] || usage ;; esac
+  case "$1" in --repo|--limit|--window|--ledger|--pr|--cache) [ $# -ge 2 ] || usage ;; esac
   case "$1" in
     --repo) repo="$2"; shift 2 ;;
     --limit) limit="$2"; shift 2 ;;
     --window) window="$2"; shift 2 ;;
     --ledger) ledger="$2"; shift 2 ;;
     --rows) rows=yes; shift ;;
+    --pr) one="$2"; shift 2 ;;
+    --cache) cache="$2"; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -26,16 +29,34 @@ case "$repo" in */*) ;; *) usage ;; esac
 case "$limit$window" in *[!0-9]*|'') usage ;; esac
 [ "$limit" -ge 1 ] && [ "$window" -ge 1 ] || usage
 [ -z "$ledger" ] || [ -r "$ledger" ] || usage
+case "$one" in '') ;; *[!0-9]*) usage ;; esac
+[ -z "$cache" ] || [ -d "$cache" ] || usage
 { command -v gh && command -v jq; } >/dev/null 2>&1 || { echo "pr-quality: gh and jq are required" >&2; exit 1; }
 
-prs="$(gh pr list -R "$repo" --state merged --limit "$limit" --json number,mergedAt 2>/dev/null \
-  | jq -r 'sort_by(.mergedAt) | reverse | .[] | "\(.number)\t\(.mergedAt)"')" || prs=""
+cfile() { printf '%s/%s__%s__%s.json' "$cache" "${repo%%/*}" "${repo#*/}" "$1"; }
+cached() { [ -n "$cache" ] && jq -er '.quality | objects | [.merged_at, .x_rows, .cr_findings, .qa_fail] | map(tostring) | @tsv' "$(cfile "$1")" 2>/dev/null; }
+store() { # <n> <mergedAt> <x> <cr> <qa>
+  [ -n "$cache" ] || return 0
+  local f t; f="$(cfile "$1")"; t="$(mktemp "$f.XXXXXX" 2>/dev/null)" || return 0
+  { jq -e objects "$f" 2>/dev/null || echo '{"v":1}'; } \
+    | jq --arg at "$2" --arg x "$3" --arg cr "$4" --arg qa "$5" '.quality = {merged_at: $at, x_rows: $x, cr_findings: $cr, qa_fail: $qa}' > "$t" 2>/dev/null \
+    && mv "$t" "$f" || rm -f "$t"
+}
+if [ -z "$one" ]; then
+  prs="$(gh pr list -R "$repo" --state merged --limit "$limit" --json number,mergedAt 2>/dev/null \
+    | jq -r 'sort_by(.mergedAt) | reverse | .[] | "\(.number)\t\(.mergedAt)"')" || prs=""
+elif row="$(cached "$one")"; then prs="$one	${row%%	*}"
+else
+  prs="$(gh pr view "$one" -R "$repo" --json number,mergedAt,state 2>/dev/null \
+    | jq -r 'select(.state == "MERGED") | "\(.number)\t\(.mergedAt)"')" || prs=""
+fi
 [ -n "$prs" ] || { echo "pr-quality: no merged PR read from $repo" >&2; exit 1; }
 
 # One line per PR: number mergedAt x_rows cr_findings qa_fail — a `-` is "never reviewed by
 # that reviewer". CodeRabbit reviewed when it left a review object; qa-reviewer when an
 # non-bot issue comment carries an okf-verdict block (the one reviewer that posts one).
 table="$(printf '%s\n' "$prs" | while IFS=$'\t' read -r n at; do
+  if row="$(cached "$n")"; then printf '%s\t%s\n' "$n" "$row"; continue; fi
   body="$(gh pr view "$n" -R "$repo" --json body --jq .body 2>/dev/null)" || exit 1
   x="$(printf '%s\n' "$body" | grep -c -E '^\|[^|]*\|[[:space:]]*✗[[:space:]]*\|')"
   # `--paginate` prints one array per page, so the count is taken after `jq -s` joins them.
@@ -49,6 +70,7 @@ table="$(printf '%s\n' "$prs" | while IFS=$'\t' read -r n at; do
       [.[][] | select(.user.type != "Bot") | .body | select(contains("<!-- okf-verdict"))]
       | if length == 0 then "-" else map([scan("\\|[^|\\n]*\\|[[:space:]]*FAIL[[:space:]]*\\|")] | length) | add end')" || exit 1
   [ -n "$qa" ] || exit 1
+  store "$n" "$at" "$x" "$cr" "${qa:--}"
   printf '%s\t%s\t%s\t%s\t%s\n' "$n" "$at" "$x" "$cr" "${qa:--}"
 done)" || { echo "pr-quality: the host did not answer for every PR" >&2; exit 1; }
 [ "$(printf '%s\n' "$table" | grep -c .)" -eq "$(printf '%s\n' "$prs" | grep -c .)" ] || { echo "pr-quality: the host did not answer for every PR" >&2; exit 1; }

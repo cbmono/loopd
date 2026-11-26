@@ -46,11 +46,11 @@ fi
 check="$(jq -r '
   def iso: type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$");
   if type != "object" then "is not a JSON object"
-  elif .schema_version != 1 then "has an unknown schema_version \(.schema_version | tojson) (this report reads 1)"
+  elif (.schema_version | IN(1, 2) | not) then "has an unknown schema_version \(.schema_version | tojson) (this report reads 1 and 2)"
   elif (.generated_at | iso | not) then "has no UTC generated_at"
   elif ([.headline, .delegation, .time, .tokens, .idle_tick_spend, .blocked_by_cause, .owner_response,
          .self_merge, .quality, .kb_efficiency, .tasks, .projects, .periods] | all(type == "object") | not)
-    then "is missing a section of schema 1"
+    then "is missing a section of schema \(.schema_version)"
   else "ok" end' "$F" 2>/dev/null)" || die 4 "$F is truncated or not JSON; the next full tick rewrites it"
 [ "$check" = ok ] || die 4 "$F ${check:-is truncated or not JSON}"
 if [ -n "$project" ]; then
@@ -69,17 +69,17 @@ if [ -r "$AB_LEDGER" ]; then
 fi
 
 read -r -d '' PROG <<'JQ'
+def stale(f): if f.stale == true then " (stale)" else "" end;
 def clean: tostring | explode | map(select(. >= 32 and . != 127 and . != 124)) | implode;
 def cut(n): if . == null then null else clean | if length > n then .[0:n - 1] + "…" else . end end;
 def none: type == "object" and .source == "none";
 def fig: if . == null then "? unknown" elif none then "— source: none" elif type == "object" then "? unknown" else clean end;
 def tok: if type == "number" then (if . >= 1000000 then "\(. / 100000 | round / 10)M" elif . >= 1000 then "\(. / 1000 | round)k" else tostring end) else fig end;
 def pct: if type == "number" then "\(. * 100 | round)%" else fig end;
-def h: if type == "number" then "\(.)h" else fig end;
+def h: if type == "number" then "\(.)h" elif type == "object" and has("mean_hours") then (.mean_hours | h) + stale(.) else fig end;
 def d: if type == "number" then "\(.)d" else fig end;
 def row: "| " + (map(fig) | join(" | ")) + " |";
 def head: (row), ("|" + (map("---|") | join("")));
-def stale(f): if f.stale == true then " (stale)" else "" end;
 def more(n; total; what): if total > n then ["", "… \(total - n) more \(what) not shown; narrow with --project or --since."] else [] end;
 
 . as $m
@@ -142,7 +142,7 @@ def more(n; total; what): if total > n then ["", "… \(total - n) more \(what) 
   (["owner response" + stale($o), "Needs-you row to action", ($o.needs_you_to_action_hours | h)] | row),
   (["owner response" + stale($o), "ready PR to merge", ($o.ready_pr_to_merge_hours | h)] | row),
   (["self-merge" + stale($m.self_merge), "rate", (if $m.self_merge | none then $m.self_merge else ($m.self_merge.rate | pct) end | fig)] | row),
-  (["quality" + stale($m.quality), "review findings and fix rounds", (if $m.quality | none then $m.quality else null end | fig)] | row),
+  (["quality" + stale($m.quality), "review findings and fix rounds", (if $m.quality | none then ($m.quality | fig) else "\($m.quality.cr_findings_per_pr | fig) findings / PR, \($m.quality.fix_rounds_per_pr | fig) fix rounds / PR, \($m.quality.first_round_merge_share | pct) merged in one round" end)] | row),
   "",
   "## By role",
   "",

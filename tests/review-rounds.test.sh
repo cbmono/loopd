@@ -530,5 +530,27 @@ ok "…and the fixture PR reports no mergeability, so it is the guard" \
    "$(grep -c 'mergeable' "$FIX/pr_json")" "0"
 
 echo
+echo "== --cache: a closed PR's count is frozen, an open PR's is read every time =="
+C="$TMP/cache"; mkdir -p "$C"
+setup; commit "$CLEAN_HEAD"; commit "$THIRD"
+review "coderabbitai[bot]" "COMMENTED" "$CLEAN_HEAD" "$(body 'One nit on the helper.')"
+review "coderabbitai[bot]" "CHANGES_REQUESTED" "$THIRD" "$(body 'Two findings.')"
+ok "an open PR is counted" "$(run coderabbit "$CAPS2" --cache "$C")" "1 2"
+ok "…and nothing is stored" "$([ -e "$C/octo__demo__7.json" ] && echo stored || echo none)" none
+jq '. + {state: "CLOSED"}' "$FIX/pr_json" > "$FIX/pr_json.c"; cp "$FIX/pr_json.c" "$FIX/pr_json"
+ok "a closed, unmerged PR is counted" "$(run coderabbit "$CAPS2" --cache "$C")" "1 2"
+ok "…and nothing is stored (it can be reopened)" "$([ -e "$C/octo__demo__7.json" ] && echo stored || echo none)" none
+jq '. + {state: "MERGED"}' "$FIX/pr_json" > "$FIX/pr_json.m" && mv "$FIX/pr_json.m" "$FIX/pr_json"
+ok "a merged PR is counted" "$(run coderabbit "$CAPS2" --cache "$C")" "1 2"
+ok "…and stored with its provenance" "$(jq -c '[.rounds, .rounds_state]' "$C/octo__demo__7.json")" '[{"coderabbit":2},"MERGED"]'
+touch "$FIX/pr_broken" "$FIX/commits_broken"
+printf '{"rounds":{"coderabbit":0}}\n' > "$C/octo__demo__8.json"
+ok "an entry without merged provenance is never trusted" "$("$SCRIPT" 8 --for coderabbit --repo octo/demo --instance "$CAPS2" --cache "$C" >/dev/null 2>&1; echo $?)" 2
+ok "a cached PR answers with no gh read" "$(run coderabbit "$CAPS2" --cache "$C")" "1 2"
+ok "…under the default cap too" "$(run coderabbit "$DEF" --cache "$C")" "1 2"
+ok "--last never reads the cache" "$(run coderabbit "$CAPS2" --cache "$C" --last | cut -d' ' -f1)" 2
+ok "--cache on a missing directory is usage" "$(run coderabbit "$CAPS2" --cache "$TMP/nodir" | cut -d' ' -f1)" 2
+
+echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

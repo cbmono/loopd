@@ -28,9 +28,11 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-62s (%s)\n' "$1" "$2"; pass=$(
 FX="$TMP/fx"; BIN="$TMP/bin"; mkdir -p "$FX" "$BIN"
 cat > "$BIN/gh" <<'EOS'
 #!/usr/bin/env bash
+echo "$*" >> "$FX/calls"
 case "$1 $2" in
   "pr list") n=""; while [ $# -gt 0 ]; do [ "$1" = --limit ] && n="$2"; shift; done; jq ".[:${n:-100}]" "$FX/list.json" ;;
-  "pr view") cat "$FX/body-$3.txt" 2>/dev/null || exit 1 ;;
+  "pr view") case "$*" in *number,mergedAt,state*) cat "$FX/view-$3.json" 2>/dev/null || exit 1 ;;
+             *) cat "$FX/body-$3.txt" 2>/dev/null || exit 1 ;; esac ;;
   "api --paginate") p="${3//\//_}"; f="$FX/$p.json"; [ -f "$f" ] || exit 1; cat "$f" ;;
   *) exit 1 ;;
 esac
@@ -88,5 +90,20 @@ PATH="$BIN:$PATH" bash "$PQ" --repo o/r --limit 0 >/dev/null 2>&1; ok "--limit 0
 rm "$FX/repos_o_r_pulls_3_reviews.json"; run --limit 4 --window 2 >/dev/null; ok "a host that cannot answer one PR is exit 1" "$?" 1
 PATH="$BIN:$PATH" bash "$PQ" >/dev/null 2>&1; ok "no --repo is usage (exit 3)" "$?" 3
 PATH="$BIN:$PATH" bash "$PQ" --repo o/r --limit x >/dev/null 2>&1; ok "a non-numeric --limit is usage" "$?" 3
+echo "== 5. one PR, and the cache =="
+C="$TMP/cache"; mkdir -p "$C"; reviews 3 ""
+printf '{"number":4,"mergedAt":"2026-01-04T00:00:00Z","state":"MERGED"}\n' > "$FX/view-4.json"
+printf '{"number":6,"mergedAt":null,"state":"OPEN"}\n' > "$FX/view-6.json"
+: > "$FX/calls"; OUT5="$(run --pr 4 --rows --cache "$C")"
+ok "--pr reads one PR, the same row"                      "$(printf '%s\n' "$OUT5" | awk -F'\t' '$1 == 4 {print $3, $4, $5}')" "1 2 -"
+ok "…and stores it under <owner>__<name>__<n>"            "$(jq -c '.quality | [.x_rows, .cr_findings, .qa_fail]' "$C/o__r__4.json")" '["1","2","-"]'
+: > "$FX/calls"; OUT6="$(run --pr 4 --rows --cache "$C")"
+ok "a cached PR makes 0 gh calls"                         "$(grep -c . "$FX/calls")" 0
+ok "…and prints the same row"                             "$(printf '%s\n' "$OUT6" | awk -F'\t' '$1 == 4 {print $2, $3, $4, $5}')" "2026-01-04T00:00:00Z 1 2 -"
+: > "$FX/calls"; run --limit 4 --window 2 --cache "$C" >/dev/null
+ok "list mode reads the cached PR from the cache"         "$(grep -c 'pulls/4/' "$FX/calls")" 0
+run --pr 6 --cache "$C" >/dev/null; ok "--pr on an open PR is exit 1" "$?" 1
+ok "…and stores nothing"                                   "$([ -e "$C/o__r__6.json" ] && echo stored || echo none)" none
+PATH="$BIN:$PATH" bash "$PQ" --repo o/r --pr 4 --cache "$TMP/nodir" >/dev/null 2>&1; ok "a --cache that is not a directory is usage" "$?" 3
 printf '\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
