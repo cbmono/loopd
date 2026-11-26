@@ -81,6 +81,12 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    field allowlist is a data-governance boundary). **No `SNAPSHOT.json` ⇒ it writes
    nothing and exits 0** — the presence rule above. Never stage or commit it.
 
+   **Then refresh the metrics, under the same switch.** Run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/metrics.sh .` from the bundle root. It writes
+   `.loopd/METRICS.json` only where `SNAPSHOT.json` exists and `board` is not `false`, keeps
+   the previous file on any failure, and reads no network. A non-zero exit goes in the tick
+   report as its `metrics:` line; it never stops the tick. Never stage or commit it.
+
    **Then re-render the page, if this instance has a board.** Nothing here publishes
    anything (that path is deleted — `docs/pm-design.md#step-8`). Immediately after the
    writer:
