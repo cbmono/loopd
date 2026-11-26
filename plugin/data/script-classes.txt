@@ -46,6 +46,7 @@ memory-stale.sh read-only
 merge-hold.sh writing --record writes a clearance receipt
 merge-permit.sh writing reaches clearance-receipt.sh and merge-hold.sh, which write gate state
 merge-queue.sh read-only
+metrics.sh writing writes METRICS.json, and reaches agent-usage.sh
 migrate-bundle.sh writing --apply rewrites bundle documents
 new-project-file.sh writing creates and commits a project
 new-project-form.sh writing keeps and removes the new-project form file
