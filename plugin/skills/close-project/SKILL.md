@@ -381,8 +381,10 @@ is, while the log entry still names the human who decided.
    `retain: true` it stamps `deliverable_paths:` into `project.md` (each task's
    `artifacts:`, verified on disk) and prunes only `tmp/`/`temp/`, `.DS_Store` and
    **non-markdown** files under `sources/` — never `deliverables/`, never `tasks/`,
-   never `sources/**/*.md`. It also writes the project's stanza into `projects/CLOSED.md`,
-   which is how a closed project's deliverables stay findable. Under `--dry-run`, run it
+   never `sources/**/*.md`. It also writes the project's stanza into `projects/CLOSED.md`
+   — on a retained close too, where a re-close rewrites that one stanza in place only
+   when the stamped deliverables changed — which is how a closed project's deliverables
+   stay findable. Under `--dry-run`, run it
    **without** `--apply`: it reports the
    exact removal or prune and changes nothing. Keep its `.loopd/log.md fragment` line for
    step 3's entry.
@@ -391,9 +393,11 @@ is, while the log entry still names the human who decided.
 
    * **removed** — the `git rm` already staged the deletion; add the `.loopd/log.md` /
      objective / KB edits by explicit path.
-   * **retained** — `git add -A -- projects/<slug>` (explicit path), so the prune's
-     deletions, `status: done`, the `deliverable_paths:` stamp and the refreshed
-     `projects/<slug>/index.md` all land in the one commit. If `git` refuses the index
+   * **retained** — `git add -A -- projects/<slug>` (explicit path), and commit it with
+     `projects/CLOSED.md` beside it when the script wrote or refreshed the stanza (it
+     staged that file already), so the prune's deletions, `status: done`, the
+     `deliverable_paths:` stamp, the stanza and the refreshed `projects/<slug>/index.md`
+     all land in the one commit. If `git` refuses the index
      because a stale `/projects/*/index.md` line is still in this instance's
      `.gitignore`, force it (`git add -f -- projects/<slug>/index.md`) and tell the
      user to re-stamp: an index the tick will never regenerate and git will never

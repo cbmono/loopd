@@ -29,7 +29,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    --apply` — never `git rm` or `rm` the folder yourself. It reads `retain:` and
    either removes the folder or keeps it pruned; it prints a `.loopd/log.md fragment` — put
    that in (b)'s entry. Then stage the edits from (b) and (c) by explicit path — plus
-   `projects/<slug>` itself when retained — and commit in one go via
+   `projects/<slug>` itself when retained, and `projects/CLOSED.md` when the script says it
+   staged it — and commit in one go via
    `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "chore: close <slug> project" --
    projects/<slug> .loopd/log.md objectives/<objective>.md <kb-path>...`. (The ROOT
    `index.md` is edited but **not** staged — derived and gitignored; a retained

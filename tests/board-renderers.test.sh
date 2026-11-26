@@ -1200,6 +1200,25 @@ NOCLH="$TMP/nocl-board.html"
 assert "a snapshot with NO \`closed\` key renders the page" "$(yes_if test -s "$NOCLH")"
 assert "…and no Closed section at all"                     "$(fhasnt 'Closed · ' "$NOCLH")"
 
+DUP="$TMP/group/_ai-bridge-dup"; ONE="$TMP/group/_ai-bridge-one"
+mkdir -p "$DUP/$AB_DIR" "$ONE/$AB_DIR"
+python3 - "$CL/$AB_SNAPSHOT" "$DUP/$AB_SNAPSHOT" "$ONE/$AB_SNAPSHOT" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+d["projects"] = [{"slug": "ai-bridge-2x", "title": "ai-bridge-2x", "kind": "build",
+                  "status": "done", "tasks": []}]
+open(sys.argv[2], "w", encoding="utf-8").write(json.dumps(d))
+d.pop("closed")
+open(sys.argv[3], "w", encoding="utf-8").write(json.dumps(d))
+PY
+DUPH="$TMP/dup-board.html"; ONEH="$TMP/one-board.html"
+( cd "$DUP" && bash "$BOARD" --standalone --out "$DUPH" "$DUP" >/dev/null 2>&1 )
+( cd "$ONE" && bash "$BOARD" --standalone --out "$ONEH" "$ONE" >/dev/null 2>&1 )
+assert "a retained project with a CLOSED.md stanza gets no Closed row" "$(fhasnt 'Closed · ' "$DUPH")"
+assert "…and appears exactly as often as without the stanza" \
+  "$(eq "$(grep -o 'ai-bridge-2x' "$DUPH" | wc -l)" "$(grep -o 'ai-bridge-2x' "$ONEH" | wc -l)")"
+assert "…which is not zero"                              "$(fhas 'ai-bridge-2x' "$DUPH")"
+
 # THE RENDERERS SHIP WITH THE PLUGIN, NOT INTO A BUNDLE (task-013). This used to assert
 # that a stamp LINKED them into `<bundle>/scripts/`; a bundle carries no machinery now, so
 # the property worth pinning is that the plugin ships both and that a stamp put no link

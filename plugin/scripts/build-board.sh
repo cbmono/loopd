@@ -2212,7 +2212,9 @@ def render_table():
         # `group` is per-SNAPSHOT and the slug is only unique within one instance, so it
         # is stamped onto each record here — two instances closing `redesign` are one
         # ambiguous pair of rows without it. Ours wins over any key of the same name.
-        closed_all += [dict(todict(c), group=g) for c in tolist(s.get("closed"))]
+        kept = {str(todict(p).get("slug") or "") for p in tolist(s.get("projects"))}
+        closed_all += [dict(todict(c), group=g) for c in tolist(s.get("closed"))
+                       if str(todict(c).get("slug") or "") not in kept]
         me, default_owner = who_and_default(d)
         others += others_for(d, me, default_owner)
         for p in tolist(s.get("projects")):
@@ -2737,9 +2739,11 @@ def render_table():
                             cell))
         o.append("</tbody></table></div>"
                  "<p class=\"where\">Read from each instance’s <code>projects/CLOSED.md</code>, "
-                 "written by closeout. The folder is gone; every link is a "
-                 "<strong>permalink at the commit it was pinned to</strong>, because a "
-                 "branch-path link 404s the moment the folder is removed. "
+                 "written by closeout. A removed project's folder is gone; a retained one "
+                 "keeps it and is listed once, with the projects above. Every link is a "
+                 "<strong>permalink at the commit it was pinned to</strong> (HEAD when "
+                 "closeout ran, the close commit's parent), because a branch-path link "
+                 "404s the moment a folder is removed. "
                  "<code>CLOSED.md</code> carries a one-paste restore command beside each "
                  "link for a deliverable GitHub will not render.</p></div></details></div>")
 
