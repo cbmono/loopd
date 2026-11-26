@@ -212,14 +212,12 @@ cp "$TMP/list" "$LIST"
 
 echo "== 14. a real path that still needs quoting writes no rule and names it =="
 n14=0
-for d in "sp ace" 'do$llar' "apo'strophe" 'amp&ersand' 'semi;colon' 'ha#sh' "$(printf 'ta\tb')" "new
-line"; do
+for d in "sp ace" 'do$llar' "apo'strophe" 'amp&ersand' 'semi;colon' 'ha#sh' "$(printf 'ta\tb')" "$(printf 'new\nline')"; do
   n14=$((n14+1)); R="$TMP/m$n14/$d/plugins/cache/mk/${PN}/9.9.9"; mkdir -p "${R%/*}"; cp -R "$MK/9.9.9" "$R"
   ln -s "$R" "$TMP/m$n14/Application Support"
   I="$TMP/i14-$n14"; mkdir -p "$I"; stamp "$TMP/m$n14/Application Support" "$I"
   ok "real path with ${d%%[[:space:]]*}…: no settings.local.json" "$(yn test -f "$I/.claude/settings.local.json")" no
-  ok "real path with ${d%%[[:space:]]*}…: the warning names it" "$(grep -cF -- "\`${R%%
-*}" "$TMP/out" | tr -d ' ')/$(grep -c 'holds whitespace or a shell metacharacter' "$TMP/out" | tr -d ' ')" 1/1
+  ok "real path with ${d%%[[:space:]]*}…: the warning names it" "$(grep -cF -- "\`$(printf '%s\n' "$R" | head -1)" "$TMP/out" | tr -d ' ')/$(grep -c 'holds whitespace or a shell metacharacter' "$TMP/out" | tr -d ' ')" 1/1
 done
 fi
 
