@@ -124,6 +124,7 @@ A walkthrough of the first hour, including what to expect at each step:
 | `/loopd:new-project <description>` | start a project — build (code, PRs) or `kind=research` (documents, no repo) |
 | `/loopd:dispatch` | run the loop every ten minutes · `once` for a single pass · `stop` to end it |
 | `/loopd:whats-up` | see what needs you, numbered |
+| `/loopd:metrics` | see how the loop is doing — tokens, time, blocks, trends · `--project <slug>` · `--since <YYYY-MM>` |
 | `/loopd:answer` | answer the project manager's questions in chat, or unblock a stuck task |
 | `/loopd:close-project <slug>` | close a finished project and keep what it learned |
 | `/loopd:board` | open the board in your browser · `publish` for a private link you can open on a phone |
