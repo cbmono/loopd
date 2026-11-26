@@ -1360,6 +1360,37 @@ test('METRICS VIEW: its own read state and age, so it draws under a malformed SN
   await ui.unmount()
 })
 
+test('METRICS VIEW: a closed and reopened pane opens on Projects again', ONLY, async ($, on) => {
+  const w = metricsWorld()
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w)
+  expect((await screen(ui))[0]).toBe('  Projects  ▸ Metrics')
+  await ui.unmount()
+  await $.command.run({ command: 'pane', args: 'close' })
+  await open($)
+  const again = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  expect((await screen(again))[0]).toBe('▸ Projects    Metrics')
+  await again.unmount()
+})
+
+test('METRICS GUARD: a cd into another bundle reads its METRICS.json, even at the same mtime', ONLY, async ($, on) => {
+  const OTHER = '/work/_loopd-other'
+  const w = metricsWorld()
+  w.files.set(OTHER + '/instance.config.json', { text: '{}', mtimeMs: 1 })
+  w.files.set(OTHER + '/.loopd/SNAPSHOT.json', { text: JSON.stringify(SNAP), mtimeMs: 1000 })
+  w.files.set(OTHER + '/.loopd/METRICS.json', { text: JSON.stringify({ ...MET, headline: { ...MET.headline, tokens_per_merged_pr: '9k' } }), mtimeMs: 700 })
+  w.root = '/work/not-a-bundle'
+  stubs(on, w)
+  const clock = mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w)
+  expect((await metricsRows(ui)).join('\n')).toContain('132k')
+  w.cwd = OTHER
+  await clock.advance(5000)
+  expect((await metricsRows(ui)).join('\n')).toContain('9k')
+  await ui.unmount()
+})
+
 test('METRICS GUARD: stat-ed only while shown; an unchanged mtime reads it 0 times in 3 polls, a moved one once, Refresh once', ONLY, async ($, on) => {
   const w = metricsWorld()
   stubs(on, w)

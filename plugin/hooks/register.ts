@@ -248,12 +248,13 @@ type Counts = {
 }
 type Metrics = {
   state: 'unread' | 'absent' | 'malformed' | 'ok'
+  path: string
   mtimeMs: number
   detail: string
   generated_at: string
   rows: { label: string; value: string; stale: boolean }[]
 }
-const NO_METRICS: Metrics = { state: 'unread', mtimeMs: -1, detail: '', generated_at: '', rows: [] }
+const NO_METRICS: Metrics = { state: 'unread', path: '', mtimeMs: -1, detail: '', generated_at: '', rows: [] }
 const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, in_session: 0, in_session_agents: [], queue: '', tasks: null, status: null, written_at: '', plugin_version: '', latest_version: '' }
 const SEMVER = /^\d+\.\d+\.\d+$/
 const TASK_KEY = /^projects\/([^/]+)\/tasks\/([^/]+)\.md$/
@@ -396,8 +397,8 @@ async function refreshCounts($: any, root: string, force: boolean): Promise<void
   counts = readCounts(text, m)
 }
 
-function readMetrics(text: unknown, m: number): Metrics {
-  const bad = (d: string): Metrics => ({ ...NO_METRICS, state: 'malformed', mtimeMs: m, detail: d })
+function readMetrics(text: unknown, path: string, m: number): Metrics {
+  const bad = (d: string): Metrics => ({ ...NO_METRICS, state: 'malformed', path, mtimeMs: m, detail: d })
   if (typeof text !== 'string') return bad('could not read ' + METRICS)
   let j: unknown
   try { j = JSON.parse(text) } catch { return bad(METRICS + ' is not valid JSON — the next metrics.sh run overwrites it') }
@@ -413,7 +414,7 @@ function readMetrics(text: unknown, m: number): Metrics {
     const v = typeof head[key] === 'string' ? clean(head[key]) : ''
     return { label, value: v || '?', stale: !!f && f.stale === true }
   })
-  return { state: 'ok', mtimeMs: m, detail: '', generated_at: str(o.generated_at), rows }
+  return { state: 'ok', path, mtimeMs: m, detail: '', generated_at: str(o.generated_at), rows }
 }
 async function refreshMetrics($: any, root: string, force: boolean): Promise<void> {
   const path = root + '/' + METRICS
@@ -425,11 +426,11 @@ async function refreshMetrics($: any, root: string, force: boolean): Promise<voi
     return
   }
   const m = typeof st.mtimeMs === 'number' ? st.mtimeMs : -2
-  if (!force && (metrics.state === 'ok' || metrics.state === 'malformed') && m === metrics.mtimeMs) return
+  if (!force && (metrics.state === 'ok' || metrics.state === 'malformed') && path === metrics.path && m === metrics.mtimeMs) return
   let text: unknown = null
   try { text = await $.fs.read(path) } catch { text = null }
   reads += 1
-  metrics = readMetrics(text, m)
+  metrics = readMetrics(text, path, m)
 }
 
 // org from the tracked config, the version /loopd:init stamped; either unreadable is ''.
@@ -1454,6 +1455,7 @@ function registerPane(on: any) {
       if (open) { try { await $.ui.close({ id: PANE }) } catch { /* already gone */ } }
       return {}
     }
+    view = 'projects'
     await reread($, true)
     let placed = false
     try { const r = await $.ui.open({ id: PANE, title: TITLE }); placed = !!(r && r.isPlaced === true) } catch { placed = false }
