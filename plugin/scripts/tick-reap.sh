@@ -2,7 +2,8 @@
 # tick-reap.sh — the launcher's one read: has the bg tick tick-spawn.sh recorded on the lock
 # finished? Run before every `tick-lock.sh acquire`. Releases the lock only on a COMMITTED
 # ledger close for the lock's minted id, or after closing the entry itself when the session
-# ended without one; then prints that close line, Needs-you from AWAITING.md and a COST: line.
+# ended without one; then prints that close line, Needs-you from AWAITING.md and a COST: line,
+# and appends the tick's own usage (`unknown` when UNKNOWN) to AB_TICK_COST.
 #
 #   tick-reap.sh [--instance DIR] [--wait]   (--wait: poll until the tick is not live)
 #
@@ -37,13 +38,28 @@ needs_you() {
 }
 
 cost() {
-  local u t n m
-  u="$(bash "$HERE/session-usage.sh" "$session" 2>/dev/null)" || return 0
-  t="$(sed -n 's/.* tokens=\([0-9]*\).*/\1/p' <<<"$u")"
-  n="$(sed -n 's/.* tools=\([0-9]*\).*/\1/p' <<<"$u")"
-  m="$(sed -n 's/.* ms=\([0-9]*\).*/\1/p' <<<"$u")"
-  u="$(bash "$HERE/agent-usage.sh" fmt --tokens "$t" --tools "$n" --duration-ms "$m")" || return 0
+  local u t="" n="" m=""
+  if u="$(bash "$HERE/session-usage.sh" "$session" 2>/dev/null)"; then
+    t="$(sed -n 's/.* tokens=\([0-9]*\).*/\1/p' <<<"$u")"
+    n="$(sed -n 's/.* tools=\([0-9]*\).*/\1/p' <<<"$u")"
+    m="$(sed -n 's/.* ms=\([0-9]*\).*/\1/p' <<<"$u")"
+    u="$(bash "$HERE/agent-usage.sh" fmt --tokens "$t" --tools "$n" --duration-ms "$m")" || u="usage UNKNOWN"
+  else u="usage UNKNOWN"; fi
+  [ "$u" = "usage UNKNOWN" ] && t=unknown n=unknown m=unknown
+  record_cost "$t" "$n" "$m"
   [ "$u" = "usage UNKNOWN" ] || echo "COST: $u"
+}
+
+# One row per reaped tick, this clone's only; the newest TICK_COST_ROWS kept. Never fails the reap.
+record_cost() {
+  local f="$inst/$AB_TICK_COST" d tmp
+  d="${f%/*}"
+  { mkdir -p "$d" && { [ -e "$d/.gitignore" ] || printf '*\n' > "$d/.gitignore"; } \
+    && printf '%s\t%s\t%s\t%s\t%s\n' "$tick" "$1" "$2" "$3" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$f" \
+    && [ "$(wc -l < "$f")" -gt "${TICK_COST_ROWS:-4320}" ] && tmp="$(mktemp "$f.XXXXXX")" \
+    && tail -n "${TICK_COST_ROWS:-4320}" "$f" > "$tmp" && mv "$tmp" "$f"; } 2>/dev/null
+  [ -z "${tmp:-}" ] || rm -f "$tmp" 2>/dev/null
+  return 0
 }
 
 # -> W (yes|no), KIDS (live in-flight tasks, or "unread"), JOB (the job record's own state)

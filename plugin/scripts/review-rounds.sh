@@ -141,6 +141,9 @@
 # `--verdicts` (qa), `<sha> <verdict>` per QA round. Everything else is stderr. No
 # PR text is echoed — the sibling quotes untrusted bodies where that is useful.
 #
+# `--cache <dir>` (count mode with `--repo`): a merged or closed PR's count is stored in
+# <dir>/<owner>__<name>__<n>.json and answered from there with no `gh` read; an open PR's never is.
+#
 # Verified by tests/review-rounds.test.sh.
 #
 # No `set -e`: a `grep` that finds nothing and a sibling that exits 4 are both ANSWERS
@@ -149,17 +152,18 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 usage() {
-  echo "Usage: $(basename "$0") <pr> --for coderabbit|qa [--last|--commits|--verdicts] [--repo <owner>/<name>] [--instance <bundle>]" >&2
+  echo "Usage: $(basename "$0") <pr> --for coderabbit|qa [--last|--commits|--verdicts] [--repo <owner>/<name>] [--instance <bundle>] [--cache <dir>]" >&2
   echo "       exit 0 under that reviewer's cap, 1 at or past it, 2 cannot answer" >&2
   exit 2
 }
 
-pr=""; repo=""; for=""; last=""; inst=""
+pr=""; repo=""; for=""; last=""; inst=""; cache=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --repo)     repo="${2:-}"; [ -n "$repo" ] || usage; shift 2 ;;
     --for)      for="${2:-}"; [ -n "$for" ] || usage; shift 2 ;;
     --instance) inst="${2:-}"; [ -n "$inst" ] || usage; shift 2 ;;
+    --cache)    cache="${2:-}"; [ -d "$cache" ] || usage; shift 2 ;;
     --last)     last=yes; shift ;;
     --commits)  last=all; shift ;;
     --verdicts) last=verdicts; shift ;;
@@ -188,6 +192,15 @@ CAP="$(bash "$(dirname "${BASH_SOURCE[0]:-$0}")/resolve-review-config.sh" --inst
   echo "error: $cap_key is unreadable in $inst — refusing (fail closed)" >&2
   exit 2
 }
+
+cfile=""
+case "$pr" in *[!0-9]*) ;; *) [ -n "$cache" ] && [ -n "$repo" ] && [ -z "$last" ] && cfile="$cache/${repo%%/*}__${repo#*/}__$pr.json" ;; esac
+if [ -n "$cfile" ] && rounds="$(jq -er --arg f "$for" '.rounds[$f] | numbers' "$cfile" 2>/dev/null)"; then
+  printf '%s\n' "$rounds"
+  [ "$rounds" -lt "$CAP" ] && { echo "ok: PR $pr ($repo) closed with $rounds $for round(s) (cached); $cap_key is $CAP." >&2; exit 0; }
+  echo "refuse: PR $pr ($repo) closed with $rounds $for round(s) (cached); $cap_key is $CAP." >&2
+  exit 1
+fi
 
 for tool in gh jq; do
   command -v "$tool" >/dev/null 2>&1 || {
@@ -246,7 +259,7 @@ R=()
 
 # --- the PR, once -------------------------------------------------------------
 raw="$(gh pr view "$pr" ${R[@]+"${R[@]}"} \
-       --json url,number,headRefOid,author 2>/dev/null)" || {
+       --json url,number,headRefOid,author,state 2>/dev/null)" || {
   echo "error: could not read PR $pr${repo:+ in $repo} — refusing (fail closed)" >&2
   exit 2
 }
@@ -474,6 +487,12 @@ while IFS= read -r sha; do
 
   [ -n "$counted" ] && { rounds=$((rounds + 1)); printf '%s\n' "$sha" >> "$TMPD/counted"; }
 done < "$TMPD/commits"
+
+pstate="$(printf '%s' "$raw" | jq -r '.state // ""' 2>/dev/null)"
+if [ -n "$cfile" ] && { [ "$pstate" = MERGED ] || [ "$pstate" = CLOSED ]; } && t="$(mktemp "$cfile.XXXXXX" 2>/dev/null)"; then
+  { jq -e objects "$cfile" 2>/dev/null || echo '{"v":1}'; } \
+    | jq --arg f "$for" --argjson n "$rounds" '.rounds[$f] = $n' > "$t" 2>/dev/null && mv "$t" "$cfile" || rm -f "$t"
+fi
 
 if [ "$last" = verdicts ]; then
   [ -f "$TMPD/verdicts" ] && cat "$TMPD/verdicts"

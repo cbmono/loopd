@@ -18,6 +18,10 @@ AB_SNAPSHOT="$AB_DIR/SNAPSHOT.json"
 # Per clone: the status line's numbers (counts.sh), rewritten on every redraw and read by the pane.
 AB_COUNTS="$AB_DIR/counts.json"
 AB_METRICS="$AB_DIR/METRICS.json"
+# Per clone: metrics.sh's gh reads, one <owner>_<repo>_<n>.json per PR a task names. Ignores itself (a `*` .gitignore).
+AB_PR_CACHE="$AB_DIR/.pr-cache"
+# Per clone: each reaped tick's own usage, one row per tick id (tick-reap.sh). Its directory ignores itself (a `*` .gitignore).
+AB_TICK_COST="$AB_DIR/.tick-cost/ticks.tsv"
 AB_AWAITING="$AB_DIR/AWAITING.md"
 AB_LEDGER="$AB_DIR/log.md"
 AB_INDEX="$AB_DIR/index.md"
