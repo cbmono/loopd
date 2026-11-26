@@ -948,23 +948,22 @@ if [ -n "$al_bad" ]; then
 elif [ -z "$al_mk" ]; then
   echo "  skip  script allowlist (not run from a plugin cache install)"
 elif [ "$al_exact" = yes ]; then
-  al_ver="${AL_ROOT##*/}"; al_ro=""
-  al_rows="$(awk 'NF { if ($1 !~ /^[A-Za-z0-9_.-]+\.sh$/ || ($2 != "read-only" && $2 != "writing")) exit 1
-                       print $2, $1 }' "$AL_ROOT/data/script-classes.txt" 2>/dev/null)" || al_rows=""
-  while read -r al_c al_n; do
-    [ -n "$al_n" ] || continue
-    [ -f "$AL_ROOT/scripts/$al_n" ] || { al_ro=""; break; }
-    [ "$al_c" = writing ] || al_ro="$al_ro$al_n
-"
+  al_ver="${AL_ROOT##*/}"; al_list="$AL_ROOT/data/script-classes.txt"
+  al_ro="$(bash "$AL_ROOT/scripts/script-classes.sh" read-only "$al_list" 2>/dev/null)" &&
+    al_wr="$(bash "$AL_ROOT/scripts/script-classes.sh" writing "$al_list" 2>/dev/null)" &&
+    [ "$(printf '%s\n' "$al_ro" "$al_wr" | grep -c .)" = "$(grep -c '[^[:space:]]' "$al_list")" ] || al_ro=""
+  while IFS= read -r al_n; do
+    case "$al_n" in "") ;; *[!A-Za-z0-9_.-]*|.*) al_ro="" ;; *) [ -f "$AL_ROOT/scripts/$al_n" ] || al_ro="" ;; esac
   done <<EOF
-$al_rows
+$al_ro
+${al_wr:-}
 EOF
   if [ -z "$al_ro" ]; then
     echo "  warn  script allowlist not changed: $AL_ROOT/data/script-classes.txt is missing, empty, unparseable or names a script that is not there." >&2
   elif ! command -v python3 >/dev/null 2>&1 && ! command -v jq >/dev/null 2>&1; then
     echo "  warn  script allowlist not changed: editing .claude/settings.local.json needs python3 or jq, and neither is here." >&2
   else
-    al_want="$(printf '%s' "$al_ro" | while IFS= read -r n; do printf 'Bash(%s/scripts/%s *)\n' "$AL_ROOT" "$n"; done)"
+    al_want="$(printf '%s\n' "$al_ro" | while IFS= read -r n; do printf 'Bash(%s/scripts/%s *)\n' "$AL_ROOT" "$n"; done)"
     al_found="$(bg_list "$AL_FILE" allow | al_scan)"
     al_newer="$(printf '%s\n' "$al_found" | awk -F'\t' '$1 == "newer" { print $2 }')"
     al_stale="$(printf '%s\n' "$al_found" | awk -F'\t' '$1 == "stale" { print $2 }')"
