@@ -104,7 +104,7 @@ your change touches shared machinery every harness loads, and say why in the PR 
 
 ## The core
 
-`tests/run.sh` always runs these eleven, because no changed path can be expected to name
+`tests/run.sh` always runs these twelve, because no changed path can be expected to name
 them — they read `plugin/` wholesale or reach their subject indirectly:
 
 | Harness | Why it cannot be derived |
@@ -115,6 +115,7 @@ them — they read `plugin/` wholesale or reach their subject indirectly:
 | `commit-as-guard`, `companion-plugins` | the two-human-authority guard (ai-bridge-v2/task-030). Both are also reachable by derivation and stay here anyway: the guard's behaviour depends on `plugin/scripts/resolve-autonomy.sh`, which `commit-as-guard.test.sh` never names |
 | `harness-read-paths` | it reads the whole `tests/` tree and resolves every literal path against the plugin tree — the one diff that names none of its own subject (ai-bridge-v2/task-029) |
 | `gate-files-complete` | it walks every file the merge gate executes, sources or reads; the diff it guards adds a script or manifest the gate reaches, which it cannot name in advance (narrow-merge-gate-files/task-001) |
+| `script-classes` | it compares `plugin/data/script-classes.txt` with every `plugin/scripts/*.sh`; the diff it guards adds a script, which it cannot name in advance (quote-readonly-script-permission-rules/task-001) |
 | `deprecation-windows` | it scans all of `plugin/`, `README.md`, `.claude/rules/`, `docs/operations.md` and `docs/conventions.md` for a window with no `until <x.y.z>`; the line that adds one names no harness |
 
 Everything else is **derived**: a harness is selected because it *names* a changed path

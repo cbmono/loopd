@@ -48,6 +48,7 @@ CORE=(
   tests/companion-plugins.test.sh
   tests/harness-read-paths.test.sh
   tests/gate-files-complete.test.sh
+  tests/script-classes.test.sh
   tests/deprecation-windows.test.sh
 )
 

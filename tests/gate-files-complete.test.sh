@@ -21,6 +21,7 @@
 #   - also here, because both files are gate files: step-4-advance.md and AUTONOMY.md precondition
 #     5 state the yolo unknown-hold rule (a merge row on the first exit 2, the reason in the close).
 # Usage: gate-files-complete.test.sh [<tree>] — checks <tree> alone, exit 1 on a gap.
+# Sourced, it defines refs() and norm() and runs nothing (script-classes.test.sh).
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -142,6 +143,7 @@ check_tree() { # <tree> — prints each gap, returns 1 on any
   return "$bad"
 }
 
+[ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 if [ $# -gt 0 ]; then check_tree "$1"; exit; fi
 
 pass=0; fail=0
