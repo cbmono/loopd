@@ -930,8 +930,8 @@ al_write() { # <missing entries, one per line> -> the rewritten file on stdout, 
 }
 al_scan() { # stdin: allow rules -> "stale|newer<TAB><rule>" for the rules this writer owns
   P="$al_mk/" L="${PLUGIN_ROOT%/*}/" V="$al_ver" awk '
-    function newer(a, b,   x, y, i, n) {
-      n = split(a, x, "."); if (split(b, y, ".") > n) n = length(y)
+    function newer(a, b,   x, y, i, n, m) {
+      n = split(a, x, "."); m = split(b, y, "."); if (m > n) n = m
       for (i = 1; i <= n; i++) if (x[i] + 0 != y[i] + 0) return x[i] + 0 > y[i] + 0
       return 0 }
     BEGIN { P = ENVIRON["P"]; L = ENVIRON["L"]; V = ENVIRON["V"] }

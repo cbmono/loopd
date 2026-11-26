@@ -6,7 +6,8 @@
 # whose path is a variable (plugin/seed/CLAUDE.md's old `AB="$(ls -d …)"; "$AB/x.sh"`),
 # a `~` path, or one chained to `$?`. On 2.1.332 no rule matched a path holding a space;
 # `Bash(<space-free abs path>/<version>/scripts/<name>.sh *)` did, the form a spaced root
-# gets per read-only script. `${CLAUDE_PLUGIN_ROOT}` is the one placeholder allowed. Scans plugin/{skills,tick-steps,agents,seed}/**/*.md and plugin/hooks/hooks.json;
+# gets per read-only script. `${CLAUDE_PLUGIN_ROOT}` is the one placeholder allowed.
+# Scans plugin/{skills,tick-steps,agents,seed}/**/*.md and plugin/hooks/hooks.json;
 # there is no plugin/commands/.
 set -uo pipefail
 

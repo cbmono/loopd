@@ -123,8 +123,6 @@ for blank in "blank line after [" "no blank line"; do
   [ "$PY" = no ] || ok "the filled file parses as JSON ($blank)" "$(yn json "$L")" yes
 done
 
-# A plugin root with whitespace (a profile's `plugins` linked to the space-free cache) gets one
-# exact-version rule per read-only script, on the real path (space-free-path-measurement.md).
 SPD="$TMP/home/Library/Application Support/profile"; mkdir -p "$SPD"
 ln -s "$TMP/home/.claude/plugins" "$SPD/plugins"
 SP="$SPD/plugins/cache/mk/${PN}"
