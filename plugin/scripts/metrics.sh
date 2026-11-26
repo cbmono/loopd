@@ -67,7 +67,7 @@ awk "$AWK_LIB"'
     s = $0
     while (match(s, /merged [A-Za-z0-9._\/-]+#[0-9]+ under yolo/)) {
       m = substr(s, RSTART + 7, RLENGTH - 18); split(m, mm, "#"); ow = ""
-      if (index(mm[1], "/")) { ow = mm[1]; sub(/\/.*/, "", ow); sub(/.*\//, "", mm[1]) }
+      ns = split(mm[1], seg2, "/"); if (ns >= 2) { ow = seg2[ns - 1]; mm[1] = seg2[ns] }
       printf "{\"k\":\"ym\",\"owner\":%s,\"repo\":%s,\"n\":%d}\n", q(ow), q(mm[1]), mm[2]; s = substr(s, RSTART + RLENGTH)
     }
     next

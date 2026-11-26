@@ -11,7 +11,7 @@ board. Procedures here; the reasoning behind each one is linked.
 
 | Half | What it carries | Scope | Installed / refreshed by |
 |---|---|---|---|
-| the **plugin** (`loopd`) | every slash command — `/loopd:dispatch`, `:new-project`, `:close-project`, `:answer`, `:board`, `:fanout`, `:handoff`, `:init`, `:update`, `:prune-wt`, `:welcome`, `:whats-up` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd` at **user scope** — core with its three mods; `loopd-yolo` is a separate, deliberate install; `/loopd:update` to update it later |
+| the **plugin** (`loopd`) | every slash command — `/loopd:dispatch`, `:new-project`, `:close-project`, `:answer`, `:board`, `:fanout`, `:handoff`, `:init`, `:update`, `:prune-wt`, `:welcome`, `:whats-up`, `:metrics` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd` at **user scope** — core with its three mods; `loopd-yolo` is a separate, deliberate install; `/loopd:update` to update it later |
 | the **bundle** (`plugin/seed/` content + your data) | `projects/`, `knowledge/`, `objectives/`, `instance.config*.json`, the seed docs (`CLAUDE.md`, `README.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, `.claude/settings.json`), the managed `.gitignore` lines, and the `repos/` links | **per bundle** | `/loopd:init <dir>` |
 
 **THE SECOND HALF NO LONGER CARRIES MACHINERY, AND THAT IS THE CHANGE.** A bundle used to

@@ -154,3 +154,50 @@ stands: `?` is unknown and `—` is no source.
 
 **No backfill.** A metric logged for the first time starts empty, so its trend and
 `--since` start empty too. Nothing reconstructs it from history.
+
+## The report
+
+`/loopd:metrics` runs `plugin/scripts/metrics-report.sh` from the bundle root and relays its
+markdown. The script reads `METRICS.json`, `instance.config.json` and the ledger. It calls no
+`gh` or `git`, writes nothing and recomputes nothing. It needs `jq`, never `python3`.
+
+* **Off.** `board: false`, or no `METRICS.json`, prints that metrics are off and names the
+  `board` switch. Exit 0.
+* **Stale.** The report compares `generated_at` (UTC) with the newest full tick in the ledger:
+  an `open:` and a `close:` line at one timestamp. An IDLE line and a reaped tick's close have
+  no pair, so they are not a refresh. A close line pulled from another clone counts. Older ⇒
+  one line saying the figures refresh on the next tick that changes something. There is no
+  refresh verb.
+* **Named errors.** Without `jq`, or outside a bundle root: exit 2. An empty, truncated,
+  non-object or wrong-`schema_version` file: exit 4.
+* **Flags.** Invalid input exits 3.
+  * `--project <slug>` narrows the project and task tables. A slug not in `projects` exits 3;
+    a closed project whose folder was removed is still there. Months stay bundle-wide.
+  * `--since <YYYY-MM|YYYY-MM-DD>` (UTC) keeps the months from that one on, and the tasks
+    created in them. A day selects its month. A future month prints empty tables.
+  * The families and the suggestions are bundle-wide, all time, and ignore both flags.
+* **Size.** At most 25 projects, 25 tasks (newest first), 24 months and 10 roles. Each
+  table names what it cut. Data strings are stripped of control characters and `|`, then
+  cut at 40–60 characters.
+* **Markers.** `—  source: none` and `? unknown` print as named, never as 0. A family with
+  `stale: true` carries `(stale)`. A trend shows the last three months and is omitted until
+  three exist. The no-backfill line always prints.
+
+### Suggested changes
+
+A rule fires when its figure is a number past the threshold. A `null` or `source: none`
+figure never fires. At most three print. Fewer fire ⇒ fewer print; none ⇒ one line saying
+so.
+
+| # | Metric | Fires when | Suggests |
+|---|---|---|---|
+| 1 | `idle_tick_spend.idle_share` | ≥ 0.5 | a longer `/loopd:dispatch` gap |
+| 2 | `delegation.share_role_agents` | < 0.5 | moving work from supervision to role agents |
+| 3 | `tokens.merged_prs.fix_rounds_per_pr` | ≥ 1 | tighter criteria before promoting |
+| 4 | `blocked_by_cause.causes.owner.tasks` | ≥ 3 | clearing the queue with `/loopd:answer` |
+| 5 | `blocked_by_cause.causes.stalled_agent.tasks` | ≥ 2 | looking at stalled tasks first |
+| 6 | `time.mean_queued_hours` | ≥ 24 | dispatching sooner after promotion |
+| 7 | `kb_efficiency` not-cited ÷ cited mean rounds, both groups ≥ 3 tasks | ≥ 1.25 | citing Findings in more briefs (an estimate) |
+
+**Ranking.** Rules rank by how far past the threshold they are: value ÷ threshold, or
+threshold ÷ value for rule 2. The lower rule number wins a tie.
