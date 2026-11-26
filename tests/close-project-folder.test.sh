@@ -578,6 +578,36 @@ run "$ROOT" bare --apply
 assert "a retained project with no deliverable writes no stanza" "$(gone "$ROOT/projects/CLOSED.md")"
 assert "…and says so"                                  "$(has 'INDEX  no entry' "$OUT")"
 
+new_instance "$ROOT" adoption "retain: true"$'\n'
+C="$ROOT/projects/CLOSED.md"
+echo late > "$ROOT/projects/adoption/deliverables/late.md"
+sed -i.bak 's|^artifacts: \[ \(.*\) \]$|artifacts: [ \1, /projects/adoption/deliverables/late.md ]|' "$ROOT/projects/adoption/tasks/task-001.md"
+rm -f "$ROOT/projects/adoption/tasks/task-001.md.bak"
+run "$ROOT" adoption --apply
+assert "a deliverable not committed at the pinned HEAD gets no row" "$(hasnt 'late.md' "$(cat "$C")")"
+assert "…and is named in a warning"                    "$(has 'not committed at' "$OUT")"
+assert "…while the committed ones are indexed (3)"     "$(eq "$(grep -c '^- deliverable: ' "$C")" 3)"
+git -C "$ROOT" reset -q -- projects/CLOSED.md
+run "$ROOT" adoption --apply
+assert "an unstaged CLOSED.md left by a failed run is staged on retry" \
+  "$(yes_if grep -qx 'projects/CLOSED.md' <<<"$(git -C "$ROOT" diff --cached --name-only)")"
+assert "…and the commit instruction names it"          "$(has "Name projects/CLOSED.md in the commit's paths" "$OUT")"
+( cd "$ROOT" && git_c add -A . >/dev/null 2>&1 && git_c commit -qm "close adoption" >/dev/null 2>&1 )
+run "$ROOT" adoption --apply
+assert "…and a re-close once it is committed indexes it" "$(yes_if grep -qF '/projects/adoption/deliverables/late.md' "$C")"
+
+( cd "$ROOT" && git_c commit -qm "re-close" >/dev/null 2>&1 )
+
+printf '\n## later\n\n- closed: 2026-01-01\n- pinned: abc\n- outcome: x\n- deliverable: `/projects/later/a.md`\n' >> "$C"
+LATER="$(sed -n '/^## later$/,$p' "$C")"
+rm -f "$ROOT/projects/adoption/tasks/task-001.md" "$ROOT/projects/adoption/tasks/task-002.md"
+( cd "$ROOT" && git_c add -A . >/dev/null 2>&1 && git_c commit -qm "drop artifacts" >/dev/null 2>&1 )
+run "$ROOT" adoption --apply
+assert "a re-close whose stamp became empty removes the stanza" "$(eq "$(grep -cxF '## adoption' "$C")" 0)"
+assert "…keeps the other stanza intact"                "$(eq "$(sed -n '/^## later$/,$p' "$C")" "$LATER")"
+assert "…leaves no doubled blank line behind"          "$(no_if awk 'NR > 1 && p == "" && $0 == "" { f = 1 } { p = $0 } END { exit !f }' "$C")"
+assert "…and stages CLOSED.md"                         "$(yes_if grep -qx 'projects/CLOSED.md' <<<"$(git -C "$ROOT" diff --cached --name-only)")"
+
 CMD="$TPL/plugin/skills/close-project/SKILL.md"
 PM="$TPL/plugin/tick-steps/step-6-close-projects.md"
 SCH="$TPL/plugin/seed/SCHEMA.md"

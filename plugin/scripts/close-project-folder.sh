@@ -24,7 +24,8 @@
 #   retain: true         ⇒  the folder STAYS. It is frozen first:
 #                             · `deliverable_paths:` is stamped into project.md,
 #                             · its `projects/CLOSED.md` entry is written, or rewritten
-#                               in place when the stamp changed, pinned at HEAD, and
+#                               in place when the stamp changed, pinned at HEAD (only
+#                               deliverables committed there), and
 #                             · working files are pruned (below).
 #
 # WHY RETENTION IS SAFE NOW. Removal never was about disk — it was about the /<plugin>:dispatch
@@ -260,14 +261,17 @@ closed_refs() {
   ' "$CLOSED_MD"
 }
 
-replace_closed_entry() { # <sha> <org/repo>  — deliverable refs on stdin
-  local body tmp
-  body="$(closed_stanza "$@")"
+rewrite_closed_entry() { # <stanza, or empty to remove it>
+  local tmp
   tmp="$(temp_beside "$CLOSED_MD")" || return 1
-  BODY="$body" awk -v h="## $SLUG" '
-    $0 == h { if (!w) print ENVIRON["BODY"]; w = 1; skip = 1; next }
+  BODY="$1" awk -v h="## $SLUG" '
+    function flush() { while (blanks > 0) { print ""; blanks-- } }
+    $0 == h { if (!w && ENVIRON["BODY"] != "") { flush(); print ENVIRON["BODY"] } else blanks = 0; w = 1; skip = 1; next }
     skip && /^## / { skip = 0; print "" }
-    !skip { print }
+    skip { next }
+    /^$/ { blanks++; next }
+    { flush(); print }
+    END { flush() }
   ' "$CLOSED_MD" > "$tmp" && mv "$tmp" "$CLOSED_MD"
 }
 
@@ -433,17 +437,28 @@ if [[ $APPLY -eq 1 ]]; then
 fi
 
 # ---- 2. the closed index
-SHA=""; NWO=""; INDEX_ACT=""
+SHA=""; NWO=""; INDEX_ACT=""; PINNED=""; HAS=0
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   SHA="$(git rev-parse --verify HEAD 2>/dev/null || true)"
   NWO="$(gh_slug || true)"
 fi
-if [[ -n "$DLV" && -n "$SHA" ]]; then
-  n_dlv="$(printf '%s\n' "$DLV" | grep -c . || true)"
-  if ! grep -qxF "## $SLUG" "$CLOSED_MD" 2>/dev/null; then
+if [[ -n "$SHA" ]]; then
+  while IFS= read -r ref; do
+    [[ -n "$ref" ]] || continue
+    if git cat-file -e "$SHA:${ref#/}" 2>/dev/null; then
+      PINNED="$PINNED${PINNED:+$'\n'}$ref"
+    else
+      note "WARN" "not committed at ${SHA:0:7}, left out of $CLOSED_MD: $ref — commit it, then re-close."
+    fi
+  done <<<"$DLV"
+  if grep -qxF "## $SLUG" "$CLOSED_MD" 2>/dev/null; then HAS=1; fi
+fi
+if [[ -n "$PINNED" ]]; then
+  n_dlv="$(printf '%s\n' "$PINNED" | grep -c . || true)"
+  if [[ $HAS -eq 0 ]]; then
     INDEX_ACT=append
     note "INDEX" "$CLOSED_MD += ## $SLUG — $n_dlv deliverable(s) pinned at ${SHA:0:7}"
-  elif [[ "$(closed_refs)" != "$DLV" ]]; then
+  elif [[ "$(closed_refs)" != "$PINNED" ]]; then
     INDEX_ACT=refresh
     note "INDEX" "$CLOSED_MD ## $SLUG refreshed — $n_dlv deliverable(s) pinned at ${SHA:0:7}"
   else
@@ -453,20 +468,30 @@ if [[ -n "$DLV" && -n "$SHA" ]]; then
     note "WARN" "${SHA:0:7} is on no remote branch yet — push before these links resolve."
   fi
   [[ -z "$INDEX_ACT" || -n "$NWO" ]] || note "WARN" "no github remote on this clone — recording \`git show\` restores, not permalinks."
-elif [[ -n "$DLV" ]]; then
+elif [[ $HAS -eq 1 ]]; then
+  INDEX_ACT=remove
+  note "INDEX" "$CLOSED_MD -= ## $SLUG — no deliverable left to index."
+elif [[ -n "$DLV" && -z "$SHA" ]]; then
   note "INDEX" "no entry — no git HEAD to pin $SLUG's deliverables at."
+elif [[ -n "$DLV" ]]; then
+  note "INDEX" "no entry — none of $SLUG's deliverables is committed at ${SHA:0:7}."
 else
   note "INDEX" "no entry — $SLUG declared no deliverable that exists on disk."
 fi
+if [[ -z "$INDEX_ACT" && $HAS -eq 1 ]] && { ! git diff --quiet -- "$CLOSED_MD" \
+     || ! git ls-files --error-unmatch -- "$CLOSED_MD" >/dev/null 2>&1; }; then
+  INDEX_ACT=stage
+  note "INDEX" "$CLOSED_MD carries an unstaged change — staging it."
+fi
 if [[ $APPLY -eq 1 && -n "$INDEX_ACT" ]]; then
-  if [[ "$INDEX_ACT" == append ]]; then
-    printf '%s\n' "$DLV" | append_closed_entry "$SHA" "$NWO"
-  else
-    printf '%s\n' "$DLV" | replace_closed_entry "$SHA" "$NWO" || {
-      echo "close-project-folder: could not rewrite ## $SLUG in $CLOSED_MD." >&2
-      exit 1
-    }
-  fi
+  case "$INDEX_ACT" in
+    append) printf '%s\n' "$PINNED" | append_closed_entry "$SHA" "$NWO" ;;
+    refresh) rewrite_closed_entry "$(printf '%s\n' "$PINNED" | closed_stanza "$SHA" "$NWO")" ;;
+    remove) rewrite_closed_entry "" ;;
+  esac || {
+    echo "close-project-folder: could not write ## $SLUG into $CLOSED_MD." >&2
+    exit 1
+  }
   git add -- "$CLOSED_MD"
 fi
 

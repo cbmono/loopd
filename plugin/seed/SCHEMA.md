@@ -1622,8 +1622,10 @@ in this order:
      is needed.
    * **A retained project keeps its folder and gets a stanza too**, pinned the same way.
      A re-close rewrites that one stanza in place when its stamped deliverables changed
-     and leaves the file byte-identical when they did not. The board lists it once,
-     with the projects, never also as a Closed row.
+     and leaves the file byte-identical when they did not; a stamp that became empty
+     removes the stanza. A deliverable not yet committed at HEAD is left out with a
+     warning, so commit it and re-close. The board lists it once, with the projects,
+     never also as a Closed row.
    * Each row carries a **one-paste restore command** beside its link, because GitHub
      serves an HTML deliverable as source and `raw.githubusercontent.com` 404s
      unauthenticated on a private repo.
