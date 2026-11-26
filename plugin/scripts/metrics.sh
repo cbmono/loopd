@@ -161,11 +161,11 @@ projs=("$root"/projects/*/project.md)
   fm == 1 && /^autonomy:/ { v = $2; gsub(/["\047]/, "", v); printf "{\"k\":\"auto\",\"slug\":%s,\"mode\":%s}\n", q(slug), q(v) }' \
   "${projs[@]}" >> "$rec" || die 2 "cannot read the project documents"
 
-if [ -r "$root/$AB_TICK_COST" ]; then
+if [ -r "$root/$AB_TICK_COST/ticks.tsv" ]; then
   awk "$AWK_LIB"'
     function num(s) { return s ~ /^[0-9]+$/ ? s : "null" }
-    NF >= 4 && $1 ~ /^tick-/ { printf "{\"k\":\"cost\",\"id\":%s,\"tokens\":%s}\n", q($1), num($2) }' FS='\t' "$root/$AB_TICK_COST" >> "$rec" \
-    || die 2 "cannot read $AB_TICK_COST"
+    NF >= 4 && $1 ~ /^tick-/ { printf "{\"k\":\"cost\",\"id\":%s,\"tokens\":%s}\n", q($1), num($2) }' FS='\t' "$root/$AB_TICK_COST/ticks.tsv" >> "$rec" \
+    || die 2 "cannot read $AB_TICK_COST/ticks.tsv"
 fi
 
 cache="$root/$AB_PR_CACHE"; ghfail=false; reads=0

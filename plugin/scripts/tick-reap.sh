@@ -3,7 +3,7 @@
 # finished? Run before every `tick-lock.sh acquire`. Releases the lock only on a COMMITTED
 # ledger close for the lock's minted id, or after closing the entry itself when the session
 # ended without one; then prints that close line, Needs-you from AWAITING.md and a COST: line,
-# and appends the tick's own usage (`unknown` when UNKNOWN) to AB_TICK_COST.
+# and appends the tick's own usage (`unknown` when UNKNOWN) to AB_TICK_COST/ticks.tsv.
 #
 #   tick-reap.sh [--instance DIR] [--wait]   (--wait: poll until the tick is not live)
 #
@@ -50,10 +50,9 @@ cost() {
   [ "$u" = "usage UNKNOWN" ] || echo "COST: $u"
 }
 
-# One row per reaped tick, this clone's only; the newest TICK_COST_ROWS kept. Never fails the reap.
 record_cost() {
-  local f="$inst/$AB_TICK_COST" d tmp
-  d="${f%/*}"
+  local d="$inst/$AB_TICK_COST" f tmp
+  f="$d/ticks.tsv"
   { mkdir -p "$d" && { [ -e "$d/.gitignore" ] || printf '*\n' > "$d/.gitignore"; } \
     && printf '%s\t%s\t%s\t%s\t%s\n' "$tick" "$1" "$2" "$3" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$f" \
     && [ "$(wc -l < "$f")" -gt "${TICK_COST_ROWS:-4320}" ] && tmp="$(mktemp "$f.XXXXXX")" \
