@@ -20,11 +20,11 @@
 # THE TWO HALVES HAVE TWO OWNERS, AND THAT IS WHAT THE CHECK IS FOR. The style FILE is a
 # seed document: a stamp delivers it to any bundle that lacks it, because a stamp seeds
 # what is absent. The settings KEY arrives by refresh-seeds.sh's merge of the seed
-# settings.json, so a bundle stamped before 2026-10-28 lacks it where that merge conflicted,
-# and then the style is a file nothing selects. The `output-style` welcome row says which
-# half is missing and prints the one-line fix; it writes neither (config is the human's; a
-# style choice is per bundle). A different style
-# chosen on purpose is a choice, reported as ✓ — section 2 asserts all four states.
+# settings.json, so a bundle stamped before 2026-10-28 lacks it where that merge reported
+# CONFLICT or UNKNOWN or the key was removed by hand, and then the style is a file nothing
+# selects. The `output-style` welcome row says which half is missing and prints the one-line
+# fix; it writes neither (config is the human's; a style choice is per bundle). A different
+# style chosen on purpose is a choice, reported as ✓ — section 2 asserts all four states.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail

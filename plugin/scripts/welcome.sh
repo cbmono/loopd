@@ -991,8 +991,8 @@ check_review_config() {
 # report in a bundle is written to. Two files, two owners: the style FILE is seed content, so a
 # stamp delivers it to a bundle that lacks it (seeds only what is absent); the settings KEY
 # is in the seed settings.json, which refresh-seeds.sh merges into a stamped bundle, so one
-# stamped before 2026-10-28 lacks it until that merge lands clean — and without it the
-# style is a file nothing selects. This row says which of
+# stamped before 2026-10-28 lacks it until that merge lands clean, and a key the bundle
+# removed stays removed — and without it the style is a file nothing selects. This row says which of
 # the two is missing and prints the one-line fix. It writes neither: config files are the
 # human's (CHECK 4), and a style selection is a per-bundle choice this script must not make.
 # A DIFFERENT style selected on purpose is a choice, not a problem — reported as ✓ with the
@@ -1025,7 +1025,7 @@ PY
       return 0 ;;
     "")
       warn "output style: .claude/output-styles/brief.md is here but .claude/settings.json selects no outputStyle"
-      hint "add \"outputStyle\": \"Brief\" to $ROOT/.claude/settings.json (or /${PLUGIN_NAME}:init $ROOT — its seed merge delivers the key unless it conflicts)"
+      hint "add \"outputStyle\": \"Brief\" to $ROOT/.claude/settings.json (a bundle stamped before 2026-10-28 can get it from /${PLUGIN_NAME}:init's seed merge; a CONFLICT, an UNKNOWN base or a key removed by hand needs this edit)"
       return "$_warned" ;;
     *)
       good "output style: $sel — a choice of this bundle's own (the seed's Brief is at .claude/output-styles/brief.md)"
