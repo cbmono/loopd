@@ -1663,6 +1663,21 @@ matches the command text, so it covers `<abs>/scripts/x.sh args` and never a `~`
 `$(…)`-derived path, a `; echo "EXIT=$?"` tail, or a rule mixing a mid-pattern `*` with
 `:*` — `…/scripts/*.sh:*` matches nothing at all.
 
+**A plugin root with whitespace** (a profile under `Application Support`) gets different
+rules: **no allow rule matches a call whose script path holds a space**, in any form —
+unquoted, single-quoted, or the rule Claude Code saves on "don't ask again". So the stamp
+resolves the root's real path (`pwd -P`, the space-free cache a profile's `plugins` links to)
+and writes **one exact-version rule per `read-only` script** of `plugin/data/script-classes.txt`,
+plain call form only: `Bash(<space-free abs path>/<version>/scripts/<name>.sh *)`. Measured
+on Claude Code 2.1.332 (2026-11-26) to match a call with arguments, with none and inside
+`cd <bundle> && <call>`; the `bash `-prefixed form was not measured and gets no rule. A
+`writing` script gets none, so it stays the classifier's. The stamp removes only rules it
+wrote on that marketplace's prefix — the wildcard pair on either path and a rule naming
+another version — keeps the old ones and warns on a missing, empty or unparseable list, writes
+nothing when the real path still holds whitespace or `' $ & ; #`, never replaces rules naming a
+newer version, and needs `python3` or `jq`. Shipped call sites still name `${CLAUDE_PLUGIN_ROOT}`,
+so these rules match only a call made by the real path.
+
 ### A stable scripts path, for your terminal only
 
 The scripts directory is version-pinned, so a literal `PATH` entry rots at the next plugin
@@ -1797,7 +1812,10 @@ the command" line; given the old rule, the same session printed it.
 Three traps the 2026-10-01 run found:
 
 - **Never put a quote character in a rule.** A multi-line `"…"` brief is matched as if
-  re-quoted: `'*` matches it and `"*` does not. The `' *` rule matched no form at all.
+  re-quoted: `'*` matches it and `"*` does not. The `' *` rule matched no form at all. On
+  2026-11-26 (Claude Code 2.1.332) no rule — unquoted, single-quoted or self-saved — matched
+  a script path holding a space; an exact-version rule on the space-free real path did
+  ([Per-instance settings](#per-instance-settings)).
 - **`ai-bridge:*` at the END of a rule is the legacy `:*` prefix form**, so it matches
   nothing; mid-rule it is an ordinary wildcard.
 - **`cd <worktree> && claude --bg …` is judged in two halves.** The `claude` half matches
