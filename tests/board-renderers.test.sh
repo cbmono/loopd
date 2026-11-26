@@ -1200,8 +1200,6 @@ NOCLH="$TMP/nocl-board.html"
 assert "a snapshot with NO \`closed\` key renders the page" "$(yes_if test -s "$NOCLH")"
 assert "…and no Closed section at all"                     "$(fhasnt 'Closed · ' "$NOCLH")"
 
-# A RETAINED project keeps its folder AND gets a CLOSED.md stanza, so it reaches the
-# snapshot twice. The board lists it once, from `projects`, never also as a Closed row.
 DUP="$TMP/group/_ai-bridge-dup"; ONE="$TMP/group/_ai-bridge-one"
 mkdir -p "$DUP/$AB_DIR" "$ONE/$AB_DIR"
 python3 - "$CL/$AB_SNAPSHOT" "$DUP/$AB_SNAPSHOT" "$ONE/$AB_SNAPSHOT" <<'PY'

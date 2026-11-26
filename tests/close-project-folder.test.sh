@@ -558,7 +558,6 @@ assert "…and says it is unchanged"                     "$(has '## adoption unc
 run "$ROOT" adoption --apply
 assert "an unchanged re-close at a later commit leaves CLOSED.md byte-identical" "$(yes_if cmp -s "$C" "$TMP/closed.first")"
 
-# In place: a later stanza must survive, after this one, untouched.
 printf '\n## later\n\n- closed: 2026-01-01\n- pinned: abc\n- outcome: x\n- deliverable: `/projects/later/a.md`\n' >> "$C"
 sed -i.bak 's|^artifacts: \[ \(.*\) \]$|artifacts: [ \1, /projects/adoption/deliverables/handout.pdf ]|' "$ROOT/projects/adoption/tasks/task-001.md"
 rm -f "$ROOT/projects/adoption/tasks/task-001.md.bak"
