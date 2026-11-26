@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
 # metrics.test.sh — plugin/scripts/metrics.sh derives .loopd/METRICS.json from a fixture
-# bundle: one computed value per file-sourced family, `source: none` and unknown never a 0,
-# the board switch, the atomic write, the key allowlist and a wall-time budget on a fixture
-# sized to a real bundle. Schema: docs/metrics.md. Reasoning: loopd-usage-metrics/task-001.
+# bundle and a stubbed `gh`: one computed value per family, unknown never a 0, the gh cache
+# (0 calls once every PR is closed), stale figures kept offline, the tick-cost join, the board
+# switch, the atomic write, the key allowlist and wall-time budgets on a fixture sized to a
+# real bundle. Schema: docs/metrics.md. Reasoning: loopd-usage-metrics/task-001, task-004.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,6 +18,52 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-62s (%s)\n' "$1" "$2"; pass=$(
 command -v jq >/dev/null 2>&1 || { echo "metrics.test: jq is required" >&2; exit 2; }
 
 export CLAUDE_CONFIG_DIR="$TMP/config" METRICS_NOW=2026-11-01T00:00:00Z
+
+# The host: `pr view <n>` answers $GHFX/view-<n>.json (honouring --jq), else a 404 on stderr;
+# `api` answers $GHFX/<commits|reviews|rcomments|icomments>-<n>.json; GH_OFFLINE fails all.
+GHFX="$TMP/ghfx"; mkdir -p "$TMP/bin" "$GHFX"
+cat > "$TMP/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+echo "$*" >> "$GHFX/calls"
+[ -n "${GH_OFFLINE:-}" ] && { echo "error connecting to api.github.com" >&2; exit 1; }
+jqf=""; prev=""; for a in "$@"; do [ "$prev" = --jq ] && jqf="$a"; prev="$a"; done
+out() { [ -f "$1" ] || { echo "GraphQL: Could not resolve to a PullRequest" >&2; exit 1; }
+        if [ -n "$jqf" ]; then jq -r "$jqf" "$1"; else cat "$1"; fi; exit 0; }
+case "$1 $2" in
+  "pr view") out "$GHFX/view-$3.json" ;;
+  "api graphql") echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}'; exit 0 ;;
+esac
+for a in "$@"; do case "$a" in
+  */pulls/*/commits*) n="${a#*/pulls/}"; out "$GHFX/commits-${n%%/*}.json" ;;
+  */pulls/*/reviews*) n="${a#*/pulls/}"; out "$GHFX/reviews-${n%%/*}.json" ;;
+  */pulls/*/comments*) n="${a#*/pulls/}"; out "$GHFX/rcomments-${n%%/*}.json" ;;
+  */issues/*/comments*) n="${a#*/issues/}"; out "$GHFX/icomments-${n%%/*}.json" ;;
+esac; done
+exit 99
+STUB
+chmod +x "$TMP/bin/gh"; export GHFX PATH="$TMP/bin:$PATH"
+calls() { : > "$GHFX/calls"; }
+ncalls() { grep -c . "$GHFX/calls" | tr -d ' '; }
+CRB='"user":{"login":"coderabbitai[bot]","type":"Bot"}'
+ghpr() { # <n> <state> <created> <merged|null> <last commit> <last review> <x-rows>
+  local m=null; [ "$4" = null ] || m="\"$4\""
+  jq -n --argjson n "$1" --arg s "$2" --arg c "$3" --argjson m "$m" --arg lc "$5" --arg lr "$6" --argjson x "$7" '
+    {number: $n, url: "https://github.com/example-user-007/widget/pull/\($n)", state: $s, createdAt: $c, mergedAt: $m,
+     closedAt: $m, mergedBy: {login: "example-user-007"}, author: {login: "example-user-007"}, headRefOid: ("b" * 40),
+     commits: [{committedDate: $lc}], reviews: [{submittedAt: $lr}],
+     body: ("## Description\n\n| C | ✓ | V |\n|---|---|---|\n" + ("| b | ✗ | later |\n" * $x))}' > "$GHFX/view-$1.json"
+  printf '[]\n' > "$GHFX/icomments-$1.json"
+}
+cr_rounds() { # <n> <rounds> <inline findings> — one CodeRabbit review per commit
+  local i=0 c="[" r="["
+  while [ "$i" -lt "$2" ]; do i=$((i+1)); sha="$(printf '%040d' "$1$i")"
+    c="$c${c#[}{\"sha\":\"$sha\"}"; c="${c%\}}},"; r="$r{$CRB,\"state\":\"COMMENTED\",\"commit_id\":\"$sha\",\"body\":\"One nit.\"},"; done
+  printf '%s]\n' "${c%,}" > "$GHFX/commits-$1.json"; printf '%s]\n' "${r%,}" > "$GHFX/reviews-$1.json"
+  jq -n --argjson k "$3" "[range(\$k) | {$CRB}]" > "$GHFX/rcomments-$1.json"
+}
+ghpr 7 MERGED 2026-10-01T03:00:00Z 2026-10-01T09:00:00Z 2026-10-01T05:00:00Z 2026-10-01T07:00:00Z 1; cr_rounds 7 2 3
+ghpr 9 MERGED 2026-10-05T00:30:00Z 2026-10-05T02:30:00Z 2026-10-05T01:00:00Z 2026-10-05T02:00:00Z 0; cr_rounds 9 1 0
+ghpr 8 OPEN 2026-10-04T00:00:00Z null 2026-10-04T01:00:00Z 2026-10-04T01:00:00Z 0
 mkdir -p "$CLAUDE_CONFIG_DIR/plugins/store"
 printf '%s\n' '{"loopd.usage.abc12345":{"input":10,"cacheWrite":20,"output":30,"cacheRead":5,"ms":1,"toolErrors":0,"tools":{}},"loopd.usage.abc12345.ended":true}' \
   > "$CLAUDE_CONFIG_DIR/plugins/store/loopd_x.json"
@@ -29,12 +76,16 @@ cat > "$B/.loopd/log.md" <<'LOG'
 ## 2026-10-01 — Project added: gone
 ## 2026-10-01 — Project added: alpha
 * TICK 2026-10-01T01:00:00Z by example-user-007 open: tick-1 · full walk
-* TICK 2026-10-01T01:00:00Z by example-user-007 close: dispatched one · usage tokens=1000 tools=1 ms=10
+* TICK 2026-10-01T01:00:00Z by example-user-007 close: dispatched one, merged widget#9 under yolo · usage tokens=1000 tools=1 ms=10
 * TICK 2026-10-01T02:00:00Z by example-user-007 idle — fingerprint unchanged (tick-delta) · tick-2
 * TICK 2026-10-01T03:00:00Z by example-user-007 idle — fingerprint unchanged (tick-delta) · tick-3
 * TICK 2026-10-01T04:00:00Z by example-user-007 idle — fingerprint unchanged (tick-delta) · tick-4
 * TICK 2026-10-01T05:00:00Z by example-user-007 idle — fingerprint unchanged · usage tokens=50 tools=1 ms=1
+* TICK 2026-10-01T06:00:00Z by example-user-008 idle — fingerprint unchanged (tick-delta) · tick-9
 LOG
+mkdir -p "$B/.loopd/.tick-cost"
+printf 'tick-1\t500\t9\t90\tx\ntick-2\t70\t1\t10\tx\ntick-3\tunknown\tunknown\tunknown\tx\ntick-x\t999\t1\t1\tx\n' > "$B/.loopd/.tick-cost/ticks.tsv"
+printf -- '---\ntype: Project\nautonomy: yolo\n---\n' > "$B/projects/alpha/project.md"
 cat > "$T/task-001-done.md" <<EOF
 ---
 type: Task
@@ -72,6 +123,7 @@ cat > "$T/task-003-other.md" <<EOF
 type: Task
 status: done
 timestamp: 2026-10-05T00:00:00Z
+pr: [ $U/9, $U/10 ]
 open_questions: [ ]
 ---
 # Notes
@@ -89,8 +141,8 @@ F="$B/.loopd/METRICS.json"
 q() { jq -c "$1" "$F" 2>/dev/null; }
 
 echo "== it writes the file =="
-bash "$M" "$B"; ok "exit 0" "$?" 0
-ok "schema_version" "$(q .schema_version)" 1
+calls; bash "$M" "$B"; ok "exit 0" "$?" 0
+ok "schema_version" "$(q .schema_version)" 2
 ok "generated_at is UTC and pinned" "$(q .generated_at)" '"2026-11-01T00:00:00Z"'
 ok "one object per family" "$(q '[.delegation,.time,.tokens,.idle_tick_spend,.blocked_by_cause,.owner_response,.self_merge,.quality,.kb_efficiency] | map(type) | unique')" '["object"]'
 ok "headline holds five strings" "$(q '.headline | map_values(type) | [.delegation_share,.tokens_per_merged_pr,.idle_tick_spend,.top_block_cause,.self_merge_rate] | unique')" '["string"]'
@@ -106,18 +158,53 @@ ok "time: working unknown when a dispatch is UNKNOWN" "$(q '.tasks["alpha/task-0
 ok "tokens: per merged PR from TOTAL lines" "$(q .tokens.merged_prs.per_pr)" 3000
 ok "tokens: fix rounds from TOTAL rounds" "$(q .tokens.merged_prs.fix_rounds)" 1
 ok "tokens: headline" "$(q .headline.tokens_per_merged_pr)" '"3k"'
-ok "idle: four idle ticks, one measured" "$(q '[.idle_tick_spend.idle_ticks, .idle_tick_spend.measured, .idle_tick_spend.tokens_measured]')" '[4,1,50]'
-ok "idle: the unmeasured share is reported, not zeroed" "$(q .idle_tick_spend.unmeasured_share)" 0.75
+ok "idle: five idle ticks, two measured (tick-cost, then ledger)" "$(q '[.idle_tick_spend.idle_ticks, .idle_tick_spend.measured, .idle_tick_spend.tokens_measured]')" '[5,2,120]'
+ok "idle: the unmeasured share is reported, not zeroed" "$(q .idle_tick_spend.unmeasured_share)" 0.6
 ok "blocked: owner, merge gate (live PR only), stalled" "$(q '.blocked_by_cause.causes | [.owner.tasks, .merge_gate.holds, .stalled_agent.tasks]')" '[1,1,1]'
 ok "owner_response: answers counted" "$(q .owner_response.answers)" 2
 ok "kb: label and files read" "$(q '[.kb_efficiency.label, .kb_efficiency.citation_files]')" '["estimate",3]'
 ok "kb: cited vs not cited" "$(q '[.kb_efficiency.cited.tasks, .kb_efficiency.not_cited.tasks]')" '[1,1]'
 
-echo "== no source, no number =="
-ok "self_merge reads source none" "$(q .self_merge)" '{"source":"none","stale":false}'
-ok "quality reads source none" "$(q .quality)" '{"source":"none","stale":false}'
-ok "a gh figure reads source none" "$(q .owner_response.ready_pr_to_merge_hours)" '{"source":"none"}'
-ok "self-merge headline is a dash" "$(q .headline.self_merge_rate)" '"—"'
+echo "== one computed value per gh-backed figure, through pr-quality.sh and review-rounds.sh =="
+ok "time: PR open to merge, mean of 6 h and 2 h" "$(q '.time.pr_open_to_merge_hours | [.prs, .mean_hours, .stale]')" '[2,4,false]'
+ok "time: a task's PR opened and merged" "$(q '.tasks["alpha/task-001-done"] | [.pr_opened, .pr_merged]')" '["2026-10-01T03:00:00Z","2026-10-01T09:00:00Z"]'
+ok "owner: ready PR to merge, owner merges only (last review → merge)" "$(q '.owner_response.ready_pr_to_merge_hours | [.prs, .mean_hours]')" '[1,2]'
+ok "self_merge: one of two merged PRs under yolo" "$(q '.self_merge | [.merged_prs, .loop, .rate]')" '[2,1,0.5]'
+ok "self_merge: the reason when not" "$(q .self_merge.not_self_merged)" '{"example-user-007/widget#7":"criteria"}'
+ok "self_merge: headline" "$(q .headline.self_merge_rate)" '"50% (1 of 2)"'
+ok "quality: CodeRabbit findings per PR (pr-quality.sh)" "$(q '.quality | [.cr_findings, .cr_findings_per_pr]')" '[3,1.5]'
+ok "quality: fix rounds per PR (review-rounds.sh)" "$(q '.quality | [.fix_rounds, .fix_rounds_per_pr]')" '[1,0.5]'
+ok "quality: first-round merge share" "$(q .quality.first_round_merge_share)" 0.5
+ok "quality: a 404 is read once and frozen, never stale" "$(q '.quality | [.prs_named, .prs_read, .stale]')" '[4,4,false]'
+
+echo "== the tick-cost join =="
+ok "pm ticks: joined on the tick id, unknown kept apart" "$(q '.tokens.pm_ticks | [.ticks, .measured, .unknown, .tokens]')" '[3,2,1,570]'
+ok "…this clone's ticks with no row, other clones' excluded" "$(q .tokens.pm_ticks.ticks_without_row)" 1
+ok "idle spend from tick-cost" "$(q '.idle_tick_spend.tick_cost | [.ticks, .measured, .unknown, .tokens]')" '[2,1,1,70]'
+
+echo "== block causes with no source read unknown =="
+ok "classifier, usage limit, CI flake" "$(q '.blocked_by_cause.causes | [.classifier_block, .usage_limit, .ci_flake]')" '[null,null,null]'
+
+echo "== the gh cache =="
+ok "one file per PR named" "$(ls "$B/.loopd/.pr-cache" | tr '\n' ' ')" "example-user-007__widget__10.json example-user-007__widget__7.json example-user-007__widget__8.json example-user-007__widget__9.json "
+ok "…in a directory that ignores itself" "$(cat "$B/.loopd/.pr-cache/.gitignore")" "*"
+calls; bash "$M" "$B"
+ok "a second run re-reads only the open PR" "$(ncalls):$(grep -c 'pr view 8 ' "$GHFX/calls")" "1:1"
+cp "$F" "$TMP/online.json"
+calls; GH_OFFLINE=1 bash "$M" "$B"; rc=$?
+ok "offline: exit 0" "$rc" 0
+ok "…the gh figures are the previous file's, marked stale" "$(jq -c '[.self_merge, .quality, .time.pr_open_to_merge_hours] | map(del(.stale))' "$F")" "$(jq -c '[.self_merge, .quality, .time.pr_open_to_merge_hours] | map(del(.stale))' "$TMP/online.json")"
+ok "…stale on each" "$(q '[.self_merge.stale, .quality.stale, .time.pr_open_to_merge_hours.stale, .owner_response.ready_pr_to_merge_hours.stale]')" '[true,true,true,true]'
+ok "…and in the headline" "$(q .headline.self_merge_rate)" '"50% (1 of 2) (stale)"'
+ok "…file figures are not stale" "$(q .time.stale)" false
+GH_OFFLINE=1 bash "$M" "$B"; ok "offline twice: one stale marker" "$(q .headline.self_merge_rate)" '"50% (1 of 2) (stale)"'
+ghpr 8 CLOSED 2026-10-04T00:00:00Z null 2026-10-04T01:00:00Z 2026-10-04T01:00:00Z 0
+bash "$M" "$B"; ok "back online: stale cleared" "$(q .self_merge.stale)" false
+calls; bash "$M" "$B"
+ok "every named PR merged or closed: 0 gh calls" "$(ncalls)" 0
+mkdir "$TMP/nogh"; ln -s "$(command -v jq)" "$TMP/nogh/jq"
+ok "…not even with gh missing" "$(PATH="$TMP/nogh:/usr/bin:/bin" "$BASH" "$M" "$B"; echo "$?:$(q .quality.stale)")" "0:false"
+ok "a PR no task names leaves the cache" "$(printf '{}' > "$B/.loopd/.pr-cache/o__r__1.json"; bash "$M" "$B"; [ -e "$B/.loopd/.pr-cache/o__r__1.json" ] && echo kept || echo pruned)" pruned
 
 echo "== main session is unattributed and never summed =="
 ok "main session label and figure" "$(q '.delegation.main_session | [.label, .tokens]')" '["unattributed (machine-wide)",60]'
@@ -139,7 +226,7 @@ ok "three rounds over two PRs is one fix round per PR" "$(jq -c '[.tokens.merged
 
 echo "== an idle ledger with no usage is unknown, never zero =="
 I="$TMP/idle"; mkdir -p "$I/.loopd"; echo '{}' > "$I/instance.config.json"; echo '{}' > "$I/.loopd/SNAPSHOT.json"
-grep 'idle — fingerprint unchanged (tick-delta)' "$B/.loopd/log.md" > "$I/.loopd/log.md"
+grep 'example-user-007 idle — fingerprint unchanged (tick-delta)' "$B/.loopd/log.md" > "$I/.loopd/log.md"
 bash "$M" "$I"
 ok "tokens unknown" "$(jq -c .idle_tick_spend.tokens_measured "$I/.loopd/METRICS.json")" null
 ok "headline says unknown" "$(jq -r .headline.idle_tick_spend "$I/.loopd/METRICS.json")" "? (3 idle ticks, none measured)"
@@ -181,7 +268,9 @@ chmod 644 "$T/task-003-other.md"
 bash "$M" "$B"; ok "the normal path still writes after each refusal" "$(cmp -s "$F" "$TMP/before.json" && echo same)" same
 
 echo "== the key allowlist =="
-ALLOWED='schema_version generated_at headline delegation_share tokens_per_merged_pr idle_tick_spend top_block_cause self_merge_rate
+ALLOWED='pm_ticks ticks_without_row unknown tick_cost mean_hours loop rate reasons not_self_merged criteria gated
+prs_named prs_read cr_reviewed_prs cr_findings cr_findings_per_pr first_round_merge_share x_rows_per_pr
+schema_version generated_at headline delegation_share tokens_per_merged_pr idle_tick_spend top_block_cause self_merge_rate
 delegation source stale unit role_agent_tokens supervision_tokens share_role_agents by_role by_model dispatches measured tokens main_session label sessions
 time tasks_reflected mean_draft_hours mean_queued_hours mean_in_flight_hours mean_working_hours mean_waiting_hours projects_closed mean_project_open_days pr_open_to_merge_hours
 supervision role_agents supervision_ticks supervision_ticks_measured merged_prs totals prs per_pr fix_rounds fix_rounds_per_pr
@@ -193,7 +282,7 @@ projects state added closed open_days tasks_reflected periods ticks_measured tic
 extra() { # <json> — keys outside ALLOWED; the keys of a by-id map are data, not fields
   jq -r --arg a "$ALLOWED" '
     def ks(m): if type == "object" then to_entries[] | (if m then empty else .key end),
-        (.key as $k | .value | ks($k | IN("tasks", "projects", "periods", "by_role", "by_model")))
+        (.key as $k | .value | ks($k | IN("tasks", "projects", "periods", "by_role", "by_model", "not_self_merged")))
       elif type == "array" then .[] | ks(false) else empty end;
     ($a | split("\\s+"; null)) as $ok | [ks(false)] | unique | map(select(. as $k | $ok | index([$k]) | not)) | join(" ")' "$1"
 }
@@ -211,10 +300,19 @@ awk 'BEGIN { for (i = 0; i < 1100; i++) {
   if (i % 2) printf "* TICK %s by example-user-007 close: walked · usage tokens=%d tools=3 ms=900\n", d, 1000 + i
   else printf "* TICK %s by example-user-007 idle — fingerprint unchanged (tick-delta) · tick-%d\n", d, i } }' > "$G/.loopd/log.md"
 for i in $(seq 1 425); do printf 'recorded: 2026-10-01\nKEPT finding-%d\n' "$i" > "$G/.loopd/citations/widget-pr-$i.txt"; done
-for p in $(seq 1 12); do mkdir -p "$G/projects/p$p/tasks"; for t in 1 2 3 4 5 6; do cp "$T/task-001-done.md" "$G/projects/p$p/tasks/task-00$t.md"; done; done
-TIMEFORMAT=%R; secs="$( { time bash "$M" "$G" >/dev/null 2>&1; } 2>&1 )"
-ok "the sized fixture is what was measured" "$(jq -c '[.kb_efficiency.citation_files, .idle_tick_spend.ticks, (.tasks | length)]' "$G/.loopd/METRICS.json")" '[425,1100,72]'
-ok "metrics.sh within the 5 s budget (took ${secs}s)" "$(awk -v s="$secs" 'BEGIN { print (s + 0 <= 5) ? "yes" : "no" }')" yes
+# task-004: each task names its own merged PR, every one already in the warm cache.
+mkdir -p "$G/.loopd/.pr-cache"
+for p in $(seq 1 12); do mkdir -p "$G/projects/p$p/tasks"; for t in 1 2 3 4 5 6; do n=$((p * 10 + t))
+  sed "s#/pull/7\$#/pull/$n#" "$T/task-001-done.md" > "$G/projects/p$p/tasks/task-00$t.md"
+  jq -n --argjson n "$n" '{v: 1, pr: {state: "MERGED", created_at: "2026-10-01T00:00:00Z", ready_at: "2026-10-01T01:00:00Z",
+    merged_at: "2026-10-01T02:00:00Z"}, quality: {merged_at: "x", x_rows: "0", cr_findings: "\($n % 3)", qa_fail: "-"},
+    rounds: {coderabbit: ($n % 2 + 1)}}' > "$G/.loopd/.pr-cache/example-user-007__widget__$n.json"; done; done
+calls; TIMEFORMAT=%R; secs="$( { time bash "$M" "$G" >/dev/null 2>&1; } 2>&1 )"
+ok "the sized fixture is what was measured" "$(jq -c '[.kb_efficiency.citation_files, .idle_tick_spend.ticks, (.tasks | length), .quality.merged_prs]' "$G/.loopd/METRICS.json")" '[425,1100,72,72]'
+ok "…with a warm cache: 0 gh calls" "$(ncalls)" 0
+# Budgets, measured 2026-11-26 on an M3 Pro: task-001 5 s (~0.3 s, no gh); task-004 5 s, warm cache (~0.6 s).
+ok "metrics.sh within the 5 s warm-cache budget (took ${secs}s)" "$(awk -v s="$secs" 'BEGIN { print (s + 0 <= 5) ? "yes" : "no" }')" yes
+ok "no python3 in metrics.sh" "$(grep -c python3 "$M")" 0
 
 echo
 echo "metrics.test: $pass passed, $fail failed"
