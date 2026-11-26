@@ -300,7 +300,6 @@ awk 'BEGIN { for (i = 0; i < 1100; i++) {
   if (i % 2) printf "* TICK %s by example-user-007 close: walked · usage tokens=%d tools=3 ms=900\n", d, 1000 + i
   else printf "* TICK %s by example-user-007 idle — fingerprint unchanged (tick-delta) · tick-%d\n", d, i } }' > "$G/.loopd/log.md"
 for i in $(seq 1 425); do printf 'recorded: 2026-10-01\nKEPT finding-%d\n' "$i" > "$G/.loopd/citations/widget-pr-$i.txt"; done
-# task-004: each task names its own merged PR, every one already in the warm cache.
 mkdir -p "$G/.loopd/.pr-cache"
 for p in $(seq 1 12); do mkdir -p "$G/projects/p$p/tasks"; for t in 1 2 3 4 5 6; do n=$((p * 10 + t))
   sed "s#/pull/7\$#/pull/$n#" "$T/task-001-done.md" > "$G/projects/p$p/tasks/task-00$t.md"
