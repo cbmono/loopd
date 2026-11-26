@@ -1050,16 +1050,16 @@ check_clean_copy_rule() {
     return 0
   fi
   has="$(python3 - "$rule" "$settings" "$ROOT/.claude/settings.local.json" <<'PY' 2>/dev/null
-import json,sys
+import json,os,sys
 rule,files=sys.argv[1],sys.argv[2:]
 found=False
-for i,p in enumerate(files):
+for p in files:
+    if not os.path.exists(p):
+        continue
     try:
         d=json.load(open(p))
     except Exception:
-        if i==0:
-            print("unparseable"); sys.exit()
-        continue
+        print("unparseable:"+p); sys.exit()
     perms=d.get("permissions") if isinstance(d,dict) else None
     allow=perms.get("allow") if isinstance(perms,dict) else None
     if isinstance(allow,list) and rule in allow:
@@ -1072,7 +1072,7 @@ PY
     no)
       warn "clean-copy rule: neither .claude/settings.json nor .claude/settings.local.json allows $rule"
       hint "add \"$rule\" to permissions.allow in $settings" ;;
-    unparseable) note "clean-copy rule: not judged — $settings does not parse as JSON" ;;
+    unparseable:*) note "clean-copy rule: not judged — ${has#unparseable:} does not parse as JSON" ;;
     *) note "clean-copy rule: not judged — the JSON reader gave no answer for $settings" ;;
   esac
   return "$_warned"

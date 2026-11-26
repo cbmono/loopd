@@ -699,6 +699,10 @@ printf '{\n' > "$INST7/.claude/settings.json"
 OUT7u="$(PATH="$PBBIN:$PATH" bash "$SH" check --instance "$INST7" --template "$SRC" 2>&1)"
 ok "an unparseable settings.json: one note, nothing else" \
   "$(printf '%s\n' "$OUT7u" | grep -c 'clean-copy rule' | tr -d ' '):$(printf '%s\n' "$OUT7u" | grep -c '^    clean-copy rule: not judged' | tr -d ' ')" 1:1
+cp "$TMP/s7.before" "$INST7/.claude/settings.json"; printf '{\n' > "$INST7/.claude/settings.local.json"
+OUT7v="$(PATH="$PBBIN:$PATH" bash "$SH" check --instance "$INST7" --template "$SRC" 2>&1)"
+ok "an unparseable settings.local.json: one note naming it, no warning" \
+  "$(printf '%s\n' "$OUT7v" | grep -c 'clean-copy rule' | tr -d ' '):$(printf '%s\n' "$OUT7v" | grep -c '^    clean-copy rule: not judged — .*settings\.local\.json does not parse' | tr -d ' ')" 1:1
 rm -f "$INST7/.claude/settings.json"
 OUT7n="$(PATH="$PBBIN:$PATH" bash "$SH" check --instance "$INST7" --template "$SRC" 2>&1)"
 ok "no settings.json: nothing printed for it"         "$(printf '%s\n' "$OUT7n" | grep -c 'clean-copy rule' | tr -d ' ')" 0
