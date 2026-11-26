@@ -168,8 +168,9 @@ for phrase in "always use the pm-loop" "always defer to subagents"; do
   ok "…nor in the welcome skill"         "$(grep -ci "$phrase" "$CMD" | tr -d ' ')" 0
 done
 # Every row in the list produced a line, including the ones with nothing wrong. "Empty
-# output is a valid, reported answer" is the criterion; silence is the failure.
-n_rows="$(bash "$SH" check --list | grep -c .)"
+# output is a valid, reported answer" is the criterion; silence is the failure — except
+# clean-copy-rule, silent by design on a bundle with no .claude/settings.json (§9b).
+n_rows="$(bash "$SH" check --list | grep -vc '^clean-copy-rule')"
 n_lines="$(printf '%s\n' "$OUT" | grep -cE '^(⚠|✓)')"
 ok "every row reported a verdict line"                     "$([ "$n_lines" -ge "$n_rows" ] && echo yes || echo no)" yes
 ok "…including the 'nothing to convert' one"               "$(printf '%s\n' "$OUT" | grep -c 'no symlinks outside repos/' | tr -d ' ')" 1
@@ -661,6 +662,50 @@ ok "a twinless retired roleEffort is named as retired" \
   "$(printf '%s\n' "$OUT6t" | grep -c 'retired role(s) nothing dispatches: instance\.config\.json:roleEffort\.auditor' | tr -d ' ')" 1
 ok "…and not ALSO as a missing-twin orphan" \
   "$(printf '%s\n' "$OUT6t" | grep -c 'roleEffort\.auditor(no roleTiers twin)' | tr -d ' ')" 0
+
+# =======================================================================================
+echo "== 9b. clean-copy-rule — a missing pbcopy allow rule is NAMED, and settings are never written =="
+# =======================================================================================
+RULE='Bash(pbcopy < tmp/copy/copy-1.txt)'
+PBBIN="$TMP/pbbin"; mkdir -p "$PBBIN"; printf '#!/bin/sh\ncat >/dev/null\n' > "$PBBIN/pbcopy"; chmod +x "$PBBIN/pbcopy"
+NOPB="$TMP/nopb"; mkdir -p "$NOPB"
+IFS=: read -r -a pathdirs <<<"$PATH"
+for d in "${pathdirs[@]}"; do
+  for f in "$d"/*; do
+    b="${f##*/}"
+    [ "$b" = pbcopy ] || [ -e "$NOPB/$b" ] || { [ -x "$f" ] && ln -s "$f" "$NOPB/$b"; }
+  done
+done
+INST7="$TMP/inst7"; mkinstance "$INST7"
+printf '{\n  "permissions": { "allow": ["Bash(ls:*)"] }\n}\n' > "$INST7/.claude/settings.json"
+printf '{\n  "permissions": { "allow": [] }\n}\n' > "$INST7/.claude/settings.local.json"
+cp "$INST7/.claude/settings.json" "$TMP/s7.before"; cp "$INST7/.claude/settings.local.json" "$TMP/l7.before"
+OUT7="$(PATH="$PBBIN:$PATH" bash "$SH" check --instance "$INST7" --template "$SRC" 2>&1)"
+ok "a missing clean-copy rule warns, naming the exact rule" \
+  "$(printf '%s\n' "$OUT7" | grep '^⚠' | grep -cF "clean-copy rule: neither .claude/settings.json nor .claude/settings.local.json allows $RULE" | tr -d ' ')" 1
+ok "…with a hint naming the rule and the file to add it to" \
+  "$(printf '%s\n' "$OUT7" | grep -cF "↳ add \"$RULE\" to permissions.allow in $INST7/.claude/settings.json" | tr -d ' ')" 1
+ok "…and settings.json is byte-identical after"       "$(yn cmp -s "$TMP/s7.before" "$INST7/.claude/settings.json")" yes
+ok "…and settings.local.json too"                     "$(yn cmp -s "$TMP/l7.before" "$INST7/.claude/settings.local.json")" yes
+printf '{\n  "permissions": { "allow": ["%s"] }\n}\n' "$RULE" > "$INST7/.claude/settings.json"
+OUT7p="$(PATH="$PBBIN:$PATH" bash "$SH" check --instance "$INST7" --template "$SRC" 2>&1)"
+ok "the rule in settings.json: no warning"            "$(printf '%s\n' "$OUT7p" | grep -c '^⚠.*clean-copy rule' | tr -d ' ')" 0
+ok "…and a good line instead"                         "$(printf '%s\n' "$OUT7p" | grep -c '^✓ clean-copy rule' | tr -d ' ')" 1
+cp "$TMP/s7.before" "$INST7/.claude/settings.json"
+printf '{\n  "permissions": { "allow": ["%s"] }\n}\n' "$RULE" > "$INST7/.claude/settings.local.json"
+OUT7l="$(PATH="$PBBIN:$PATH" bash "$SH" check --instance "$INST7" --template "$SRC" 2>&1)"
+ok "the rule in settings.local.json only: no warning" "$(printf '%s\n' "$OUT7l" | grep -c '^⚠.*clean-copy rule' | tr -d ' ')" 0
+printf '{\n' > "$INST7/.claude/settings.json"
+OUT7u="$(PATH="$PBBIN:$PATH" bash "$SH" check --instance "$INST7" --template "$SRC" 2>&1)"
+ok "an unparseable settings.json: one note, nothing else" \
+  "$(printf '%s\n' "$OUT7u" | grep -c 'clean-copy rule' | tr -d ' '):$(printf '%s\n' "$OUT7u" | grep -c '^    clean-copy rule: not judged' | tr -d ' ')" 1:1
+rm -f "$INST7/.claude/settings.json"
+OUT7n="$(PATH="$PBBIN:$PATH" bash "$SH" check --instance "$INST7" --template "$SRC" 2>&1)"
+ok "no settings.json: nothing printed for it"         "$(printf '%s\n' "$OUT7n" | grep -c 'clean-copy rule' | tr -d ' ')" 0
+cp "$TMP/s7.before" "$INST7/.claude/settings.json"; cp "$TMP/l7.before" "$INST7/.claude/settings.local.json"
+OUT7x="$(PATH="$NOPB" bash "$SH" check --instance "$INST7" --template "$SRC" 2>&1)"
+ok "no pbcopy on the machine: nothing printed for it" "$(printf '%s\n' "$OUT7x" | grep -c 'clean-copy rule' | tr -d ' ')" 0
+ok "…while the same run still reports other rows"    "$(printf '%s\n' "$OUT7x" | grep -c -e '^✓.*output style' -e '^⚠.*output style' | tr -d ' ')" 1
 
 # =======================================================================================
 echo "== 10. it ships like every other script here =="
