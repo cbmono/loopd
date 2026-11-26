@@ -17,8 +17,8 @@ CACHE="$(mktemp -d)" || exit 2
 trap 'rm -rf "$CACHE"' EXIT
 
 sh_refs() { # <tree> <file> — the .sh files it names, cached per tree and file
-  local k; k="$CACHE/$(printf '%s/%s' "$1" "$2" | tr '/ ' '__')"
-  [ -f "$k" ] || refs "$1" "$2" | grep '\.sh$' > "$k"
+  local k; k="$CACHE/$(printf '%s' "$1" | cksum | cut -d' ' -f1)/$2"
+  [ -f "$k" ] || { mkdir -p "${k%/*}" && refs "$1" "$2" | grep '\.sh$' > "$k"; }
   cat "$k"
 }
 
@@ -56,7 +56,7 @@ gaps() { # <tree> <list> — one line per gap
 check_tree() { # <tree> — prints each gap, returns 1 on any
   local list="$1/plugin/data/script-classes.txt" out
   [ -r "$list" ] || { echo "NO-LIST plugin/data/script-classes.txt"; return 1; }
-  out="$(gaps "$1" "$list")"
+  out="$(gaps "$1" "$list")" || { echo "UNKNOWN the gap walk could not run"; return 1; }
   [ -z "$out" ] && return 0
   printf '%s\n' "$out"; return 1
 }
@@ -106,6 +106,9 @@ ok "a read-only script reaching a writing one, two hops and a lib/ file away, fa
 ok "…naming the caller" "$(has 'REACHES ro.sh wr.sh')" 1
 ok "…and the middle script too" "$(has 'REACHES mid.sh wr.sh')" 1
 ok "a basename in a message is not a call" "$(grep -c '^REACHES' <<<"$out")" 2
+fixture "$TMP/collide" "lib_x.sh read-only" "mid.sh read-only" "ro.sh read-only" "wr.sh writing writes a file"
+echo '#!/usr/bin/env bash' > "$TMP/collide/plugin/scripts/lib_x.sh"; run collide
+ok "lib_x.sh walked first does not hide lib/x.sh's call to a writer" "$(has 'REACHES ro.sh wr.sh')" 1
 fixture "$TMP/leaf" "mid.sh writing runs wr.sh" "ro.sh writing runs wr.sh" "wr.sh read-only"; run leaf
 ok "a read-only script reached by writing ones passes" "$rc" 0
 
