@@ -1674,9 +1674,10 @@ on Claude Code 2.1.332 (2026-11-26) to match a call with arguments, with none an
 `writing` script gets none, so it stays the classifier's. The stamp removes only rules it
 wrote on that marketplace's prefix — the wildcard pair on either path and a rule naming
 another version — keeps the old ones and warns on a missing, empty or unparseable list, writes
-nothing when the real path still holds whitespace or `' $ & ; #`, never replaces rules naming a
-newer version, and needs `python3` or `jq`. Shipped call sites still name `${CLAUDE_PLUGIN_ROOT}`,
-so these rules match only a call made by the real path.
+nothing when the real path still holds whitespace, `' $ & ; #` or a rule wildcard `* ? [`, never
+replaces rules naming a newer version, never rewrites a settings file it cannot read, and needs
+`python3` or `jq`. Shipped call sites still name `${CLAUDE_PLUGIN_ROOT}`, so these rules match
+only a call made by the real path.
 
 ### A stable scripts path, for your terminal only
 

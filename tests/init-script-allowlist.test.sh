@@ -208,14 +208,29 @@ for bad in missing empty unparseable "names a missing script"; do
 done
 cp "$TMP/list" "$LIST"
 
-echo "== 14. a real path that still needs quoting writes no rule and names it =="
+echo "== 14. a real path that needs quoting or holds a rule wildcard writes no rule and names it =="
 n14=0
-for d in "sp ace" 'do$llar' "apo'strophe" 'amp&ersand' 'semi;colon' 'ha#sh' "$(printf 'ta\tb')" "$(printf 'new\nline')"; do
+NL="$(printf '\nx')"; NL="${NL%x}"
+for d in "sp ace" 'do$llar' "apo'strophe" 'amp&ersand' 'semi;colon' 'ha#sh' "$(printf 'ta\tb')" "new${NL}line" \
+         'st*ar' 'qu?ery' 'br[ack]et'; do
   n14=$((n14+1)); R="$TMP/m$n14/$d/plugins/cache/mk/${PN}/9.9.9"; mkdir -p "${R%/*}"; cp -R "$MK/9.9.9" "$R"
   ln -s "$R" "$TMP/m$n14/Application Support"
   I="$TMP/i14-$n14"; mkdir -p "$I"; stamp "$TMP/m$n14/Application Support" "$I"
   ok "real path with ${d%%[[:space:]]*}…: no settings.local.json" "$(yn test -f "$I/.claude/settings.local.json")" no
-  ok "real path with ${d%%[[:space:]]*}…: the warning names it" "$(grep -cF -- "\`$(printf '%s\n' "$R" | head -1)" "$TMP/out" | tr -d ' ')/$(grep -c 'holds whitespace or a shell metacharacter' "$TMP/out" | tr -d ' ')" 1/1
+  ok "real path with ${d%%[[:space:]]*}…: the warning names it" "$(grep -cF -- "\`${R%%"$NL"*}" "$TMP/out" | tr -d ' ')/$(grep -c 'holds whitespace, a shell metacharacter or a rule wildcard' "$TMP/out" | tr -d ' ')" 1/1
+done
+
+echo "== 15. a settings file that cannot be read is never replaced =="
+for via in "python3" "jq only"; do
+  if [ "$via" = "jq only" ] && ! (PATH="$STUB:$NOPY"; command -v jq >/dev/null 2>&1); then
+    echo "  SKIP  no jq on this machine"; continue; fi
+  I="$TMP/i15-${via% *}"; L="$I/.claude/settings.local.json"; mkfile "$L" "$OLD_SP1" "$HAND1"; cp "$L" "$TMP/before"
+  chmod 000 "$L"
+  if cat "$L" >/dev/null 2>&1; then chmod 644 "$L"; echo "  SKIP  a mode-000 file is readable here (root)"; continue; fi
+  if [ "$via" = python3 ]; then stamp "$SP/9.9.9" "$I"; else stamp "$SP/9.9.9" "$I" "$STUB:$NOPY"; fi
+  chmod 644 "$L"
+  ok "unreadable, $via: file byte-identical" "$(yn cmp -s "$TMP/before" "$L")" yes
+  ok "unreadable, $via: the stamp warns" "$(grep -c 'script allowlist not written: no safe edit' "$TMP/out" | tr -d ' ')" 1
 done
 fi
 

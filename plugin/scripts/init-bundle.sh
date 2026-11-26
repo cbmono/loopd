@@ -872,10 +872,11 @@ allow.extend(r for r in rules if r not in allow)
 json.dump(d, sys.stdout, indent=2); print()
 PY
   elif command -v jq >/dev/null 2>&1; then
-    { [ -s "$AL_FILE" ] && cat "$AL_FILE" || echo '{}'; } | jq --arg r "$1" --arg s "$2" '
-      ($s | split("\n") | map(select(length > 0))) as $st
+    local f='($s | split("\n") | map(select(length > 0))) as $st
       | ($r | split("\n") | map(select(length > 0))) as $add
       | .permissions.allow = (((.permissions.allow // []) - $st) as $a | $a + ($add - $a))'
+    if [ -s "$AL_FILE" ]; then jq --arg r "$1" --arg s "$2" "$f" "$AL_FILE"
+    else echo '{}' | jq --arg r "$1" --arg s "$2" "$f"; fi
   else return 1; fi
 }
 bg_verify() { # <file> <want> <stale> — parses, carries each wanted rule once, and none of the stale ones
@@ -903,7 +904,7 @@ AL_ROOT="$PLUGIN_ROOT"; al_exact=no; al_bad=""
 case "$PLUGIN_ROOT" in
   *[[:space:]]*)
     al_exact=yes; AL_ROOT="$(cd "$PLUGIN_ROOT" 2>/dev/null && pwd -P)"
-    case "$AL_ROOT" in ""|*[[:space:]]*|*[\'\$\&\;\#]*) al_bad="${AL_ROOT:-$PLUGIN_ROOT}" ;; esac ;;
+    case "$AL_ROOT" in ""|*[[:space:]]*|*[\'\$\&\;\#\*\?\[]*) al_bad="${AL_ROOT:-$PLUGIN_ROOT}" ;; esac ;;
 esac
 al_mk="${AL_ROOT%/*}"
 case "${al_mk##*/}|${al_mk%/*/*}|$AL_ROOT" in
@@ -944,7 +945,7 @@ al_scan() { # stdin: allow rules -> "stale|newer<TAB><rule>" for the rules this 
       if (v != V) print (newer(v, V) ? "newer" : "stale") "\t" $0 }'
 }
 if [ -n "$al_bad" ]; then
-  echo "  warn  script allowlist not written: the plugin's real path \`$al_bad\` holds whitespace or a shell metacharacter, so no rule can match a call by it." >&2
+  echo "  warn  script allowlist not written: the plugin's real path \`$al_bad\` holds whitespace, a shell metacharacter or a rule wildcard, so no exact rule can name it." >&2
 elif [ -z "$al_mk" ]; then
   echo "  skip  script allowlist (not run from a plugin cache install)"
 elif [ "$al_exact" = yes ]; then
@@ -964,7 +965,7 @@ EOF
     echo "  warn  script allowlist not changed: editing .claude/settings.local.json needs python3 or jq, and neither is here." >&2
   else
     al_want="$(printf '%s\n' "$al_ro" | while IFS= read -r n; do printf 'Bash(%s/scripts/%s *)\n' "$AL_ROOT" "$n"; done)"
-    al_found="$(bg_list "$AL_FILE" allow | al_scan)"
+    al_found="$(bg_list "$AL_FILE" allow | al_scan)" || al_found=""
     al_newer="$(printf '%s\n' "$al_found" | awk -F'\t' '$1 == "newer" { print $2 }')"
     al_stale="$(printf '%s\n' "$al_found" | awk -F'\t' '$1 == "stale" { print $2 }')"
     al_missing="$(printf '%s\n' "$al_want" | while IFS= read -r r; do
