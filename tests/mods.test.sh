@@ -145,6 +145,8 @@ ok "…lists a directory, so it spells its walk as a quoted glob" \
 # hand would drift the day the layout moved and read a file nobody writes.
 ok "…and spells the snapshot path as bundle-paths.sh does ('$AB_SNAPSHOT')" \
    "$([ "$(count "'$AB_SNAPSHOT'" "$MOD")" -ge 1 ] && echo yes || echo no)" yes
+ok "…and the metrics path as bundle-paths.sh does ('$AB_METRICS')" \
+   "$([ "$(count "'$AB_METRICS'" "$MOD")" -ge 1 ] && echo yes || echo no)" yes
 # A message to another session is a line Claude there reads, never a prompt this mod
 # submits in its place: a module that sends may not also submit.
 ok "…sends a message, so it never submits a prompt" \
@@ -281,6 +283,8 @@ ok "…a \$.fs.list in a module that spells no glob is caught" \
 # The snapshot spelling check bites: a hand-spelled old root path is caught.
 sed "s#'$AB_SNAPSHOT'#'SNAPSHOT.json'#" "$MOD" > "$TMP/oldpath.ts"
 ok "…a module spelling the snapshot's pre-3.0 root path is caught" "$(count "'$AB_SNAPSHOT'" "$TMP/oldpath.ts")" 0
+sed "s#'$AB_METRICS'#'METRICS.json'#" "$MOD" > "$TMP/metricspath.ts"
+ok "…and one spelling the metrics path by hand is caught" "$(count "'$AB_METRICS'" "$TMP/metricspath.ts")" 0
 # A switch that stops being read, or is read twice, is named.
 sed "s/o\.signal !== false/true/" "$MOD" > "$TMP/noswitch.ts"
 ok "…a switch the module stops reading is caught" "$(code "$TMP/noswitch.ts" | grep -cF 'o.signal !== false')" 0
