@@ -1636,8 +1636,10 @@ style is bundle-scoped seed content, and nothing is written to `~/.claude`.
 
 **Two halves, two owners — and a bundle stamped before that date has one without the
 other.** The style *file* is a seed document, so the next `/loopd:init` delivers it (a stamp
-seeds what is absent). The settings *key* is config, copied once and never merged, so an
-older bundle never receives it and the style is a file nothing selects. The welcome check's
+seeds what is absent). The settings *key* arrives by the same stamp's seed merge of
+`.claude/settings.json`, so an older bundle lacks it only where that merge reported
+`CONFLICT` or `UNKNOWN` or the key was removed by hand, and then the style is a file nothing
+selects. The welcome check's
 `output-style` row says which half is missing and prints the one-line fix; it writes neither
 — config is the human's, and a different style chosen on purpose is reported as `✓` with
 its name, never as a problem. `tests/brief-output-style.test.sh` pins all four states.

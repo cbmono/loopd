@@ -19,11 +19,12 @@
 #
 # THE TWO HALVES HAVE TWO OWNERS, AND THAT IS WHAT THE CHECK IS FOR. The style FILE is a
 # seed document: a stamp delivers it to any bundle that lacks it, because a stamp seeds
-# what is absent. The settings KEY is config: copied once, never merged, so a bundle stamped
-# before 2026-10-28 never receives it, and then the style is a file nothing selects. The
-# `output-style` welcome row says which half is missing and prints the one-line fix; it
-# writes neither (config is the human's; a style choice is per bundle). A different style
-# chosen on purpose is a choice, reported as ✓ — section 2 asserts all four states.
+# what is absent. The settings KEY arrives by refresh-seeds.sh's merge of the seed
+# settings.json, so a bundle stamped before 2026-10-28 lacks it where that merge reported
+# CONFLICT or UNKNOWN or the key was removed by hand, and then the style is a file nothing
+# selects. The `output-style` welcome row says which half is missing and prints the one-line
+# fix; it writes neither (config is the human's; a style choice is per bundle). A different
+# style chosen on purpose is a choice, reported as ✓ — section 2 asserts all four states.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
@@ -79,8 +80,8 @@ ok "…and never invents state"            "$(has "$STYLE" 'Report only what you
 sel="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("outputStyle",""))' "$SETTINGS" 2>/dev/null)"
 ok "the seed settings select it"         "$sel" Brief
 ok "…by the style's own name, so the two cannot drift apart" "$([ "$sel" = "$(fm_name "$STYLE")" ] && echo yes || echo no)" yes
-ok "…and the settings' own note says a pre-2026-10-28 bundle adds the key by hand" \
-  "$(has "$SETTINGS" 'a bundle stamped before 2026-10-28 adds the key by hand')" yes
+ok "…and the settings' own note says a pre-2026-10-28 bundle receives the key by merge" \
+  "$(has "$SETTINGS" 'a bundle stamped before 2026-10-28 receives the key from that merge')" yes
 # NOT in the plugin: the measured non-loading location. A copy there would be a second
 # source the next reader keeps in sync by hand.
 # path-scan: absent plugin/output-styles — the measured non-loading location; its absence IS the assertion
