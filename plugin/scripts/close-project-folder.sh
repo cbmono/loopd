@@ -22,7 +22,9 @@
 #                           link 404s the moment the folder goes). Written here, in the
 #                           closing commit: a list maintained by hand rots.
 #   retain: true         ⇒  the folder STAYS. It is frozen first:
-#                             · `deliverable_paths:` is stamped into project.md, and
+#                             · `deliverable_paths:` is stamped into project.md,
+#                             · its `projects/CLOSED.md` entry is written, or rewritten
+#                               in place when the stamp changed, pinned at HEAD, and
 #                             · working files are pruned (below).
 #
 # WHY RETENTION IS SAFE NOW. Removal never was about disk — it was about the /<plugin>:dispatch
@@ -209,42 +211,64 @@ $(find "$PROJ/tasks" -maxdepth 1 -name '*.md' 2>/dev/null | grep -vE '/(index|lo
 EOF
 }
 
-# One stanza, appended. The key prefixes are the parse contract write-snapshot.sh reads;
+# One stanza. The key prefixes are the parse contract write-snapshot.sh reads;
 # the restore command is there because GitHub renders an HTML deliverable as source and
 # raw.githubusercontent.com 404s unauthenticated on a private repo.
-append_closed_entry() { # <sha> <org/repo>  — deliverable refs on stdin
+closed_stanza() { # <sha> <org/repo>  — deliverable refs on stdin
   local sha="$1" nwo="$2" outcome ref file
   outcome="$(field "$PROJ/project.md" description)"
   [[ -n "$outcome" ]] || outcome="$(field "$PROJ/project.md" title)"
+  printf '## %s\n\n' "$SLUG"
+  printf -- '- closed: %s\n' "$(date -u +%Y-%m-%d)"
+  printf -- '- pinned: %s\n' "$sha"
+  printf -- '- outcome: %s\n' "$outcome"
+  while IFS= read -r ref; do
+    [[ -n "$ref" ]] || continue
+    file="${ref##*/}"
+    if [[ -n "$nwo" ]]; then
+      printf -- '- deliverable: `%s` — https://github.com/%s/blob/%s%s\n' "$ref" "$nwo" "$sha" "$ref"
+      printf -- '  - restore: `gh api repos/%s/contents/%s?ref=%s --jq .content | base64 -d > /tmp/%s`\n' \
+        "$nwo" "${ref#/}" "$sha" "$file"
+    else
+      printf -- '- deliverable: `%s`\n' "$ref"
+      printf -- '  - restore: `git show %s:%s > /tmp/%s`\n' "$sha" "${ref#/}" "$file"
+    fi
+  done
+}
+
+append_closed_entry() { # <sha> <org/repo>  — deliverable refs on stdin
   [[ -f "$CLOSED_MD" ]] || cat > "$CLOSED_MD" <<'HDR'
 # Closed projects
 
-A closed project's folder is removed at closeout; this file is the index back into git.
-Every link is a GitHub **permalink at a commit sha** — a `blob/main` link 404s the moment
-the folder goes. `pinned:` is the last commit that still carried the files, i.e. the
-parent of the closing commit.
+A closed project's folder is removed at closeout, unless `retain: true` keeps it; either
+way this file is the index back into git. Every link is a GitHub **permalink at a commit
+sha** — a `blob/main` link 404s the moment a folder goes. `pinned:` is HEAD when closeout
+ran, i.e. the parent of the closing commit: for a removed project, the last commit that
+still carried the files.
 
 Written by `close-project-folder.sh`, in the closing commit. **Do not hand-edit** — a
 list maintained by hand rots, which is the failure this file exists to end.
 HDR
-  {
-    printf '\n## %s\n\n' "$SLUG"
-    printf -- '- closed: %s\n' "$(date -u +%Y-%m-%d)"
-    printf -- '- pinned: %s\n' "$sha"
-    printf -- '- outcome: %s\n' "$outcome"
-    while IFS= read -r ref; do
-      [[ -n "$ref" ]] || continue
-      file="${ref##*/}"
-      if [[ -n "$nwo" ]]; then
-        printf -- '- deliverable: `%s` — https://github.com/%s/blob/%s%s\n' "$ref" "$nwo" "$sha" "$ref"
-        printf -- '  - restore: `gh api repos/%s/contents/%s?ref=%s --jq .content | base64 -d > /tmp/%s`\n' \
-          "$nwo" "${ref#/}" "$sha" "$file"
-      else
-        printf -- '- deliverable: `%s`\n' "$ref"
-        printf -- '  - restore: `git show %s:%s > /tmp/%s`\n' "$sha" "${ref#/}" "$file"
-      fi
-    done
-  } >> "$CLOSED_MD"
+  { printf '\n'; closed_stanza "$@"; } >> "$CLOSED_MD"
+}
+
+closed_refs() {
+  awk -v h="## $SLUG" '
+    $0 == h { f = 1; next }
+    f && /^## / { exit }
+    f && /^- deliverable: `/ { s = $0; sub(/^- deliverable: `/, "", s); sub(/`.*/, "", s); print s }
+  ' "$CLOSED_MD"
+}
+
+replace_closed_entry() { # <sha> <org/repo>  — deliverable refs on stdin
+  local body tmp
+  body="$(closed_stanza "$@")"
+  tmp="$(temp_beside "$CLOSED_MD")" || return 1
+  BODY="$body" awk -v h="## $SLUG" '
+    $0 == h { if (!w) print ENVIRON["BODY"]; w = 1; skip = 1; next }
+    skip && /^## / { skip = 0; print "" }
+    !skip { print }
+  ' "$CLOSED_MD" > "$tmp" && mv "$tmp" "$CLOSED_MD"
 }
 
 # ---------------------------------------------------------------- report helpers
@@ -367,6 +391,7 @@ echo "close-project-folder: $SLUG — RETAINED (retain: true). The folder stays.
 # done-project skip removed. Verification happens now, while a human is watching.
 KEEP=""
 STAMP=""
+DLV=""
 while IFS= read -r ref; do
   [[ -n "$ref" ]] || continue
   case "$STAMP" in *"[$ref]"*) continue ;; esac   # first-seen order, no duplicates
@@ -376,6 +401,7 @@ while IFS= read -r ref; do
     # loops below compare against. A keep-set spelled differently from the candidates
     # it protects protects nothing, and does so silently.
     KEEP="$KEEP${KEEP:+$'\n'}${ref#/}"
+    DLV="$DLV${DLV:+$'\n'}$ref"
     stamped=$((stamped+1))
   else
     # Same call validate-bundle.sh makes for `artifacts:`: a declared deliverable that
@@ -406,7 +432,45 @@ if [[ $APPLY -eq 1 ]]; then
   }
 fi
 
-# ---- 2. prune. Every candidate is produced by an explicit expression below; nothing
+# ---- 2. the closed index
+SHA=""; NWO=""; INDEX_ACT=""
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  SHA="$(git rev-parse --verify HEAD 2>/dev/null || true)"
+  NWO="$(gh_slug || true)"
+fi
+if [[ -n "$DLV" && -n "$SHA" ]]; then
+  n_dlv="$(printf '%s\n' "$DLV" | grep -c . || true)"
+  if ! grep -qxF "## $SLUG" "$CLOSED_MD" 2>/dev/null; then
+    INDEX_ACT=append
+    note "INDEX" "$CLOSED_MD += ## $SLUG — $n_dlv deliverable(s) pinned at ${SHA:0:7}"
+  elif [[ "$(closed_refs)" != "$DLV" ]]; then
+    INDEX_ACT=refresh
+    note "INDEX" "$CLOSED_MD ## $SLUG refreshed — $n_dlv deliverable(s) pinned at ${SHA:0:7}"
+  else
+    note "INDEX" "$CLOSED_MD ## $SLUG unchanged — $n_dlv deliverable(s)"
+  fi
+  if [[ -n "$INDEX_ACT" && -z "$(git branch -r --contains "$SHA" 2>/dev/null)" ]]; then
+    note "WARN" "${SHA:0:7} is on no remote branch yet — push before these links resolve."
+  fi
+  [[ -z "$INDEX_ACT" || -n "$NWO" ]] || note "WARN" "no github remote on this clone — recording \`git show\` restores, not permalinks."
+elif [[ -n "$DLV" ]]; then
+  note "INDEX" "no entry — no git HEAD to pin $SLUG's deliverables at."
+else
+  note "INDEX" "no entry — $SLUG declared no deliverable that exists on disk."
+fi
+if [[ $APPLY -eq 1 && -n "$INDEX_ACT" ]]; then
+  if [[ "$INDEX_ACT" == append ]]; then
+    printf '%s\n' "$DLV" | append_closed_entry "$SHA" "$NWO"
+  else
+    printf '%s\n' "$DLV" | replace_closed_entry "$SHA" "$NWO" || {
+      echo "close-project-folder: could not rewrite ## $SLUG in $CLOSED_MD." >&2
+      exit 1
+    }
+  fi
+  git add -- "$CLOSED_MD"
+fi
+
+# ---- 3. prune. Every candidate is produced by an explicit expression below; nothing
 # else in the folder is even enumerated.
 protected() { # <path> — is this a declared deliverable?
   [[ -n "$KEEP" ]] && grep -qxF -- "$1" <<<"$KEEP"
@@ -473,6 +537,9 @@ if [[ $APPLY -eq 1 ]]; then
   printf 'close-project-folder: %s retained — %d deliverable path(s) stamped, %d directory/ies and %d file(s) pruned.\n' \
     "$SLUG" "$stamped" "$pruned_dirs" "$pruned_files"
   echo "Now stage the folder: git add -A -- $PROJ"
+  if [[ -n "$INDEX_ACT" ]]; then
+    echo "Name $CLOSED_MD in the commit's paths — the entry must land in THIS commit."
+  fi
 else
   printf 'close-project-folder: report only — nothing changed. %d path(s) would be stamped, %d directory/ies and %d file(s) would be pruned.\n' \
     "$stamped" "$pruned_dirs" "$pruned_files"

@@ -526,6 +526,59 @@ assert "a second close of the same slug appends nothing" \
   "$(eq "$(grep -c '^## adoption$' "$ROOT/projects/CLOSED.md")" "$n1")"
 assert "…and says why"                                 "$(has 'not appending a second entry' "$OUT")"
 
+echo "== the closed index on a RETAINED close: one stanza, refreshed only on change =="
+ROOT="$TMP/kept"
+new_instance "$ROOT" adoption "retain: true"$'\n'
+( cd "$ROOT" && git remote add origin git@github.com:fixture-org/fixture-bundle.git )
+C="$ROOT/projects/CLOSED.md"
+run "$ROOT" adoption
+assert "retained report-only names the stanza it would add" "$(has 'CLOSED.md += ## adoption' "$OUT")"
+assert "…and writes no CLOSED.md"                      "$(gone "$C")"
+
+HEAD1="$( cd "$ROOT" && git rev-parse HEAD )"
+run "$ROOT" adoption --apply
+assert "retained --apply exits 0"                      "$(eq "$RC" 0)"
+assert "…and writes exactly one \`## adoption\`"       "$(eq "$(grep -cxF '## adoption' "$C")" 1)"
+assert "…with an ISO close date"                       "$(yes_if grep -qE '^- closed: [0-9]{4}-[0-9]{2}-[0-9]{2}$' "$C")"
+assert "…pinned at HEAD when closeout ran"             "$(eq "$(sed -n 's/^- pinned: //p' "$C")" "$HEAD1")"
+assert "…one deliverable row per stamped path (3)"     "$(eq "$(grep -c '^- deliverable: ' "$C")" 3)"
+assert "…as permalinks at that sha"                    "$(yes_if grep -qF \
+  "https://github.com/fixture-org/fixture-bundle/blob/$HEAD1/projects/adoption/deliverables/cover.png" "$C")"
+assert "…and STAGES CLOSED.md"                         "$(yes_if grep -qx 'projects/CLOSED.md' <<<"$(git -C "$ROOT" diff --cached --name-only)")"
+assert "…whose header says a retained project keeps its folder" "$(has 'unless `retain: true` keeps it' "$(cat "$C")")"
+
+cp "$C" "$TMP/closed.first"
+run "$ROOT" adoption --apply
+assert "a second retained --apply exits 0"             "$(eq "$RC" 0)"
+assert "…leaves one \`## adoption\`"                   "$(eq "$(grep -cxF '## adoption' "$C")" 1)"
+assert "…and CLOSED.md byte-identical"                 "$(yes_if cmp -s "$C" "$TMP/closed.first")"
+assert "…and says it is unchanged"                     "$(has '## adoption unchanged' "$OUT")"
+
+( cd "$ROOT" && git_c add -A . >/dev/null 2>&1 && git_c commit -qm "chore: close adoption" >/dev/null 2>&1 )
+run "$ROOT" adoption --apply
+assert "an unchanged re-close at a later commit leaves CLOSED.md byte-identical" "$(yes_if cmp -s "$C" "$TMP/closed.first")"
+
+# In place: a later stanza must survive, after this one, untouched.
+printf '\n## later\n\n- closed: 2026-01-01\n- pinned: abc\n- outcome: x\n- deliverable: `/projects/later/a.md`\n' >> "$C"
+sed -i.bak 's|^artifacts: \[ \(.*\) \]$|artifacts: [ \1, /projects/adoption/deliverables/handout.pdf ]|' "$ROOT/projects/adoption/tasks/task-001.md"
+rm -f "$ROOT/projects/adoption/tasks/task-001.md.bak"
+( cd "$ROOT" && git_c add -A . >/dev/null 2>&1 && git_c commit -qm "add handout" >/dev/null 2>&1 )
+HEAD2="$( cd "$ROOT" && git rev-parse HEAD )"
+LATER="$(sed -n '/^## later$/,$p' "$C")"
+run "$ROOT" adoption --apply
+assert "a re-close whose stamp changed exits 0"        "$(eq "$RC" 0)"
+assert "…still one \`## adoption\`"                    "$(eq "$(grep -cxF '## adoption' "$C")" 1)"
+assert "…pinned at the new HEAD"                       "$(eq "$(sed -n '/^## adoption$/,/^## later$/s/^- pinned: //p' "$C")" "$HEAD2")"
+assert "…with the new deliverable row (4)"             "$(eq "$(sed -n '/^## adoption$/,/^## later$/p' "$C" | grep -c '^- deliverable: ')" 4)"
+assert "…rewritten in place, before the later stanza"  "$(eq "$(sed -n '/^## later$/,$p' "$C")" "$LATER")"
+assert "…and says it refreshed it"                     "$(has '## adoption refreshed' "$OUT")"
+
+new_instance "$ROOT" bare "retain: true"$'\n'
+rm -f "$ROOT/projects/bare/tasks/task-001.md" "$ROOT/projects/bare/tasks/task-002.md"
+run "$ROOT" bare --apply
+assert "a retained project with no deliverable writes no stanza" "$(gone "$ROOT/projects/CLOSED.md")"
+assert "…and says so"                                  "$(has 'INDEX  no entry' "$OUT")"
+
 CMD="$TPL/plugin/skills/close-project/SKILL.md"
 PM="$TPL/plugin/tick-steps/step-6-close-projects.md"
 SCH="$TPL/plugin/seed/SCHEMA.md"
@@ -545,6 +598,13 @@ assert "…and the 'no archive/' line says what replaces it" \
   "$(yes_if grep -q 'there is still no .archive/.; what replaces it is an INDEX' "$SCH")"
 assert "…and retain: is NOT removed by this change"     "$(yes_if grep -qF 'With `retain: true`** the folder stays' "$SCH")"
 assert "…and deliverable_paths: as closeout-written"    "$(yes_if grep -qE '^  - "/projects/<slug>/deliverables/' "$SCH")"
+assert "the retained staging bullet names projects/CLOSED.md beside projects/<slug>" \
+  "$(has '`projects/CLOSED.md` beside it' "$(grep -A1 -F '**retained** — `git add -A -- projects/<slug>`' "$CMD")")"
+assert "SCHEMA.md says a retained project keeps its folder and gets a stanza" \
+  "$(yes_if grep -qF 'A retained project keeps its folder and gets a stanza too' "$SCH")"
+assert "…and that pinned: is HEAD when closeout ran"    "$(yes_if grep -qF 'is HEAD when closeout ran, i.e. the parent of the closing commit' "$SCH")"
+assert "the board's Closed footer says a retained one keeps its folder" \
+  "$(yes_if grep -qF "a retained one \"" "$TPL/plugin/scripts/build-board.sh")"
 assert "…and that non-terminal tasks become cancelled"  "$(yes_if grep -q 'not terminal at closeout becomes .cancelled' "$SCH")"
 # The enum itself, at its enforcement point. A "closed-unfinished" sibling status would
 # show up here first, and the criterion this pins is that none was introduced.
