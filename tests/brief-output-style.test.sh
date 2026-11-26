@@ -64,7 +64,7 @@ ok "…and keeps the coding instructions"  "$(has "$STYLE" 'keep-coding-instruct
 # into a different shape under the same name.
 ok "…it defines the Needs-you heading"   "$(has "$STYLE" 'ℹ️ **Needs you:**')" yes
 ok "…every item executable, with the URL inline" "$(has "$STYLE" 'with the URL inline, or a local file as a markdown link whose target is its absolute path')" yes
-ok "…a command is its own inline-code line, no bullet, number, prompt or prose" "$(has "$STYLE" 'A command the human runs goes on its own line as inline code, with no bullet, number, `$` prompt or trailing prose on the line, and never in a fenced block')" yes
+ok "…a command is its own inline-code line, no bullet, number, prompt or prose" "$(has "$STYLE" 'A command the human runs goes on its own line as inline code, with no bullet, number, `$` prompt or trailing prose on the line, no `>` and no indentation, and never in a fenced block')" yes
 ok "…several commands are several lines, in run order" "$(has "$STYLE" 'Several commands are several such lines, in run order.')" yes
 ok "…every item carries a recommendation" "$(has "$STYLE" 'Every `Needs you` item ends with `Recommend: <the answer> — <one-line reason>`** on the item'"'"'s line')" yes
 ok "…except a lone merge or close whose verb is the advice, and no other" "$(has "$STYLE" '**except a lone merge or close item whose verb already is the advice** (🔀 merge once green, 🏁 close a finished project), which carries none; no other verb is exempt.')" yes
@@ -142,17 +142,19 @@ ok "keywords go in inline code"           "$(has "$STYLE" '**Keywords go in inli
 ok "every PR, run, URL and local file is a link" "$(has "$STYLE" 'Every PR, run, URL and local file is a markdown link')" yes
 ok "…bare URLs only inside copy-ready text" "$(has "$STYLE" 'Never a bare URL, except inside copy-ready text.')" yes
 ok "a linked keyword keeps an inline-code label" "$(has "$STYLE" '[`task-001`](/Users/…/task-001.md). A branch or commit links to its GitHub URL.')" yes
-ok "a command is always its own inline-code line" "$(has "$STYLE" '**A command is always its own inline-code line**')" yes
+ok "a command is always its own inline-code line, never quoted or indented" "$(has "$STYLE" '**A command is always its own inline-code line**, the shape the `Needs you` rule above gives it: no `>` and no indentation, which only hand-off text may carry.')" yes
 ok "reply shorthand is inline code, as typed" "$(has "$STYLE" '`prom 10 11`, `mrg`, `go`, `ok`, `1 n 2`')" yes
 ok "recap items open with a bold label, Needs-you items with their verb" "$(has "$STYLE" '**Each numbered `Done so far` item opens with a short bold label**')" yes
 ok "a hand-off block sits above Needs you" "$(has "$STYLE" '**A hand-off block sits above `Needs you:`**')" yes
 ok "tick reports are exempt"              "$(has "$STYLE" '**Tick reports are exempt from hand-off blocks, clean copy and recap labels**')" yes
-ok "hand-off text: a label line, then plain paragraphs" "$(has "$STYLE" 'no `>` blockquote, no indentation, no bullets.')" yes
-ok "nothing copy-ready is quoted or indented" "$(has "$STYLE" '**Never a `>` quote or indentation for anything meant to be copied.**')" yes
+ok "hand-off text: a label line, then quoted plain paragraphs" "$(has "$STYLE" '**Under the label line, the text follows as plain paragraphs in a `>` blockquote**: each line prefixed `> `, a bare `>` line between paragraphs.')" yes
+ok "…the quote optional, the default, unquoted where it renders badly" "$(has "$STYLE" 'The quote is optional and the default wherever hand-off text appears, clean copy written or not; plain paragraphs with no quote stay correct where a quote would render badly.')" yes
+ok "…no indentation and no bullets inside the text" "$(has "$STYLE" '**Inside the text: no indentation and no bullets**, quoted or not')" yes
+ok "…the pbcopy clean copy is the guarantee, still mandatory" "$(has "$STYLE" 'the `pbcopy` clean copy is the guarantee of a clean clipboard, and stays mandatory in an interactive session.')" yes
 ok "clean copy is interactive only"       "$(has "$STYLE" 'in an interactive session only, never a background tick or subagent.')" yes
 ok "…checks tmp/copy is ignored first"    "$(has "$STYLE" '`git check-ignore -q tmp/copy`')" yes
 ok "…and a failed check stops the whole sequence" "$(has "$STYLE" 'If it exits non-zero, stop the clean copy: write no file, skip steps 2–5, and tell the human the clipboard was not updated.')" yes
-ok "…clears old files, writes with the Write tool, text only" "$(has "$STYLE" 'Delete `tmp/copy/copy-*.txt`, then write `tmp/copy/copy-1.txt`, `copy-2.txt` … with the Write tool, one per block: the text only, never its label line.')" yes
+ok "…copy-N.txt drops the > markers, a bare > line becomes blank" "$(has "$STYLE" 'Delete `tmp/copy/copy-*.txt`, then write `tmp/copy/copy-1.txt`, `copy-2.txt` … with the Write tool, one per block: the text only, never its label line, with its `>` markers dropped and a bare `>` separator line written as a blank line.')" yes
 ok "…pbcopy is named"                     "$([ "$(grep -c pbcopy "$STYLE")" -ge 1 ] && echo yes || echo no)" yes
 ok "…several blocks: one pbcopy line each, run with !" "$(has "$STYLE" 'one `pbcopy < <abs path>` line each, which the human runs with `!`')" yes
 ok "…no pbcopy: print the path"           "$(has "$STYLE" 'No `pbcopy` on this machine: print each file'"'"'s absolute path instead.')" yes
@@ -168,10 +170,18 @@ example() { awk '/^## Hand-off example$/{f=1; next} f && /^## /{exit} f && NF' "
 EX="$(example "$STYLE")"
 ok "the hand-off example has a label line, then text" "$(head -1 <<<"$EX")" '📋 **WhatsApp → <name>**'
 ok "…at least one plain paragraph under it" "$([ "$(wc -l <<<"$EX")" -ge 2 ] && echo yes || echo no)" yes
-ok "…no > line, indentation or bullet in it" "$(grep -c -E '^(>|[[:space:]]|[-*+] |[0-9]+\. )' <<<"$EX" | tr -d ' ')" 0
+# The text under the label: every line quoted, and once the `> ` is stripped, no indentation or bullet.
+text() { tail -n +2 <<<"$1"; }
+junk() { grep -c -E '^([[:space:]]|[-*+] |[0-9]+\. )' <<<"$(sed -E 's/^> ?//' <<<"$(text "$1")")" | tr -d ' '; }
+unquoted() { grep -c -v '^>' <<<"$(text "$1")" | tr -d ' '; }
+ok "…every line under the label is quoted" "$(unquoted "$EX")" 0
+ok "…paragraphs split by a bare > line"   "$(grep -c '^>$' <<<"$EX" | tr -d ' ')" 1
+ok "…no indentation or bullet inside the quote" "$(junk "$EX")" 0
 ok "…and exactly one example heading"     "$(grep -c '^## Hand-off example$' "$STYLE" | tr -d ' ')" 1
-awk '/^## Hand-off example$/{print; print ""; print "> quoted"; next} 1' "$STYLE" > "$TMP/mutant-style.md"
-ok "mutant: a > line in the example -> check FAILS" "$(grep -c -E '^(>|[[:space:]]|[-*+] |[0-9]+\. )' <<<"$(example "$TMP/mutant-style.md")" | tr -d ' ')" 1
+mutate() { awk -v l="$1" '/^## Hand-off example$/{f=1} f && /^> /{print; print l; f=0; next} 1' "$STYLE"; }
+ok "mutant: a > - x bullet in the quote -> check FAILS" "$(junk "$(example <(mutate '> - x'))")" 1
+ok "mutant: a >   x indented line in the quote -> check FAILS" "$(junk "$(example <(mutate '>   x'))")" 1
+ok "mutant: one unquoted line in the example -> check FAILS" "$(unquoted "$(example <(mutate 'unquoted'))")" 1
 
 SHARED=('Always link to the real artifacts' 'Lead with the outcome' '`prom` or `mrg`')
 flat() { tr '\n' ' ' < "$1" | tr -s ' '; }
@@ -184,7 +194,7 @@ ok "…and its Output style section is one pointer line" "$(awk '/^### Output st
 
 echo
 total=$((pass + fail))
-ok "exactly 69 assertions ran"            "$total" 69
+ok "exactly 75 assertions ran"            "$total" 75
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

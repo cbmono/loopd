@@ -10,7 +10,7 @@ Report like a briefing. The reader scans for two things: what changed, and what 
 
 - **Lead with the outcome.** First line says what happened or what the answer is. No preamble, no restating the question.
 - **`Needs you` last, and only when true.** When a human decision, credential, approval, or manual step is the blocker, end with a section headed `ℹ️ **Needs you:**` — always bold, always prefixed with the information glyph and one space. Nothing blocking → omit the section entirely rather than padding it.
-- **Every `Needs you` item is executable**: a numbered step, one action, in the imperative, with the URL inline, or a local file as a markdown link whose target is its absolute path. "Merge [monorepo#2725](url)", "Approve [task-001](/Users/…/task-001.md)" — not "the PR needs attention". A command the human runs goes on its own line as inline code, with no bullet, number, `$` prompt or trailing prose on the line, and never in a fenced block: the terminal colours inline code and a bullet's `-` pastes into the shell. Several commands are several such lines, in run order.
+- **Every `Needs you` item is executable**: a numbered step, one action, in the imperative, with the URL inline, or a local file as a markdown link whose target is its absolute path. "Merge [monorepo#2725](url)", "Approve [task-001](/Users/…/task-001.md)" — not "the PR needs attention". A command the human runs goes on its own line as inline code, with no bullet, number, `$` prompt or trailing prose on the line, no `>` and no indentation, and never in a fenced block: the terminal colours inline code, a bullet's `-` pastes into the shell and a copied `>` is a shell redirect. Several commands are several such lines, in run order.
 - **Every `Needs you` item ends with `Recommend: <the answer> — <one-line reason>`** on the item's line, never a line of its own — **except a lone merge or close item whose verb already is the advice** (🔀 merge once green, 🏁 close a finished project), which carries none; no other verb is exempt. A real choice (options, yes/no, `go`/`prom`) keeps it, and so does an item whose advice differs from the obvious action (wait, don't merge yet), with its reason. An item with no sensible default says why: `Recommend: none — <why>`. A row relayed from `AWAITING.md` carries it as `(recommended: …)` or `(no recommendation)`, which satisfies this — keep that text unchanged, a merge or close row included, and rewrite only its link target to an absolute path. On a promote or merge item it is display-only — only a typed `prom` or `mrg` acts.
 - **`Done so far` is optional, and marked the same way when used.** A reply that heads its recap `Done so far:` writes it as `🚀 **Done so far:**` — bold, rocket glyph, one space. Never add the heading only to carry the glyph.
 - **Number multi-item output** so the reader can reply "re: 2". Bullets only for unordered sub-points.
@@ -23,17 +23,18 @@ Report like a briefing. The reader scans for two things: what changed, and what 
 - **Keywords go in inline code**: task ids, branches, file names, config keys, command names.
 - **Always link to the real artifacts.** Every PR, run, URL and local file is a markdown link: a PR as `[<repo>#<n>](<url>)`, a run to its URL, a local file to its absolute path, never a GitHub URL or the bundle-relative `/projects/…` target. Never a bare URL, except inside copy-ready text.
 - **A keyword that is also a file or URL is a link with an inline-code label**: [`task-001`](/Users/…/task-001.md). A branch or commit links to its GitHub URL.
-- **A command is always its own inline-code line**, the shape the `Needs you` rule above gives it.
+- **A command is always its own inline-code line**, the shape the `Needs you` rule above gives it: no `>` and no indentation, which only hand-off text may carry.
 - **Reply shorthand the human types back is inline code, exactly as typed**: `prom 10 11`, `mrg`, `go`, `ok`, `1 n 2`.
 
 ## Hand-off text
 
 - **Text the human sends or pastes gets a bold label line naming where it goes**: `📋 **WhatsApp → <name>**` for a message to a person (Slack, WhatsApp, email), `🌐 **Claude in Chrome prompt**` for a prompt.
-- **The text follows as plain paragraphs**: no `>` blockquote, no indentation, no bullets.
-- **Never a `>` quote or indentation for anything meant to be copied.**
+- **Under the label line, the text follows as plain paragraphs in a `>` blockquote**: each line prefixed `> `, a bare `>` line between paragraphs. The quote is optional and the default wherever hand-off text appears, clean copy written or not; plain paragraphs with no quote stay correct where a quote would render badly.
+- **Inside the text: no indentation and no bullets**, quoted or not — both copy as junk.
+- **The quote is a visual marker, never the guarantee.** Whether a terminal copies it cleanly depends on the terminal; the `pbcopy` clean copy is the guarantee of a clean clipboard, and stays mandatory in an interactive session.
 - **Clean copy, in an interactive session only, never a background tick or subagent.** The terminal wraps and indents every rendered line and `/copy` takes the whole reply, so each copy-ready block also goes to a scratch file:
   1. First `git check-ignore -q tmp/copy` from the bundle root. If it exits non-zero, stop the clean copy: write no file, skip steps 2–5, and tell the human the clipboard was not updated.
-  2. Delete `tmp/copy/copy-*.txt`, then write `tmp/copy/copy-1.txt`, `copy-2.txt` … with the Write tool, one per block: the text only, never its label line.
+  2. Delete `tmp/copy/copy-*.txt`, then write `tmp/copy/copy-1.txt`, `copy-2.txt` … with the Write tool, one per block: the text only, never its label line, with its `>` markers dropped and a bare `>` separator line written as a blank line.
   3. One block: run `pbcopy < tmp/copy/copy-1.txt` from the bundle root, so it is on the clipboard.
   4. Several blocks: one `pbcopy < <abs path>` line each, which the human runs with `!`.
   5. No `pbcopy` on this machine: print each file's absolute path instead.
@@ -42,9 +43,9 @@ Report like a briefing. The reader scans for two things: what changed, and what 
 
 📋 **WhatsApp → <name>**
 
-Hi <name>, the export you asked for is in the shared folder under today's date.
-
-Tell me if a column is missing and I will add it.
+> Hi <name>, the export you asked for is in the shared folder under today's date.
+>
+> Tell me if a column is missing and I will add it.
 
 ## Answer vs deliverable
 
