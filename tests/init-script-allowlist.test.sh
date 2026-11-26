@@ -2,8 +2,10 @@
 #
 # init-script-allowlist.test.sh — plugin/scripts/init-bundle.sh writes the two
 # version-wild script rules into .claude/settings.local.json, once, and fails closed on a
-# shape it cannot edit. The plugin is copied to a cache-shaped path under a fixture HOME,
-# because the rule is derived from where the running init lives. Reasoning: task-016.
+# shape it cannot edit; from a plugin root with whitespace, one exact-version rule per
+# read-only script on the space-free real path instead (§8-§14). The plugin is copied to a
+# cache-shaped path under a fixture HOME, because the rule is derived from where the running
+# init lives. Reasoning: task-016.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -120,6 +122,106 @@ for blank in "blank line after [" "no blank line"; do
   ok "only the non-last entry keeps its comma ($blank)" "$(grep -c '",$' "$L" | tr -d ' ')" 1
   [ "$PY" = no ] || ok "the filled file parses as JSON ($blank)" "$(yn json "$L")" yes
 done
+
+# A plugin root with whitespace (a profile's `plugins` linked to the space-free cache) gets one
+# exact-version rule per read-only script, on the real path (space-free-path-measurement.md).
+SPD="$TMP/home/Library/Application Support/profile"; mkdir -p "$SPD"
+ln -s "$TMP/home/.claude/plugins" "$SPD/plugins"
+SP="$SPD/plugins/cache/mk/${PN}"
+LIST="$MK/9.9.9/data/script-classes.txt"
+RO="$(awk '$2 == "read-only" { print $1 }' "$LIST")"; WR="$(awk '$2 == "writing" { print $1 }' "$LIST")"
+rule() { printf 'Bash(%s/%s/scripts/%s *)' "$MK" "$1" "$2"; }
+allow() { python3 -c 'import json,sys; [print(a) for a in json.load(open(sys.argv[1]))["permissions"]["allow"]]' "$1"; }
+mkfile() { # <file> <rule>... -> a settings.local.json allowing exactly those rules
+  mkdir -p "$(dirname "$1")"; f="$1"; shift
+  python3 -c 'import json,sys; json.dump({"permissions": {"allow": sys.argv[2:]}}, open(sys.argv[1], "w"), indent=2)' "$f" "$@"
+}
+HAND1='Bash(git status)'; HAND2="Bash($MK/9.9.8/scripts/bundle-paths.sh)"
+HAND3="Bash($TMP/home/.claude/plugins/cache/other/${PN}/*/scripts/*)"
+OLD_SP1="Bash($SP/*/scripts/*)"; OLD_SP2="Bash(bash $SP/*/scripts/*)"
+OLD_MK2="Bash(bash $MK/*/scripts/*)"; OLD_V="$(rule 9.9.8 bundle-paths.sh)"
+
+if [ "$PY" = no ]; then echo "  SKIP  §8-§14 need python3 to read the fixture JSON"; else
+echo "== 8. a whitespace root writes one exact-version rule per read-only script =="
+ok "the fixture root holds a space and links to the cache" "$(cd "$SP/9.9.9" && pwd -P)" "$MK/9.9.9"
+I="$TMP/i8"; git init -q "$I"; stamp "$SP/9.9.9" "$I"; rc=$?; L="$I/.claude/settings.local.json"
+ok "stamp exits 0" "$rc" 0
+ok "the file parses as JSON" "$(yn json "$L")" yes
+ok "one rule per read-only entry, nothing else" "$(allow "$L" | sort | cksum)" \
+  "$(printf '%s\n' "$RO" | while read -r n; do rule 9.9.9 "$n"; echo; done | sort | cksum)"
+ok "…and the list has read-only entries to write" "$([ "$(printf '%s\n' "$RO" | grep -c .)" -gt 10 ] && echo yes)" yes
+ok "merge-queue.sh gets the literal measured rule" "$(allow "$L" | grep -cxF "Bash($MK/9.9.9/scripts/merge-queue.sh *)")" 1
+ok "no rule names the spaced path" "$(grep -cF "$SPD" "$L" | tr -d ' ')" 0
+ok "no bash-prefixed twin and no wildcard version" "$(allow "$L" | grep -cE '^Bash\(bash |/\*/scripts/')" 0
+ok "0 rules for any writing entry" "$(printf '%s\n' "$WR" | while read -r n; do allow "$L" | grep -F "/scripts/$n " ; done | grep -c .)" 0
+for n in commit-as.sh reclaim-worktree.sh release-bump.sh; do
+  ok "$n is classed writing and has no rule" "$(grep -c "^$n writing" "$LIST")/$(allow "$L" | grep -cF "/$n")" 1/0
+done
+
+echo "== 9. a second stamp is a no-op =="
+cp "$L" "$TMP/before"; stamp "$SP/9.9.9" "$I"
+ok "file byte-identical" "$(yn cmp -s "$TMP/before" "$L")" yes
+ok "the stamp says keep" "$(grep -c 'keep  script allowlist' "$TMP/out" | tr -d ' ')" 1
+
+echo "== 10. a re-stamp removes only the rules this writer wrote =="
+I="$TMP/i10"; L="$I/.claude/settings.local.json"
+mkfile "$L" "$HAND1" "$OLD_SP1" "$OLD_SP2" "$R1" "$OLD_MK2" "$OLD_V" "$HAND2" "$HAND3"
+stamp "$SP/9.9.9" "$I"
+for r in "$OLD_SP1" "$OLD_SP2" "$R1" "$OLD_MK2" "$OLD_V"; do
+  ok "removed: ${r#"$TMP"}" "$(allow "$L" | grep -cxF -- "$r")" 0
+done
+for r in "$HAND1" "$HAND2" "$HAND3"; do
+  ok "kept byte-identical: ${r#"$TMP"}" "$(grep -cF "\"$r\"" "$L" | tr -d ' ')" 1
+done
+ok "every read-only rule written" "$(allow "$L" | grep -cF "$MK/9.9.9/scripts/")" "$(printf '%s\n' "$RO" | grep -c .)"
+ok "the stamp names each removal" "$(grep -c '^  removed ' "$TMP/out" | tr -d ' ')" 5
+
+echo "== 11. a stamp from an older plugin root never replaces newer rules =="
+I="$TMP/i11"; L="$I/.claude/settings.local.json"
+mkfile "$L" "$(rule 9.10.0 merge-queue.sh)" "$OLD_SP1"; cp "$L" "$TMP/before"
+stamp "$SP/9.9.9" "$I"
+ok "9.10.0 is newer than 9.9.9: file byte-identical" "$(yn cmp -s "$TMP/before" "$L")" yes
+ok "…and the stamp says why" "$(grep -c 'names a newer' "$TMP/out" | tr -d ' ')" 1
+
+echo "== 12. neither python3 nor jq: skip with a warning =="
+NOPJ="$TMP/nopj"; mkdir -p "$NOPJ"
+for f in "$NOPY"/*; do [ "${f##*/}" = jq ] || ln -s "$(readlink "$f")" "$NOPJ/${f##*/}"; done
+I="$TMP/i12"; L="$I/.claude/settings.local.json"; mkfile "$L" "$OLD_SP1" "$OLD_SP2"; cp "$L" "$TMP/before"
+stamp "$SP/9.9.9" "$I" "$STUB:$NOPJ"
+ok "no python3 or jq on the fixture PATH" "$( (PATH="$NOPJ"; command -v python3 jq | grep -c .) )" 0
+ok "file byte-identical" "$(yn cmp -s "$TMP/before" "$L")" yes
+ok "…and a warning names the missing tools" "$(grep -c 'needs python3 or jq' "$TMP/out" | tr -d ' ')" 1
+
+echo "== 13. a bad list keeps the old rules and warns =="
+cp "$LIST" "$TMP/list"
+n13=0
+for bad in missing empty unparseable "names a missing script"; do
+  n13=$((n13+1)); cp "$TMP/list" "$LIST"
+  case "$bad" in
+    missing) rm "$LIST" ;;
+    empty) : > "$LIST" ;;
+    unparseable) printf 'bundle-paths.sh maybe\n' >> "$LIST" ;;
+    *) printf 'gone.sh read-only\n' >> "$LIST" ;;
+  esac
+  I="$TMP/i13-$n13"; L="$I/.claude/settings.local.json"; mkfile "$L" "$OLD_SP1" "$OLD_SP2"; cp "$L" "$TMP/before"
+  stamp "$SP/9.9.9" "$I"
+  ok "list $bad: old rules kept, file byte-identical" "$(yn cmp -s "$TMP/before" "$L")" yes
+  ok "list $bad: a warning is printed" "$(grep -c 'script-classes.txt is missing, empty' "$TMP/out" | tr -d ' ')" 1
+done
+cp "$TMP/list" "$LIST"
+
+echo "== 14. a real path that still needs quoting writes no rule and names it =="
+n14=0
+for d in "sp ace" 'do$llar' "apo'strophe" 'amp&ersand' 'semi;colon' 'ha#sh' "$(printf 'ta\tb')" "new
+line"; do
+  n14=$((n14+1)); R="$TMP/m$n14/$d/plugins/cache/mk/${PN}/9.9.9"; mkdir -p "${R%/*}"; cp -R "$MK/9.9.9" "$R"
+  ln -s "$R" "$TMP/m$n14/Application Support"
+  I="$TMP/i14-$n14"; mkdir -p "$I"; stamp "$TMP/m$n14/Application Support" "$I"
+  ok "real path with ${d%%[[:space:]]*}…: no settings.local.json" "$(yn test -f "$I/.claude/settings.local.json")" no
+  ok "real path with ${d%%[[:space:]]*}…: the warning names it" "$(grep -cF -- "\`${R%%
+*}" "$TMP/out" | tr -d ' ')/$(grep -c 'holds whitespace or a shell metacharacter' "$TMP/out" | tr -d ' ')" 1/1
+done
+fi
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

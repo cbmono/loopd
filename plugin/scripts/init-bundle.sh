@@ -837,13 +837,76 @@ else
   fi
 fi
 
+# THE settings.local.json EDITORS 1e and 1f share.
+# A rule under permissions.deny is not a grant, so only the named list is read.
+bg_list() { # <file> <allow|deny> -> its string entries, one per line
+  [ -f "$1" ] || return 0
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$1" "$2" <<'PY' 2>/dev/null
+import json, sys
+try: d = json.load(open(sys.argv[1]))
+except Exception: sys.exit(0)
+l = (d.get("permissions") or {}).get(sys.argv[2]) if isinstance(d, dict) and isinstance(d.get("permissions"), dict) else None
+for a in (l if isinstance(l, list) else []):
+    if isinstance(a, str) and "\n" not in a: print(a)
+PY
+  elif command -v jq >/dev/null 2>&1; then
+    jq -r --arg k "$2" '.permissions[$k] // [] | .[] | strings' "$1" 2>/dev/null
+  elif [ "$2" = allow ]; then grep -o "\"${BG_BROAD%% *}[^\"]*)\"" "$1" | sed 's/^"//; s/"$//'; fi
+}
+bg_write_json() { # <add> <remove> -> stdout: $AL_FILE with <add> in and <remove> out; non-zero = not safe
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$AL_FILE" "$1" "$2" <<'PY' 2>/dev/null
+import json, os, sys
+p, rules = sys.argv[1], [r for r in sys.argv[2].split("\n") if r]
+stale = [s for s in sys.argv[3].split("\n") if s]
+d = {}
+if os.path.exists(p) and open(p).read().strip():
+    d = json.load(open(p))          # unreadable means refuse, never "treat as empty"
+if not isinstance(d, dict): sys.exit(1)
+perm = d.setdefault("permissions", {})
+allow = perm.setdefault("allow", []) if isinstance(perm, dict) else None
+if not isinstance(allow, list): sys.exit(1)
+allow[:] = [a for a in allow if a not in stale]
+allow.extend(r for r in rules if r not in allow)
+json.dump(d, sys.stdout, indent=2); print()
+PY
+  elif command -v jq >/dev/null 2>&1; then
+    { [ -s "$AL_FILE" ] && cat "$AL_FILE" || echo '{}'; } | jq --arg r "$1" --arg s "$2" '
+      ($s | split("\n") | map(select(length > 0))) as $st
+      | ($r | split("\n") | map(select(length > 0))) as $add
+      | .permissions.allow = (((.permissions.allow // []) - $st) as $a | $a + ($add - $a))'
+  else return 1; fi
+}
+bg_verify() { # <file> <want> <stale> — parses, carries each wanted rule once, and none of the stale ones
+  team_json_ok "$1" || return 1
+  while IFS= read -r bg_r; do
+    [ -z "$bg_r" ] || [ "$(bg_list "$1" allow | grep -cxF -- "$bg_r")" = 1 ] || return 1
+  done <<EOF
+$2
+EOF
+  while IFS= read -r bg_s; do
+    [ -z "$bg_s" ] || ! bg_list "$1" allow | grep -qxF -- "$bg_s" || return 1
+  done <<EOF
+$3
+EOF
+}
+
 # 1e. THE SCRIPT ALLOWLIST — into the gitignored .claude/settings.local.json, because the
-# rule is an absolute $HOME path. Only the version is wild: `*.sh:*` and `~` forms match
-# nothing (Claude Code 2.1.284, task-016). jq-free and fail-closed like 1d.
+# rule is an absolute $HOME path. A space-free plugin root gets the version-wild pair, jq-free
+# and fail-closed like 1d. No rule matches a call by a path with whitespace, so such a root
+# gets one exact-version rule per read-only script of data/script-classes.txt on its
+# space-free real path (Claude Code 2.1.332). docs/operations.md -> "Per-instance settings".
 AL_FILE="$TARGET/.claude/settings.local.json"
 AL_OPEN='"allow"[[:space:]]*:[[:space:]]*\[[[:space:]]*$'
-al_mk="${PLUGIN_ROOT%/*}"
-case "${al_mk##*/}|${al_mk%/*/*}|$PLUGIN_ROOT" in
+AL_ROOT="$PLUGIN_ROOT"; al_exact=no; al_bad=""
+case "$PLUGIN_ROOT" in
+  *[[:space:]]*)
+    al_exact=yes; AL_ROOT="$(cd "$PLUGIN_ROOT" 2>/dev/null && pwd -P)"
+    case "$AL_ROOT" in ""|*[[:space:]]*|*[\'\$\&\;\#]*) al_bad="${AL_ROOT:-$PLUGIN_ROOT}" ;; esac ;;
+esac
+al_mk="${AL_ROOT%/*}"
+case "${al_mk##*/}|${al_mk%/*/*}|$AL_ROOT" in
   *'"'*|*'\'*|*'('*|*')'*) al_mk="" ;;
   "$PLUGIN_NAME"\|*/plugins/cache\|*) ;;
   *) al_mk="" ;;
@@ -865,8 +928,64 @@ al_write() { # <missing entries, one per line> -> the rewritten file on stdout, 
     O="$AL_OPEN" AL="$add" awk '{ print } $0 ~ ENVIRON["O"] { print ENVIRON["AL"] }' "$AL_FILE"
   fi
 }
-if [ -z "$al_mk" ]; then
+al_scan() { # stdin: allow rules -> "stale|newer<TAB><rule>" for the rules this writer owns
+  P="$al_mk/" L="${PLUGIN_ROOT%/*}/" V="$al_ver" awk '
+    function newer(a, b,   x, y, i, n) {
+      n = split(a, x, "."); if (split(b, y, ".") > n) n = length(y)
+      for (i = 1; i <= n; i++) if (x[i] + 0 != y[i] + 0) return x[i] + 0 > y[i] + 0
+      return 0 }
+    BEGIN { P = ENVIRON["P"]; L = ENVIRON["L"]; V = ENVIRON["V"] }
+    $0 == "Bash(" P "*/scripts/*)" || $0 == "Bash(bash " P "*/scripts/*)" ||
+    $0 == "Bash(" L "*/scripts/*)" || $0 == "Bash(bash " L "*/scripts/*)" { print "stale\t" $0; next }
+    index($0, "Bash(" P) == 1 {
+      r = substr($0, length(P) + 6)
+      if (r !~ /^[^\/*]+\/scripts\/[A-Za-z0-9_.-]+\.sh \*\)$/) next
+      v = substr(r, 1, index(r, "/") - 1)
+      if (v != V) print (newer(v, V) ? "newer" : "stale") "\t" $0 }'
+}
+if [ -n "$al_bad" ]; then
+  echo "  warn  script allowlist not written: the plugin's real path \`$al_bad\` holds whitespace or a shell metacharacter, so no rule can match a call by it." >&2
+elif [ -z "$al_mk" ]; then
   echo "  skip  script allowlist (not run from a plugin cache install)"
+elif [ "$al_exact" = yes ]; then
+  al_ver="${AL_ROOT##*/}"; al_ro=""
+  al_rows="$(awk 'NF { if ($1 !~ /^[A-Za-z0-9_.-]+\.sh$/ || ($2 != "read-only" && $2 != "writing")) exit 1
+                       print $2, $1 }' "$AL_ROOT/data/script-classes.txt" 2>/dev/null)" || al_rows=""
+  while read -r al_c al_n; do
+    [ -n "$al_n" ] || continue
+    [ -f "$AL_ROOT/scripts/$al_n" ] || { al_ro=""; break; }
+    [ "$al_c" = writing ] || al_ro="$al_ro$al_n
+"
+  done <<EOF
+$al_rows
+EOF
+  if [ -z "$al_ro" ]; then
+    echo "  warn  script allowlist not changed: $AL_ROOT/data/script-classes.txt is missing, empty, unparseable or names a script that is not there." >&2
+  elif ! command -v python3 >/dev/null 2>&1 && ! command -v jq >/dev/null 2>&1; then
+    echo "  warn  script allowlist not changed: editing .claude/settings.local.json needs python3 or jq, and neither is here." >&2
+  else
+    al_want="$(printf '%s' "$al_ro" | while IFS= read -r n; do printf 'Bash(%s/scripts/%s *)\n' "$AL_ROOT" "$n"; done)"
+    al_found="$(bg_list "$AL_FILE" allow | al_scan)"
+    al_newer="$(printf '%s\n' "$al_found" | awk -F'\t' '$1 == "newer" { print $2 }')"
+    al_stale="$(printf '%s\n' "$al_found" | awk -F'\t' '$1 == "stale" { print $2 }')"
+    al_missing="$(printf '%s\n' "$al_want" | while IFS= read -r r; do
+      bg_list "$AL_FILE" allow | grep -qxF -- "$r" || printf '%s\n' "$r"; done)"
+    al_tmp="$AL_FILE.allow.$$"
+    if [ -n "$al_newer" ]; then
+      echo "  keep  script allowlist: .claude/settings.local.json names a newer ${PLUGIN_NAME} than $al_ver, and an older stamp never replaces it:"
+      printf '%s\n' "$al_newer" | sed 's/^/          /'
+    elif [ -z "$al_missing$al_stale" ]; then
+      echo "  keep  script allowlist (.claude/settings.local.json already has the $al_ver rules)"
+    elif [ ! -L "$AL_FILE" ] && mkdir -p "$TARGET/.claude" && bg_write_json "$al_missing" "$al_stale" > "$al_tmp" \
+         && bg_verify "$al_tmp" "$al_want" "$al_stale" && mv "$al_tmp" "$AL_FILE" \
+         && bg_verify "$AL_FILE" "$al_want" "$al_stale"; then
+      echo "  wrote script allowlist into .claude/settings.local.json: $(printf '%s\n' "$al_missing" | grep -c .) read-only script rule(s) on $AL_ROOT/scripts/"
+      printf '%s\n' "$al_stale" | awk 'NF { print "  removed " $0 }'
+    else
+      rm -f "$al_tmp"
+      echo "  warn  script allowlist not written: no safe edit of $AL_FILE (it must parse as JSON)." >&2
+    fi
+  fi
 else
   al_missing=""
   for r in "Bash($al_mk/*/scripts/*)" "Bash(bash $al_mk/*/scripts/*)"; do
@@ -919,22 +1038,6 @@ BG_BROAD="Bash(claude --bg *)"
 BG_INERT="Bash(claude --bg ' *)"
 RESUME_RULE="Bash(claude --bg --resume *)"
 STOP_RULE="Bash(claude stop *)"
-# A rule under permissions.deny is not a grant, so only the named list is read.
-bg_list() { # <file> <allow|deny> -> its string entries, one per line
-  [ -f "$1" ] || return 0
-  if command -v python3 >/dev/null 2>&1; then
-    python3 - "$1" "$2" <<'PY' 2>/dev/null
-import json, sys
-try: d = json.load(open(sys.argv[1]))
-except Exception: sys.exit(0)
-l = (d.get("permissions") or {}).get(sys.argv[2]) if isinstance(d, dict) and isinstance(d.get("permissions"), dict) else None
-for a in (l if isinstance(l, list) else []):
-    if isinstance(a, str) and "\n" not in a: print(a)
-PY
-  elif command -v jq >/dev/null 2>&1; then
-    jq -r --arg k "$2" '.permissions[$k] // [] | .[] | strings' "$1" 2>/dev/null
-  elif [ "$2" = allow ]; then grep -o "\"${BG_BROAD%% *}[^\"]*)\"" "$1" | sed 's/^"//; s/"$//'; fi
-}
 bg_has() { bg_list "$AL_FILE" allow | grep -qxF -- "$1"; }
 BG_WANT="$(printf '%s\n' "$BG_RULES" "$RESUME_RULE" "$STOP_RULE" | grep .)"
 bg_missing="$(printf '%s\n' "$BG_WANT" | while IFS= read -r r; do bg_has "$r" || printf '%s\n' "$r"; done)"
@@ -952,41 +1055,6 @@ if [ -f "$AL_FILE" ]; then
         match($0, /--agent [^:* ]+:/) { ns = substr($0, RSTART + 8, RLENGTH - 9); if (ns != pn) print $0 "\tstale: names the retired " ns ": namespace" }')"
 fi
 bg_stale_rules="$(printf '%s\n' "$bg_stale" | cut -f1 | grep . || true)"
-bg_write_json() { # -> stdout: the file with $bg_missing in and $bg_stale_rules out; non-zero = not safe
-  if command -v python3 >/dev/null 2>&1; then
-    python3 - "$AL_FILE" "$bg_missing" "$bg_stale_rules" <<'PY' 2>/dev/null
-import json, os, sys
-p, rules = sys.argv[1], [r for r in sys.argv[2].split("\n") if r]
-stale = [s for s in sys.argv[3].split("\n") if s]
-d = {}
-if os.path.exists(p) and open(p).read().strip():
-    d = json.load(open(p))          # unreadable means refuse, never "treat as empty"
-if not isinstance(d, dict): sys.exit(1)
-perm = d.setdefault("permissions", {})
-allow = perm.setdefault("allow", []) if isinstance(perm, dict) else None
-if not isinstance(allow, list): sys.exit(1)
-allow[:] = [a for a in allow if a not in stale]
-allow.extend(r for r in rules if r not in allow)
-json.dump(d, sys.stdout, indent=2); print()
-PY
-  elif command -v jq >/dev/null 2>&1; then
-    { [ -s "$AL_FILE" ] && cat "$AL_FILE" || echo '{}'; } | jq --arg r "$bg_missing" --arg s "$bg_stale_rules" '
-      ($s | split("\n") | map(select(length > 0))) as $st
-      | ($r | split("\n") | map(select(length > 0))) as $add
-      | .permissions.allow = (((.permissions.allow // []) - $st) as $a | $a + ($add - $a))'
-  else return 1; fi
-}
-bg_verify() { # <file> — parses, carries each rule once, and none of the stale ones
-  team_json_ok "$1" || return 1
-  while IFS= read -r bg_r; do [ "$(bg_list "$1" allow | grep -cxF -- "$bg_r")" = 1 ] || return 1; done <<EOF
-$BG_WANT
-EOF
-  while IFS= read -r bg_s; do
-    [ -z "$bg_s" ] || ! bg_list "$1" allow | grep -qxF -- "$bg_s" || return 1
-  done <<EOF
-$bg_stale_rules
-EOF
-}
 bg_note_stale() { printf '%s\n' "$bg_stale" | awk -F'\t' 'NF { printf "  note  .claude/settings.local.json has `%s` — %s. Remove it: re-run with --spawn-grant, or edit the file.\n", $1, $2 }'; }
 bg_want=no; [ -z "$bg_missing" ] || bg_want=yes
 printf '%s\n' "$bg_denied" | awk 'NF { printf "  note  .claude/settings.local.json lists `%s` under permissions.deny, which overrides any allow — the tick is refused until you remove it.\n", $0 }'
@@ -1021,8 +1089,9 @@ if [ "$bg_want" = yes ] || [ -n "$bg_stale" ]; then
   fi
   if [ "$bg_write" = yes ]; then
     bg_tmp="$AL_FILE.bg.$$"
-    if [ ! -L "$AL_FILE" ] && mkdir -p "$TARGET/.claude" && bg_write_json > "$bg_tmp" \
-       && bg_verify "$bg_tmp" && mv "$bg_tmp" "$AL_FILE" && bg_verify "$AL_FILE"; then
+    if [ ! -L "$AL_FILE" ] && mkdir -p "$TARGET/.claude" && bg_write_json "$bg_missing" "$bg_stale_rules" > "$bg_tmp" \
+       && bg_verify "$bg_tmp" "$BG_WANT" "$bg_stale_rules" && mv "$bg_tmp" "$AL_FILE" \
+       && bg_verify "$AL_FILE" "$BG_WANT" "$bg_stale_rules"; then
       echo "  wrote spawn grant into .claude/settings.local.json:"
       printf '%s\n' "$bg_missing" | sed 's/^/          /'
       printf '%s\n' "$bg_stale" | awk -F'\t' 'NF { printf "  removed %s  (%s)\n", $1, $2 }'
