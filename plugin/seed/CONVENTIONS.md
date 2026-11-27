@@ -179,6 +179,10 @@ Verified: `foo.test.sh` 40/0 locally, 10/10 checks green on [run 1234](https://�
 
 1. **`## Description`, then a one-sentence TL;DR.**
 2. **A `Verified:` line that cites something a reader can open** — a link, not "all green".
+   **A PR whose base is not the default branch** usually gets no CI or bot review: cite a
+   URL a reader can open (a local run only through such a link) or the parent PR's run
+   labelled `(parent)`, and mark CI-dependent criteria `✗` until it is rebased onto the
+   default branch.
 3. **The criteria table** under a heading carrying **the tally, and the reason for any
    `✗`**; the gate counts rows and refuses a tally that disagrees.
 4. **`### Decided without asking`**, required — one row per technical choice no criterion,

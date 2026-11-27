@@ -58,8 +58,9 @@ are on it.
    was given, `ls projects/` for the **directory names** and run "The no-slug path" below —
    never open one to judge whether it is closeable. That judgement is the agent's
    step 1, which refuses a project whose tasks are still live.
-2. **The folder exists.** Confirm `projects/<slug>/` is there; if it is not, stop and
-   report. Nothing inside it is read here.
+2. **The folder exists.** Confirm `projects/<slug>/` is there; if it is not, dispatch the
+   agent anyway with `folder absent` in its brief: it finishes a step 7 an earlier
+   closeout handed to the human, or stops and reports. Nothing inside it is read here.
 
 ### The launcher reads nothing else — an ALLOWLIST of two, and everything else is the closeout agent
 
@@ -219,6 +220,15 @@ is, while the log entry still names the human who decided.
 > may run: it is report-only by design and prints the exact removal or prune it would
 > perform, which is a better dry-run report than a description of one.
 
+> **A re-run after a handed-over `--apply` finishes step 7 and nothing else.** An earlier
+> closeout ran steps 1–6 and the human ran step 7's command by hand when
+> `projects/<slug>/` is gone with its deletion staged (`git status --porcelain --
+> projects/<slug>`), or, for a retained project, `project.md` carries an uncommitted
+> `deliverable_paths:` stamp. Then skip steps 0–6 and run step 7 from "Then stage and
+> commit": every path that closeout left uncommitted, by explicit path, after
+> `validate-bundle.sh`, then `build-awaiting.sh` and the snapshot. Folder gone with
+> nothing staged ⇒ stop and report.
+
 0. **Both escalations, before any write — the pre-flight.** This step is the split's, and steps 1–7 below
    are the closeout as it always was. Read `project.md` and every `tasks/*.md`, the
    project's objective, and — unless the project is `retain: true`, which skips step 6
@@ -373,6 +383,17 @@ is, while the log entry still names the human who decided.
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug> --apply
    ```
+
+   **When the host refuses that command, hand it to the human.** Only a permission
+   denial triggers this — auto mode or a permission rule refused the call, so the
+   script never ran; a non-zero exit of the script itself is reported as below. Finish
+   steps 3–6 if any is left, write nothing more, and end your report with the command as
+   one paste-ready inline-code line, its path absolute (what `${CLAUDE_PLUGIN_ROOT}`
+   expands to, never the variable): `<absolute plugin root>/scripts/close-project-folder.sh <slug> --apply`.
+   Name the bundle root's absolute path as the directory to run it from, and tell the
+   human to re-run `/loopd:close-project <slug>` afterwards: that run finds the folder
+   gone and finishes this step (validate, commit, `build-awaiting.sh`, snapshot). Add no
+   allow rule for the script — a writing script gets none.
 
    **Do not `git rm` or `rm` the folder by hand.** That one command is the whole
    folder step, and it reads `retain:` from `project.md` to decide which of the two
