@@ -301,8 +301,9 @@ quiet_report() {
     }
     index($0, pn " fix — acting ONLY") == 1 { close_seed(); infix = 1; inblock = 0; next }
     infix && /^── / { close_seed(); inblock = 1; warned = 0; seedrow = ($2 == "seed-drift"); fate = "drop"; next }
-    infix && !inblock { next }
     infix && /^$/ { close_seed(); inblock = 0; next }
+    infix && !inblock && /^                / { next }
+    infix && !inblock { infix = 0 }
     infix && /^⚠ / { warned = 1; if (tty) gsub(/\*\*/, ""); if (!seedrow) out[++n] = $0; next }
     infix && /^    ↳ / { if (warned && !seedrow) out[++n] = $0; next }
     infix && /^    NOT / { if ($0 !~ /^    NOT ACTED ON/) out[++n] = $0; next }

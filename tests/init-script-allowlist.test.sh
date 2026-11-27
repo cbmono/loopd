@@ -33,7 +33,7 @@ STUB="$TMP/bin"; mkdir -p "$STUB"; printf '#!/bin/sh\nexit 1\n' > "$STUB/gh"; ch
 stamp() { # <plugin root> <instance> [PATH]
   PATH="${3:-$STUB:$PATH}" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" CLAUDE_CONFIG_DIR="$TMP/home/.claude" \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" \
-    bash "$1/scripts/init-bundle.sh" "$2" </dev/null >"$TMP/out" 2>&1
+    bash "$1/scripts/init-bundle.sh" --verbose "$2" </dev/null >"$TMP/out" 2>&1
 }
 R1="Bash($MK/*/scripts/*)"; R2="Bash(bash $MK/*/scripts/*)"
 has() { grep -cF "\"$1\"" "$2" | tr -d ' '; }

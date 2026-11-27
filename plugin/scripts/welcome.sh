@@ -602,7 +602,7 @@ fix_bundle_unconverted() {
     return 0
   fi
   # The stamp inherits LOOPD_INIT_PASS and runs no pass — one extra stamp, never a loop.
-  note "running: bash $BIN/init-bundle.sh $ROOT"
+  note "running: bash $BIN/init-bundle.sh --verbose $ROOT"
   bash "$BIN/init-bundle.sh" --verbose "$ROOT" 2>&1 | sed 's/^/      /'
   return 0
 }

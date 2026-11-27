@@ -613,7 +613,7 @@ STUBG="$TMP/stubbin"; mkdir -p "$STUBG" "$TMP/stamphome"; printf '#!/bin/sh\nexi
 stamp() { # <instance> -> combined output in $out, status in $rc
   out="$(cd "$TMP" && PATH="$STUBG:$PATH" HOME="$TMP/stamphome" XDG_CONFIG_HOME="$TMP/stamphome" \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/stamphome/none" LOOPD_INIT_PASS=1 \
-    bash "$INIT" "$1" </dev/null 2>&1)"; rc=$?
+    bash "$INIT" --verbose "$1" </dev/null 2>&1)"; rc=$?
 }
 kb_cfg() { # <dir> <repo> — a bundle whose tracked config names a KB and nothing else of note
   mkdir -p "$1"

@@ -1838,7 +1838,7 @@ assert "a refresh never clobbers an existing snapshot" "$(fhas 'LOCAL SNAPSHOT C
 #
 # What deletion still does, and what it no longer does, are both asserted here.
 rm "$INST/$AB_SNAPSHOT"
-bash "$BRIDGE_INSTALL" "$INST" >"$TMP/i2.out" 2>&1
+bash "$BRIDGE_INSTALL" --verbose "$INST" >"$TMP/i2.out" 2>&1
 assert "a re-stamp RESTORES a deleted snapshot (board defaults on)" \
   "$(yes_if test -f "$INST/$AB_SNAPSHOT")"
 assert "…and says so"                               "$(fhas "seed  $AB_SNAPSHOT" "$TMP/i2.out")"
@@ -1852,7 +1852,7 @@ p = sys.argv[1]
 d = json.load(open(p)); d["board"] = False
 json.dump(d, open(p, "w"), indent=2)
 PYCFG
-bash "$BRIDGE_INSTALL" "$INST" >"$TMP/i3.out" 2>&1
+bash "$BRIDGE_INSTALL" --verbose "$INST" >"$TMP/i3.out" 2>&1
 assert "board:false keeps it off across a re-stamp"  "$(yes_if test ! -e "$INST/$AB_SNAPSHOT")"
 assert "…and the installer says which key did it"   "$(fhas 'board: false in instance.config.json' "$TMP/i3.out")"
 python3 - "$INST/instance.config.json" <<'PYCFG'

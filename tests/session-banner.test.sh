@@ -154,7 +154,7 @@ mkdir -p "$STAMPED/.claude/hooks"
 for gone in check-machinery.sh show-awaiting.sh show-board-link.sh; do
   ln -s "$SRC_TPL/plugin/hooks/$gone" "$STAMPED/.claude/hooks/$gone"
 done
-bash "$BRIDGE_INSTALL" "$STAMPED" >"$TMP/stamp2.log" 2>&1
+bash "$BRIDGE_INSTALL" --verbose "$STAMPED" >"$TMP/stamp2.log" 2>&1
 left="$(ls "$STAMPED/.claude/hooks/" 2>/dev/null | grep -cE '^(check-machinery|show-awaiting|show-board-link)\.sh$')"
 assert "a re-stamp retires the three dangling hook links (left $left)" "$(eq "$left" 0)"
 assert "…and says so, rather than removing them silently" \

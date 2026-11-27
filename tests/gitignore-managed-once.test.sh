@@ -50,7 +50,7 @@ grep -v 'gi_managed="$gi_managed /$AB_KB_STAMP\*' "$INIT_SRC" > "$MUT/plugin/scr
 
 KB="/$AB_KB_STAMP*"; REF="/$AB_DIR/refresh/"; CNT="/$AB_COUNTS"
 count() { grep -cxF "$2" "$1/.gitignore" | tr -d ' '; }
-stamp() { bash "$1/plugin/scripts/init-bundle.sh" "$2" </dev/null >"$TMP/out" 2>&1; }
+stamp() { bash "$1/plugin/scripts/init-bundle.sh" --verbose "$2" </dev/null >"$TMP/out" 2>&1; }
 commit() { ( cd "$1" && { [ -d .git ] || git init -q .; } && git add -A && git commit -qm s ) >/dev/null 2>&1; }
 # Stamp fresh, then take the two lines out of the bundle AND its merge base: the shape a
 # 4.3.0 stamp left, so the next stamp's append and the seed merge both write them.
