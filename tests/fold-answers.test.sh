@@ -283,6 +283,52 @@ ok "an indented non-entry line is refused (exit 3)" "$(bash "$SH" "$M" >/dev/nul
 ok "…and nothing was written" "$(cmp -s "$M" "$TMP/mixed.before" && echo yes || echo no)" yes
 
 echo
+echo "== a COLUMN-0 block sequence is a list, never an empty one =="
+# YAML allows `- entry` at the key's own indent. Read as unindented, it ended the block at
+# its first line: an empty list at exit 0, so the answered entry never moved.
+col0() { # <path> <open entry>...
+  local p="$1" e; shift
+  { printf -- '---\ntype: Task\ntitle: "T"\nstatus: draft\nopen_questions:\n'
+    for e in "$@"; do printf -- '- "%s"\n' "$e"; done
+    printf -- 'acceptance_criteria:\n- "c1"\nnote: kept\nanswered_questions: [ ]\n---\n\n# Context\n\nbody\n'; } > "$p"
+}
+fm_col0() { sed -n '2,/^---$/p' "$1" | grep -c '^- ' | tr -d ' '; }
+Z="$TMP/col0.md"; col0 "$Z" "Q1: colour? --- blue" "Q2: open"
+cp "$Z" "$TMP/col0.before"
+ok "--list reads the column-0 entries" "$(bash "$SH" --list "$Z" open_questions | tr '\n' '|')" "Q1: colour? --- blue|Q2: open|"
+ok "…and leaves the file untouched" "$(cmp -s "$Z" "$TMP/col0.before" && echo yes || echo no)" yes
+ok "the fold exits 0" "$(bash "$SH" "$Z" >/dev/null 2>&1; echo $?)" 0
+ok "…moves the answered entry" "$(bash "$SH" --list "$Z" answered_questions | sed 's/^[^·]*· //')" "Q1: colour? --- blue"
+ok "…keeps the open one" "$(bash "$SH" --list "$Z" open_questions)" "Q2: open"
+ok "…rewrites open_questions indented" "$(sed -n '/^open_questions:$/{n;p;}' "$Z")" '  - "Q2: open"'
+ok "the next column-0 list is its own block, untouched" "$(bash "$SH" --list "$Z" acceptance_criteria),$(fm_col0 "$Z")" "c1,1"
+ok "…and the scalar key after it too" "$(grep -c '^note: kept$' "$Z" | tr -d ' ')" 1
+
+Z="$TMP/col0-add.md"; col0 "$Z" "Q1: open"
+ok "--add appends to a column-0 list" "$(bash "$SH" --add "$Z" "Q2: new" >/dev/null 2>&1; bash "$SH" --list "$Z" open_questions | tr '\n' '|')" "Q1: open|Q2: new|"
+ok "…rewritten indented" "$(sed -n '/^open_questions:$/,/^acceptance_criteria:$/p' "$Z" | grep -c '^  - "' | tr -d ' ')" 2
+
+Z="$TMP/col0-answer.md"; col0 "$Z" "Q1: which?" "Q2: open"
+bash "$SH" --answer "Q1: which?" "this" "$Z" >/dev/null 2>&1
+ok "--answer finds a column-0 entry" "$(bash "$SH" --list "$Z" open_questions),$(bash "$SH" --list "$Z" answered_questions | sed 's/^[^·]*· //')" "Q2: open,Q1: which? --- this"
+
+Z="$TMP/col0-sweep.md"; col0 "$Z" "Q1: open"
+ok "--sweep notes a column-0 entry" "$(bash "$SH" --sweep "Q1: open" "seen" "$Z" >/dev/null 2>&1; bash "$SH" --list "$Z" open_questions)" "Q1: open · sweep: seen"
+
+Z="$TMP/col0-clear.md"; col0 "$Z" "Q1: moot" "Q2: open"
+bash "$SH" --clear "Q1: moot" "superseded" "$Z" >/dev/null 2>&1
+ok "--clear moves a column-0 entry" "$(bash "$SH" --list "$Z" open_questions),$(bash "$SH" --list "$Z" answered_questions | sed 's/^[^·]*· //')" "Q2: open,Q1: moot --- superseded"
+
+for order in col0-first indented-first; do
+  Z="$TMP/mixed-$order.md"
+  if [ "$order" = col0-first ]; then a='- "Q1: a --- b"'; b='  - "Q2: c"'; else a='  - "Q1: a --- b"'; b='- "Q2: c"'; fi
+  printf -- '---\ntype: Task\nstatus: draft\nopen_questions:\n%s\n%s\nanswered_questions: [ ]\n---\n' "$a" "$b" > "$Z"
+  cp "$Z" "$Z.before"
+  ok "mixed indents ($order) are exit 3" "$(bash "$SH" "$Z" >/dev/null 2>&1; echo $?)" 3
+  ok "…and nothing was written" "$(cmp -s "$Z" "$Z.before" && echo yes || echo no)" yes
+done
+
+echo
 echo "== a '### Q<n>' block in the body: the line folds exactly as before, the block stays =="
 QD="$TMP/qd.md"; QP="$TMP/qp.md"
 doc "$QP" '"c1"' '"Q1: region? --- eu-central-1", "Q2: open"' ''
