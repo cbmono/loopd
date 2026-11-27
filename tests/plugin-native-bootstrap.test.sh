@@ -219,7 +219,7 @@ GI
 
 ok "the fixture really carries 8 symlinks" \
    "$(find "$LEG" -type l | grep -c . | tr -d ' ')" 8
-bash "$INIT" "$LEG" >"$TMP/convert.out" 2>&1
+bash "$INIT" --verbose "$LEG" >"$TMP/convert.out" 2>&1
 ok "the conversion exits 0"              "$?" 0
 ok "…and only the human's own link is left" \
    "$(find "$LEG" -type l | grep -c . | tr -d ' ')" 1
