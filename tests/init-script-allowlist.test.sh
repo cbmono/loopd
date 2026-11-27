@@ -135,7 +135,7 @@ mkfile() { # <file> <rule>... -> a settings.local.json allowing exactly those ru
   python3 -c 'import json,sys; json.dump({"permissions": {"allow": sys.argv[2:]}}, open(sys.argv[1], "w"), indent=2)' "$f" "$@"
 }
 HAND1='Bash(git status)'; HAND2="Bash($MK/9.9.8/scripts/bundle-paths.sh)"
-HAND3="Bash($TMP/home/.claude/plugins/cache/other/${PN}/*/scripts/*)"
+HAND3="Bash($TMP/home/.claude/plugins/cache/other/${PN}/*/scripts/*)"; HAND4="$(rule 9.9.8 commit-as.sh)"
 OLD_SP1="Bash($SP/*/scripts/*)"; OLD_SP2="Bash(bash $SP/*/scripts/*)"
 OLD_MK2="Bash(bash $MK/*/scripts/*)"; OLD_V="$(rule 9.9.8 bundle-paths.sh)"
 
@@ -163,12 +163,12 @@ ok "the stamp says keep" "$(grep -c 'keep  script allowlist' "$TMP/out" | tr -d 
 
 echo "== 10. a re-stamp removes only the rules this writer wrote =="
 I="$TMP/i10"; L="$I/.claude/settings.local.json"
-mkfile "$L" "$HAND1" "$OLD_SP1" "$OLD_SP2" "$R1" "$OLD_MK2" "$OLD_V" "$HAND2" "$HAND3"
+mkfile "$L" "$HAND1" "$OLD_SP1" "$OLD_SP2" "$R1" "$OLD_MK2" "$OLD_V" "$HAND2" "$HAND3" "$HAND4" "$(rule 9.10.0 commit-as.sh)"
 stamp "$SP/9.9.9" "$I"
 for r in "$OLD_SP1" "$OLD_SP2" "$R1" "$OLD_MK2" "$OLD_V"; do
   ok "removed: ${r#"$TMP"}" "$(allow "$L" | grep -cxF -- "$r")" 0
 done
-for r in "$HAND1" "$HAND2" "$HAND3"; do
+for r in "$HAND1" "$HAND2" "$HAND3" "$HAND4" "$(rule 9.10.0 commit-as.sh)"; do
   ok "kept byte-identical: ${r#"$TMP"}" "$(grep -cF "\"$r\"" "$L" | tr -d ' ')" 1
 done
 ok "every read-only rule written" "$(allow "$L" | grep -cF "$MK/9.9.9/scripts/")" "$(printf '%s\n' "$RO" | grep -c .)"
