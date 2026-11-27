@@ -234,19 +234,21 @@ gh_api "$TMP/wfs" --paginate "repos/$repo/actions/workflows" \
 
 gh_api "$TMP/b" "repos/$repo/branches/$branch"
 case $? in 1) unknown "branch $branch not found in $repo" ;; 2) unknown "gh could not read branch $branch of $repo" ;; esac
-fetch() { # <path> <ref> -> F, its flattened file, read once per path and ref; 1 when it 404s
+fetch() { # <path> <ref> -> F, its flattened file, read once per path and ref; 1 it 404s · 2 gh failed
   F="$TMP/f.$(printf '%s@%s' "$1" "$2" | cksum | cut -d' ' -f1)"
   if [ ! -e "$F" ]; then
     gh_api "$F.raw" -H 'Accept: application/vnd.github.raw' "repos/$repo/contents/$1?ref=$2"
-    case $? in 0) flatten < "$F.raw" > "$F" ;; 1) : > "$F"; : > "$F.404" ;; 2) unknown "gh could not read $1 at $2" ;; esac
+    case $? in 0) flatten < "$F.raw" > "$F" ;; 1) : > "$F"; : > "$F.404" ;; 2) : > "$F"; : > "$F.err" ;; esac
   fi
+  [ ! -e "$F.err" ] || return 2
   [ ! -e "$F.404" ]
 }
 i=0; gone=0; : > "$TMP/index"
 while IFS= read -r path; do
   [ -n "$path" ] || continue
   i=$((i + 1))
-  fetch "$path" "$branch" || { gone=$((gone + 1)); continue; }
+  fetch "$path" "$branch"
+  case $? in 1) gone=$((gone + 1)); continue ;; 2) unknown "gh could not read $path at $branch" ;; esac
   wf="$(sel "$F" name | head -n1)"
   printf '%s\t%s\t%s\n' "$F" "$path" "${wf:-$path}" >> "$TMP/index"
 done < "$TMP/wfs"
@@ -282,6 +284,8 @@ exprs() { # <flat> <ref> <out> -> `<k><TAB><group>` lines, k 0 own, else inputs 
     fetch "${u#./}" "$ref" || { CW="${CW:-a job calls $u, which is not readable at $ref}"; continue; }
     c="$F"
     [ -z "$(calls "$c")" ] || { CW="${CW:-a job calls $u, which calls a workflow itself (one level is read)}"; continue; }
+    awk -F'\t' 'index($2, "\001") == 1 && $1 ~ /^jobs(\.[^.]+(\.<<(\[\])?)?)?$/ { f = 1 } END { exit !f }' "$c" \
+      && { CW="${CW:-a job calls $u, where a job is an anchor, alias or flow mapping}"; continue; }
     K=$((K + 1)); : > "$TMP/in.$K"
     while IFS= read -r e; do
       for n in $(printf '%s\n' "$e" | grep -oE 'inputs\.[A-Za-z0-9_-]+' | cut -d. -f2 | tr '[:upper:]' '[:lower:]' | sort -u); do
@@ -334,7 +338,9 @@ why=""
 while IFS="$US" read -r id path ev hb sha prn base st url hrepo created; do
   [ -n "$id" ] || continue
   rf="${path%%@*}"
-  fetch "$rf" "$sha" || { why="${why:-run $id ($rf, $st): its workflow file is not readable at $sha}"; continue; }
+  fetch "$rf" "$sha"
+  case $? in 2) unknown "gh could not read $rf at $sha" ;;
+    1) why="${why:-run $id ($rf, $st): its workflow file is not readable at $sha}"; continue ;; esac
   f="$F"
   exprs "$f" "$sha" "$TMP/g" || why="${why:-run $id ($rf, $st): $CW}"
   X_WF="$(sel "$f" name | head -n1)"; X_WF="${X_WF:-$rf}"

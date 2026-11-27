@@ -38,6 +38,7 @@ case "$url" in
                 [ -e "$FIX/branch.missing" ] || [ -e "$FIX/gone.$b" ] && { echo "gh: Branch not found (HTTP 404)" >&2; exit 1; }; echo '{}' ;;
   */contents/*) f="${url#*/contents/}"; ref="${f#*\?ref=}"; d="$FIX/files"; [ -d "$FIX/at.$ref" ] && d="$FIX/at.$ref"
                 f="$d/$(basename "${f%%\?*}")"
+                [ -e "$f.fail" ] && { echo "gh: Server Error (HTTP 502)" >&2; exit 1; }
                 [ -f "$f" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }; cat "$f" ;;
   */actions/runs\?status=*) st="${url#*status=}"; st="${st%%&*}"
                 [ -e "$FIX/runs.fail" ] && { echo "gh: Bad credentials (HTTP 401)" >&2; exit 1; }
@@ -329,6 +330,18 @@ reuse runnested "$(job a $E prod)"; reuse - "$(job a $E prod)" "$ENVWF$(job n $O
 ok "…and on a run: unknown naming the run"                  "$(mq | grep -c '^unknown: run 213 .*which calls a workflow itself')" 1
 rm "$FIX/at.s4/env.yml"
 ok "a run whose callee 404s at its sha: unknown"            "$(mq | grep -c "^unknown: run 213 .*a job calls $E, which is not readable at s4")" 1
+reuse runfail "$(job a $E prod)"; reuse - "$(job a $E prod)" "" at.s6; : > "$FIX/at.s6/env.yml.fail"; run in_progress 217 push feat-a "" "" s6
+ok "a run whose callee read fails: unknown naming the run"  "$(mq | grep -c "^unknown: run 217 .*a job calls $E, which is not readable at s6")" 1
+run in_progress 218 push main
+ok "…and a hold found after it still wins (exit 1)"         "$(rc)$(grp)" 1deploy-prod
+reuse pushfail "$(job a $E prod)"; list tests.yml; : > "$FIX/files/env.yml.fail"
+ok "a callee read failing at the branch: unknown"           "$(mq | grep -c "^unknown: .github/workflows/tests.yml: a job calls $E, which is not readable at main")" 1
+n=0
+for j in $'  d: &d\n    runs-on: x\n    concurrency: deploy-main' $'  d:\n    runs-on: x\n  e: *d' \
+  '  d: { runs-on: x, concurrency: deploy-main }' $'  d:\n    <<: *base\n    runs-on: x' $'  d:\n    <<: [*base]\n    runs-on: x'; do
+  n=$((n + 1)); reuse opaque "$(job a $E)" "$(printf 'on: workflow_call\njobs:\n%s' "$j")"
+  ok "a callee job bash cannot see into: unknown ($n of 5)"   "$(mq | grep -c "^unknown: .*a job calls $E, where a job is an anchor, alias or flow mapping")" 1
+done
 
 echo "== each file is read once per path and ref =="
 reuse once "$(job a $E prod; job b $E staging)"; cp "$FIX/files/tests.yml" "$FIX/files/second.yml"; list tests.yml second.yml env.yml
