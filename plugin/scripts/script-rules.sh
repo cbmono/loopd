@@ -2,7 +2,7 @@
 # script-rules.sh <plugin-root> — the allow rules init-bundle.sh 1e writes for a plugin root with
 # whitespace: one exact-version rule per read-only script of data/script-classes.txt, on the root's
 # space-free real path. Reads allow rules on stdin and names the ones 1e replaces or keeps.
-# Out: `root<TAB><real path>`, then `want|stale|newer<TAB><rule>`; `bad<TAB><real path>` on exit 3.
+# Out: `root<TAB><real path>` (exit 0 and 5), then `want|stale|newer<TAB><rule>`; `bad<TAB><path>` on 3.
 # Exit: 0 printed · 1 the root has no whitespace · 2 usage · 3 the real path cannot be named in a
 # rule · 4 not a plugin cache install · 5 the list is missing, empty, unparseable or names a
 # script that is not there. Read by init-bundle.sh and welcome.sh check; docs/operations.md ->
@@ -24,6 +24,7 @@ case "${mk##*/}|${mk%/*/*}|$real" in
   *) exit 4 ;;
 esac
 
+printf 'root\t%s\n' "$real"
 list="$real/data/script-classes.txt"
 ro="$(bash "$real/scripts/script-classes.sh" read-only "$list" 2>/dev/null)" &&
   wr="$(bash "$real/scripts/script-classes.sh" writing "$list" 2>/dev/null)" &&
@@ -36,7 +37,6 @@ $ro
 $wr
 EOF
 
-printf 'root\t%s\n' "$real"
 printf '%s\n' "$ro" | while IFS= read -r n; do printf 'want\tBash(%s/scripts/%s *)\n' "$real" "$n"; done
 [ -t 0 ] && exit 0
 P="$mk/" L="${root%/*}/" V="${real##*/}" awk '

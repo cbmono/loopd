@@ -934,7 +934,7 @@ elif [ "$al_rc" = 4 ] || { [ "$al_rc" = 1 ] && [ -z "$al_mk" ]; }; then
 elif [ "$al_rc" = 0 ] || [ "$al_rc" = 5 ]; then
   al_ver="${AL_ROOT##*/}"
   if [ "$al_rc" = 5 ]; then
-    echo "  warn  script allowlist not changed: data/script-classes.txt is missing, empty, unparseable or names a script that is not there." >&2
+    echo "  warn  script allowlist not changed: $AL_ROOT/data/script-classes.txt is missing, empty, unparseable or names a script that is not there." >&2
   elif ! command -v python3 >/dev/null 2>&1 && ! command -v jq >/dev/null 2>&1; then
     echo "  warn  script allowlist not changed: editing .claude/settings.local.json needs python3 or jq, and neither is here." >&2
   else
