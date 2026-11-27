@@ -6,10 +6,11 @@
 # SNAPSHOT.json: through write-snapshot.sh, its one writer, only while ab_snapshot_stale says
 # a document moved since the snapshot and the last attempt (the stamp).
 # METRICS.json: one detached metrics.sh run, reading no PR, when the file is absent or older
-# than the newest full tick; one attempt per tick (docs/metrics.md → "When it is written").
-# Started detached by hooks/refresh-state.sh and status-line.sh. One run per root (a mkdir
-# lock, a dead run's taken over after 2 min); a burst coalesces in REFRESH_STATE_DEBOUNCE (2 s).
-# Prints nothing, exits 0; no network, no model, no tracked file.
+# than the newest full tick; one attempt per tick, killed after REFRESH_STATE_METRICS_MAX
+# seconds (600 when unset). Rules: docs/metrics.md → "When it is written".
+# Started detached by hooks/refresh-state.sh and status-line.sh. One run per root (a mkdir lock,
+# a dead run's taken over after 2 min); a burst coalesces in REFRESH_STATE_DEBOUNCE (2 s). Prints
+# nothing, exits 0; no network, no model, no tracked file.
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)" || exit 0
 . "$here/bundle-paths.sh" 2>/dev/null || exit 0
@@ -24,7 +25,17 @@ lock="$stamp.lock"
 mkdir -p "${stamp%/*}" 2>/dev/null || exit 0
 wait_s="${REFRESH_STATE_DEBOUNCE:-2}"
 case "$wait_s" in ''|*[!0-9]*) wait_s=2 ;; esac
+max_s="${REFRESH_STATE_METRICS_MAX:-600}"
+case "$max_s" in ''|*[!0-9]*) max_s=600 ;; esac
 
+metrics_run() { # <full tick> <deadline, epoch seconds>
+  local m rc
+  trap '' HUP
+  METRICS_GH_MAX_PRS=0 METRICS_LOCK_WAIT=0 bash "$here/metrics.sh" "$root" & m=$!
+  while kill -0 "$m" 2>/dev/null && [ "$(date +%s)" -lt "$2" ]; do sleep 0.2; done
+  kill "$m" 2>/dev/null; wait "$m"; rc=$?
+  [ "$rc" -eq 0 ] || [ -L "$AB_METRICS_RUN" ] || printf 'exit %s close %s\n' "$rc" "$1" > "$AB_METRICS_RUN/failed"
+}
 metrics_refresh() {
   local run="$AB_METRICS_RUN" last gen
   command -v jq >/dev/null 2>&1 || return 0
@@ -44,10 +55,7 @@ metrics_refresh() {
   [ "$(cat "$run/attempt" 2>/dev/null)" != "$last" ] || return 0
   mkdir -p "$run" 2>/dev/null && [ ! -L "$run" ] && { [ -e "$run/.gitignore" ] || printf '*\n' > "$run/.gitignore"; } || return 0
   printf '%s\n' "$last" > "$run/attempt" 2>/dev/null || return 0
-  ( trap '' HUP
-    METRICS_GH_MAX_PRS=0 METRICS_LOCK_WAIT=0 bash "$here/metrics.sh" "$root"; rc=$?
-    [ "$rc" -eq 0 ] || [ -L "$run" ] || printf 'exit %s close %s\n' "$rc" "$last" > "$run/failed"
-  ) </dev/null >/dev/null 2>&1 &
+  metrics_run "$last" "$(( $(date +%s) + max_s ))" </dev/null >/dev/null 2>&1 &
 }
 
 for i in 1 2 3; do

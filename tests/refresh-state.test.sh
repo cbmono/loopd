@@ -243,8 +243,12 @@ ok "a symlinked run directory starts none and touches nothing behind it" "$(star
 SW="$TMP/swapped"; mk "$SW"; mkdir -p "$TMP/outside2"
 STUB_SLEEP=1 STUB_RC=2 fire "$SW"; sleep 0.4; mv "$SW/$AB_METRICS_RUN" "$TMP/run-moved"; ln -s "$TMP/outside2" "$SW/$AB_METRICS_RUN"
 ok "a run directory swapped for a link mid-run: one start, no marker behind the link" "$(starts 1.5):$(ls -A "$TMP/outside2" | tr '\n' ' ')" "2:"
+KD="$TMP/killed"; mk "$KD"
+STUB_SLEEP=5 REFRESH_STATE_METRICS_MAX=1 fire "$KD"
+i=0; while [ ! -f "$KD/$AB_METRICS_RUN/failed" ] && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i+1)); done
+ok "a run past REFRESH_STATE_METRICS_MAX is killed and marked" "$(starts 0):$(cat "$KD/$AB_METRICS_RUN/failed" 2>/dev/null)" "3:exit 143 close none"
 OD="$TMP/oddstamp"; mk "$OD"; full "$OD" '2026-10-01T01:00:00Z/../x'; fire "$OD"
-ok "a full-tick stamp that is not a timestamp starts none and is never written" "$(starts):$([ -e "$OD/$AB_METRICS_RUN" ] && echo written || echo none)" "2:none"
+ok "a full-tick stamp that is not a timestamp starts none and is never written" "$(starts):$([ -e "$OD/$AB_METRICS_RUN" ] && echo written || echo none)" "3:none"
 
 echo "== METRICS.json: the real run"
 RB="$TMP/realmetrics"; mk "$RB"; full "$RB" 2026-10-01T01:00:00Z
