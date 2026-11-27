@@ -218,7 +218,8 @@ ok "every workflow 404 at the branch is unknown"            "$(rc)" 2
 fixture onegone; printf '{"workflows":[{"path":".github/workflows/tests.yml","state":"active"},{"path":".github/workflows/gone.yml","state":"active"}]}\n' > "$FIX/workflows.json"
 ok "one workflow absent at the branch is skipped: clear"    "$(rc)" 0
 fixture reusable; printf '  call:\n    uses: ./.github/workflows/shared.yml\n' >> "$FIX/files/tests.yml"
-ok "a job calling a reusable workflow is unknown"           "$(rc)" 2
+ok "a job calling a local workflow that 404s is unknown"    "$(rc)" 2
+ok "…naming the call"                                       "$(mq | grep -c '^unknown: .github/workflows/tests.yml: a job calls ./.github/workflows/shared.yml, which is not readable at main')" 1
 fixture ownbranch; mkdir -p "$FIX/at.main"; cp "$FIX/files/tests.yml" "$FIX/at.main/"
 printf 'name: Feat\non: push\nconcurrency: tests-Tests-refs/heads/main\njobs:\n  b:\n    runs-on: x\n' > "$FIX/files/feat.yml"
 run in_progress 73 push feat-only "" feat.yml
@@ -227,6 +228,115 @@ rm -f "$FIX/files/feat.yml"
 ok "…and is unknown when its file cannot be read"           "$(rc)" 2
 fixture requested; run requested 74 push main
 ok "a requested main run holds"                             "$(rc)" 1
+
+echo "== a local reusable workflow: its groups are the calling job's, inputs from with: or a default =="
+E=./.github/workflows/env.yml; O=./.github/workflows/other.yml; REMOTE=example-org/example-shared/.github/workflows/x.yml@v1
+ENVWF=$'name: Env\non:\n  workflow_call:\n    inputs:\n      env:\n        type: string\n        default: dev\nconcurrency:\n  group: deploy-${{ inputs.env }}\njobs:\n  d:\n    runs-on: x\n'
+NODEF="$(printf '%s' "$ENVWF" | sed '/default: dev/d')"
+NOCON="$(printf '%s' "$ENVWF" | sed -e '/^concurrency:/d' -e '/group:/d')"
+group() { printf '%s' "$ENVWF" | sed "s/group: .*/group: $1/"; }
+list() { # <file>... -> the active workflows
+  local f p=""; for f in "$@"; do p="$p${p:+,}{\"path\":\".github/workflows/$f\",\"state\":\"active\"}"; done
+  printf '{"workflows":[%s]}\n' "$p" > "$FIX/workflows.json"
+}
+job() { printf '  %s:\n    uses: %s\n' "$1" "$2"; [ $# -lt 3 ] || printf '    with:\n      env: %s\n' "$3"; } # <id> <uses> [<env>]
+reuse() { # <name> <caller jobs> [<callee>] [<at.sha>] -> tests.yml (Deploy, on push to main) calling env.yml
+  [ -n "${4:-}" ] || { fixture "$1"; list tests.yml env.yml; }
+  mkdir -p "$FIX/${4:-files}"
+  printf 'name: Deploy\non:\n  push:\n    branches: [main]\njobs:\n%s\n' "$2" > "$FIX/${4:-files}/tests.yml"
+  printf '%s\n' "${3:-$ENVWF}" > "$FIX/${4:-files}/env.yml"
+}
+names() { mq | grep -c "^unknown: .*: job $1 gives input env of $E no plain-string literal, and a concurrency group reads it"; }
+reuse lit "$(job a $E prod)"
+ok "a with: literal resolves: clear, not unknown (exit 0)"  "$(rc)" 0
+run in_progress 201 push main
+ok "…and a run of that caller holds in the callee's group"  "$(rc)$(grp)" 1deploy-prod
+ok "…its callee read at the run's head_sha"                 "$(grep -c '/contents/.github/workflows/env.yml?ref=run201$' "$FIX/calls" | sed 's/[1-9][0-9]*/n/')" n
+reuse joblevel "$(job a $E prod)" "$NOCON"$'\n    concurrency: job-${{ inputs.env }}'; run in_progress 216 push main
+ok "a callee's job-level group is read the same way"        "$(rc)$(grp)" 1job-prod
+reuse otherlit "$(job a $E prod)"; reuse - "$(job a $E staging)" "" at.s1; run in_progress 202 push main "" "" s1
+ok "a run whose call passes another literal: clear"         "$(rc)" 0
+reuse dflt "$(job a $E)"; run in_progress 203 push main
+ok "no with: takes the callee's literal default"            "$(grp)" deploy-dev
+reuse upper "$(job a $E prod | sed 's/env:/ENV:/')"; run in_progress 204 push main
+ok "an input name matches caselessly"                       "$(grp)" deploy-prod
+for v in '${{ needs.x.outputs.env }}' 1.0 01 True '*e' '&e prod' $'|\n        prod' "'it''s'"; do
+  reuse nonlit "$(job a $E "$v")"
+  ok "unknown naming the input, with: $(printf '%s' "$v" | tr '\n' ' ' | cut -c1-26)" "$(names a)" 1
+done
+reuse nodef "$(job a $E)" "$NODEF"
+ok "no value and no default: unknown naming the input"      "$(names a)" 1
+reuse baddef "$(job a $E)" "$(printf '%s' "$ENVWF" | sed 's/default: dev/default: ${{ github.actor }}/')"
+ok "a default that is not a literal: unknown"               "$(names a)" 1
+reuse typed "$(job a $E prod)" "$(printf '%s' "$ENVWF" | sed 's/type: string/type: number/')"
+ok "an input not typed string: unknown"                     "$(names a)" 1
+reuse dup "$(job a $E prod; printf '      env: staging\n')"
+ok "an input given twice: unknown"                          "$(names a)" 1
+reuse flowwith "$(job a $E; printf '    with: { env: prod }\n')"
+ok "a flow-style with: is not read past: unknown"           "$(names a)" 1
+reuse owngroup "$(job a $E prod)"; printf 'concurrency: own-${{ inputs.env }}\n' >> "$FIX/files/tests.yml"
+ok "inputs.* in the caller's own group stays unknown"       "$(mq | grep -c "^unknown: .*group 'own-\${{ inputs.env }}' — bash cannot evaluate it")" 1
+fixture standalone; list env.yml; printf '%s' "$ENVWF" | awk '{ print } /^on:$/ { print "  push:" }' > "$FIX/files/env.yml"
+ok "…and in a push + workflow_call file read on its own"    "$(mq | grep -c "^unknown: .github/workflows/env.yml: concurrency group 'deploy-\${{ inputs.env }}'")" 1
+
+echo "== every calling job is read, each with its own with: =="
+reuse mixed "$(job a $E prod; job b $REMOTE)"
+ok "a local callee, then a remote one: unknown naming it"   "$(mq | grep -c "^unknown: .github/workflows/tests.yml: a job calls $REMOTE, whose concurrency bash does not read")" 1
+reuse two "$(job a $E prod; job b $O)"; list tests.yml env.yml other.yml
+printf 'on: workflow_call\nconcurrency: other-${{ github.ref_name }}\njobs:\n  d:\n    runs-on: x\n' > "$FIX/files/other.yml"
+ok "two local callees: both groups are joined"              "$(mq | grep -c '^clear: 2 group(s)')" 1
+rm "$FIX/files/other.yml"
+ok "…and the second one unreadable: unknown"                "$(mq | grep -c "^unknown: .*a job calls $O, which is not readable at main")" 1
+reuse twice "$(job a $E prod; job b $E staging)"
+ok "one callee called twice: each with: is its own group"   "$(mq | grep -c '^clear: 2 group(s)')" 1
+reuse - "$(job b $E staging)" "" at.s2; run in_progress 206 push main "" "" s2
+ok "…and a run in the second call's group holds"            "$(rc)$(grp)" 1deploy-staging
+reuse twicebad "$(job a $E prod; job b $E '${{ matrix.env }}')"
+ok "…and a non-literal on the second call: unknown"         "$(names b)" 1
+reuse reset "$(job a $E prod; job b $E)"
+ok "the next calling job starts with no inputs: its default" "$(mq | grep -c '^clear: 2 group(s)')" 1
+reuse leak "$(job a $E prod; job b $E)" "$NODEF"
+ok "…or unknown, never the previous job's with:"            "$(names b)" 1
+reuse leakfile "$(job a $E prod)" "$NODEF"; list tests.yml second.yml env.yml
+printf 'name: Second\non: push\njobs:\n%s\n' "$(job b $E)" > "$FIX/files/second.yml"
+ok "…nor the previous file's"                               "$(mq | grep -c "^unknown: .github/workflows/second.yml: job b gives input env")" 1
+
+echo "== a with: value no callee group reads never matters; github.workflow is the caller's =="
+reuse q1 "$(job a $E '${{ needs.plan.outputs.env }}'; job b $O $'|\n        x'; job c $E '*e')" "$NOCON"
+cp "$FIX/files/env.yml" "$FIX/files/other.yml"; list tests.yml env.yml other.yml; printf 'concurrency: deploy-main\n' >> "$FIX/files/tests.yml"
+ok "callees with no concurrency, expression with: values: clear" "$(rc)$(mq | grep -c '^clear: 1 group(s)')" 01
+run in_progress 208 push main
+ok "…and the caller's literal group still holds"            "$(rc)$(grp)" 1deploy-main
+reuse unread "$(job a $E '${{ matrix.env }}')" "$(group 'fixed-${{ github.ref_name }}')"; run in_progress 209 push main
+ok "a callee group that reads no input ignores with:"       "$(rc)$(grp)" 1fixed-main
+reuse wfname "$(job a $E prod)" "$(group '${{ github.workflow }}-${{ inputs.env }}')"; run in_progress 210 push main
+ok "github.workflow in the callee is the caller's name"     "$(grp)" Deploy-prod
+
+echo "== anything but a readable local file, one level deep, is unknown =="
+for u in "$REMOTE" ./.github/workflows/../env.yml "$E?ref=x" "$E#x" "$E@main" ./.github/workflows/sub/env.yml ./env.yml; do
+  reuse nonlocal "$(job a "$u" prod)"; : > "$FIX/calls"
+  ok "not local, unknown before any fetch: ${u:0:40}"       "$(mq | grep -c '^unknown: .*a job calls .*, whose concurrency bash does not read')$(grep -c '/contents/' "$FIX/calls")" 12
+done
+reuse runremote "$(job a $E prod)"; reuse - "$(job a $REMOTE)" "" at.s3; run in_progress 211 push feat-a "" "" s3
+ok "a run calling a remote workflow: unknown naming the run" "$(mq | grep -c "^unknown: run 211 (.github/workflows/tests.yml, in_progress): a job calls $REMOTE, whose")" 1
+: > "$FIX/calls"; mq >/dev/null
+ok "…fetching only the run's own file at its sha"           "$(grep -c 'ref=s3$' "$FIX/calls")" 1
+run in_progress 212 push main
+ok "…and a hold found after that run still wins (exit 1)"   "$(rc)$(grp)" 1deploy-prod
+reuse nested "$(job a $E prod)" "$ENVWF$(job n $O)"
+ok "a callee that calls a workflow itself: unknown"         "$(mq | grep -c "^unknown: .github/workflows/tests.yml: a job calls $E, which calls a workflow itself")" 1
+reuse runnested "$(job a $E prod)"; reuse - "$(job a $E prod)" "$ENVWF$(job n $O)" at.s4; run in_progress 213 push feat-a "" "" s4
+ok "…and on a run: unknown naming the run"                  "$(mq | grep -c '^unknown: run 213 .*which calls a workflow itself')" 1
+rm "$FIX/at.s4/env.yml"
+ok "a run whose callee 404s at its sha: unknown"            "$(mq | grep -c "^unknown: run 213 .*a job calls $E, which is not readable at s4")" 1
+
+echo "== each file is read once per path and ref =="
+reuse once "$(job a $E prod; job b $E staging)"; cp "$FIX/files/tests.yml" "$FIX/files/second.yml"; list tests.yml second.yml env.yml
+reuse - "$(job a $E qa; job b $E uat)" "" at.s5; cp "$FIX/at.s5/tests.yml" "$FIX/at.s5/second.yml"
+run in_progress 214 push feat-a "" "" s5; run queued 215 push feat-b "" second.yml s5; : > "$FIX/calls"
+ok "two callers, two runs at one sha: clear"                "$(rc)" 0
+ok "…no contents URL asked twice, the listing's included"   "$(grep '/contents/' "$FIX/calls" | sort | uniq -d | wc -l | tr -d ' ')" 0
+ok "…the callee once at the branch, once at the sha"        "$(grep '/contents/.github/workflows/env.yml?ref=' "$FIX/calls" | sed 's/.*ref=//' | tr '\n' ' ')" "main s5 "
 
 echo "== --pr: a mark per PR and head, and D3's bound of 2 unknowns =="
 B="$TMP/bundle"; mkdir -p "$B/projects/demo/tasks" "$B/$AB_DIR"; printf '{}\n' > "$B/instance.config.json"

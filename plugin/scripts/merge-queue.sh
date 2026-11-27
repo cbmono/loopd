@@ -252,14 +252,13 @@ while IFS= read -r path; do
 done < "$TMP/wfs"
 [ "$i" = 0 ] || [ "$gone" != "$i" ] || unknown "none of the $i workflow file(s) of $repo is readable at $branch"
 
-# A called workflow: only a local file, one level deep (D3), its groups read as the calling job's.
+# Called workflows: local files, one level (D3).
 LOCAL='^\./\.github/workflows/[A-Za-z0-9._-]+\.ya?ml$'; JOBID='^[A-Za-z_][A-Za-z0-9_-]*$'; K=0; X_IN=""
 calls() { awk -F'\t' '$1 ~ /^jobs\.[^.]+\.uses$/ { print substr($1, 6, length($1) - 10) "\t" substr($0, length($1) + 2) }' "$1"; }
-pick() { # <flat> <key> -> its one scalar, the key matched caselessly; 1 no such key · 2 not one scalar
+pick() { # <flat> <key> -> its one scalar, the key matched caselessly; 1 no such key · 2 several
   awk -F'\t' -v k="$2" 'BEGIN { k = tolower(k) }
     { x = tolower($1) }
     x == k { n++; v = substr($0, length($1) + 2) }
-    index(x, k ".") == 1 || index(x, k "[]") == 1 { n = 2 }
     END { if (n == 1) print v; exit (n == 1 ? 0 : (n ? 2 : 1)) }' "$1"
 }
 plain() { # <value> -> 0 when GitHub reads it as that very string
@@ -268,14 +267,14 @@ plain() { # <value> -> 0 when GitHub reads it as that very string
     [0-9]*|[-+.][0-9]*|[-+].[0-9]*|.inf|.nan|[-+].inf|[-+].nan|true|false|yes|no|on|off|y|n|null) return 1 ;;
   esac
 }
-input() { # <caller flat> <job> <callee flat> <name> -> the string that job gives the input; 1 cannot tell
+input() { # <caller flat> <job> <callee flat> <name> -> its string; 1 cannot tell
   local v w="jobs.$2.with" d="on.workflow_call.inputs.$4"
   [ -z "$(sel "$1" "$w")" ] && [ "$(pick "$3" "$d.type")" = string ] || return 1
   v="$(pick "$1" "$w.$4")"
   case $? in 1) v="$(pick "$3" "$d.default")" || return 1 ;; 2) return 1 ;; esac
   plain "$v" && printf '%s' "$v"
 }
-exprs() { # <flat> <ref> <out> -> `<k><TAB><group expression>`: k 0 its own, else inputs in $TMP/in.<k>; 1 = CW
+exprs() { # <flat> <ref> <out> -> `<k><TAB><group>` lines, k 0 own, else inputs in $TMP/in.<k>; 1 = CW
   local cf="$1" ref="$2" out="$3" job u c e n v
   CW=""; groups "$cf" | awk '{ print "0\t" $0 }' > "$out"
   while IFS="$TAB" read -r job u; do
