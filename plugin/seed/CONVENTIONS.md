@@ -154,7 +154,7 @@ choices outside this list.
 
 **It opens with the literal heading
 `## Description`** — character for character; the clearance gate greps for it. Five parts,
-in this order, plus an optional `### Notes` and nothing else:
+in order, plus an optional `### Notes`, nothing else:
 
 ```md
 ## Description
@@ -178,11 +178,9 @@ Verified: `foo.test.sh` 40/0 locally, 10/10 checks green on [run 1234](https://�
 ```
 
 1. **`## Description`, then a one-sentence TL;DR.**
-2. **A `Verified:` line that cites something a reader can open** — a link, not "all green".
-   **A PR whose base is not the default branch** usually gets no CI or bot review: cite a
-   URL a reader can open (a local run only through such a link) or the parent PR's run
-   labelled `(parent)`, and mark CI-dependent criteria `✗` until it is rebased onto the
-   default branch.
+2. **A `Verified:` line that cites something a reader can open** — a URL, never "all
+   green"; a local run only through one; on a non-default base, or the parent's run
+   labelled `(parent)`, with CI-dependent criteria `✗` until rebased.
 3. **The criteria table** under a heading carrying **the tally, and the reason for any
    `✗`**; the gate counts rows and refuses a tally that disagrees.
 4. **`### Decided without asking`**, required — one row per technical choice no criterion,
@@ -193,7 +191,7 @@ Verified: `foo.test.sh` 40/0 locally, 10/10 checks green on [run 1234](https://�
 
 A `### Notes` section is optional, **at most three one-line notes, each leading with its
 claim in bold**. **Reasoning goes in the commit message and the task doc**, never the
-body. The worked example is the block above. Detail:
+body. Detail:
 `conventions/pr-body.md` → "The PR body shape" — when `pr-body-clearance.sh`
 refuses your draft at exit 1 or 4.
 
