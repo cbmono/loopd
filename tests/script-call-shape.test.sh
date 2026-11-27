@@ -70,6 +70,8 @@ ok "a real path with whitespace keeps today's value" "$(said "$TMP/spaced two")"
 root "$TMP/re#al/p" "$TMP/spaced three"
 ok "…and so does one with a shell metacharacter" "$(said "$TMP/spaced three")" "$TMP/spaced three"
 ok "…with no note" "$(brief "$TMP/spaced three" | grep -cF "$NOTE")" 0
+root "$TMP/real(p)/p" "$TMP/spaced four"
+ok "…and one with parentheses" "$(said "$TMP/spaced four")" "$TMP/spaced four"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

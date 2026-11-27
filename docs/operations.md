@@ -1679,8 +1679,8 @@ replaces rules naming a newer version, never rewrites a settings file it cannot 
 `python3` or `jq`. Shipped call sites name `${CLAUDE_PLUGIN_ROOT}` in the plain call form,
 and Claude Code expands it in skill and agent text to the root as loaded, spaces kept (measured
 on 2.1.332). So `tick-spawn.sh` builds the tick brief on the real path and tells the tick to call
-every script through it; a space-free root, or a real path still holding whitespace or one of
-`' $ & ; # * ? [`, keeps its logical path. An interactive skill still calls by the spaced root.
+every script through it; a space-free root, or a real path holding any character outside
+`A-Za-z0-9/._@+-`, keeps its logical path. An interactive skill still calls by the spaced root.
 
 ### A stable scripts path, for your terminal only
 

@@ -14,7 +14,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"; root_note=""
 case "$ROOT" in *[[:space:]]*)
   real="$(cd "$ROOT" && pwd -P)"
-  case "$real" in ""|*[[:space:]]*|*[\'\$\&\;\#\*\?\[]*) ;; *)
+  case "$real" in ""|*[!A-Za-z0-9/._@+-]*) ;; *)
     ROOT="$real"
     root_note=" Your agent prompt shows that root already expanded, with a space no allow rule matches: call every plugin script through \`$ROOT/scripts/\` instead, \`AUTONOMY.md\`'s recipes included." ;;
   esac ;;
