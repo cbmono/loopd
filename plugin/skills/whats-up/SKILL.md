@@ -1,10 +1,10 @@
 ---
 name: whats-up
 description: What's next, and what do you need from me? Reprints the Needs-you queue from AWAITING.md, numbered, with when it was last refreshed, and ends with the working agents and their tasks. Read-only.
-allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/whats-up.sh)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/whats-up.sh)
 ---
 
-Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/whats-up.sh` from the bundle root and **relay its
+Run `${CLAUDE_PLUGIN_ROOT}/scripts/whats-up.sh` from the bundle root and **relay its
 stdout unchanged** — no rendering, no reordering, no summary, no code fence. That is the
 whole skill: the script is the one reader of `AWAITING.md`, and you never dispatch,
 promote, merge or edit anything here.

@@ -116,7 +116,7 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
       published. Ask the resolver, never the file:
 
       ```bash
-      bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-config.sh --source boardArtifactUrl
+      ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-config.sh --source boardArtifactUrl
       ```
 
       Exit 1, or a first field of `tracked`, ⇒ **no line**. `tracked` is the deleted shape

@@ -113,10 +113,10 @@ readers_granted() { # <file> -> count of grants that are NOT on the approved lis
     | grep -v '^$' \
     | grep -v -x -e 'Bash(pwd)' -e 'Bash(ls:\*)' \
                  -e 'ScheduleWakeup' -e 'CronCreate' -e 'CronList' -e 'CronDelete' \
-                 -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' \
-                 -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:\*)' \
-                 -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh:\*)' \
-                 -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh:\*)' \
+                 -e 'Bash(\${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' \
+                 -e 'Bash(\${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:\*)' \
+                 -e 'Bash(\${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh:\*)' \
+                 -e 'Bash(\${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh:\*)' \
     | wc -l | tr -d ' '
 }
 
@@ -137,7 +137,7 @@ for probe in 'Bash(curl:*)' 'Bash(python:*)' 'Bash(node:*)' 'Read' 'Bash'; do
 done
 # …while the real launcher's exact grant list still passes, so the allowlist is not
 # simply rejecting everything.
-printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh:*), ScheduleWakeup, CronList, CronDelete\n---\nbody\n' \
+printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh:*), ScheduleWakeup, CronList, CronDelete\n---\nbody\n' \
   > "$TMP/probe.md"
 ok "…and PASSES on the approved set alone" "$(readers_granted "$TMP/probe.md")" 0
 # The approved set is EXACTLY those seven. A near-miss — another script under the same
@@ -152,8 +152,8 @@ ok "…and FAILS on a different script grant" \
 # added, `tick-spawn.sh` the spawn that replaced `Agent`.
 printf -- '---\nallowed-tools: Bash(pwd), Agent\n---\nbody\n' > "$TMP/probe.md"
 ok "…and FAILS on an Agent grant, the old tick spawn" "$(readers_granted "$TMP/probe.md")" 1
-ok "the launcher grants the reaper"     "$(granted "$LAUNCHER" 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh:\*)')" yes
-ok "…and the spawn script"              "$(granted "$LAUNCHER" 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh:\*)')" yes
+ok "the launcher grants the reaper"     "$(granted "$LAUNCHER" 'Bash(\${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh:\*)')" yes
+ok "…and the spawn script"              "$(granted "$LAUNCHER" 'Bash(\${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh:\*)')" yes
 ok "…and no Agent tool"                 "$(granted "$LAUNCHER" 'Agent')" no
 
 # --- the launcher says, in the file, that it reads nothing else -------------------

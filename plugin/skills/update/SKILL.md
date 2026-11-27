@@ -2,13 +2,13 @@
 name: update
 description: Update this plugin in one command — refresh the marketplace, update every plugin of it installed at user scope, re-stamp the current bundle with the NEW version's init, then tell you to run /reload-plugins.
 disable-model-invocation: true
-allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/update-plugin.sh), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/update-plugin.sh --verbose), Bash(pwd)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/update-plugin.sh), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/update-plugin.sh --verbose), Bash(pwd)
 ---
 
 Run this from the bundle root, and **relay its output verbatim**:
 
 ```
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/update-plugin.sh
+${CLAUDE_PLUGIN_ROOT}/scripts/update-plugin.sh
 ```
 
 Add `--verbose` only when the human asks for the full list of other-scope installs. Every

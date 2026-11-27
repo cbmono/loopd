@@ -2,10 +2,10 @@
 name: welcome
 description: The loopd welcome screen — banner, or `check` (state that could be wrong). Reports facts, never rules; it repairs nothing (the repair pass runs inside /loopd:init).
 argument-hint: "[check]  omit for the banner"
-allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/welcome.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/welcome.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
 
-Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/welcome.sh $ARGUMENTS` from the bundle root and
+Run `${CLAUDE_PLUGIN_ROOT}/scripts/welcome.sh $ARGUMENTS` from the bundle root and
 **relay its output verbatim**. `$ARGUMENTS` is empty or `check` — nothing else; anything else is a
 typo and the script will say so rather than guess.
 

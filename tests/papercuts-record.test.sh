@@ -154,7 +154,7 @@ ok "the cataloguer runs the grouping pass"  "$(has "$CAT" 'scripts/papercuts.sh 
 ok "…proposing one task per surface"        "$(has "$CAT" 'One proposal per surface')" yes
 ok "…and never marks the pass itself"       "$(has "$CAT" 'never mark the pass')" yes
 ok "close-project marks the pass"           "$(has "$CLOSE" 'scripts/papercuts.sh pass')" yes
-ok "…and is allowed to run the script"      "$(has "$CLOSE" 'Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*)')" yes
+ok "…and is allowed to run the script"      "$(has "$CLOSE" 'Bash(${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*)')" yes
 ok "the tick asks whether a pass is due"    "$(has "$PM" 'scripts/papercuts.sh due')" yes
 ok "…and creates the drafts as draft"       "$(has "$PM" 'never `ready`, the human')" yes
 ok "the script's own default record path"   "$(has "$PC" 'FILE="knowledge/papercuts.md"')" yes

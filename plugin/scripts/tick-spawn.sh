@@ -11,7 +11,14 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 3
-ROOT="$(cd "$HERE/.." && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"; root_note=""
+case "$ROOT" in *[[:space:]]*)
+  real="$(cd "$ROOT" && pwd -P)"
+  case "$real" in ""|*[!A-Za-z0-9/._@+-]*) ;; *)
+    ROOT="$real"
+    root_note=" Your agent prompt shows that root already expanded, with a space no allow rule matches: call every plugin script through \`$ROOT/scripts/\` instead, \`AUTONOMY.md\`'s recipes included." ;;
+  esac ;;
+esac
 TEMPLATE="$ROOT/skills/dispatch/tick-brief.md"
 
 die() { echo "tick-spawn: $2" >&2; exit "$1"; }
@@ -43,8 +50,8 @@ else
   mode_line="DRY RUN — do steps 1–2 and report the dispatch and monitor actions you would take; spawn no role agent and modify no target repo (\`project-manager.md\` → Modes)."
 fi
 brief="$(TICK_ID="$tick" GAP="$gap" MODE_WORD="$mode_word" MODE_LINE="$mode_line" \
-  PLUGIN="${PLUGIN_NAME:-loopd}" PLUGIN_ROOT="$ROOT" awk '
-  { for (k = split("TICK_ID GAP MODE_WORD MODE_LINE PLUGIN PLUGIN_ROOT", ks, " "); k >= 1; k--)
+  PLUGIN="${PLUGIN_NAME:-loopd}" PLUGIN_ROOT="$ROOT" ROOT_NOTE="$root_note" awk '
+  { for (k = split("TICK_ID GAP MODE_WORD MODE_LINE PLUGIN PLUGIN_ROOT ROOT_NOTE", ks, " "); k >= 1; k--)
       while ((i = index($0, "{{" ks[k] "}}")) > 0)
         $0 = substr($0, 1, i - 1) ENVIRON[ks[k]] substr($0, i + length(ks[k]) + 4)
     print }' "$TEMPLATE")" || die 3 "could not read $TEMPLATE"

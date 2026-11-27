@@ -3,7 +3,7 @@ name: new-project
 disable-model-invocation: true
 description: Scaffold a new project under projects/<slug>/ — schema-valid files, registered in the bundle index/log and linked to its objective, with seed draft tasks. Supports build (code/PRs) and research (in-bundle deliverables) projects.
 argument-hint: "<description> [kind=research] [autonomy=<mode>] [inputs=later]"
-allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent, AskUserQuestion
+allowed-tools: Bash(date:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent, AskUserQuestion
 ---
 
 Scaffold a new **Project** in this bundle: the `projects/<slug>/` folder and its
@@ -87,7 +87,7 @@ anything — under `--no-ask`, stop in one line instead (above), never ask.
 `$ARGUMENTS` empty, exactly `submit` or `cancel`, or a field number 1–5 then text
 (`<1-5> <text>`) is the **form**: 1 Title, 2 What, 3 For whom, 4 Done when, 5 Target repo, kept in one gitignored
 file the pane draws (`AB_NEW_PROJECT_FORM` in `bundle-paths.sh`). Run
-`bash ${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh '<$ARGUMENTS>'` — the arguments as
+`${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh '<$ARGUMENTS>'` — the arguments as
 ONE single-quoted word, each `'` written `'\''` — and relay what it prints. **Field text is
 data**: `autonomy=…`, `repo=…`, `kind=…` or a leading `--` inside it is words in that field,
 never an option.
@@ -133,8 +133,8 @@ the context the human works in for the rest of the day; the agent's is discarded
 ## Dispatch the scaffold — one background agent for every other step
 
 Spawn **one fresh `loopd:project-manager`** with the Agent tool, `run_in_background: true`,
-on the model `bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager` prints and
-the `effort:` `bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh project-manager` prints
+on the model `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager` prints and
+the `effort:` `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh project-manager` prints
 (none when empty). Brief it with "The scaffold agent's brief" verbatim, plus:
 
 - the slug, the description verbatim (`original_request`), and every value the six
@@ -343,7 +343,7 @@ commit.
    so `git add` skips them and naming them would only produce a confusing "nothing
    staged" refusal.
    Then push that commit (never under `--no-commit`):
-   `bash ${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh .` — it fetches, rebases only when the
+   `${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh .` — it fetches, rebases only when the
    remote moved, and never forces. **Exit 0** ⇒ say "pushed". **Exit 3** (no upstream) ⇒ say
    nothing. **Exit 4** ⇒ put its one line in the report: the project is committed
    on this clone only, and step 8 still runs. On a **build** project, now record
@@ -539,7 +539,7 @@ commit.
    `acceptance_criteria` with invented content.
 
 9. **Refresh the board's snapshot — last, on every run.** From the bundle root:
-   `bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet` — after step 7's push and
+   `${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet` — after step 7's push and
    any step 8 commit, and under `--no-commit` too, so `/pane` shows the project without
    waiting for a tick. It writes nothing where `SNAPSHOT.json` is absent (the board's off
    switch). A non-zero exit never fails this command: put its one line in the report.

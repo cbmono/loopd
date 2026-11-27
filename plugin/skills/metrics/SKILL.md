@@ -1,10 +1,10 @@
 ---
 name: metrics
 description: How is loopd doing? Prints the full metrics report from .loopd/METRICS.json — headline, families, blocked time by cause, per-project and per-task breakdowns, monthly trends — and ends with up to three suggested changes. Filters: --project <slug>, --since <YYYY-MM[-DD]>. Read-only.
-allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/metrics-report.sh:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/metrics-report.sh:*)
 ---
 
-Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/metrics-report.sh $ARGUMENTS` from the bundle root and **relay its
+Run `${CLAUDE_PLUGIN_ROOT}/scripts/metrics-report.sh $ARGUMENTS` from the bundle root and **relay its
 stdout unchanged** — no rendering, no reordering, no summary, no code fence. The script is the
 one reader of `METRICS.json` and computes nothing; `metrics.sh` wrote every figure at the last
 full tick. You never run `metrics.sh`, refresh, dispatch or edit anything here.
