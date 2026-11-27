@@ -65,11 +65,11 @@ assert "…carrying no symlink at all"        "$([ -z "$(find "$INST" -type l 2>
 # and a plain stamp must create none. The opt-in flag is the only thing that makes it, and
 # it is idempotent — an existing objectives/ is DATA, so it is kept, never re-seeded.
 assert "a plain stamp creates no objectives/" "$(no_if test -d "$INST/objectives")"
-bash "$TPL/plugin/scripts/init-bundle.sh" --with-objectives "$INST" >"$TMP/out-obj" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" --verbose --with-objectives "$INST" >"$TMP/out-obj" 2>&1
 assert "--with-objectives creates it"        "$(yes_if test -d "$INST/objectives")"
 assert "…and says so"                        "$(yes_if grep -q 'seed  objectives/' "$TMP/out-obj")"
 printf -- '---\ntype: Objective\ntitle: O\nstatus: active\n---\n' > "$INST/objectives/mine.md"
-bash "$TPL/plugin/scripts/init-bundle.sh" --with-objectives "$INST" >"$TMP/out-obj2" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" --verbose --with-objectives "$INST" >"$TMP/out-obj2" 2>&1
 assert "a second run keeps it, never re-seeds" "$(yes_if grep -q 'keep  objectives/ (exists)' "$TMP/out-obj2")"
 assert "…and the human's objective survives"   "$(yes_if grep -q 'type: Objective' "$INST/objectives/mine.md")"
 
@@ -82,7 +82,7 @@ printf 'my own notes\n' > "$INST/scripts/mine.sh"                          # a r
 ln -s "$TMP/nowhere-at-all"  "$INST/scripts/foreign-dangling"              # dangles, NOT ours
 mkdir -p "$TMP/elsewhere"; ln -sfn "$TMP/elsewhere" "$INST/my-own-link"    # theirs, resolves
 
-RC=0; bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/out3" 2>&1 || RC=$?
+RC=0; bash "$TPL/plugin/scripts/init-bundle.sh" --verbose "$INST" >"$TMP/out3" 2>&1 || RC=$?
 assert "the stamp still exits 0"            "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "a LIVE machinery link is removed"   "$(no_if test -L "$INST/scripts/doomed.sh")"
 assert "…and reported with its reason"      "$(yes_if grep -q 'retire scripts/doomed.sh — machinery link into a template checkout' "$TMP/out3")"
@@ -100,7 +100,7 @@ mkdir -p "$INST/projects/demo" "$INST/knowledge/findings" "$INST/objectives"
 ln -s "$TMP/nowhere-at-all" "$INST/projects/demo/spec.md"
 ln -s "$TMP/nowhere-at-all" "$INST/knowledge/findings/linked.md"
 ln -s "$TMP/nowhere-at-all" "$INST/objectives/linked.md"
-bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/out-data" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" --verbose "$INST" >"$TMP/out-data" 2>&1
 assert "a dangling link under projects/ survives"   "$(yes_if test -L "$INST/projects/demo/spec.md")"
 assert "…under knowledge/ too"                      "$(yes_if test -L "$INST/knowledge/findings/linked.md")"
 assert "…and under objectives/"                     "$(yes_if test -L "$INST/objectives/linked.md")"
@@ -139,7 +139,7 @@ for rel in $LEGACY; do
 done
 assert "the legacy fixture really carries them all" \
   "$([ "$(find "$LEG" -type l | wc -l | tr -d ' ')" = "$n_legacy" ] && echo 0 || echo 1)"
-bash "$TPL/plugin/scripts/init-bundle.sh" "$LEG" >"$TMP/out-legacy" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" --verbose "$LEG" >"$TMP/out-legacy" 2>&1
 left=0; unreported=0
 for rel in $LEGACY; do
   [ -L "$LEG/$rel" ] && left=$((left+1))
@@ -167,7 +167,7 @@ bash "$TPL/plugin/scripts/init-bundle.sh" "$ODD" >"$TMP/out8" 2>&1
 printf 'doomed again\n' > "$OLDTPL/symlink/DOOMED-TWICE.md"
 ln -s "$OLDTPL/symlink/DOOMED-TWICE.md" "$ODD/DOOMED-TWICE.md"
 assert "glob-y path: the fixture link exists" "$(yes_if test -L "$ODD/DOOMED-TWICE.md")"
-bash "$TPL/plugin/scripts/init-bundle.sh" "$ODD" >"$TMP/out10" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" --verbose "$ODD" >"$TMP/out10" 2>&1
 assert "glob-y path: the link is swept"     "$(no_if test -L "$ODD/DOOMED-TWICE.md")"
 assert "…and reported with its relative path" "$(yes_if grep -q 'retire DOOMED-TWICE.md' "$TMP/out10")"
 

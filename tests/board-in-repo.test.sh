@@ -94,7 +94,7 @@ ok "the legacy shape really does track board.html" \
   "$(yes_if git -C "$LEGACY" ls-files --error-unmatch board.html)" yes
 ok "…and git does NOT ignore it there yet"               "$(ignored "$LEGACY" board.html)" no
 
-bash "$TPL/plugin/scripts/init-bundle.sh" "$LEGACY" >"$TMP/outL2" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" --verbose "$LEGACY" >"$TMP/outL2" 2>&1
 ok "a re-stamp appends the ignore"           "$(yes_if grep -qxF '/board.html' "$LEGACY/.gitignore")" yes
 ok "…and git now reports board.html as ignored"          "$(ignored "$LEGACY" board.html)" yes
 # The migration must never remove a line from a live instance's .gitignore.

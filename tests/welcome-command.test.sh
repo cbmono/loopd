@@ -765,7 +765,7 @@ ok "…but a verdict line"                                    "$(printf '%s\n' "
 
 # The stamp is the other half: what check names is exactly what init-bundle.sh then changes.
 HOME="$TMP/home" CLAUDE_CONFIG_DIR="$TMP/home/.claude" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" \
-  bash "$SPR/scripts/init-bundle.sh" "$INST9" </dev/null >"$TMP/stamp9" 2>&1
+  bash "$SPR/scripts/init-bundle.sh" --verbose "$INST9" </dev/null >"$TMP/stamp9" 2>&1
 ok "init-bundle.sh adds the rules check named absent" \
   "$(grep -c 'wrote script allowlist.*'"$n_ro"' read-only script rule' "$TMP/stamp9" | tr -d ' ')" 1
 ok "…and removes the ones it named stale" "$(grep -c '^  removed ' "$TMP/stamp9" | tr -d ' ')" 4

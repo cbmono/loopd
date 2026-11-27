@@ -326,7 +326,7 @@ awk -v e="$OLD_E" '{print} $0==e {print "!projects/kept/index.md"}' "$INST8/.git
   && mv "$INST8/.gitignore.tmp" "$INST8/.gitignore"
 assert "8a fixture: one old pair, no loopd pair" "$([[ "$(pair_counts "$INST8/.gitignore")" == 1/1/0/0 ]] && echo 0 || echo 1)"
 old_at="$(grep -nxF "$OLD_B" "$INST8/.gitignore" | cut -d: -f1)"
-bash "$TPL/plugin/scripts/init-bundle.sh" "$INST8" >"$TMP/out8b" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" --verbose "$INST8" >"$TMP/out8b" 2>&1
 assert "8a the old pair becomes exactly one loopd pair" "$([[ "$(pair_counts "$INST8/.gitignore")" == 0/0/1/1 ]] && echo 0 || echo 1)"
 assert "…on the line the old BEGIN held — renamed in place, not appended" \
   "$([[ "$(grep -nxF "$NEW_B" "$INST8/.gitignore" | cut -d: -f1)" == "$old_at" ]] && echo 0 || echo 1)"

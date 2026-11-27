@@ -400,7 +400,7 @@ simple "refresh leaves an existing queue byte-for-byte" \
 
 rm "$inst/$AB_AWAITING"
 mkdir -p "$inst/$AB_DIR"; echo 'queue present' > "$inst/$AB_STATE_DIR"
-out="$(bash "$BRIDGE_INSTALL" "$inst" 2>&1)"
+out="$(bash "$BRIDGE_INSTALL" --verbose "$inst" 2>&1)"
 simple "…and drops the idle fingerprint, so the next tick runs in full" \
   "$([ -e "$inst/$AB_STATE_DIR" ] && echo kept || echo dropped)" dropped
 simple "rm + re-stamp (seeded awaiting: true) brings it back" \
@@ -416,7 +416,7 @@ p = sys.argv[1]; d = json.load(open(p)); d.pop("awaiting", None); d.pop("$awaiti
 json.dump(d, open(p, "w"), indent=2)
 PYJ
 rm "$inst/$AB_AWAITING"
-out="$(bash "$BRIDGE_INSTALL" "$inst" 2>&1)"
+out="$(bash "$BRIDGE_INSTALL" --verbose "$inst" 2>&1)"
 simple "old bundle (no key, no file): the stamp creates it" \
   "$([ "$(cat "$inst/$AB_AWAITING" 2>/dev/null)" = "$SEEDED" ] && echo yes || echo no)" yes
 simple "…printing a seed line, not 'absent by choice'" \
@@ -436,7 +436,7 @@ PYJ
 }
 set_awaiting "$inst/instance.config.json" false
 rm "$inst/$AB_AWAITING"
-out="$(bash "$BRIDGE_INSTALL" "$inst" 2>&1)"
+out="$(bash "$BRIDGE_INSTALL" --verbose "$inst" 2>&1)"
 simple "awaiting: false — the stamp never creates it" \
   "$([ -e "$inst/$AB_AWAITING" ] && echo created || echo absent)" absent
 simple "…and says skip, naming the key" \

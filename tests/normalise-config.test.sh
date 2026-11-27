@@ -311,7 +311,7 @@ PY
 # `git add` stages nothing and the staging assertion below passes vacuously.
 git -C "$I" add -A >/dev/null 2>&1
 git -C "$I" -c user.email=t@example.com -c user.name=t commit -qm drift >/dev/null 2>&1
-bash "$INIT" "$I" >"$TMP/out" 2>&1
+bash "$INIT" --verbose "$I" >"$TMP/out" 2>&1
 ok "a dirty pair: the stamp REPORTS"          "$(said 'Config findings')" yes
 ok "…naming the missing key"                  "$(finding MISSING maxPrFiles)" yes
 ok "…and report mode wrote nothing"           "$(jget "$I/$TCFG" maxPrFiles)" -

@@ -89,24 +89,23 @@ ok "nothing is installed"                       "$(has 'plugin install' "$LOG")"
 ok "exactly two plugin updates"                 "$(grep -c '^claude plugin update' <<<"$LOG")" 2
 ok "prints old → new"                           "$(has "$PN 1.0.0 → 1.0.1" "$OUT")" yes
 ok "prints up to date for the unchanged one"    "$(has "$PN-yolo up to date" "$OUT")" yes
-ok "the project-scope install is listed"        "$(has "$PN 1.0.0 (project scope, $BUNDLE) — listed, not updated" "$OUT")" yes
+ok "the project-scope install is not listed by default" "$(has 'listed, not updated' "$OUT")" no
+ok "no marketplace or init step line by default" "$(grep -c '^marketplace: \|^init: ' <<<"$OUT")" 0
 ok "…and warned about, older than user scope"   "$(has "this bundle's project-scope $PN is 1.0.0, older than the user-scope 1.0.1" "$OUT")" yes
 ok "init runs from the NEW user-scope version"  "$(grep '^init ' <<<"$LOG")" "init $CACHE/$PN/1.0.1/scripts/init-bundle.sh $BUNDLE"
 ok "…never from CLAUDE_PLUGIN_ROOT"             "$(has "$CACHE/$PN/1.0.0/scripts" "$LOG")" no
 ok "…and hands init the NEW root as CLAUDE_PLUGIN_ROOT" "$(grep '^root ' <<<"$LOG")" "root $CACHE/$PN/1.0.1"
-ok "…with no flag"                              "$(grep -c -- '--spawn-grant\|--normalise-config\|--owner\|--email\|--repos-root' <<<"$LOG")" 0
+ok "…with no flag"                              "$(grep -c -- '--spawn-grant\|--normalise-config\|--owner\|--email\|--repos-root\|--verbose' <<<"$LOG")" 0
 ok "the last line is the reload, no restart line" "$(last1)" "$RELOAD"
 ok "no summary line with no install elsewhere"  "$(has 'installs elsewhere' "$OUT")" no
 
-echo "== installs elsewhere: one summary line, --verbose lists them =="
+echo "== installs elsewhere: silent by default, --verbose lists them =="
 registry "$REG" "$U_OLD" "$P_HERE" "$P_WT1" "$P_WT2" "$L_WT3" "$Y"
 registry "$AFTER" "$U_NEW" "$P_HERE" "$P_WT1" "$P_WT2" "$L_WT3" "$Y"
 run
 ok "exit 0"                                     "$RC" 0
-ok "one summary line for the three elsewhere"   "$(grep -c 'installs elsewhere' <<<"$OUT")" 1
-ok "…naming the count and both scopes"          "$(has '3 project/local-scope installs elsewhere — not touched (--verbose lists them)' "$OUT")" yes
-ok "only this bundle's install is listed"       "$(grep -c -- '— listed, not updated' <<<"$OUT")" 1
-ok "…and still warned about"                    "$(has "this bundle's project-scope $PN is 1.0.0, older than the user-scope 1.0.1" "$OUT")" yes
+ok "no install is listed by default"            "$(grep -c -- '— listed, not updated' <<<"$OUT")" 0
+ok "…this bundle's is still warned about"       "$(has "this bundle's project-scope $PN is 1.0.0, older than the user-scope 1.0.1" "$OUT")" yes
 ok "no elsewhere path is printed"               "$(has "$TMP/wt" "$OUT")" no
 ARGS=--verbose run
 ok "--verbose: exit 0"                          "$RC" 0
@@ -114,6 +113,18 @@ ok "--verbose lists all four"                   "$(grep -c -- '— listed, not u
 ok "…the local one with its dir"                "$(has "$PN 1.0.0 (local scope, $TMP/wt3) — listed, not updated" "$OUT")" yes
 ok "…and prints no summary"                     "$(has 'installs elsewhere' "$OUT")" no
 ok "…warns only for this bundle"                "$(grep -c 'warn' <<<"$OUT")" 1
+ok "--verbose hands init --verbose"             "$(grep '^init ' <<<"$LOG")" "init $CACHE/$PN/1.0.1/scripts/init-bundle.sh --verbose $BUNDLE"
+WANT="marketplace: claude plugin marketplace update $PMK
+$PN up to date
+$PN-yolo up to date
+$PN 1.0.0 (project scope, $BUNDLE) — listed, not updated
+  warn  this bundle's project-scope $PN is 1.0.0, older than the user-scope 1.0.1 it is stamped from
+$PN 1.0.0 (project scope, $TMP/wt1) — listed, not updated
+$PN 1.0.0 (local scope, $TMP/wt3) — listed, not updated
+$PN-yolo 4.4.0 (project scope, $TMP/wt2) — listed, not updated
+init: $CACHE/$PN/1.0.1/scripts/init-bundle.sh $BUNDLE
+$RELOAD"
+ok "--verbose prints the full output, line for line" "$(diff <(printf '%s\n' "$WANT") <(printf '%s\n' "$OUT") >/dev/null && echo same || echo differs)" same
 ARGS=--bogus run
 ok "an unknown argument: exit 2"                "$RC" 2
 ok "…and nothing ran"                           "$LOG" ""
@@ -169,6 +180,27 @@ registry "$REG" "$U_OLD"
 INIT_RC=3 run
 ok "exit 3"                                     "$RC" 3
 ok "reload line last"                           "$(last1)" "$RELOAD"
+
+echo "== a routine update with the real init: at most 15 lines =="
+REAL="$TMP/real"
+cp -R "$TPL/plugin" "$CACHE/$PN/1.0.2"
+CLAUDE_CONFIG_DIR="$CFG" bash "$CACHE/$PN/1.0.2/scripts/init-bundle.sh" "$REAL" --spawn-grant >/dev/null 2>&1 </dev/null
+registry "$REG" "$U_OLD"; registry "$AFTER" "$PN@$PMK|user|1.0.2|$CACHE/$PN/1.0.2|"
+run "$REAL"
+ok "exit 0"                                     "$RC" 0
+ok "at most 15 lines"                           "$([ "$(printf '%s\n' "$OUT" | wc -l)" -le 15 ] && echo yes || echo no)" yes
+ok "the version line"                           "$(has "$PN 1.0.0 → 1.0.2" "$OUT")" yes
+ok "init's one count line"                      "$(grep -c '^init: [0-9]* written, [0-9]* removed' <<<"$OUT")" 1
+ok "no check heading, no keep line"             "$(grep -c '^── \|^  keep ' <<<"$OUT")" 0
+ok "reload line last"                           "$(last1)" "$RELOAD"
+INIT_OUT="$(CLAUDE_CONFIG_DIR="$CFG" bash "$CACHE/$PN/1.0.2/scripts/init-bundle.sh" "$REAL" 2>&1 </dev/null)"
+ok "init alone on the stamped bundle: at most 15 lines" "$([ "$(printf '%s\n' "$INIT_OUT" | wc -l)" -le 15 ] && echo yes || echo no)" yes
+ok "…with its count line"                       "$(grep -c '^init: [0-9]* written, [0-9]* removed' <<<"$INIT_OUT")" 1
+INIT_OUT="$(CLAUDE_CONFIG_DIR="$CFG" bash "$CACHE/$PN/1.0.2/scripts/init-bundle.sh" --verbose "$REAL" 2>&1 </dev/null)"
+ok "init --verbose: the full report, no count line" "$([ "$(grep -c '^── \|^  keep ' <<<"$INIT_OUT")" -gt 15 ] && ! grep -q '^init: [0-9]* written' <<<"$INIT_OUT" && echo yes || echo no)" yes
+ARGS=--verbose run "$REAL"
+ok "--verbose: the full report, well past 15"   "$([ "$(printf '%s\n' "$OUT" | wc -l)" -gt 15 ] && echo yes || echo no)" yes
+ok "…with the check headings and keep lines"    "$([ "$(grep -c '^── \|^  keep ' <<<"$OUT")" -gt 15 ] && echo yes || echo no)" yes
 
 echo
 echo "update-plugin.test: $pass passed, $fail failed"

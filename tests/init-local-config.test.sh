@@ -75,7 +75,7 @@ stamp() { # <instance> [flags…]
   local i="$1"; shift
   PATH="$STUB:$PATH" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" \
-    bash "$INIT" "$i" "$@" >"$TMP/out" 2>&1
+    bash "$INIT" --verbose "$i" "$@" >"$TMP/out" 2>&1
 }
 mkdir -p "$TMP/home"
 newinst() { local d="$TMP/i$1"; rm -rf "$d"; mkdir -p "$d"; printf '%s' "$d"; }

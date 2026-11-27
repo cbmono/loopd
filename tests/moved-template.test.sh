@@ -205,7 +205,7 @@ assert "…and the repair is /${PN}:init" "$(has "/${PN}:init $LEG" "$OUT")"
 assert "nothing was repaired"            "$(yes_if test -L "$LEG/SCHEMA.md")"
 
 echo "== the conversion: links out, data untouched =="
-RC=0; bash "$TPL2/plugin/scripts/init-bundle.sh" "$LEG" >"$TMP/convert" 2>&1 || RC=$?
+RC=0; bash "$TPL2/plugin/scripts/init-bundle.sh" --verbose "$LEG" >"$TMP/convert" 2>&1 || RC=$?
 assert "the conversion exits 0"          "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "…and says what it retired"       "$(yes_if grep -q '^  retire SCHEMA.md' "$TMP/convert")"
 assert "…naming the reason for a live link" "$(yes_if grep -q 'machinery link into a template checkout\|dangling' "$TMP/convert")"

@@ -39,7 +39,7 @@ stamp() { # <plugin root> <instance> [extra env…]
   local root="$1" inst="$2"; shift 2
   env -u CLAUDE_CONFIG_DIR PATH="$CLEAN_PATH" HOME="$H" XDG_CONFIG_HOME="$H" \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$H/none" PYTHONDONTWRITEBYTECODE=1 "$@" \
-    bash "$root/scripts/init-bundle.sh" "$inst" </dev/null >"$TMP/out" 2>&1
+    bash "$root/scripts/init-bundle.sh" --verbose "$inst" </dev/null >"$TMP/out" 2>&1
 }
 tree() { ( cd "$H" && find . ! -path './.claude/plugins/cache*' | LC_ALL=C sort ); }
 line() { grep -E '^ +if \[ -d ' "$TMP/out" | sed 's/^ *//'; }

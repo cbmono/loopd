@@ -74,7 +74,7 @@ TPL="$TMP/tpl"; make_tpl "$TPL"
 SCRIPTS="$TPL/plugin/scripts"
 
 newinst() { local d="$TMP/i$1"; rm -rf "$d"; mkdir -p "$d"; printf '%s' "$d"; }
-stamp()   { bash "$TPL/plugin/scripts/init-bundle.sh" "$1" >"$TMP/out" 2>&1; }
+stamp()   { bash "$TPL/plugin/scripts/init-bundle.sh" --verbose "$1" >"$TMP/out" 2>&1; }
 said()    { grep -q -- "$1" "$TMP/out" && echo yes || echo no; }
 # One key or entry out of a JSON file, as text. `-` for a key that is not there and
 # `null` for one that is there and null: the two are DIFFERENT answers here — present-and-

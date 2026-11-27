@@ -216,18 +216,18 @@ WR="$TMP/g/_loopd-refresh"; mkdir -p "$WR"
 bash "$BRIDGE_INSTALL" "$WR" >/dev/null 2>&1 </dev/null
 ok "a first stamp seeds the workspace file" "$(ws_count "$WR")" 1
 rm -f "$WR"/*.code-workspace
-WROUT="$(bash "$BRIDGE_INSTALL" "$WR" 2>&1 </dev/null)"
+WROUT="$(bash "$BRIDGE_INSTALL" --verbose "$WR" 2>&1 </dev/null)"
 ok "a refresh after the human deleted it does not re-create it" "$(ws_count "$WR")" 0
 ok "…and says so in one line" \
   "$(printf '%s\n' "$WROUT" | grep -c 'skip  refresh.code-workspace (not re-seeded on a refresh; delete-proof)')" 1
 printf '{ "hand": "made" }\n' > "$WR/mine.code-workspace"
-WROUT="$(bash "$BRIDGE_INSTALL" "$WR" 2>&1 </dev/null)"
+WROUT="$(bash "$BRIDGE_INSTALL" --verbose "$WR" 2>&1 </dev/null)"
 ok "an existing workspace file is kept byte for byte" "$(cat "$WR/mine.code-workspace")" '{ "hand": "made" }'
 ok "…and reported as kept" "$(printf '%s\n' "$WROUT" | grep -c 'keep  mine.code-workspace (workspace exists)')" 1
 WO="$TMP/g/_loopd-optout"; mkdir -p "$WO"
 printf '{ "org": "fixture-org", "codeWorkspace": false }\n' > "$WO/instance.config.json"
 ( cd "$WO" && git init -q . ) 2>/dev/null || true
-WOOUT="$(bash "$BRIDGE_INSTALL" "$WO" 2>&1 </dev/null)"
+WOOUT="$(bash "$BRIDGE_INSTALL" --verbose "$WO" 2>&1 </dev/null)"
 ok "codeWorkspace: false seeds nothing, even on a first stamp" "$(ws_count "$WO")" 0
 ok "…and says why" "$(printf '%s\n' "$WOOUT" | grep -c 'skip  optout.code-workspace (codeWorkspace: false)')" 1
 ok "codeWorkspace is a key the machinery knows" \
