@@ -52,6 +52,7 @@ setup and nothing on a machine needs a clone. A stale link an older `--config` l
 |---|---|
 | `/whats-up` | Read-only. Reprints the Needs-you rows of `AWAITING.md`, numbered and verbatim, with when it was last refreshed — nothing else is read. |
 | `/metrics [--project <slug>] [--since <YYYY-MM>]` | Read-only. Prints the metrics report from `.loopd/METRICS.json` through `metrics-report.sh`, ending with up to three rule-based suggested changes. |
+| `/add-task <slug> <description> [kind=<build\|research>]` | Writes the next `draft` task into an open project through `add-task.sh`: kind and `target_repo` from `project.md`, the description verbatim as `original_request`; validated, committed and pushed. Refuses a done or missing project and a `kind=` that differs. |
 | `/dispatch [gap]` | The gated background loop. It carries the contract itself now — during the migration it delegated to the bundle's own copy verbatim, so there was never a second implementation to drift. |
 | `/handoff <path> <login>` | Ownership transfer with the context that makes it real: `owner:` set, a dated handoff note, and a paste-ready summary (open questions, PRs, linked Findings) for the new owner. Dispatch-gating only — never a promotion. |
 | `/welcome` | The welcome screen: bundle, owner, config layers, tier→model routing, board path, what awaits you. `check` reports state that could be wrong; `fix` repairs only the idempotent tier. |
