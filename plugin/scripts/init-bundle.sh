@@ -271,6 +271,11 @@ quiet_report() {
   if [ "$rc" -ne 0 ]; then cat "$QUIET_LOG"; rm -f "$QUIET_LOG"; exit "$rc"; fi
   local tty=0
   [ ! -t 1 ] || tty=1
+  if grep -q '^    [0-9]* seed document(s) differ with no merge base' "$QUIET_LOG" \
+     && ! grep -q '^        UNKNOWN ' "$QUIET_LOG"; then
+    { echo "$PLUGIN_NAME fix — acting ONLY"; echo "── seed-drift"
+      bash "$BIN_DIR/refresh-seeds.sh" "$TARGET" --no-deepen 2>/dev/null | sed 's/^/      /'; echo; } >> "$QUIET_LOG" || true
+  fi
   awk -v pn="$PLUGIN_NAME" -v tty="$tty" '
     function fate_of(tag) {
       if (tag ~ /^(seed|wrote|link|mark|create|set|tidy|renamed|pushed|PORTED|RESOLVED)$/) { written++; return "drop" }
@@ -279,20 +284,21 @@ quiet_report() {
       if (tag ~ /^(CONFLICT|UNKNOWN)$/) return "seed"
       return "keep"
     }
-    function close_seed() { if (pending != "") { out[++n] = pending; pending = "" } }
+    function close_seed() { if (pending != "") { out[++n] = pending (why != "" ? " — " why : ""); pending = "" } }
     function classify(l,   tag) {
       if (l ~ /^      /) {
         if (fate == "seed" && pending != "" && match(l, /diff (-u )?\047/)) {
           sub(/diff (-u )?\047/, "diff -u \047", l); sub(/^ +/, "", l)
           out[++n] = pending " — " l; pending = ""
-        } else if (fate == "keep") out[++n] = l
+        } else if (fate == "seed" && pending != "" && why == "") { why = l; sub(/^ +/, "", why) }
+        else if (fate == "keep") out[++n] = l
         return
       }
       close_seed()
       if (l ~ /^  [A-Za-z]+ /) {
         tag = l; sub(/^  /, "", tag); sub(/ .*/, "", tag)
         fate = fate_of(tag)
-        if (fate == "seed") { sub(/ +$/, "", l); pending = l }
+        if (fate == "seed") { sub(/ +$/, "", l); pending = l; why = "" }
         else if (fate == "keep") out[++n] = l
         return
       }
@@ -306,6 +312,7 @@ quiet_report() {
     infix && !inblock { infix = 0 }
     infix && /^⚠ / { warned = 1; if (tty) gsub(/\*\*/, ""); if (!seedrow) out[++n] = $0; next }
     infix && /^    ↳ / { if (warned && !seedrow) out[++n] = $0; next }
+    infix && seedrow && /^    ([0-9]+ seed document\(s\) differ|cannot compare seed drift)/ { out[++n] = $0; next }
     infix && /^    NOT / { if ($0 !~ /^    NOT ACTED ON/) out[++n] = $0; next }
     infix { if (sub(/^      /, "")) classify($0); next }
     /^$/ || /^Initialising the / || /^Done\. / || /^link-repos: / { close_seed(); fate = "drop"; next }

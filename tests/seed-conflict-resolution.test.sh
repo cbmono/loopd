@@ -303,19 +303,20 @@ assert "…and the log is still untouched"          "$(yes_if cmp -s "$TMP/paper
 
 echo "== a seed change ported by hand is in sync, with a local line beside it =="
 TPL4="$TMP/tpl4"; cp -R "$TPL" "$TPL4"
-printf '{\n  "permissions": {\n    "allow": [\n      "Bash(one)",\n      "Bash(two)"\n    ]\n  }\n}\n' \
+printf '{\n  "permissions": {\n    "allow": [\n      "Bash(one)",\n      "Bash(two)"\n    ],\n    "deny": [\n      "Bash(no)"\n    ]\n  }\n}\n' \
   > "$TPL4/plugin/seed/.claude/settings.json"
 ( cd "$TPL4" && git add -A && gc "template, controlled settings" )
 INST4="$TMP/group4/_ai-bridge-ported"; mkdir -p "$INST4"
 bash "$TPL4/plugin/scripts/init-bundle.sh" "$INST4" > "$TMP/stamp4.out" 2>&1
-printf '{\n  "permissions": {\n    "allow": [\n      "Bash(one)",\n      "Bash(two)",\n      "Bash(seed-a)",\n      "Bash(seed-b)"\n    ]\n  }\n}\n' \
+printf '{\n  "permissions": {\n    "allow": [\n      "Bash(one)",\n      "Bash(two)",\n      "Bash(seed-a)",\n      "Bash(seed-b)"\n    ],\n    "deny": [\n      "Bash(no)"\n    ]\n  }\n}\n' \
   > "$TPL4/plugin/seed/.claude/settings.json"
 printf 'seed rule A\nseed rule B\n' >> "$TPL4/plugin/seed/CLAUDE.md"
 ( cd "$TPL4" && git add -A && gc "template, two seed lines added" )
-hand() { # <CLAUDE.md lines after the stamped copy> <settings rules after "Bash(two)">
+hand() { # <CLAUDE.md lines after the stamped copy> <allow rules after "Bash(two)"> [deny rules after "Bash(no)"]
   { cat "$TMP/claude4.stamped"; printf '%b' "$1"; } > "$INST4/CLAUDE.md"
   { printf '{\n  "statusLine": { "type": "command", "command": "mine" },\n  "permissions": {\n    "allow": [\n      "Bash(one)",\n      "Bash(two)"'
-    printf '%b' "$2"; printf '\n    ]\n  }\n}\n'; } > "$INST4/.claude/settings.json"
+    printf '%b' "$2"; printf '\n    ],\n    "deny": [\n      "Bash(no)"'
+    printf '%b' "${3:-}"; printf '\n    ]\n  }\n}\n'; } > "$INST4/.claude/settings.json"
 }
 cp "$INST4/CLAUDE.md" "$TMP/claude4.stamped"
 R4="$TPL4/plugin/scripts/refresh-seeds.sh"
@@ -341,6 +342,45 @@ sed '/^seed rule B$/d' "$TPL4/plugin/seed/CLAUDE.md" > "$TMP/x" && mv "$TMP/x" "
 ( cd "$TPL4" && git add -A && gc "template, a seed line dropped" )
 DROPPED="$(bash "$R4" "$INST4" 2>&1)"
 assert "a line the seed dropped, still in the bundle: CONFLICT" "$(has 'CONFLICT  CLAUDE.md$' "$DROPPED")"
+
+echo "== a seed rule ported under another key is not ported =="
+sed 's/^      "Bash(no)"$/      "Bash(no)",\
+      "Bash(seed-deny)"/' "$TPL4/plugin/seed/.claude/settings.json" > "$TMP/x" && mv "$TMP/x" "$TPL4/plugin/seed/.claude/settings.json"
+( cd "$TPL4" && git add -A && gc "template, a deny rule added" )
+ALLOW4=',\n      "Bash(seed-a)",\n      "Bash(seed-b)",\n      "Bash(local)"'
+hand 'seed rule A\n' "$ALLOW4"',\n      "Bash(seed-deny)"' ',\n      "Bash(local-deny)"'
+WRONGKEY="$(bash "$R4" "$INST4" 2>&1)"
+assert "the deny rule sits under allow: CONFLICT"   "$(has 'CONFLICT  .claude/settings.json$' "$WRONGKEY")"
+hand 'seed rule A\n' "$ALLOW4" ',\n      "Bash(seed-deny)",\n      "Bash(local-deny)"'
+RIGHTKEY="$(bash "$R4" "$INST4" 2>&1)"
+assert "the same rule under deny: in sync"          "$(hasnt 'settings.json$' "$RIGHTKEY")"
+
+echo "== with only the stamped-seed record: UNKNOWN is one quiet line, and a hand-port moves the base =="
+NR="$TMP/norepo"; mkdir -p "$NR"; cp -R "$TPL/plugin" "$NR/plugin"
+INST5="$TMP/group5/_ai-bridge-record"; mkdir -p "$INST5"
+bash "$NR/plugin/scripts/init-bundle.sh" "$INST5" > "$TMP/stamp5.out" 2>&1
+R5="$NR/plugin/scripts/refresh-seeds.sh"; REC="$INST5/$AB_DIR/seed-base/CLAUDE.md"
+assert "the stamp recorded the seed it copied"      "$(yes_if cmp -s "$REC" "$NR/plugin/seed/CLAUDE.md")"
+rm "$INST5/$AB_DIR/seed-base/README.md"; echo 'a local line' >> "$INST5/README.md"
+Q5="$(bash "$NR/plugin/scripts/init-bundle.sh" "$INST5" 2>&1)"
+V5="$(bash "$NR/plugin/scripts/init-bundle.sh" --verbose "$INST5" 2>&1)"
+assert "quiet: one UNKNOWN line carrying its diff -u command" \
+  "$([ "$(grep -c "^  UNKNOWN  *README.md — diff -u '.*/README.md' '.*/seed/README.md'\$" <<<"$Q5")" = 1 ] && echo 0 || echo 1)"
+assert "…and the notice that the comparison was incomplete" "$(has '1 seed document(s) differ with no merge base' "$Q5")"
+assert "--verbose prints the notice, and no one-line form"  \
+  "$(grep -q '1 seed document(s) differ with no merge base' <<<"$V5" && ! grep -q ' — diff -u ' <<<"$V5" && echo 0 || echo 1)"
+printf 'seed rule A\nseed rule B\n' >> "$NR/plugin/seed/CLAUDE.md"
+printf 'seed rule A\nseed rule B\nLOCAL HOUSE RULE\n' >> "$INST5/CLAUDE.md"
+cp "$REC" "$TMP/rec5.before"
+REPORT5="$(bash "$R5" "$INST5" 2>&1)"
+assert "the history source is the record"           "$(has 'stamped-seed record' "$REPORT5")"
+assert "report mode: the hand-port is in sync"      "$(hasnt '  CLAUDE.md$' "$REPORT5")"
+assert "…and the record is not written"             "$(yes_if cmp -s "$TMP/rec5.before" "$REC")"
+bash "$R5" "$INST5" --apply > "$TMP/apply5.out" 2>&1
+assert "--apply: the record is now the seed"        "$(yes_if cmp -s "$REC" "$NR/plugin/seed/CLAUDE.md")"
+sed '/^seed rule B$/d' "$NR/plugin/seed/CLAUDE.md" > "$TMP/x" && mv "$TMP/x" "$NR/plugin/seed/CLAUDE.md"
+DROP5="$(bash "$R5" "$INST5" 2>&1)"
+assert "the seed then drops the ported line: CONFLICT" "$(has 'CONFLICT  CLAUDE.md$' "$DROP5")"
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
