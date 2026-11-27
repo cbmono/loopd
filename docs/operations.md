@@ -1684,8 +1684,8 @@ every script through it; a space-free root, or a real path holding any character
 `script-rules.sh` derives both sets for the stamp and for `/loopd:welcome check`, whose
 `script-rules` row (on the session banner too) names every rule the stamp would add (absent
 from both settings files) or remove (from `settings.local.json`, the one it edits), and writes
-nothing. `/loopd:update`
-re-stamps only the bundle it ran in, so another bundle's fix is `/loopd:init` there.
+nothing. `/loopd:update` re-stamps only the bundle it ran in, so another bundle's fix is
+`/loopd:init` there.
 
 ### A stable scripts path, for your terminal only
 

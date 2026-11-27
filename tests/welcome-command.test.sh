@@ -720,6 +720,7 @@ SPD="$TMP/home/Library/Application Support/profile"; mkdir -p "$SPD"; ln -s "$TM
 SPR="$SPD/plugins/cache/mk/${PN}/9.9.9"; REAL="$(cd "$SPR" && pwd -P)"; RMK="${REAL%/*}"
 RO9="$(awk '$2 == "read-only" { print $1 }' "$REAL/data/script-classes.txt")"
 rules9() { printf '%s\n' "$RO9" | while IFS= read -r n; do printf 'Bash(%s/%s/scripts/%s *)\n' "$RMK" "$1" "$n"; done; }
+rule9() { printf 'Bash(%s/%s/scripts/bundle-paths.sh *)' "$RMK" "$1"; }
 mkallow() { python3 -c 'import json,sys; json.dump({"permissions": {"allow": [r for r in sys.stdin.read().split("\n") if r]}}, open(sys.argv[1], "w"), indent=2)' "$1"; }
 chk() { # <plugin root> <instance> [flags…] — welcome.sh check as that plugin runs it
   local r="$1" i="$2"; shift 2
@@ -727,7 +728,7 @@ chk() { # <plugin root> <instance> [flags…] — welcome.sh check as that plugi
 }
 OLDW="Bash($RMK/*/scripts/*)"; OLDB="Bash(bash $RMK/*/scripts/*)"; OLDS="Bash($(cd "${SPR%/*}" && pwd)/*/scripts/*)"
 INST9="$TMP/inst9"; mkinstance "$INST9"; L9="$INST9/.claude/settings.local.json"
-printf '%s\n' "Bash(git status)" "$OLDW" "$OLDB" "$OLDS" "$(rules9 9.9.8 | head -1)" | mkallow "$L9"
+printf '%s\n' "Bash(git status)" "$OLDW" "$OLDB" "$OLDS" "$(rule9 9.9.8)" | mkallow "$L9"
 cp "$L9" "$TMP/l9.before"
 ok "fixture: the root holds a space, its real path none" \
   "$(printf '%s\n' "$SPR" | grep -c ' ')$(printf '%s\n' "$REAL" | grep -c ' ')" 10
@@ -742,12 +743,12 @@ ok "…naming each absent rule, read from settings.local.json" \
   "$(printf '%s\n' "$OUT9" | sed -n 's/^    absent  //p' | sort | cksum)" "$(rules9 9.9.9 | sort | cksum)"
 ok "…and each old wildcard and version-stale rule" \
   "$(printf '%s\n' "$OUT9" | sed -n 's/^    stale   //p' | sort | cksum)" \
-  "$(printf '%s\n' "$OLDW" "$OLDB" "$OLDS" "$(rules9 9.9.8 | head -1)" | sort | cksum)"
+  "$(printf '%s\n' "$OLDW" "$OLDB" "$OLDS" "$(rule9 9.9.8)" | sort | cksum)"
 ok "…with /${PN}:update and /${PN}:init in its one hint" \
-  "$(printf '%s\n' "$OUT9" | grep -A99 '^⚠.*script rules' | grep '^    ↳' | head -1 | grep -c "/${PN}:init $INST9 .*/${PN}:update" | tr -d ' ')" 1
+  "$(printf '%s\n' "$OUT9" | grep -c "^    ↳ /${PN}:init $INST9 .*/${PN}:update" | tr -d ' ')" 1
 ok "settings.local.json byte-identical after check"         "$(sha "$L9")" "$(sha "$TMP/l9.before")"
 ok "…and no settings.json written"                          "$(yn test -f "$INST9/.claude/settings.json")" no
-printf '%s\n' "Bash(ls:*)" "$(rules9 9.9.7 | head -1)" | mkallow "$INST9/.claude/settings.json"
+printf '%s\n' "Bash(ls:*)" "$(rule9 9.9.7)" | mkallow "$INST9/.claude/settings.json"
 cp "$INST9/.claude/settings.json" "$TMP/s9.before"
 OUT9s="$(chk "$SPR" "$INST9")"
 ok "an old rule in settings.json, which no stamp edits, is not called stale" \

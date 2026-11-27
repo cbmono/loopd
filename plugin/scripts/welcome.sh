@@ -1125,7 +1125,7 @@ PY
   esac
   ver="$(printf '%s\n' "$out" | awk -F'\t' '$1 == "root" { n = split($2, p, "/"); print p[n]; exit }')"
   if printf '%s\n' "$out" | grep -q '^newer	'; then
-    good "script rules: .claude/settings.local.json names a newer ${PLUGIN_NAME} than $ver, which a stamp from here keeps"
+    good "script rules: .claude/settings.local.json holds rules for a later ${PLUGIN_NAME} than $ver; a stamp from here keeps them"
     return 0
   fi
   absent="$(printf '%s\n' "$out" | H="$have" awk -F'\t' '
