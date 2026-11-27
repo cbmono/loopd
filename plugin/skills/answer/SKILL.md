@@ -3,7 +3,7 @@ name: answer
 disable-model-invocation: true
 description: Answer the PM's pending open_questions interactively — gather the unanswered questions (all projects, one project, or one task), ask them one at a time, then record each through answer.sh (clearing them). Given a blocked task, take your one decision and return it to ready. In-session convenience instead of editing each task file by hand.
 argument-hint: "[<project-slug> | projects/<slug> | <task path> [Q<n>] <n | more | later | text> | <blocked task path> [<decision>]]  omit for every project"
-allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh:*), Read, Write, Glob, Grep, AskUserQuestion
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh:*), Read, Write, Glob, Grep, AskUserQuestion
 ---
 
 Answer the Project Manager's pending `open_questions` **interactively**, instead of
@@ -12,7 +12,7 @@ opening each `taskX.md` and appending ` --- <answer>` by hand.
 ## Preconditions
 Run from a control-panel instance root — confirm `instance.config.json` in the cwd and
 `SCHEMA.md` at the resolved schema path (`AB_SCHEMA`; the root on a legacy layout) with exactly
-`ls instance.config.json "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`; if it fails, tell the user to `cd` into the instance and stop. (A bundle
+`ls instance.config.json "$(${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`; if it fails, tell the user to `cd` into the instance and stop. (A bundle
 carries no `.claude/agents`; the roles ship in the plugin — `SCHEMA.md` → "Which document
 wins", row 1.)
 
@@ -30,7 +30,7 @@ wins", row 1.)
 
 ## One answer from the arguments — `<task path> [Q<n>] <n | more | later | text>`
 When a task path is followed by more words, run exactly
-`bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path> [Q<n>] <the rest>` and relay its
+`${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path> [Q<n>] <the rest>` and relay its
 output; skip the steps below. It answers `Q<n>`, else the first open question: a bare
 integer records that option's **text** from the `### Q<n>` block (`SCHEMA.md` → "Question
 details"), `--text <words>` records the words even when they are a number or `more`, and
@@ -49,13 +49,13 @@ the record. `more` prints the next stored depth (1, then 2, then 3) and changes 
 
 ## A blocked task — `<task path> [<decision>]`
 When the task's `status:` is `blocked` and no `Q<n>` was given, `answer.sh` hands it to
-`unblock.sh`. Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path>` first and relay
+`unblock.sh`. Run `${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path>` first and relay
 its `last_blocker` and escalation note — in the session, never the pane. **Exit 1** — the task
 still has open questions, named in its one sentence: ask those through the steps below and stop;
 it is unblocked only once they are gone (`answer.sh --first <task path> <answer>` answers the first,
 numbered or not). `more`, `later` or a bare number is refused as a decision; pass it with `--text`. With no decision in the arguments, ask for exactly one
 with `AskUserQuestion` — what the next agent should do differently, in a line. Then run
-`bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path> --text <the decision>`: one `# Notes`
+`${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path> --text <the decision>`: one `# Notes`
 line `- <ISO 8601> by <login>: unblocked — <decision>`, the stall counter reset, `status: ready`,
 committed as you. Exit 3 and 4 read as above. It never dispatches: the next tick does.
 
@@ -73,7 +73,7 @@ committed as you. Exit 3 and 4 read as above. It never dispatches: the next tick
    selections are then recorded as ONE answer (step 3).
 3. **Record.** One `answer.sh` call per answer, in the order asked — **never edit the task
    doc yourself** (no `Edit`, perl or sed):
-   - a picked option `k` of the stored `### Q<n>` block: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path> Q<n> <k>`;
+   - a picked option `k` of the stored `### Q<n>` block: `${CLAUDE_PLUGIN_ROOT}/scripts/answer.sh <task path> Q<n> <k>`;
    - free text, an option you proposed (no stored block), or a `multiSelect` answer joined
      into one line (the picked options' texts, `; `-separated): `Write` it to `<bundle root>/tmp/answer.txt` (gitignored), then
      `… answer.sh <task path> Q<n> --text-file <that path>` — never as an argument;

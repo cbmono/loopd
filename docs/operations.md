@@ -1676,8 +1676,11 @@ wrote on that marketplace's prefix — the wildcard pair on either path and a ru
 another version — keeps the old ones and warns on a missing, empty or unparseable list, writes
 nothing when the real path still holds whitespace, `' $ & ; #` or a rule wildcard `* ? [`, never
 replaces rules naming a newer version, never rewrites a settings file it cannot read, and needs
-`python3` or `jq`. Shipped call sites still name `${CLAUDE_PLUGIN_ROOT}`, so these rules match
-only a call made by the real path.
+`python3` or `jq`. Shipped call sites name `${CLAUDE_PLUGIN_ROOT}` in the plain call form,
+and Claude Code expands it in skill and agent text to the root as loaded, spaces kept (measured
+on 2.1.332). So `tick-spawn.sh` builds the tick brief on the real path and tells the tick to call
+every script through it; a space-free root, or a real path still holding whitespace or one of
+`' $ & ; # * ? [`, keeps its logical path. An interactive skill still calls by the spaced root.
 
 ### A stable scripts path, for your terminal only
 

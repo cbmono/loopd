@@ -3,13 +3,13 @@ name: init
 description: Create a new loopd bundle, refresh an existing one, or convert a symlink-era bundle in place. Data only — a bundle it stamps carries no machinery and no link into any checkout.
 argument-hint: "<dir>  [--org O [--name R]] [--with-objectives] [--normalise-config] [--owner L] [--email A] [--repos-root D] [--spawn-grant]"
 disable-model-invocation: true
-allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
 
 Run this, from anywhere, and **relay its output verbatim**:
 
 ```
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh $ARGUMENTS
+${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh $ARGUMENTS
 ```
 
 `$ARGUMENTS` is the bundle directory, optionally followed by `--org <org>` (see "One org,
@@ -77,7 +77,7 @@ could not derive it prints as a `needs` line naming the key and its flag.
 - **Ask the human only for the keys on `needs` lines — one batched question, all of them
   at once.** Never ask for a value the script derived and printed; it already has it.
 - Then re-run the same command with the flags for exactly those keys, e.g.
-  `bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh <dir> --owner <login> --email <address>`.
+  `${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh <dir> --owner <login> --email <address>`.
 - **No `needs` line means nothing to ask.** A bundle whose local file already exists is
   left alone — the script says so — with one exception: a missing `authorEmail` is filled
   from the tracked `people` map for the login the file names, and when `people` has no

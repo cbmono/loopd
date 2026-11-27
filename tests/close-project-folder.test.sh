@@ -614,7 +614,7 @@ SCH="$TPL/plugin/seed/SCHEMA.md"
 assert "/close-project's folder step calls the script" \
   "$(yes_if grep -q 'close-project-folder.sh <slug> --apply' "$CMD")"
 assert "…and says not to remove the folder by hand"     "$(yes_if grep -q 'Do not .git rm. or .rm. the folder by hand' "$CMD")"
-assert "…and it is in the command's allowed-tools"      "$(yes_if grep -q 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:\*)' "$CMD")"
+assert "…and it is in the command's allowed-tools"      "$(yes_if grep -q 'Bash(\${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:\*)' "$CMD")"
 assert "the PM's closeout calls the same script"        "$(yes_if grep -q 'close-project-folder.sh <slug>' "$PM")"
 # Step 1 stayed in the core when step 6 moved out — it runs on every full tick.
 assert "the PM skips done projects at the frontmatter"  "$(yes_if grep -q 'skip every .status: done. project right' "$TPL/plugin/agents/project-manager.md")"

@@ -103,8 +103,8 @@ ok "the mutant leaves the remote at init"     "$(remote "$B")" "init"
 
 echo
 echo "== THE SKILL runs the script, and may =="
-ok "allowed-tools grants push-commit.sh"      "$(sed -n '/^allowed-tools:/p' "$SKILL" | grep -cF 'Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*)')" 1
-ok "…step 7 calls it with that prefix"        "$(grep -cF '`bash ${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh .`' "$SKILL")" 1
+ok "allowed-tools grants push-commit.sh"      "$(sed -n '/^allowed-tools:/p' "$SKILL" | grep -cF 'Bash(${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*)')" 1
+ok "…step 7 calls it with that prefix"        "$(grep -cF '`${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh .`' "$SKILL")" 1
 ok "…and runs no git pull or push itself"     "$(grep -cE 'git (pull|push)' "$SKILL" | tr -d ' ')" 0
 ok "answer.sh shares the same tail"           "$(grep -c 'push-commit.sh' "$REPO/plugin/scripts/answer.sh")" 1
 

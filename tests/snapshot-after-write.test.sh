@@ -94,7 +94,7 @@ for sk in new-project close-project handoff; do
   last="$(awk '/^allowed-tools:/ { next } /commit-as\.sh|push-commit\.sh|build-awaiting\.sh/ { n = NR } END { print n + 0 }' "$f")"
   ok "…after its last commit, push and queue rebuild" "$([ "${at:-0}" -gt "$last" ] && echo after || echo "line ${at:-none} vs $last")" after
   if grep -q '^allowed-tools:' "$f"; then
-    ok "…and its allowed-tools permits it" "$(grep '^allowed-tools:' "$f" | grep -cF 'Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*)')" 1
+    ok "…and its allowed-tools permits it" "$(grep '^allowed-tools:' "$f" | grep -cF 'Bash(${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*)')" 1
   fi
 done
 

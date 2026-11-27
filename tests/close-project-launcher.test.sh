@@ -149,17 +149,17 @@ grants() { # <file> -> one grant per line
 # needs. The criterion is "no UNDECLARED grant ships", so this is an equality and any
 # widening — including a second interactive tool — is what fails it.
 EXPECTED_GRANTS='Bash(date:*)
-Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*)
-Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*)
-Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*)
-Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*)
-Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*)
-Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*)
-Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh:*)
-Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*)
-Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*)
-Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*)
-Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh:*)
+Bash(${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*)
+Bash(${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*)
+Bash(${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*)
+Bash(${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*)
+Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*)
+Bash(${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*)
+Bash(${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh:*)
+Bash(${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*)
+Bash(${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*)
+Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*)
+Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh:*)
 Bash(grep:*)
 Bash(git rm:*)
 Bash(git add:*)
@@ -193,12 +193,12 @@ ungranted() { # <file> -> the calls no grant covers
 }
 for c in 'papercuts.sh pass' 'build-kb-index.sh' 'build-kb-index.sh --check' 'close-project-folder.sh <slug> --apply'; do
   ok "the call to $c is in the granted form" \
-    "$(grep -qxF "   bash \${CLAUDE_PLUGIN_ROOT}/scripts/$c" "$SKILL" && echo yes || echo no)" yes
+    "$(grep -qxF "   \${CLAUDE_PLUGIN_ROOT}/scripts/$c" "$SKILL" && echo yes || echo no)" yes
 done
 ok "every script call matches a grant"   "$(ungranted "$SKILL" | sort -u | tr '\n' ' ')" ""
 ok "…and there are calls to check"       "$([ "$(calls "$SKILL" | wc -l)" -ge 10 ] && echo yes || echo no)" yes
-printf -- '---\nallowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/x.sh:*)\n---\n    ${CLAUDE_PLUGIN_ROOT}/scripts/x.sh --apply\n' > "$TMP/bare.md"
-ok "…while a bare call under a bash grant fails it" "$(ungranted "$TMP/bare.md" | wc -l | tr -d ' ')" 1
+printf -- '---\nallowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/x.sh:*)\n---\n    bash ${CLAUDE_PLUGIN_ROOT}/scripts/x.sh --apply\n' > "$TMP/bash.md"
+ok "…while a bash call under a plain grant fails it" "$(ungranted "$TMP/bash.md" | wc -l | tr -d ' ')" 1
 
 # --- the launcher says, in the file, that it reads nothing else -------------------
 ok "launcher carries the closed-list rule" "$(has "$SKILL" 'The launcher reads nothing else')" yes

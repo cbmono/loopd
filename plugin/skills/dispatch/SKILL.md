@@ -3,7 +3,7 @@ name: dispatch
 disable-model-invocation: true
 description: Start the Project Manager loop as a SERIAL, completion-driven loop (one tick at a time) in this control-panel instance repo — bare, it owns its own cadence
 argument-hint: "[gap|once|dry-run|stop]  cadence between passes, default 10m (e.g. 30m); once = a single tick, no cadence; dry-run = once, reporting only; stop = end the loop"
-allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh:*), ScheduleWakeup, CronCreate, CronList, CronDelete
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh:*), ScheduleWakeup, CronCreate, CronList, CronDelete
 ---
 
 Start the **Project Manager loop** — but as a **SERIAL, completion-driven** loop:
@@ -51,7 +51,7 @@ reads nothing else"; anything not on it is a tick or a subagent. Both checks bel
 1. Must run from a **control-panel instance root**: confirm `instance.config.json` in the
    cwd and `SCHEMA.md` at the resolved schema path (`AB_SCHEMA`; the root on a legacy
    layout) with exactly
-   `ls instance.config.json "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`
+   `ls instance.config.json "$(${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`
    — if it fails, tell the user to `cd` into the instance and stop. (Never hardcode a
    path. The role agents ship in the plugin, so a bundle has no `.claude/agents` and the
    check must not look for one.)
@@ -218,7 +218,7 @@ spawned with `--dry-run`; anything else is the inter-tick
 
 0. **Reap the last tick first — every pass, including the first after `stop`:**
 
-       bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh
+       ${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh
 
    It reads the one bg tick `.tick-lock` records and releases the lock **only** on a
    committed ledger close for that tick's minted id — or after writing the close itself
@@ -285,7 +285,7 @@ spawned with `--dry-run`; anything else is the inter-tick
    line, 14.3% of a busy tick's input measured in tick-as-bg-session/task-001, and its
    result lands in this context):
 
-       bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh --tick <id> --gap <gap>
+       ${CLAUDE_PLUGIN_ROOT}/scripts/tick-spawn.sh --tick <id> --gap <gap>
 
    (`once` passes `--gap once`; `dry-run` adds `--dry-run`, so
    `tick-spawn.sh --tick <id> --gap <gap> --dry-run` — the tick does steps 1–2 and
@@ -307,7 +307,7 @@ spawned with `--dry-run`; anything else is the inter-tick
    `/loop` the pass ends at the spawn, and the next fire's step 0 is the wait. A human who
    typed `once` expected a result, so run
 
-       bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh --wait
+       ${CLAUDE_PLUGIN_ROOT}/scripts/tick-reap.sh --wait
 
    with the Bash tool's longest timeout. It polls the same way step 0 reads, returns when
    the tick's committed close (or its death) releases the lock — printing the close line,

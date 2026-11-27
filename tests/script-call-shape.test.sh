@@ -6,9 +6,10 @@
 # whose path is a variable (plugin/seed/CLAUDE.md's old `AB="$(ls -d …)"; "$AB/x.sh"`),
 # a `~` path, or one chained to `$?`. On 2.1.332 no rule matched a path holding a space;
 # `Bash(<space-free abs path>/<version>/scripts/<name>.sh *)` did, the form a spaced root
-# gets per read-only script. `${CLAUDE_PLUGIN_ROOT}` is the one placeholder allowed.
-# Scans plugin/{skills,tick-steps,agents,seed}/**/*.md and plugin/hooks/hooks.json;
-# there is no plugin/commands/.
+# gets per read-only script. `${CLAUDE_PLUGIN_ROOT}` is the one placeholder allowed, in the
+# plain call form only. Scans plugin/{skills,tick-steps,agents,seed}/**/*.md,
+# plugin/hooks/hooks.json and the companion AUTONOMY.md; there is no plugin/commands/.
+# Then the tick brief built from a spaced symlinked root names the space-free real path.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -22,7 +23,7 @@ cd "$REPO" || exit 2
 FILES=()
 while IFS= read -r f; do FILES+=("$f"); done < <(
   find plugin/skills plugin/tick-steps plugin/agents plugin/seed -type f -name '*.md' | sort
-  echo plugin/hooks/hooks.json)
+  echo plugin/hooks/hooks.json; echo plugin-yolo/companion/AUTONOMY.md)
 ok "prompt files found" "$([ "${#FILES[@]}" -gt 20 ] && echo yes || echo no)" yes
 
 SCRIPT='[A-Za-z0-9_-]+\.sh'
@@ -37,10 +38,38 @@ shape 'no script reached through a shell variable'  "\\\$\\{?[A-Za-z_][A-Za-z0-9
   'CLAUDE_PLUGIN_ROOT}/'
 shape 'no script reached through a ~ path'          "~/[^[:space:]]*/scripts/$SCRIPT"
 shape 'no script call chained to $?'                "scripts/$SCRIPT.*\\\$\\?"
+BASH_CALL="bash +\"?\\\$\\{CLAUDE_PLUGIN_ROOT\\}/scripts/"
+shape 'no plugin script called through bash'        "$BASH_CALL"
+ok "…while a planted one is caught by the same scan" \
+  "$(printf 'Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/x.sh --flag`.\n' | grep -cE "$BASH_CALL")" 1
+ok "AUTONOMY.md names each script by its root" \
+  "$(grep -cE "(^|[^/A-Za-z0-9_}])scripts/$SCRIPT" plugin-yolo/companion/AUTONOMY.md)" 0
 
 # The seed is the surface that taught the idiom, so it must teach the replacement.
 ok "plugin/seed/CLAUDE.md names the matchable shape" \
   "$(grep -c 'one command per call' plugin/seed/CLAUDE.md)" 1
+
+echo "== the tick brief's plugin root =="
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/callshape.XXXXXX")" || exit 2
+TMP="$(cd "$TMP" && pwd -P)"; trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$TMP/b"
+root() { # <dir> <link>: a plugin root at <dir> running this checkout, reached through <link>
+  mkdir -p "$1" && ln -s "$REPO/plugin/scripts" "$1/scripts" && ln -s "$REPO/plugin/skills" "$1/skills" && ln -s "$1" "$2"; }
+brief() { bash "$1/scripts/tick-spawn.sh" --instance "$TMP/b" --tick tick-20261127T000000Z-abcd --print 2>/dev/null; }
+said() { brief "$1" | sed -n 's/.*in your agent prompt is `\([^`]*\)`.*/\1/p'; }
+NOTE='call every plugin script through'
+root "$TMP/real/p" "$TMP/spaced link"; ln -s "$TMP/real/p" "$TMP/link"
+ok "a spaced symlinked root: the brief names its real path" "$(said "$TMP/spaced link")" "$TMP/real/p"
+ok "…tells the tick to call scripts through it" \
+  "$(brief "$TMP/spaced link" | grep -cF "$NOTE \`$TMP/real/p/scripts/\`")" 1
+ok "…and names no path with whitespace" "$(brief "$TMP/spaced link" | grep -c 'spaced link')" 0
+ok "a space-free symlinked root keeps its logical path" "$(said "$TMP/link")" "$TMP/link"
+ok "…with no note" "$(brief "$TMP/link" | grep -cF "$NOTE")" 0
+root "$TMP/real dir/p" "$TMP/spaced two"
+ok "a real path with whitespace keeps today's value" "$(said "$TMP/spaced two")" "$TMP/spaced two"
+root "$TMP/re#al/p" "$TMP/spaced three"
+ok "…and so does one with a shell metacharacter" "$(said "$TMP/spaced three")" "$TMP/spaced three"
+ok "…with no note" "$(brief "$TMP/spaced three" | grep -cF "$NOTE")" 0
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

@@ -54,7 +54,7 @@ pull `--rebase` (never `--autostash`) and push, so the other human's clone sees 
 transfer on their next tick.
 
 Last, after the push, refresh the board's snapshot from the bundle root:
-`bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet` — its `mine` reads `owner:`,
+`${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet` — its `mine` reads `owner:`,
 so `/pane` shows the transfer without waiting for a tick. It writes nothing where
 `SNAPSHOT.json` is absent (the board's off switch), and a non-zero exit never fails the
 handoff: say so in the report and carry on.

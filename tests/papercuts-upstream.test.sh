@@ -147,7 +147,7 @@ ok "close-project names the refused-pass branch" \
   "$(norm "$SKILL" | grep -cF 'If `pass` exits 1, closeout continues without a marker')" 1
 ok "…logs the refused surfaces"               "$(norm "$SKILL" | grep -cF '`papercuts pass refused: <surfaces>`')" 1
 ok "…and calls the writers in the granted form" \
-  "$(grep -cE '^   bash \$\{CLAUDE_PLUGIN_ROOT\}/scripts/papercuts\.sh (propose|dismiss) ' "$SKILL")" 2
+  "$(grep -cE '^   \$\{CLAUDE_PLUGIN_ROOT\}/scripts/papercuts\.sh (propose|dismiss) ' "$SKILL")" 2
 ok "the path is one constant in bundle-paths.sh" \
   "$("$REPO/plugin/scripts/bundle-paths.sh" AB_UPSTREAM)" .loopd/upstream-proposals.md
 ok "SCHEMA.md defines both row shapes" \

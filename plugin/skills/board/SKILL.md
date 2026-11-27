@@ -34,7 +34,7 @@ tracked `instance.config.json` turns that off, and `serve` still starts it by ha
 
 **Confirm you are at an instance root first** — `instance.config.json` in the cwd and
 `SCHEMA.md` at the resolved schema path (`AB_SCHEMA`; the root on a legacy layout), with exactly
-`ls instance.config.json "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`. If it fails, say which directory this is, say that an instance root
+`ls instance.config.json "$(${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_SCHEMA)" 2>/dev/null || ls instance.config.json SCHEMA.md`. If it fails, say which directory this is, say that an instance root
 carries those two files, and stop. Do not run the script: it exits 0 and prints nothing
 when the check fails, so a session that delegated the refusal would leave the human
 looking at a blank line.
@@ -42,7 +42,7 @@ looking at a blank line.
 Then run it from the instance root and relay what it prints:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/board-serve.sh
+${CLAUDE_PLUGIN_ROOT}/scripts/board-serve.sh
 ```
 
 That is the whole form. The script binds `127.0.0.1` on `boardPort`
@@ -73,7 +73,7 @@ its own; what it publishes is the bytes the renderer wrote.
 
 1. **Confirm you are at an instance root** — `instance.config.json` is present. If it is
    not, say which directory this is and stop. Never improvise a board.
-2. **Refresh the data**: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet`. No `SNAPSHOT.json` ⇒ the
+2. **Refresh the data**: `${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet`. No `SNAPSHOT.json` ⇒ the
    writer writes nothing and exits 0 — that is how a human takes this instance off the
    board, so say so in one line and stop. Never create the file.
 3. **Read `board` from the tracked `instance.config.json`** — the same key `/loopd:init`
@@ -82,7 +82,7 @@ its own; what it publishes is the bytes the renderer wrote.
 4. **Render, scoped to this instance**, from the instance root:
 
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --out "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_BOARD_DIR)/artifact-body.html" .
+   ${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --out "$(${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_BOARD_DIR)/artifact-body.html" .
    ```
 
    **No `--standalone`**: the artifact host supplies `<!doctype>`, `<html>`, `<head>` and

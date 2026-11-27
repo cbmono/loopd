@@ -1174,7 +1174,7 @@ echo
 echo "== the wiring: the launcher runs the acquire, and holds exactly the grant for it =="
 grants() { awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/,""); print}' "$1" \
   | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$'; }
-ok "allowed-tools grants the script"     "$(grep -qx 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' <<<"$(grants "$LAUNCHER")" && echo yes || echo no)" yes
+ok "allowed-tools grants the script"     "$(grep -qx 'Bash(\${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' <<<"$(grants "$LAUNCHER")" && echo yes || echo no)" yes
 # 10: the eighth is bundle-paths.sh, which prints a layout constant for precondition 1; the
 # ninth is CronCreate, the one session job precondition 2 creates (2026-10-28); and since
 # tick-as-bg-session/task-002 `Agent` is gone and tick-reap.sh + tick-spawn.sh replace it.

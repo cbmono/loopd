@@ -3,7 +3,7 @@ name: close-project
 disable-model-invocation: true
 description: Close a completed project — final KB consolidation, log the closeout, roll up status, then remove the project folder (git history + KB are the record; no archive) — or, with `retain: true`, freeze and keep it. With no slug it opens a multi-select picker of the projects and asks whether to run `--force` or `--dry-run`. Human-gated; run once a project's tasks are all done/cancelled.
 argument-hint: [<project-slug>]  [--dry-run] [--force]  — no slug opens the picker
-allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent, AskUserQuestion
+allowed-tools: Bash(date:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent, AskUserQuestion
 ---
 
 **Close a completed Project.** This is the human-triggered form of the closeout the
@@ -125,8 +125,8 @@ nothing to the explicit-slug path and never runs on it.
 
 1. **The names.** `ls projects/` — allowlist item 1, directory names and nothing else.
 2. **The state, from a subagent.** Spawn **one background subagent**, on the model
-   `bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh explorer` prints, at the `effort:`
-   `bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh explorer` prints (none when empty), and ask it for **one
+   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh explorer` prints, at the `effort:`
+   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh explorer` prints (none when empty), and ask it for **one
    short line per project**: the slug, the project's own `status:`, how many of its tasks
    are terminal and how many are not, and whether it carries `retain: true`. It reads the
    documents; you read its report, and nothing else about any project enters this thread.
@@ -173,8 +173,8 @@ closeout agent's brief" below verbatim, the slug, and any `--dry-run`/`--force` 
 Namespace it — a bare agent name does not resolve. **Several projects from the picker are
 several dispatches, in series** (→ "Several projects close ONE AT A TIME"), never one agent
 carrying a list. Resolve its model with
-`bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager` and its `effort:` with
-`bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh project-manager` (nothing printed ⇒ none). **Never wake a completed
+`${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager` and its `effort:` with
+`${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh project-manager` (nothing printed ⇒ none). **Never wake a completed
 closeout agent with a message** — dispatch a fresh one.
 
 **A closeout is NOT a tick, and the brief must say so.** It runs once, it is not
@@ -215,7 +215,7 @@ is, while the log entry still names the human who decided.
 > `log.md`/`index.md`/`project.md`/objective, prune worktrees, rebuild `AWAITING.md`, or
 > commit/remove anything.
 > Only a run without the flag actually changes state. Step 7's
-> `bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug>` **without `--apply`** is the one thing you
+> `${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug>` **without `--apply`** is the one thing you
 > may run: it is report-only by design and prints the exact removal or prune it would
 > perform, which is a better dry-run report than a description of one.
 
@@ -267,9 +267,9 @@ is, while the log entry still names the human who decided.
    plugin row — its concrete edit, or why it no longer reproduces — then mark the pass:
 
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh propose --surface <s> --edit "<concrete edit>"
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh dismiss --surface <s> --reason "<why>"
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh pass
+   ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh propose --surface <s> --edit "<concrete edit>"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh dismiss --surface <s> --reason "<why>"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh pass
    ```
 
    `pass` checks only the plugin side; the drafts are your duty. **If `pass` exits 1,
@@ -277,20 +277,20 @@ is, while the log entry still names the human who decided.
    refused: <the surfaces it named>`, and the entries stay pending for the tick's next DUE.
    `.loopd/upstream-proposals.md`, when written, goes in step 7's commit by explicit path.
 
-   Skip only if `bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh report` finds nothing; say so if you do.
+   Skip only if `${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh report` finds nothing; say so if you do.
 
    Finish with the index, which is derived rather than curated:
 
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh --check
+   ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh
+   ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh --check
    ```
 
    Zero errors before step 7 commits, and `knowledge/index.md` goes in that commit by
    explicit path.
 
 3. **Record the closeout.** Get a timestamp (`date -u +%Y-%m-%dT%H:%M:%SZ`) and the
-   login closing it (`bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`). Prepend
+   login closing it (`${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`). Prepend
    a dated **Project closed** entry to `.loopd/log.md` (newest-first), stamped
    `by <login>`, naming the
    project, its merged PR(s) as `[<repo>#<n>](url)`, the `Finding`(s) it produced
@@ -325,7 +325,7 @@ is, while the log entry still names the human who decided.
 5. **Report leftover worktrees** — **only when no role agents are in flight.** A `done`
    task's own worktree was already reclaimed by step 5's `reclaim-worktree.sh`, so what is
    left here is what no task record names. Run
-   `bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh`; it classifies and prints `git worktree remove`
+   `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh`; it classifies and prints `git worktree remove`
    commands but never deletes. Include its `REMOVABLE`/`RECLAIMABLE` lines for this
    project's worktrees in the closing summary so the human can reclaim them; don't
    run the commands yourself. **Report only this project's lines**; the rest of the scan
@@ -371,7 +371,7 @@ is, while the log entry still names the human who decided.
 7. **Remove — or retain — then validate, then commit.** Unless `--dry-run`, run
 
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug> --apply
+   ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug> --apply
    ```
 
    **Do not `git rm` or `rm` the folder by hand.** That one command is the whole
@@ -403,13 +403,13 @@ is, while the log entry still names the human who decided.
      user to re-stamp: an index the tick will never regenerate and git will never
      carry exists on exactly one machine.
 
-   Commit via `bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "chore: close <slug> project" --stage -- <path>...`,
+   Commit via `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "chore: close <slug> project" --stage -- <path>...`,
    naming every path — including `projects/<slug>`, `projects/CLOSED.md` and, when step 2
    wrote it, `.loopd/upstream-proposals.md`. **Author it
    as `project-manager`, never as `human`**: `human` is the one role every guard trusts
    (it skips the promotion-authority check and the explicit-path requirement), and an
    agent must not commit under it. Step 3's entry still names the human who decided.
-   **Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh` after the folder step and before committing** —
+   **Run `${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh` after the folder step and before committing** —
    validating beforehand cannot see a reference that only dangles once the folder is
    gone, which is the whole failure class step 6 exists to prevent. Zero errors is the
    gate. Print the closing commit SHA and the `.loopd/log.md` entry. For a removal, remind the
@@ -419,7 +419,7 @@ is, while the log entry still names the human who decided.
    **Then rebuild the queue — after the folder step, every time:**
 
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh
+   ${CLAUDE_PLUGIN_ROOT}/scripts/build-awaiting.sh
    ```
 
    `AWAITING.md` is derived from the task documents, and the tick rewrites it **only when
@@ -435,7 +435,7 @@ is, while the log entry still names the human who decided.
    from the bundle root (never under `--dry-run`):**
 
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet
+   ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet
    ```
 
    It copies `AWAITING.md`'s rows, which is why it follows the queue rebuild, and it is
