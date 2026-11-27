@@ -159,9 +159,14 @@ groups() { # <flat> -> each concurrency group expression; UNK-prefixed when none
 }
 
 # Run context: X_WF X_EVENT X_REF X_REFNAME X_HEADREF X_BASEREF X_PRNUM X_RUN; UNK = not known.
+# X_IN is the calling job's resolved inputs, set only for a called workflow's group.
 ctx() {
   local v
   case "$1" in
+    inputs.*) v="${1#inputs.}"; [ -n "$X_IN" ] || return 1
+      case "$v" in ''|*[!A-Za-z0-9_-]*) return 1 ;; esac
+      v="$(awk -F'\t' -v k="$(printf '%s' "$v" | tr '[:upper:]' '[:lower:]')" \
+        '$1 == k { print substr($0, length(k) + 2); f = 1; exit } END { exit !f }' "$X_IN")" || return 1 ;;
     github.workflow) v="$X_WF" ;;            github.event_name) v="$X_EVENT" ;;
     github.ref) v="$X_REF" ;;                github.ref_name) v="$X_REFNAME" ;;
     github.head_ref) v="$X_HEADREF" ;;       github.base_ref) v="$X_BASEREF" ;;
@@ -229,31 +234,83 @@ gh_api "$TMP/wfs" --paginate "repos/$repo/actions/workflows" \
 
 gh_api "$TMP/b" "repos/$repo/branches/$branch"
 case $? in 1) unknown "branch $branch not found in $repo" ;; 2) unknown "gh could not read branch $branch of $repo" ;; esac
+fetch() { # <path> <ref> -> F, its flattened file, read once per path and ref; 1 it 404s · 2 gh failed
+  F="$TMP/f.$(printf '%s@%s' "$1" "$2" | cksum | cut -d' ' -f1)"
+  if [ ! -e "$F" ]; then
+    gh_api "$F.raw" -H 'Accept: application/vnd.github.raw' "repos/$repo/contents/$1?ref=$2"
+    case $? in 0) flatten < "$F.raw" > "$F" ;; 1) : > "$F"; : > "$F.404" ;; 2) : > "$F"; : > "$F.err" ;; esac
+  fi
+  [ ! -e "$F.err" ] || return 2
+  [ ! -e "$F.404" ]
+}
 i=0; gone=0; : > "$TMP/index"
 while IFS= read -r path; do
   [ -n "$path" ] || continue
   i=$((i + 1))
-  gh_api "$TMP/raw.$i" -H 'Accept: application/vnd.github.raw' "repos/$repo/contents/$path?ref=$branch"
+  fetch "$path" "$branch"
   case $? in 1) gone=$((gone + 1)); continue ;; 2) unknown "gh could not read $path at $branch" ;; esac
-  flatten < "$TMP/raw.$i" > "$TMP/flat.$i"
-  wf="$(sel "$TMP/flat.$i" name | head -n1)"
-  printf '%s\t%s\t%s\n' "$i" "$path" "${wf:-$path}" >> "$TMP/index"
+  wf="$(sel "$F" name | head -n1)"
+  printf '%s\t%s\t%s\n' "$F" "$path" "${wf:-$path}" >> "$TMP/index"
 done < "$TMP/wfs"
 [ "$i" = 0 ] || [ "$gone" != "$i" ] || unknown "none of the $i workflow file(s) of $repo is readable at $branch"
-uses() { awk -F'\t' '$1 ~ /^jobs\.[^.]+\.uses$/ { print $2; exit }' "$1"; }
+
+# Called workflows: local files, one level (D3).
+LOCAL='^\./\.github/workflows/[A-Za-z0-9._-]+\.ya?ml$'; JOBID='^[A-Za-z_][A-Za-z0-9_-]*$'; K=0; X_IN=""
+calls() { awk -F'\t' '$1 ~ /^jobs\.[^.]+\.uses$/ { print substr($1, 6, length($1) - 10) "\t" substr($0, length($1) + 2) }' "$1"; }
+pick() { # <flat> <key> -> its one scalar, the key matched caselessly; 1 no such key · 2 several
+  awk -F'\t' -v k="$2" 'BEGIN { k = tolower(k) }
+    { x = tolower($1) }
+    x == k { n++; v = substr($0, length($1) + 2) }
+    END { if (n == 1) print v; exit (n == 1 ? 0 : (n ? 2 : 1)) }' "$1"
+}
+plain() { # <value> -> 0 when GitHub reads it as that very string
+  case "$1" in ''|"$UNK"*|*'${{'*|*\\*|*\'*) return 1 ;; esac
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    [0-9]*|[-+.][0-9]*|[-+].[0-9]*|.inf|.nan|[-+].inf|[-+].nan|true|false|yes|no|on|off|y|n|null) return 1 ;;
+  esac
+}
+input() { # <caller flat> <job> <callee flat> <name> -> its string; 1 cannot tell
+  local v w="jobs.$2.with" d="on.workflow_call.inputs.$4"
+  [ -z "$(sel "$1" "$w")" ] && [ "$(pick "$3" "$d.type")" = string ] || return 1
+  v="$(pick "$1" "$w.$4")"
+  case $? in 1) v="$(pick "$3" "$d.default")" || return 1 ;; 2) return 1 ;; esac
+  plain "$v" && printf '%s' "$v"
+}
+exprs() { # <flat> <ref> <out> -> `<k><TAB><group>` lines, k 0 own, else inputs in $TMP/in.<k>; 1 = CW
+  local cf="$1" ref="$2" out="$3" job u c e n v
+  CW=""; groups "$cf" | awk '{ print "0\t" $0 }' > "$out"
+  while IFS="$TAB" read -r job u; do
+    if ! [[ "$job" =~ $JOBID && "$u" =~ $LOCAL ]]; then CW="${CW:-a job calls $u, whose concurrency bash does not read}"; continue; fi
+    fetch "${u#./}" "$ref" || { CW="${CW:-a job calls $u, which is not readable at $ref}"; continue; }
+    c="$F"
+    [ -z "$(calls "$c")" ] || { CW="${CW:-a job calls $u, which calls a workflow itself (one level is read)}"; continue; }
+    awk -F'\t' 'index($2, "\001") == 1 && $1 ~ /^jobs(\.[^.]+(\.<<(\[\])?)?)?$/ { f = 1 } END { exit !f }' "$c" \
+      && { CW="${CW:-a job calls $u, where a job is an anchor, alias or flow mapping}"; continue; }
+    K=$((K + 1)); : > "$TMP/in.$K"
+    while IFS= read -r e; do
+      for n in $(printf '%s\n' "$e" | grep -oE 'inputs\.[A-Za-z0-9_-]+' | cut -d. -f2 | tr '[:upper:]' '[:lower:]' | sort -u); do
+        v="$(input "$cf" "$job" "$c" "$n")" \
+          || { CW="${CW:-job $job gives input $n of $u no plain-string literal, and a concurrency group reads it}"; continue 2; }
+        printf '%s\t%s\n' "$n" "$v" >> "$TMP/in.$K"
+      done
+      printf '%s\t%s\n' "$K" "$e" >> "$out"
+    done < <(groups "$c")
+  done < <(calls "$cf")
+  [ -z "$CW" ]
+}
 
 : > "$TMP/pushg"
-while IFS=$'\t' read -r i path wf; do
-  triggers "$TMP/flat.$i"
+while IFS=$'\t' read -r f path wf; do
+  triggers "$f"
   case $? in 1) continue ;; 2) unknown "$path: its push trigger cannot be read" ;; esac
-  u="$(uses "$TMP/flat.$i")"
-  [ -z "$u" ] || unknown "$path: a job calls $u, whose concurrency bash does not read"
+  exprs "$f" "$branch" "$TMP/g" || unknown "$path: $CW"
   X_WF="$wf" X_EVENT=push X_REF="refs/heads/$branch" X_REFNAME="$branch" X_HEADREF="" X_BASEREF="" \
     X_PRNUM="" X_RUN="$UNK.new-run"
-  while IFS= read -r e; do
+  while IFS="$TAB" read -r k e; do
+    X_IN=""; [ "$k" = 0 ] || X_IN="$TMP/in.$k"
     g="$(evalg "$e")" || unknown "$path: concurrency group '${e#"$UNK"}' — bash cannot evaluate it"
     printf '%s\n' "$g" >> "$TMP/pushg"
-  done < <(groups "$TMP/flat.$i")
+  done < "$TMP/g"
 done < "$TMP/index"
 [ -s "$TMP/pushg" ] || { echo "clear: no workflow a push to $branch triggers sets a concurrency group"; finish 0; }
 
@@ -280,14 +337,12 @@ ghost() { # <id> <status> <head branch> <head repo> <created_at> -> 0 skip it
 why=""
 while IFS="$US" read -r id path ev hb sha prn base st url hrepo created; do
   [ -n "$id" ] || continue
-  rf="${path%%@*}"; f="$TMP/run.$(printf '%s@%s' "$rf" "$sha" | cksum | cut -d' ' -f1)"
-  if [ ! -e "$f" ]; then
-    gh_api "$f.raw" -H 'Accept: application/vnd.github.raw' "repos/$repo/contents/$rf?ref=$sha"
-    case $? in 0) flatten < "$f.raw" > "$f" ;; 1) : > "$f"; : > "$f.404" ;; 2) unknown "gh could not read $rf at $sha" ;; esac
-  fi
-  if [ -e "$f.404" ]; then why="${why:-run $id ($rf, $st): its workflow file is not readable at $sha}"; continue; fi
-  u="$(uses "$f")"
-  if [ -n "$u" ]; then why="${why:-run $id ($rf, $st): a job calls $u, whose concurrency bash does not read}"; continue; fi
+  rf="${path%%@*}"
+  fetch "$rf" "$sha"
+  case $? in 2) unknown "gh could not read $rf at $sha" ;;
+    1) why="${why:-run $id ($rf, $st): its workflow file is not readable at $sha}"; continue ;; esac
+  f="$F"
+  exprs "$f" "$sha" "$TMP/g" || why="${why:-run $id ($rf, $st): $CW}"
   X_WF="$(sel "$f" name | head -n1)"; X_WF="${X_WF:-$rf}"
   X_EVENT="$ev"; X_RUN="run.$id"; X_HEADREF=""; X_BASEREF=""; X_PRNUM=""
   X_REF="refs/heads/$hb"; X_REFNAME="$hb"
@@ -300,7 +355,8 @@ while IFS="$US" read -r id path ev hb sha prn base st url hrepo created; do
     fi ;;
   esac
   gk=""
-  while IFS= read -r e; do
+  while IFS="$TAB" read -r k e; do
+    X_IN=""; [ "$k" = 0 ] || X_IN="$TMP/in.$k"
     if ! g="$(evalg "$e")"; then
       [ -n "$gk" ] || { ghost "$id" "$st" "$hb" "$hrepo" "$created"; gk=$?; }
       [ "$gk" = 0 ] && continue
@@ -310,7 +366,7 @@ while IFS="$US" read -r id path ev hb sha prn base st url hrepo created; do
       echo "hold: group '$g' has run $id ($X_WF, $st, $ev on $hb) $url"
       finish 1 "##mq1 $branch $g"
     fi
-  done < <(groups "$f")
+  done < "$TMP/g"
 done < "$TMP/runs"
 [ -z "$why" ] || unknown "$why"
 echo "clear: $(sort -u "$TMP/pushg" | grep -c .) group(s) a push to $branch joins, none with a pending run"

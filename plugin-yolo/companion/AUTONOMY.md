@@ -241,7 +241,9 @@ not be able to talk the loop into a merge. Confirm all seven and **abort if any 
    script names the group and the run, keeps a mark under the bundle's ignored
    `.loopd/.merge-holds/`, and `tick-delta.sh check` reports that mark as a DELTA, so the next
    tick asks again rather than idling. **Exit 2 is unknown, and unknown holds** — a trigger or
-   group expression bash cannot read, a job calling a reusable workflow, a branch or workflow
+   group expression bash cannot read, a job calling a reusable workflow other than a local
+   `./.github/workflows/<file>` (read one level deep, its groups taken as the calling job's)
+   or giving an input a called group reads no plain-string literal, a branch or workflow
    file the host does not return, or `gh` failing — but for **at most 2 unknowns at one head**
    (D3). The script counts calls, so it runs **once per PR per tick**.
    **The first unknown at a head holds with no row** and is retried next tick.
