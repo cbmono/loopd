@@ -281,7 +281,7 @@ ok "future, malformed and orphan rows are counted, rows above ## Entries are not
 ok "…and it still exits 0"                  "$(rc on 2026-09-05 proposals)" 0
 ok "…with the same nine entries"            "$(grep -c '^  ' <<<"$out")" 9
 ok "a row dated after --date is malformed as of that day" \
-  "$(on 2026-09-03 proposals | head -1)" "== 8 entries · 6 surfaces · 8 malformed"
+  "$(head -1 <<<"$(on 2026-09-03 proposals)")" "== 8 entries · 6 surfaces · 8 malformed"
 printf '# Upstream proposals\n\n## Entries\n\n' > "$UP"
 ok "a file with no rows"                    "$(bash "$PC" proposals)" "papercuts: no upstream proposals, 0 malformed"
 
