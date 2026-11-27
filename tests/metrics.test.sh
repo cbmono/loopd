@@ -308,6 +308,10 @@ wait; mkdir "$RUN/lock"; touch -t 202001010000 "$RUN/lock"; : > "$RUN/failed"
 METRICS_LOCK_WAIT=0 bash "$M" "$B"
 ok "a lock older than 10 minutes is taken over, and released" "$?:$([ -d "$RUN/lock" ] && echo held || echo free)" 0:free
 ok "a written file clears the hook's failure marker" "$([ -e "$RUN/failed" ] && echo marked || echo none)" none
+mv "$RUN" "$TMP/run-real"; mkdir -p "$TMP/outside/lock"; touch -t 202001010000 "$TMP/outside/lock"; ln -s "$TMP/outside" "$RUN"
+fails_kept "a symlinked run directory"
+ok "…and nothing behind the link is written or removed" "$(ls -A "$TMP/outside" | tr '\n' ' ')" "lock "
+rm "$RUN"; mv "$TMP/run-real" "$RUN"
 
 echo "== the key allowlist =="
 ALLOWED='pm_ticks ticks_without_row unknown tick_cost mean_hours loop rate reasons not_self_merged criteria gated

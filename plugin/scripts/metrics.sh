@@ -28,10 +28,10 @@ out="$root/$AB_METRICS"
 work="$(mktemp -d "${TMPDIR:-/tmp}/metrics.XXXXXX")" || die 2 "mktemp failed"
 trap 'rm -rf "$work"' EXIT
 run="$root/$AB_METRICS_RUN"; lock="$run/lock"; waited=0
-mkdir -p "$run" && { [ -e "$run/.gitignore" ] || printf '*\n' > "$run/.gitignore"; } \
-  || die 2 "cannot write $AB_METRICS_RUN — METRICS.json not written, previous file kept"
+[ ! -L "$run" ] && mkdir -p "$run" && { [ -e "$run/.gitignore" ] || printf '*\n' > "$run/.gitignore"; } \
+  || die 2 "cannot write $AB_METRICS_RUN (a symlink is refused) — METRICS.json not written, previous file kept"
 until mkdir "$lock" 2>/dev/null; do
-  [ -z "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || { rm -rf "$lock" 2>/dev/null && continue; }
+  [ -z "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || { rmdir "$lock" 2>/dev/null && continue; }
   [ "$waited" -lt "${METRICS_LOCK_WAIT:-30}" ] \
     || die 2 "another run holds $AB_METRICS_RUN/lock — METRICS.json not written, previous file kept"
   sleep 1; waited=$((waited + 1))

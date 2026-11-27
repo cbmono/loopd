@@ -29,9 +29,10 @@ metrics_refresh() {
   local run="$AB_METRICS_RUN" last gen
   command -v jq >/dev/null 2>&1 || return 0
   [ -f "$AB_SNAPSHOT" ] && [ "$(jq -r '.board == false' instance.config.json 2>/dev/null)" = false ] || return 0
+  [ ! -L "$run" ] || return 0
   if [ -d "$run/lock" ]; then
     [ -n "$(find "$run/lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || return 0
-    rm -rf "$run/lock" 2>/dev/null
+    rmdir "$run/lock" 2>/dev/null || return 0
   fi
   last="$(ab_last_full_tick "$AB_LEDGER")"
   if [ -f "$AB_METRICS" ]; then

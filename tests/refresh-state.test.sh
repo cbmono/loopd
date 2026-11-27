@@ -237,6 +237,9 @@ ok "an unpaired close alone starts none" "$(starts)" 1
 BO="$TMP/metricsoff"; mk "$BO"; printf '{ "org": "acme", "board": false }\n' > "$BO/instance.config.json"; fire "$BO"
 ok "board off starts none" "$(starts)" 1
 ok "…and writes no run directory" "$([ -e "$BO/$AB_METRICS_RUN" ] && echo written || echo none)" none
+LK="$TMP/linked"; mk "$LK"; mkdir -p "$TMP/outside/lock"; touch -t 202001010000 "$TMP/outside/lock"
+ln -s "$TMP/outside" "$LK/$AB_METRICS_RUN"; fire "$LK"
+ok "a symlinked run directory starts none and touches nothing behind it" "$(starts):$(ls -A "$TMP/outside" | tr '\n' ' ')" "1:lock "
 
 echo "== METRICS.json: the real run"
 RB="$TMP/realmetrics"; mk "$RB"; full "$RB" 2026-10-01T01:00:00Z
