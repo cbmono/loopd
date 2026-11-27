@@ -58,15 +58,7 @@ if [ -n "$project" ]; then
     || die 3 "no project '$project' in $F — run without --project to list them"
 fi
 
-last=""
-if [ -r "$AB_LEDGER" ]; then
-  last="$(awk '
-    /^\* TICK / {
-      o = index($0, " open: "); c = index($0, " close: ")
-      if (c > 0 && (o == 0 || c < o)) closed[$3] = 1; else if (o > 0) opened[$3] = 1
-    }
-    END { for (t in closed) if ((t in opened) && t > best) best = t; print best }' "$AB_LEDGER")"
-fi
+last="$(ab_last_full_tick "$AB_LEDGER")"
 
 read -r -d '' PROG <<'JQ'
 def stale(f): if f.stale == true then " (stale)" else "" end;

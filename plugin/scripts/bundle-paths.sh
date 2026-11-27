@@ -22,6 +22,9 @@ AB_METRICS="$AB_DIR/METRICS.json"
 AB_PR_CACHE="$AB_DIR/.pr-cache"
 # Per clone: each reaped tick's own usage, one ticks.tsv row per tick id (tick-reap.sh). Ignores itself (a `*` .gitignore).
 AB_TICK_COST="$AB_DIR/.tick-cost"
+# Per clone: metrics.sh's run lock (lock/), and the session hook's last attempt and failure
+# marker (refresh-state.sh). Ignores itself (a `*` .gitignore).
+AB_METRICS_RUN="$AB_DIR/.metrics-run"
 AB_AWAITING="$AB_DIR/AWAITING.md"
 AB_LEDGER="$AB_DIR/log.md"
 AB_INDEX="$AB_DIR/index.md"
@@ -72,10 +75,10 @@ index.md:$AB_INDEX .tick-state:$AB_STATE_DIR .board-live:$AB_BOARD_DIR \
 # here so the detector below, the stamp's refusal and the notice name the same thing.
 AB_DIR_BEFORE=".ai-bridge"
 
-export AB_DIR AB_SCHEMA AB_CONVENTIONS AB_CONVENTIONS_DIR AB_SNAPSHOT AB_COUNTS AB_METRICS AB_PR_CACHE AB_TICK_COST AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER
+export AB_DIR AB_SCHEMA AB_CONVENTIONS AB_CONVENTIONS_DIR AB_SNAPSHOT AB_COUNTS AB_METRICS AB_PR_CACHE AB_TICK_COST AB_METRICS_RUN AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER
 export AB_STATE_DIR AB_RECEIPTS AB_ANSWER_DEPTH AB_ANSWER_LATER AB_HANDOFFS AB_NEW_PROJECT_FORM AB_QUEUE AB_QUEUE_LEDGER AB_MODE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM AB_KB_STAMP AB_MERGE_HOLDS AB_SESSIONS_SAVED AB_TICK_START AB_UPSTREAM AB_MOVES AB_DIR_BEFORE
 
-AB_KEYS="AB_DIR AB_SCHEMA AB_CONVENTIONS AB_CONVENTIONS_DIR AB_SNAPSHOT AB_COUNTS AB_METRICS AB_PR_CACHE AB_TICK_COST AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER \
+AB_KEYS="AB_DIR AB_SCHEMA AB_CONVENTIONS AB_CONVENTIONS_DIR AB_SNAPSHOT AB_COUNTS AB_METRICS AB_PR_CACHE AB_TICK_COST AB_METRICS_RUN AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER \
 AB_STATE_DIR AB_RECEIPTS AB_ANSWER_DEPTH AB_ANSWER_LATER AB_HANDOFFS AB_NEW_PROJECT_FORM AB_QUEUE AB_QUEUE_LEDGER AB_MODE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM AB_KB_STAMP AB_MERGE_HOLDS AB_SESSIONS_SAVED AB_TICK_START AB_UPSTREAM"
 export AB_KEYS
 
@@ -158,6 +161,17 @@ ab_board_root() { # <path>
 ab_refresh_stamp() { # <root>
   local r="${1:-.}"
   printf '%s/loopd/refresh%s\n' "${XDG_CACHE_HOME:-$HOME/.cache}" "${r//\//_}"
+}
+# The newest FULL tick in a ledger: an `open:` and a `close:` line at one timestamp, max by
+# timestamp. Prints it, or nothing. What metrics-report.sh and refresh-state.sh call stale.
+ab_last_full_tick() { # <ledger>
+  [ -r "${1:-}" ] || return 0
+  awk '
+    /^\* TICK / {
+      o = index($0, " open: "); c = index($0, " close: ")
+      if (c > 0 && (o == 0 || c < o)) closed[$3] = 1; else if (o > 0) opened[$3] = 1
+    }
+    END { for (t in closed) if ((t in opened) && t > best) best = t; print best }' "$1"
 }
 # Claude Code's per-project folder for a working directory — a Claude Code internal, spelled
 # here once: <config>/projects/<pwd -P, every non-[A-Za-z0-9] -> ->. memory-stale.sh reads
