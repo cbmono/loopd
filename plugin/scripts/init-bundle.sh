@@ -897,17 +897,12 @@ EOF
 # rule is an absolute $HOME path. A space-free plugin root gets the version-wild pair, jq-free
 # and fail-closed like 1d. No rule matches a call by a path with whitespace, so such a root
 # gets one exact-version rule per read-only script of data/script-classes.txt on its
-# space-free real path (Claude Code 2.1.332). docs/operations.md -> "Per-instance settings".
+# space-free real path (Claude Code 2.1.332), as script-rules.sh derives them for welcome.sh
+# check too. docs/operations.md -> "Per-instance settings".
 AL_FILE="$TARGET/.claude/settings.local.json"
 AL_OPEN='"allow"[[:space:]]*:[[:space:]]*\[[[:space:]]*$'
-AL_ROOT="$PLUGIN_ROOT"; al_exact=no; al_bad=""
-case "$PLUGIN_ROOT" in
-  *[[:space:]]*)
-    al_exact=yes; AL_ROOT="$(cd "$PLUGIN_ROOT" 2>/dev/null && pwd -P)"
-    case "$AL_ROOT" in ""|*[[:space:]]*|*[\'\$\&\;\#\*\?\[]*) al_bad="${AL_ROOT:-$PLUGIN_ROOT}" ;; esac ;;
-esac
-al_mk="${AL_ROOT%/*}"
-case "${al_mk##*/}|${al_mk%/*/*}|$AL_ROOT" in
+al_mk="${PLUGIN_ROOT%/*}"
+case "${al_mk##*/}|${al_mk%/*/*}|$PLUGIN_ROOT" in
   *'"'*|*'\'*|*'('*|*')'*) al_mk="" ;;
   "$PLUGIN_NAME"\|*/plugins/cache\|*) ;;
   *) al_mk="" ;;
@@ -929,45 +924,23 @@ al_write() { # <missing entries, one per line> -> the rewritten file on stdout, 
     O="$AL_OPEN" AL="$add" awk '{ print } $0 ~ ENVIRON["O"] { print ENVIRON["AL"] }' "$AL_FILE"
   fi
 }
-al_scan() { # stdin: allow rules -> "stale|newer<TAB><rule>" for the rules this writer owns
-  P="$al_mk/" L="${PLUGIN_ROOT%/*}/" V="$al_ver" awk '
-    function newer(a, b,   x, y, i, n, m) {
-      n = split(a, x, "."); m = split(b, y, "."); if (m > n) n = m
-      for (i = 1; i <= n; i++) if (x[i] + 0 != y[i] + 0) return x[i] + 0 > y[i] + 0
-      return 0 }
-    BEGIN { P = ENVIRON["P"]; L = ENVIRON["L"]; V = ENVIRON["V"] }
-    $0 == "Bash(" P "*/scripts/*)" || $0 == "Bash(bash " P "*/scripts/*)" ||
-    $0 == "Bash(" L "*/scripts/*)" || $0 == "Bash(bash " L "*/scripts/*)" { print "stale\t" $0; next }
-    index($0, "Bash(" P) == 1 {
-      r = substr($0, length(P) + 6)
-      if (r !~ /^[^\/*]+\/scripts\/[A-Za-z0-9_.-]+\.sh \*\)$/) next
-      v = substr(r, 1, index(r, "/") - 1)
-      if (v != V) print (newer(v, V) ? "newer" : "stale") "\t" $0 }'
-}
-if [ -n "$al_bad" ]; then
-  echo "  warn  script allowlist not written: the plugin's real path \`$al_bad\` holds whitespace, a shell metacharacter or a rule wildcard, so no exact rule can name it." >&2
-elif [ -z "$al_mk" ]; then
+al_have="$(bg_list "$AL_FILE" allow)" || al_have=""
+al_rc=0; al_out="$(printf '%s\n' "$al_have" | bash "$BIN_DIR/script-rules.sh" "$PLUGIN_ROOT")" || al_rc=$?
+AL_ROOT="$(printf '%s\n' "$al_out" | awk -F'\t' '$1 == "root" { print $2; exit }')"
+if [ "$al_rc" = 3 ]; then
+  echo "  warn  script allowlist not written: the plugin's real path \`${al_out#bad?}\` holds whitespace, a shell metacharacter or a rule wildcard, so no exact rule can name it." >&2
+elif [ "$al_rc" = 4 ] || { [ "$al_rc" = 1 ] && [ -z "$al_mk" ]; }; then
   echo "  skip  script allowlist (not run from a plugin cache install)"
-elif [ "$al_exact" = yes ]; then
-  al_ver="${AL_ROOT##*/}"; al_list="$AL_ROOT/data/script-classes.txt"
-  al_ro="$(bash "$AL_ROOT/scripts/script-classes.sh" read-only "$al_list" 2>/dev/null)" &&
-    al_wr="$(bash "$AL_ROOT/scripts/script-classes.sh" writing "$al_list" 2>/dev/null)" &&
-    [ "$(printf '%s\n' "$al_ro" "$al_wr" | grep -c .)" = "$(grep -c '[^[:space:]]' "$al_list")" ] || al_ro=""
-  while IFS= read -r al_n; do
-    case "$al_n" in "") ;; *[!A-Za-z0-9_.-]*|.*) al_ro="" ;; *) [ -f "$AL_ROOT/scripts/$al_n" ] || al_ro="" ;; esac
-  done <<EOF
-$al_ro
-${al_wr:-}
-EOF
-  if [ -z "$al_ro" ]; then
-    echo "  warn  script allowlist not changed: $AL_ROOT/data/script-classes.txt is missing, empty, unparseable or names a script that is not there." >&2
+elif [ "$al_rc" = 0 ] || [ "$al_rc" = 5 ]; then
+  al_ver="${AL_ROOT##*/}"
+  if [ "$al_rc" = 5 ]; then
+    echo "  warn  script allowlist not changed: data/script-classes.txt is missing, empty, unparseable or names a script that is not there." >&2
   elif ! command -v python3 >/dev/null 2>&1 && ! command -v jq >/dev/null 2>&1; then
     echo "  warn  script allowlist not changed: editing .claude/settings.local.json needs python3 or jq, and neither is here." >&2
   else
-    al_want="$(printf '%s\n' "$al_ro" | while IFS= read -r n; do printf 'Bash(%s/scripts/%s *)\n' "$AL_ROOT" "$n"; done)"
-    al_found="$(bg_list "$AL_FILE" allow | al_scan)" || al_found=""
-    al_newer="$(printf '%s\n' "$al_found" | awk -F'\t' '$1 == "newer" { print $2 }')"
-    al_stale="$(printf '%s\n' "$al_found" | awk -F'\t' '$1 == "stale" { print $2 }')"
+    al_want="$(printf '%s\n' "$al_out" | awk -F'\t' '$1 == "want" { print $2 }')"
+    al_newer="$(printf '%s\n' "$al_out" | awk -F'\t' '$1 == "newer" { print $2 }')"
+    al_stale="$(printf '%s\n' "$al_out" | awk -F'\t' '$1 == "stale" { print $2 }')"
     al_missing="$(printf '%s\n' "$al_want" | while IFS= read -r r; do
       bg_list "$AL_FILE" allow | grep -qxF -- "$r" || printf '%s\n' "$r"; done)"
     al_tmp="$AL_FILE.allow.$$"
@@ -986,6 +959,8 @@ EOF
       echo "  warn  script allowlist not written: no safe edit of $AL_FILE (it must parse as JSON)." >&2
     fi
   fi
+elif [ "$al_rc" != 1 ]; then
+  echo "  warn  script allowlist not changed: $BIN_DIR/script-rules.sh exited $al_rc." >&2
 else
   al_missing=""
   for r in "Bash($al_mk/*/scripts/*)" "Bash(bash $al_mk/*/scripts/*)"; do
