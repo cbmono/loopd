@@ -929,20 +929,20 @@ al_write() { # <missing entries, one per line> -> the rewritten file on stdout, 
     O="$AL_OPEN" AL="$add" awk '{ print } $0 ~ ENVIRON["O"] { print ENVIRON["AL"] }' "$AL_FILE"
   fi
 }
-al_scan() { # stdin: allow rules -> "stale|newer<TAB><rule>" for the rules this writer owns: read-only names only
-  P="$al_mk/" L="${PLUGIN_ROOT%/*}/" V="$al_ver" RO="$al_ro" awk '
+al_scan() { # stdin: allow rules -> "stale|newer<TAB><rule>" for the rules this writer owns
+  P="$al_mk/" L="${PLUGIN_ROOT%/*}/" V="$al_ver" awk '
     function newer(a, b,   x, y, i, n, m) {
       n = split(a, x, "."); m = split(b, y, "."); if (m > n) n = m
       for (i = 1; i <= n; i++) if (x[i] + 0 != y[i] + 0) return x[i] + 0 > y[i] + 0
       return 0 }
-    BEGIN { P = ENVIRON["P"]; L = ENVIRON["L"]; V = ENVIRON["V"]; n = split(ENVIRON["RO"], a, "\n"); for (i = 1; i <= n; i++) ro[a[i]] = 1 }
+    BEGIN { P = ENVIRON["P"]; L = ENVIRON["L"]; V = ENVIRON["V"] }
     $0 == "Bash(" P "*/scripts/*)" || $0 == "Bash(bash " P "*/scripts/*)" ||
     $0 == "Bash(" L "*/scripts/*)" || $0 == "Bash(bash " L "*/scripts/*)" { print "stale\t" $0; next }
     index($0, "Bash(" P) == 1 {
       r = substr($0, length(P) + 6)
       if (r !~ /^[^\/*]+\/scripts\/[A-Za-z0-9_.-]+\.sh \*\)$/) next
-      v = substr(r, 1, index(r, "/") - 1); f = substr(r, length(v) + 10); f = substr(f, 1, length(f) - 3)
-      if (v != V && f in ro) print (newer(v, V) ? "newer" : "stale") "\t" $0 }'
+      v = substr(r, 1, index(r, "/") - 1)
+      if (v != V) print (newer(v, V) ? "newer" : "stale") "\t" $0 }'
 }
 if [ -n "$al_bad" ]; then
   echo "  warn  script allowlist not written: the plugin's real path \`$al_bad\` holds whitespace, a shell metacharacter or a rule wildcard, so no exact rule can name it." >&2

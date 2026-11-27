@@ -135,9 +135,9 @@ mkfile() { # <file> <rule>... -> a settings.local.json allowing exactly those ru
   python3 -c 'import json,sys; json.dump({"permissions": {"allow": sys.argv[2:]}}, open(sys.argv[1], "w"), indent=2)' "$f" "$@"
 }
 HAND1='Bash(git status)'; HAND2="Bash($MK/9.9.8/scripts/bundle-paths.sh)"
-HAND3="Bash($TMP/home/.claude/plugins/cache/other/${PN}/*/scripts/*)"; HAND4="$(rule 9.9.8 commit-as.sh)"
+HAND3="Bash($TMP/home/.claude/plugins/cache/other/${PN}/*/scripts/*)"
 OLD_SP1="Bash($SP/*/scripts/*)"; OLD_SP2="Bash(bash $SP/*/scripts/*)"
-OLD_MK2="Bash(bash $MK/*/scripts/*)"; OLD_V="$(rule 9.9.8 bundle-paths.sh)"
+OLD_MK2="Bash(bash $MK/*/scripts/*)"; OLD_V="$(rule 9.9.8 bundle-paths.sh)"; OLD_W="$(rule 9.9.8 commit-as.sh)"
 
 if [ "$PY" = no ]; then echo "  SKIP  §8-§14 need python3 to read the fixture JSON"; else
 echo "== 8. a whitespace root writes one exact-version rule per read-only script =="
@@ -163,22 +163,25 @@ ok "the stamp says keep" "$(grep -c 'keep  script allowlist' "$TMP/out" | tr -d 
 
 echo "== 10. a re-stamp removes only the rules this writer wrote =="
 I="$TMP/i10"; L="$I/.claude/settings.local.json"
-mkfile "$L" "$HAND1" "$OLD_SP1" "$OLD_SP2" "$R1" "$OLD_MK2" "$OLD_V" "$HAND2" "$HAND3" "$HAND4" "$(rule 9.10.0 commit-as.sh)"
+mkfile "$L" "$HAND1" "$OLD_SP1" "$OLD_SP2" "$R1" "$OLD_MK2" "$OLD_V" "$HAND2" "$HAND3" "$OLD_W"
 stamp "$SP/9.9.9" "$I"
-for r in "$OLD_SP1" "$OLD_SP2" "$R1" "$OLD_MK2" "$OLD_V"; do
+for r in "$OLD_SP1" "$OLD_SP2" "$R1" "$OLD_MK2" "$OLD_V" "$OLD_W"; do
   ok "removed: ${r#"$TMP"}" "$(allow "$L" | grep -cxF -- "$r")" 0
 done
-for r in "$HAND1" "$HAND2" "$HAND3" "$HAND4" "$(rule 9.10.0 commit-as.sh)"; do
+for r in "$HAND1" "$HAND2" "$HAND3"; do
   ok "kept byte-identical: ${r#"$TMP"}" "$(grep -cF "\"$r\"" "$L" | tr -d ' ')" 1
 done
 ok "every read-only rule written" "$(allow "$L" | grep -cF "$MK/9.9.9/scripts/")" "$(printf '%s\n' "$RO" | grep -c .)"
-ok "the stamp names each removal" "$(grep -c '^  removed ' "$TMP/out" | tr -d ' ')" 5
+ok "the stamp names each removal" "$(grep -c '^  removed ' "$TMP/out" | tr -d ' ')" 6
 
 echo "== 11. a stamp from an older plugin root never replaces newer rules =="
 I="$TMP/i11"; L="$I/.claude/settings.local.json"
 mkfile "$L" "$(rule 9.10.0 merge-queue.sh)" "$OLD_SP1"; cp "$L" "$TMP/before"
 stamp "$SP/9.9.9" "$I"
 ok "9.10.0 is newer than 9.9.9: file byte-identical" "$(yn cmp -s "$TMP/before" "$L")" yes
+mkfile "$L" "$(rule 9.10.0 commit-as.sh)" "$OLD_SP1"; cp "$L" "$TMP/before"
+stamp "$SP/9.9.9" "$I"
+ok "…a newer rule for any script name holds it too" "$(yn cmp -s "$TMP/before" "$L")" yes
 ok "…and the stamp says why" "$(grep -c 'names a newer' "$TMP/out" | tr -d ' ')" 1
 
 echo "== 12. neither python3 nor jq: skip with a warning =="
