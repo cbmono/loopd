@@ -1083,13 +1083,13 @@ PY
 # CHECK 6d — script-rules (idempotent, no repair here; banner:yes)
 # =========================================================================================
 # THE FACT: the bundle's settings allow every rule `init-bundle.sh` 1e would write for THIS
-# plugin root with whitespace, and none of the ones it replaces. `script-rules.sh` derives both
-# for the stamp and for this row. `/<plugin>:update` re-stamps only the bundle it ran in, so
-# every other bundle reads stale at its next session start. Never writes; a space-free root
-# gets the version-wild pair and is not judged here.
+# plugin root with whitespace, and settings.local.json, the one file 1e edits, holds none of the
+# ones it replaces. `script-rules.sh` derives both for the stamp and for this row.
+# `/<plugin>:update` re-stamps only the bundle it ran in, so every other bundle reads stale at
+# its next session start. Never writes; a space-free root gets the version-wild pair.
 check_script_rules() {
   _warned=0
-  local have out rc ver absent stale n_want n_absent n_stale
+  local have local_have out rc ver absent stale n_want n_absent n_stale
   [ -f "$BIN/script-rules.sh" ] || return 0
   if ! command -v python3 >/dev/null 2>&1; then
     good "script rules: not judged (python3 absent)"
@@ -1097,7 +1097,7 @@ check_script_rules() {
   fi
   have="$(python3 - "$ROOT/.claude/settings.json" "$ROOT/.claude/settings.local.json" <<'PY' 2>/dev/null
 import json,os,sys
-for p in sys.argv[1:]:
+for tag,p in zip("SL",sys.argv[1:]):
     if not os.path.exists(p):
         continue
     try:
@@ -1108,14 +1108,16 @@ for p in sys.argv[1:]:
     allow=perms.get("allow") if isinstance(perms,dict) else None
     for a in (allow if isinstance(allow,list) else []):
         if isinstance(a,str) and "\n" not in a:
-            print(a)
+            print(tag+"\t"+a)
 PY
 )"
   case "$have" in *"	unparseable:"*)
     note "script rules: not judged — ${have##*	unparseable:} does not parse as JSON"
     return 0 ;;
   esac
-  rc=0; out="$(printf '%s\n' "$have" | bash "$BIN/script-rules.sh" "$PLUGIN_ROOT")" || rc=$?
+  local_have="$(printf '%s\n' "$have" | awk -F'\t' '$1 == "L" { print substr($0, 3) }')"
+  have="$(printf '%s\n' "$have" | cut -f2-)"
+  rc=0; out="$(printf '%s\n' "$local_have" | bash "$BIN/script-rules.sh" "$PLUGIN_ROOT")" || rc=$?
   case "$rc" in
     0) ;;
     1) good "script rules: the plugin root has no whitespace, so the version-wild pair covers it"; return 0 ;;
@@ -1123,7 +1125,7 @@ PY
   esac
   ver="$(printf '%s\n' "$out" | awk -F'\t' '$1 == "root" { n = split($2, p, "/"); print p[n]; exit }')"
   if printf '%s\n' "$out" | grep -q '^newer	'; then
-    good "script rules: the settings name a newer ${PLUGIN_NAME} than $ver, which a stamp from here keeps"
+    good "script rules: .claude/settings.local.json names a newer ${PLUGIN_NAME} than $ver, which a stamp from here keeps"
     return 0
   fi
   absent="$(printf '%s\n' "$out" | H="$have" awk -F'\t' '
@@ -1136,7 +1138,7 @@ PY
     good "script rules: all $n_want read-only script rules for $ver are allowed"
     return 0
   fi
-  warn "script rules: $n_absent of $n_want read-only script rules for $ver are absent and $n_stale stale one(s) remain in .claude/settings*.json"
+  warn "script rules: $n_absent of $n_want read-only script rules for $ver are absent and $n_stale stale one(s) remain in .claude/settings.local.json"
   printf '%s\n' "$absent" | awk 'NF { print "    absent  " $0 }'
   printf '%s\n' "$stale" | awk 'NF { print "    stale   " $0 }'
   hint "/${PLUGIN_NAME}:init $ROOT writes them for $ver (/${PLUGIN_NAME}:update does too, after updating the plugin)"

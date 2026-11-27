@@ -747,9 +747,11 @@ ok "…with /${PN}:update and /${PN}:init in its one hint" \
   "$(printf '%s\n' "$OUT9" | grep -A99 '^⚠.*script rules' | grep '^    ↳' | head -1 | grep -c "/${PN}:init $INST9 .*/${PN}:update" | tr -d ' ')" 1
 ok "settings.local.json byte-identical after check"         "$(sha "$L9")" "$(sha "$TMP/l9.before")"
 ok "…and no settings.json written"                          "$(yn test -f "$INST9/.claude/settings.json")" no
-printf '{\n  "permissions": { "allow": ["Bash(ls:*)"] }\n}\n' > "$INST9/.claude/settings.json"
+printf '%s\n' "Bash(ls:*)" "$(rules9 9.9.7 | head -1)" | mkallow "$INST9/.claude/settings.json"
 cp "$INST9/.claude/settings.json" "$TMP/s9.before"
 OUT9s="$(chk "$SPR" "$INST9")"
+ok "an old rule in settings.json, which no stamp edits, is not called stale" \
+  "$(printf '%s\n' "$OUT9s" | grep -c '9\.9\.7' | tr -d ' ')" 0
 ok "with a settings.json too, still the same finding" \
   "$(printf '%s\n' "$OUT9s" | grep -c "^⚠.*script rules: $n_ro of $n_ro .* 4 stale" | tr -d ' ')" 1
 ok "…and both files byte-identical" \
