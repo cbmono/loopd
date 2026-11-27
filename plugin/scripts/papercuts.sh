@@ -3,8 +3,8 @@
 #
 #   papercuts.sh add --task <ref> --surface <skill|agent|script>:<name> --note <text>
 #   papercuts.sh check | report [--all] | due [--every <days>] | pass | classify --surface <s>
-#   papercuts.sh propose --surface <s> --edit <text> | dismiss --surface <s> --reason <text>
-#
+#   papercuts.sh propose --surface <s> --edit <text> | dismiss --surface <s> --reason <text> [--proposed <d>]
+#   papercuts.sh progress | resolve --surface <s> --ref <r> [--proposed <d>] | proposals
 # Entry shape, one line: `DATE | TASK | KIND:NAME | what hurt` (note 15-160 bytes).
 # Exit: 0 clean / a pass is due · 1 refused, named on stderr (or: not due) · 2 unknown
 # (usage, an unreadable record). Record: knowledge/papercuts.md, appended, never edited;
@@ -19,7 +19,7 @@ CMD="${1:-}"; [ $# -gt 0 ] && shift
 usage() { sed -n '2,10p' "$0" >&2; }
 need2() { [ "$1" -ge 2 ] || { echo "papercuts: $2 needs a value" >&2; exit 2; }; }
 
-FILE=""; TASK=""; SURFACE=""; NOTE=""; DATE=""; EVERY=7; ALL=0; EDIT=""; REASON=""
+FILE=""; TASK=""; SURFACE=""; NOTE=""; DATE=""; EVERY=7; ALL=0; EDIT=""; REASON=""; REF=""; PROPOSED=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --file)    need2 $# "$1"; FILE="$2";    shift 2 ;;
@@ -28,6 +28,8 @@ while [ $# -gt 0 ]; do
     --note)    need2 $# "$1"; NOTE="$2";    shift 2 ;;
     --edit)    need2 $# "$1"; EDIT="$2";    shift 2 ;;
     --reason)  need2 $# "$1"; REASON="$2";  shift 2 ;;
+    --ref)     need2 $# "$1"; REF="$2";     shift 2 ;;
+    --proposed) need2 $# "$1"; PROPOSED="$2"; shift 2 ;;
     --date)    need2 $# "$1"; DATE="$2";    shift 2 ;;
     --every)   need2 $# "$1"; EVERY="$2";   shift 2 ;;
     --all)     ALL=1; shift ;;
@@ -52,6 +54,8 @@ sources() {
 printf '%s' "$EVERY" | grep -qE '^[0-9]+$' || { echo "papercuts: --every wants days" >&2; exit 2; }
 DATE_RE='^[0-9][0-9][0-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
 printf '%s' "$DATE" | grep -qE "$DATE_RE" || { echo "papercuts: --date wants YYYY-MM-DD" >&2; exit 2; }
+[ -z "$PROPOSED" ] || printf '%s' "$PROPOSED" | grep -qE "$DATE_RE" \
+  || { echo "papercuts: --proposed wants YYYY-MM-DD" >&2; exit 2; }
 
 # A wrong root calls every surface instance, which silently opens `pass` — so the root is
 # where this file physically lives, CLAUDE_PLUGIN_ROOT must agree, and anything else is refused.
@@ -67,6 +71,7 @@ fi
 need_root() { [ -z "$ROOT_ERR" ] || { echo "papercuts: cannot classify — $ROOT_ERR" >&2; exit 2; }; }
 UPSTREAM="$AB_UPSTREAM"
 SURFACE_RE='^(skill|agent|script):[A-Za-z0-9][A-Za-z0-9._/-]*$'
+MARK_RE='[(]proposed [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9][)]$'
 
 trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
 bytes() { printf '%s' "$1" | LC_ALL=C wc -c | tr -d ' '; }
@@ -136,11 +141,11 @@ held_upstream() {
     [ -n "$l" ] || continue
     d="$(trim "${l%%|*}")"; s="$(field3 "$l")"
     [ "$(owner_of "$s")" = plugin ] || continue
-    awk -F'|' -v s="$s" -v d="$d" -v now="$DATE" -v re="$DATE_RE" '
+    awk -F'|' -v s="$s" -v d="$d" -v now="$DATE" -v re="$DATE_RE" -v mk="$MARK_RE" '
       function t(x) { gsub(/^[ \t\r]+|[ \t\r]+$/, "", x); return x }
       /^## Entries[ \t\r]*$/ { e = 1; next }
       e && t($1) ~ re && t($1) >= d && t($1) <= now && t($2) == s \
-        && (t($3) == "proposal" || t($3) == "dismissed") && t($4) != "" { f = 1 }
+        && (t($3) == "proposal" || (t($3) == "dismissed" && t($4) !~ mk)) && t($4) != "" { f = 1 }
       END { exit !f }' "$UPSTREAM" 2>/dev/null || printf '%s\n' "$s"
   done <<<"$1" | sort -u
 }
@@ -153,6 +158,26 @@ days() {
   echo $(( d + (153*mm + 2)/5 + 365*yy + yy/4 - yy/100 + yy/400 - 32045 ))
 }
 
+# Upstream entries, in file order
+scan() {
+  [ -r "$UPSTREAM" ] || return 0
+  awk -F'|' -v now="$1" -v dre="$DATE_RE" -v sre="$SURFACE_RE" -v mk="$MARK_RE" '
+    function t(x) { gsub(/^[ \t\r]+|[ \t\r]+$/, "", x); return x }
+    /^## Entries[ \t\r]*$/ { e = 1; next }
+    !e || /^[ \t\r]*(<!--|$)/ { next }
+    {
+      d = t($1); s = t($2); k = t($3); x = t($4); p = ""
+      if (NF != 4 || d !~ dre || d > now || s !~ sre || x == "") { bad++; next }
+      if (k != "proposal" && match(x, mk)) { p = substr(x, RSTART + 10, 10); x = t(substr(x, 1, RSTART - 1)) }
+      if (k == "proposal" || (k == "dismissed" && p == "")) {
+        n++; su[n] = s; la[n] = d; tx[n] = x
+        if (k == "proposal") { st[n] = "pending"; pd[n] = d; last[s, d] = n } else { st[n] = k; pd[n] = "-" }
+      } else if ((k == "in-progress" || k == "done" || k == "dismissed") && x != "" && ((s, p) in last)) {
+        i = last[s, p]; st[i] = k; la[i] = d; tx[i] = x
+      } else bad++
+    }
+    END { print "#|" bad + 0; for (i = 1; i <= n; i++) print st[i] "|" su[i] "|" pd[i] "|" la[i] "|" tx[i] }' "$UPSTREAM"
+}
 
 case "$CMD" in
   add)
@@ -255,28 +280,79 @@ EOF
     need_root
     owner_of "$SURFACE"
     ;;
-  propose|dismiss)
+  propose|dismiss|progress|resolve)
     [ -n "$SURFACE" ] || { echo "papercuts: $CMD wants --surface" >&2; usage; exit 2; }
-    if [ "$CMD" = propose ]; then kind=proposal; flag=--edit; text="$EDIT"; else kind=dismissed; flag=--reason; text="$REASON"; fi
-    need_root
+    case "$CMD" in
+      propose)  kind=proposal;    flag=--edit;   text="$EDIT" ;;
+      dismiss)  kind=dismissed;   flag=--reason; text="$REASON" ;;
+      progress) kind=in-progress; flag=--ref;    text="$REF" ;;
+      resolve)  kind=done;        flag=--ref;    text="$REF" ;;
+    esac
+    moves=yes
+    if [ "$CMD" = propose ] || { [ "$CMD" = dismiss ] && [ -z "$PROPOSED" ]; }; then moves=no; need_root; fi
     text="$(trim "$text")"
     [ -n "$(trim "${text//$'\xc2\xa0'/}")" ] || { echo "papercuts: refused — $CMD needs a non-empty $flag; nothing written" >&2; exit 1; }
     case "$SURFACE$text" in *$'\n'*|*$'\r'*) echo "papercuts: refused — a row is ONE line" >&2; exit 1 ;; esac
     case "$text" in *'|'*) echo "papercuts: refused — a \"|\" in $flag breaks the row" >&2; exit 1 ;; esac
-    [ "$(days "$DATE")" -le "$(days "$(date -u +%Y-%m-%d)")" ] \
+    today="$(date -u +%Y-%m-%d)"
+    [ "$(days "$DATE")" -le "$(days "$today")" ] \
       || { echo "papercuts: refused — --date $DATE is in the future; a row is dated when it is written" >&2; exit 1; }
     printf '%s' "$SURFACE" | grep -qE "$SURFACE_RE" \
       || { echo "papercuts: refused — '$SURFACE' is not skill|agent|script:<name>" >&2; exit 1; }
-    [ "$(owner_of "$SURFACE")" = plugin ] \
-      || { echo "papercuts: refused — '$SURFACE' is instance-owned: draft it as a task in its owning project" >&2; exit 1; }
-    if [ ! -e "$UPSTREAM" ]; then
-      mkdir -p "$(dirname "$UPSTREAM")" || exit 2
-      printf '# Upstream proposals\n\nPapercut proposals for loopd plugin surfaces, for the plugin repo to act on.\nOne line: `DATE | KIND:NAME | proposal | <concrete edit>` or `DATE | KIND:NAME | dismissed | <reason>`.\nAppend with `papercuts.sh propose` / `dismiss`; never edit or delete a line.\n\n## Entries\n\n' > "$UPSTREAM" || exit 2
+    if [ "$moves" = yes ]; then
+      own="$(scan "$today" | awk -F'|' -v s="$SURFACE" '$2 == s && $3 != "-"')"
+      [ -n "$own" ] || { echo "papercuts: refused — '$SURFACE' has no proposal row in $UPSTREAM; nothing written" >&2; exit 1; }
+      dates="$(printf '%s\n' "$own" | cut -d'|' -f3 | sort -u | paste -sd' ' -)"
+      if [ -z "$PROPOSED" ]; then
+        [ "$(count "$own")" -eq 1 ] \
+          || { echo "papercuts: refused — '$SURFACE' has $(count "$own") proposals; name one with --proposed: $dates" >&2; exit 1; }
+        PROPOSED="$dates"
+      fi
+      state="$(printf '%s\n' "$own" | awk -F'|' -v p="$PROPOSED" '$3 == p { s = $1 } END { print s }')"
+      [ -n "$state" ] || { echo "papercuts: refused — '$SURFACE' has no proposal dated $PROPOSED; it has: $dates" >&2; exit 1; }
+      case "$state" in done|dismissed)
+        echo "papercuts: refused — the $PROPOSED proposal for '$SURFACE' is already $state; nothing written" >&2; exit 1 ;;
+      esac
+      [ "$(days "$DATE")" -ge "$(days "$PROPOSED")" ] \
+        || { echo "papercuts: refused — --date $DATE is before its proposal ($PROPOSED)" >&2; exit 1; }
+      text="$text (proposed $PROPOSED)"
+    else
+      [ "$(owner_of "$SURFACE")" = plugin ] \
+        || { echo "papercuts: refused — '$SURFACE' is instance-owned: draft it as a task in its owning project" >&2; exit 1; }
+      if [ "$CMD" = dismiss ] && printf '%s' "$text" | grep -qE "$MARK_RE"; then
+        echo "papercuts: refused — a reason ending '(proposed <date>)' closes a proposal: pass --proposed <date>" >&2; exit 1
+      fi
+      if [ ! -e "$UPSTREAM" ]; then
+        mkdir -p "$(dirname "$UPSTREAM")" || exit 2
+        printf '%s\n' '# Upstream proposals' '' \
+          'Papercut proposals for loopd plugin surfaces, for the plugin repo to act on.' \
+          'One line: `DATE | KIND:NAME | proposal | <concrete edit>` or `DATE | KIND:NAME | dismissed | <reason>`,' \
+          'then `DATE | KIND:NAME | in-progress | <ref> (proposed <YYYY-MM-DD>)` and' \
+          '`DATE | KIND:NAME | done | <ref> (proposed <YYYY-MM-DD>)` as the fix moves.' \
+          'Append with `papercuts.sh propose` / `dismiss` / `progress` / `resolve`; never edit or delete a line.' \
+          'The human or the session that files the fix runs `progress` and `resolve`, and commits this file.' \
+          'Status of each proposal, by its latest line: `papercuts.sh proposals`.' '' '## Entries' '' > "$UPSTREAM" || exit 2
+      fi
     fi
     [ -w "$UPSTREAM" ] || { echo "papercuts: cannot write '$UPSTREAM'" >&2; exit 2; }
     [ -z "$(tail -c 1 "$UPSTREAM")" ] || printf '\n' >> "$UPSTREAM"
     printf '%s | %s | %s | %s\n' "$DATE" "$SURFACE" "$kind" "$text" >> "$UPSTREAM" || exit 2
-    echo "papercuts: appended a $kind row to $UPSTREAM"
+    a=a; [ "$kind" = in-progress ] && a=an
+    echo "papercuts: appended $a $kind row to $UPSTREAM"
+    ;;
+  proposals)
+    [ -e "$UPSTREAM" ] || { echo "papercuts: no upstream proposals"; exit 0; }
+    [ -r "$UPSTREAM" ] || { echo "papercuts: cannot read '$UPSTREAM'" >&2; exit 2; }
+    rows="$(scan "$DATE")"; bad="${rows%%$'\n'*}"; bad="${bad#*|}"
+    rows="$(printf '%s\n' "$rows" | sed 1d)"
+    if [ -z "$rows" ]; then echo "papercuts: no upstream proposals, $bad malformed"; exit 0; fi
+    printf '== %s entries · %s surfaces · %s malformed\n' "$(count "$rows")" \
+      "$(printf '%s\n' "$rows" | cut -d'|' -f2 | sort -u | grep -c .)" "$bad"
+    for g in pending in-progress done dismissed; do
+      printf '%s\n' "$rows" | awk -F'|' -v g="$g" '
+        $1 == g { n++; l = l sprintf("  %s  proposed %s  latest %s  %s\n", $2, $3, $4, $5) }
+        END { if (n) { sub(/-/, " ", g); printf "\n%s  (%s)\n%s", g, n, l } }'
+    done
     ;;
   *) usage; exit 2 ;;
 esac

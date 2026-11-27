@@ -1290,21 +1290,38 @@ tick ledger — is **not** a KB artifact and is never sharded.
 which no project in an instance owns. A surface is a plugin surface only when its name
 resolves in the installed plugin (`papercuts.sh classify --surface <s>`); every other
 surface is instance-owned and its proposal becomes a `draft` task in its owning project.
-`papercuts.sh propose` and `dismiss` are the only writers — one appended line each, never
-edited; an empty edit or reason, a `|` in it, or a future `--date` is refused. A plugin root
-the script cannot verify — `CLAUDE_PLUGIN_ROOT` naming another tree, or no `VERSION` beside
-`scripts/` — exits 2 rather than classify:
+`papercuts.sh propose`, `dismiss`, `progress` and `resolve` are the only writers — one
+appended line each, never edited; an empty edit, reason or ref, a `|` in it, or a future
+`--date` is refused. A plugin root the script cannot verify — `CLAUDE_PLUGIN_ROOT` naming
+another tree, or no `VERSION` beside `scripts/` — exits 2 rather than classify:
 
 ```
 DATE | KIND:NAME | proposal | <concrete edit>
 DATE | KIND:NAME | dismissed | <reason>
+DATE | KIND:NAME | in-progress | <ref> (proposed <YYYY-MM-DD>)
+DATE | KIND:NAME | done | <ref> (proposed <YYYY-MM-DD>)
 ```
+
+**`progress` and `resolve` move a filed proposal, and nothing runs them automatically**: the
+human, or the session that files the fix, runs `papercuts.sh progress --surface <s> --ref
+<r>` when the fix is under way and `resolve` when it has landed, and commits the file. The
+row names its proposal by date — `(proposed <YYYY-MM-DD>)` — taken from the surface's one
+proposal, or from `--proposed <date>`, which is required when the surface has two or more;
+two proposals on one surface and date are both kept, and the date names the later. The
+proposal row is the only ownership proof, so a surface the fix renamed or deleted still
+resolves. `dismiss --proposed <date>` closes a filed proposal as dismissed and ends
+`(proposed <date>)` the same way; a bare `dismiss` stays an entry of its own. A row dated
+before its proposal, or written after that proposal's `done` or `dismissed` row, is refused.
+`papercuts.sh proposals` prints each proposal once — pending, in progress, done or dismissed
+— by its latest line in file order, and counts a future-dated, malformed or orphan row
+(a `(proposed <date>)` matching no proposal) as malformed.
 
 The file is tracked and committed with `commit-as.sh` — by the PM at the tick, by
 `/loopd:close-project` at closeout — and it sits outside `knowledge/` on purpose: never
 KB-synced, never sharded, never read as a concept doc. `papercuts.sh pass` refuses while a
-well-formed entry since the last pass names a plugin surface with no row under `## Entries`
-dated from the entry to the pass; a malformed entry is counted on its own and never classified. A `👉 do` row may
+well-formed entry since the last pass names a plugin surface with no `proposal` or bare
+`dismissed` row under `## Entries` dated from the entry to the pass — an `in-progress`,
+`done` or `dismiss --proposed` row never releases it; a malformed entry is counted on its own and never classified. A `👉 do` row may
 point at the file but is never the only record — hand-offs render from the ignored
 `.loopd/.handoffs/`.
 
