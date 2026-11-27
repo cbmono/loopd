@@ -421,17 +421,17 @@ function readMetrics(text: unknown, path: string, m: number): Metrics {
   })
   return { state: 'ok', path, mtimeMs: m, detail: '', generated_at: str(o.generated_at), computing: false, rows }
 }
-const moved = new Map<string, { m: number; text: string }>()
+const fileCache = new Map<string, { m: number; text: string }>()
 async function readMoved($: any, path: string): Promise<string> {
   let st: any = null
   try { st = await $.fs.stat(path) } catch { st = null }
-  if (!st || st.kind !== 'file') { moved.delete(path); return '' }
+  if (!st || st.kind !== 'file') { fileCache.delete(path); return '' }
   const m = typeof st.mtimeMs === 'number' ? st.mtimeMs : -2
-  const had = moved.get(path)
+  const had = fileCache.get(path)
   if (had && had.m === m) return had.text
   let text = ''
   try { text = String(await $.fs.read(path)) } catch { text = '' }
-  moved.set(path, { m, text })
+  fileCache.set(path, { m, text })
   return text
 }
 async function metricsLocked($: any, root: string): Promise<boolean> {
