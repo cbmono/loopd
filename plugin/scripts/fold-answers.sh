@@ -193,22 +193,28 @@ def scan_block(text, i, key):
 
     `i` is the rest of the key line. Its comment is returned so a rewrite keeps it. An
     indented line that is not an entry — a continuation, a nested mapping — is a refusal:
-    the rewrite would leave it stranded under whatever entry it emits last."""
+    the rewrite would leave it stranded under whatever entry it emits last. Entries at
+    column 0 are valid YAML too; a block mixing both indents is a refusal."""
     line_end = text.find("\n", i)
     if line_end < 0:
         line_end = len(text)
     rest = text[i:line_end].strip()
     if rest and not rest.startswith("#"):
         die(3, "%s is neither a flow nor a block list" % key)
-    out, end, pos = [], line_end, line_end + 1
+    out, end, pos, col0 = [], line_end, line_end + 1, None
     SPANS[key] = spans = []
     while pos < FM_END:
         nl = text.find("\n", pos)
         if nl < 0:
             nl = len(text)
         line = text[pos:nl]
-        m = re.match(r"[ \t]+-(?:[ \t]+|$)", line)
-        if not m:
+        m = re.match(r"[ \t]*-(?:[ \t]+|$)", line)
+        if m:
+            if col0 is None:
+                col0 = line[0] == "-"
+            elif col0 != (line[0] == "-"):
+                die(3, "%s mixes column-0 and indented entries" % key)
+        else:
             if not line.strip():
                 pos = nl + 1
                 continue
