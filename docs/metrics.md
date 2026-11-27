@@ -24,6 +24,8 @@ page is the contract they code against.
   seconds (**30** when unset; the hook's run waits 0), then exits 2 and keeps the previous
   file. A lock older than 10 minutes is taken over. `.loopd/.metrics-run/` ignores itself
   (a `*` `.gitignore`), and a symlink in its place is refused.
+* **Bounded.** The worker kills a run still going after `REFRESH_STATE_METRICS_MAX` seconds
+  (**600** when unset) and marks it failed.
 * **One attempt per full tick.** Before it starts a run the worker writes the tick's
   timestamp to `.metrics-run/attempt` (`none` for a ledger with no full tick, or no ledger),
   and it starts no second run for that value, whether the first exited 0 or not — so a run
@@ -185,18 +187,24 @@ stands: `?` is unknown and `—` is no source.
 ## The report
 
 `/loopd:metrics` runs `plugin/scripts/metrics-report.sh` from the bundle root and relays its
-markdown. The script reads `METRICS.json`, `instance.config.json` and the ledger. It calls no
+markdown. The script reads `METRICS.json`, `instance.config.json`, the ledger and the
+session hook's `attempt` and `failed` files under `.loopd/.metrics-run/`. It calls no
 `gh` or `git`, writes nothing and recomputes nothing. It needs `jq`, never `python3`.
 
-* **Off.** `board: false`, or no `SNAPSHOT.json`, prints that metrics are off and names the
-  `board` switch. Exit 0.
-* **Not computed yet.** The board on and no `METRICS.json` prints that the next session turn
-  computes them. Exit 0.
+* **Off.** `board: false` prints that metrics are off and names the `board` switch; so does
+  no `METRICS.json` with no `SNAPSHOT.json`. Exit 0. A `METRICS.json` left behind after the
+  snapshot was removed is still reported, as the pane still draws it: nothing rewrites it
+  until the snapshot is back.
+* **Not computed.** The board on and no `METRICS.json`. Before the hook has run for the
+  newest full tick: the next session turn computes them. After it has: that run was already
+  made, or failed with its exit code, and the next full tick computes them. Exit 0.
 * **Stale.** The report compares `generated_at` (UTC) with the newest full tick in the ledger:
   an `open:` and a `close:` line at one timestamp. An IDLE line and a reaped tick's close have
   no pair, so they are not a refresh. A close line pulled from another clone counts. Older ⇒
-  one line saying the next session turn recomputes them, once per full tick, and that PR
-  figures refresh on the next tick that changes something. There is no refresh verb.
+  one line saying the next session turn recomputes them and that PR figures refresh on the
+  next tick that changes something; or, once the hook has run for that tick, that the
+  recompute was already made, or failed with its exit code, and is not retried on a session
+  turn. There is no refresh verb.
 * **Named errors.** Without `jq`, or outside a bundle root: exit 2. An empty, truncated,
   non-object or wrong-`schema_version` file: exit 4.
 * **Flags.** Invalid input exits 3.

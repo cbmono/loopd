@@ -1356,6 +1356,21 @@ test('METRICS ABSENT: computing… redraws from the file on the first poll after
   await ui.unmount()
 })
 
+test('METRICS ABSENT: a config read that fails is not cached; the next poll reads it again and draws OFF', ONLY, async ($, on) => {
+  const w = metricsWorld(SNAP, null)
+  w.files.set(CONFIG, { text: '{"board": false}', mtimeMs: 2 })
+  stubs(on, w)
+  const clock = mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  w.failReads = new Set([CONFIG])
+  await ui.press({ key: 'view-metrics' })
+  expect((await metricsRows(ui))[0]).toMatch(NOT_COMPUTED)
+  await clock.advance(5000)
+  expect((await metricsRows(ui))[0]).toMatch(/^metrics OFF — `board` is false/)
+  await ui.unmount()
+})
+
 test('METRICS VIEW: a stale file under a live lock keeps its figures and draws computing… for the age, then the new file on the first poll after its mtime moves', ONLY, async ($, on) => {
   const w = metricsWorld()
   w.files.set(METRICS_LOCK, { text: '', mtimeMs: GENERATED })

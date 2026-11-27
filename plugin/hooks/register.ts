@@ -429,8 +429,9 @@ async function readMoved($: any, path: string): Promise<string> {
   const m = typeof st.mtimeMs === 'number' ? st.mtimeMs : -2
   const had = fileCache.get(path)
   if (had && had.m === m) return had.text
-  let text = ''
-  try { text = String(await $.fs.read(path)) } catch { text = '' }
+  let text: unknown = null
+  try { text = await $.fs.read(path) } catch { text = null }
+  if (typeof text !== 'string') { fileCache.delete(path); return '' }
   fileCache.set(path, { m, text })
   return text
 }

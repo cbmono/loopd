@@ -398,7 +398,16 @@ ok "unknown and source none never fire a rule" "$(has "$(rep "$V")" 'No rule fir
 variant '.generated_at = "2026-09-30T00:00:00Z"'
 out="$(rep "$V")"
 ok "older than the last full tick: stale, recomputed by the next session turn" \
-  "$(has "$out" '**Stale:** these figures were generated before the last full tick (2026-10-01T01:00:00Z). The next session turn on this bundle recomputes them, once per full tick; PR figures refresh on the next tick that changes something.')" 1
+  "$(has "$out" '**Stale:** these figures were generated before the last full tick (2026-10-01T01:00:00Z). The next session turn on this bundle recomputes them; PR figures refresh on the next tick that changes something.')" 1
+mkdir -p "$V/.loopd/.metrics-run"; echo 2026-10-01T01:00:00Z > "$V/.loopd/.metrics-run/attempt"
+ok "…already attempted for that tick: no session-turn promise" \
+  "$(has "$(rep "$V")" 'The recompute for that tick has already been made; they refresh on the next tick that changes something.')$(has "$(rep "$V")" 'next session turn')" 10
+echo 'exit 2 close 2026-10-01T01:00:00Z' > "$V/.loopd/.metrics-run/failed"
+ok "…and failed: the exit code, no session-turn promise" \
+  "$(has "$(rep "$V")" 'The recompute for that tick failed (exit 2) and is not retried on a session turn')$(has "$(rep "$V")" 'next session turn on this bundle recomputes')" 10
+echo 2026-09-01T01:00:00Z > "$V/.loopd/.metrics-run/attempt"
+ok "…a failure for an older tick still promises the next turn" "$(has "$(rep "$V")" 'The next session turn on this bundle recomputes them')" 1
+rm -r "$V/.loopd/.metrics-run"
 variant '.generated_at = "2026-10-01T01:30:00Z"'
 ok "a later IDLE line is not a refresh" "$(has "$(rep "$V")" '**Stale:**')" 0
 variant '.periods = {"2026-08": {"tick_tokens": 1000, "dispatch_tokens": 0, "idle_ticks": 1, "merged_prs": 0},
@@ -433,6 +442,14 @@ ok "…naming the on switch" "$(has "$out" 'Metrics are off: "board": false in i
 echo '{}' > "$V/instance.config.json"; rm "$V/.loopd/METRICS.json"
 echo '{}' > "$V/.loopd/SNAPSHOT.json"; out="$(rep "$V")"; rc=$?
 ok "absent METRICS.json, board on: not computed yet, exit 0" "$rc$(has "$out" 'Metrics are not computed yet: no .loopd/METRICS.json. The next session turn on this bundle computes them')$(has "$out" 'Metrics are off')" 010
+tk="$(. "$REPO/plugin/scripts/bundle-paths.sh" && ab_last_full_tick "$V/.loopd/log.md")"; mkdir -p "$V/.loopd/.metrics-run"; echo "${tk:-none}" > "$V/.loopd/.metrics-run/attempt"
+out="$(rep "$V")"
+ok "…already attempted for the newest full tick: the next full tick, not the next turn" \
+  "$(has "$out" 'the run for the newest full tick has already been made. The next full tick computes them.')$(has "$out" 'next session turn')" 10
+echo "exit 2 close ${tk:-none}" > "$V/.loopd/.metrics-run/failed"; out="$(rep "$V")"
+ok "…and failed: the exit code, the next full tick" \
+  "$(has "$out" 'the run for the newest full tick failed (exit 2). It is not retried on a session turn; the next full tick computes them.')$(has "$out" 'next session turn on this bundle computes')" 10
+rm -r "$V/.loopd/.metrics-run"
 rm "$V/.loopd/SNAPSHOT.json"; out="$(rep "$V")"; rc=$?
 ok "…and with no SNAPSHOT.json: metrics off, exit 0" "$rc$(has "$out" 'Metrics are off: no .loopd/SNAPSHOT.json. They follow the board switch, "board"')" 01
 named() { # <label> <want-substring> — exit 4 with a named error
