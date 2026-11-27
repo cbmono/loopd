@@ -712,6 +712,79 @@ ok "no pbcopy on the machine: nothing printed for it" "$(printf '%s\n' "$OUT7x" 
 ok "…while the same run still reports other rows"    "$(printf '%s\n' "$OUT7x" | grep -c -e '^✓.*output style' -e '^⚠.*output style' | tr -d ' ')" 1
 
 # =======================================================================================
+echo "== 9c. script-rules — the rules a stamp would write on a spaced root are NAMED, never written =="
+# =======================================================================================
+if ! command -v python3 >/dev/null 2>&1; then echo "  SKIP  §9c needs python3 to write the fixture JSON"; else
+MKC="$TMP/home/.claude/plugins/cache/mk/${PN}"; mkdir -p "$MKC"; cp -R "$SRC/plugin" "$MKC/9.9.9"
+SPD="$TMP/home/Library/Application Support/profile"; mkdir -p "$SPD"; ln -s "$TMP/home/.claude/plugins" "$SPD/plugins"
+SPR="$SPD/plugins/cache/mk/${PN}/9.9.9"; REAL="$(cd "$SPR" && pwd -P)"; RMK="${REAL%/*}"
+RO9="$(awk '$2 == "read-only" { print $1 }' "$REAL/data/script-classes.txt")"
+rules9() { printf '%s\n' "$RO9" | while IFS= read -r n; do printf 'Bash(%s/%s/scripts/%s *)\n' "$RMK" "$1" "$n"; done; }
+rule9() { printf 'Bash(%s/%s/scripts/bundle-paths.sh *)' "$RMK" "$1"; }
+mkallow() { python3 -c 'import json,sys; json.dump({"permissions": {"allow": [r for r in sys.stdin.read().split("\n") if r]}}, open(sys.argv[1], "w"), indent=2)' "$1"; }
+chk() { # <plugin root> <instance> [flags…] — welcome.sh check as that plugin runs it
+  local r="$1" i="$2"; shift 2
+  CLAUDE_PLUGIN_ROOT="$r" bash "$r/scripts/welcome.sh" check --instance "$i" --template "$SRC" "$@" 2>&1
+}
+OLDW="Bash($RMK/*/scripts/*)"; OLDB="Bash(bash $RMK/*/scripts/*)"; OLDS="Bash($(cd "${SPR%/*}" && pwd)/*/scripts/*)"
+INST9="$TMP/inst9"; mkinstance "$INST9"; L9="$INST9/.claude/settings.local.json"
+printf '%s\n' "Bash(git status)" "$OLDW" "$OLDB" "$OLDS" "$(rule9 9.9.8)" | mkallow "$L9"
+cp "$L9" "$TMP/l9.before"
+ok "fixture: the root holds a space, its real path none" \
+  "$(printf '%s\n' "$SPR" | grep -c ' ')$(printf '%s\n' "$REAL" | grep -c ' ')" 10
+ok "fixture: no .claude/settings.json in the bundle"        "$(yn test -f "$INST9/.claude/settings.json")" no
+OUT9="$(chk "$SPR" "$INST9")"; rc9=$?
+n_ro="$(printf '%s\n' "$RO9" | grep -c .)"
+ok "check exits 0"                                          "$rc9" 0
+ok "one finding for the whole set"                          "$(printf '%s\n' "$OUT9" | grep -c '^⚠.*script rules' | tr -d ' ')" 1
+ok "…counting every absent rule and the 4 stale ones" \
+  "$(printf '%s\n' "$OUT9" | grep -c "^⚠.*script rules: $n_ro of $n_ro read-only script rules for 9.9.9 are absent and 4 stale" | tr -d ' ')" 1
+ok "…naming each absent rule, read from settings.local.json" \
+  "$(printf '%s\n' "$OUT9" | sed -n 's/^    absent  //p' | sort | cksum)" "$(rules9 9.9.9 | sort | cksum)"
+ok "…and each old wildcard and version-stale rule" \
+  "$(printf '%s\n' "$OUT9" | sed -n 's/^    stale   //p' | sort | cksum)" \
+  "$(printf '%s\n' "$OLDW" "$OLDB" "$OLDS" "$(rule9 9.9.8)" | sort | cksum)"
+ok "…with /${PN}:update and /${PN}:init in its one hint" \
+  "$(printf '%s\n' "$OUT9" | grep -c "^    ↳ /${PN}:init $INST9 .*/${PN}:update" | tr -d ' ')" 1
+ok "settings.local.json byte-identical after check"         "$(sha "$L9")" "$(sha "$TMP/l9.before")"
+ok "…and no settings.json written"                          "$(yn test -f "$INST9/.claude/settings.json")" no
+printf '%s\n' "Bash(ls:*)" "$(rule9 9.9.7)" | mkallow "$INST9/.claude/settings.json"
+cp "$INST9/.claude/settings.json" "$TMP/s9.before"
+OUT9s="$(chk "$SPR" "$INST9")"
+ok "an old rule in settings.json, which no stamp edits, is not called stale" \
+  "$(printf '%s\n' "$OUT9s" | grep -c '9\.9\.7' | tr -d ' ')" 0
+ok "with a settings.json too, still the same finding" \
+  "$(printf '%s\n' "$OUT9s" | grep -c "^⚠.*script rules: $n_ro of $n_ro .* 4 stale" | tr -d ' ')" 1
+ok "…and both files byte-identical" \
+  "$(sha "$INST9/.claude/settings.json")/$(sha "$L9")" "$(sha "$TMP/s9.before")/$(sha "$TMP/l9.before")"
+rm -f "$INST9/.claude/settings.json"
+
+OUT9f="$(chk "$MKC/9.9.9" "$INST9")"
+ok "the same settings on a space-free root: no finding"     "$(printf '%s\n' "$OUT9f" | grep -c '^⚠.*script rules' | tr -d ' ')" 0
+ok "…but a verdict line"                                    "$(printf '%s\n' "$OUT9f" | grep -c '^✓ script rules: the plugin root has no whitespace' | tr -d ' ')" 1
+
+# The stamp is the other half: what check names is exactly what init-bundle.sh then changes.
+HOME="$TMP/home" CLAUDE_CONFIG_DIR="$TMP/home/.claude" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" \
+  bash "$SPR/scripts/init-bundle.sh" "$INST9" </dev/null >"$TMP/stamp9" 2>&1
+ok "init-bundle.sh adds the rules check named absent" \
+  "$(grep -c 'wrote script allowlist.*'"$n_ro"' read-only script rule' "$TMP/stamp9" | tr -d ' ')" 1
+ok "…and removes the ones it named stale" "$(grep -c '^  removed ' "$TMP/stamp9" | tr -d ' ')" 4
+OUT9d="$(chk "$SPR" "$INST9")"
+ok "after the stamp: no finding, all allowed" \
+  "$(printf '%s\n' "$OUT9d" | grep -c '^⚠.*script rules' | tr -d ' '):$(printf '%s\n' "$OUT9d" | grep -c "^✓ script rules: all $n_ro read-only script rules for 9.9.9 are allowed" | tr -d ' ')" 0:1
+
+# /loopd:update re-stamps only the bundle it ran in, so another bundle holds the old version's set.
+INST9u="$TMP/inst9u"; mkinstance "$INST9u"
+rules9 9.9.8 | mkallow "$INST9u/.claude/settings.local.json"
+B9="$(CLAUDE_PROJECT_DIR="$INST9u" CLAUDE_PLUGIN_ROOT="$SPR" bash "$SPR/hooks/session-banner.sh" --format md 2>&1)"
+ok "the session-start banner shows the finding unasked" \
+  "$(printf '%s\n' "$B9" | grep -c "script rules: $n_ro of $n_ro read-only script rules for 9.9.9 are absent and $n_ro stale" | tr -d ' ')" 1
+ok "…with /${PN}:init in that bundle as the fix" \
+  "$(printf '%s\n' "$B9" | grep -c "↳ /${PN}:init $INST9u " | tr -d ' ')" 1
+ok "…and without the per-rule lines"                        "$(printf '%s\n' "$B9" | grep -c '^    absent  ' | tr -d ' ')" 0
+fi
+
+# =======================================================================================
 echo "== 10. it ships like every other script here =="
 # =======================================================================================
 ok "welcome.sh parses"                                   "$(yn bash -n "$SH")" yes

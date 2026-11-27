@@ -91,6 +91,7 @@ review-next.sh writing records a clearance receipt
 review-rounds.sh writing reaches review-clearance.sh and qa-dispatch.sh, which write gate state
 role-signature.sh read-only
 script-classes.sh read-only
+script-rules.sh read-only
 service-doc.sh read-only
 session-handoff.sh writing runs claude stop and files a hand-off note
 session-sweep.sh writing runs claude stop
