@@ -440,13 +440,13 @@ async function metricsLocked($: any, root: string): Promise<boolean> {
   return !!st && typeof st.mtimeMs === 'number' && (await nowMs($)) - st.mtimeMs < LOCK_MS
 }
 async function absentMetrics($: any, root: string): Promise<string> {
-  if (!(await exists($, root + '/' + SNAPSHOT))) return 'metrics OFF — no ' + SNAPSHOT + '. The board switch turns them on: ' + SNAPSHOT + ' present and `board` not false in ' + CONFIG + '.'
+  if (!(await exists($, root + '/' + SNAPSHOT))) return 'metrics OFF — no ' + SNAPSHOT + '. The board switch turns them on: that file present and `board` not false in ' + CONFIG + '.'
   let cfg: Record<string, unknown> | null = null
   try { cfg = obj(JSON.parse(await readMoved($, root + '/' + CONFIG))) } catch { cfg = null }
   if (cfg && cfg.board === false) return 'metrics OFF — `board` is false in ' + CONFIG + '. Remove the key, or set it true, to turn them on.'
   if (await metricsLocked($, root)) return 'computing… — this view redraws when ' + METRICS + ' lands.'
   const failed = /^exit (\d{1,3}) /.exec(await readMoved($, root + '/' + METRICS_FAILED))
-  if (failed) return 'metrics not computed — last run failed (exit ' + failed[1] + '). It is retried after the next full tick.'
+  if (failed) return 'metrics not computed — last run failed (exit ' + failed[1] + '). `metrics.sh .` in the bundle root prints why.'
   return 'metrics not computed yet — the next session turn computes them.'
 }
 async function refreshMetrics($: any, root: string, force: boolean): Promise<void> {
