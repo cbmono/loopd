@@ -22,7 +22,9 @@ node_modules/
 /.loopd/counts.json
 
 # Usage and efficiency metrics (scripts/metrics.sh), rewritten by each full tick beside the
-# board snapshot. Per clone and derived; delete freely. /loopd:init appends this line too.
+# board snapshot and, when absent or older than the last one, by the session hook
+# (scripts/refresh-state.sh). Its run state, .loopd/.metrics-run/, ignores itself. Per clone
+# and derived; delete freely. /loopd:init appends this line too.
 /.loopd/METRICS.json
 
 # metrics.sh's per-PR gh reads (frozen once a PR is merged or closed) and each reaped tick's

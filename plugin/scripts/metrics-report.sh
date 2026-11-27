@@ -3,7 +3,7 @@
 # Run from the bundle root. Usage: metrics-report.sh [--project <slug>] [--since <YYYY-MM[-DD]>].
 # Read-only: reads METRICS.json, instance.config.json and the ledger; no gh, no git, no write,
 # and nothing recomputed — the figures are metrics.sh's (schema: docs/metrics.md).
-# Exit: 0 printed, or metrics off · 2 not a bundle root, no jq or config unreadable · 3 usage
+# Exit: 0 printed, metrics off or not computed yet · 2 not a bundle root, no jq or config unreadable · 3 usage
 # · 4 METRICS.json unreadable, truncated or of an unknown schema.
 # Rules, thresholds and filter semantics: docs/metrics.md → "The report".
 set -uo pipefail
@@ -38,7 +38,11 @@ if [ "$board" = true ]; then
   exit 0
 fi
 if [ ! -e "$F" ]; then
-  echo "Metrics are off: no $F. They follow the board switch, \"board\" in instance.config.json (on unless false), and need $AB_SNAPSHOT; the next tick that changes something writes them."
+  if [ -f "$AB_SNAPSHOT" ]; then
+    echo "Metrics are not computed yet: no $F. The next session turn on this bundle computes them, and so does the next tick that changes something."
+  else
+    echo "Metrics are off: no $AB_SNAPSHOT. They follow the board switch, \"board\" in instance.config.json (on unless false), and need that file."
+  fi
   exit 0
 fi
 [ -f "$F" ] && [ -r "$F" ] || die 4 "$F is unreadable"
@@ -107,7 +111,7 @@ def more(n; total; what): if total > n then ["", "… \(total - n) more \(what) 
 | "# loopd metrics",
   "",
   "Generated \($m.generated_at | clean) · schema \($m.schema_version) · project: \(if $project == "" then "all" else $project end) · since: \(if $since == "" then "all months" else $since end)",
-  (if $stale != "" then "", "**Stale:** these figures were generated before the last full tick (\($stale | clean)). They refresh on the next tick that changes something." else empty end),
+  (if $stale != "" then "", "**Stale:** these figures were generated before the last full tick (\($stale | clean)). The next session turn on this bundle recomputes them, once per full tick; PR figures refresh on the next tick that changes something." else empty end),
   "",
   "## Headline",
   "",

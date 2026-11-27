@@ -397,8 +397,8 @@ variant '.delegation.share_role_agents = null | .idle_tick_spend.idle_share = {"
 ok "unknown and source none never fire a rule" "$(has "$(rep "$V")" 'No rule fired on these figures.')" 1
 variant '.generated_at = "2026-09-30T00:00:00Z"'
 out="$(rep "$V")"
-ok "older than the last full tick: stale, refreshed by the next changing tick" \
-  "$(has "$out" '**Stale:** these figures were generated before the last full tick (2026-10-01T01:00:00Z). They refresh on the next tick that changes something.')" 1
+ok "older than the last full tick: stale, recomputed by the next session turn" \
+  "$(has "$out" '**Stale:** these figures were generated before the last full tick (2026-10-01T01:00:00Z). The next session turn on this bundle recomputes them, once per full tick; PR figures refresh on the next tick that changes something.')" 1
 variant '.generated_at = "2026-10-01T01:30:00Z"'
 ok "a later IDLE line is not a refresh" "$(has "$(rep "$V")" '**Stale:**')" 0
 variant '.periods = {"2026-08": {"tick_tokens": 1000, "dispatch_tokens": 0, "idle_ticks": 1, "merged_prs": 0},
@@ -431,8 +431,10 @@ out="$(rep "$V")"; rc=$?
 ok "board false: metrics off, exit 0" "$rc" 0
 ok "…naming the on switch" "$(has "$out" 'Metrics are off: "board": false in instance.config.json')" 1
 echo '{}' > "$V/instance.config.json"; rm "$V/.loopd/METRICS.json"
-out="$(rep "$V")"; rc=$?
-ok "absent METRICS.json: metrics off, exit 0" "$rc$(has "$out" 'Metrics are off: no .loopd/METRICS.json. They follow the board switch, "board"')" 01
+echo '{}' > "$V/.loopd/SNAPSHOT.json"; out="$(rep "$V")"; rc=$?
+ok "absent METRICS.json, board on: not computed yet, exit 0" "$rc$(has "$out" 'Metrics are not computed yet: no .loopd/METRICS.json. The next session turn on this bundle computes them')$(has "$out" 'Metrics are off')" 010
+rm "$V/.loopd/SNAPSHOT.json"; out="$(rep "$V")"; rc=$?
+ok "…and with no SNAPSHOT.json: metrics off, exit 0" "$rc$(has "$out" 'Metrics are off: no .loopd/SNAPSHOT.json. They follow the board switch, "board"')" 01
 named() { # <label> <want-substring> — exit 4 with a named error
   out="$(rep "$V")"; ok "$1: exit 4" "$?" 4; ok "…named" "$(has "$out" "metrics-report: .loopd/METRICS.json $2")" 1; }
 : > "$V/.loopd/METRICS.json"; named "a zero-byte file" "is empty"
