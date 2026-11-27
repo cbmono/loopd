@@ -89,10 +89,14 @@ tree at once, and there is no per-bundle step for any of it.
 The plugin row is per machine and installed by Claude Code. **`/loopd:update`**, run from
 a bundle root, does it all: `claude plugin marketplace update`, `claude plugin update
 <p>@<marketplace> -s user` for each plugin of that marketplace already installed at user
-scope (project, local and managed installs are never touched — one summary line, or every
-one with `--verbose`), then the **new** version's init on that bundle — its path read from
+scope (project, local and managed installs are never touched, and listed only with
+`--verbose`), then the **new** version's init on that bundle — its path read from
 the registry's user-scope entry, since the session's plugin root is still the old one. It
-ends `Now run /reload-plugins`, which registers a new skill without a restart. Another
+ends `Now run /reload-plugins`, which registers a new skill without a restart. **Both are
+quiet by default**: the version lines, one `init:` count line, each `CONFLICT` or `UNKNOWN`
+seed file as one line with its `diff -u` command, any `needs`, note, warning or failing
+check, and the reload step. `--verbose` on either prints the full report, and
+`/loopd:update --verbose` passes it to init. A first stamp always prints in full. Another
 bundle on the machine still needs:
 
 ```

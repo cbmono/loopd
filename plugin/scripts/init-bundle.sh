@@ -2641,6 +2641,7 @@ if [ -f "$NORMALISER" ]; then
     # NORMALISE_CONFIG_STDIN=1 is the one way past the TTY test, and it exists so this
     # prompt can be tested — the same role TEAM_SETUP_STDIN plays for the roster block.
     if [ "$norm_apply" = 0 ] && { [ -t 0 ] || [ "${NORMALISE_CONFIG_STDIN:-}" = 1 ]; }; then
+      [ -z "${QUIET_LOG:-}" ] || bash "$NORMALISER" "$TARGET" >&2 || true
       printf '  Apply them now? [y/N] ' >&2
       norm_reply=""
       IFS= read -r -t 30 norm_reply || norm_reply=""

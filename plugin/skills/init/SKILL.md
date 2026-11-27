@@ -1,12 +1,13 @@
 ---
 name: init
 description: Create a new loopd bundle, refresh an existing one, or convert a symlink-era bundle in place. Data only — a bundle it stamps carries no machinery and no link into any checkout.
-argument-hint: "<dir>  [--org O [--name R]] [--with-objectives] [--normalise-config] [--owner L] [--email A] [--repos-root D] [--spawn-grant]"
+argument-hint: "<dir>  [--org O [--name R]] [--with-objectives] [--normalise-config] [--owner L] [--email A] [--repos-root D] [--spawn-grant] [--verbose]"
 disable-model-invocation: true
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
 
-Run this, from anywhere, and **relay its output verbatim**:
+Run this, from anywhere, and **relay what it prints** — on a re-stamp that is already the
+short form:
 
 ```
 ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh $ARGUMENTS
@@ -16,7 +17,11 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh $ARGUMENTS
 one bundle"),
 `--with-objectives`, `--normalise-config`, one of `--owner <login>` / `--email
 <address>` / `--repos-root <dir>` (see "When it says `needs`"), or `--spawn-grant` (see
-"The spawn grant"). No directory means the current one. That is the whole skill: every
+"The spawn grant"). No directory means the current one. **A re-stamp prints a summary**: one
+`init:` count line (files written and removed), each `CONFLICT` or `UNKNOWN` seed file as
+one line with its `diff -u` command, and any `needs`, note, warning or failing check. Add
+`--verbose` only when the human asks for the full report. A first stamp, `--org` and
+`--uninstall` always print in full. That is the whole skill: every
 decision, every guard and every line of output lives in the script, so a human running it
 in a terminal and a session running it here get the same answer, and there is no second
 copy here to drift.
@@ -107,7 +112,7 @@ without your yes`, followed by the rules still missing. When you see that note:
 
 - **Do not act on a line it declined to act on.** A `stale` line names retired content
   that is the human's to keep or delete; the script prints the exact `rm` and does not
-  run it. A `keep` line names a symlink of the human's own.
+  run it. A `keep` line (printed with `--verbose`) names a symlink of the human's own.
 - **Do not act on a `CONFLICT` yourself.** A hand-diverged seed file is the only copy of
   a decision somebody made; the script reports it, names the diff, and stops. So do you.
 - **`AUTONOMY.md` disappearing is a real change, not noise.** If the conversion removed
