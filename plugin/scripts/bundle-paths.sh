@@ -144,6 +144,17 @@ ab_snapshot_stale() { # <root> [<stamp>, default ab_refresh_stamp's]
   done
   return 1
 }
+# A pane Refresh may be waiting: METRICS.json exists, no run holds its lock, and a loopd
+# plugin-store file is newer than both it and .metrics-run/served, which refresh-state.sh
+# touches on each look. A glob and `-nt` alone, no process: status-line.sh asks on every redraw.
+ab_metrics_request_due() { # <root>
+  local r="${1:-.}" f
+  [ -f "$r/$AB_SNAPSHOT" ] && [ -f "$r/$AB_METRICS" ] && [ ! -d "$r/$AB_METRICS_RUN/lock" ] || return 1
+  for f in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/store/loopd_*.json; do
+    [ "$f" -nt "$r/$AB_METRICS" ] && [ "$f" -nt "$r/$AB_METRICS_RUN/served" ] && return 0
+  done
+  return 1
+}
 # The root refresh-state.sh may WRITE: prints its canonical path, or exits 1. Absolute,
 # resolved by `cd -P` (never the raw string), holding instance.config.json, a .loopd/ folder
 # and SNAPSHOT.json — the board's off switch. Hook and worker both ask it.

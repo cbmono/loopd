@@ -90,7 +90,9 @@ ab_counts "$root"
 ab_write_counts "$root"
 # A snapshot behind its documents — a task doc edited by hand, with no turn whose hook would
 # refresh it — is rewritten by refresh-state.sh, detached. The check is `-nt` alone.
-if ab_snapshot_stale "$root"; then
+# So is a pane Refresh in an idle session: a plugin-store file newer than METRICS.json and
+# than the worker's last look (.metrics-run/served), with no run in flight. `-nt` alone.
+if ab_snapshot_stale "$root" || ab_metrics_request_due "$root"; then
   nohup bash "$(dirname "${BASH_SOURCE[0]:-$0}")/refresh-state.sh" "$root" </dev/null >/dev/null 2>&1 &
 fi
 
