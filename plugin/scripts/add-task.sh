@@ -53,7 +53,7 @@ kind = field("kind") or "build"
 if want and want != kind:
     out(7, "kind=%s, but projects/%s is %s" % (want, os.path.basename(base), kind))
 one = " ".join(desc.split())
-title = re.split(r"(?<=[.!?])\s", one, 1)[0].rstrip(".") or one
+title = re.split(r"(?<=[.!?])\s", one, maxsplit=1)[0].rstrip(".") or one
 fslug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:40].strip("-") or "task"
 nums = [0] + [int(re.match(r"task-(\d*)", os.path.basename(p)).group(1) or 0)
               for p in glob.glob(os.path.join(base, "tasks", "task-*.md"))]
