@@ -220,14 +220,14 @@ is, while the log entry still names the human who decided.
 > may run: it is report-only by design and prints the exact removal or prune it would
 > perform, which is a better dry-run report than a description of one.
 
-> **A re-run after a handed-over `--apply` finishes step 7 and nothing else.** An earlier
-> closeout ran steps 1–6 and the human ran step 7's command by hand when
-> `projects/<slug>/` is gone with its deletion staged (`git status --porcelain --
-> projects/<slug>`), or, for a retained project, `project.md` carries an uncommitted
-> `deliverable_paths:` stamp. Then skip steps 0–6 and run step 7 from "Then stage and
-> commit": every path that closeout left uncommitted, by explicit path, after
-> `validate-bundle.sh`, then `build-awaiting.sh` and the snapshot. Folder gone with
-> nothing staged ⇒ stop and report.
+> **A re-run after a handed-over `--apply` finishes step 7 and nothing else.** The marker
+> is step 3's entry: when `git diff -- .loopd/log.md` adds a **Project closed** entry
+> naming `<slug>`, an earlier closeout ran steps 1–6 and stopped at step 7. Skip steps 0–6
+> and run step 7 — its `--apply` too, unless `projects/<slug>/` is already gone with its
+> deletion staged (`git status --porcelain -- projects/<slug>`); a second `--apply` on a
+> retained folder only re-confirms the stamp and the stanza. Then commit every path that
+> closeout left uncommitted, by explicit path, after `validate-bundle.sh`, then
+> `build-awaiting.sh` and the snapshot. No such entry and no folder ⇒ stop and report.
 
 0. **Both escalations, before any write — the pre-flight.** This step is the split's, and steps 1–7 below
    are the closeout as it always was. Read `project.md` and every `tasks/*.md`, the
@@ -389,7 +389,8 @@ is, while the log entry still names the human who decided.
    script never ran; a non-zero exit of the script itself is reported as below. Finish
    steps 3–6 if any is left, write nothing more, and end your report with the command as
    one paste-ready inline-code line, its path absolute (what `${CLAUDE_PLUGIN_ROOT}`
-   expands to, never the variable): `<absolute plugin root>/scripts/close-project-folder.sh <slug> --apply`.
+   expands to, never the variable) and single-quoted, since a plugin root can hold a
+   space: `'<absolute plugin root>/scripts/close-project-folder.sh' <slug> --apply`.
    Name the bundle root's absolute path as the directory to run it from, and tell the
    human to re-run `/loopd:close-project <slug>` afterwards: that run finds the folder
    gone and finishes this step (validate, commit, `build-awaiting.sh`, snapshot). Add no

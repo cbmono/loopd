@@ -179,8 +179,8 @@ Verified: `foo.test.sh` 40/0 locally, 10/10 checks green on [run 1234](https://�
 
 1. **`## Description`, then a one-sentence TL;DR.**
 2. **A `Verified:` line that cites something a reader can open** — a URL, never "all
-   green"; a local run only through one; on a non-default base, or the parent's run
-   labelled `(parent)`, with CI-dependent criteria `✗` until rebased.
+   green"; a local run only through one. On a non-default base the parent's run, labelled
+   `(parent)`, counts; CI-dependent criteria stay `✗` until rebased.
 3. **The criteria table** under a heading carrying **the tally, and the reason for any
    `✗`**; the gate counts rows and refuses a tally that disagrees.
 4. **`### Decided without asking`**, required — one row per technical choice no criterion,

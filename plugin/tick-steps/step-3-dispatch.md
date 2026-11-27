@@ -261,7 +261,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    (b) install with the target repo's **own package manager** (its `CLAUDE.md` says
    which — never assume one; naming none, take it from the committed lockfile —
    `pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`, `bun.lock`/`bun.lockb`, and with
-   more than one the one CI installs with) against a **private store** inside the worktree
+   more than one the one CI installs the package under test with) against a **private store** inside the worktree
    where that manager has one, and run tests on the runtime version CI pins (the setup
    action's version input, `.nvmrc`/`.node-version`, or `engines`), not the machine
    default, and (c) **push early**. Two agents must never run a

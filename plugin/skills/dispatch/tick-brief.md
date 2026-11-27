@@ -65,7 +65,7 @@ Three rules this spawn adds, each because the launcher reads nothing but your le
   default per SCHEMA.md). Each agent uses its own worktree under `worktreeRoot`
   (absent, `<reposRoot>/_wt`) + the target repo's **own package manager** (its `CLAUDE.md` says which;
   naming none, the committed lockfile — `pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`,
-  `bun.lock`/`bun.lockb`, and with more than one the one CI installs with)
+  `bun.lock`/`bun.lockb`, and with more than one the one CI installs the package under test with)
   with a **private store** inside the worktree where that manager has one, runs tests on the
   runtime version CI pins (the setup action's version input, `.nvmrc`/`.node-version`, or
   `engines`), not the machine default, and **pushes early** — never two installs
