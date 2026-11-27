@@ -74,7 +74,7 @@ reclaim-worktree.sh writing removes a task's worktree
 refactor-backlog.sh writing appends to knowledge/backlog
 reflect-deploy.sh writing writes a deploy question into a task doc
 refresh-seeds.sh writing --apply merges seed files, settings included, into the bundle
-refresh-state.sh writing writes counts.json and SNAPSHOT.json
+refresh-state.sh writing writes counts.json and SNAPSHOT.json, and starts metrics.sh
 release-bump.sh writing bumps the version and commits on the default branch
 report-clearance.sh read-only
 required-checks.sh writing records a clearance receipt for the PR it clears

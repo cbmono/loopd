@@ -13,6 +13,8 @@ const SNAPSHOT = CWD + '/.loopd/SNAPSHOT.json'
 const COUNTS = CWD + '/.loopd/counts.json'
 const STAMPED = CWD + '/.loopd/seed-base/VERSION'
 const METRICS = CWD + '/.loopd/METRICS.json'
+const METRICS_LOCK = CWD + '/.loopd/.metrics-run/lock'
+const METRICS_FAILED = CWD + '/.loopd/.metrics-run/failed'
 const PANE_ID = 'loopd-board'
 
 // What Claude Code passes a ui.render hook for this pane, apart from the surface.
@@ -1211,7 +1213,7 @@ test('a non-interactive session registers the command and says nothing', ONLY, a
 // ---------------------------------------------------------------- the Metrics view
 // Shape: docs/metrics.md
 const MET = {
-  schema_version: 1,
+  schema_version: 2,
   generated_at: '2026-10-08T00:50:03Z',
   headline: {
     delegation_share: '62% role agents', tokens_per_merged_pr: '132k',
@@ -1295,13 +1297,101 @@ test('METRICS VIEW: Projects and Metrics are plain buttons with no hotkey; Proje
 })
 
 const METRICS_LINES: [string, unknown, RegExp][] = [
-  ['absent', null, /^metrics OFF — no \.loopd\/METRICS\.json\. The board switch turns them on: \.loopd\/SNAPSHOT\.json present and `board` not false in instance\.config\.json\.$/],
   ['not JSON', '{ not json', /^\.loopd\/METRICS\.json is not valid JSON — the next metrics\.sh run overwrites it$/],
   ['an array', '[1, 2]', /^\.loopd\/METRICS\.json is not a JSON object/],
-  ['schema_version 2', { ...MET, schema_version: 2 }, /^\.loopd\/METRICS\.json has schema_version 2; this pane reads 1$/],
-  ['schema_version "1"', { ...MET, schema_version: '1' }, /^\.loopd\/METRICS\.json has schema_version "1"; this pane reads 1$/],
-  ['no schema_version', { headline: MET.headline }, /^\.loopd\/METRICS\.json has schema_version none; this pane reads 1$/],
+  ['schema_version 1', { ...MET, schema_version: 1 }, /^\.loopd\/METRICS\.json has schema_version 1; this pane reads 2$/],
+  ['schema_version "2"', { ...MET, schema_version: '2' }, /^\.loopd\/METRICS\.json has schema_version "2"; this pane reads 2$/],
+  ['no schema_version', { headline: MET.headline }, /^\.loopd\/METRICS\.json has schema_version none; this pane reads 2$/],
 ]
+// METRICS.json absent: [name, snapshot, config, lock age in ms or null, failure marker or null, the one line]
+const NOT_COMPUTED = /^metrics not computed yet — the next session turn computes them\.$/
+const ABSENT: [string, unknown | null, string, number | null, string | null, RegExp][] = [
+  ['no SNAPSHOT.json is OFF', null, '{}', null, null, /^metrics OFF — no \.loopd\/SNAPSHOT\.json\. The board switch turns them on: that file present and `board` not false in instance\.config\.json\.$/],
+  ['no SNAPSHOT.json is OFF, lock or not', null, '{}', 1000, null, /^metrics OFF — no \.loopd\/SNAPSHOT\.json\./],
+  ['board false is OFF', SNAP, '{"board": false}', 1000, 'exit 2 close none\n', /^metrics OFF — `board` is false in instance\.config\.json\. Remove the key, or set it true, to turn them on\.$/],
+  ['board on, no run in flight is not computed yet', SNAP, '{"board": true}', null, null, NOT_COMPUTED],
+  ['a config that does not parse is not OFF', SNAP, '{ broken', null, null, NOT_COMPUTED],
+  ['a live lock is computing…', SNAP, '{}', 9 * 60000, 'exit 2 close none\n', /^computing… — this view redraws when \.loopd\/METRICS\.json lands\.$/],
+  ['a lock older than 10 minutes is not computing', SNAP, '{}', 10 * 60000, null, NOT_COMPUTED],
+  ['a failed run names its exit code', SNAP, '{}', null, 'exit 2 close 2026-10-08T00:00:00Z\n', /^metrics not computed — last run failed \(exit 2\)\. `metrics\.sh \.` in the bundle root prints why\.$/],
+  ['a failure marker of another shape is ignored', SNAP, '{}', null, 'exit two\n', NOT_COMPUTED],
+]
+for (const [name, snapshot, config, lockAge, failed, want] of ABSENT) {
+  test('METRICS ABSENT: ' + name + ', one line, the ledger never read', ONLY, async ($, on) => {
+    const w = metricsWorld(snapshot, null)
+    w.files.set(CONFIG, { text: config, mtimeMs: 2 })
+    if (lockAge !== null) w.files.set(METRICS_LOCK, { text: '', mtimeMs: GENERATED - lockAge })
+    if (failed !== null) w.files.set(METRICS_FAILED, { text: failed, mtimeMs: 3 })
+    stubs(on, w)
+    mock.clock(on, { now: GENERATED })
+    const ui = await showMetrics($, w)
+    const body = await metricsRows(ui)
+    expect(body).toHaveLength(1)
+    expect(body[0]).toMatch(want)
+    expect([...w.statOf!, ...w.readOf!].filter(p => /log\.md$/.test(p))).toEqual([])
+    expect(w.submitted).toEqual([])
+    await ui.unmount()
+  })
+}
+
+test('METRICS ABSENT: computing… redraws from the file on the first poll after it lands; config and marker are read once, not per poll', ONLY, async ($, on) => {
+  const w = metricsWorld(SNAP, null)
+  w.files.set(METRICS_LOCK, { text: '', mtimeMs: GENERATED })
+  stubs(on, w)
+  const clock = mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w)
+  expect((await metricsRows(ui))[0]).toMatch(/^computing…/)
+  await clock.advance(5000)
+  await clock.advance(5000)
+  expect((await metricsRows(ui))[0]).toMatch(/^computing…/)
+  expect(w.readOf!.filter(p => p === CONFIG || p === METRICS_FAILED).length).toBeLessThanOrEqual(2)
+  w.files.delete(METRICS_LOCK)
+  w.files.set(METRICS, { text: JSON.stringify(MET), mtimeMs: 900 })
+  await clock.advance(5000)
+  const body = await metricsRows(ui)
+  expect(body[0]).toMatch(/^METRICS +\d+ min ago$/)
+  expect(body.join('\n')).toContain('132k')
+  expect(metricsReads(w)).toBe(1)
+  expect(w.submitted).toEqual([])
+  await ui.unmount()
+})
+
+test('METRICS ABSENT: a config read that fails is not cached; the next poll reads it again and draws OFF', ONLY, async ($, on) => {
+  const w = metricsWorld(SNAP, null)
+  w.files.set(CONFIG, { text: '{"board": false}', mtimeMs: 2 })
+  stubs(on, w)
+  const clock = mock.clock(on, { now: GENERATED })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  w.failReads = new Set([CONFIG])
+  await ui.press({ key: 'view-metrics' })
+  expect((await metricsRows(ui))[0]).toMatch(NOT_COMPUTED)
+  await clock.advance(5000)
+  expect((await metricsRows(ui))[0]).toMatch(/^metrics OFF — `board` is false/)
+  await ui.unmount()
+})
+
+test('METRICS VIEW: a stale file under a live lock keeps its figures and draws computing… for the age, then the new file on the first poll after its mtime moves', ONLY, async ($, on) => {
+  const w = metricsWorld()
+  w.files.set(METRICS_LOCK, { text: '', mtimeMs: GENERATED })
+  stubs(on, w)
+  const clock = mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w)
+  let body = await metricsRows(ui)
+  expect(body[0]).toBe('METRICS' + ' '.repeat(28) + 'computing…')
+  expect(body.join('\n')).toContain('132k')
+  w.files.delete(METRICS_LOCK)
+  w.files.set(METRICS, { text: JSON.stringify({ ...MET, generated_at: SNAP.generated_at, headline: { ...MET.headline, tokens_per_merged_pr: '140k' } }), mtimeMs: 900 })
+  await clock.advance(5000)
+  body = await metricsRows(ui)
+  expect(body[0]).toBe('METRICS' + ' '.repeat(30) + 'just now')
+  expect(body.join('\n')).toContain('140k')
+  expect(metricsReads(w)).toBe(2)
+  w.files.set(METRICS_LOCK, { text: '', mtimeMs: GENERATED - 11 * 60000 })
+  await clock.advance(5000)
+  expect((await metricsRows(ui))[0]).toBe('METRICS' + ' '.repeat(30) + 'just now')
+  await ui.unmount()
+})
 for (const [name, met, want] of METRICS_LINES) {
   test('METRICS VIEW: ' + name + ' is one line, naming no tick', ONLY, async ($, on) => {
     const w = metricsWorld(SNAP, met)

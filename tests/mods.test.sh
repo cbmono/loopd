@@ -147,6 +147,8 @@ ok "…and spells the snapshot path as bundle-paths.sh does ('$AB_SNAPSHOT')" \
    "$([ "$(count "'$AB_SNAPSHOT'" "$MOD")" -ge 1 ] && echo yes || echo no)" yes
 ok "…and the metrics path as bundle-paths.sh does ('$AB_METRICS')" \
    "$([ "$(count "'$AB_METRICS'" "$MOD")" -ge 1 ] && echo yes || echo no)" yes
+ok "…and the metrics run lock under bundle-paths.sh's '$AB_METRICS_RUN'" \
+   "$([ "$(count "'$AB_METRICS_RUN/lock'" "$MOD")" -ge 1 ] && echo yes || echo no)" yes
 # A message to another session is a line Claude there reads, never a prompt this mod
 # submits in its place: a module that sends may not also submit.
 ok "…sends a message, so it never submits a prompt" \

@@ -203,6 +203,7 @@ ghpr 8 CLOSED 2026-10-04T00:00:00Z null 2026-10-04T01:00:00Z 2026-10-04T01:00:00
 bash "$M" "$B"; ok "back online: stale cleared" "$(q .self_merge.stale)" false
 calls; bash "$M" "$B"
 ok "every named PR merged or closed: 0 gh calls" "$(ncalls)" 0
+METRICS_GH_MAX_PRS=0 bash "$M" "$B"; ok "a cap of 0 with no PR due is not stale" "$(q .quality.stale)" false
 mkdir "$TMP/nogh"; ln -s "$(command -v jq)" "$TMP/nogh/jq"
 ok "…not even with gh missing" "$(PATH="$TMP/nogh:/usr/bin:/bin" "$BASH" "$M" "$B"; echo "$?:$(q .quality.stale)")" "0:false"
 ok "a PR no task names leaves the cache" "$(printf '{}' > "$B/.loopd/.pr-cache/o__r__1.json"; bash "$M" "$B"; [ -e "$B/.loopd/.pr-cache/o__r__1.json" ] && echo kept || echo pruned)" pruned
@@ -212,6 +213,9 @@ N="$TMP/fair"; mkdir -p "$N/.loopd" "$N/projects/p/tasks"; echo '{}' > "$N/insta
 printf '* TICK 2026-10-01T01:00:00Z by example-user-007 open: tick-5 · full walk\n' > "$N/.loopd/log.md"
 printf -- '---\nstatus: in-review\npr: [ %s/8, %s/11 ]\n---\n' "$U" "$U" > "$N/projects/p/tasks/task-001.md"
 ghpr 11 OPEN 2026-10-04T00:00:00Z null 2026-10-04T01:00:00Z 2026-10-04T01:00:00Z 0
+calls; err="$(METRICS_GH_MAX_PRS=0 bash "$M" "$N" 2>&1)"
+ok "a cap of 0 reads no PR and prints nothing (BSD head refuses -n 0)" "$(ncalls):$err" "0:"
+ok "…and marks the unread PRs' figures stale" "$(jq -c '[.self_merge.stale, .quality.stale, .quality.prs_read]' "$N/.loopd/METRICS.json")" '[true,true,0]'
 calls; METRICS_GH_MAX_PRS=1 bash "$M" "$N"; first="$(grep -o 'pr view [0-9]*' "$GHFX/calls")"
 calls; METRICS_GH_MAX_PRS=1 bash "$M" "$N"; second="$(grep -o 'pr view [0-9]*' "$GHFX/calls")"
 ok "at the read cap, the least recently read open PR goes next" "$(printf '%s\n%s\n' "$first" "$second" | sort | tr '\n' ' ')" "pr view 11 pr view 8 "
@@ -263,9 +267,9 @@ ok "board: false writes nothing" "$([ -e "$O/.loopd/METRICS.json" ] && echo writ
 echo '{}' > "$O/instance.config.json"; rm "$O/.loopd/SNAPSHOT.json"; bash "$M" "$O"
 ok "no SNAPSHOT.json writes nothing" "$([ -e "$O/.loopd/METRICS.json" ] && echo written || echo none)" none
 ok "step 8 runs it beside write-snapshot.sh" "$(grep -c 'scripts/metrics\.sh \.' "$REPO/plugin/tick-steps/step-8-render.md")" 1
-ok "only step 8 runs it (no idle path, no refresh-state.sh)" \
-  "$(cd "$REPO/plugin" && grep -rl 'scripts/metrics\.sh' --include='*.sh' --include='*.md' --include='*.ts' --include='*.json' . | grep -v '^./scripts/metrics\.sh$' | tr '\n' ' ')" \
-  "./tick-steps/step-8-render.md "
+ok "only step 8 and the session hook's worker run it (no idle path)" \
+  "$(cd "$REPO/plugin" && grep -rlE '(scripts|\$here)/metrics\.sh' --include='*.sh' --include='*.md' --include='*.ts' --include='*.json' . | grep -v '^./scripts/metrics\.sh$' | sort | tr '\n' ' ')" \
+  "./scripts/refresh-state.sh ./tick-steps/step-8-render.md "
 
 echo "== the atomic write =="
 cp "$F" "$TMP/before.json"; mv "$B/.loopd/log.md" "$TMP/log.md"
@@ -291,6 +295,23 @@ if [ -r "$T/task-003-other.md" ]; then echo "  SKIP  an unreadable task doc (run
 else fails_kept "an unreadable task document"; fi
 chmod 644 "$T/task-003-other.md"
 bash "$M" "$B"; ok "the normal path still writes after each refusal" "$(cmp -s "$F" "$TMP/before.json" && echo same)" same
+
+echo "== one run at a time =="
+RUN="$B/.loopd/.metrics-run"
+ok "the run directory ignores itself" "$(cat "$RUN/.gitignore")" '*'
+ok "a finished run leaves no lock" "$([ -d "$RUN/lock" ] && echo held || echo free)" free
+mkdir "$RUN/lock"; METRICS_LOCK_WAIT=0 fails_kept "a held run lock"
+ok "…which the refused run leaves held" "$([ -d "$RUN/lock" ] && echo held || echo free)" held
+( sleep 1; rmdir "$RUN/lock" ) & bash "$M" "$B"
+ok "a lock released inside the wait: written" "$?:$(cmp -s "$F" "$TMP/before.json" && echo same)" 0:same
+wait; mkdir "$RUN/lock"; touch -t 202001010000 "$RUN/lock"; : > "$RUN/failed"
+METRICS_LOCK_WAIT=0 bash "$M" "$B"
+ok "a lock older than 10 minutes is taken over, and released" "$?:$([ -d "$RUN/lock" ] && echo held || echo free)" 0:free
+ok "a written file clears the hook's failure marker" "$([ -e "$RUN/failed" ] && echo marked || echo none)" none
+mv "$RUN" "$TMP/run-real"; mkdir -p "$TMP/outside/lock"; touch -t 202001010000 "$TMP/outside/lock"; ln -s "$TMP/outside" "$RUN"
+fails_kept "a symlinked run directory"
+ok "…and nothing behind the link is written or removed" "$(ls -A "$TMP/outside" | tr '\n' ' ')" "lock "
+rm "$RUN"; mv "$TMP/run-real" "$RUN"
 
 echo "== the key allowlist =="
 ALLOWED='pm_ticks ticks_without_row unknown tick_cost mean_hours loop rate reasons not_self_merged criteria gated
@@ -376,8 +397,17 @@ variant '.delegation.share_role_agents = null | .idle_tick_spend.idle_share = {"
 ok "unknown and source none never fire a rule" "$(has "$(rep "$V")" 'No rule fired on these figures.')" 1
 variant '.generated_at = "2026-09-30T00:00:00Z"'
 out="$(rep "$V")"
-ok "older than the last full tick: stale, refreshed by the next changing tick" \
-  "$(has "$out" '**Stale:** these figures were generated before the last full tick (2026-10-01T01:00:00Z). They refresh on the next tick that changes something.')" 1
+ok "older than the last full tick: stale, recomputed by the next session turn" \
+  "$(has "$out" '**Stale:** these figures were generated before the last full tick (2026-10-01T01:00:00Z). The next session turn on this bundle recomputes them; PR figures refresh on the next tick that changes something.')" 1
+mkdir -p "$V/.loopd/.metrics-run"; echo 2026-10-01T01:00:00Z > "$V/.loopd/.metrics-run/attempt"
+ok "…already attempted for that tick: no session-turn promise" \
+  "$(has "$(rep "$V")" 'The recompute for that tick has already been made; they refresh on the next tick that changes something.')$(has "$(rep "$V")" 'next session turn')" 10
+echo 'exit 2 close 2026-10-01T01:00:00Z' > "$V/.loopd/.metrics-run/failed"
+ok "…and failed: the exit code, no session-turn promise" \
+  "$(has "$(rep "$V")" 'The recompute for that tick failed (exit 2) and is not retried on a session turn')$(has "$(rep "$V")" 'next session turn on this bundle recomputes')" 10
+echo 2026-09-01T01:00:00Z > "$V/.loopd/.metrics-run/attempt"
+ok "…a failure for an older tick still promises the next turn" "$(has "$(rep "$V")" 'The next session turn on this bundle recomputes them')" 1
+rm -r "$V/.loopd/.metrics-run"
 variant '.generated_at = "2026-10-01T01:30:00Z"'
 ok "a later IDLE line is not a refresh" "$(has "$(rep "$V")" '**Stale:**')" 0
 variant '.periods = {"2026-08": {"tick_tokens": 1000, "dispatch_tokens": 0, "idle_ticks": 1, "merged_prs": 0},
@@ -410,8 +440,18 @@ out="$(rep "$V")"; rc=$?
 ok "board false: metrics off, exit 0" "$rc" 0
 ok "…naming the on switch" "$(has "$out" 'Metrics are off: "board": false in instance.config.json')" 1
 echo '{}' > "$V/instance.config.json"; rm "$V/.loopd/METRICS.json"
-out="$(rep "$V")"; rc=$?
-ok "absent METRICS.json: metrics off, exit 0" "$rc$(has "$out" 'Metrics are off: no .loopd/METRICS.json. They follow the board switch, "board"')" 01
+echo '{}' > "$V/.loopd/SNAPSHOT.json"; out="$(rep "$V")"; rc=$?
+ok "absent METRICS.json, board on: not computed yet, exit 0" "$rc$(has "$out" 'Metrics are not computed yet: no .loopd/METRICS.json. The next session turn on this bundle computes them')$(has "$out" 'Metrics are off')" 010
+tk="$(. "$REPO/plugin/scripts/bundle-paths.sh" && ab_last_full_tick "$V/.loopd/log.md")"; mkdir -p "$V/.loopd/.metrics-run"; echo "${tk:-none}" > "$V/.loopd/.metrics-run/attempt"
+out="$(rep "$V")"
+ok "…already attempted for the newest full tick: the next full tick, not the next turn" \
+  "$(has "$out" 'the run for the newest full tick has already been made. The next full tick computes them.')$(has "$out" 'next session turn')" 10
+echo "exit 2 close ${tk:-none}" > "$V/.loopd/.metrics-run/failed"; out="$(rep "$V")"
+ok "…and failed: the exit code, the next full tick" \
+  "$(has "$out" 'the run for the newest full tick failed (exit 2). It is not retried on a session turn; the next full tick computes them.')$(has "$out" 'next session turn on this bundle computes')" 10
+rm -r "$V/.loopd/.metrics-run"
+rm "$V/.loopd/SNAPSHOT.json"; out="$(rep "$V")"; rc=$?
+ok "…and with no SNAPSHOT.json: metrics off, exit 0" "$rc$(has "$out" 'Metrics are off: no .loopd/SNAPSHOT.json. They follow the board switch, "board"')" 01
 named() { # <label> <want-substring> — exit 4 with a named error
   out="$(rep "$V")"; ok "$1: exit 4" "$?" 4; ok "…named" "$(has "$out" "metrics-report: .loopd/METRICS.json $2")" 1; }
 : > "$V/.loopd/METRICS.json"; named "a zero-byte file" "is empty"

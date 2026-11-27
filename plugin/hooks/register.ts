@@ -156,7 +156,11 @@ const SNAPSHOT = '.loopd/SNAPSHOT.json'
 const COUNTS = '.loopd/counts.json'
 // AB_METRICS; schema: docs/metrics.md
 const METRICS = '.loopd/METRICS.json'
-const METRICS_VERSION = 1
+const METRICS_VERSION = 2
+// AB_METRICS_RUN: metrics.sh's run lock, taken over after LOCK_MS, and refresh-state.sh's failure marker
+const METRICS_LOCK = '.loopd/.metrics-run/lock'
+const METRICS_FAILED = '.loopd/.metrics-run/failed'
+const LOCK_MS = 600000
 const HEADLINE = [
   ['delegation_share', 'delegation', 'Delegation'],
   ['tokens_per_merged_pr', 'tokens', 'Tokens per merged PR'],
@@ -252,9 +256,10 @@ type Metrics = {
   mtimeMs: number
   detail: string
   generated_at: string
+  computing: boolean
   rows: { label: string; value: string; stale: boolean }[]
 }
-const NO_METRICS: Metrics = { state: 'unread', path: '', mtimeMs: -1, detail: '', generated_at: '', rows: [] }
+const NO_METRICS: Metrics = { state: 'unread', path: '', mtimeMs: -1, detail: '', generated_at: '', computing: false, rows: [] }
 const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, in_session: 0, in_session_agents: [], queue: '', tasks: null, status: null, written_at: '', plugin_version: '', latest_version: '' }
 const SEMVER = /^\d+\.\d+\.\d+$/
 const TASK_KEY = /^projects\/([^/]+)\/tasks\/([^/]+)\.md$/
@@ -414,7 +419,36 @@ function readMetrics(text: unknown, path: string, m: number): Metrics {
     const v = typeof head[key] === 'string' ? clean(head[key]) : ''
     return { label, value: v || '?', stale: !!f && f.stale === true }
   })
-  return { state: 'ok', path, mtimeMs: m, detail: '', generated_at: str(o.generated_at), rows }
+  return { state: 'ok', path, mtimeMs: m, detail: '', generated_at: str(o.generated_at), computing: false, rows }
+}
+const fileCache = new Map<string, { m: number; text: string }>()
+async function readMoved($: any, path: string): Promise<string> {
+  let st: any = null
+  try { st = await $.fs.stat(path) } catch { st = null }
+  if (!st || st.kind !== 'file') { fileCache.delete(path); return '' }
+  const m = typeof st.mtimeMs === 'number' ? st.mtimeMs : -2
+  const had = fileCache.get(path)
+  if (had && had.m === m) return had.text
+  let text: unknown = null
+  try { text = await $.fs.read(path) } catch { text = null }
+  if (typeof text !== 'string') { fileCache.delete(path); return '' }
+  fileCache.set(path, { m, text })
+  return text
+}
+async function metricsLocked($: any, root: string): Promise<boolean> {
+  let st: any = null
+  try { st = await $.fs.stat(root + '/' + METRICS_LOCK) } catch { st = null }
+  return !!st && typeof st.mtimeMs === 'number' && (await nowMs($)) - st.mtimeMs < LOCK_MS
+}
+async function absentMetrics($: any, root: string): Promise<string> {
+  if (!(await exists($, root + '/' + SNAPSHOT))) return 'metrics OFF — no ' + SNAPSHOT + '. The board switch turns them on: that file present and `board` not false in ' + CONFIG + '.'
+  let cfg: Record<string, unknown> | null = null
+  try { cfg = obj(JSON.parse(await readMoved($, root + '/' + CONFIG))) } catch { cfg = null }
+  if (cfg && cfg.board === false) return 'metrics OFF — `board` is false in ' + CONFIG + '. Remove the key, or set it true, to turn them on.'
+  if (await metricsLocked($, root)) return 'computing… — this view redraws when ' + METRICS + ' lands.'
+  const failed = /^exit (\d{1,3}) /.exec(await readMoved($, root + '/' + METRICS_FAILED))
+  if (failed) return 'metrics not computed — last run failed (exit ' + failed[1] + '). `metrics.sh .` in the bundle root prints why.'
+  return 'metrics not computed yet — the next session turn computes them.'
 }
 async function refreshMetrics($: any, root: string, force: boolean): Promise<void> {
   const path = root + '/' + METRICS
@@ -422,15 +456,19 @@ async function refreshMetrics($: any, root: string, force: boolean): Promise<voi
   try { st = await $.fs.stat(path) } catch { st = null }
   if (!st || st.kind !== 'file') {
     if (metrics.state !== 'absent') reads += 1
-    metrics = { ...NO_METRICS, state: 'absent', detail: 'metrics OFF — no ' + METRICS + '. The board switch turns them on: ' + SNAPSHOT + ' present and `board` not false in ' + CONFIG + '.' }
+    metrics = { ...NO_METRICS, state: 'absent', detail: await absentMetrics($, root) }
     return
   }
   const m = typeof st.mtimeMs === 'number' ? st.mtimeMs : -2
-  if (!force && (metrics.state === 'ok' || metrics.state === 'malformed') && path === metrics.path && m === metrics.mtimeMs) return
+  const computing = await metricsLocked($, root)
+  if (!force && (metrics.state === 'ok' || metrics.state === 'malformed') && path === metrics.path && m === metrics.mtimeMs) {
+    metrics = { ...metrics, computing }
+    return
+  }
   let text: unknown = null
   try { text = await $.fs.read(path) } catch { text = null }
   reads += 1
-  metrics = readMetrics(text, path, m)
+  metrics = { ...readMetrics(text, path, m), computing }
 }
 
 // org from the tracked config, the version /loopd:init stamped; either unreadable is ''.
@@ -555,7 +593,7 @@ function newer(a: string, b: string): boolean {
 }
 const updateDue = () => counts.state === 'ok' && !!counts.plugin_version && !!counts.latest_version && newer(counts.latest_version, counts.plugin_version)
 // What the poll compares: an age or a note's expiry changing redraws.
-const metricsAge = (now: number) => metrics.state === 'ok' ? age(now, metrics.generated_at) : ''
+const metricsAge = (now: number) => metrics.state !== 'ok' ? metrics.detail : metrics.computing ? 'computing…' : age(now, metrics.generated_at)
 function ageKey(now: number): string { return (view === 'metrics' ? metricsAge(now) : board ? headAge(now, board) : '') + '|' + noteLive(now) }
 
 function summary(): string {

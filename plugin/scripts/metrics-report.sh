@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # metrics-report.sh — print the /loopd:metrics report, as markdown, from .loopd/METRICS.json.
 # Run from the bundle root. Usage: metrics-report.sh [--project <slug>] [--since <YYYY-MM[-DD]>].
-# Read-only: reads METRICS.json, instance.config.json and the ledger; no gh, no git, no write,
+# Read-only: reads METRICS.json, instance.config.json, the ledger and the hook's run state; no gh, no git, no write,
 # and nothing recomputed — the figures are metrics.sh's (schema: docs/metrics.md).
-# Exit: 0 printed, or metrics off · 2 not a bundle root, no jq or config unreadable · 3 usage
+# Exit: 0 printed, metrics off or not computed yet · 2 not a bundle root, no jq or config unreadable · 3 usage
 # · 4 METRICS.json unreadable, truncated or of an unknown schema.
 # Rules, thresholds and filter semantics: docs/metrics.md → "The report".
 set -uo pipefail
@@ -37,8 +37,22 @@ if [ "$board" = true ]; then
   echo "Metrics are off: \"board\": false in instance.config.json. Remove the key (or set it true) to turn them on; the next tick that changes something writes $F."
   exit 0
 fi
+last="$(ab_last_full_tick "$AB_LEDGER")"
+tried=""; failed=""
+if [ ! -L "$AB_METRICS_RUN" ] && [ "$(cat "$AB_METRICS_RUN/attempt" 2>/dev/null)" = "${last:-none}" ]; then
+  tried=yes
+  failed="$(sed -n 's/^exit \([0-9]\{1,3\}\) close .*/\1/p' "$AB_METRICS_RUN/failed" 2>/dev/null | head -n 1)"
+fi
 if [ ! -e "$F" ]; then
-  echo "Metrics are off: no $F. They follow the board switch, \"board\" in instance.config.json (on unless false), and need $AB_SNAPSHOT; the next tick that changes something writes them."
+  if [ -f "$AB_SNAPSHOT" ] && [ -n "$failed" ]; then
+    echo "Metrics are not computed: no $F, and the run for the newest full tick failed (exit $failed). It is not retried on a session turn; the next full tick computes them."
+  elif [ -f "$AB_SNAPSHOT" ] && [ -n "$tried" ]; then
+    echo "Metrics are not computed: no $F, and the run for the newest full tick has already been made. The next full tick computes them."
+  elif [ -f "$AB_SNAPSHOT" ]; then
+    echo "Metrics are not computed yet: no $F. The next session turn on this bundle computes them, and so does the next tick that changes something."
+  else
+    echo "Metrics are off: no $AB_SNAPSHOT. They follow the board switch, \"board\" in instance.config.json (on unless false), and need that file."
+  fi
   exit 0
 fi
 [ -f "$F" ] && [ -r "$F" ] || die 4 "$F is unreadable"
@@ -56,16 +70,6 @@ check="$(jq -r '
 if [ -n "$project" ]; then
   jq -e --arg p "$project" '.projects | has($p)' "$F" >/dev/null 2>&1 \
     || die 3 "no project '$project' in $F — run without --project to list them"
-fi
-
-last=""
-if [ -r "$AB_LEDGER" ]; then
-  last="$(awk '
-    /^\* TICK / {
-      o = index($0, " open: "); c = index($0, " close: ")
-      if (c > 0 && (o == 0 || c < o)) closed[$3] = 1; else if (o > 0) opened[$3] = 1
-    }
-    END { for (t in closed) if ((t in opened) && t > best) best = t; print best }' "$AB_LEDGER")"
 fi
 
 read -r -d '' PROG <<'JQ'
@@ -115,7 +119,9 @@ def more(n; total; what): if total > n then ["", "… \(total - n) more \(what) 
 | "# loopd metrics",
   "",
   "Generated \($m.generated_at | clean) · schema \($m.schema_version) · project: \(if $project == "" then "all" else $project end) · since: \(if $since == "" then "all months" else $since end)",
-  (if $stale != "" then "", "**Stale:** these figures were generated before the last full tick (\($stale | clean)). They refresh on the next tick that changes something." else empty end),
+  (if $stale != "" then "", "**Stale:** these figures were generated before the last full tick (\($stale | clean)). \(if $failed != "" then "The recompute for that tick failed (exit \($failed | clean)) and is not retried on a session turn; they refresh on the next tick that changes something."
+       elif $tried != "" then "The recompute for that tick has already been made; they refresh on the next tick that changes something."
+       else "The next session turn on this bundle recomputes them; PR figures refresh on the next tick that changes something." end)" else empty end),
   "",
   "## Headline",
   "",
@@ -209,6 +215,6 @@ JQ
 stale=""
 gen="$(jq -r .generated_at "$F")"
 [ -n "$last" ] && [[ "$gen" < "$last" ]] && stale="$last"
-report="$(jq -r --arg project "$project" --arg since "$since" --arg stale "$stale" "$PROG" "$F" 2>/dev/null)" \
+report="$(jq -r --arg project "$project" --arg since "$since" --arg stale "$stale" --arg tried "$tried" --arg failed "$failed" "$PROG" "$F" 2>/dev/null)" \
   || die 4 "$F does not match schema 1 — a figure has an unexpected type"
 printf "%s\n" "$report"

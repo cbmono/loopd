@@ -2,10 +2,12 @@
 # metrics.sh — derive .loopd/METRICS.json from records the bundle already keeps: the tick
 # ledger, task docs, .loopd/citations/, the usage store, tick-reap.sh's AB_TICK_COST and the
 # PRs task docs name, read through gh into AB_PR_CACHE (frozen once merged or closed, at most
-# METRICS_GH_MAX_PRS reads a run, 20 when unset). Usage: metrics.sh <bundle-root>. Written only
-# where SNAPSHOT.json exists and `board` is not false; a failed gh read keeps the previous gh
-# figures, marked stale. Atomic. METRICS_NOW pins generated_at. Schema: docs/metrics.md.
-# Exit: 0 written or switched off · 2 cannot compute (jq missing, unreadable input) · 3 usage.
+# METRICS_GH_MAX_PRS reads a run, 20 when unset; 0 reads none and marks a due PR's figures
+# stale). Usage: metrics.sh <bundle-root>. Written only where SNAPSHOT.json exists and `board`
+# is not false; a failed gh read keeps the previous gh figures, marked stale. Atomic. One run a
+# root: a mkdir lock in AB_METRICS_RUN, waited on METRICS_LOCK_WAIT seconds (30 when unset),
+# taken over after 10 min. METRICS_NOW pins generated_at. Schema: docs/metrics.md.
+# Exit: 0 written or switched off · 2 cannot compute (jq missing, unreadable input, lock held) · 3 usage.
 # Reasoning: loopd-usage-metrics/task-001, task-004.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -25,6 +27,16 @@ now="${METRICS_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 out="$root/$AB_METRICS"
 work="$(mktemp -d "${TMPDIR:-/tmp}/metrics.XXXXXX")" || die 2 "mktemp failed"
 trap 'rm -rf "$work"' EXIT
+run="$root/$AB_METRICS_RUN"; lock="$run/lock"; waited=0
+[ ! -L "$run" ] && mkdir -p "$run" && { [ -e "$run/.gitignore" ] || printf '*\n' > "$run/.gitignore"; } \
+  || die 2 "cannot write $AB_METRICS_RUN (a symlink is refused) — METRICS.json not written, previous file kept"
+until mkdir "$lock" 2>/dev/null; do
+  [ -z "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || { rmdir "$lock" 2>/dev/null && continue; }
+  [ "$waited" -lt "${METRICS_LOCK_WAIT:-30}" ] \
+    || die 2 "another run holds $AB_METRICS_RUN/lock — METRICS.json not written, previous file kept"
+  sleep 1; waited=$((waited + 1))
+done
+trap 'rm -rf "$work"; rmdir "$lock" 2>/dev/null' EXIT
 rec="$work/rec.ndjson"
 shopt -s nullglob
 export LC_ALL=C
@@ -185,7 +197,9 @@ while read -r o r n; do
   f="$cache/${o}__${r}__$n.json"
   jq -e "$FROZEN" "$f" >/dev/null 2>&1 && continue
   printf '%s %s %s %s\n' "$(jq -r '.read_at // "-" | strings' "$f" 2>/dev/null || echo -)" "$o" "$r" "$n"
-done < "$work/named" | sort | head -n "${METRICS_GH_MAX_PRS:-20}" > "$work/due"
+done < "$work/named" | sort > "$work/unread"
+awk -v n="${METRICS_GH_MAX_PRS:-20}" 'NR <= n + 0' "$work/unread" > "$work/due"
+[ -s "$work/due" ] || [ ! -s "$work/unread" ] || ghfail=true
 while read -r _ o r n; do
   f="$cache/${o}__${r}__$n.json"
   put "$f" --arg t "$now" '.read_at = $t' || { ghfail=true; continue; }
@@ -411,3 +425,4 @@ if ! jq -n --slurpfile r "$rec" --slurpfile prev "$prev" --argjson ghfail "$ghfa
   rm -f "$tmp"; die 2 "could not compute ($(head -c 200 "$work/err")) — previous file kept"
 fi
 mv "$tmp" "$out" || { rm -f "$tmp"; die 2 "cannot replace $out — previous file kept"; }
+[ -L "$run" ] || rm -f "$run/failed"

@@ -2,15 +2,43 @@
 
 `plugin/scripts/metrics.sh <bundle-root>` writes `.loopd/METRICS.json`. It is the one place a
 metric is computed: the `/pane` Metrics view and `metrics-report.sh` read this file and
-compute nothing. This page is the contract they code against.
+compute nothing, and neither starts a run — tick step 8 and the session hook do (below). This
+page is the contract they code against.
 
 ## When it is written
 
 * **Switch:** the board's. Written only where `.loopd/SNAPSHOT.json` exists and `board` in the
   tracked `instance.config.json` is not `false`. There is no metrics switch of its own.
-* **Refresh:** tick step 8's render half (`plugin/tick-steps/step-8-render.md`), right after
-  `write-snapshot.sh`. An IDLE tick and `refresh-state.sh` never run it, so the figures move
-  at the next full tick.
+* **Refresh, two callers:** tick step 8's render half (`plugin/tick-steps/step-8-render.md`),
+  right after `write-snapshot.sh`; and the session hook's worker, `refresh-state.sh`, at a
+  session's Stop, SubagentStop and UserPromptSubmit. The worker starts one detached run when
+  the file is absent, or when its `generated_at` is older than the newest full tick in the
+  ledger — an `open:` and a `close:` line at one timestamp, the report's stale rule, one
+  function (`ab_last_full_tick`). So a fresh install fills within one session turn. An IDLE
+  tick never runs it.
+* **The hook's run reads no PR.** It sets `METRICS_GH_MAX_PRS=0`: every other figure is
+  recomputed, and the `gh` figures of a PR still due a read are the previous file's, marked
+  `"stale": true`, until the next full tick reads it (with no previous file, the cache's).
+* **One run at a time.** Every run holds `.loopd/.metrics-run/lock`, a directory, so the
+  hook's run and step 8's never overlap. A run that finds it held waits `METRICS_LOCK_WAIT`
+  seconds (**30** when unset; the hook's run waits 0), then exits 2 and keeps the previous
+  file. A lock older than 10 minutes is taken over. `.loopd/.metrics-run/` ignores itself
+  (a `*` `.gitignore`), and a symlink in its place is refused.
+* **Bounded.** The worker kills a run still going after `REFRESH_STATE_METRICS_MAX` seconds
+  (**600** when unset) and marks it failed.
+* **One attempt per full tick.** Before it starts a run the worker writes the tick's
+  timestamp to `.metrics-run/attempt` (`none` for a ledger with no full tick, or no ledger),
+  and it starts no second run for that value, whether the first exited 0 or not — so a run
+  that leaves the file stale, a tick stamped ahead of this machine's clock included, is not
+  restarted on every turn. A non-zero exit also writes `.metrics-run/failed`,
+  `exit <n> close <tick>`, which the next written file removes. Deleting `METRICS.json`
+  alone therefore waits for the next full tick; delete `.loopd/.metrics-run/` with it and the
+  next session turn recomputes.
+* **What a reader shows before the file exists.** The pane: `metrics OFF` only where
+  `SNAPSHOT.json` is absent or `board` is `false`; `computing…` while the lock is under 10
+  minutes old; `metrics not computed — last run failed (exit <n>)` after a failed hook run;
+  otherwise `metrics not computed yet` (`plugin/hooks/MODS.md`). The report: "The report"
+  below.
 * **Atomic:** written to a temp file under `.loopd/` and moved into place. Any failure (no
   `jq`, an unreadable task document, a config or usage store that does not parse, a failed
   `agent-usage.sh series`) prints a `metrics:` error, exits
@@ -25,7 +53,8 @@ compute nothing. This page is the contract they code against.
   A PR the host answers with a 404 is cached as `MISSING` and never retried. An entry no
   task names is deleted. At most `METRICS_GH_MAX_PRS` (**20** when unset) PRs are read per
   run, least recently read first, so a deferred PR gets the next run's turn; until read it
-  counts in `quality.prs_named`, not `prs_read`.
+  counts in `quality.prs_named`, not `prs_read`. `0` reads none, and counts as a failed read
+  (next bullet) when a PR was due.
 * **Offline:** a failed `gh` read (no `gh`, offline, rate-limited) still exits 0. The `gh`
   figures are the previous file's, each marked `"stale": true`. With no previous file they
   come from the cache, also marked stale.
@@ -158,16 +187,24 @@ stands: `?` is unknown and `—` is no source.
 ## The report
 
 `/loopd:metrics` runs `plugin/scripts/metrics-report.sh` from the bundle root and relays its
-markdown. The script reads `METRICS.json`, `instance.config.json` and the ledger. It calls no
+markdown. The script reads `METRICS.json`, `instance.config.json`, the ledger and the
+session hook's `attempt` and `failed` files under `.loopd/.metrics-run/`. It calls no
 `gh` or `git`, writes nothing and recomputes nothing. It needs `jq`, never `python3`.
 
-* **Off.** `board: false`, or no `METRICS.json`, prints that metrics are off and names the
-  `board` switch. Exit 0.
+* **Off.** `board: false` prints that metrics are off and names the `board` switch; so does
+  no `METRICS.json` with no `SNAPSHOT.json`. Exit 0. A `METRICS.json` left behind after the
+  snapshot was removed is still reported, as the pane still draws it: nothing rewrites it
+  until the snapshot is back.
+* **Not computed.** The board on and no `METRICS.json`. Before the hook has run for the
+  newest full tick: the next session turn computes them. After it has: that run was already
+  made, or failed with its exit code, and the next full tick computes them. Exit 0.
 * **Stale.** The report compares `generated_at` (UTC) with the newest full tick in the ledger:
   an `open:` and a `close:` line at one timestamp. An IDLE line and a reaped tick's close have
   no pair, so they are not a refresh. A close line pulled from another clone counts. Older ⇒
-  one line saying the figures refresh on the next tick that changes something. There is no
-  refresh verb.
+  one line saying the next session turn recomputes them and that PR figures refresh on the
+  next tick that changes something; or, once the hook has run for that tick, that the
+  recompute was already made, or failed with its exit code, and is not retried on a session
+  turn. There is no refresh verb.
 * **Named errors.** Without `jq`, or outside a bundle root: exit 2. An empty, truncated,
   non-object or wrong-`schema_version` file: exit 4.
 * **Flags.** Invalid input exits 3.
