@@ -86,4 +86,6 @@ root="$(git -C "$inst" rev-parse --show-toplevel 2>/dev/null)" || exit 0
   { echo "add-task: written, but the commit failed — commit it by hand" >&2; exit 4; }
 bash "$HERE/push-commit.sh" "$root"; rc=$?
 [ ! -f "$inst/instance.config.json" ] || ( cd "$inst" && bash "$HERE/write-snapshot.sh" --quiet >/dev/null )
+[ $rc -ne 3 ] || ! git -C "$root" remote get-url origin >/dev/null 2>&1 ||
+  { echo "add-task: committed, but this branch has no upstream on origin, so not pushed" >&2; exit 4; }
 case $rc in 0|3) exit 0 ;; *) exit 4 ;; esac

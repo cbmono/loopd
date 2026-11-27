@@ -29,7 +29,7 @@ Print the script's `added …` line, then one line per exit that is not 0:
 | Exit | Say |
 |---|---|
 | 1, 3, 5, 6, 7 | its one `add-task:` line, unchanged — nothing was written |
-| 2 | the usage line it printed |
+| 2 | the line it printed, unchanged — usage text or an `add-task:` error |
 | 4 | the task is written and kept, but not committed or not pushed — its line says which; never force |
 | 8 | the draft failed `validate-bundle.sh` and was removed — relay the line and stop |
 

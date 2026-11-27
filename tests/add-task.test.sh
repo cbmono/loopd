@@ -119,7 +119,10 @@ git -C "$D" remote add origin "$TMP/origin$N.git" && git -C "$D" push -q -u orig
 ok "with an origin: exits 0" "$(run build-p "Do it")" 0
 ok "…and origin has the commit" "$(git -C "$TMP/origin$N.git" rev-parse main)" "$(git -C "$D" rev-parse HEAD)"
 rm -rf "$TMP/origin$N.git"
-ok "an unreachable origin: exits 4, committed, not pushed" "$(run build-p "Do more")|$(git -C "$D" log -1 --format=%s)" "4|feat: add task-011 to build-p"
+git -C "$D" branch -q --unset-upstream
+ok "an origin but no upstream: exits 4, committed, not pushed" "$(run build-p "Do this")|$(git -C "$D" log -1 --format=%s)|$(grep -c 'no upstream on origin' "$TMP/err")" "4|feat: add task-011 to build-p|1"
+git -C "$D" push -q -u origin main 2>/dev/null
+ok "an unreachable origin: exits 4, committed, not pushed" "$(run build-p "Do more")|$(git -C "$D" log -1 --format=%s)" "4|feat: add task-012 to build-p"
 
 echo "== 6. validate-bundle.sh warns on a shared task number =="
 fresh
