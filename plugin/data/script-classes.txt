@@ -1,3 +1,4 @@
+add-task.sh writing writes, commits and pushes a draft task in an open project
 agent-sessions.sh writing save writes the session listing and round marks merge-hold.sh reads
 agent-usage.sh writing appends usage lines to a task doc
 answer.sh writing answers a task's question and commits through unblock.sh

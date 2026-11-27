@@ -122,6 +122,7 @@ A walkthrough of the first hour, including what to expect at each step:
 | Command | Use it to |
 |---|---|
 | `/loopd:new-project <description>` | start a project — build (code, PRs) or `kind=research` (documents, no repo) |
+| `/loopd:add-task <slug> <description>` | add a draft task to an open project instead of starting a new one |
 | `/loopd:dispatch` | run the loop every ten minutes · `once` for a single pass · `stop` to end it |
 | `/loopd:whats-up` | see what needs you, numbered |
 | `/loopd:metrics` | see how the loop is doing — tokens, time, blocks, trends · `--project <slug>` · `--since <YYYY-MM>` |

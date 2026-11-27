@@ -74,6 +74,9 @@
 # `artifacts:` WARNS rather than fails: a research task legitimately declares a
 # deliverable before it is written.
 #
+# Two task files in one project sharing a `task-NNN` number WARN: `add-task.sh` on two
+# clones at once can each take the next number, and renaming one is a human's call.
+#
 # A `Finding` over 40 lines, or without a one-line `lesson:`, WARNS for the same reason —
 # `CONVENTIONS.md` -> "Write less" sets both, and the 133 findings that predate the rule
 # average 110 lines. A warning puts them on the cataloguer's list; an error would fail
@@ -482,6 +485,14 @@ while IFS= read -r file; do
       else if (v ~ ("^" q "[^" q "]*" q "[[:space:]]*(#.*)?$")) { v = substr(v, 2); sub(q "[[:space:]]*(#.*)?$", "", v) }
       else { sub(/[[:space:]]#.*$/, "", v); sub(/[[:space:]]+$/, "", v) }
       print v }')"
+  fi
+
+  if [[ $type == Task && "$rel" =~ ^projects/[^/]+/tasks/(task-[0-9]+)[.-] ]]; then
+    tnum="${BASH_REMATCH[1]}"; twins=""
+    for t in "$(dirname "$file")/$tnum".md "$(dirname "$file")/$tnum"-*.md; do
+      if [[ -f "$t" && "$t" != "$file" ]]; then twins+=" ${t##*/}"; fi
+    done
+    [[ -z "$twins" ]] || warn "$rel" "shares $tnum with$twins — two clones added a task at once; rename one to the next free number"
   fi
 
   if [[ $type == Service ]]; then
