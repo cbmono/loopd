@@ -13,6 +13,13 @@ Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short
   store** where the repo's own package manager has one (that manager, as the
   target repo's `CLAUDE.md` states it — never assume one; e.g. a pnpm repo takes
   `--store-dir <worktree>/.pnpm-store`), and pushes early.
+  **When that `CLAUDE.md` names no package manager, take it from the committed lockfile**
+  (`pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`, `bun.lock`/`bun.lockb`); with more
+  than one lockfile, take the one CI installs the package under test with. **Run the tests
+  on the runtime version CI pins** (the setup action's version input, `.nvmrc`/`.node-version`,
+  or `engines`), not the machine default. Where CI pins only a range (`engines` `>=18`),
+  any version inside it will do, the machine default included; name the one you ran on the
+  PR's `Verified:` line.
   **THE HOOK CREATES IT — CHECK BEFORE YOU CREATE ONE.** A session started as
   `claude --worktree <task-id>` is placed by `plugin/hooks/worktree-create.sh` in
   `<worktreeRoot>/<task-id>` of your `target_repo`, on the task's `branch:`, and that is

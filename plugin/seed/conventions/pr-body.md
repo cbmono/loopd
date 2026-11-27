@@ -84,6 +84,11 @@ Detail for `../CONVENTIONS.md` — moved there verbatim, so the core stays short
      out. A line asserting "all green" with nothing to open is the same
      evidence-free claim the criteria floor already refuses one column over, and it is
      refused here for its own reason, separately from the line being absent.
+     **A PR whose base is not the default branch** (a stacked PR) usually gets no CI run
+     and no bot review, so there is no run of its own to link: cite a URL a reader can
+     open — a local run is cited only through such a link — or the parent PR's run,
+     labelled `(parent)`, and mark every CI-dependent criterion `✗` until the PR is
+     rebased onto the default branch.
   3. **The task's `acceptance_criteria` as a table** — one row per criterion, its text
      verbatim, a `✓`/`✗`, and the evidence. **Required, always** (next bullet).
      **Under a heading that carries the tally AND the reason for the `✗`s** —
