@@ -30,6 +30,10 @@
 #     of the bundle's edits (`git merge-file`, i.e. a real 3-way merge, never a copy).
 #     Clean ⇒ portable, and the hand edits survive by construction. Conflicting ⇒ reported
 #     with the diff and NOT touched, unless it is one of the DECIDABLE classes below.
+#   · A conflicting merge whose seed change the bundle ALREADY CARRIES — ported by hand,
+#     with a line of the bundle's own beside it — is in sync: every line of the seed is in
+#     the bundle's copy (a `.json` line compared without its trailing comma) and no line
+#     the seed dropped since the base is left. A partial port is still a CONFLICT.
 #   · A DECIDABLE conflict — one that recurs on every bundle with the same answer — is a
 #     rule, not a question. The `DECIDABLE` table below is one row per class and the rule
 #     that resolves it; `--apply` applies it and reports RESOLVED, naming the rule. A class
@@ -500,6 +504,22 @@ resolve_gitignore() { # <merged-with-markers> <out>
   ' "$1" > "$2"
 }
 
+# ------------------------------------------------------ a seed change ported by hand
+seed_ported() { # <base> <seed> <bundle copy> <seed-relative path>
+  local json=0
+  case "$4" in *.json) json=1 ;; esac
+  awk -v json="$json" '
+    { l = $0; if (json) { sub(/[[:space:]]+$/, "", l); sub(/,$/, "", l) } }
+    l ~ /^[[:space:]]*$/ { next }
+    FILENAME == ARGV[1] { b[l]++; next }
+    FILENAME == ARGV[2] { s[l]++; next }
+    { i[l]++ }
+    END {
+      for (l in s) if (i[l] + 0 < s[l]) exit 1
+      for (l in b) if (b[l] > s[l] + 0 && i[l] + 0 > s[l] + 0) exit 1
+    }' "$1" "$2" "$3"
+}
+
 report() { printf '  %-9s %s\n' "$1" "$2"; }
 detail() { printf '            %s\n' "$1"; }
 
@@ -739,6 +759,10 @@ EOF
     if [ "$APPLY" -eq 1 ]; then report "RESOLVED" "$rel"; else report "DECIDABLE" "$rel"; fi
     detail "rule: $(rule_for "$rel")"
     continue
+  fi
+
+  if [ "$merge_rc" -gt 0 ] && seed_ported "$TMPD/base" "$seed_side" "$cmp_inst" "$rel"; then
+    insync=$((insync+1)); continue
   fi
 
   if [ "$merge_rc" -gt 0 ]; then

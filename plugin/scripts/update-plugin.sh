@@ -2,12 +2,13 @@
 #
 # update-plugin.sh — behind /<plugin>:update: refresh the marketplace, update every plugin of
 # it installed at user scope, stamp the bundle in the cwd with the NEW version's init-bundle.sh
-# (read from the registry's user entry), then say to reload. --verbose lists every install
-# at another scope; by default they are one summary line, bar the cwd bundle's own.
+# (read from the registry's user entry), then say to reload. By default it prints the version
+# lines, init's summary, warnings and the reload step; --verbose prints every step and every
+# install at another scope, and passes --verbose to init.
 # Exit: 0 done · 1 a plugin update failed (the rest, and init, still ran) · 2 the marketplace
 # update failed, no usable registry entry, or an unknown argument (no init ran) · else
 # init-bundle.sh's own exit.
-# Never installs, never touches a project/local/managed install, never passes init a flag.
+# Never installs, never touches a project/local/managed install, passes init only --verbose.
 # Reasoning: loopd-update-command/task-001, decisions D1-D5.
 set -uo pipefail
 verbose=0
@@ -24,6 +25,7 @@ REGISTRY="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/plugins/installed_plugins.json
 TAB="$(printf '\t')"
 
 finish() { echo "Now run /reload-plugins"; exit "$1"; }
+say() { [ "$verbose" = 0 ] || echo "$@"; }
 
 # One line per registry entry: key TAB scope TAB version TAB installPath TAB projectPath.
 # The registry is pretty-printed one key per line, the same assumption resolve-autonomy.sh makes.
@@ -49,7 +51,7 @@ ver_lt() { # <a> <b> — true when a is an older dotted version than b
     for (i = 1; i <= n; i++) { if (x[i] + 0 < y[i] + 0) exit 0; if (x[i] + 0 > y[i] + 0) exit 1 }; exit 1 }'
 }
 
-echo "marketplace: claude plugin marketplace update $MKT"
+say "marketplace: claude plugin marketplace update $MKT"
 if ! command -v claude >/dev/null 2>&1; then
   echo "update: no claude CLI on PATH — nothing was updated" >&2; exit 2
 fi
@@ -80,23 +82,16 @@ for key in $users; do
 done
 
 here="$(pwd -P)" here_l="$(pwd)"
-elsewhere=0 scopes=""
 while IFS="$TAB" read -r key sc ve ip pp; do
   [ -n "$key" ] && [ "$sc" != user ] || continue
   if [ -n "$pp" ] && { [ "$pp" = "$here" ] || [ "$pp" = "$here_l" ]; }; then this=1; else this=0; fi
-  if [ "$this" = 1 ] || [ "$verbose" = 1 ]; then
-    echo "${key%@*} $ve ($sc scope${pp:+, $pp}) — listed, not updated"
-  else
-    elsewhere=$((elsewhere + 1))
-    case "/$scopes/" in *"/$sc/"*) ;; *) scopes="${scopes:+$scopes/}$sc" ;; esac
-  fi
+  say "${key%@*} $ve ($sc scope${pp:+, $pp}) — listed, not updated"
   [ "$this" = 1 ] || continue
   uv="$(printf '%s\n' "$after" | awk -F "$TAB" -v k="$key" '$1 == k && $2 == "user" { print $3; exit }')"
   if [ -n "$uv" ] && ver_lt "$ve" "$uv"; then
     echo "  warn  this bundle's $sc-scope ${key%@*} is $ve, older than the user-scope $uv it is stamped from" >&2
   fi
 done <<<"$after"
-[ "$elsewhere" -eq 0 ] || echo "$elsewhere $scopes-scope install$([ "$elsewhere" -eq 1 ] || echo s) elsewhere — not touched (--verbose lists them)"
 
 if ! ab_is_bundle "$here"; then
   echo "init: skipped — $here is not a bundle root"
@@ -107,9 +102,10 @@ if [ -z "$ip" ] || [ ! -f "$ip/scripts/init-bundle.sh" ]; then
   echo "update: no init-bundle.sh under the user-scope $CORE@$MKT install (${ip:-none recorded}) — no init ran" >&2
   finish 2
 fi
-echo "init: $ip/scripts/init-bundle.sh $here"
+say "init: $ip/scripts/init-bundle.sh $here"
 # init's check-and-fix pass reads CLAUDE_PLUGIN_ROOT (welcome.sh), still the old version here.
-CLAUDE_PLUGIN_ROOT="$ip" bash "$ip/scripts/init-bundle.sh" "$here"
+if [ "$verbose" = 1 ]; then CLAUDE_PLUGIN_ROOT="$ip" bash "$ip/scripts/init-bundle.sh" --verbose "$here"
+else CLAUDE_PLUGIN_ROOT="$ip" bash "$ip/scripts/init-bundle.sh" "$here"; fi
 irc=$?
 [ "$irc" -eq 0 ] || rc="$irc"
 finish "$rc"

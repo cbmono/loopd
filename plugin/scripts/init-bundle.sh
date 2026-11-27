@@ -16,6 +16,7 @@
 #                                       # the ORG'S bundle: clone <ORG>/<REPO> when it is
 #                                       # there, else create it private and push (step 0).
 #                                       # REPO defaults to <ORG>-okf
+#     init-bundle.sh --verbose [TARGET]  # the full report; a re-stamp prints a summary without it
 #     init-bundle.sh --uninstall [TARGET]  # remove the repos/ view and any legacy machinery links
 #     init-bundle.sh --help
 #     (`--config` is RETIRED, 2026-10-28: the three agents it linked ship in the plugin.)
@@ -148,6 +149,7 @@ ID_REPOS_FLAG=""
 # The human's "yes" to step 1f's question, given from a session that has no terminal to
 # ask it in. 0 means ask at a terminal, and write nothing anywhere else.
 SPAWN_GRANT_FLAG=0
+VERBOSE=0
 # The ORGANISATION whose bundle this is, and the repo name under it. Empty means the old
 # behaviour exactly: a local folder, no host call, no remote.
 ORG_FLAG=""
@@ -169,6 +171,7 @@ while [ "$#" -gt 0 ]; do
     # default because it rewrites a TRACKED file.
     --normalise-config) NORMALISE_CONFIG=1 ;;
     --spawn-grant) SPAWN_GRANT_FLAG=1 ;;
+    --verbose) VERBOSE=1 ;;
     # A BARE directory argument has always meant "stamp a bundle here" — three live
     # instances and the welcome skill call it that way — so `--instance` is only the
     # explicit spelling of the one behaviour this script has, never a new requirement.
@@ -186,7 +189,7 @@ while [ "$#" -gt 0 ]; do
       # line) — extend it when you add lines there, or --help truncates silently.
       # tests/team-setup.test.sh and tests/no-bg-grant.test.sh assert the last header
       # line is in the output, which is what notices a stale range.
-      sed -n '3,82p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '3,83p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     --owner|--email|--repos-root|--org|--name)
       [ "$#" -ge 2 ] || { echo "error: $arg needs a value" >&2; exit 2; }
@@ -257,6 +260,66 @@ if [ "$MODE" = install ] && ab_is_bundle "$TARGET" && [ -d "$TARGET/$AB_DIR_BEFO
   ab_say_run "        " migrate-bundle.sh --layout-only --apply >&2
   [ ! -e "$TARGET/$AB_DIR" ] || echo "       $AB_DIR/ exists too (an earlier stamp made it): move it aside first, or the migration stops." >&2
   exit 2
+fi
+
+# =========================================================================================
+# QUIET RE-STAMP — stdout is captured and summarised at exit; --verbose skips this.
+# =========================================================================================
+quiet_report() {
+  local rc=$?
+  exec 1>&3 3>&-
+  if [ "$rc" -ne 0 ]; then cat "$QUIET_LOG"; rm -f "$QUIET_LOG"; exit "$rc"; fi
+  awk -v pn="$PLUGIN_NAME" '
+    function fate_of(tag) {
+      if (tag ~ /^(seed|wrote|link|create|set|tidy|renamed|pushed|PORTED|RESOLVED)$/) { written++; return "drop" }
+      if (tag ~ /^(removed|rmdir|drop|retire)$/) { removed++; return "drop" }
+      if (tag ~ /^(keep|skip|absent|CONFIG)$/) return "drop"
+      if (tag ~ /^(CONFLICT|UNKNOWN)$/) return "seed"
+      return "keep"
+    }
+    function close_seed() { if (pending != "") { out[++n] = pending; pending = "" } }
+    function classify(l,   tag) {
+      if (l ~ /^      /) {
+        if (fate == "seed" && pending != "" && match(l, /diff (-u )?\047/)) {
+          sub(/diff (-u )?\047/, "diff -u \047", l); sub(/^ +/, "", l)
+          out[++n] = pending " — " l; pending = ""
+        } else if (fate == "keep") out[++n] = l
+        return
+      }
+      close_seed()
+      if (l ~ /^  [A-Za-z]+ /) {
+        tag = l; sub(/^  /, "", tag); sub(/ .*/, "", tag)
+        fate = fate_of(tag)
+        if (fate == "seed") { sub(/ +$/, "", l); pending = l }
+        else if (fate == "keep") out[++n] = l
+        return
+      }
+      fate = infix ? "drop" : "keep"
+      if (!infix) out[++n] = l
+    }
+    index($0, pn " fix — acting ONLY") == 1 { close_seed(); infix = 1; inblock = 0; next }
+    infix && /^── / { close_seed(); inblock = 1; warned = 0; nb = 0; seedrow = ($2 == "seed-drift"); fate = "drop"; next }
+    infix && !inblock { next }
+    infix && /^$/ { close_seed(); inblock = 0; next }
+    infix && /^⚠ / { warned = 1; if (!seedrow) out[++n] = $0; next }
+    infix && /^    ↳ / { if (warned && !seedrow) out[++n] = $0; next }
+    infix && /^    NOT / { if ($0 !~ /^    NOT ACTED ON/) out[++n] = $0; next }
+    infix { if (sub(/^      /, "")) classify($0); next }
+    /^$/ || /^Initialising the / || /^Done\. / || /^link-repos: / { close_seed(); fate = "drop"; next }
+    /^Next: / { close_seed(); fate = "drop"; next }
+    { classify($0) }
+    END {
+      close_seed()
+      printf "init: %d written, %d removed (--verbose prints the full report)\n", written, removed
+      for (i = 1; i <= n; i++) print out[i]
+    }' "$QUIET_LOG"
+  rm -f "$QUIET_LOG"
+  exit "$rc"
+}
+if [ "$VERBOSE" = 0 ] && [ "$MODE" = install ] && [ -z "$ORG_FLAG" ] && [ -e "$TARGET/instance.config.json" ]; then
+  QUIET_LOG="$(mktemp "${TMPDIR:-/tmp}/loopd-init.XXXXXX")"
+  exec 3>&1 >"$QUIET_LOG"
+  trap quiet_report EXIT
 fi
 
 # =========================================================================================
