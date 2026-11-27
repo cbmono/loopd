@@ -269,7 +269,9 @@ quiet_report() {
   local rc=$?
   exec 1>&3 3>&-
   if [ "$rc" -ne 0 ]; then cat "$QUIET_LOG"; rm -f "$QUIET_LOG"; exit "$rc"; fi
-  awk -v pn="$PLUGIN_NAME" '
+  local tty=0
+  [ ! -t 1 ] || tty=1
+  awk -v pn="$PLUGIN_NAME" -v tty="$tty" '
     function fate_of(tag) {
       if (tag ~ /^(seed|wrote|link|create|set|tidy|renamed|pushed|PORTED|RESOLVED)$/) { written++; return "drop" }
       if (tag ~ /^(removed|rmdir|drop|retire)$/) { removed++; return "drop" }
@@ -301,12 +303,16 @@ quiet_report() {
     infix && /^── / { close_seed(); inblock = 1; warned = 0; nb = 0; seedrow = ($2 == "seed-drift"); fate = "drop"; next }
     infix && !inblock { next }
     infix && /^$/ { close_seed(); inblock = 0; next }
-    infix && /^⚠ / { warned = 1; if (!seedrow) out[++n] = $0; next }
+    infix && /^⚠ / { warned = 1; if (tty) gsub(/\*\*/, ""); if (!seedrow) out[++n] = $0; next }
     infix && /^    ↳ / { if (warned && !seedrow) out[++n] = $0; next }
     infix && /^    NOT / { if ($0 !~ /^    NOT ACTED ON/) out[++n] = $0; next }
     infix { if (sub(/^      /, "")) classify($0); next }
     /^$/ || /^Initialising the / || /^Done\. / || /^link-repos: / { close_seed(); fate = "drop"; next }
     /^Next: / { close_seed(); fate = "drop"; next }
+    /^Config findings \(/ { close_seed(); cfg = 1; next }
+    cfg && /^  [0-9]+ finding\(s\)\. / { cfg = 0; fate = "keep"; out[++n] = $0; next }
+    cfg && /^ / { next }
+    cfg { cfg = 0 }
     { classify($0) }
     END {
       close_seed()

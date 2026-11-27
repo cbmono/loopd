@@ -183,7 +183,7 @@ mkdir -p "$INST/$AB_DIR"; printf 'held by a tick\n' > "$INST/$AB_LOCK"
 ( cd "$INST" && git add -A && gc "before the pass" )
 printf '{\n  "org": "decided-minutes-ago"\n}\n' > "$INST/instance.config.json"
 cp "$INST/instance.config.json" "$TMP/config.pristine"
-STAMP="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" 2>&1)"
+STAMP="$(bash "$TPL/plugin/scripts/init-bundle.sh" --verbose "$INST" 2>&1)"
 assert "the stamp prints the check headings"   "$(has '── seed-drift .idempotent.' "$STAMP")"
 assert "…for the config row too"               "$(has '── config-uncommitted .ambiguous.' "$STAMP")"
 assert "…and says it acts on the idempotent tier ONLY" \
@@ -195,6 +195,25 @@ assert "…and instance.config.json was never written"   "$(yes_if cmp -s "$TMP/
 assert "…and the seed drift was actually resolved" \
   "$(yes_if sh -c "grep -qx '/$AB_STATE_DIR' \"\$1\" && grep -qx 'MY-OWN-IGNORE' \"\$1\"" _ "$INST/.gitignore")"
 assert "…without re-entering the stamp"        "$(hasnt 'NOT re-stamped' "$STAMP")"
+
+echo "== a re-stamp is quiet by default: one line per conflict, no hunks =="
+sed 's/^tail line$/tail line — TEMPLATE V4/' "$TPL/plugin/seed/CLAUDE.md" > "$TMP/c" && mv "$TMP/c" "$TPL/plugin/seed/CLAUDE.md"
+( cd "$TPL" && git add -A && gc "template, seed v4" )
+sed 's/^tail line$/tail line — HOUSE EDIT/' "$INST/CLAUDE.md" > "$TMP/c" && mv "$TMP/c" "$INST/CLAUDE.md"
+QUIET="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" 2>&1)"
+FULL="$(bash "$TPL/plugin/scripts/init-bundle.sh" --verbose "$INST" 2>&1)"
+assert "one CONFLICT line carrying its diff -u command" \
+  "$([ "$(grep -c "^  CONFLICT  CLAUDE.md — diff -u '.*/CLAUDE.md' '.*/seed/CLAUDE.md'\$" <<<"$QUIET")" = 1 ] && echo 0 || echo 1)"
+assert "…and no diff hunk"                     "$(hasnt '^ *[-+@]' "$QUIET")"
+assert "…no check heading, no keep line"       "$(hasnt '^── \|^  keep ' "$QUIET")"
+assert "…one count line"                       "$([ "$(grep -c '^init: [0-9]* written, [0-9]* removed' <<<"$QUIET")" = 1 ] && echo 0 || echo 1)"
+assert "…the uncommitted config is still warned about" "$(has '^⚠ .*instance.config.json' "$QUIET")"
+assert "…the config findings are one line"     "$([ "$(grep -c 'MISSING\|finding(s)' <<<"$QUIET")" = 1 ] && echo 0 || echo 1)"
+assert "--verbose still prints the hunks"      "$(has '^ *+tail line — TEMPLATE V4' "$FULL")"
+assert "…and the check headings"               "$(has '── seed-drift .idempotent.' "$FULL")"
+assert "every other quiet line is a line of the --verbose run" \
+  "$(awk 'NR == FNR { full[$0] = 1; next } /^init: / || / — diff -u / { next } !($0 in full) { n++ } END { print n + 0 }' \
+       <(printf '%s\n' "$FULL") <(printf '%s\n' "$QUIET"))"
 
 echo "== welcome fix outside init is a usage error =="
 FIX_RC=0
@@ -281,6 +300,48 @@ LOG_AGAIN="$(bash "$TPL3/plugin/scripts/refresh-seeds.sh" "$INST3" 2>&1)"
 assert "a second run is silent about the written log" "$(hasnt 'papercuts.md' "$LOG_AGAIN")"
 assert "…and about the one it just ported"       "$(hasnt 'knowledge/log.md' "$LOG_AGAIN")"
 assert "…and the log is still untouched"          "$(yes_if cmp -s "$TMP/papercuts.pristine" "$INST3/knowledge/papercuts.md")"
+
+# D6: ported means every seed line is in the bundle copy and none the seed dropped is left.
+echo "== a seed change ported by hand is in sync, with a local line beside it =="
+TPL4="$TMP/tpl4"; cp -R "$TPL" "$TPL4"
+printf '{\n  "permissions": {\n    "allow": [\n      "Bash(one)",\n      "Bash(two)"\n    ]\n  }\n}\n' \
+  > "$TPL4/plugin/seed/.claude/settings.json"
+( cd "$TPL4" && git add -A && gc "template, controlled settings" )
+INST4="$TMP/group4/_ai-bridge-ported"; mkdir -p "$INST4"
+bash "$TPL4/plugin/scripts/init-bundle.sh" "$INST4" > "$TMP/stamp4.out" 2>&1
+printf '{\n  "permissions": {\n    "allow": [\n      "Bash(one)",\n      "Bash(two)",\n      "Bash(seed-a)",\n      "Bash(seed-b)"\n    ]\n  }\n}\n' \
+  > "$TPL4/plugin/seed/.claude/settings.json"
+printf 'seed rule A\nseed rule B\n' >> "$TPL4/plugin/seed/CLAUDE.md"
+( cd "$TPL4" && git add -A && gc "template, two seed lines added" )
+hand() { # <CLAUDE.md lines after the stamped copy> <settings rules after "Bash(two)">
+  { cat "$TMP/claude4.stamped"; printf '%b' "$1"; } > "$INST4/CLAUDE.md"
+  { printf '{\n  "statusLine": { "type": "command", "command": "mine" },\n  "permissions": {\n    "allow": [\n      "Bash(one)",\n      "Bash(two)"'
+    printf '%b' "$2"; printf '\n    ]\n  }\n}\n'; } > "$INST4/.claude/settings.json"
+}
+cp "$INST4/CLAUDE.md" "$TMP/claude4.stamped"
+R4="$TPL4/plugin/scripts/refresh-seeds.sh"
+hand 'LOCAL HOUSE RULE\n' ',\n      "Bash(local)"'
+NEVER="$(bash "$R4" "$INST4" 2>&1)"
+assert "never ported: CLAUDE.md is a CONFLICT"      "$(has 'CONFLICT  CLAUDE.md$' "$NEVER")"
+assert "…and so is settings.json"                   "$(has 'CONFLICT  .claude/settings.json$' "$NEVER")"
+hand 'seed rule A\nLOCAL HOUSE RULE\n' ',\n      "Bash(seed-a)",\n      "Bash(local)"'
+PARTLY="$(bash "$R4" "$INST4" 2>&1)"
+assert "partly ported: CLAUDE.md is a CONFLICT"     "$(has 'CONFLICT  CLAUDE.md$' "$PARTLY")"
+assert "…and so is settings.json"                   "$(has 'CONFLICT  .claude/settings.json$' "$PARTLY")"
+hand 'seed rule A\nseed rule B\nLOCAL HOUSE RULE\n' ',\n      "Bash(seed-a)",\n      "Bash(seed-b)",\n      "Bash(local)"'
+cp "$INST4/CLAUDE.md" "$TMP/claude4.ported"; cp "$INST4/.claude/settings.json" "$TMP/settings4.ported"
+PORTED_RC=0
+PORTED="$(bash "$R4" "$INST4" --apply 2>&1)" || PORTED_RC=$?
+assert "ported by hand: --apply exits 0"            "$([ "$PORTED_RC" -eq 0 ] && echo 0 || echo 1)"
+assert "…CLAUDE.md is not named"                    "$(hasnt '  CLAUDE.md$' "$PORTED")"
+assert "…nor settings.json"                         "$(hasnt 'settings.json$' "$PORTED")"
+assert "…0 conflicting"                             "$(has ' 0 conflicting' "$PORTED")"
+assert "…CLAUDE.md is byte-identical"               "$(yes_if cmp -s "$TMP/claude4.ported" "$INST4/CLAUDE.md")"
+assert "…and settings.json"                         "$(yes_if cmp -s "$TMP/settings4.ported" "$INST4/.claude/settings.json")"
+sed '/^seed rule B$/d' "$TPL4/plugin/seed/CLAUDE.md" > "$TMP/x" && mv "$TMP/x" "$TPL4/plugin/seed/CLAUDE.md"
+( cd "$TPL4" && git add -A && gc "template, a seed line dropped" )
+DROPPED="$(bash "$R4" "$INST4" 2>&1)"
+assert "a line the seed dropped, still in the bundle: CONFLICT" "$(has 'CONFLICT  CLAUDE.md$' "$DROPPED")"
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
