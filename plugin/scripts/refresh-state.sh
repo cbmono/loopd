@@ -35,17 +35,18 @@ metrics_refresh() {
     rmdir "$run/lock" 2>/dev/null || return 0
   fi
   last="$(ab_last_full_tick "$AB_LEDGER")"
+  case "$last" in *[!0-9TZ:.+-]*) return 0 ;; esac
   if [ -f "$AB_METRICS" ]; then
     gen="$(jq -r '.generated_at // empty | strings' "$AB_METRICS" 2>/dev/null)"
     [ -n "$last" ] && [[ "$gen" < "$last" ]] || return 0
   fi
   last="${last:-none}"
   [ "$(cat "$run/attempt" 2>/dev/null)" != "$last" ] || return 0
-  mkdir -p "$run" 2>/dev/null && { [ -e "$run/.gitignore" ] || printf '*\n' > "$run/.gitignore"; } || return 0
+  mkdir -p "$run" 2>/dev/null && [ ! -L "$run" ] && { [ -e "$run/.gitignore" ] || printf '*\n' > "$run/.gitignore"; } || return 0
   printf '%s\n' "$last" > "$run/attempt" 2>/dev/null || return 0
   ( trap '' HUP
     METRICS_GH_MAX_PRS=0 METRICS_LOCK_WAIT=0 bash "$here/metrics.sh" "$root"; rc=$?
-    [ "$rc" -eq 0 ] || printf 'exit %s close %s\n' "$rc" "$last" > "$run/failed"
+    [ "$rc" -eq 0 ] || [ -L "$run" ] || printf 'exit %s close %s\n' "$rc" "$last" > "$run/failed"
   ) </dev/null >/dev/null 2>&1 &
 }
 

@@ -425,4 +425,4 @@ if ! jq -n --slurpfile r "$rec" --slurpfile prev "$prev" --argjson ghfail "$ghfa
   rm -f "$tmp"; die 2 "could not compute ($(head -c 200 "$work/err")) — previous file kept"
 fi
 mv "$tmp" "$out" || { rm -f "$tmp"; die 2 "cannot replace $out — previous file kept"; }
-rm -f "$run/failed"
+[ -L "$run" ] || rm -f "$run/failed"

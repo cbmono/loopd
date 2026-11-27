@@ -240,6 +240,11 @@ ok "…and writes no run directory" "$([ -e "$BO/$AB_METRICS_RUN" ] && echo writ
 LK="$TMP/linked"; mk "$LK"; mkdir -p "$TMP/outside/lock"; touch -t 202001010000 "$TMP/outside/lock"
 ln -s "$TMP/outside" "$LK/$AB_METRICS_RUN"; fire "$LK"
 ok "a symlinked run directory starts none and touches nothing behind it" "$(starts):$(ls -A "$TMP/outside" | tr '\n' ' ')" "1:lock "
+SW="$TMP/swapped"; mk "$SW"; mkdir -p "$TMP/outside2"
+STUB_SLEEP=1 STUB_RC=2 fire "$SW"; sleep 0.4; mv "$SW/$AB_METRICS_RUN" "$TMP/run-moved"; ln -s "$TMP/outside2" "$SW/$AB_METRICS_RUN"
+ok "a run directory swapped for a link mid-run: one start, no marker behind the link" "$(starts 1.5):$(ls -A "$TMP/outside2" | tr '\n' ' ')" "2:"
+OD="$TMP/oddstamp"; mk "$OD"; full "$OD" '2026-10-01T01:00:00Z/../x'; fire "$OD"
+ok "a full-tick stamp that is not a timestamp starts none and is never written" "$(starts):$([ -e "$OD/$AB_METRICS_RUN" ] && echo written || echo none)" "2:none"
 
 echo "== METRICS.json: the real run"
 RB="$TMP/realmetrics"; mk "$RB"; full "$RB" 2026-10-01T01:00:00Z
