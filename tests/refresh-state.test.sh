@@ -14,6 +14,9 @@
 #   * A LINKED WORKTREE'S SESSION refreshes its bundle only when that bundle links the repo
 #     back; a marker naming any other folder, or a board that is off, starts no worker.
 #   * THE STATUS LINE starts it for a stale snapshot only (a hand edit with no turn).
+#   * METRICS.json: ONE detached metrics.sh run, reading no PR, when the file is absent or
+#     older than the newest full tick; one attempt per tick, one run at a time, a non-zero
+#     exit marked and not retried; nothing with the board off.
 #   * OFFLINE: `gh` and `curl` are PATH stubs that leave a sentinel.
 # Fixtures live under mktemp; no real bundle is touched.
 # Exit: 0 all assertions pass, 1 one failed, 2 the fixture could not be built.
@@ -168,6 +171,81 @@ tick; touch "$B/projects/proj-a/tasks/task-001.md"
 bash "$SL" --instance "$B" --color never </dev/null >/dev/null 2>&1
 ok "stale snapshot: the status line has it rewritten" "$(moved "$B/$AB_SNAPSHOT" "$s4")" yes
 settle "$B"
+
+echo "== METRICS.json: one run when absent or older than the newest full tick"
+S="$TMP/metricsplug"; mkdir -p "$S"; cp -R "$PLUG/scripts" "$S/scripts"
+STARTS="$TMP/metrics-starts"; : > "$STARTS"
+cat > "$S/scripts/metrics.sh" <<STUB
+#!/usr/bin/env bash
+printf 'prs=%s wait=%s\\n' "\${METRICS_GH_MAX_PRS:-unset}" "\${METRICS_LOCK_WAIT:-unset}" >> "$STARTS"
+mkdir -p "\$1/$AB_METRICS_RUN/lock"; sleep "\${STUB_SLEEP:-0}"; rmdir "\$1/$AB_METRICS_RUN/lock"
+exit "\${STUB_RC:-0}"
+STUB
+starts() { sleep "${1:-0.6}"; grep -c . "$STARTS" | tr -d ' '; }
+fire() { bash "$S/scripts/refresh-state.sh" "$1"; }
+full() { printf '* TICK %s by example-user-007 open: tick-x · full walk\n* TICK %s by example-user-007 close: walked\n' "$2" "$2" >> "$1/$AB_LEDGER"; }
+gen() { printf '{"schema_version":2,"generated_at":"%s"}\n' "$2" > "$1/$AB_METRICS"; }
+MB="$TMP/mbundle"; mk "$MB"; RUN="$MB/$AB_METRICS_RUN"
+full "$MB" 2026-10-01T01:00:00Z
+fire "$MB"
+ok "absent starts one" "$(starts)" 1
+ok "…reading no PR, waiting on no lock" "$(cat "$STARTS")" "prs=0 wait=0"
+ok "…its attempt recorded for that tick" "$(cat "$RUN/attempt")" 2026-10-01T01:00:00Z
+fire "$MB"
+ok "absent again, same tick: none (one attempt per tick)" "$(starts)" 1
+gen "$MB" 2026-10-01T02:00:00Z; rm -f "$RUN/attempt"; fire "$MB"
+ok "fresh starts none" "$(starts)" 1
+printf '* TICK 2026-10-05T01:00:00Z by example-user-007 close: reaped\n* TICK 2026-10-06T01:00:00Z by example-user-007 idle — fingerprint unchanged\n' >> "$MB/$AB_LEDGER"
+fire "$MB"
+ok "an unpaired close and an idle line are not a full tick: none" "$(starts)" 1
+full "$MB" 2026-10-02T01:00:00Z; fire "$MB"
+ok "stale starts one" "$(starts)" 2
+fire "$MB"
+ok "a run that exits 0 and leaves the file stale is not restarted" "$(starts)" 2
+full "$MB" 2026-10-03T01:00:00Z; fire "$MB"
+ok "…until a newer full tick" "$(starts)" 3
+ok "no failure marker after exit 0" "$([ -e "$RUN/failed" ] && echo marked || echo none)" none
+
+echo "== METRICS.json: one run at a time"
+full "$MB" 2026-10-04T01:00:00Z
+STUB_SLEEP=2 fire "$MB"; sleep 0.5; full "$MB" 2026-10-07T01:00:00Z; fire "$MB"
+ok "a second fire inside one run starts none" "$(starts)" 4
+sleep 2; fire "$MB"
+ok "…and one once the lock is released" "$(starts)" 5
+mkdir -p "$RUN/lock"; full "$MB" 2026-10-08T01:00:00Z; fire "$MB"
+ok "a held lock starts none" "$(starts)" 5
+touch -t 202001010000 "$RUN/lock"; fire "$MB"
+ok "a lock older than 10 minutes is reclaimed" "$(starts)" 6
+
+echo "== METRICS.json: a failed run is marked and not retried"
+full "$MB" 2026-10-09T01:00:00Z
+STUB_RC=2 fire "$MB"
+ok "a non-zero exit starts one" "$(starts)" 7
+ok "…and names the exit code and the tick" "$(cat "$RUN/failed")" "exit 2 close 2026-10-09T01:00:00Z"
+fire "$MB"
+ok "…no new run for that tick" "$(starts)" 7
+full "$MB" 2026-10-10T01:00:00Z; fire "$MB"
+ok "…one for the next" "$(starts)" 8
+
+echo "== METRICS.json: no full tick, no ledger, board off"
+NL="$TMP/noledger"; mk "$NL"; : > "$STARTS"
+fire "$NL"; fire "$NL"
+ok "no log.md, absent: two fires start one" "$(starts)" 1
+ok "…recorded as no tick" "$(cat "$NL/$AB_METRICS_RUN/attempt")" none
+printf '* TICK 2026-10-01T01:00:00Z by example-user-007 close: reaped\n' > "$NL/$AB_LEDGER"; fire "$NL"
+ok "an unpaired close alone starts none" "$(starts)" 1
+BO="$TMP/metricsoff"; mk "$BO"; printf '{ "org": "acme", "board": false }\n' > "$BO/instance.config.json"; fire "$BO"
+ok "board off starts none" "$(starts)" 1
+ok "…and writes no run directory" "$([ -e "$BO/$AB_METRICS_RUN" ] && echo written || echo none)" none
+
+echo "== METRICS.json: the real run"
+RB="$TMP/realmetrics"; mk "$RB"; full "$RB" 2026-10-01T01:00:00Z
+git -C "$RB" init -q 2>/dev/null
+bash "$WORKER" "$RB"
+i=0; while [ ! -f "$RB/$AB_METRICS" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i+1)); done; sleep 0.3
+ok "the hook's run writes METRICS.json" "$(jq -r .schema_version "$RB/$AB_METRICS" 2>/dev/null)" 2
+ok "…releases the lock and leaves no failure marker" "$(ls "$RB/$AB_METRICS_RUN" | tr '\n' ' ')" "attempt "
+ok "…and git sees nothing under the run directory" "$(git -C "$RB" status --porcelain --untracked-files=all --ignored=no | grep -c 'metrics-run')" 0
 
 ok "offline: no gh or curl was run" "$([ -e "$SENTINEL" ] && echo touched || echo clean)" clean
 

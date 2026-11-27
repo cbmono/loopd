@@ -203,6 +203,7 @@ ghpr 8 CLOSED 2026-10-04T00:00:00Z null 2026-10-04T01:00:00Z 2026-10-04T01:00:00
 bash "$M" "$B"; ok "back online: stale cleared" "$(q .self_merge.stale)" false
 calls; bash "$M" "$B"
 ok "every named PR merged or closed: 0 gh calls" "$(ncalls)" 0
+METRICS_GH_MAX_PRS=0 bash "$M" "$B"; ok "a cap of 0 with no PR due is not stale" "$(q .quality.stale)" false
 mkdir "$TMP/nogh"; ln -s "$(command -v jq)" "$TMP/nogh/jq"
 ok "…not even with gh missing" "$(PATH="$TMP/nogh:/usr/bin:/bin" "$BASH" "$M" "$B"; echo "$?:$(q .quality.stale)")" "0:false"
 ok "a PR no task names leaves the cache" "$(printf '{}' > "$B/.loopd/.pr-cache/o__r__1.json"; bash "$M" "$B"; [ -e "$B/.loopd/.pr-cache/o__r__1.json" ] && echo kept || echo pruned)" pruned
@@ -212,6 +213,9 @@ N="$TMP/fair"; mkdir -p "$N/.loopd" "$N/projects/p/tasks"; echo '{}' > "$N/insta
 printf '* TICK 2026-10-01T01:00:00Z by example-user-007 open: tick-5 · full walk\n' > "$N/.loopd/log.md"
 printf -- '---\nstatus: in-review\npr: [ %s/8, %s/11 ]\n---\n' "$U" "$U" > "$N/projects/p/tasks/task-001.md"
 ghpr 11 OPEN 2026-10-04T00:00:00Z null 2026-10-04T01:00:00Z 2026-10-04T01:00:00Z 0
+calls; err="$(METRICS_GH_MAX_PRS=0 bash "$M" "$N" 2>&1)"
+ok "a cap of 0 reads no PR and prints nothing (BSD head refuses -n 0)" "$(ncalls):$err" "0:"
+ok "…and marks the unread PRs' figures stale" "$(jq -c '[.self_merge.stale, .quality.stale, .quality.prs_read]' "$N/.loopd/METRICS.json")" '[true,true,0]'
 calls; METRICS_GH_MAX_PRS=1 bash "$M" "$N"; first="$(grep -o 'pr view [0-9]*' "$GHFX/calls")"
 calls; METRICS_GH_MAX_PRS=1 bash "$M" "$N"; second="$(grep -o 'pr view [0-9]*' "$GHFX/calls")"
 ok "at the read cap, the least recently read open PR goes next" "$(printf '%s\n%s\n' "$first" "$second" | sort | tr '\n' ' ')" "pr view 11 pr view 8 "
@@ -263,9 +267,9 @@ ok "board: false writes nothing" "$([ -e "$O/.loopd/METRICS.json" ] && echo writ
 echo '{}' > "$O/instance.config.json"; rm "$O/.loopd/SNAPSHOT.json"; bash "$M" "$O"
 ok "no SNAPSHOT.json writes nothing" "$([ -e "$O/.loopd/METRICS.json" ] && echo written || echo none)" none
 ok "step 8 runs it beside write-snapshot.sh" "$(grep -c 'scripts/metrics\.sh \.' "$REPO/plugin/tick-steps/step-8-render.md")" 1
-ok "only step 8 runs it (no idle path, no refresh-state.sh)" \
-  "$(cd "$REPO/plugin" && grep -rl 'scripts/metrics\.sh' --include='*.sh' --include='*.md' --include='*.ts' --include='*.json' . | grep -v '^./scripts/metrics\.sh$' | tr '\n' ' ')" \
-  "./tick-steps/step-8-render.md "
+ok "only step 8 and the session hook's worker run it (no idle path)" \
+  "$(cd "$REPO/plugin" && grep -rlE '(scripts|\$here)/metrics\.sh' --include='*.sh' --include='*.md' --include='*.ts' --include='*.json' . | grep -v '^./scripts/metrics\.sh$' | sort | tr '\n' ' ')" \
+  "./scripts/refresh-state.sh ./tick-steps/step-8-render.md "
 
 echo "== the atomic write =="
 cp "$F" "$TMP/before.json"; mv "$B/.loopd/log.md" "$TMP/log.md"
@@ -291,6 +295,19 @@ if [ -r "$T/task-003-other.md" ]; then echo "  SKIP  an unreadable task doc (run
 else fails_kept "an unreadable task document"; fi
 chmod 644 "$T/task-003-other.md"
 bash "$M" "$B"; ok "the normal path still writes after each refusal" "$(cmp -s "$F" "$TMP/before.json" && echo same)" same
+
+echo "== one run at a time =="
+RUN="$B/.loopd/.metrics-run"
+ok "the run directory ignores itself" "$(cat "$RUN/.gitignore")" '*'
+ok "a finished run leaves no lock" "$([ -d "$RUN/lock" ] && echo held || echo free)" free
+mkdir "$RUN/lock"; METRICS_LOCK_WAIT=0 fails_kept "a held run lock"
+ok "…which the refused run leaves held" "$([ -d "$RUN/lock" ] && echo held || echo free)" held
+( sleep 1; rmdir "$RUN/lock" ) & bash "$M" "$B"
+ok "a lock released inside the wait: written" "$?:$(cmp -s "$F" "$TMP/before.json" && echo same)" 0:same
+wait; mkdir "$RUN/lock"; touch -t 202001010000 "$RUN/lock"; : > "$RUN/failed"
+METRICS_LOCK_WAIT=0 bash "$M" "$B"
+ok "a lock older than 10 minutes is taken over, and released" "$?:$([ -d "$RUN/lock" ] && echo held || echo free)" 0:free
+ok "a written file clears the hook's failure marker" "$([ -e "$RUN/failed" ] && echo marked || echo none)" none
 
 echo "== the key allowlist =="
 ALLOWED='pm_ticks ticks_without_row unknown tick_cost mean_hours loop rate reasons not_self_merged criteria gated
