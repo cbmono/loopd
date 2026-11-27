@@ -273,8 +273,8 @@ quiet_report() {
   [ ! -t 1 ] || tty=1
   awk -v pn="$PLUGIN_NAME" -v tty="$tty" '
     function fate_of(tag) {
-      if (tag ~ /^(seed|wrote|link|create|set|tidy|renamed|pushed|PORTED|RESOLVED)$/) { written++; return "drop" }
-      if (tag ~ /^(removed|rmdir|drop|retire)$/) { removed++; return "drop" }
+      if (tag ~ /^(seed|wrote|link|mark|create|set|tidy|renamed|pushed|PORTED|RESOLVED)$/) { written++; return "drop" }
+      if (tag ~ /^(removed|rmdir|drop|retire|prune|unlink|unmark)$/) { removed++; return "drop" }
       if (tag ~ /^(keep|skip|absent|CONFIG)$/) return "drop"
       if (tag ~ /^(CONFLICT|UNKNOWN)$/) return "seed"
       return "keep"
@@ -300,7 +300,7 @@ quiet_report() {
       if (!infix) out[++n] = l
     }
     index($0, pn " fix — acting ONLY") == 1 { close_seed(); infix = 1; inblock = 0; next }
-    infix && /^── / { close_seed(); inblock = 1; warned = 0; nb = 0; seedrow = ($2 == "seed-drift"); fate = "drop"; next }
+    infix && /^── / { close_seed(); inblock = 1; warned = 0; seedrow = ($2 == "seed-drift"); fate = "drop"; next }
     infix && !inblock { next }
     infix && /^$/ { close_seed(); inblock = 0; next }
     infix && /^⚠ / { warned = 1; if (tty) gsub(/\*\*/, ""); if (!seedrow) out[++n] = $0; next }
