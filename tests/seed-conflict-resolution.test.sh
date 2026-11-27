@@ -301,7 +301,6 @@ assert "a second run is silent about the written log" "$(hasnt 'papercuts.md' "$
 assert "…and about the one it just ported"       "$(hasnt 'knowledge/log.md' "$LOG_AGAIN")"
 assert "…and the log is still untouched"          "$(yes_if cmp -s "$TMP/papercuts.pristine" "$INST3/knowledge/papercuts.md")"
 
-# D6: ported means every seed line is in the bundle copy and none the seed dropped is left.
 echo "== a seed change ported by hand is in sync, with a local line beside it =="
 TPL4="$TMP/tpl4"; cp -R "$TPL" "$TPL4"
 printf '{\n  "permissions": {\n    "allow": [\n      "Bash(one)",\n      "Bash(two)"\n    ]\n  }\n}\n' \
