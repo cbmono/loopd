@@ -64,6 +64,7 @@ print-board.sh read-only
 project-inputs.sh writing --release rewrites a project's inputs field
 project-paused.sh read-only
 prompt-cost.sh read-only
+prune-state.sh writing --apply removes aged per-machine files under .loopd
 prune-worktrees.sh read-only
 prune-wt.sh writing removes git worktrees
 push-commit.sh writing rebases and pushes a branch
