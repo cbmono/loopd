@@ -102,9 +102,10 @@ its own. A stale `headline.self_merge_rate` ends in ` (stale)`.
 
 | Key | Value |
 |---|---|
-| `schema_version` | `2` (task-004 added keys). Bumped only when a key is added |
+| `schema_version` | `3` (task-006 added `pane`). Bumped only when a key is added, in `metrics.sh`, the pane's `METRICS_VERSION` and `metrics-report.sh`'s together (`tests/metrics-version.test.sh`) |
 | `generated_at` | UTC, `YYYY-MM-DDTHH:MM:SSZ` (`METRICS_NOW` pins it for tests) |
 | `headline` | five ready-formatted strings, below |
+| `pane` | the `/pane` Metrics view's figures, ready to draw, below |
 | `delegation`, `time`, `tokens`, `idle_tick_spend`, `blocked_by_cause`, `owner_response`, `self_merge`, `quality`, `kb_efficiency` | one object per family |
 | `tasks` | per-task objects keyed `<project-slug>/<task-id>` (a bare task id repeats across projects) |
 | `projects` | per-project objects keyed by project slug, closed projects included |
@@ -113,6 +114,18 @@ its own. A stale `headline.self_merge_rate` ends in ` (stale)`.
 `headline` holds `delegation_share`, `tokens_per_merged_pr`, `idle_tick_spend`,
 `top_block_cause` and `self_merge_rate`. Each value is a string a renderer prints as it
 stands: `?` is unknown and `—` is no source.
+
+`pane` is an ordered list of groups, `{label, rows: [{label, value, stale?}]}`: 24 rows in
+11 groups, built after the stale swap, every `value` a ready string. A row whose family (or
+figure) is `source: none` is `—`, a `null` figure `?`, never `0`; a row of a stale family
+carries `"stale": true`. The groups: Delegation (role-agent share; role agents / supervision
+tokens), Time, mean (draft, queued, in flight, PR open to merge), Tokens (per merged PR, fix
+rounds per PR), Idle ticks (share of ticks, measured spend), Owner response (answers given),
+Self-merge (rate), Quality (review findings per PR, merged in one round), Blocked now (owner,
+merge gate, stalled agent), KB efficiency, estimate (tasks cited / not, mean tokens cited /
+not), Projects (live, closed, mean days open) and This month / last (merged PRs, tick
+tokens, as `this / last`, a month with no `periods` bucket `—`). Working vs waiting and ready
+PR to owner merge stay in the report.
 
 ## Families
 

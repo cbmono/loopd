@@ -8,6 +8,7 @@
 # Rules, thresholds and filter semantics: docs/metrics.md → "The report".
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+METRICS_VERSION=3
 . "$HERE/bundle-paths.sh" || exit 2
 . "$HERE/lib/tick-ledger.sh" || exit 2
 
@@ -58,10 +59,10 @@ if [ ! -e "$F" ]; then
 fi
 [ -f "$F" ] && [ -r "$F" ] || die 4 "$F is unreadable"
 [ -s "$F" ] || die 4 "$F is empty — truncated; the next full tick rewrites it"
-check="$(jq -r '
+check="$(jq -r --argjson v "$METRICS_VERSION" '
   def iso: type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$");
   if type != "object" then "is not a JSON object"
-  elif (.schema_version | IN(1, 2) | not) then "has an unknown schema_version \(.schema_version | tojson) (this report reads 1 and 2)"
+  elif (.schema_version | IN(range(1; $v + 1)) | not) then "has an unknown schema_version \(.schema_version | tojson) (this report reads 1 to \($v))"
   elif (.generated_at | iso | not) then "has no UTC generated_at"
   elif ([.headline, .delegation, .time, .tokens, .idle_tick_spend, .blocked_by_cause, .owner_response,
          .self_merge, .quality, .kb_efficiency, .tasks, .projects, .periods] | all(type == "object") | not)

@@ -41,6 +41,7 @@ trap 'rm -rf "$work"; rmdir "$lock" 2>/dev/null' EXIT
 rec="$work/rec.ndjson"
 shopt -s nullglob
 export LC_ALL=C
+SCHEMA=3
 
 AWK_LIB='
 function san(s) { gsub(/[^A-Za-z0-9._\/:@+-]/, "_", s); return s }
@@ -235,7 +236,7 @@ printf '{"k":"named","n":%d}\n' "$(grep -c . "$work/named")" >> "$rec"
 self="$(jq -r '.ownerGithubUser // empty | strings' "$root/instance.config.local.json" 2>/dev/null)"
 [ -n "$self" ] || self="$(jq -r '.ownerGithubUser // empty | strings' "$root/instance.config.json" 2>/dev/null)"
 prev="$work/prev.json"
-jq -e 'objects | select(.schema_version == 2)' "$out" > "$prev" 2>/dev/null || : > "$prev"
+jq -e --argjson v "$SCHEMA" 'objects | select(.schema_version | IN(2, $v))' "$out" > "$prev" 2>/dev/null || : > "$prev"
 
 { printf '{"k":"holds","names":['
   sep=""; for h in "$root/$AB_MERGE_HOLDS"/*; do printf '%s"%s"' "$sep" "$(basename "$h" | tr -cd 'A-Za-z0-9._-')"; sep=,; done
@@ -345,7 +346,7 @@ recs("s") as $s | recs("tick") as $ticks | recs("t") as $tasks | recs("d") as $d
   (($s | map(.month)) + ($ticks | map(.month)) + ($ans | map(.month)) + ($cites | map(.month))
    + ($done | map(.reflected[0:7]))) | map(select(. != null)) | unique as $months
 | {
-  schema_version: 2,
+  schema_version: $schema,
   generated_at: $now,
   headline: {
     delegation_share: (if $share == null then "?" else "\($share | pct) role agents" end),
@@ -420,10 +421,43 @@ recs("s") as $s | recs("tick") as $ticks | recs("t") as $tasks | recs("d") as $d
     | .tasks |= with_entries(.key as $k | .value.pr_opened = ($p.tasks[$k].pr_opened // .value.pr_opened)
         | .value.pr_merged = ($p.tasks[$k].pr_merged // .value.pr_merged))
   else $o end
+| def cell(f): if type == "object" and .source == "none" then "—" elif . == null then "?" else f end;
+  def r($l; $fam; $v): {label: $l, value: (if $fam.source == "none" then "—" else $v end)}
+    + (if $fam.stale == true then {stale: true} else {} end);
+  def per($a; $b): "\($a) / \($b)";
+  def h: cell("\(.)h");
+  def n: cell(tostring);
+  (($now[0:4] | tonumber) * 12 + ($now[5:7] | tonumber) - 2) as $lm
+  | ("\($lm / 12 | floor)-\($lm % 12 + 1 | if . < 10 then "0\(.)" else tostring end)") as $last
+  | def month(f): per(.periods[$now[0:7]] // none | cell(f); .periods[$last] // none | cell(f));
+  .delegation as $dl | .time as $t | .tokens as $tk | .idle_tick_spend as $it | .owner_response as $or
+  | .self_merge as $sm | .quality as $q | .blocked_by_cause as $b | .kb_efficiency as $kb
+  | .pane = [
+    {label: "Delegation", rows: [r("Role-agent share"; $dl; $dl.share_role_agents | pct),
+      r("Role agents / supervision"; $dl; per($dl.role_agent_tokens | tok; $dl.supervision_tokens | tok))]},
+    {label: "Time, mean", rows: [r("Draft"; $t; $t.mean_draft_hours | h), r("Queued"; $t; $t.mean_queued_hours | h),
+      r("In flight"; $t; $t.mean_in_flight_hours | h),
+      r("PR open to merge"; $t.pr_open_to_merge_hours; $t.pr_open_to_merge_hours.mean_hours | h)]},
+    {label: "Tokens", rows: [r("Per merged PR"; $tk; $tk.merged_prs.per_pr | tok),
+      r("Fix rounds per PR"; $tk; $tk.merged_prs.fix_rounds_per_pr | n)]},
+    {label: "Idle ticks", rows: [r("Share of ticks"; $it; $it.idle_share | pct),
+      r("Measured spend"; $it; if $it.idle_ticks == 0 then "0 idle ticks"
+        else "\($it.tokens_measured | tok) (\($it.measured) of \($it.idle_ticks))" end)]},
+    {label: "Owner response", rows: [r("Answers given"; $or; $or.answers | n)]},
+    {label: "Self-merge", rows: [r("Rate"; $sm; if ($sm.merged_prs // 0) == 0 then "?" else "\($sm.rate | pct) (\($sm.loop) of \($sm.merged_prs))" end)]},
+    {label: "Quality", rows: [r("Review findings per PR"; $q; $q.cr_findings_per_pr | n),
+      r("Merged in one round"; $q; $q.first_round_merge_share | pct)]},
+    {label: "Blocked now", rows: [r("Owner"; $b; $b.causes.owner.tasks | n),
+      r("Merge gate"; $b; $b.causes.merge_gate.holds | n), r("Stalled agent"; $b; $b.causes.stalled_agent.tasks | n)]},
+    {label: "KB efficiency, estimate", rows: [r("Tasks cited / not"; $kb; per($kb.cited.tasks | n; $kb.not_cited.tasks | n)),
+      r("Mean tokens cited / not"; $kb; per($kb.cited.mean_tokens | tok; $kb.not_cited.mean_tokens | tok))]},
+    {label: "Projects", rows: [r("Live"; {}; .projects | map(select(.state == "live")) | length | n),
+      r("Closed"; $t; $t.projects_closed | n), r("Mean days open"; $t; $t.mean_project_open_days | cell("\(.)d"))]},
+    {label: "This month / last", rows: [r("Merged PRs"; {}; month(.merged_prs | n)), r("Tick tokens"; {}; month(.tick_tokens | tok))]}]
 JQ
 
 tmp="$(mktemp "$root/$AB_DIR/.METRICS.json.XXXXXX")" || die 2 "cannot write under $root/$AB_DIR"
-if ! jq -n --slurpfile r "$rec" --slurpfile prev "$prev" --argjson ghfail "$ghfail" --arg self "$self" --arg now "$now" "$PROG" > "$tmp" 2>"$work/err" \
+if ! jq -n --slurpfile r "$rec" --slurpfile prev "$prev" --argjson ghfail "$ghfail" --arg self "$self" --arg now "$now" --argjson schema "$SCHEMA" "$PROG" > "$tmp" 2>"$work/err" \
    || ! jq -e '.schema_version' "$tmp" >/dev/null 2>&1; then
   rm -f "$tmp"; die 2 "could not compute ($(head -c 200 "$work/err")) — previous file kept"
 fi
