@@ -16,8 +16,8 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-62s (%s)\n' "$1" "$2"; pass=$(
 command -v jq >/dev/null 2>&1 || { echo "metrics-version.test: jq is required" >&2; exit 2; }
 export CLAUDE_CONFIG_DIR="$TMP/config"
 
-versions() { # <plugin dir> — "<written> <pane> <report>", a site that names none is `-`
-  local b="$TMP/bundle-$RANDOM"
+versions() { # <plugin dir> <bundle dir> — "<written> <pane> <report>", a site that names none is `-`
+  local b="$2"
   mkdir -p "$b/.loopd"; echo '{}' > "$b/instance.config.json"; echo '{}' > "$b/.loopd/SNAPSHOT.json"; : > "$b/.loopd/log.md"
   bash "$1/scripts/metrics.sh" "$b" >/dev/null 2>&1
   printf '%s %s %s\n' "$(jq -r '.schema_version // "-"' "$b/.loopd/METRICS.json" 2>/dev/null || echo -)" \
@@ -27,9 +27,9 @@ versions() { # <plugin dir> — "<written> <pane> <report>", a site that names n
 agree() { set -- $1; [ "$1" != - ] && [ "$1" = "$2" ] && [ "$1" = "$3" ] && echo agree || echo disagree; }
 
 echo "== the shipped plugin =="
-v="$(versions "$REPO/plugin")"
+b="$TMP/bundle"
+v="$(versions "$REPO/plugin" "$b")"
 ok "metrics.sh, register.ts and metrics-report.sh name one version" "$(agree "$v")" agree
-b="$(ls -d "$TMP"/bundle-* | head -1)"
 (cd "$b" && bash "$REPO/plugin/scripts/metrics-report.sh" >/dev/null 2>&1); ok "metrics-report.sh reads the file metrics.sh wrote" "$?" 0
 
 echo "== a copy with one site moved disagrees =="
@@ -37,7 +37,7 @@ mutant() { # <label> <file under plugin/> <sed expression>
   rm -rf "$TMP/plugin"; mkdir -p "$TMP/plugin/hooks"
   cp -R "$REPO/plugin/scripts" "$TMP/plugin/"; cp "$REPO/plugin/hooks/register.ts" "$TMP/plugin/hooks/"
   sed -i.bak "$3" "$TMP/plugin/$2"
-  ok "$1" "$(agree "$(versions "$TMP/plugin")")" disagree
+  rm -rf "$TMP/mutant"; ok "$1" "$(agree "$(versions "$TMP/plugin" "$TMP/mutant")")" disagree
 }
 mutant "register.ts METRICS_VERSION moved" hooks/register.ts 's/^const METRICS_VERSION = [0-9]*$/const METRICS_VERSION = 99/'
 mutant "metrics.sh's written version moved" scripts/metrics.sh 's/^SCHEMA=[0-9]*$/SCHEMA=99/'
