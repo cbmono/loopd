@@ -688,6 +688,64 @@ for bad in 'tick-20261113T084450Z-d9ad ended' 'x idle — fingerprint unchanged 
 done
 mkdir -p "$TMP/noledger"
 ok "no ledger ⇒ exit 2, never a new file"         "$("$SRC" record --idle --instance "$TMP/noledger" >/dev/null 2>&1; echo $?):$(ls "$TMP/noledger" "$TMP/noledger/$AB_DIR" | grep -c 'log.md')" 2:0
+ok "…nor a .loopd/ or a shard"                   "$("$SRC" ledger-target --instance "$TMP/noledger" >/dev/null 2>&1; echo $?):$(ls -A "$TMP/noledger" | wc -l | tr -d ' ')" 2:0
+
+echo "== the write target: the flat ledger while it exists, else the month's shard (D9) =="
+SH1="$TMP/shard1"; mkdir -p "$SH1/$AB_DIR"; printf '# Log\n' > "$SH1/$AB_LEDGER"
+ok "ledger-target names the flat ledger while it exists" "$(TICK_LEDGER_NOW=2026-12-01T00:00:05Z "$SRC" ledger-target --instance "$SH1")" "$AB_LEDGER"
+ok "record --idle appends there and says so" "$("$SRC" record --idle --instance "$SH1" | sed 's/^idle: [^ ]* //'):$(grep -c 'idle — fingerprint' "$SH1/$AB_LEDGER"):$([ -d "$SH1/$AB_LEDGER_DIR" ] && echo dir || echo nodir)" "— commit $AB_LEDGER:1:nodir"
+rm "$SH1/$AB_LEDGER"
+ok "no flat ledger: ledger-target creates the month's shard bare" \
+   "$(TICK_LEDGER_NOW=2026-12-01T00:00:05Z "$SRC" ledger-target --instance "$SH1"):$(wc -c < "$SH1/$AB_LEDGER_DIR/2026-12.md" | tr -d ' ')" "$AB_LEDGER_DIR/2026-12.md:0"
+NOWM="$AB_LEDGER_DIR/$(date -u +%Y-%m).md"
+ok "record --idle writes this month's shard, and names it" "$("$SRC" record --idle --instance "$SH1" | sed 's/^idle: [^ ]* //'):$(grep -c 'idle — fingerprint' "$SH1/$NOWM")" "— commit $NOWM:1"
+ok "…never re-creating the flat ledger" "$([ -e "$SH1/$AB_LEDGER" ] && echo yes || echo no)" no
+printf '* TICK 2026-11-30T23:00:00Z by me idle — fingerprint unchanged (tick-delta) · tick-9\n' > "$SH1/$AB_LEDGER_DIR/2026-11.md"
+printf 'session: x\nclaimant: tick-9\n' > "$SH1/$AB_LOCK"; cp -R "$SH1/$AB_LEDGER_DIR" "$TMP/shard1.before"
+ok "the idle guard reads last month's shard: no double write" \
+   "$(TICK_LEDGER_NOW=2026-12-01T00:00:05Z "$SRC" record --idle --instance "$SH1" --tick-id tick-9 >/dev/null 2>&1; echo $?):$(diff -r "$SH1/$AB_LEDGER_DIR" "$TMP/shard1.before" >/dev/null && echo same || echo changed)" 1:same
+
+echo "== record --close: beside its open line, in whichever file holds it (D3) =="
+SH2="$TMP/shard2"; mkdir -p "$SH2/$AB_LEDGER_DIR"
+printf '* TICK 2026-11-20T08:00:00Z by me open: a full tick\n* TICK 2026-11-20T08:00:00Z by me close: done\n* TICK 2026-11-30T23:59:00Z by me open: go\n* TICK 2026-11-30T23:59:30Z by me idle — fingerprint unchanged (tick-delta)\n' > "$SH2/$AB_LEDGER_DIR/2026-11.md"
+printf '# Awaiting\n' > "$SH2/$AB_AWAITING"; touch -t 202611010000 "$SH2/$AB_AWAITING"
+out="$(TICK_LEDGER_NOW=2026-12-01T00:00:05Z "$SRC" record --instance "$SH2" --close "closed after the month turned")"
+ok "a close at 2026-12-01 finds the 2026-11 open line, and names that shard" "$out" "closed: 2026-11-30T23:59:00Z — commit $AB_LEDGER_DIR/2026-11.md"
+ok "…the close sits right after its open line" \
+   "$(awk '/open: go/{o=NR} /close: closed after/{c=NR} END{print c-o}' "$SH2/$AB_LEDGER_DIR/2026-11.md")" 1
+ok "…no current-month shard, no flat ledger" "$(ls "$SH2/$AB_LEDGER_DIR"):$([ -e "$SH2/$AB_LEDGER" ] && echo yes || echo no)" "2026-11.md:no"
+ok "…and the previous full tick was found in last month's shard" \
+   "$(grep -c 'close: closed after the month turned; awaiting not rendered by 2026-11-20T08:00:00Z' "$SH2/$AB_LEDGER_DIR/2026-11.md")" 1
+printf '* TICK 2026-11-30T23:50:00Z by me open: one\n' >> "$SH2/$AB_LEDGER_DIR/2026-11.md"
+printf '* TICK 2026-12-01T00:00:01Z by me open: two\n' > "$SH2/$AB_LEDGER_DIR/2026-12.md"
+cp -R "$SH2/$AB_LEDGER_DIR" "$TMP/shard2.before"
+ok "two open entries across the window are AMBIGUOUS, nothing written" \
+   "$(TICK_LEDGER_NOW=2026-12-01T00:00:05Z "$SRC" record --instance "$SH2" --close x 2>&1 | grep -c 'more than one open'):$(diff -r "$SH2/$AB_LEDGER_DIR" "$TMP/shard2.before" >/dev/null && echo same || echo changed)" 1:same
+ok "…--tick picks the one in the current shard" \
+   "$(TICK_LEDGER_NOW=2026-12-01T00:00:05Z "$SRC" record --instance "$SH2" --close x --tick 2026-12-01T00:00:01Z)" "closed: 2026-12-01T00:00:01Z — commit $AB_LEDGER_DIR/2026-12.md"
+ok "…while two months on the old one is out of the window" \
+   "$(TICK_LEDGER_NOW=2027-01-15 "$SRC" record --instance "$SH2" --close x --tick 2026-11-30T23:50:00Z >/dev/null 2>&1; echo $?)" 1
+
+echo "== no merge driver: two clones appending to one month's shard conflict as on the flat file =="
+parity() { # <flat|shard|first> -> the rebase's exit code and whether a rebase was left in progress
+  local o="$TMP/par-$1" rc
+  GIT init -q --bare "$o.git"; GIT clone -q "$o.git" "$o-a" 2>/dev/null
+  mkdir -p "$o-a/$AB_DIR"; printf '# Log\n' > "$o-a/$AB_DIR/keep"
+  case "$1" in flat) printf '# Log\n' > "$o-a/$AB_LEDGER" ;; shard) mkdir -p "$o-a/$AB_LEDGER_DIR"; printf '* TICK x\n' > "$o-a/$AB_LEDGER_DIR/$(date -u +%Y-%m).md" ;; esac
+  GIT -C "$o-a" add -A; GIT -C "$o-a" commit -qm init; GIT -C "$o-a" push -q origin HEAD:main 2>/dev/null
+  GIT clone -q -b main "$o.git" "$o-b" 2>/dev/null
+  for c in a b; do
+    "$SRC" record --idle --instance "$o-$c" --swept "clone $c" >/dev/null 2>&1
+    GIT -C "$o-$c" add -A; GIT -C "$o-$c" commit -qm "idle $c"
+  done
+  GIT -C "$o-a" push -q origin HEAD:main 2>/dev/null
+  GIT -C "$o-b" pull -q --rebase origin main >/dev/null 2>&1; rc=$?
+  printf '%s:%s' "$rc" "$([ -d "$o-b/.git/rebase-merge" ] || [ -d "$o-b/.git/rebase-apply" ] && echo stopped || echo clean)"
+}
+FLATP="$(parity flat)"
+ok "two appends to the flat ledger: the rebase stops on a conflict" "$FLATP" 1:stopped
+ok "…two appends to one shard: the same stop"                       "$(parity shard)" "$FLATP"
+ok "…two clones each creating the month's first shard: the same stop" "$(parity first)" "$FLATP"
 
 echo "== closeAfterDays: a close coming due with time alone moves the fingerprint =="
 CD="$TMP/closedue"; mkdir -p "$CD/projects/fin/tasks" "$CD/projects/run/tasks" "$CD/$AB_DIR"

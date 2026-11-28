@@ -62,6 +62,16 @@ fresh
 ok "without the call the project is still created" "$(rc bash "$MUT/scripts/new-project-file.sh" --instance "$D" "$ENTRY")|$([ -f "$D/projects/$SLUG/project.md" ] && echo made)" "0|made"
 ok "…and the snapshot stays stale: this harness sees the call go" "$(has $SLUG)" False
 
+echo "== 1b. the Project added entry heads the file tick-delta.sh ledger-target names =="
+MONTH="$AB_LEDGER_DIR/$(date -u +%Y-%m).md"
+fresh; printf '# Log\n\n* old line\n' > "$D/$AB_LEDGER"; git -C "$D" add -A; git -C "$D" commit -qm flat
+ok "flat ledger: prepended at its head, committed" \
+   "$(rc bash "$S/new-project-file.sh" --instance "$D" "$ENTRY")|$(head -1 "$D/$AB_LEDGER" | grep -c "Project added: $SLUG")|$(tail -1 "$D/$AB_LEDGER")|$(git -C "$D" status --porcelain | wc -l | tr -d ' ')" "0|1|* old line|0"
+fresh; mkdir -p "$D/$AB_LEDGER_DIR"; printf '* old line\n' > "$D/$MONTH"; git -C "$D" add -A; git -C "$D" commit -qm shard
+ok "no flat ledger: prepended at the month's shard head, committed" \
+   "$(rc bash "$S/new-project-file.sh" --instance "$D" "$ENTRY")|$(head -1 "$D/$MONTH" | grep -c "Project added: $SLUG")|$(tail -1 "$D/$MONTH")|$(git -C "$D" status --porcelain | wc -l | tr -d ' ')" "0|1|* old line|0"
+ok "…and no flat ledger is created" "$([ -e "$D/$AB_LEDGER" ] && echo yes || echo no)" no
+
 echo "== 2. absent stays absent; a failing writer fails nobody =="
 fresh; rm -f "$D/$AB_SNAPSHOT"
 ok "board off: the project is created" "$(rc bash "$S/new-project-file.sh" --instance "$D" "$ENTRY")|$([ -f "$D/projects/$SLUG/project.md" ] && echo made)" "0|made"
