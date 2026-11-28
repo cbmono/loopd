@@ -156,7 +156,8 @@ const SNAPSHOT = '.loopd/SNAPSHOT.json'
 const COUNTS = '.loopd/counts.json'
 // AB_METRICS; schema: docs/metrics.md
 const METRICS = '.loopd/METRICS.json'
-const METRICS_VERSION = 2
+const METRICS_VERSION = 3
+const METRICS_READS = [2, METRICS_VERSION]
 // AB_METRICS_RUN: metrics.sh's run lock, taken over after LOCK_MS, and refresh-state.sh's failure marker
 const METRICS_LOCK = '.loopd/.metrics-run/lock'
 const METRICS_FAILED = '.loopd/.metrics-run/failed'
@@ -165,6 +166,10 @@ const METRICS_SERVED = '.loopd/.metrics-run/served'
 const REFRESH_KEY = 'loopd.metrics.refresh.'
 const REQUESTED = 'refresh requested — the next session turn computes it'
 const LOCK_MS = 600000
+const PANE_GROUPS = 16
+const PANE_ROWS = 40
+const PANE_LABEL = 40
+const PANE_VALUE = 120
 const HEADLINE = [
   ['delegation_share', 'delegation', 'Delegation'],
   ['tokens_per_merged_pr', 'tokens', 'Tokens per merged PR'],
@@ -187,6 +192,8 @@ const WIDTH = 45        // the operator layout's width where the surface names n
 const PAD = 2           // the operator pane's padding, left and right; every row is drawn inside it
 const BAR = 10          // progress-bar cells, whatever the task count
 const ROW_LINES = 3     // a wrapped row's most lines, every section alike; the last is cut
+const VIEW_LINES = 2    // the Projects/Metrics tabs and the blank line under them
+const BUTTON_LINES = 4  // the blank, rule and blank lines above the buttons, and the buttons
 // write-snapshot.sh's verb set, minus nothing: the pane names the verb, never the reason.
 const VERBS = ['approve', 'answer', 'merge', 'unblock', 'close'] as const
 const ANSWER = 'loopd:answer'
@@ -262,9 +269,10 @@ type Metrics = {
   generated_at: string
   computing: boolean
   request: string          // the pending Refresh's line: REQUESTED or a failed run's; '' otherwise
-  rows: { label: string; value: string; stale: boolean }[]
+  groups: { label: string; rows: { label: string; value: string; stale: boolean }[] }[]
+  paneNote: string
 }
-const NO_METRICS: Metrics = { state: 'unread', path: '', mtimeMs: -1, detail: '', generated_at: '', computing: false, request: '', rows: [] }
+const NO_METRICS: Metrics = { state: 'unread', path: '', mtimeMs: -1, detail: '', generated_at: '', computing: false, request: '', groups: [], paneNote: '' }
 const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, in_session: 0, in_session_agents: [], queue: '', tasks: null, status: null, written_at: '', plugin_version: '', latest_version: '' }
 const SEMVER = /^\d+\.\d+\.\d+$/
 const TASK_KEY = /^projects\/([^/]+)\/tasks\/([^/]+)\.md$/
@@ -415,9 +423,12 @@ function readMetrics(text: unknown, path: string, m: number): Metrics {
   try { j = JSON.parse(text) } catch { return bad(METRICS + ' is not valid JSON — the next metrics.sh run overwrites it') }
   const o = obj(j)
   if (!o) return bad(METRICS + ' is not a JSON object — the next metrics.sh run overwrites it')
-  if (o.schema_version !== METRICS_VERSION) {
-    return bad(METRICS + ' has schema_version ' + cut(clean(JSON.stringify(o.schema_version) ?? 'none'), 12) + '; this pane reads ' + METRICS_VERSION)
+  if (!METRICS_READS.includes(o.schema_version as number)) {
+    return bad(METRICS + ' has schema_version ' + cut(clean(JSON.stringify(o.schema_version) ?? 'none'), 12) + '; this pane reads ' + METRICS_READS.join(' and '))
   }
+  const ok = (rest: Partial<Metrics>): Metrics => ({ ...NO_METRICS, state: 'ok', path, mtimeMs: m, generated_at: str(o.generated_at), ...rest })
+  const groups = readPane(o.pane)
+  if (groups) return ok({ groups })
   const head = obj(o.headline) || {}
   const rows = HEADLINE.map(([key, family, label]) => {
     const f = obj(o[family])
@@ -425,7 +436,25 @@ function readMetrics(text: unknown, path: string, m: number): Metrics {
     const v = typeof head[key] === 'string' ? clean(head[key]) : ''
     return { label, value: v || '?', stale: !!f && f.stale === true }
   })
-  return { state: 'ok', path, mtimeMs: m, detail: '', generated_at: str(o.generated_at), computing: false, request: '', rows }
+  return ok({ groups: [{ label: '', rows }], paneNote: o.pane === undefined ? '' : 'pane block malformed — next run rewrites' })
+}
+function readPane(v: unknown): Metrics['groups'] | null {
+  const text = (x: unknown, n: number) => typeof x === 'string' && clean(x) !== '' && cols(clean(x)) <= n ? clean(x) : null
+  if (!Array.isArray(v) || v.length === 0 || v.length > PANE_GROUPS) return null
+  const groups: Metrics['groups'] = []
+  let total = 0
+  for (const g of v) {
+    const o = obj(g), label = o && text(o.label, PANE_LABEL), rows = o && o.rows
+    if (!o || !label || !Array.isArray(rows) || rows.length === 0 || (total += rows.length) > PANE_ROWS) return null
+    const out: Metrics['groups'][number]['rows'] = []
+    for (const r of rows) {
+      const x = obj(r), l = x && text(x.label, PANE_LABEL), val = x && text(x.value, PANE_VALUE)
+      if (!x || !l || !val || (x.stale !== undefined && typeof x.stale !== 'boolean')) return null
+      out.push({ label: l, value: val, stale: x.stale === true })
+    }
+    groups.push({ label, rows: out })
+  }
+  return groups
 }
 const fileCache = new Map<string, { m: number; text: string }>()
 async function readMoved($: any, path: string): Promise<string> {
@@ -684,18 +713,31 @@ function draw($: any, e: any, now: number): any {
     else if (metrics.state !== 'ok') rows.push(line(metrics.detail))
     else {
       const a = metrics.computing ? 'computing…' : age(now, metrics.generated_at)
-      rows.push(row(seg('METRICS', { ...HEAD, bold: true }), seg(gap(7 + cols(a))), seg(a, MUTED)))
-      for (const l of metrics.request ? wrap(metrics.request, W, ROW_LINES) : []) rows.push(line(l, MUTED))
-      rows.push(line(' '))
-      for (const { label, value, stale } of metrics.rows) {
-        const v = stale ? value + ' · stale' : value
-        const look = value === '—' || value === '?' ? MUTED : TEXT
-        if (cols(label) + 2 + cols(v) <= W) rows.push(row(seg(label, MUTED), seg(gap(cols(label) + cols(v))), seg(v, look)))
-        else {
-          rows.push(line(label, MUTED))
-          for (const l of wrap(v, Math.max(1, W - 3), Infinity)) rows.push(row(seg('   '), seg(l, look)))
+      const head = [row(seg('METRICS', { ...HEAD, bold: true }), seg(gap(7 + cols(a))), seg(a, MUTED)),
+        ...[metrics.request, metrics.paneNote].flatMap(s => s ? wrap(s, W, ROW_LINES) : []).map(l => line(l, MUTED)), line(' ')]
+      rows.push(...head)
+      const blocks: { lines: any[]; figure: boolean }[] = []
+      for (const g of metrics.groups) {
+        if (g.label) blocks.push({ lines: [line(g.label, HEAD)], figure: false })
+        for (const { label, value, stale } of g.rows) {
+          const v = stale ? value + ' · stale' : value
+          const look = value === '—' || value === '?' ? MUTED : TEXT
+          blocks.push({ figure: true, lines: cols(label) + 2 + cols(v) <= W ? [row(seg(label, MUTED), seg(gap(cols(label) + cols(v))), seg(v, look))]
+            : [line(label, MUTED), ...wrap(v, Math.max(1, W - 3), Infinity).map(l => row(seg('   '), seg(l, look)))] })
         }
       }
+      const body = toint(e && e.props && e.props.scroll ? e.props.scroll.bodyRows : 0)
+      const room = body > 0 ? body - VIEW_LINES - head.length - BUTTON_LINES : Infinity
+      let shown = blocks
+      if (blocks.reduce((n, b) => n + b.lines.length, 0) > room) {
+        shown = []
+        let used = 0
+        for (const b of blocks) { if (used + b.lines.length > room - 1) break; shown.push(b); used += b.lines.length }
+        while (shown.length && !shown[shown.length - 1]!.figure) shown.pop()
+      }
+      for (const b of shown) rows.push(...b.lines)
+      const hidden = blocks.filter(b => b.figure).length - shown.filter(b => b.figure).length
+      if (hidden > 0) rows.push(line('… ' + hidden + ' more', MUTED))
     }
   } else if (kind !== 'ok' || !board) {
     rows.push(line(kind === 'unread' ? 'loopd board: reading…' : detail, { dimColor: kind === 'unread' }))

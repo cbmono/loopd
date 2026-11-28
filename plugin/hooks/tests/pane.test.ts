@@ -1300,9 +1300,10 @@ test('METRICS VIEW: Projects and Metrics are plain buttons with no hotkey; Proje
 const METRICS_LINES: [string, unknown, RegExp][] = [
   ['not JSON', '{ not json', /^\.loopd\/METRICS\.json is not valid JSON — the next metrics\.sh run overwrites it$/],
   ['an array', '[1, 2]', /^\.loopd\/METRICS\.json is not a JSON object/],
-  ['schema_version 1', { ...MET, schema_version: 1 }, /^\.loopd\/METRICS\.json has schema_version 1; this pane reads 2$/],
-  ['schema_version "2"', { ...MET, schema_version: '2' }, /^\.loopd\/METRICS\.json has schema_version "2"; this pane reads 2$/],
-  ['no schema_version', { headline: MET.headline }, /^\.loopd\/METRICS\.json has schema_version none; this pane reads 2$/],
+  ['schema_version 1', { ...MET, schema_version: 1 }, /^\.loopd\/METRICS\.json has schema_version 1; this pane reads 2 and 3$/],
+  ['schema_version "2"', { ...MET, schema_version: '2' }, /^\.loopd\/METRICS\.json has schema_version "2"; this pane reads 2 and 3$/],
+  ['no schema_version', { headline: MET.headline }, /^\.loopd\/METRICS\.json has schema_version none; this pane reads 2 and 3$/],
+  ['schema_version 4', { ...MET, schema_version: 4 }, /^\.loopd\/METRICS\.json has schema_version 4; this pane reads 2 and 3$/],
 ]
 // METRICS.json absent: [name, snapshot, config, lock age in ms or null, failure marker or null, the one line]
 const NOT_COMPUTED = /^metrics not computed yet — the next session turn computes them\.$/
@@ -1543,6 +1544,121 @@ test('METRICS VIEW: source none draws —, stale draws the figure marked stale, 
   expect(body.join('\n')).not.toMatch(/\b0\b|never drawn/)
   await ui.unmount()
 })
+
+// metrics.sh's `pane` block, schema 3 (docs/metrics.md): 11 groups, 24 figures.
+const LONG_VALUE = '123456789 / 987654321 over every month the ledger has'
+const PANE_BLOCK = [
+  ['Delegation', [['Role-agent share', '85%'], ['Role agents / supervision', '6k / 1k']]],
+  ['Time, mean', [['Draft\u0007', '2h'], ['Queued', '2h'], ['In flight', '4h'], ['PR open to merge', '4h', true]]],
+  ['Tokens', [['Per merged PR', '3k'], ['Fix rounds per PR', '0.5']]],
+  ['Idle ticks', [['Share of ticks', '83%'], ['Measured spend', '? (0 of 3)']]],
+  ['Owner response', [['Answers given', '2']]],
+  ['Self-merge', [['Rate', '50% (1 of 2)', true]]],
+  ['Quality', [['Review findings per PR', '1.5'], ['Merged in one round', '50%']]],
+  ['Blocked now', [['Owner', '1'], ['Merge gate', '1'], ['Stalled agent', '1']]],
+  ['KB efficiency, estimate', [['Tasks cited / not', '1 / 1'], ['Mean tokens cited / not', '4k / 2k']]],
+  ['Projects', [['Live', '1'], ['Closed', '1'], ['Mean days open', '10d']]],
+  ['This month / last', [['Merged PRs', '— / 2'], ['Tick tokens', LONG_VALUE]]],
+].map(([label, rows]) => ({ label, rows: (rows as any[]).map(([l, value, stale]) => stale ? { label: l, value, stale } : { label: l, value }) }))
+const MET3 = { ...MET, schema_version: 3, pane: PANE_BLOCK }
+const tall = (bodyColumns: number | undefined, bodyRows: number) => ({ ...PANE, props: { ...PANE.props, bodyColumns, scroll: { offset: 0, bodyRows } } })
+const fig = (l: string, v: string, w = 45) => l + ' '.repeat(w - cols(l) - cols(v)) + v
+
+test('METRICS PANE: schema 3 draws the pane block verbatim in its groups within 45 columns; —, ? and stale as written, a long value wraps under its label and is never cut', ONLY, async ($, on) => {
+  const w = metricsWorld(SNAP, MET3)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w, tall(49, 80))
+  const body = await metricsRows(ui)
+  expect(body).toEqual([
+    'METRICS' + ' '.repeat(28) + '12 min ago', ' ',
+    'Delegation', fig('Role-agent share', '85%'), fig('Role agents / supervision', '6k / 1k'),
+    'Time, mean', fig('Draft', '2h'), fig('Queued', '2h'), fig('In flight', '4h'), fig('PR open to merge', '4h · stale'),
+    'Tokens', fig('Per merged PR', '3k'), fig('Fix rounds per PR', '0.5'),
+    'Idle ticks', fig('Share of ticks', '83%'), fig('Measured spend', '? (0 of 3)'),
+    'Owner response', fig('Answers given', '2'),
+    'Self-merge', fig('Rate', '50% (1 of 2) · stale'),
+    'Quality', fig('Review findings per PR', '1.5'), fig('Merged in one round', '50%'),
+    'Blocked now', fig('Owner', '1'), fig('Merge gate', '1'), fig('Stalled agent', '1'),
+    'KB efficiency, estimate', fig('Tasks cited / not', '1 / 1'), fig('Mean tokens cited / not', '4k / 2k'),
+    'Projects', fig('Live', '1'), fig('Closed', '1'), fig('Mean days open', '10d'),
+    'This month / last', fig('Merged PRs', '— / 2'), 'Tick tokens', '   123456789 / 987654321 over every month the', '   ledger has',
+  ])
+  for (const r of await screen(ui)) expect(cols(r)).toBeLessThanOrEqual(45)
+  await ui.unmount()
+})
+
+test('METRICS PANE: with no bodyColumns the content is 41 columns wide and nothing is cut', ONLY, async ($, on) => {
+  const w = metricsWorld(SNAP, MET3)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w, tall(undefined, 80))
+  const body = await metricsRows(ui)
+  for (const r of body) expect(cols(r)).toBeLessThanOrEqual(41)
+  expect(body).toContain(fig('Rate', '50% (1 of 2) · stale', 41))
+  expect(body.join(' ').replace(/ +/g, ' ')).toContain(LONG_VALUE)
+  expect(body.join('\n')).not.toMatch(/…/)
+  await ui.unmount()
+})
+
+test('METRICS PANE: past bodyRows it draws what fits, never a group label alone, then `… N more`; the buttons stay on screen', ONLY, async ($, on) => {
+  const w = metricsWorld(SNAP, MET3)
+  stubs(on, w)
+  mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w, tall(49, 30))
+  const all = await screen(ui)
+  const body = await metricsRows(ui)
+  expect(body.slice(-3)).toEqual([fig('Review findings per PR', '1.5'), fig('Merged in one round', '50%'), '… 10 more'])
+  expect(all.findIndex(l => l.includes('↻ Refresh'))).toBeLessThan(30)
+  expect(all.length - 1).toBeLessThanOrEqual(30)
+  await ui.unmount()
+  for (const [rows, more] of [[31, 10], [29, 11], [12, 22]] as const) {
+    const again = await $.ui.mount({ ...tall(49, rows), surface: 'terminal' })
+    const lines = await screen(again)
+    expect(lines.findIndex(l => l.includes('↻ Refresh'))).toBeLessThan(rows)
+    expect(lines).toContain('… ' + more + ' more')
+    expect(['Delegation', 'Time, mean', 'Tokens', 'Idle ticks']).not.toContain(lines[lines.indexOf('… ' + more + ' more') - 1])
+    await again.unmount()
+  }
+})
+
+const HEADLINE_ROWS = [
+  'Delegation' + ' '.repeat(20) + '62% role agents', 'Tokens per merged PR' + ' '.repeat(21) + '132k',
+  'Idle-tick spend', '   ? (548 idle ticks, none measured)', 'Top block cause' + ' '.repeat(21) + 'owner · 3', 'Self-merge rate' + ' '.repeat(29) + '—',
+]
+const MALFORMED_PANE: [string, unknown][] = [
+  ['a string', 'rows'],
+  ['an empty list', []],
+  ['a group with no rows', [{ label: 'Delegation', rows: [] }]],
+  ['a group label that cleans to nothing', [{ label: '\u001b', rows: [{ label: 'a', value: '1' }] }]],
+  ['a number for a value', [{ label: 'Tokens', rows: [{ label: 'Per merged PR', value: 3000 }] }]],
+  ['a value past 120 columns', [{ label: 'Tokens', rows: [{ label: 'Per merged PR', value: 'x'.repeat(121) }] }]],
+  ['stale that is not a boolean', [{ label: 'Tokens', rows: [{ label: 'Per merged PR', value: '3k', stale: 'yes' }] }]],
+  ['17 groups', Array.from({ length: 17 }, () => ({ label: 'G', rows: [{ label: 'a', value: '1' }] }))],
+  ['41 rows', [{ label: 'G', rows: Array.from({ length: 41 }, () => ({ label: 'a', value: '1' })) }]],
+]
+for (const [name, pane] of MALFORMED_PANE) {
+  test('METRICS PANE: ' + name + ' is malformed: the headline and one line', ONLY, async ($, on) => {
+    const w = metricsWorld(SNAP, { ...MET3, pane })
+    stubs(on, w)
+    mock.clock(on, { now: GENERATED })
+    const ui = await showMetrics($, w, tall(49, 80))
+    expect((await metricsRows(ui)).slice(1)).toEqual(['pane block malformed — next run rewrites', ' ', ...HEADLINE_ROWS])
+    await ui.unmount()
+  })
+}
+
+const { pane: _, ...NO_PANE } = MET3
+for (const [name, met] of [['schema 3 with no pane key', NO_PANE], ['schema 2', MET]] as const) {
+  test('METRICS PANE: ' + name + ' draws the five headline values and no malformed line', ONLY, async ($, on) => {
+    const w = metricsWorld(SNAP, met)
+    stubs(on, w)
+    mock.clock(on, { now: GENERATED })
+    const ui = await showMetrics($, w, tall(49, 80))
+    expect((await metricsRows(ui)).slice(1)).toEqual([' ', ...HEADLINE_ROWS])
+    await ui.unmount()
+  })
+}
 
 test('METRICS VIEW: its own read state and age, so it draws under a malformed SNAPSHOT.json', ONLY, async ($, on) => {
   const w = metricsWorld('{ broken')
