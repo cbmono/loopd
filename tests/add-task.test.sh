@@ -88,6 +88,14 @@ ok "…and no deliverable stub" "$([ -e "$D/projects/research-p/deliverables" ] 
 ok "kind absent in project.md ⇒ build" "$(run nokind-p 'Do a thing' kind=build)|$(fm "$D/projects/nokind-p/tasks/$(new nokind-p)" kind)" "0|build"
 ok "…and no target_repo to copy is no key" "$(fm "$D/projects/nokind-p/tasks/$(new nokind-p)" target_repo)" "<absent>"
 
+echo "== 2b. --text-file: free text never passes through an argument =="
+fresh
+printf "%s\n" "Don't retry the 'late' notice" > "$TMP/desc"
+ok "--text-file exits 0" "$(run build-p --text-file "$TMP/desc")" 0
+ok "…original_request is the file's text, quotes kept" "$(yaml "$(fm "$D/projects/build-p/tasks/$(new build-p)" original_request)")" "Don't retry the 'late' notice"
+ok "…with kind= after it" "$(run build-p --text-file "$TMP/desc" kind=build)" 0
+ok "an unreadable --text-file → 2, nothing written" "$(run build-p --text-file "$TMP/absent")|$(ls "$D/projects/build-p/tasks" | wc -l | tr -d ' ')" "2|3"
+
 echo "== 3. refusals: distinct exits, one line, nothing written =="
 refuse() { # <name> <want rc> <args...>
   local name="$1" want="$2"; shift 2; fresh

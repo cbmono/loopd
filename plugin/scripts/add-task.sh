@@ -2,13 +2,13 @@
 #
 # add-task.sh — write the next draft task into one open project, shaped like a seed task.
 #
-#   Usage: add-task.sh [--instance DIR] <project-slug> <description> [kind=<build|research>]
+#   Usage: add-task.sh [--instance DIR] <project-slug> <description | --text-file <f>> [kind=<build|research>]
 #
-# kind and target_repo come from project.md; the description is original_request, verbatim.
+# kind and target_repo come from project.md; the description (or the file's text) is original_request.
 # Exit: 0 written, committed and pushed (or no origin) · 1 empty description · 2 usage or I/O
 #       3 slug is not one folder name · 4 written, but the commit or push failed · 5 no such project
 #       6 project is done · 7 kind= differs from the project · 8 failed validate-bundle.sh, removed
-# Reasoning: prefer-tasks-in-open-projects/task-001.
+# Reasoning: prefer-tasks-in-open-projects/task-001, task-003.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,10 +17,18 @@ command -v python3 >/dev/null 2>&1 || { echo "add-task: python3 is required" >&2
 
 inst="."
 [ "${1:-}" = "--instance" ] && { [ $# -ge 2 ] || usage; inst="$2"; shift 2; }
-[ $# -ge 2 ] && [ $# -le 3 ] || usage
-slug="$1"; desc="$2"; want=""
-if [ $# -eq 3 ]; then
-  case "$3" in kind=build|kind=research) want="${3#kind=}" ;; *) usage ;; esac
+[ $# -ge 2 ] || usage
+slug="$1"; shift; want=""
+if [ "$1" = "--text-file" ]; then
+  [ $# -ge 2 ] || usage
+  [ -f "$2" ] && [ -r "$2" ] || { echo "add-task: cannot read $2" >&2; exit 2; }
+  desc="$(cat -- "$2")"; shift 2
+else
+  desc="$1"; shift
+fi
+[ $# -le 1 ] || usage
+if [ $# -eq 1 ]; then
+  case "$1" in kind=build|kind=research) want="${1#kind=}" ;; *) usage ;; esac
 fi
 [ -f "$inst/instance.config.json" ] || { echo "add-task: not a loopd bundle: $inst" >&2; exit 2; }
 inst="$(cd "$inst" && pwd -P)"

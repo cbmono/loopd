@@ -3,7 +3,7 @@ name: new-project
 disable-model-invocation: true
 description: Scaffold a new project under projects/<slug>/ — schema-valid files, registered in the bundle index/log and linked to its objective, with seed draft tasks. Supports build (code/PRs) and research (in-bundle deliverables) projects.
 argument-hint: "<description> [kind=research] [autonomy=<mode>] [inputs=later]"
-allowed-tools: Bash(date:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent, AskUserQuestion
+allowed-tools: Bash(date:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/add-task.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh:*), Bash(${CLAUDE_PLUGIN_ROOT}/scripts/resolve-effort.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent, AskUserQuestion
 ---
 
 Scaffold a new **Project** in this bundle: the `projects/<slug>/` folder and its
@@ -115,11 +115,12 @@ never an option.
    whatever connector this session has. No connector, or `--no-ask` ⇒ the URL stays the
    description verbatim, and the dispatch says the issue was not fetched.
 3. **The slug probe** — step 2: derive the slug and confirm `projects/<slug>/` is absent.
-4. **The question** — step 4a: `resolve-autonomy.sh` with its disclosure lines, then the one
-   batched `AskUserQuestion` (or the form's values under `--no-ask`).
+4. **The question** — step 4a: `resolve-autonomy.sh` with its disclosure lines,
+   `open-project-match.sh` when the kind part is asked, then the one batched `AskUserQuestion`
+   (or the form's values under `--no-ask`), and `add-task.sh` when its answer adds a task.
 5. **The target repo** — `org` and `defaultRepo` from `instance.config.json` (step 1's config
-   read and nothing else of step 1), asking in one line on `build` when there is no
-   `defaultRepo` (step 4c).
+   read and nothing else of step 1, done before the question when step 4a's match runs), asking
+   in one line on `build` when there is no `defaultRepo` (step 4c).
 6. **The merge preflight** — step 4b's lines for the chosen mode, and its preflight when the
    mode delegates merging.
 
@@ -217,6 +218,19 @@ commit.
    labelled `(Recommended)`. Never add a fourth part:
    - **kind** — "Build — code shipped as PRs" (default) / "Research — docs, decks or
      assets in this bundle".
+
+   **The open-project match — only while the kind part is asked.** Write the description as
+   typed (an issue URL stays the URL, never the fetched text) to
+   `tmp/new-project-description.txt`, then run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/open-project-match.sh . build [<org>/<repo>] --text-file tmp/new-project-description.txt`,
+   with the `repo=` flag or `<org>/<defaultRepo>` as the repo when either is known, and no
+   repo otherwise. A `<slug>\t<title>` line adds `add as a task to <slug>` — `<title>` as
+   the kind part's third option, after Build `(Recommended)` and Research: never a fourth
+   part and never a second question. Choosing it runs
+   `${CLAUDE_PLUGIN_ROOT}/scripts/add-task.sh <slug> --text-file tmp/new-project-description.txt`,
+   relays it as `/loopd:add-task` does, and stops: no operations 5-6 and no scaffold
+   dispatch, with one line naming the flags it dropped. With `kind=` given, all three flags
+   given, `--no-ask` or the form's `submit`, no match runs and the launcher scaffolds as today.
    - **autonomy** — resolve `AUTONOMY.md` first, with
      `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-autonomy.sh --bundle <bundle>` (bundle root,
      then an installed companion — exit 1 means absent). **Absent ⇒ don't ask at
