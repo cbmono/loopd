@@ -84,15 +84,21 @@ tick_ledger_files() { # <root> [--all] [--at <rev>]
   done <<<"$names"
 }
 
+_tick_ledger_cat() { # <root> <at> <names>
+  local n
+  while IFS= read -r n; do
+    if [ -n "$2" ]; then git -C "$1" show "$2:$n" 2>/dev/null || return 2
+    else cat "$1/$n" 2>/dev/null || return 2; fi
+  done <<<"$3"
+}
+
 tick_ledger_read() { # <root> [--all] [--at <rev>]
-  local root="${1:-}" all="" at="" names n
+  local root="${1:-}" all="" at="" names out
   [ -n "$root" ] || return 2
   shift
   _tick_ledger_opts "$@" || return 2
   names="$(_tick_ledger_names "$root" "$all" "$at")" || return 2
   [ -n "$names" ] || return 0
-  while IFS= read -r n; do
-    if [ -n "$at" ]; then git -C "$root" show "$at:$n" 2>/dev/null || return 2
-    else cat "$root/$n" 2>/dev/null || return 2; fi
-  done <<<"$names"
+  out="$(_tick_ledger_cat "$root" "$at" "$names" && printf x)"
+  case "$out" in *x) printf '%s' "${out%x}" ;; *) return 2 ;; esac
 }
