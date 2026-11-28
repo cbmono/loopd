@@ -71,7 +71,7 @@ echo "== --at <rev>: the committed files =="
 head_flat="$(cat "$D/.loopd/log.md")"; head_nov="$(cat "$D/.loopd/log/2026-11.md")"
 rm "$D/.loopd/log.md"; echo '* TICK late' >>"$D/.loopd/log/2026-11.md"; shard 2025-01
 ok "lists the committed flat file and window"  "$(tick_ledger_files "$D" --at HEAD)" "$(nl HEAD:.loopd/log.md HEAD:.loopd/log/2026-10.md HEAD:.loopd/log/2026-11.md)"
-ok "--at with --all ignores an uncommitted shard" "$(tick_ledger_files "$D" --all --at HEAD | head -2)" "$(nl HEAD:.loopd/log.md HEAD:.loopd/log/2026-10.md)"
+ok "--at with --all ignores an uncommitted shard" "$(tick_ledger_files "$D" --all --at HEAD | sed -n 1,2p)" "$(nl HEAD:.loopd/log.md HEAD:.loopd/log/2026-10.md)"
 ok "reads the committed bytes"                 "$(tick_ledger_read "$D" --at HEAD | sed -n '1,2p;4p')" "$(nl "$head_flat" "$head_nov")"
 ok "the worktree read sees the edit"           "$(tick_ledger_read "$D" | tail -1)" "* TICK late"
 ok "an unknown revision returns 2"             "$(rc tick_ledger_files "$D" --at no-such-rev)" 2
