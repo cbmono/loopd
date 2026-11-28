@@ -33,7 +33,7 @@ bytes() { find -P "$1" -type f -exec wc -c {} \; 2>/dev/null | awk '{ s += $1 } 
 age_of() { local r; for r in $AGES; do [ "${r%%:*}" = "$1" ] && { echo "${r##*:}"; return 0; }; done; return 1; }
 
 for p in $(bash "$HERE/bundle-paths.sh" | sed -n "s#^AB_[A-Z_]*=$AB_DIR/\([^/]*\).*#\1#p"); do KEPT="$KEPT $p"; done
-known() { local k; for k in $KEPT; do case "$1" in $k) return 0 ;; esac; done; return 1; }
+known() { local k r=1; set -f; for k in $KEPT; do case "$1" in $k) r=0; break ;; esac; done; set +f; return $r; }
 
 : > "$work/cand"
 for p in "$root/$AB_DIR"/* "$root/$AB_DIR"/.[!.]* "$root/$AB_DIR"/..?*; do
@@ -82,8 +82,8 @@ fi
 awk -F'\t' '$1 == ".tick-receipts" { print $2 }' "$work/cand" | while IFS= read -r f; do
   r="$(awk '$1 == "repo" { print $2; exit }' "$root/$f")"; n="$(awk '$1 == "pr" { print $2; exit }' "$root/$f")"
   s=""
-  if [ "$offline" -eq 0 ] && [[ "$r" == */* && "$n" =~ ^[0-9]+$ ]]; then
-    s="$(grep -m1 "^$r#$n " "$work/prs" 2>/dev/null | cut -d' ' -f2)"
+  if [ "$offline" -eq 0 ] && [[ "$r" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ && "$n" =~ ^[0-9]+$ ]]; then
+    s="$(awk -v k="$r#$n" '$1 == k { print $2; exit }' "$work/prs" 2>/dev/null)"
     [ -n "$s" ] || { s="$(gh pr view "$n" -R "$r" --json state -q .state 2>/dev/null </dev/null)" || s=UNKNOWN
                      printf '%s#%s %s\n' "$r" "$n" "${s:-UNKNOWN}" >> "$work/prs"; }
   fi
@@ -97,7 +97,10 @@ done
 total=0; count=0
 while IFS='	' read -r d f; do
   grep -qxF "$f" "$work/keep" && continue
+  case "$f" in "$AB_DIR/$d/"*) ;; *) continue ;; esac
+  case "/$f/" in */../*|*/./*) continue ;; esac
   [ -f "$root/$f" ] && [ ! -L "$root/$f" ] || continue
+  case "$(cd -P "$(dirname "$root/$f")" 2>/dev/null && pwd -P)/" in "$root/$AB_DIR/$d/"*) ;; *) continue ;; esac
   b="$(wc -c < "$root/$f" | tr -d ' ')"
   if [ "$apply" -eq 0 ]; then echo "would remove $f $b"
   else

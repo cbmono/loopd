@@ -51,6 +51,7 @@ put "$L/.mystery/blob" 90 abcdefghi
 printf 'old\n' > "$TMP/outside/far.txt"; old 90 "$TMP/outside/far.txt"
 ln -s "$TMP/outside" "$B/$L/tmp"; ln -s "$TMP/outside/far.txt" "$B/$L/.scratch/link"
 put "tmp/root-scratch.txt" 90
+put notes.md 90; put "$L/.scratch/a"$'\n'"notes.md" 90
 git -C "$B" init -q && git -C "$B" add "$L/.scratch/tracked.txt" instance.config.json \
   && git -C "$B" -c user.name=F -c user.email=f@example.com -c commit.gpgsign=false commit -qm fixture || die "git fixture"
 
@@ -90,6 +91,7 @@ ok "apply: nothing kept, tracked or unowned is removed" \
    "$(has "$L/.pr-cache/o__r__1.json")$(has "$L/.mystery/blob")$(has "$L/.scratch/tracked.txt")$(has "$L/.handoffs/.gitignore")" yesyesyesyes
 ok "apply: no symlink target and nothing outside .loopd/ is removed" \
    "$(has "$L/.scratch/link")$([ -f "$TMP/outside/far.txt" ] && echo yes)$(has tmp/root-scratch.txt)" yesyesyes
+ok "newline: a file name carrying a newline never names a path outside .loopd/" "$(grep -c '^would remove notes.md' <<<"$DRY")$(has notes.md)" 0yes
 ok "apply: every removed path is under .loopd/" "$(grep '^removed' <<<"$APP" | grep -vc "^removed $L/")" 0
 ok "usage: a root with no .loopd exits 2" "$(bash "$SCRIPT" "$TMP/outside" >/dev/null 2>&1; echo $?)" 2
 
