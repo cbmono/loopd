@@ -33,6 +33,7 @@
 #
 # WHICH `claude`. Under tests/run.sh the shim on PATH execs the real binary for exactly
 # these two shapes and AB_CLAUDE_REAL names it (empty = none on this machine); by hand, PATH.
+# `plugin test` runs under a throwaway CLAUDE_CONFIG_DIR: a session's own may have hook modules off.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -53,6 +54,8 @@ count() { grep -cE -e "$1" "$2" 2>/dev/null | tr -d ' '; }
 command -v jq >/dev/null 2>&1 || { echo "SKIP: jq not installed"; echo "pass=0 fail=0"; exit 0; }
 
 if [ -n "${AB_TIER:-}" ]; then CLI="${AB_CLAUDE_REAL:-}"; else CLI="$(command -v claude 2>/dev/null || true)"; fi
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/mods.XXXXXX")" && TMP="$(cd "$TMP" && pwd)" || { echo "mods.test: mktemp failed" >&2; exit 2; }
+trap 'rm -rf "$TMP"' EXIT
 
 # The prohibitions, as source patterns. `tool.check` is the permission event; `$.model.` is
 # every model call; REACH is every way out of the process that is not a file; FSWRITE is the
@@ -224,7 +227,8 @@ if [ -n "$CLI" ]; then
   ok "…its calls: line has no \$.model."       "$(grep -c "$MODEL" <<<"$calls_line")" 0
   ok "…nor a process, http or env call"        "$(grep -cE "$REACH_CALLS" <<<"$calls_line")" 0
   ok "…nor an fs.write or fs.ancestors call"   "$(grep -cE "$FSWRITE_CALLS" <<<"$calls_line")" 0
-  tout="$(cd "$PLUGIN" && claude plugin test </dev/null 2>&1)"; trc=$?
+  CFG="$(mktemp -d "$TMP/config.XXXXXX")" || { echo "mods.test: mktemp failed" >&2; exit 2; }
+  tout="$(cd "$PLUGIN" && CLAUDE_CONFIG_DIR="$CFG" claude plugin test </dev/null 2>&1)"; trc=$?
   ok "claude plugin test passes"               "$trc" 0
   [ "$trc" -eq 0 ] || printf '%s\n' "$tout" | sed 's/^/        | /'
   ok "…and ran at least one test"              "$(grep -cE '^ *[1-9][0-9]* pass' <<<"$tout")" 1
@@ -236,8 +240,6 @@ echo
 echo "== the sweep is not vacuous, and the source read bites =="
 # A copy of the shipped module with each prohibition planted: the same patterns catch it.
 # Planted as a top-level function so the grep is not merely matching its own comment.
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/mods.XXXXXX")" || { echo "mods.test: mktemp failed" >&2; exit 2; }
-trap 'rm -rf "$TMP"' EXIT
 ok "the shipped module is clean of all four" \
    "$(( $(count "$MODEL" "$MOD") + $(count "$CHECK" "$MOD") + $(count "$REACH" "$MOD") + $(count "$FSWRITE" "$MOD") ))" 0
 { cat "$MOD"; printf '\nasync function spend($: any) { return $.model.complete({ prompt: "x" }) }\n'; } > "$TMP/model.ts"
