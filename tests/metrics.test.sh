@@ -143,12 +143,17 @@ q() { jq -c "$1" "$F" 2>/dev/null; }
 
 echo "== it writes the file =="
 calls; bash "$M" "$B"; ok "exit 0" "$?" 0
-ok "schema_version" "$(q .schema_version)" 2
+ok "schema_version" "$(q .schema_version)" 3
 ok "generated_at is UTC and pinned" "$(q .generated_at)" '"2026-11-01T00:00:00Z"'
 ok "one object per family" "$(q '[.delegation,.time,.tokens,.idle_tick_spend,.blocked_by_cause,.owner_response,.self_merge,.quality,.kb_efficiency] | map(type) | unique')" '["object"]'
 ok "headline holds five strings" "$(q '.headline | map_values(type) | [.delegation_share,.tokens_per_merged_pr,.idle_tick_spend,.top_block_cause,.self_merge_rate] | unique')" '["string"]'
 ok "per-task keys are <slug>/<id>" "$(q '.tasks | keys')" '["alpha/task-001-done","alpha/task-002-live","alpha/task-003-other"]'
 ok "monthly buckets" "$(q '.periods | keys')" '["2026-10"]'
+pv() { jq -r --arg l "$2" '[.pane[].rows[] | select(.label == $l)][0] | .value + (if .stale then " stale" else "" end)' "$1"; }
+ok "pane: 24 figures in 11 groups" "$(q '[(.pane | length), ([.pane[].rows[]] | length)]')" '[11,24]'
+ok "pane: every value a ready string" "$(q '[.pane[].rows[] | .value | type] | unique')" '["string"]'
+ok "pane: a month with no record is source none, drawn —, never 0" "$(pv "$F" "Merged PRs")" "— / 2"
+ok "pane: a figure from its family" "$(pv "$F" "Role agents / supervision")" "6k / 1k"
 
 echo "== one computed value per file-sourced family =="
 ok "delegation: share of role-agent tokens (6000/7050)" "$(q .delegation.share_role_agents)" 0.851
@@ -198,6 +203,8 @@ ok "…the gh figures are the previous file's, marked stale" "$(jq -c '[.self_me
 ok "…stale on each" "$(q '[.self_merge.stale, .quality.stale, .time.pr_open_to_merge_hours.stale, .owner_response.ready_pr_to_merge_hours.stale]')" '[true,true,true,true]'
 ok "…and in the headline" "$(q .headline.self_merge_rate)" '"50% (1 of 2) (stale)"'
 ok "…file figures are not stale" "$(q .time.stale)" false
+ok "…pane rows of a stale figure carry stale, after the swap" "$(q '[.pane[].rows[] | select(.stale) | .label]')" '["PR open to merge","Rate","Review findings per PR","Merged in one round"]'
+ok "…and keep the previous value" "$(pv "$F" "Rate")" "50% (1 of 2) stale"
 GH_OFFLINE=1 bash "$M" "$B"; ok "offline twice: one stale marker" "$(q .headline.self_merge_rate)" '"50% (1 of 2) (stale)"'
 ghpr 8 CLOSED 2026-10-04T00:00:00Z null 2026-10-04T01:00:00Z 2026-10-04T01:00:00Z 0
 bash "$M" "$B"; ok "back online: stale cleared" "$(q .self_merge.stale)" false
@@ -259,6 +266,7 @@ grep 'example-user-007 idle — fingerprint unchanged (tick-delta)' "$B/.loopd/l
 bash "$M" "$I"
 ok "tokens unknown" "$(jq -c .idle_tick_spend.tokens_measured "$I/.loopd/METRICS.json")" null
 ok "headline says unknown" "$(jq -r .headline.idle_tick_spend "$I/.loopd/METRICS.json")" "? (3 idle ticks, none measured)"
+ok "pane says unknown, ?" "$(pv "$I/.loopd/METRICS.json" "Measured spend")" "? (0 of 3)"
 
 echo "== the board switch =="
 O="$TMP/off"; mkdir -p "$O/.loopd"; cp "$B/.loopd/log.md" "$O/.loopd/"; echo '{"board": false}' > "$O/instance.config.json"
@@ -324,7 +332,8 @@ ticks idle_ticks idle_share tokens_measured unmeasured_share blocked_by_cause ca
 owner_response answers needs_you_to_action_hours ready_pr_to_merge_hours self_merge quality
 kb_efficiency citation_files sources_citing pr_records cited not_cited mean_tokens mean_rounds
 tasks project status created promoted first_dispatch reflected dispatches_measured tokens_from draft_hours queued_hours in_flight_hours working_hours waiting_hours pr_opened pr_merged stall_count open_questions
-projects state added closed open_days tasks_reflected periods ticks_measured tick_tokens dispatch_tokens idle_measured citations'
+projects state added closed open_days tasks_reflected periods ticks_measured tick_tokens dispatch_tokens idle_measured citations
+pane rows value'
 extra() { # <json> — keys outside ALLOWED; the keys of a by-id map are data, not fields
   jq -r --arg a "$ALLOWED" '
     def ks(m): if type == "object" then to_entries[] | (if m then empty else .key end),
@@ -456,8 +465,8 @@ named() { # <label> <want-substring> — exit 4 with a named error
   out="$(rep "$V")"; ok "$1: exit 4" "$?" 4; ok "…named" "$(has "$out" "metrics-report: .loopd/METRICS.json $2")" 1; }
 : > "$V/.loopd/METRICS.json"; named "a zero-byte file" "is empty"
 head -c 300 "$TMP/report-before.json" > "$V/.loopd/METRICS.json"; named "a truncated file" "is truncated or not JSON"
-variant '.schema_version = 3'; named "an unknown schema" 'has an unknown schema_version 3'
-variant 'del(.periods)'; named "a missing section" "is missing a section of schema 2"
+variant '.schema_version = 4'; named "an unknown schema" 'has an unknown schema_version 4'
+variant 'del(.periods)'; named "a missing section" "is missing a section of schema 3"
 variant '.'; out="$(cd "$V" && PATH="$TMP/nojq" "$BASH" "$MR" 2>&1)"; rc=$?
 ok "without jq: exit 2 and a named error" "$rc $(has "$out" 'jq not found')" "2 1"
 ok "metrics-report.sh never uses python3" "$(grep -c python3 "$MR" | tr -d ' ')" 0
