@@ -99,6 +99,6 @@ tick_ledger_read() { # <root> [--all] [--at <rev>]
   _tick_ledger_opts "$@" || return 2
   names="$(_tick_ledger_names "$root" "$all" "$at")" || return 2
   [ -n "$names" ] || return 0
-  out="$(_tick_ledger_cat "$root" "$at" "$names" && printf x)"
-  case "$out" in *x) printf '%s' "${out%x}" ;; *) return 2 ;; esac
+  out="$(_tick_ledger_cat "$root" "$at" "$names" && printf x)" || return 2
+  printf '%s' "${out%x}"
 }

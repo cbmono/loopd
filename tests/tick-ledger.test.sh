@@ -91,10 +91,10 @@ else
   ok "an unreadable shard directory returns 2"  "$(rc tick_ledger_files "$E")" 2
   ok "the caller is not exited"                 "$(bash -c '. "$1"; tick_ledger_read "$2"; echo "alive rc=$?"' _ "$LIB" "$E" 2>/dev/null)" "alive rc=2"
   chmod 755 "$E/.loopd/log"
-  echo '* TICK nov' >"$E/.loopd/log/2026-11.md"; chmod 000 "$E/.loopd/log/2026-11.md"
+  printf 'ends in x' >"$E/.loopd/log/2026-10.md"; echo '* TICK nov' >"$E/.loopd/log/2026-11.md"; chmod 000 "$E/.loopd/log/2026-11.md"
   ok "an unreadable shard: rc 2 and no partial output" "$(tick_ledger_read "$E"; echo "rc=$?")" "rc=2"
   chmod 644 "$E/.loopd/log/2026-11.md"
-  ok "the same ledger reads whole once readable" "$(tick_ledger_read "$E")" "$(nl f '* TICK nov')"
+  ok "the same ledger reads whole once readable" "$(tick_ledger_read "$E")" "$(printf 'f\nends in x* TICK nov')"
 fi
 ok "the library never calls exit"              "$(grep -cE '(^|[;&|[:space:]])exit([[:space:]]|$)' "$LIB")" 0
 ok "the header says the read is not chronological" "$(sed -n '1,10p' "$LIB" | grep -c 'NOT chronological')" 1
