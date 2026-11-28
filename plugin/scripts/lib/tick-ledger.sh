@@ -110,7 +110,7 @@ tick_ledger_read() { # <root> [--all] [--at <rev>]
   printf '%s' "${out%x}"
 }
 
-tick_ledger_last_full() { # <root> — the newest FULL tick in the default window: an open: and a close: line at one timestamp
+tick_ledger_last_full() { # <root> — newest timestamp with an open: and a close: line
   local names n f=()
   names="$(tick_ledger_files "${1:-}")" || return 2
   [ -n "$names" ] || return 0

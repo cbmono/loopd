@@ -6,7 +6,7 @@
 # `usage UNKNOWN` dispatch line once a detached session's numbers exist (session-usage.sh
 # supplies them, `--cached`/`--errors`/`--by` appended after the fixed three — this file
 # still reads no transcript); `series` prints the monthly
-# figures from the tick ledger's TICK pairs (every shard) and the task docs' dispatch lines — file reads only,
+# figures from every ledger shard's TICK pairs and the task docs' dispatch lines — file reads only,
 # no `gh`, no transcript. Denominated in TOKENS: no money anywhere, ever.
 # Exit: 0 done, 1 refused (already written), 2 cannot answer, 3 usage.
 # Reasoning: ai-bridge-v3/task-001.
