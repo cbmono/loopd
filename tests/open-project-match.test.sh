@@ -33,6 +33,7 @@ ok "no repo given: kind alone" "$(match "$ASK" build)" "webhooks${T}Retry failed
 ok "a repo URL is the same <org>/<repo>" "$(match "$ASK" build https://github.com/owner/name.git)" "webhooks${T}Retry failed webhook deliveries"$'\nrc=0'
 ok "a kind miss prints nothing" "$(match "$ASK" research)" "rc=0"
 ok "a repo miss prints nothing" "$(match "$ASK" build owner/other)" "rc=0"
+ok "exactly two shared words match" "$(match 'Webhook delivery dashboard' build)" "webhooks${T}Retry failed webhook deliveries"$'\nrc=0'
 ok "one shared word prints nothing" "$(match 'Webhook dashboards for the sales team' build)" "rc=0"
 ok "zero shared words prints nothing" "$(match 'Export invoices as spreadsheets' build)" "rc=0"
 
@@ -42,6 +43,17 @@ proj closed "$WEB"$'kind: build\nstatus: done\ntimestamp: 2026-11-09T00:00:00Z\n
 ok "a closed project never matches" "$(match "$ASK" build)" "rc=0"
 proj held "$WEB"$'status: paused\ntimestamp: 2026-11-01T00:00:00Z\n'
 ok "paused is open, and no kind: is build" "$(match "$ASK" build)" "held${T}Retry failed webhook deliveries"$'\nrc=0'
+
+proj noted "$WEB"$'kind: build\nstatus: "done" # closed\ntimestamp: 2026-11-09T00:00:00Z\n'
+proj quoted "$WEB"$'kind: build\nstatus: \'done\' # closed\ntimestamp: 2026-11-09T00:00:00Z\n'
+ok "a quoted done with a trailing comment is closed" "$(match "$ASK" build)" "held${T}Retry failed webhook deliveries"$'\nrc=0'
+
+echo "== URLs are not a feature area =="
+fresh
+proj issue $'title: "Fix https://github.com/acme/web/issues/12"\ndescription: "See https://github.com/acme/web/issues/12"\ntarget_repo: acme/web\nstatus: active\ntimestamp: 2026-11-01T00:00:00Z\n'
+proj webhooks "$WEB"$'target_repo: acme/web\nstatus: active\ntimestamp: 2026-10-01T00:00:00Z\n'
+ok "an issue-URL ask matches no project by its URL" "$(match 'https://github.com/acme/web/issues/99' build acme/web)" "rc=0"
+ok "the words beside a URL still match" "$(match "$ASK https://github.com/acme/web/issues/99" build acme/web)" "webhooks${T}Retry failed webhook deliveries"$'\nrc=0'
 
 echo "== generic words are not a feature area =="
 fresh
@@ -55,11 +67,15 @@ ok "a single-quoted description holding a quote" "$(match "The webhook's signing
 
 echo "== ties and ranking =="
 fresh
-proj older "$WEB"$'kind: build\nstatus: active\ntimestamp: 2026-10-01T00:00:00Z\n'
-proj newer "$WEB"$'kind: build\nstatus: active\ntimestamp: 2026-11-01T00:00:00Z\n'
+proj a-older "$WEB"$'kind: build\nstatus: active\ntimestamp: 2026-10-01T00:00:00Z\n'
+proj b-newer "$WEB"$'kind: build\nstatus: active\ntimestamp: 2026-11-01T00:00:00Z\n'
 proj alpha $'title: "Webhook backoff"\ndescription: "x"\nkind: build\nstatus: active\ntimestamp: 2026-11-20T00:00:00Z\n'
-ok "a tie goes to the newest timestamp" "$(match "$ASK" build)" "newer${T}Retry failed webhook deliveries"$'\nrc=0'
-ok "more shared words beat a newer project" "$(match 'retried webhook deliveries with backoff' build)" "newer${T}Retry failed webhook deliveries"$'\nrc=0'
+ok "a tie goes to the newest timestamp, read last" "$(match "$ASK" build)" "b-newer${T}Retry failed webhook deliveries"$'\nrc=0'
+ok "more shared words beat a newer project" "$(match 'retried webhook deliveries with backoff' build)" "b-newer${T}Retry failed webhook deliveries"$'\nrc=0'
+fresh
+proj a-newer "$WEB"$'kind: build\nstatus: active\ntimestamp: 2026-11-01T00:00:00Z\n'
+proj b-older "$WEB"$'kind: build\nstatus: active\ntimestamp: 2026-10-01T00:00:00Z\n'
+ok "a tie goes to the newest timestamp, read first" "$(match "$ASK" build)" "a-newer${T}Retry failed webhook deliveries"$'\nrc=0'
 
 echo "== nothing to match, and usage =="
 fresh

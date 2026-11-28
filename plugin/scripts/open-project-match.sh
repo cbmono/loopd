@@ -5,8 +5,9 @@
 #   Usage: open-project-match.sh <bundle> <build|research> [<org>/<repo>] --text-file <f>
 #
 # Prints at most one `<slug>\t<title>`: an open project (not done; no kind: is build) of that kind
-# and, when given, that target_repo, sharing the most content words (two or more) with its title
-# and description; ties go to the newest timestamp. Read-only. Exit: 0 printed or none · 2 usage.
+# and, when given, that target_repo, sharing the most content words (two or more, URLs left out)
+# with its title and description; ties go to the newest timestamp. Read-only. Exit: 0 printed or
+# none · 2 usage.
 # Reasoning: prefer-tasks-in-open-projects/task-003.
 set -uo pipefail
 
@@ -40,12 +41,14 @@ function norm(r) {
 }
 function val(s) {
   sub(/^[^:]*:[ \t]*/, "", s); sub(/[ \t]+$/, "", s)
+  if (s ~ /^"/) sub(/"[ \t]+#.*$/, "\"", s); else if (substr(s, 1, 1) == q) sub(q "[ \t]+#.*$", q, s)
   if (s ~ /^".*"$/) { s = substr(s, 2, length(s) - 2); gsub(/\\"/, "\"", s) }
   else if (length(s) > 1 && substr(s, 1, 1) == q && substr(s, length(s)) == q) { s = substr(s, 2, length(s) - 2); gsub(q q, q, s) }
   else sub(/[ \t]+#.*$/, "", s)
   return s
 }
 function content(s, out,   raw, n, p, i, k) {
+  gsub(/[A-Za-z][A-Za-z0-9+.-]*:\/\/[^ \t]+/, " ", s)
   delete raw; n = split(words(s, raw), p, " "); k = 0
   for (i = 1; i <= n; i++) if (length(p[i]) > 1 && !(p[i] in STOPX)) { out[p[i]] = 1; k++ }
   return k
