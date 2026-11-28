@@ -70,7 +70,7 @@ ok "…and never by the agent"                             "$(in_brief 'never as
 ok "operation 4 runs the match"            "$(in_section '`open-project-match.sh` when the kind part is asked')" yes
 ok "…and add-task.sh, on its answer"       "$(in_section '`add-task.sh` when its answer adds a task')" yes
 ok "…which passes build"                   "$(has "$SKILL" 'scripts/open-project-match.sh . build [<org>/<repo>] --text-file')" yes
-ok "…the repo flag, defaultRepo or none"   "$(has "$SKILL" 'with the `repo=` flag or `<org>/<defaultRepo>` as the repo when either is known, and no repo otherwise')" yes
+ok "…the repo flag, defaultRepo or none"   "$(has "$SKILL" 'with the `repo=` flag (qualified with `org`) or `<org>/<defaultRepo>` as the repo when either is known, and no repo otherwise')" yes
 ok "…offered as the kind part's third option" "$(has "$SKILL" "the kind part's third option, after Build \`(Recommended)\` and Research")" yes
 ok "…never a fourth part or a second question" "$(has "$SKILL" 'never a fourth part and never a second question')" yes
 ok "the option text is there"              "$(grep -c 'add as a task to' "$SKILL" | awk '{print ($1>0)?"yes":"no"}')" yes

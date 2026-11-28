@@ -11,8 +11,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=kb-words.sh
-. "$HERE/kb-words.sh"
+. "$HERE/kb-words.sh" || exit 2
 usage() { sed -n '5p' "$0" >&2; exit 2; }
 
 text=""; args=()

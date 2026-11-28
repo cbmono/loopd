@@ -218,19 +218,6 @@ commit.
    labelled `(Recommended)`. Never add a fourth part:
    - **kind** — "Build — code shipped as PRs" (default) / "Research — docs, decks or
      assets in this bundle".
-
-   **The open-project match — only while the kind part is asked.** Write the description as
-   typed (an issue URL stays the URL, never the fetched text) to
-   `tmp/new-project-description.txt`, then run
-   `${CLAUDE_PLUGIN_ROOT}/scripts/open-project-match.sh . build [<org>/<repo>] --text-file tmp/new-project-description.txt`,
-   with the `repo=` flag or `<org>/<defaultRepo>` as the repo when either is known, and no
-   repo otherwise. A `<slug>\t<title>` line adds `add as a task to <slug>` — `<title>` as
-   the kind part's third option, after Build `(Recommended)` and Research: never a fourth
-   part and never a second question. Choosing it runs
-   `${CLAUDE_PLUGIN_ROOT}/scripts/add-task.sh <slug> --text-file tmp/new-project-description.txt`,
-   relays it as `/loopd:add-task` does, and stops: no operations 5-6 and no scaffold
-   dispatch, with one line naming the flags it dropped. With `kind=` given, all three flags
-   given, `--no-ask` or the form's `submit`, no match runs and the launcher scaffolds as today.
    - **autonomy** — resolve `AUTONOMY.md` first, with
      `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-autonomy.sh --bundle <bundle>` (bundle root,
      then an installed companion — exit 1 means absent). **Absent ⇒ don't ask at
@@ -244,6 +231,19 @@ commit.
      define is used as given, without asking.
    - **inputs** — "Ready now — start refining" (default) / "I'll add files to `sources/`
      first — hold refinement until they land".
+
+   **The open-project match — only while the kind part is asked.** Write the description as
+   typed (an issue URL stays the URL, never the fetched text) to
+   `tmp/new-project-description.txt`, then run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/open-project-match.sh . build [<org>/<repo>] --text-file tmp/new-project-description.txt`,
+   with the `repo=` flag (qualified with `org`) or `<org>/<defaultRepo>` as the repo when
+   either is known, and no repo otherwise. A `<slug>\t<title>` line adds
+   `add as a task to <slug>` — `<title>` as the kind part's third option, after Build
+   `(Recommended)` and Research: never a fourth part and never a second question. Choosing it runs
+   `${CLAUDE_PLUGIN_ROOT}/scripts/add-task.sh <slug> --text-file tmp/new-project-description.txt`,
+   relays it as `/loopd:add-task` does, and stops: no operations 5-6 and no scaffold
+   dispatch, with one line naming the flags it dropped. With `kind=` given, all three flags
+   given, `--no-ask` or the form's `submit`, no match runs and the launcher scaffolds as today.
 
    **Never asked, whatever the kind** — each takes its flag or its default: `clis` (left
    out), `browser` (`off`), `objective` (none), `owner`, `timebox`, the value gate and
