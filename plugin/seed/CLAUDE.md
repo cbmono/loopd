@@ -50,11 +50,12 @@ ls -d ~/.claude/plugins/cache/*/loopd/*/scripts | sort -V | tail -1
 | Fan ad-hoc asks out to background agents | **`/loopd:fanout`** — or give ≥2 independent asks at once |
 | Remove finished worktrees | **`/loopd:prune-wt`** |
 
-**Before suggesting `/loopd:new-project`**, run `<scripts>/open-project-match.sh <bundle> <kind>
-[<org>/<repo>] --text-file <ask>`: a printed slug (open, same kind and target repo, shared
-wording) ⇒ suggest `/loopd:add-task <slug>` instead. A new goal or an unrelated area stays a
-new project; a closed project is never reopened — a follow-up to it is a new project that
-links to it.
+**Before suggesting `/loopd:new-project`**, write the ask to a file and run
+`<scripts>/open-project-match.sh <bundle> <kind> <org>/<repo> --text-file <file>` (omit the
+repo only when unknown). A printed slug is an open project of that kind and repo sharing
+wording: when its goal is the ask's, suggest `/loopd:add-task <slug>`; a new goal or an
+unrelated area stays a new project. A closed project is never reopened — a follow-up to it
+is a new project that links to it.
 
 `/pane` (a mod) draws the board beside the session.
 

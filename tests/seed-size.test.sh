@@ -98,10 +98,10 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # docs with perl and saved a grant to memory. Capped at 400 by the task. Measured, not rounded.
 # 16700 -> 15872 (consistent-chat-formatting/task-001, 2026-11-25). -828 bytes: the link,
 # command and output-style lines restating the Brief style become pointers to it. Measured.
-# 15872 -> 16385 (prefer-tasks-in-open-projects/task-002, 2026-11-28). +513 bytes, 6 lines: the
+# 15872 -> 16470 (prefer-tasks-in-open-projects/task-002, 2026-11-28). +598 bytes, 8 lines: the
 # /loopd:add-task row and the rule to run open-project-match.sh before suggesting a new project.
 # The main thread suggests commands from this file only. Measured, not rounded.
-CEILING=16385
+CEILING=16470
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
