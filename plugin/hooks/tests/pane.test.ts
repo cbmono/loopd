@@ -15,6 +15,7 @@ const STAMPED = CWD + '/.loopd/seed-base/VERSION'
 const METRICS = CWD + '/.loopd/METRICS.json'
 const METRICS_LOCK = CWD + '/.loopd/.metrics-run/lock'
 const METRICS_FAILED = CWD + '/.loopd/.metrics-run/failed'
+const METRICS_SERVED = CWD + '/.loopd/.metrics-run/served'
 const PANE_ID = 'loopd-board'
 
 // What Claude Code passes a ui.render hook for this pane, apart from the surface.
@@ -1392,6 +1393,112 @@ test('METRICS VIEW: a stale file under a live lock keeps its figures and draws c
   expect((await metricsRows(ui))[0]).toBe('METRICS' + ' '.repeat(30) + 'just now')
   await ui.unmount()
 })
+// ---------------------------------------------------------------- Refresh in the Metrics view
+const SID = 'aaaaaaaa-1111-2222-3333-444444444444'
+const REQUESTED = 'refresh requested — the next session turn computes it'
+function asking(on: any, sid: string | null = SID): Map<string, unknown> {
+  const store = new Map<string, unknown>()
+  on('session.id', () => ({ value: sid }))
+  on('store.set', (_$: any, e: any) => { store.set(e.key, e.value); return { value: undefined } })
+  return store
+}
+const asText = async (ui: any) => (await metricsRows(ui)).join(' ')
+
+test('METRICS REFRESH: a press in the Metrics view writes one store record per bundle, whole-second UTC, the newest winning; the Projects view writes none', ONLY, async ($, on) => {
+  const w = metricsWorld()
+  stubs(on, w)
+  const store = asking(on)
+  const clock = mock.clock(on, { now: GENERATED + 1500 })
+  await open($)
+  const ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  await ui.press({ key: 'refresh' })
+  expect(store.size).toBe(0)
+  await ui.press({ key: 'view-metrics' })
+  await ui.press({ key: 'refresh' })
+  expect([...store.entries()]).toEqual([['loopd.metrics.refresh.' + CWD, { sessionId: SID, at: '2026-10-08T01:02:04Z' }]])
+  await clock.advance(61000)
+  await ui.press({ key: 'refresh' })
+  expect([...store.entries()]).toEqual([['loopd.metrics.refresh.' + CWD, { sessionId: SID, at: '2026-10-08T01:03:05Z' }]])
+  expect(w.submitted).toEqual([])
+  await ui.unmount()
+})
+
+test('METRICS REFRESH: no session id writes no record and says so', ONLY, async ($, on) => {
+  const w = metricsWorld()
+  stubs(on, w)
+  const store = asking(on, null)
+  mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w)
+  await ui.press({ key: 'refresh' })
+  expect(store.size).toBe(0)
+  expect(await asText(ui)).not.toContain('refresh requested')
+  expect(await shown(ui)).toContain('metrics refresh not requested — no session id')
+  await ui.unmount()
+})
+
+test('METRICS REFRESH: requested until the served marker holds the request, computing… until a newer file lands, then its figures', ONLY, async ($, on) => {
+  const w = metricsWorld()
+  stubs(on, w)
+  asking(on)
+  const clock = mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w)
+  await ui.press({ key: 'refresh' })
+  let body = await metricsRows(ui)
+  expect(body[0]).toBe('METRICS' + ' '.repeat(28) + '12 min ago')
+  expect(body.slice(1, 3).join(' ')).toBe(REQUESTED)
+  w.files.set(METRICS_SERVED, { text: 'an earlier request\n', mtimeMs: 800 })
+  await clock.advance(5000)
+  expect(await asText(ui)).toContain(REQUESTED)
+  w.files.set(METRICS_SERVED, { text: SNAP.generated_at + '\n', mtimeMs: 801 })
+  await clock.advance(5000)
+  body = await metricsRows(ui)
+  expect(body[0]).toBe('METRICS' + ' '.repeat(28) + 'computing…')
+  expect(body.join(' ')).not.toContain(REQUESTED)
+  expect(body.join('\n')).toContain('132k')
+  w.files.set(METRICS, { text: JSON.stringify({ ...MET, generated_at: SNAP.generated_at, headline: { ...MET.headline, tokens_per_merged_pr: '140k' } }), mtimeMs: 900 })
+  await clock.advance(5000)
+  body = await metricsRows(ui)
+  expect(body[0]).toBe('METRICS' + ' '.repeat(30) + 'just now')
+  expect(body.join('\n')).toContain('140k')
+  expect(w.submitted).toEqual([])
+  await ui.unmount()
+})
+
+test('METRICS REFRESH: a failed request run shows its exit code with the file present', ONLY, async ($, on) => {
+  const w = metricsWorld()
+  stubs(on, w)
+  asking(on)
+  const clock = mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w)
+  await ui.press({ key: 'refresh' })
+  w.files.set(METRICS_SERVED, { text: SNAP.generated_at + '\n', mtimeMs: 800 })
+  w.files.set(METRICS_FAILED, { text: 'exit 2 request ' + SNAP.generated_at + '\n', mtimeMs: 801 })
+  await clock.advance(5000)
+  const body = await metricsRows(ui)
+  expect(body[0]).toBe('METRICS' + ' '.repeat(28) + '12 min ago')
+  expect(body.join(' ')).toContain('refresh not computed — last run failed (exit 2).')
+  expect(body.join('\n')).toContain('132k')
+  await ui.unmount()
+})
+
+test('METRICS REFRESH: with no file, requested, then computing… once served, then the failed run', ONLY, async ($, on) => {
+  const w = metricsWorld(SNAP, null)
+  stubs(on, w)
+  asking(on)
+  const clock = mock.clock(on, { now: GENERATED })
+  const ui = await showMetrics($, w)
+  expect(await asText(ui)).toMatch(/^metrics not computed yet/)
+  await ui.press({ key: 'refresh' })
+  expect(await asText(ui)).toBe(REQUESTED)
+  w.files.set(METRICS_SERVED, { text: SNAP.generated_at + '\n', mtimeMs: 800 })
+  await clock.advance(5000)
+  expect(await asText(ui)).toMatch(/^computing… — this view redraws/)
+  w.files.set(METRICS_FAILED, { text: 'exit 3 request ' + SNAP.generated_at + '\n', mtimeMs: 801 })
+  await clock.advance(5000)
+  expect(await asText(ui)).toMatch(/^metrics not computed — last run failed \(exit 3\)/)
+  await ui.unmount()
+})
+
 for (const [name, met, want] of METRICS_LINES) {
   test('METRICS VIEW: ' + name + ' is one line, naming no tick', ONLY, async ($, on) => {
     const w = metricsWorld(SNAP, met)

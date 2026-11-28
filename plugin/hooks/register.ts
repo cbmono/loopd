@@ -160,6 +160,10 @@ const METRICS_VERSION = 2
 // AB_METRICS_RUN: metrics.sh's run lock, taken over after LOCK_MS, and refresh-state.sh's failure marker
 const METRICS_LOCK = '.loopd/.metrics-run/lock'
 const METRICS_FAILED = '.loopd/.metrics-run/failed'
+// A Refresh in the Metrics view: one store record per bundle; refresh-state.sh writes `served` before its run
+const METRICS_SERVED = '.loopd/.metrics-run/served'
+const REFRESH_KEY = 'loopd.metrics.refresh.'
+const REQUESTED = 'refresh requested — the next session turn computes it'
 const LOCK_MS = 600000
 const HEADLINE = [
   ['delegation_share', 'delegation', 'Delegation'],
@@ -257,9 +261,10 @@ type Metrics = {
   detail: string
   generated_at: string
   computing: boolean
+  request: string          // the pending Refresh's line: REQUESTED or a failed run's; '' otherwise
   rows: { label: string; value: string; stale: boolean }[]
 }
-const NO_METRICS: Metrics = { state: 'unread', path: '', mtimeMs: -1, detail: '', generated_at: '', computing: false, rows: [] }
+const NO_METRICS: Metrics = { state: 'unread', path: '', mtimeMs: -1, detail: '', generated_at: '', computing: false, request: '', rows: [] }
 const NO_COUNTS: Counts = { state: 'absent', mtimeMs: -1, in_progress: null, in_review: null, working: null, idle: null, dead: null, tick: null, need_you: null, in_session: 0, in_session_agents: [], queue: '', tasks: null, status: null, written_at: '', plugin_version: '', latest_version: '' }
 const SEMVER = /^\d+\.\d+\.\d+$/
 const TASK_KEY = /^projects\/([^/]+)\/tasks\/([^/]+)\.md$/
@@ -272,6 +277,7 @@ let mtimeMs = -1         // the snapshot's mtime at the last read; -1 = never re
 let counts: Counts = NO_COUNTS
 let view: 'projects' | 'metrics' = 'projects'
 let metrics: Metrics = NO_METRICS
+let asked = ''           // the `at` of this pane's last Refresh request; '' once a METRICS.json at least as new is read
 let reads = 0            // how many times the file was actually read (the poll skips an unchanged one)
 let timer: { cancel: () => void } | null = null
 let answerQueued = false
@@ -419,7 +425,7 @@ function readMetrics(text: unknown, path: string, m: number): Metrics {
     const v = typeof head[key] === 'string' ? clean(head[key]) : ''
     return { label, value: v || '?', stale: !!f && f.stale === true }
   })
-  return { state: 'ok', path, mtimeMs: m, detail: '', generated_at: str(o.generated_at), computing: false, rows }
+  return { state: 'ok', path, mtimeMs: m, detail: '', generated_at: str(o.generated_at), computing: false, request: '', rows }
 }
 const fileCache = new Map<string, { m: number; text: string }>()
 async function readMoved($: any, path: string): Promise<string> {
@@ -440,14 +446,36 @@ async function metricsLocked($: any, root: string): Promise<boolean> {
   try { st = await $.fs.stat(root + '/' + METRICS_LOCK) } catch { st = null }
   return !!st && typeof st.mtimeMs === 'number' && (await nowMs($)) - st.mtimeMs < LOCK_MS
 }
+const runFailed = (n: string) => 'last run failed (exit ' + n + '). `metrics.sh .` in the bundle root prints why.'
+// Refresh in the Metrics view leaves one record per bundle, the newest press winning; no session id, no record.
+async function requestMetrics($: any): Promise<void> {
+  const { root } = await paneRoot($)
+  const sid = await sessionId($)
+  const now = await nowMs($)
+  if (!root || !sid || !isFinite(now)) { note = 'metrics refresh not requested — no ' + (sid ? 'clock' : 'session id'); noteAt = now; return }
+  const at = new Date(now - now % 1000).toISOString().replace('.000Z', 'Z')
+  try { await $.store.set(REFRESH_KEY + root, { sessionId: sid, at }); asked = at } catch (err) { note = 'metrics refresh not requested: ' + why(err); noteAt = now }
+}
+// The pending request: '' when none or a file at least as new is read, REQUESTED until the
+// hook's served marker holds it, then a failed run's exit code, or 'computing'.
+async function requestState($: any, root: string, generated: string): Promise<string> {
+  if (!asked || (generated !== '' && generated >= asked)) { asked = ''; return '' }
+  if ((await readMoved($, root + '/' + METRICS_SERVED)).trim() !== asked) return REQUESTED
+  const failed = /^exit (\d{1,3}) request (\S+)/.exec(await readMoved($, root + '/' + METRICS_FAILED))
+  return failed && failed[2] === asked ? failed[1] : 'computing'
+}
 async function absentMetrics($: any, root: string): Promise<string> {
   if (!(await exists($, root + '/' + SNAPSHOT))) return 'metrics OFF — no ' + SNAPSHOT + '. The board switch turns them on: that file present and `board` not false in ' + CONFIG + '.'
   let cfg: Record<string, unknown> | null = null
   try { cfg = obj(JSON.parse(await readMoved($, root + '/' + CONFIG))) } catch { cfg = null }
   if (cfg && cfg.board === false) return 'metrics OFF — `board` is false in ' + CONFIG + '. Remove the key, or set it true, to turn them on.'
-  if (await metricsLocked($, root)) return 'computing… — this view redraws when ' + METRICS + ' lands.'
+  const computing = 'computing… — this view redraws when ' + METRICS + ' lands.'
+  if (await metricsLocked($, root)) return computing
+  const request = await requestState($, root, '')
+  if (request === REQUESTED) return REQUESTED
+  if (request === 'computing') return computing
   const failed = /^exit (\d{1,3}) /.exec(await readMoved($, root + '/' + METRICS_FAILED))
-  if (failed) return 'metrics not computed — last run failed (exit ' + failed[1] + '). `metrics.sh .` in the bundle root prints why.'
+  if (failed) return 'metrics not computed — ' + runFailed(failed[1])
   return 'metrics not computed yet — the next session turn computes them.'
 }
 async function refreshMetrics($: any, root: string, force: boolean): Promise<void> {
@@ -460,15 +488,15 @@ async function refreshMetrics($: any, root: string, force: boolean): Promise<voi
     return
   }
   const m = typeof st.mtimeMs === 'number' ? st.mtimeMs : -2
-  const computing = await metricsLocked($, root)
-  if (!force && (metrics.state === 'ok' || metrics.state === 'malformed') && path === metrics.path && m === metrics.mtimeMs) {
-    metrics = { ...metrics, computing }
-    return
+  const locked = await metricsLocked($, root)
+  if (force || !(metrics.state === 'ok' || metrics.state === 'malformed') || path !== metrics.path || m !== metrics.mtimeMs) {
+    let text: unknown = null
+    try { text = await $.fs.read(path) } catch { text = null }
+    reads += 1
+    metrics = readMetrics(text, path, m)
   }
-  let text: unknown = null
-  try { text = await $.fs.read(path) } catch { text = null }
-  reads += 1
-  metrics = { ...readMetrics(text, path, m), computing }
+  const r = await requestState($, root, metrics.generated_at)
+  metrics = { ...metrics, computing: locked || r === 'computing', request: r === REQUESTED ? r : /^\d+$/.test(r) ? 'refresh not computed — ' + runFailed(r) : '' }
 }
 
 // org from the tracked config, the version /loopd:init stamped; either unreadable is ''.
@@ -593,7 +621,7 @@ function newer(a: string, b: string): boolean {
 }
 const updateDue = () => counts.state === 'ok' && !!counts.plugin_version && !!counts.latest_version && newer(counts.latest_version, counts.plugin_version)
 // What the poll compares: an age or a note's expiry changing redraws.
-const metricsAge = (now: number) => metrics.state !== 'ok' ? metrics.detail : metrics.computing ? 'computing…' : age(now, metrics.generated_at)
+const metricsAge = (now: number) => metrics.state !== 'ok' ? metrics.detail : (metrics.computing ? 'computing…' : age(now, metrics.generated_at)) + metrics.request
 function ageKey(now: number): string { return (view === 'metrics' ? metricsAge(now) : board ? headAge(now, board) : '') + '|' + noteLive(now) }
 
 function summary(): string {
@@ -655,8 +683,9 @@ function draw($: any, e: any, now: number): any {
     if (metrics.state === 'unread') rows.push(line(kind === 'not-bundle' || kind === 'malformed' ? detail : 'loopd metrics: reading…', { dimColor: kind === 'unread' }))
     else if (metrics.state !== 'ok') rows.push(line(metrics.detail))
     else {
-      const a = metricsAge(now)
+      const a = metrics.computing ? 'computing…' : age(now, metrics.generated_at)
       rows.push(row(seg('METRICS', { ...HEAD, bold: true }), seg(gap(7 + cols(a))), seg(a, MUTED)))
+      for (const l of metrics.request ? wrap(metrics.request, W, ROW_LINES) : []) rows.push(line(l, MUTED))
       rows.push(line(' '))
       for (const { label, value, stale } of metrics.rows) {
         const v = stale ? value + ' · stale' : value
@@ -916,7 +945,11 @@ function draw($: any, e: any, now: number): any {
       }),
       Button({
         key: 'refresh', ...label('↻ Refresh', RULE),
-        onPress: async () => { await refresh($, true); $.ui.invalidate('ui.render') },
+        onPress: async () => {
+          await refresh($, true)
+          if (view === 'metrics') { await requestMetrics($); await refresh($, false) }
+          $.ui.invalidate('ui.render')
+        },
       }),
       Button({
         key: 'close', ...label('✕ Close Pane', PLUM),

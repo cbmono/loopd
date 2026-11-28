@@ -16,7 +16,24 @@ page is the contract they code against.
   ledger — an `open:` and a `close:` line at one timestamp, the report's stale rule, one
   function (`ab_last_full_tick`). So a fresh install fills within one session turn. An IDLE
   tick never runs it.
-* **The hook's run reads no PR.** It sets `METRICS_GH_MAX_PRS=0`: every other figure is
+* **A pane Refresh asks for one run.** Refresh in the `/pane` Metrics view writes one
+  plugin-store record per bundle, `loopd.metrics.refresh.<bundle root>` =
+  `{ sessionId, at }`, `at` a whole-second UTC timestamp; the newest press wins, and no session
+  id means no record. The worker reads only the `loopd_*.json` store files, takes the record
+  whose root resolves (`pwd -P`) to its own, and starts one run — before the full-tick check,
+  with the same flags — when `generated_at` is older than `at` and `.loopd/.metrics-run/served`
+  does not already hold it. It writes `at` to `served` before the run, so a request is served
+  once: a failed or future-dated one is not retried on every turn, and one is done once
+  `generated_at` is not older than `at` (an overtaken or same-second request included). A failed
+  request run writes `exit <n> request <at>` to `failed`. A held lock starts nothing; the next
+  look serves it.
+* **The status line serves an idle session.** `status-line.sh` starts the worker when
+  `METRICS.json` exists, no lock is held and a `loopd_*.json` store file is newer (`-nt`, no
+  `jq`) than `served`, which the worker touches on every look — so a press is served within one
+  status-line interval, and any other store write starts the worker at most once. Never
+  against `METRICS.json`'s mtime: a run ends by replacing it, so a press made during the run
+  would look served.
+* **The hook's run reads no PR**, a Refresh run included. It sets `METRICS_GH_MAX_PRS=0`: every other figure is
   recomputed, and the `gh` figures of a PR still due a read are the previous file's, marked
   `"stale": true`, until the next full tick reads it (with no previous file, the cache's).
 * **One run at a time.** Every run holds `.loopd/.metrics-run/lock`, a directory, so the
@@ -37,7 +54,10 @@ page is the contract they code against.
 * **What a reader shows before the file exists.** The pane: `metrics OFF` only where
   `SNAPSHOT.json` is absent or `board` is `false`; `computing…` while the lock is under 10
   minutes old; `metrics not computed — last run failed (exit <n>)` after a failed hook run;
-  otherwise `metrics not computed yet` (`plugin/hooks/MODS.md`). The report: "The report"
+  otherwise `metrics not computed yet` (`plugin/hooks/MODS.md`). After a Refresh, with or
+  without the file: `refresh requested — the next session turn computes it` until `served`
+  holds the request, then `computing…` until a file at least as new lands, or the failed
+  request run's exit code. The report: "The report"
   below.
 * **Atomic:** written to a temp file under `.loopd/` and moved into place. Any failure (no
   `jq`, an unreadable task document, a config or usage store that does not parse, a failed
