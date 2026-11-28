@@ -123,6 +123,13 @@ ok "ensure creates the shard bare"             "$(tick_ledger_ensure "$W" .loopd
 ok "…never the flat ledger"                   "$(rc tick_ledger_ensure "$W" .loopd/log.md):$([ -e "$W/.loopd/log.md" ] && echo yes || echo no)" 2:no
 mkdir -p "$TMP/notbundle"
 ok "no .loopd/: rc 2, nothing created"         "$(rc tick_ledger_ensure "$TMP/notbundle" .loopd/log/2026-12.md):$(ls -A "$TMP/notbundle" | wc -l | tr -d ' ')" 2:0
+R="$TMP/race"; lost=0
+for r in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
+  mkdir -p "$R/$r/.loopd"
+  for i in 1 2 3 4; do ( tick_ledger_ensure "$R/$r" .loopd/log/2026-12.md || echo lost >> "$R/$r.lost" ) & done; wait
+  [ -f "$R/$r.lost" ] && lost=$((lost + $(wc -l < "$R/$r.lost")))
+done
+ok "four writers racing on a month's first shard: none fails" "$lost" 0
 mkdir -p "$W/.loopd/log.md"
 ok "a flat path that is not a file: rc 2"      "$(rc tick_ledger_target "$W")" 2
 ok "no script outside the library builds a shard path" \

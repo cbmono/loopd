@@ -81,7 +81,8 @@ if ! ( cd "$inst" && bash "$HERE/validate-bundle.sh" "projects/$slug/project.md"
   echo "new-project-file: the scaffold failed validate-bundle.sh, so nothing was kept" >&2
   exit 2
 fi
-ledger="$(tick_ledger_target "$inst")" && tick_ledger_ensure "$inst" "$ledger" || exit 2
+ledger="$(tick_ledger_target "$inst")" && tick_ledger_ensure "$inst" "$ledger" \
+  || { echo "new-project-file: created projects/$slug, but no tick ledger to write under $inst" >&2; exit 2; }
 python3 - "$inst/$ledger" "$slug" "$repo" "$ts" "$by" "$title" <<'PY' || exit 2
 import os, sys
 path, slug, repo, ts, by, title = sys.argv[1:7]

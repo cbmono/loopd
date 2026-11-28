@@ -723,6 +723,8 @@ ok "two open entries across the window are AMBIGUOUS, nothing written" \
    "$(TICK_LEDGER_NOW=2026-12-01T00:00:05Z "$SRC" record --instance "$SH2" --close x 2>&1 | grep -c 'more than one open'):$(diff -r "$SH2/$AB_LEDGER_DIR" "$TMP/shard2.before" >/dev/null && echo same || echo changed)" 1:same
 ok "…--tick picks the one in the current shard" \
    "$(TICK_LEDGER_NOW=2026-12-01T00:00:05Z "$SRC" record --instance "$SH2" --close x --tick 2026-12-01T00:00:01Z)" "closed: 2026-12-01T00:00:01Z — commit $AB_LEDGER_DIR/2026-12.md"
+ok "…inserted right after its open line in that shard, the other untouched" \
+   "$(awk '/open: two/{o=NR} /close: x/{c=NR} END{print c-o}' "$SH2/$AB_LEDGER_DIR/2026-12.md"):$(diff -q "$SH2/$AB_LEDGER_DIR/2026-11.md" "$TMP/shard2.before/2026-11.md" >/dev/null && echo same || echo changed)" 1:same
 ok "…while two months on the old one is out of the window" \
    "$(TICK_LEDGER_NOW=2027-01-15 "$SRC" record --instance "$SH2" --close x --tick 2026-11-30T23:50:00Z >/dev/null 2>&1; echo $?)" 1
 

@@ -352,6 +352,7 @@ if [ "$close_set" -eq 1 ]; then
   AT="$at" LINE="$line" awk 'NR == ENVIRON["AT"] + 0 { print; print ENVIRON["LINE"]; next } { print }' \
     "$LOG" > "$tmp" || { rm -f "$tmp"; fail2 "cannot write beside $LOG"; }
   [ -s "$tmp" ] || { rm -f "$tmp"; fail2 "refusing to replace $LOG with an empty file"; }
+  grep -qxF -- "$line" "$tmp" || { rm -f "$tmp"; fail2 "line $at of $LOG moved — nothing written"; }
   mv "$tmp" "$LOG" || { rm -f "$tmp"; fail2 "cannot replace $LOG"; }
   echo "closed: $ts — commit ${LOG#"$inst/"}"
   exit 0

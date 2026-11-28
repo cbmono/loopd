@@ -94,8 +94,8 @@ tick_ledger_ensure() { # <root> <target> — creates a missing shard bare, only 
   [ -f "$1/$2" ] && return 0
   case "$2" in "$AB_LEDGER_DIR"/[0-9][0-9][0-9][0-9]-[0-9][0-9].md) ;; *) return 2 ;; esac
   [ -d "$1/$AB_DIR" ] && [ ! -L "$1/$AB_DIR" ] || return 2
-  { [ -d "$1/$AB_LEDGER_DIR" ] || mkdir "$1/$AB_LEDGER_DIR"; } 2>/dev/null || return 2
-  { [ ! -e "$1/$2" ] && [ ! -L "$1/$2" ] && : >> "$1/$2"; } 2>/dev/null || return 2
+  { mkdir "$1/$AB_LEDGER_DIR" || [ -d "$1/$AB_LEDGER_DIR" ]; } 2>/dev/null || return 2
+  [ ! -L "$1/$2" ] && { : >> "$1/$2"; } 2>/dev/null && [ -f "$1/$2" ] || return 2
 }
 
 tick_ledger_files() { # <root> [--all] [--at <rev>]
