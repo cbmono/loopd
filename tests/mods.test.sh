@@ -13,7 +13,6 @@
 # present — the vendor's analysis can see a call routed through a helper that a grep cannot.
 # Where the CLI is absent that half is a SKIP by name, never a pass. `claude plugin test`
 # runs the mods' own kit tests (plugin/hooks/tests/) the same way.
-# It runs under a throwaway CLAUDE_CONFIG_DIR: a session's own one may have hook modules off.
 #
 # THE ONE WIDENING, AND ITS SHAPE (2026-10-08, the pane; 2026-10-09, the signal). The third
 # prohibition used to be every way out of the process — `$.process`, `$.http`, `$.fs`, `$.env`
@@ -34,6 +33,7 @@
 #
 # WHICH `claude`. Under tests/run.sh the shim on PATH execs the real binary for exactly
 # these two shapes and AB_CLAUDE_REAL names it (empty = none on this machine); by hand, PATH.
+# `plugin test` runs under a throwaway CLAUDE_CONFIG_DIR: a session's own may have hook modules off.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
