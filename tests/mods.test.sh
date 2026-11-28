@@ -54,7 +54,7 @@ count() { grep -cE -e "$1" "$2" 2>/dev/null | tr -d ' '; }
 command -v jq >/dev/null 2>&1 || { echo "SKIP: jq not installed"; echo "pass=0 fail=0"; exit 0; }
 
 if [ -n "${AB_TIER:-}" ]; then CLI="${AB_CLAUDE_REAL:-}"; else CLI="$(command -v claude 2>/dev/null || true)"; fi
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/mods.XXXXXX")" || { echo "mods.test: mktemp failed" >&2; exit 2; }
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/mods.XXXXXX")" && TMP="$(cd "$TMP" && pwd)" || { echo "mods.test: mktemp failed" >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 
 # The prohibitions, as source patterns. `tool.check` is the permission event; `$.model.` is
