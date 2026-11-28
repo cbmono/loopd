@@ -2,7 +2,7 @@
 #
 # tick-ledger.test.sh — plugin/scripts/lib/tick-ledger.sh, the tick ledger's monthly-shard
 # reader: the shard for a timestamp, the two-month default window (across a year too), --all,
-# --at <rev>, the strict shard-name filter, flat file first, the empty case and the return-2
+# --at <rev>, the strict shard-name filter, flat file first, the write target, the empty case and the return-2
 # edges, which must never exit the caller. Reasoning: bound-loopd-dir-growth/task-001.
 set -uo pipefail
 
@@ -112,6 +112,28 @@ ok "mixed: a shard's pair outranks the flat one" "$(TICK_LEDGER_NOW=2026-12 tick
 rm "$L/.loopd/log/2026-12.md"
 ok "…the flat pair outranks an older shard's"    "$(TICK_LEDGER_NOW=2026-12 tick_ledger_last_full "$L")" 2026-11-02T00:00:00Z
 ok "…and a close with no open line is never full"     "$(TICK_LEDGER_NOW=2026-11 tick_ledger_last_full "$L")" 2026-11-02T00:00:00Z
+echo "== tick_ledger_target / tick_ledger_ensure: the one write rule (D9) =="
+W="$TMP/write"; mkdir -p "$W/.loopd"; printf '# Log\n' > "$W/.loopd/log.md"
+ok "the flat ledger while it exists"           "$(TICK_LEDGER_NOW=2026-12 tick_ledger_target "$W")" .loopd/log.md
+ok "…ensure leaves it byte-identical"         "$(tick_ledger_ensure "$W" .loopd/log.md; echo "rc=$?"; cat "$W/.loopd/log.md")" "$(printf 'rc=0\n# Log')"
+rm "$W/.loopd/log.md"
+ok "no flat file: the clock's shard"           "$(TICK_LEDGER_NOW=2026-12-01T00:00:05Z tick_ledger_target "$W")" .loopd/log/2026-12.md
+ok "…a timestamp argument outranks the clock"  "$(TICK_LEDGER_NOW=2026-12 tick_ledger_target "$W" 2026-11-30T23:59:59Z)" .loopd/log/2026-11.md
+ok "ensure creates the shard bare"             "$(tick_ledger_ensure "$W" .loopd/log/2026-12.md; echo "rc=$?"; wc -c < "$W/.loopd/log/2026-12.md" | tr -d ' ')" "$(printf 'rc=0\n0')"
+ok "…never the flat ledger"                   "$(rc tick_ledger_ensure "$W" .loopd/log.md):$([ -e "$W/.loopd/log.md" ] && echo yes || echo no)" 2:no
+mkdir -p "$TMP/notbundle"
+ok "no .loopd/: rc 2, nothing created"         "$(rc tick_ledger_ensure "$TMP/notbundle" .loopd/log/2026-12.md):$(ls -A "$TMP/notbundle" | wc -l | tr -d ' ')" 2:0
+R="$TMP/race"; lost=0
+for r in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
+  mkdir -p "$R/$r/.loopd"
+  for i in 1 2 3 4; do ( tick_ledger_ensure "$R/$r" .loopd/log/2026-12.md || echo lost >> "$R/$r.lost" ) & done; wait
+  [ -f "$R/$r.lost" ] && lost=$((lost + $(wc -l < "$R/$r.lost")))
+done
+ok "four writers racing on a month's first shard: none fails" "$lost" 0
+mkdir -p "$W/.loopd/log.md"
+ok "a flat path that is not a file: rc 2"      "$(rc tick_ledger_target "$W")" 2
+ok "no script outside the library builds a shard path" \
+   "$(grep -lE 'AB_LEDGER_DIR\}?/\$|log/\$\(date' "$REPO"/plugin/scripts/*.sh | wc -l | tr -d ' ')" 0
 ok "the library never calls exit"              "$(grep -cE '(^|[;&|[:space:]])exit([[:space:]]|$)' "$LIB")" 0
 ok "the header says the read is not chronological" "$(sed -n '1,10p' "$LIB" | grep -c 'NOT chronological')" 1
 

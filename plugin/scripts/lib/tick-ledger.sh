@@ -2,6 +2,7 @@
 # monthly UTC shards $AB_LEDGER_DIR/<YYYY-MM>.md. Not the KB's per-item ledger.sh.
 # Default window: the clock's month and the one before it; --all reads every shard; --at <rev>
 # reads the one commit <rev> names, printed as its id. The clock is TICK_LEDGER_NOW, else the UTC clock.
+# Writes go to tick_ledger_target: the flat file while it exists, else the clock's shard (D9).
 # The concatenated read is NOT chronological — project sections sit at the flat file's head —
 # so a caller matches lines and never relies on their order.
 # Every function returns, never exits: 0 ok (an empty ledger included), 2 a bad argument, an
@@ -77,6 +78,24 @@ tick_ledger_shard() { # <root> [<ISO ts>]
   [ -n "${1:-}" ] || return 2
   m="$(_tick_ledger_month "${2:-}")" || return 2
   printf '%s/%s/%s.md\n' "$1" "$AB_LEDGER_DIR" "$m"
+}
+
+tick_ledger_target() { # <root> [<ISO ts>] — bundle-relative: the flat file while it exists, else the month's shard
+  local m
+  [ -n "${1:-}" ] || return 2
+  if [ -f "$1/$AB_LEDGER" ]; then printf '%s\n' "$AB_LEDGER"; return 0; fi
+  if [ -e "$1/$AB_LEDGER" ] || [ -L "$1/$AB_LEDGER" ]; then return 2; fi
+  m="$(_tick_ledger_month "${2:-}")" || return 2
+  printf '%s/%s.md\n' "$AB_LEDGER_DIR" "$m"
+}
+
+tick_ledger_ensure() { # <root> <target> — creates a missing shard bare, only under an existing $AB_DIR
+  [ -n "${1:-}" ] && [ -n "${2:-}" ] || return 2
+  [ -f "$1/$2" ] && return 0
+  case "$2" in "$AB_LEDGER_DIR"/[0-9][0-9][0-9][0-9]-[0-9][0-9].md) ;; *) return 2 ;; esac
+  [ -d "$1/$AB_DIR" ] && [ ! -L "$1/$AB_DIR" ] || return 2
+  { mkdir "$1/$AB_LEDGER_DIR" || [ -d "$1/$AB_LEDGER_DIR" ]; } 2>/dev/null || return 2
+  [ ! -L "$1/$2" ] && { : >> "$1/$2"; } 2>/dev/null && [ -f "$1/$2" ] || return 2
 }
 
 tick_ledger_files() { # <root> [--all] [--at <rev>]

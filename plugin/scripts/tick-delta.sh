@@ -7,7 +7,10 @@
 #          tick-delta.sh record --close TEXT [--tick ISO] [--tokens N] [--tools N] [--duration-ms N]
 #          tick-delta.sh record --idle [--tick-id ID] [--swept TEXT]
 #          tick-delta.sh digest [--instance DIR]
+#          tick-delta.sh ledger-target [--instance DIR]
 #
+# `ledger-target` prints, bundle-relative, the file a ledger line is appended to: the flat
+# ledger while it exists, else the current UTC month's shard, created bare when missing.
 # `record --close TEXT` IS THE LEDGER HALF, AND IT TOUCHES NO FINGERPRINT. It appends
 # `* TICK <ts> <by> close: TEXT` BESIDE the tick's own open line rather than rewriting it,
 # so the pair at one timestamp is the tick's wall duration. The three usage flags append
@@ -18,6 +21,8 @@
 # guessing closes the other tick's entry under your summary and leaves yours open.
 # `record --idle` appends the IDLE tick's one already-closed line, offline too: a tick that
 # composed it by hand wrote a root `log.md` the reaper never reads, and held the lock ~70m.
+# Both print the ledger file they wrote, for the tick to commit by name. Neither creates a
+# ledger in a directory with no `.loopd/`: that is exit 2.
 #
 # WHY THIS EXISTS. A tick re-derives everything every time — full task walk, a live
 # read of every open PR — which is correct and stays the default. But measured on a
@@ -142,6 +147,7 @@
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/lib/critique-receipt.sh" || exit 2
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/lib/tick-ledger.sh" || exit 2
 
 STATE_NAME="$AB_STATE_DIR"
 
@@ -149,11 +155,12 @@ usage() {
   echo "Usage: $(basename "$0") check|record|digest [--instance DIR] [--gap TEXT]" >&2
   echo "       $(basename "$0") record --close TEXT [--tick ISO] [--tokens N] [--tools N] [--duration-ms N]" >&2
   echo "       $(basename "$0") record --idle [--tick-id ID] [--swept TEXT]" >&2
+  echo "       $(basename "$0") ledger-target [--instance DIR]" >&2
   exit 3
 }
 
 cmd="${1:-}"; [ "$#" -gt 0 ] && shift
-case "$cmd" in check|record|digest) ;; *) usage ;; esac
+case "$cmd" in check|record|digest|ledger-target) ;; *) usage ;; esac
 
 inst="."
 gap=""
@@ -195,7 +202,13 @@ done
 next_check="on the next tick"
 [ -n "$gap" ] && next_check="in $gap"
 [ -d "$inst" ] || { echo "tick-delta: no such instance directory: $inst" >&2; exit 2; }
-ab_ensure_dir "$inst"
+if [ "$cmd" = ledger-target ]; then
+  target="$(tick_ledger_target "$inst")" && tick_ledger_ensure "$inst" "$target" \
+    || { echo "CANNOT ANSWER: no tick ledger to write under $inst ($AB_LEDGER, $AB_LEDGER_DIR/)." >&2; exit 2; }
+  printf '%s\n' "$target"
+  exit 0
+fi
+[ "$idle" -eq 1 ] || [ "$close_set" -eq 1 ] || ab_ensure_dir "$inst"
 STATE="$inst/$STATE_NAME"
 
 REASON="$inst/$AB_TICK_START/digest-stderr"
@@ -226,8 +239,6 @@ if [ "$idle" -eq 0 ] && { [ -n "$tick_id" ] || [ -n "$swept" ]; }; then
 fi
 if [ "$idle" -eq 1 ]; then
   [ "$close_set" -eq 0 ] || { echo "tick-delta: --idle and --close are two different lines" >&2; exit 3; }
-  LOG="$inst/$AB_LEDGER"
-  [ -f "$LOG" ] && [ -w "$LOG" ] || fail2 "no writable $LOG"
   swept="$(oneline "$swept")"
   case "$tick_id" in *[!A-Za-z0-9._-]*) echo "tick-delta: --tick-id takes a minted id, [A-Za-z0-9._-] only" >&2; exit 3 ;; esac
   # The swept text is agent-relayed, and the reaper parses this line: no ledger grammar, no home path.
@@ -239,22 +250,28 @@ if [ "$idle" -eq 1 ]; then
     claimant="$(awk 'index($0, "claimant:") == 1 { sub(/^claimant:[[:space:]]*/, ""); print; exit }' "$inst/$AB_LOCK" 2>/dev/null)"
     [ "$claimant" = "$tick_id" ] || {
       echo "REFUSED: --tick-id $tick_id is not the claimant on $AB_LOCK (${claimant:-none}) — not closing another tick." >&2; exit 1; }
-    if grep -F -- "$tick_id" "$LOG" | grep -q '^\* TICK '; then
-      echo "REFUSED: $LOG already has a TICK line for $tick_id — not double-writing." >&2; exit 1
+    window="$(tick_ledger_read "$inst")" || fail2 "could not read the tick ledger under $inst"
+    if grep -F -- "$tick_id" <<<"$window" | grep -q '^\* TICK '; then
+      echo "REFUSED: the tick ledger already has a TICK line for $tick_id — not double-writing." >&2; exit 1
     fi
   fi
-  by="$(bash "$(dirname "$0")/decision-stamp.sh" --instance "$inst" --self 2>/dev/null)"
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  target="$(tick_ledger_target "$inst" "$ts")" && tick_ledger_ensure "$inst" "$target" \
+    || fail2 "no tick ledger to write under $inst ($AB_LEDGER, $AB_LEDGER_DIR/)"
+  LOG="$inst/$target"
+  [ -w "$LOG" ] || fail2 "no writable $LOG"
+  by="$(bash "$(dirname "$0")/decision-stamp.sh" --instance "$inst" --self 2>/dev/null)"
   line="* TICK $ts by ${by:-<unknown>} idle — fingerprint unchanged (tick-delta)"
   [ -n "$tick_id" ] && line="$line · $tick_id"
   [ -n "$swept" ] && line="$line · swept: $swept"
   printf '%s\n' "$line" >> "$LOG" || fail2 "cannot append to $LOG"
-  echo "idle: $ts — commit $AB_LEDGER"
+  echo "idle: $ts — commit $target"
   exit 0
 fi
 if [ "$close_set" -eq 1 ]; then
-  LOG="$inst/$AB_LEDGER"
-  [ -f "$LOG" ] && [ -w "$LOG" ] || fail2 "no writable $LOG"
+  files="$(tick_ledger_files "$inst")" || fail2 "could not read the tick ledger under $inst"
+  [ -n "$files" ] || fail2 "no tick ledger under $inst ($AB_LEDGER, $AB_LEDGER_DIR/)"
+  LEDGER=(); while IFS= read -r f; do LEDGER+=("$f"); done <<<"$files"
   close="$(printf '%s' "$close" | tr '\n\t' '  ' | sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//')"
   case "$close" in
     '') echo "tick-delta: --close needs a summary" >&2; exit 3 ;;
@@ -269,27 +286,28 @@ if [ "$close_set" -eq 1 ]; then
     /^\* TICK / {
       o = index($0, " open: "); c = index($0, " close: ")
       if (c > 0 && (o == 0 || c < o)) { closed[$3] = 1; next }
-      if (o > 0) { n++; ts[n] = $3; at[n] = NR }
+      if (o > 0) { n++; ts[n] = $3; at[n] = FNR; fl[n] = FILENAME }
     }
     END {
       want = ENVIRON["WANT"]
       for (i = n; i >= 1; i--) {
         if (ts[i] in closed) continue
         if (want != "" && ts[i] != want) continue
-        if (++open_n == 1) hit = at[i] " " ts[i]
+        if (++open_n == 1) hit = at[i] " " ts[i] " " fl[i]
       }
       if (open_n > 1)  { print "AMBIGUOUS"; exit }
       if (open_n == 1) { print hit; exit }
       print (n > 0 ? (want != "" ? "NOMATCH" : "CLOSED") : "NOOPEN")
     }
-  ' "$LOG")" || fail2 "could not read $LOG"
+  ' "${LEDGER[@]}")" || fail2 "could not read the tick ledger under $inst"
   case "$found" in
-    NOOPEN) echo "REFUSED: no \`open:\` TICK entry in $LOG." >&2; exit 1 ;;
+    NOOPEN) echo "REFUSED: no \`open:\` TICK entry in the tick ledger." >&2; exit 1 ;;
     CLOSED) echo "REFUSED: every open TICK entry already carries a close — not double-writing." >&2; exit 1 ;;
-    NOMATCH) echo "REFUSED: no open TICK entry at \`$tick\` in $LOG — it is already closed, or was never opened." >&2; exit 1 ;;
-    AMBIGUOUS) echo "REFUSED: $LOG has more than one open TICK entry — pass \`--tick <the timestamp of the open line you wrote>\`; closing the newest could close another tick's entry." >&2; exit 1 ;;
+    NOMATCH) echo "REFUSED: no open TICK entry at \`$tick\` in the tick ledger — it is already closed, or was never opened." >&2; exit 1 ;;
+    AMBIGUOUS) echo "REFUSED: the tick ledger has more than one open TICK entry — pass \`--tick <the timestamp of the open line you wrote>\`; closing the newest could close another tick's entry." >&2; exit 1 ;;
   esac
-  at="${found%% *}"; ts="${found#* }"
+  at="${found%% *}"; ts="${found#* }"; LOG="${ts#* }"; ts="${ts%% *}"
+  [ -w "$LOG" ] || fail2 "no writable $LOG"
   by="$(sed -n "${at}p" "$LOG")"; by="${by#\* TICK "$ts"}"; by="${by%% open:*}"
   FMT="$(dirname "$0")/agent-usage.sh"
   [ -x "$FMT" ] || { echo "tick-delta: $FMT is missing — the one usage form lives there." >&2; exit 2; }
@@ -305,7 +323,7 @@ if [ "$close_set" -eq 1 ]; then
       if (c > 0 && (o == 0 || c < o)) closed[$3] = 1; else if (o > 0) opened[$3] = 1
     }
     END { for (t in closed) if ((t in opened) && t < ENVIRON["CUR"] && t > best) best = t; print best }
-  ' "$LOG")"
+  ' "${LEDGER[@]}")"
   if [ -n "$prev" ] && [ -f "$inst/$AB_AWAITING" ] && ! perl -MTime::Local -e '
        my @s = stat $ARGV[0] or exit 0;
        $ARGV[1] =~ /^(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+)Z$/ or exit 0;
@@ -334,8 +352,9 @@ if [ "$close_set" -eq 1 ]; then
   AT="$at" LINE="$line" awk 'NR == ENVIRON["AT"] + 0 { print; print ENVIRON["LINE"]; next } { print }' \
     "$LOG" > "$tmp" || { rm -f "$tmp"; fail2 "cannot write beside $LOG"; }
   [ -s "$tmp" ] || { rm -f "$tmp"; fail2 "refusing to replace $LOG with an empty file"; }
+  grep -qxF -- "$line" "$tmp" || { rm -f "$tmp"; fail2 "line $at of $LOG moved — nothing written"; }
   mv "$tmp" "$LOG" || { rm -f "$tmp"; fail2 "cannot replace $LOG"; }
-  echo "closed: $ts"
+  echo "closed: $ts — commit ${LOG#"$inst/"}"
   exit 0
 fi
 

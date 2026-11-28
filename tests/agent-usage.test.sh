@@ -67,7 +67,7 @@ echo "== the close is an APPEND, and the open line survives it =="
 out="$("$TD" record --instance "$INST" --close "dispatched task-004; reflected task-002 merged" \
         --tokens 412345 --tools 137 --duration-ms 1084221 2>&1)"; rc=$?
 ok "record --close exits 0"                      "$rc" 0
-ok "…and says which entry it closed"            "$out" "closed: 2026-09-13T08:24:17Z"
+ok "…and says which entry it closed"            "$out" "closed: 2026-09-13T08:24:17Z — commit $AB_LEDGER"
 ok "the open line is STILL THERE"                 "$(has "$LOG" '* TICK 2026-09-13T08:24:17Z by cbmono open: dispatch ready tasks')" yes
 ok "…with a close line at the SAME timestamp"   "$(has "$LOG" '* TICK 2026-09-13T08:24:17Z by cbmono close: ')" yes
 ok "…carrying the three numbers, one fixed form" "$(has "$LOG" 'close: dispatched task-004; reflected task-002 merged · usage tokens=412345 tools=137 ms=1084221')" yes

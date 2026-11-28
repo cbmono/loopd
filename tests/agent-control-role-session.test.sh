@@ -25,6 +25,7 @@ printf -- '---\nsession: 11111111-aaaa-4bbb-8ccc-000000000002\n---\n' > "$TASKDO
 OTHERDOC="$INST/projects/p/tasks/task-002.md"
 printf -- '---\nsession: 11111111-aaaa-4bbb-8ccc-000000000009\n---\n' > "$OTHERDOC"
 cp "$REPO/plugin/scripts/control.sh" "$REPO/plugin/scripts/bundle-paths.sh" "$INST/scripts/"
+mkdir -p "$INST/scripts/lib"; cp "$REPO/plugin/scripts/lib/tick-ledger.sh" "$INST/scripts/lib/"
 PLUG="$TMP/plugin"; mkdir -p "$PLUG/hooks" "$PLUG/scripts" "$PLUG/agents" "$PLUG/.claude-plugin"
 cp "$REPO/plugin/.claude-plugin/plugin.json" "$PLUG/.claude-plugin/"
 cp "$REPO/plugin/hooks/agent-control.sh" "$PLUG/hooks/"

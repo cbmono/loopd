@@ -20,6 +20,7 @@ command -v jq >/dev/null 2>&1 || { echo "SKIP: jq not installed (the hook requir
 INST="$TMP/inst"; mkdir -p "$INST/scripts" "$INST/.claude/control"
 printf '{"stuckSignature":true}\n' > "$INST/instance.config.json"
 cp "$REPO/plugin/scripts/control.sh" "$REPO/plugin/scripts/bundle-paths.sh" "$INST/scripts/"
+mkdir -p "$INST/scripts/lib"; cp "$REPO/plugin/scripts/lib/tick-ledger.sh" "$INST/scripts/lib/"
 PLUG="$TMP/plugin"; mkdir -p "$PLUG/hooks" "$PLUG/scripts" "$PLUG/agents" "$PLUG/.claude-plugin"
 cp "$REPO/plugin/.claude-plugin/plugin.json" "$PLUG/.claude-plugin/"
 cp "$REPO/plugin/hooks/agent-control.sh" "$PLUG/hooks/"
