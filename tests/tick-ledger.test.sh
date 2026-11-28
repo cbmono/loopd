@@ -68,12 +68,13 @@ rmdir "$D/.loopd/log/2026-10.md"; shard 2026-10
 echo "== --at <rev>: the committed files =="
 ( cd "$D" && git init -q . && git config user.name example-user-007 && git config user.email u@example.com \
   && git add -A && git commit -qm init ) || { echo "tick-ledger.test: git fixture failed" >&2; exit 2; }
-head_flat="$(cat "$D/.loopd/log.md")"; head_nov="$(cat "$D/.loopd/log/2026-11.md")"
+sha="$(git -C "$D" rev-parse HEAD)"; head_flat="$(cat "$D/.loopd/log.md")"; head_nov="$(cat "$D/.loopd/log/2026-11.md")"
 rm "$D/.loopd/log.md"; echo '* TICK late' >>"$D/.loopd/log/2026-11.md"; shard 2025-01
-ok "lists the committed flat file and window"  "$(tick_ledger_files "$D" --at HEAD)" "$(nl HEAD:.loopd/log.md HEAD:.loopd/log/2026-10.md HEAD:.loopd/log/2026-11.md)"
-ok "--at with --all ignores an uncommitted shard" "$(tick_ledger_files "$D" --all --at HEAD | sed -n 1,2p)" "$(nl HEAD:.loopd/log.md HEAD:.loopd/log/2026-10.md)"
+ok "lists the committed files under the commit id"  "$(tick_ledger_files "$D" --at HEAD)" "$(nl "$sha:.loopd/log.md" "$sha:.loopd/log/2026-10.md" "$sha:.loopd/log/2026-11.md")"
+ok "--at with --all ignores an uncommitted shard" "$(tick_ledger_files "$D" --all --at HEAD | sed -n 1,2p)" "$(nl "$sha:.loopd/log.md" "$sha:.loopd/log/2026-10.md")"
 ok "reads the committed bytes"                 "$(tick_ledger_read "$D" --at HEAD | sed -n '1,2p;4p')" "$(nl "$head_flat" "$head_nov")"
 ok "the worktree read sees the edit"           "$(tick_ledger_read "$D" | tail -1)" "* TICK late"
+ok "a revision that is not a commit returns 2"  "$(rc tick_ledger_read "$D" --at 'HEAD^{tree}')" 2
 ok "an unknown revision returns 2"             "$(rc tick_ledger_files "$D" --at no-such-rev)" 2
 ok "--at with no revision returns 2"           "$(rc tick_ledger_read "$D" --at)" 2
 ok "an unknown flag returns 2"                 "$(rc tick_ledger_files "$D" --every)" 2
@@ -85,8 +86,13 @@ ok "the empty read returns 0"                  "$(rc tick_ledger_read "$E")" 0
 mkdir -p "$E/.loopd/log"
 ok "an empty shard directory: nothing"         "$(tick_ledger_files "$E" --all; echo "rc=$?")" "rc=0"
 ok "a set -e caller survives a flat-only ledger" "$(echo f >"$E/.loopd/log.md"; bash -ec '. "$1"; tick_ledger_files "$2" >/dev/null; tick_ledger_read "$2" >/dev/null; echo alive' _ "$LIB" "$E")" alive
+ok "an absent root returns 2"                  "$(rc tick_ledger_files "$TMP/no-such-root")" 2
 if [ "$(id -u)" = 0 ]; then echo "  SKIP  root reads a 000 directory; the unreadable case is unprovable here"
 else
+  chmod 000 "$E/.loopd"
+  ok "an unsearchable bundle directory returns 2" "$(rc tick_ledger_files "$E")" 2
+  ok "…and the read returns 2, not an empty ledger" "$(rc tick_ledger_read "$E")" 2
+  chmod 755 "$E/.loopd"
   chmod 000 "$E/.loopd/log"
   ok "an unreadable shard directory returns 2"  "$(rc tick_ledger_files "$E")" 2
   ok "the caller is not exited"                 "$(bash -c '. "$1"; tick_ledger_read "$2"; echo "alive rc=$?"' _ "$LIB" "$E" 2>/dev/null)" "alive rc=2"

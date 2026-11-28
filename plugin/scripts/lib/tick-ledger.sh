@@ -1,7 +1,7 @@
 # tick-ledger.sh — sourced, never run: the tick ledger's files, the flat $AB_LEDGER and the
 # monthly UTC shards $AB_LEDGER_DIR/<YYYY-MM>.md. Not the KB's per-item ledger.sh.
 # Default window: the clock's month and the one before it; --all reads every shard; --at <rev>
-# reads what is committed at <rev>. The clock is TICK_LEDGER_NOW, else the UTC clock.
+# reads the one commit <rev> names, printed as its id. The clock is TICK_LEDGER_NOW, else the UTC clock.
 # The concatenated read is NOT chronological — project sections sit at the flat file's head —
 # so a caller matches lines and never relies on their order.
 # Every function returns, never exits: 0 ok (an empty ledger included), 2 a bad argument, an
@@ -25,7 +25,9 @@ _tick_ledger_prev() { # <YYYY-MM>
   printf '%04d-%02d\n' "$y" "$m"
 }
 
-_tick_ledger_opts() { # [--all] [--at <rev>]
+_tick_ledger_opts() { # <root> [--all] [--at <rev>]
+  local root="$1"
+  shift
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --all) all=1 ;;
@@ -34,6 +36,7 @@ _tick_ledger_opts() { # [--all] [--at <rev>]
     esac
     shift
   done
+  if [ -n "$at" ]; then at="$(git -C "$root" rev-parse --verify --quiet "$at^{commit}" 2>/dev/null)" || return 2; fi
 }
 
 _tick_ledger_names() { # <root> <all> <at>
@@ -44,6 +47,10 @@ _tick_ledger_names() { # <root> <all> <at>
     listing="$(git -C "$root" ls-tree "$at" -- "$AB_LEDGER" "$AB_LEDGER_DIR/" 2>/dev/null)" || return 2
     listing="$(printf '%s\n' "$listing" | awk -F'\t' '$1 ~ / blob / { print $2 }')"
   else
+    [ -d "$root" ] && [ -x "$root" ] || return 2
+    if [ -e "$root/$AB_DIR" ] || [ -L "$root/$AB_DIR" ]; then
+      [ -d "$root/$AB_DIR" ] && [ -x "$root/$AB_DIR" ] || return 2
+    fi
     if [ -e "$d" ] || [ -L "$d" ]; then
       [ -d "$d" ] && [ -r "$d" ] && [ -x "$d" ] || return 2
     fi
@@ -76,7 +83,7 @@ tick_ledger_files() { # <root> [--all] [--at <rev>]
   local root="${1:-}" all="" at="" names n
   [ -n "$root" ] || return 2
   shift
-  _tick_ledger_opts "$@" || return 2
+  _tick_ledger_opts "$root" "$@" || return 2
   names="$(_tick_ledger_names "$root" "$all" "$at")" || return 2
   [ -n "$names" ] || return 0
   while IFS= read -r n; do
@@ -96,7 +103,7 @@ tick_ledger_read() { # <root> [--all] [--at <rev>]
   local root="${1:-}" all="" at="" names out
   [ -n "$root" ] || return 2
   shift
-  _tick_ledger_opts "$@" || return 2
+  _tick_ledger_opts "$root" "$@" || return 2
   names="$(_tick_ledger_names "$root" "$all" "$at")" || return 2
   [ -n "$names" ] || return 0
   out="$(_tick_ledger_cat "$root" "$at" "$names" && printf x)" || return 2
