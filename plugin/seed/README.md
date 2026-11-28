@@ -14,7 +14,8 @@ were **copied once and are yours**. The slash commands come from the same **plug
 `/loopd:answer`, `/loopd:board`,
 `/loopd:fanout`) and are
 installed per machine, not per instance. This repo tracks only its own
-**content**: `projects/`, `knowledge/`, `log.md`, an optional `objectives/`, and
+**content**: `projects/`, `knowledge/`, the tick ledger (`.loopd/log/<YYYY-MM>.md`, or a
+flat `.loopd/log.md` until it is sharded), an optional `objectives/`, and
 `instance.config.json`.
 
 For a unified tree (this control panel pinned on top, the group's product repos

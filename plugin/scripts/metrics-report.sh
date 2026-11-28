@@ -9,6 +9,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
+. "$HERE/lib/tick-ledger.sh" || exit 2
 
 die() { echo "metrics-report: $2" >&2; exit "$1"; }
 project=""; since=""
@@ -37,7 +38,7 @@ if [ "$board" = true ]; then
   echo "Metrics are off: \"board\": false in instance.config.json. Remove the key (or set it true) to turn them on; the next tick that changes something writes $F."
   exit 0
 fi
-last="$(ab_last_full_tick "$AB_LEDGER")"
+last="$(tick_ledger_last_full .)"
 tried=""; failed=""
 if [ ! -L "$AB_METRICS_RUN" ] && [ "$(cat "$AB_METRICS_RUN/attempt" 2>/dev/null)" = "${last:-none}" ]; then
   tried=yes

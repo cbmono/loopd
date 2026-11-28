@@ -12,6 +12,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
+. "$HERE/lib/tick-ledger.sh" || exit 2
 
 die() { echo "metrics: $2" >&2; exit "$1"; }
 [ "$#" -eq 1 ] || die 3 "usage: metrics.sh <bundle-root>"
@@ -63,7 +64,9 @@ awk "$AWK_LIB"'
       q(m), tn, tm, nz(val(" " p[2], "tokens")), dn, dm, nz(val(" " p[3], "tokens"))
   }' "$work/series.txt" > "$rec" || die 2 "cannot read the series"
 
-awk "$AWK_LIB"'
+ledger="$(tick_ledger_files "$root" --all)" && [ -n "$ledger" ] \
+  || die 2 "cannot read the tick ledger ($AB_LEDGER, $AB_LEDGER_DIR/)"
+tick_ledger_read "$root" --all | awk "$AWK_LIB"'
   /^\* TICK [0-9][0-9][0-9][0-9]-[0-9][0-9]-/ {
     o = index($0, " open: "); c = index($0, " close: ")
     if (o > 0 && (c == 0 || c > o)) {
@@ -88,7 +91,7 @@ awk "$AWK_LIB"'
     ev = ($0 ~ /Project added: /) ? "added" : "closed"
     s = $0; sub(/.* Project (added|closed|re-closed): /, "", s); sub(/[ `].*/, "", s)
     printf "{\"k\":\"proj\",\"slug\":%s,\"event\":\"%s\",\"date\":%s}\n", q(s), ev, q($2)
-  }' "$root/$AB_LEDGER" >> "$rec" || die 2 "cannot read $AB_LEDGER"
+  }' >> "$rec" || die 2 "cannot read the tick ledger ($AB_LEDGER, $AB_LEDGER_DIR/)"
 
 tasks=("$root"/projects/*/tasks/*.md)
 if [ "${#tasks[@]}" -gt 0 ]; then

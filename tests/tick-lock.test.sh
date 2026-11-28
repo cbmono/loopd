@@ -1352,6 +1352,22 @@ sed -i.bak '/^session:/d' "$FN/$AB_LOCK"
 bash "$LOCKSH" status --instance "$FN" >/dev/null 2>&1; RC=$?
 ok "no session recorded ⇒ HELD (1), as the reaper frees nothing" "$RC" 1
 
+echo "== FINISHED from a shard: the close is committed in last month's shard, beside a flat ledger =="
+FS="$TMP/finished-shard"; mkinst "$FS"
+printf '/%s\n/%s\n' "$AB_LOCK" "$AB_LOCK_CLAIM" > "$FS/.gitignore"
+printf '* TICK 2026-10-02T08:00:00Z by someone close: an older tick\n' > "$FS/$AB_LEDGER"
+{ git -C "$FS" init -q && git -C "$FS" add -A && git -C "$FS" -c user.name=t -c user.email=t@example.com commit -qm l; } >/dev/null 2>&1
+bash "$LOCKSH" acquire --instance "$FS" --claimant "$FID" >/dev/null 2>&1
+printf 'session: 00000000-0000-4000-8000-000000000000\n' >> "$FS/$AB_LOCK"
+mkdir -p "$FS/$AB_LEDGER_DIR"
+printf '* TICK 2026-11-13T21:43:39Z by someone idle — fingerprint unchanged (tick-delta) · %s\n' "$FID" > "$FS/$AB_LEDGER_DIR/2026-11.md"
+fs_status() { OUT="$(TICK_LEDGER_NOW=2026-12-01T00:00:05Z bash "$LOCKSH" status --instance "$FS" 2>&1)"; RC=$?; }
+fs_status
+ok "the shard's close uncommitted ⇒ not FINISHED"   "$RC:$(grep -c '^FINISHED' <<<"$OUT" | tr -d ' ')" "1:0"
+{ git -C "$FS" add -A && git -C "$FS" -c user.name=t -c user.email=t@example.com commit -qm c; } >/dev/null 2>&1
+fs_status
+ok "…committed in the shard ⇒ 5, FINISHED"          "$RC:$(grep -c "^FINISHED: tick $FID" <<<"$OUT" | tr -d ' ')" "5:1"
+
 echo "== outside an instance root: exit 2, one stderr line, no $AB_DIR left behind =="
 NI="$TMP/not-an-instance"; mkdir -p "$NI"
 for c in acquire release status; do

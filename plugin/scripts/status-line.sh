@@ -15,6 +15,7 @@ set -uo pipefail
 # `|| exit 0`, not the house `|| exit 2`: the exit contract above wins — a status line
 # never fails a session, even when its own resolver is gone.
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 0
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/lib/tick-ledger.sh" || exit 0
 
 INST=""; COLOR=auto
 while [ $# -gt 0 ]; do
@@ -109,22 +110,20 @@ fi
 lock=free
 [ -f "$root/$AB_LOCK" ] && lock=held
 
-# --- last tick: log.md's last `* TICK` line ---------------------------------------------
+# --- last tick: the newest `* TICK` timestamp in the ledger's window ----------------------
 # NOT `.tick-state`: tick-delta.sh refuses to stamp it while any task is in-progress, so it
 # is guaranteed stale exactly while `in progress` is non-zero. An `open:` line counts — a tick
 # that started and has not closed is still the last tick.
 last="$UNKNOWN"
-if [ -r "$root/$AB_LEDGER" ]; then
-  ts="$(awk '/^\* TICK [0-9][0-9][0-9][0-9]-[0-9][0-9]-/ { t = $3 } END { print t }' \
-        "$root/$AB_LEDGER" 2>/dev/null)"
-  if [ -n "$ts" ]; then
-    # The stamp is UTC and the reader is not. BSD first — it needs `-u` on the PARSE and a
-    # second call to print local, and GNU `date` has no `-j` to be confused by.
-    ep="$(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$ts" '+%s' 2>/dev/null)" || ep=""
-    if [ -n "$ep" ]; then hm="$(date -r "$ep" '+%H:%M' 2>/dev/null)" || hm=""
-    else                  hm="$(date -d "$ts" '+%H:%M' 2>/dev/null)" || hm=""; fi
-    [ -n "$hm" ] && last="$hm"
-  fi
+ts="$(tick_ledger_read "$root" 2>/dev/null \
+      | awk '/^\* TICK [0-9][0-9][0-9][0-9]-[0-9][0-9]-/ { if ($3 > t) t = $3 } END { print t }')"
+if [ -n "$ts" ]; then
+  # The stamp is UTC and the reader is not. BSD first — it needs `-u` on the PARSE and a
+  # second call to print local, and GNU `date` has no `-j` to be confused by.
+  ep="$(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$ts" '+%s' 2>/dev/null)" || ep=""
+  if [ -n "$ep" ]; then hm="$(date -r "$ep" '+%H:%M' 2>/dev/null)" || hm=""
+  else                  hm="$(date -d "$ts" '+%H:%M' 2>/dev/null)" || hm=""; fi
+  [ -n "$hm" ] && last="$hm"
 fi
 
 n_colour() { case "$1" in "$UNKNOWN") printf '%s' "$C_PINK" ;; 0) printf '%s' "$C_DIM" ;; *) printf '%s' "$2" ;; esac; }

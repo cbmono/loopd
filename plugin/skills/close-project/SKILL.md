@@ -221,7 +221,7 @@ is, while the log entry still names the human who decided.
 > perform, which is a better dry-run report than a description of one.
 
 > **A re-run after a handed-over `--apply` finishes step 7 and nothing else.** The marker
-> is step 3's entry: when `git diff -- .loopd/log.md` adds a **Project closed** entry
+> is step 3's entry: when `git diff -- .loopd/log.md .loopd/log/` adds a **Project closed** entry
 > naming `<slug>`, an earlier closeout ran steps 1–6 and stopped at step 7. Skip steps 0–6
 > and run step 7 — its `--apply` too, unless `projects/<slug>/` is already gone with its
 > deletion staged (`git status --porcelain -- projects/<slug>`); a second `--apply` on a

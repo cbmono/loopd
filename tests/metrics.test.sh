@@ -260,6 +260,14 @@ bash "$M" "$I"
 ok "tokens unknown" "$(jq -c .idle_tick_spend.tokens_measured "$I/.loopd/METRICS.json")" null
 ok "headline says unknown" "$(jq -r .headline.idle_tick_spend "$I/.loopd/METRICS.json")" "? (3 idle ticks, none measured)"
 
+echo "== full history: the flat ledger and every monthly shard =="
+X="$TMP/sharded"; mkdir -p "$X/.loopd/log"; echo '{}' > "$X/instance.config.json"; echo '{}' > "$X/.loopd/SNAPSHOT.json"
+for fm in log.md:09 log/2026-06.md:06 log/2026-11.md:11; do
+  printf '* TICK 2026-%s-02T00:00:00Z by example-user-007 idle — fingerprint unchanged (tick-delta)\n' "${fm#*:}" > "$X/.loopd/${fm%:*}"
+done
+TICK_LEDGER_NOW=2026-11-01 bash "$M" "$X"
+ok "an idle tick from each file, one shard outside the default window" "$(jq -c .idle_tick_spend.idle_ticks "$X/.loopd/METRICS.json")" 3
+
 echo "== the board switch =="
 O="$TMP/off"; mkdir -p "$O/.loopd"; cp "$B/.loopd/log.md" "$O/.loopd/"; echo '{"board": false}' > "$O/instance.config.json"
 echo '{}' > "$O/.loopd/SNAPSHOT.json"; bash "$M" "$O"

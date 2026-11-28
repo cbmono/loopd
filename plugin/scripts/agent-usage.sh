@@ -6,12 +6,13 @@
 # `usage UNKNOWN` dispatch line once a detached session's numbers exist (session-usage.sh
 # supplies them, `--cached`/`--errors`/`--by` appended after the fixed three — this file
 # still reads no transcript); `series` prints the monthly
-# figures from log.md's TICK pairs and the task docs' dispatch lines — file reads only,
+# figures from every ledger shard's TICK pairs and the task docs' dispatch lines — file reads only,
 # no `gh`, no transcript. Denominated in TOKENS: no money anywhere, ever.
 # Exit: 0 done, 1 refused (already written), 2 cannot answer, 3 usage.
 # Reasoning: ai-bridge-v3/task-001.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/lib/tick-ledger.sh" || exit 2
 
 NOTES='# Notes'
 UNKNOWN='usage UNKNOWN'
@@ -143,8 +144,9 @@ case "$cmd" in
 
   series)
     [ -d "$inst" ] || die2 "no such instance directory: $inst"
-    [ -r "$inst/$AB_LEDGER" ] || die2 "no readable $inst/$AB_LEDGER"
-    { cat "$inst/$AB_LEDGER"
+    ledger="$(tick_ledger_files "$inst" --all)" && [ -n "$ledger" ] \
+      || die2 "no readable tick ledger ($inst/$AB_LEDGER, $inst/$AB_LEDGER_DIR/)"
+    { tick_ledger_read "$inst" --all || exit 2
       for f in "$inst"/projects/*/tasks/*.md; do [ -e "$f" ] || continue; cat "$f" || exit 2; done
     } | awk '
       function val(s, k,   r) {

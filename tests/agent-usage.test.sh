@@ -234,6 +234,12 @@ mkdir -p "$TMP/i7/$AB_DIR"; : > "$TMP/i7/$AB_LEDGER"
 ok "an empty ledger says UNKNOWN, not nothing"    "$("$AU" series --instance "$TMP/i7" | grep -c '^UNKNOWN — no TICK or DISPATCH lines')" 1
 ok "no readable log.md is exit 2"                 "$("$AU" series --instance "$TMP/i7/nope" >/dev/null 2>&1; echo $?)" 2
 ok "a bundle with no task docs is exit 0"         "$("$AU" series --instance "$TMP/i6" >/dev/null 2>&1; echo $?)" 0
+mkdir -p "$TMP/i11/$AB_LEDGER_DIR"
+printf '* TICK 2026-09-05T00:00:00Z by a close: flat · usage tokens=1 tools=1 ms=1\n' > "$TMP/i11/$AB_LEDGER"
+printf '* TICK 2026-06-05T00:00:00Z by a close: old · usage tokens=2 tools=1 ms=1\n' > "$TMP/i11/$AB_LEDGER_DIR/2026-06.md"
+printf '* TICK 2026-11-05T00:00:00Z by a close: new · usage tokens=3 tools=1 ms=1\n' > "$TMP/i11/$AB_LEDGER_DIR/2026-11.md"
+mixed="$(TICK_LEDGER_NOW=2026-11-20 "$AU" series --instance "$TMP/i11")"
+ok "full history: flat ledger and every shard"   "$(printf '%s\n' "$mixed" | grep -cE '^2026-(06|09|11) · ticks 1 \(1 measured\)')" 3
 mkdir -p "$TMP/i6/projects/p/tasks"; printf '* DISPATCH 2026-01-05T00:00:00Z · r · model m · usage UNKNOWN\n' > "$TMP/i6/projects/p/tasks/t.md"
 chmod 000 "$TMP/i6/projects/p/tasks/t.md"
 if [ -r "$TMP/i6/projects/p/tasks/t.md" ]; then echo "  SKIP  an unreadable task doc (running as root)"

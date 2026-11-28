@@ -15,6 +15,7 @@ set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)" || exit 0
 . "$here/bundle-paths.sh" 2>/dev/null || exit 0
 . "$here/counts.sh" 2>/dev/null || exit 0
+. "$here/lib/tick-ledger.sh" 2>/dev/null || exit 0
 
 root="$(ab_board_root "${1:-}")" && cd "$root" 2>/dev/null || exit 0   # never a raw argv
 stamp="$(ab_refresh_stamp "$root")"
@@ -79,7 +80,7 @@ metrics_request() {
 metrics_refresh() {
   local run="$AB_METRICS_RUN" last gen
   metrics_ready || return 0
-  last="$(ab_last_full_tick "$AB_LEDGER")"
+  last="$(tick_ledger_last_full .)"
   case "$last" in *[!0-9TZ:.+-]*) return 0 ;; esac
   if [ -f "$AB_METRICS" ]; then
     gen="$(metrics_gen)"

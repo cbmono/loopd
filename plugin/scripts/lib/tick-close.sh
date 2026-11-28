@@ -1,7 +1,8 @@
 # tick-close.sh — sourced, never run: the ONE reader of "did tick <id> close its ledger entry?".
 # tick-reap.sh releases on it; tick-lock.sh status reports a lock whose claimant it answers as
 # FINISHED. One grammar, so a reader can never call RUNNING what the reaper would reap.
-# Needs AB_LEDGER (bundle-paths.sh) for tick_committed_close.
+# Sources tick-ledger.sh itself: tick-lock.sh sources this file with its errors silenced.
+. "$(dirname "${BASH_SOURCE[0]}")/tick-ledger.sh" || return 2
 
 # <tick id>, ledger text on stdin -> "closed <line>" | "open <ts>" | "none". The id counts only
 # as the token right after the line's FIRST marker, or in the exact `record --idle` grammar —
@@ -32,12 +33,12 @@ tick_close_scan() {
     }'
 }
 
-# <instance> <tick id> -> the close line on stdout and 0 when the COMMITTED ledger (HEAD) closes
-# the id; 1 otherwise, an unreadable HEAD included. Only a committed close counts: an
-# uncommitted one is a tick still writing.
+# <instance> <tick id> -> the close line on stdout and 0 when the COMMITTED ledger (HEAD: the flat
+# file and the window's shards) closes the id; 1 otherwise, an unreadable HEAD included. Only a
+# committed close counts: an uncommitted one is a tick still writing.
 tick_committed_close() {
   local r
-  r="$(git -C "$1" show "HEAD:$AB_LEDGER" 2>/dev/null | tick_close_scan "$2")" || return 1
+  r="$(tick_ledger_read "$1" --at HEAD | tick_close_scan "$2")" || return 1
   case "$r" in closed\ *) printf '%s\n' "${r#closed }"; return 0 ;; esac
   return 1
 }
