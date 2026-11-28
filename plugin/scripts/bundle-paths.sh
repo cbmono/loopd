@@ -145,13 +145,14 @@ ab_snapshot_stale() { # <root> [<stamp>, default ab_refresh_stamp's]
   return 1
 }
 # A pane Refresh may be waiting: METRICS.json exists, no run holds its lock, and a loopd
-# plugin-store file is newer than both it and .metrics-run/served, which refresh-state.sh
-# touches on each look. A glob and `-nt` alone, no process: status-line.sh asks on every redraw.
+# plugin-store file is newer than .metrics-run/served, which refresh-state.sh touches on each
+# look — never METRICS.json's mtime, which a run ends with, so a press during a run stays due.
+# A glob and `-nt` alone, no process: status-line.sh asks on every redraw.
 ab_metrics_request_due() { # <root>
   local r="${1:-.}" f
   [ -f "$r/$AB_SNAPSHOT" ] && [ -f "$r/$AB_METRICS" ] && [ ! -d "$r/$AB_METRICS_RUN/lock" ] || return 1
   for f in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/store/loopd_*.json; do
-    [ "$f" -nt "$r/$AB_METRICS" ] && [ "$f" -nt "$r/$AB_METRICS_RUN/served" ] && return 0
+    [ "$f" -nt "$r/$AB_METRICS_RUN/served" ] && return 0
   done
   return 1
 }

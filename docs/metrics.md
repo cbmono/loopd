@@ -29,9 +29,10 @@ page is the contract they code against.
   look serves it.
 * **The status line serves an idle session.** `status-line.sh` starts the worker when
   `METRICS.json` exists, no lock is held and a `loopd_*.json` store file is newer (`-nt`, no
-  `jq`) than both `METRICS.json` and `served`, which the worker touches on every look — so a
-  press is served within one status-line interval, and any other store write starts the worker
-  at most once.
+  `jq`) than `served`, which the worker touches on every look — so a press is served within one
+  status-line interval, and any other store write starts the worker at most once. Never
+  against `METRICS.json`'s mtime: a run ends by replacing it, so a press made during the run
+  would look served.
 * **The hook's run reads no PR**, a Refresh run included. It sets `METRICS_GH_MAX_PRS=0`: every other figure is
   recomputed, and the `gh` figures of a PR still due a read are the previous file's, marked
   `"stale": true`, until the next full tick reads it (with no previous file, the cache's).

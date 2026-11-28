@@ -117,7 +117,7 @@ rewritten by `metrics.sh` at a full tick's step 8 and, when it is absent or olde
 full tick, by the worker below: one detached run that reads no PR, one attempt per full tick
 — and once per pane Refresh request, which the worker finds in the plugin store and marks
 served in `.loopd/.metrics-run/served` before its run; `status-line.sh` starts the worker for
-one when a store file is newer than `METRICS.json` and that marker, so an idle session is served
+one when a store file is newer than that marker, so an idle session is served
 too (`docs/metrics.md` → "When it is written"). The shell
 hook `hooks/refresh-state.sh` runs at a session's Stop, SubagentStop and UserPromptSubmit —
 the main session, the tick's and every role session (a linked worktree reaches its bundle by
