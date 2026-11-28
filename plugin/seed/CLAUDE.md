@@ -43,11 +43,18 @@ ls -d ~/.claude/plugins/cache/*/loopd/*/scripts | sort -V | tail -1
 |---|---|
 | See state & advance work (refine drafts, dispatch `ready` tasks, reflect merges) | **`/loopd:dispatch`** — the serial loop, a tick every 10m; `once` = one tick, `stop` ends it; "DRY RUN" previews. |
 | Start a new project | **`/loopd:new-project <description>`** — build (code → PRs), or `kind=research` for docs/decks/assets (no repo). |
+| Add a task to an open project | **`/loopd:add-task <project-slug> "<description>"`** — a draft the next tick refines. |
 | Close a finished project | **`/loopd:close-project <slug>`** — the PM flags it `closeAfterDays` (5) days after its last task is terminal. Removes the folder (git history + KB are the record) unless `project.md` says `retain: true`. |
 | What needs you | **`/loopd:whats-up`** |
 | Answer questions; unblock a task | **`/loopd:answer [<task> <answer>]`** |
 | Fan ad-hoc asks out to background agents | **`/loopd:fanout`** — or give ≥2 independent asks at once |
 | Remove finished worktrees | **`/loopd:prune-wt`** |
+
+**Before suggesting `/loopd:new-project`**, run `<scripts>/open-project-match.sh <bundle> <kind>
+[<org>/<repo>] --text-file <ask>`: a printed slug (open, same kind and target repo, shared
+wording) ⇒ suggest `/loopd:add-task <slug>` instead. A new goal or an unrelated area stays a
+new project; a closed project is never reopened — a follow-up to it is a new project that
+links to it.
 
 `/pane` (a mod) draws the board beside the session.
 
