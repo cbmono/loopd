@@ -12,6 +12,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
+. "$HERE/lib/tick-ledger.sh" || exit 2
 usage() { sed -n '5p' "$0" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "new-project-file: python3 is required" >&2; exit 2; }
 
@@ -80,7 +81,8 @@ if ! ( cd "$inst" && bash "$HERE/validate-bundle.sh" "projects/$slug/project.md"
   echo "new-project-file: the scaffold failed validate-bundle.sh, so nothing was kept" >&2
   exit 2
 fi
-python3 - "$inst/$AB_LEDGER" "$slug" "$repo" "$ts" "$by" "$title" <<'PY' || exit 2
+ledger="$(tick_ledger_target "$inst")" && tick_ledger_ensure "$inst" "$ledger" || exit 2
+python3 - "$inst/$ledger" "$slug" "$repo" "$ts" "$by" "$title" <<'PY' || exit 2
 import os, sys
 path, slug, repo, ts, by, title = sys.argv[1:7]
 try:
@@ -95,7 +97,7 @@ os.replace(path + ".tmp", path)
 PY
 echo "created projects/$slug (autonomy gated)"
 root="$(git -C "$inst" rev-parse --show-toplevel 2>/dev/null)" || exit 0
-( cd "$root" && bash "$HERE/commit-as.sh" human "feat: add $slug project" --stage -- "$base" "$inst/$AB_LEDGER" >/dev/null ) ||
+( cd "$root" && bash "$HERE/commit-as.sh" human "feat: add $slug project" --stage -- "$base" "$inst/$ledger" >/dev/null ) ||
   { echo "new-project-file: created, but the commit failed" >&2; exit 4; }
 bash "$HERE/push-commit.sh" "$root" >/dev/null; rc=$?
 ( cd "$inst" && bash "$HERE/write-snapshot.sh" --quiet >/dev/null )

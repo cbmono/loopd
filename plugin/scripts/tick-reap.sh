@@ -100,11 +100,20 @@ turn_status() {
     | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
 }
 
-ended() { # the tick left no ledger line for its id: close it here, then release
-  local login line
+commit_close() { # <bundle-relative ledger file> — the reaper's own close, committed by name
+  ( cd "$inst" && bash "$HERE/commit-as.sh" project-manager "chore: close tick $tick (tick-reap)" --stage -- "$1" ) >/dev/null 2>&1 \
+    || echo "tick-reap: closed $tick in $1 but could not commit it — commit that file by name." >&2
+}
+
+ended() { # the tick left no ledger line for its id: close it in the write target, then release
+  local login line ts target
   login="$(cd "$inst" && bash "$HERE/decision-stamp.sh" --self 2>/dev/null)" || login="<unknown>"
-  line="* TICK $(date -u +%Y-%m-%dT%H:%M:%SZ) by ${login:-<unknown>} close: $tick ended with no ledger entry — session $short $state (tick-reap)"
-  printf '%s\n' "$line" >> "$LOG" || { echo "tick-reap: cannot append to $LOG — the lock stays." >&2; exit 2; }
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  line="* TICK $ts by ${login:-<unknown>} close: $tick ended with no ledger entry — session $short $state (tick-reap)"
+  { target="$(tick_ledger_target "$inst" "$ts")" && tick_ledger_ensure "$inst" "$target" \
+      && printf '%s\n' "$line" >> "$inst/$target"; } 2>/dev/null \
+    || { echo "tick-reap: cannot append to the tick ledger under $inst — the lock stays." >&2; exit 2; }
+  commit_close "$target"
   release ended "$line"
 }
 
@@ -176,9 +185,11 @@ assess() {
     closed\ *) release "closed, uncommitted" "${disk#closed }" ;;
     open\ *)
       ts="${disk#open }"
-      bash "$HERE/tick-delta.sh" record --instance "$inst" --tick "$ts" \
-        --close "dead — $tick session $short $state with its entry open (tick-reap)" >/dev/null \
+      wrote="$(bash "$HERE/tick-delta.sh" record --instance "$inst" --tick "$ts" \
+        --close "dead — $tick session $short $state with its entry open (tick-reap)")" \
+        && [ "${wrote#closed: * — commit }" != "$wrote" ] \
         || { echo "tick-reap: could not close the dead tick's entry at $ts — the lock stays." >&2; exit 2; }
+      commit_close "${wrote#closed: * — commit }"
       release dead "$(tick_ledger_read "$inst" | tick_close_scan "$tick" | sed 's/^closed //')" ;;
   esac
   ended

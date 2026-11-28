@@ -39,6 +39,7 @@ esac
 STUB
 chmod +x "$TMP/bin/claude"
 export ST PATH="$TMP/bin:$PATH" CLAUDE_CONFIG_DIR="$TMP/cfg"
+export CONTROL_PLANE_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 SID="1234abcd-0000-4000-8000-00000000000a"
 state() { # <state|none|garbage>
   case "$1" in
@@ -243,12 +244,22 @@ ok "a real record --idle line with --swept closes the tick" "$RC:$(has "$OUT" "r
 
 echo "== the reaper reads the monthly shards beside the flat ledger =="
 shard() { mkdir -p "$B/.loopd/log"; printf '%s\n' "$2" >> "$B/.loopd/log/$1.md"; }
-spawned; shard 2026-10 "* TICK 2026-10-31T23:59:00Z by me open: $ID · x"; commit "$B"; state done
+clean() { git -C "$B" status --porcelain --untracked-files=no | wc -l | tr -d ' '; }
+spawned; git -C "$B" rm -q .loopd/log.md; shard 2026-10 "* TICK 2026-10-31T23:59:00Z by me open: $ID · x"; commit "$B"; state done
 TICK_LEDGER_NOW=2026-11-01T00:00:05Z reap
-ok "an open line in last month's shard, session done ⇒ found at its timestamp" \
-   "$(has "$OUT" "dead tick's entry at 2026-10-31T23:59:00Z"):$(grep -c 'ended with no ledger entry' "$B/.loopd/log.md" | tr -d ' ')" "yes:0"
+ok "an open line in last month's shard, session done ⇒ reaped dead" "$RC:$(has "$OUT" "reaped: $ID · dead")" "0:yes"
+ok "…its close beside the open line, in that shard" \
+   "$(awk '/open: '"$ID"'/{o=NR} /close: dead — '"$ID"'/{c=NR} END{print c-o}' "$B/.loopd/log/2026-10.md")" 1
+ok "…no flat ledger created, no other shard" "$([ -e "$B/.loopd/log.md" ] && echo yes || echo no):$(ls "$B/.loopd/log")" "no:2026-10.md"
+ok "…and the reaper committed it: no dirty tracked file" "$(clean):$(git -C "$B" log -1 --format=%s -- .loopd/log/2026-10.md)" "0:chore: close tick $ID (tick-reap)"
+spawned; shard 2026-10 "* TICK 2026-10-31T23:58:00Z by me open: $ID · x"; commit "$B"; state done
 TICK_LEDGER_NOW=2027-01-01T00:00:05Z reap
 ok "…while two months on it is outside the window: no entry" "$(has "$OUT" "reaped: $ID · ended")" yes
+NOW_SHARD=".loopd/log/$(date -u +%Y-%m).md"
+spawned; git -C "$B" rm -q .loopd/log.md; commit "$B"; state stopped; reap
+ok "ended(), no flat ledger ⇒ the close lands in ledger-target, committed" \
+   "$RC:$(grep -c "close: $ID ended with no ledger entry" "$B/$NOW_SHARD" | tr -d ' '):$(clean):$(git -C "$B" ls-files "$NOW_SHARD")" "0:1:0:$NOW_SHARD"
+ok "…and never re-creates the flat ledger" "$([ -e "$B/.loopd/log.md" ] && echo yes || echo no)" no
 spawned; shard 2026-10 "* TICK 2026-10-31T23:59:00Z by me open: $ID · x"
 shard 2026-10 "* TICK 2026-10-31T23:59:00Z by me close: dispatched x"; commit "$B"; state done
 TICK_LEDGER_NOW=2026-11-01T00:00:05Z reap

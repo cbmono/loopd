@@ -44,7 +44,7 @@ plugin/scripts/bundle-paths.sh|migrate-bundle.sh --layout-only --apply
 plugin/scripts/close-project-folder.sh|close-project-folder.sh \"\$SLUG\" --apply
 plugin/scripts/close-project-folder.sh|close-project-folder.sh \"\$SLUG\" --apply
 plugin/scripts/commit-as.sh|kb-sync.sh commit --role \"\$role\" --message \"\\\"\$message\\\"\" -- '<path>...'
-plugin/scripts/control.sh|commit-as.sh human \"\\\"chore: record halt of \$id\\\"\" -- \"\$AB_LEDGER\"
+plugin/scripts/control.sh|commit-as.sh human \"\\\"chore: record halt of \$id\\\"\" -- \"\$ledger\"
 plugin/scripts/control.sh|control.sh clear \"\$id\"
 plugin/scripts/control.sh|control.sh clear \"\$id\"
 plugin/scripts/control.sh|control.sh clear '<agent-id>'
@@ -140,7 +140,8 @@ SLUG=probe-slug
 BIN_DIR=$SCRIPTS
 SELF=$SCRIPTS/refresh-seeds.sh
 TARGET=$OUTSIDE
-REAP_ROOT=$ABSENT"
+REAP_ROOT=$ABSENT
+ledger=.loopd/log.md"
 SLOTS="<agent-id>=probe-agent-0001
 <message>=probe message
 <why>=probe reason

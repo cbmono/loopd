@@ -70,6 +70,7 @@ cp "$CTL_SRC"  "$INST/scripts/control.sh"
 # control.sh sources its sibling resolver (ai-bridge-v3/task-031), so a one-file fixture
 # has to carry it too — the plugin never ships one without the other.
 cp "$REPO/plugin/scripts/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"
+mkdir -p "$INST/scripts/lib"; cp "$REPO/plugin/scripts/lib/tick-ledger.sh" "$INST/scripts/lib/"
 chmod +x "$PLUGROOT/hooks/agent-control.sh" "$INST/scripts/control.sh"
 HOOK="$PLUGROOT/hooks/agent-control.sh"
 CTL="$INST/.claude/control"

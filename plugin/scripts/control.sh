@@ -81,6 +81,7 @@
 # Verified by tests/agent-control.test.sh.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/lib/tick-ledger.sh" || exit 2
 
 usage() {
   cat <<'USAGE'
@@ -383,11 +384,12 @@ halt|gate|pause|steer)
       echo
       echo "  If this halt belongs in the bundle's permanent history, add it yourself —"
       echo "  the hook deliberately never edits tracked files (see its header). Prepend to"
-      echo "  $AB_LEDGER under a '## $(date -u +%Y-%m-%d)' heading:"
+      ledger="$(tick_ledger_target "$ROOT")" || ledger="$AB_LEDGER"
+      echo "  $ledger under a '## $(date -u +%Y-%m-%d)' heading:"
       echo
       echo "    * **Agent halted**: $id — $reason"
       echo
-      ab_say_run "   " commit-as.sh human "\"chore: record halt of $id\"" -- "$AB_LEDGER"
+      ab_say_run "   " commit-as.sh human "\"chore: record halt of $id\"" -- "$ledger"
       ;;
     gate)
       echo "GATE set for $id. Every tool call is refused until you clear it; the agent is"
