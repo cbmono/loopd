@@ -241,6 +241,19 @@ spawned; bash "$SC/tick-delta.sh" record --idle --instance "$B" --tick-id "$ID" 
 STATUS=idle state working; reap
 ok "a real record --idle line with --swept closes the tick" "$RC:$(has "$OUT" "reaped: $ID · closed")" "0:yes"
 
+echo "== the reaper reads the monthly shards beside the flat ledger =="
+shard() { mkdir -p "$B/.loopd/log"; printf '%s\n' "$2" >> "$B/.loopd/log/$1.md"; }
+spawned; shard 2026-10 "* TICK 2026-10-31T23:59:00Z by me open: $ID · x"; commit "$B"; state done
+TICK_LEDGER_NOW=2026-11-01T00:00:05Z reap
+ok "an open line in last month's shard, session done ⇒ found at its timestamp" \
+   "$(has "$OUT" "dead tick's entry at 2026-10-31T23:59:00Z"):$(grep -c 'ended with no ledger entry' "$B/.loopd/log.md" | tr -d ' ')" "yes:0"
+TICK_LEDGER_NOW=2027-01-01T00:00:05Z reap
+ok "…while two months on it is outside the window: no entry" "$(has "$OUT" "reaped: $ID · ended")" yes
+spawned; shard 2026-10 "* TICK 2026-10-31T23:59:00Z by me open: $ID · x"
+shard 2026-10 "* TICK 2026-10-31T23:59:00Z by me close: dispatched x"; commit "$B"; state done
+TICK_LEDGER_NOW=2026-11-01T00:00:05Z reap
+ok "a committed close in a shard, flat ledger beside it ⇒ reaped closed" "$RC:$(has "$OUT" "reaped: $ID · closed"):$(has "$OUT" uncommitted)" "0:yes:no"
+
 echo "== the readers agree with the reaper: a committed close is FINISHED, never RUNNING =="
 # The 2026-11-13 shape: an idle tick claimed its lock, `record --idle --tick-id` (no --swept)
 # wrote its close, the tick committed it, and the launcher's session never fired again.

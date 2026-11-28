@@ -142,6 +142,14 @@ D="$TMP/d2"; mk "$D"; rm -f "$D/$AB_LEDGER"
 ok "no log.md ⇒ the time is unknown"       "$(plain "$D" | sed 's/.*· //')" "last tick ?"
 D="$TMP/d3"; mk "$D"; printf '# Log\n\nnothing yet\n' > "$D/$AB_LEDGER"
 ok "a log with no TICK line ⇒ unknown"     "$(plain "$D" | sed 's/.*· //')" "last tick ?"
+D="$TMP/d3s"; mk "$D"; mkdir -p "$D/$AB_LEDGER_DIR"
+printf '* TICK 2026-09-12T07:00:00Z by cbmono close: older, in the last file read\n' > "$D/$AB_LEDGER_DIR/2026-09.md"
+ok "mixed bundle: the newest TICK across files, not the last file's last" \
+   "$(TICK_LEDGER_NOW=2026-09-20 plain "$D" | sed 's/.*· //')" "last tick $HM"
+D="$TMP/d3t"; mk "$D"; mkdir -p "$D/$AB_LEDGER_DIR"; mv "$D/$AB_LEDGER" "$D/$AB_LEDGER_DIR/2026-09.md"
+printf '* TICK 2026-07-01T00:00:00Z by cbmono close: an older flat line\n' > "$D/$AB_LEDGER"
+ok "…and a shard's TICK is read beside the flat file" \
+   "$(TICK_LEDGER_NOW=2026-09-20 plain "$D" | sed 's/.*· //')" "last tick $HM"
 D="$TMP/d4"; mk "$D"; rm -rf "$D/projects"
 ok "no projects/ ⇒ in-flight is unknown"   "$(plain "$D" | sed 's/.*loopd · \([^·]*in progress\) ·.*/\1/')" "? in progress"
 

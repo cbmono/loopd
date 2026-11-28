@@ -102,6 +102,16 @@ else
   chmod 644 "$E/.loopd/log/2026-11.md"
   ok "the same ledger reads whole once readable" "$(tick_ledger_read "$E")" "$(printf 'f\nends in x* TICK nov')"
 fi
+echo "== tick_ledger_last_full: the newest open+close pair across the window's files =="
+L="$TMP/lastfull"; mkdir -p "$L/.loopd/log"
+ok "no ledger: nothing, rc 0"                   "$(tick_ledger_last_full "$L"; echo "rc=$?")" "rc=0"
+printf '* TICK 2026-11-02T00:00:00Z by a open: x\n* TICK 2026-11-02T00:00:00Z by a close: y\n' > "$L/.loopd/log.md"
+printf '* TICK 2026-10-01T00:00:00Z by a open: x\n* TICK 2026-10-01T00:00:00Z by a close: y\n* TICK 2026-12-09T00:00:00Z by a close: no open line\n' > "$L/.loopd/log/2026-10.md"
+printf '* TICK 2026-12-01T00:00:00Z by a open: x\n* TICK 2026-12-01T00:00:00Z by a close: y\n' > "$L/.loopd/log/2026-12.md"
+ok "mixed: a shard's pair outranks the flat one" "$(TICK_LEDGER_NOW=2026-12 tick_ledger_last_full "$L")" 2026-12-01T00:00:00Z
+rm "$L/.loopd/log/2026-12.md"
+ok "…the flat pair outranks an older shard's"    "$(TICK_LEDGER_NOW=2026-12 tick_ledger_last_full "$L")" 2026-11-02T00:00:00Z
+ok "…and a close with no open line is never full"     "$(TICK_LEDGER_NOW=2026-11 tick_ledger_last_full "$L")" 2026-11-02T00:00:00Z
 ok "the library never calls exit"              "$(grep -cE '(^|[;&|[:space:]])exit([[:space:]]|$)' "$LIB")" 0
 ok "the header says the read is not chronological" "$(sed -n '1,10p' "$LIB" | grep -c 'NOT chronological')" 1
 

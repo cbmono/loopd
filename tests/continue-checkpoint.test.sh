@@ -102,6 +102,17 @@ printf '## 2026-09-02 — Project added: made-later\n\nAdded by example-user-008
 rows "$W" >/dev/null
 ok "empty no_owner: ⇒ the login on the creation entry" "$(row_for "$W" made | grep -c 'example-user-007: should')" 1
 ok "no creation entry ⇒ defaultOwner" "$(row_for "$W" orphan | grep -c 'example-user-008: should')" 1
+S="$TMP/sharded"; inst "$S" '{ "continueAfterDays": 20, "defaultOwner": "example-user-008" }'
+for p in old flat; do proj "$S" "$p" 2026-06-01T00:00:00Z 0 1; sed -i.bak 's/^no_owner: Dana$/no_owner:/' "$S/projects/$p/project.md"; done
+mkdir -p "$S/$AB_LEDGER_DIR"
+printf '## 2026-06-01 — Project added: old\n\n**Added 2026-06-01T00:00:00Z by example-user-007.**\n' > "$S/$AB_LEDGER_DIR/2026-06.md"
+printf '* TICK 2026-10-01T00:00:00Z by example-user-008 close: x\n' > "$S/$AB_LEDGER_DIR/2026-10.md"
+printf '## 2026-06-01 — Project added: flat\n\nAdded by example-user-009.\n' > "$S/$AB_LEDGER"
+SOUT="$(TICK_LEDGER_NOW=2026-10-05 bash "$CK" --instance "$S")"
+ok "a creation entry four months back in a shard keeps its creator (--all)" "$(grep -c '^/projects/old/project.md	example-user-007	' <<<"$SOUT")" 1
+ok "…and a flat ledger beside the shards is read too" "$(grep -c '^/projects/flat/project.md	example-user-009	' <<<"$SOUT")" 1
+ok "…which the default window would have missed" \
+   "$(. "$REPO/plugin/scripts/lib/tick-ledger.sh"; TICK_LEDGER_NOW=2026-10-05 tick_ledger_read "$S" | grep -c 'Project added: old')" 0
 
 echo
 echo "== the other gates still hold =="
