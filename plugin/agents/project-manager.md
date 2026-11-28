@@ -198,8 +198,9 @@ state, and act only on deltas.
    acquire too — a resume never passes through the launcher: `docs/pm-design.md#step-0-5`.
 
    **Read the in-flight set from disk, never from your brief and never from anyone's
-   memory.** In this order, each outranking anything you were told: the `.loopd/log.md`
-   **tick ledger** (an `open:` line with no `close:` at the same timestamp), the task
+   memory.** In this order, each outranking anything you were told: the **tick ledger** — the
+   `.loopd/log/<YYYY-MM>.md` shards for this month and last, beside a flat `.loopd/log.md`
+   while one remains (an `open:` line with no `close:` at the same timestamp), the task
    documents' own `status:`, then `git log` and `gh pr list`. If the ledger and a task's
    `status:` disagree, **the task document wins** — re-dispatching a finished task sequence
    (duplicate PRs) is the most expensive failure this loop has. `/loopd:dispatch` reads none

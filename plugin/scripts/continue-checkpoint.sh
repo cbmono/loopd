@@ -12,6 +12,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
+. "$HERE/lib/tick-ledger.sh" || exit 2
 
 inst="$PWD"
 while [ $# -gt 0 ]; do
@@ -35,14 +36,15 @@ daynum() { printf '%s\n' "$1" | awk -F- 'NF==3 { y=$1+0; m=$2+0; d=$3+0; if (m<=
 today="${CHECKPOINT_TODAY:-$(date -u +%Y-%m-%d)}"
 tnum="$(daynum "$today")"; [ -n "$tnum" ] || exit 3
 
-ledger="$inst/$AB_LEDGER"; [ -f "$ledger" ] || ledger="$inst/log.md"
-# The `by <login>` stamped on the project's creation entry in the root log.
+# The `by <login>` stamped on the project's creation entry: the whole tick ledger, else the root log.
 creator() { # <slug>
-  [ -f "$ledger" ] || return 0
-  awk -v s="$1" '
+  local files
+  files="$(tick_ledger_files "$inst" --all)" || return 0
+  { if [ -n "$files" ]; then tick_ledger_read "$inst" --all; else cat "$inst/log.md"; fi; } 2>/dev/null \
+  | awk -v s="$1" '
     !on && /Project added/ && (substr($0, length($0) - length(s) - 1) == ": " s || index($0, "/projects/" s "/") || index($0, "`" s "`")) { on=1; print; next }
     on && (/^## / || /^\* /) { exit }
-    on { print }' "$ledger" \
+    on { print }' \
   | grep -oE '(Added|added|[0-9]Z)(\*\*)? by [A-Za-z0-9]+(-[A-Za-z0-9]+)*' | head -n1 | sed 's/.* by //'
 }
 default_owner="$(sed -n 's/.*"defaultOwner"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9-]*\)".*/\1/p' "$inst/instance.config.json" 2>/dev/null | head -n1)"

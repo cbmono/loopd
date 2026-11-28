@@ -122,7 +122,8 @@ assess() {
   [ -n "$tick" ] || { echo "tick-reap: $LOCK records a session and no claimant — leaving it for a human" >&2; exit 2; }
   short="${session%%-*}"
   state="$(bash "$HERE/agent-sessions.sh" state "$session" 2>/dev/null)" || state=unknown
-  disk=unread; [ -r "$LOG" ] && { disk="$(tick_close_scan "$tick" < "$LOG")" || disk=unread; }
+  files="$(tick_ledger_files "$inst")"; frc=$?
+  disk=unread; [ -n "$files" ] && { disk="$(tick_ledger_read "$inst" | tick_close_scan "$tick")" || disk=unread; }
   # The same call tick-lock.sh status reports FINISHED on, so no reader says RUNNING here.
   if closed="$(tick_committed_close "$inst" "$tick")"; then
     # A bg session does not exit after its turn, and `state` reads `working` while it
@@ -140,11 +141,12 @@ assess() {
   # The id anywhere at all (a malformed hand-typed open line) holds: only total absence stops.
   if [ "$state" = working ] && [ "$(turn_status)" = idle ] && past_grace; then
     case "$disk" in
-      none) grep -qF -- "$tick" "$LOG" && return 1
+      none) tick_ledger_read "$inst" | grep -F -- "$tick" >/dev/null && return 1
             live_kids && return 1
             claude stop "$short" >/dev/null 2>&1 </dev/null; state=turn-over; ended ;;
       unread)
-        [ -e "$LOG" ] && why="cannot read $LOG" || why="$LOG is missing, so no entry can be ruled out"
+        [ "$frc" -eq 0 ] && [ -z "$files" ] && why="the tick ledger is missing ($LOG, $inst/$AB_LEDGER_DIR/), so no entry can be ruled out" \
+          || why="cannot read the tick ledger ($LOG, $inst/$AB_LEDGER_DIR/)"
         echo "UNKNOWN: $why for tick $tick — the lock stays; nothing stopped." >&2; exit 2 ;;
     esac
   fi
@@ -177,7 +179,7 @@ assess() {
       bash "$HERE/tick-delta.sh" record --instance "$inst" --tick "$ts" \
         --close "dead — $tick session $short $state with its entry open (tick-reap)" >/dev/null \
         || { echo "tick-reap: could not close the dead tick's entry at $ts — the lock stays." >&2; exit 2; }
-      release dead "$(tick_close_scan "$tick" < "$LOG" | sed 's/^closed //')" ;;
+      release dead "$(tick_ledger_read "$inst" | tick_close_scan "$tick" | sed 's/^closed //')" ;;
   esac
   ended
 }

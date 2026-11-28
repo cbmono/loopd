@@ -14,7 +14,8 @@ page is the contract they code against.
   session's Stop, SubagentStop and UserPromptSubmit. The worker starts one detached run when
   the file is absent, or when its `generated_at` is older than the newest full tick in the
   ledger — an `open:` and a `close:` line at one timestamp, the report's stale rule, one
-  function (`ab_last_full_tick`). So a fresh install fills within one session turn. An IDLE
+  function (`tick_ledger_last_full`, in `plugin/scripts/lib/tick-ledger.sh`, over the current and
+  previous month). So a fresh install fills within one session turn. An IDLE
   tick never runs it.
 * **A pane Refresh asks for one run.** Refresh in the `/pane` Metrics view writes one
   plugin-store record per bundle, `loopd.metrics.refresh.<bundle root>` =

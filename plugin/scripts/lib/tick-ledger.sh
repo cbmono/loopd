@@ -109,3 +109,16 @@ tick_ledger_read() { # <root> [--all] [--at <rev>]
   out="$(_tick_ledger_cat "$root" "$at" "$names" && printf x)" || return 2
   printf '%s' "${out%x}"
 }
+
+tick_ledger_last_full() { # <root> — the newest FULL tick in the default window: an open: and a close: line at one timestamp
+  local names n f=()
+  names="$(tick_ledger_files "${1:-}")" || return 2
+  [ -n "$names" ] || return 0
+  while IFS= read -r n; do f+=("$n"); done <<<"$names"
+  awk '
+    /^\* TICK / {
+      o = index($0, " open: "); c = index($0, " close: ")
+      if (c > 0 && (o == 0 || c < o)) closed[$3] = 1; else if (o > 0) opened[$3] = 1
+    }
+    END { for (t in closed) if ((t in opened) && t > best) best = t; print best }' "${f[@]}" 2>/dev/null || return 2
+}

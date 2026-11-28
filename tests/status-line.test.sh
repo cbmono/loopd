@@ -280,6 +280,7 @@ ok "the theme's basic tier is asked for by name" "$(grep -c 'ab_theme "\$use_col
 ok "…and this file builds no escape of its own"  "$(grep -v '^[[:space:]]*#' "$SL" | grep -c '033' | tr -d ' ')" 0
 NT="$TMP/no-theme"; mkdir -p "$NT"
 cp "$SL" "$REPO/plugin/scripts/bundle-paths.sh" "$REPO/plugin/scripts/counts.sh" "$NT/"
+mkdir -p "$NT/lib"; cp "$REPO/plugin/scripts/lib/tick-ledger.sh" "$NT/lib/"
 # Its own cache: this copy has no agent-sessions.sh, so it caches `agents ?` for $INST.
 ok "an unsourceable theme means no colour, never no line" \
    "$(XDG_CACHE_HOME="$TMP/nt-cache" SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NT/status-line.sh" --instance "$INST" --color always </dev/null 2>/dev/null)" \

@@ -554,9 +554,9 @@ echo "---"
 # partial, and a reader six months from now has no way to tell that from damage unless
 # the log says which directories went.
 if [[ -n "$LOG_BITS" ]]; then
-  echo "$AB_LEDGER fragment — pruned $LOG_BITS; kept tasks/, deliverables/, sources/*.md, index.md, log.md."
+  echo "log.md fragment — pruned $LOG_BITS; kept tasks/, deliverables/, sources/*.md, index.md, log.md."
 else
-  echo "$AB_LEDGER fragment — nothing to prune; the folder is retained in full."
+  echo "log.md fragment — nothing to prune; the folder is retained in full."
 fi
 if [[ $APPLY -eq 1 ]]; then
   printf 'close-project-folder: %s retained — %d deliverable path(s) stamped, %d directory/ies and %d file(s) pruned.\n' \
