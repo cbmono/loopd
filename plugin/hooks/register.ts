@@ -737,7 +737,7 @@ function draw($: any, e: any, now: number): any {
       }
       for (const b of shown) rows.push(...b.lines)
       const hidden = blocks.filter(b => b.figure).length - shown.filter(b => b.figure).length
-      if (hidden > 0) rows.push(line('… ' + hidden + ' more', MUTED))
+      if (hidden > 0 && room >= 1) rows.push(line('… ' + hidden + ' more', MUTED))
     }
   } else if (kind !== 'ok' || !board) {
     rows.push(line(kind === 'unread' ? 'loopd board: reading…' : detail, { dimColor: kind === 'unread' }))

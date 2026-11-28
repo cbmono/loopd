@@ -1621,6 +1621,11 @@ test('METRICS PANE: past bodyRows it draws what fits, never a group label alone,
     expect(['Delegation', 'Time, mean', 'Tokens', 'Idle ticks']).not.toContain(lines[lines.indexOf('… ' + more + ' more') - 1])
     await again.unmount()
   }
+  const none = await $.ui.mount({ ...tall(49, 8), surface: 'terminal' })
+  const lines = await screen(none)
+  expect(lines.findIndex(l => l.includes('↻ Refresh'))).toBe(7)
+  expect(lines.join('\n')).not.toMatch(/more$/m)
+  await none.unmount()
 })
 
 const HEADLINE_ROWS = [
