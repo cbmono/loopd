@@ -283,22 +283,20 @@ rmdir "$RR/lock"; fire "$RQ"
 ok "…and one once it is released" "$(starts)" 4
 
 echo "== the status line starts the worker on a pending request only"
-SQ="$TMP/sline"; mk "$SQ"; gen "$SQ" 2026-11-01T10:00:00Z; mkdir -p "$SQ/$AB_METRICS_RUN"
-req "$SQ" 2026-11-01T10:00:30Z; tick; touch "$SQ/$AB_METRICS"; : > "$SQ/$AB_METRICS_RUN/served"
-sv="$(mt "$SQ/$AB_METRICS_RUN/served")"
-ok "store older than the served marker: not due" "$(ab_metrics_request_due "$SQ" && echo yes || echo no)" no
-bash "$SL" --instance "$SQ" --color never </dev/null >/dev/null 2>&1; sleep 1.5
-ok "…and the status line starts no worker" "$(mt "$SQ/$AB_METRICS_RUN/served")" "$sv"
-tick; req "$SQ" 2026-11-01T10:00:30Z
-ok "a newer store write: due" "$(ab_metrics_request_due "$SQ" && echo yes || echo no)" yes
-bash "$SL" --instance "$SQ" --color never </dev/null >/dev/null 2>&1
-ok "…and the status line's worker serves it" "$(moved "$SQ/$AB_METRICS_RUN/served" "$sv"):$(settle "$SQ"; cat "$SQ/$AB_METRICS_RUN/served")" yes:2026-11-01T10:00:30Z
-i=0; while [ -d "$SQ/$AB_METRICS_RUN/lock" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i+1)); done
-ok "…after which nothing is due" "$(ab_metrics_request_due "$SQ" && echo yes || echo no)" no
-mkdir "$SQ/$AB_METRICS_RUN/lock"; tick; req "$SQ" 2026-11-01T10:00:40Z
-ok "a press during a run: not due while the lock is held" "$(ab_metrics_request_due "$SQ" && echo yes || echo no)" no
-tick; touch "$SQ/$AB_METRICS"; rmdir "$SQ/$AB_METRICS_RUN/lock"
-ok "…and still due once the run has replaced METRICS.json and let go" "$(ab_metrics_request_due "$SQ" && echo yes || echo no)" yes
+SQ="$TMP/sline"; mk "$SQ"; gen "$SQ" 2026-11-01T10:00:00Z; mkdir -p "$SQ/$AB_METRICS_RUN"; SV="$SQ/$AB_METRICS_RUN/served"
+sl() { bash "$SL" --instance "$SQ" --color never </dev/null >/dev/null 2>&1; }
+req "$SQ" 2099-01-02T00:00:30Z; tick; : > "$SV"; sv="$(mt "$SV")"
+sl; sleep 1.5
+ok "store older than the served marker: the status line starts no worker" "$(mt "$SV")" "$sv"
+tick; req "$SQ" 2099-01-02T00:00:30Z; sl
+ok "a newer store write: its worker serves the request" "$(moved "$SV" "$sv"):$(settle "$SQ"; cat "$SV")" yes:2099-01-02T00:00:30Z
+i=0; while [ -d "$SQ/$AB_METRICS_RUN/lock" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i+1)); done; settle "$SQ"
+sv="$(mt "$SV")"; sl; sleep 1.5
+ok "…after which nothing starts it" "$(mt "$SV")" "$sv"
+mkdir "$SQ/$AB_METRICS_RUN/lock"; tick; req "$SQ" 2099-01-02T00:00:40Z; sl; sleep 1.5
+ok "a press during a run: nothing starts while the lock is held" "$(mt "$SV")" "$sv"
+tick; touch "$SQ/$AB_METRICS"; rmdir "$SQ/$AB_METRICS_RUN/lock"; sl
+ok "…and it is served once the run has replaced METRICS.json and let go" "$(moved "$SV" "$sv"):$(settle "$SQ"; cat "$SV")" yes:2099-01-02T00:00:40Z
 
 echo "== METRICS.json: the real run"
 RB="$TMP/realmetrics"; mk "$RB"; full "$RB" 2026-10-01T01:00:00Z

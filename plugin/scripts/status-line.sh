@@ -90,9 +90,18 @@ ab_counts "$root"
 ab_write_counts "$root"
 # A snapshot behind its documents — a task doc edited by hand, with no turn whose hook would
 # refresh it — is rewritten by refresh-state.sh, detached. The check is `-nt` alone.
-# So is a pane Refresh in an idle session: a plugin-store file newer than the worker's last
-# look (.metrics-run/served), with no run in flight. `-nt` alone.
-if ab_snapshot_stale "$root" || ab_metrics_request_due "$root"; then
+# So is a pane Refresh in an idle session: METRICS.json exists, no run holds its lock, and a
+# loopd plugin-store file is newer than .metrics-run/served, which refresh-state.sh touches on
+# each look — never METRICS.json's mtime, which a run ends with. A glob and `-nt` alone.
+metrics_request_due() {
+  local f
+  [ -f "$root/$AB_SNAPSHOT" ] && [ -f "$root/$AB_METRICS" ] && [ ! -d "$root/$AB_METRICS_RUN/lock" ] || return 1
+  for f in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/store/loopd_*.json; do
+    [ "$f" -nt "$root/$AB_METRICS_RUN/served" ] && return 0
+  done
+  return 1
+}
+if ab_snapshot_stale "$root" || metrics_request_due; then
   nohup bash "$(dirname "${BASH_SOURCE[0]:-$0}")/refresh-state.sh" "$root" </dev/null >/dev/null 2>&1 &
 fi
 
