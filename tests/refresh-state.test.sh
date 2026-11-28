@@ -303,7 +303,7 @@ RB="$TMP/realmetrics"; mk "$RB"; full "$RB" 2026-10-01T01:00:00Z
 git -C "$RB" init -q 2>/dev/null
 bash "$WORKER" "$RB"
 i=0; while [ ! -f "$RB/$AB_METRICS" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i+1)); done; sleep 0.3
-ok "the hook's run writes METRICS.json" "$(jq -r .schema_version "$RB/$AB_METRICS" 2>/dev/null)" 2
+ok "the hook's run writes METRICS.json" "$(jq -r .schema_version "$RB/$AB_METRICS" 2>/dev/null)" 3
 ok "…releases the lock and leaves no failure marker" "$(ls "$RB/$AB_METRICS_RUN" | tr '\n' ' ')" "attempt "
 ok "…and git sees nothing under the run directory" "$(git -C "$RB" status --porcelain --untracked-files=all --ignored=no | grep -c 'metrics-run')" 0
 

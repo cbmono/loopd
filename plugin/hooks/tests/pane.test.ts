@@ -1561,7 +1561,8 @@ const PANE_BLOCK = [
   ['This month / last', [['Merged PRs', '— / 2'], ['Tick tokens', LONG_VALUE]]],
 ].map(([label, rows]) => ({ label, rows: (rows as any[]).map(([l, value, stale]) => stale ? { label: l, value, stale } : { label: l, value }) }))
 const MET3 = { ...MET, schema_version: 3, pane: PANE_BLOCK }
-const tall = (bodyColumns: number | undefined, bodyRows: number) => ({ ...PANE, props: { ...PANE.props, bodyColumns, scroll: { offset: 0, bodyRows } } })
+const tall = (bodyColumns: number, bodyRows: number) => ({ ...PANE, props: { ...PANE.props, bodyColumns, scroll: { offset: 0, bodyRows } } })
+const { bodyColumns: _cols, ...NO_COLUMNS } = PANE.props
 const fig = (l: string, v: string, w = 45) => l + ' '.repeat(w - cols(l) - cols(v)) + v
 
 test('METRICS PANE: schema 3 draws the pane block verbatim in its groups within 45 columns; —, ? and stale as written, a long value wraps under its label and is never cut', ONLY, async ($, on) => {
@@ -1592,7 +1593,7 @@ test('METRICS PANE: with no bodyColumns the content is 41 columns wide and nothi
   const w = metricsWorld(SNAP, MET3)
   stubs(on, w)
   mock.clock(on, { now: GENERATED })
-  const ui = await showMetrics($, w, tall(undefined, 80))
+  const ui = await showMetrics($, w, { ...PANE, props: { ...NO_COLUMNS, scroll: { offset: 0, bodyRows: 80 } } })
   const body = await metricsRows(ui)
   for (const r of body) expect(cols(r)).toBeLessThanOrEqual(41)
   expect(body).toContain(fig('Rate', '50% (1 of 2) · stale', 41))
