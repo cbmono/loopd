@@ -66,6 +66,19 @@ ok "…its default first, labelled (Recommended)"          "$(has "$SKILL" 'labe
 ok "…asked by the launcher"                              "$(in_section 'batched `AskUserQuestion`')" yes
 ok "…and never by the agent"                             "$(in_brief 'never ask, never re-derive it')" yes
 
+# --- the open-project match: inside operation 4, never a part of its own ---------
+ok "operation 4 runs the match"            "$(in_section '`open-project-match.sh` when the kind part is asked')" yes
+ok "…and add-task.sh, on its answer"       "$(in_section '`add-task.sh` when its answer adds a task')" yes
+ok "…which passes build"                   "$(has "$SKILL" 'scripts/open-project-match.sh . build [<org>/<repo>] --text-file')" yes
+ok "…the repo flag, defaultRepo or none"   "$(has "$SKILL" 'with the `repo=` flag (qualified with `org`) or `<org>/<defaultRepo>` as the repo when either is known, and no repo otherwise')" yes
+ok "…offered as the kind part's third option" "$(has "$SKILL" "the kind part's third option, after Build \`(Recommended)\` and Research")" yes
+ok "…never a fourth part or a second question" "$(has "$SKILL" 'never a fourth part and never a second question')" yes
+ok "the option text is there"              "$(grep -c 'add as a task to' "$SKILL" | awk '{print ($1>0)?"yes":"no"}')" yes
+ok "choosing it runs add-task.sh from the typed text" "$(has "$SKILL" 'scripts/add-task.sh <slug> --text-file tmp/new-project-description.txt')" yes
+ok "…never the fetched issue text"         "$(has "$SKILL" 'an issue URL stays the URL, never the fetched text')" yes
+ok "…and stops before operations 5-6"      "$(has "$SKILL" 'no operations 5-6 and no scaffold dispatch, with one line naming the flags it dropped')" yes
+ok "kind=, all flags, --no-ask or submit skip it" "$(has "$SKILL" 'With `kind=` given, all three flags given, `--no-ask` or the form'"'"'s `submit`, no match runs and the launcher scaffolds as today')" yes
+
 # --- the issue fetch --------------------------------------------------------------
 ok "no connector or --no-ask keeps the URL verbatim" "$(in_section 'No connector, or `--no-ask` ⇒ the URL stays the description verbatim')" yes
 ok "…and the report says it was not fetched"        "$(in_brief '`issue not fetched: <why>`')" yes
@@ -122,6 +135,7 @@ grants() {
 }
 EXPECTED_GRANTS='Bash(date:*)
 Bash(${CLAUDE_PLUGIN_ROOT}/scripts/new-project-form.sh:*)
+Bash(${CLAUDE_PLUGIN_ROOT}/scripts/add-task.sh:*)
 Bash(${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*)
 Bash(${CLAUDE_PLUGIN_ROOT}/scripts/push-commit.sh:*)
 Bash(${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*)

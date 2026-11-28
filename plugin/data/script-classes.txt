@@ -53,6 +53,7 @@ migrate-bundle.sh writing --apply rewrites bundle documents
 new-project-file.sh writing creates and commits a project
 new-project-form.sh writing keeps and removes the new-project form file
 normalise-config.sh writing --apply rewrites and stages the tracked config
+open-project-match.sh read-only
 papercuts.sh writing appends to knowledge/papercuts.md
 plugin-name.sh read-only
 pr-body-clearance.sh writing records a clearance receipt for the PR it reads
