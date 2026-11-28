@@ -41,6 +41,8 @@ export AB_SESSIONS_LISTING="$TMP/listing.json"
 put "$L/.scratch/old.txt" 20; put "$L/.scratch/new.txt" 10; put "$L/.scratch/tracked.txt" 20
 put "$L/.scratch/sub/deep/x.txt" 20; put "$L/.scratch/$LIVE-notes.txt" 20; put "$L/.scratch/$DEAD-notes.txt" 20
 put "$L/.scratch/touched.txt" 20
+put "$L/.scratch/café.md" 20; put "$L/.scratch/naïve.md" 20; put "$L/.scratch/t"$'\t'"ab.txt" 20
+for s in "$LIVE" "$DEAD"; do put "$L/.scratch/run-12345678-$s.md" 20; put "$L/.scratch/$s/n.md" 20; done
 put "$L/.handoffs/aaaa1111-bbbb2222.txt" 20; put "$L/.handoffs/aaaa1111-eeee5555.txt" 20; put "$L/.handoffs/.gitignore" 20 '*'
 mkdir -p "$B/projects/p/tasks"; echo '* needs handed off · hand-off aaaa1111-bbbb2222 · Q1' > "$B/projects/p/tasks/t.md"
 for n in 1 2 3; do put "$L/.tick-receipts/o-r__pr${n}__h" 20 "$(printf 'repo o/r\npr %s\nhead h' "$n")"; done
@@ -52,7 +54,7 @@ printf 'old\n' > "$TMP/outside/far.txt"; old 90 "$TMP/outside/far.txt"
 ln -s "$TMP/outside" "$B/$L/tmp"; ln -s "$TMP/outside/far.txt" "$B/$L/.scratch/link"
 put "tmp/root-scratch.txt" 90
 put notes.md 90; put "$L/.scratch/a"$'\n'"notes.md" 90
-git -C "$B" init -q && git -C "$B" add "$L/.scratch/tracked.txt" instance.config.json \
+git -C "$B" init -q && git -C "$B" add "$L/.scratch/tracked.txt" "$L/.scratch/café.md" "$L/.scratch/t"$'\t'"ab.txt" instance.config.json \
   && git -C "$B" -c user.name=F -c user.email=f@example.com -c commit.gpgsign=false commit -qm fixture || die "git fixture"
 
 DRY="$(bash "$SCRIPT" "$B" 2>/dev/null)"
@@ -67,11 +69,16 @@ ok "kept: .sessions, kb.git and counts.json.<pid> are printed kept" \
    "$(grep -cxE "kept $L/(\.sessions|kb\.git|counts\.json\.4242)" <<<"$DRY")" 3
 ok "unowned: an unknown directory is printed with its bytes" "$(grep -cx "unowned $L/.mystery 10" <<<"$DRY")" 1
 ok "tracked: a tracked aged file is never listed" "$(would .scratch/tracked.txt)" 0
+ok "tracked: a tracked non-ASCII name is never listed, an untracked one is" "$(would .scratch/café.md)$(would .scratch/naïve.md)" 01
+ok "tab: a file name carrying a tab is never listed" "$(grep -c "ab.txt" <<<"$DRY")" 0
 ok ".gitignore: a writer-seeded .gitignore is never listed" "$(would .handoffs/.gitignore)" 0
 ok "hand-off: one a task doc names is kept at any age" "$(would .handoffs/aaaa1111-bbbb2222.txt)" 0
 ok "hand-off: one no task doc names is listed" "$(would .handoffs/aaaa1111-eeee5555.txt)" 1
 ok "session: a live session's file is kept" "$(would .scratch/$LIVE-notes.txt)" 0
 ok "session: a done session's file is listed" "$(would .scratch/$DEAD-notes.txt)" 1
+ok "session: a live id after the first token of a name is kept, a done one listed" \
+   "$(would .scratch/run-12345678-$LIVE.md)$(would .scratch/run-12345678-$DEAD.md)" 01
+ok "session: a live id as a directory name is kept, a done one listed" "$(would .scratch/$LIVE/n.md)$(would .scratch/$DEAD/n.md)" 01
 ok "session: an unreadable listing keeps every id-bearing file" \
    "$(AB_SESSIONS_LISTING="$TMP/missing.json" bash "$SCRIPT" "$B" 2>/dev/null | grep -cE "^would remove .*($DEAD-notes|aaaa1111-eeee5555)")" 0
 ok "receipt: merged and closed PRs listed, the open one kept" \
@@ -89,6 +96,8 @@ ok "apply: an emptied subdirectory goes, the table directory stays" "$(has "$L/.
 ok "apply: a directory a table directory empties stays (.tick-receipts)" "$(has "$L/.tick-receipts")" yes
 ok "apply: nothing kept, tracked or unowned is removed" \
    "$(has "$L/.pr-cache/o__r__1.json")$(has "$L/.mystery/blob")$(has "$L/.scratch/tracked.txt")$(has "$L/.handoffs/.gitignore")" yesyesyesyes
+ok "apply: a tracked non-ASCII or tab name and a live session's files stay" \
+   "$(has "$L/.scratch/café.md")$(has "$L/.scratch/t"$'\t'"ab.txt")$(has "$L/.scratch/run-12345678-$LIVE.md")$(has "$L/.scratch/$LIVE/n.md")" yesyesyesyes
 ok "apply: no symlink target and nothing outside .loopd/ is removed" \
    "$(has "$L/.scratch/link")$([ -f "$TMP/outside/far.txt" ] && echo yes)$(has tmp/root-scratch.txt)" yesyesyes
 ok "newline: a file name carrying a newline never names a path outside .loopd/" "$(grep -c '^would remove notes.md' <<<"$DRY")$(has notes.md)" 0yes

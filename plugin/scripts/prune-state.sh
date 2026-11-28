@@ -5,7 +5,8 @@
 # Dry run by default: `would remove <path> <bytes>`, `kept <path>`, `unowned <path> <bytes>`, then
 # `prune: <n> files, <bytes> bytes`; `--apply` removes and prints `removed`. Only AGES rows are
 # removed; never a tracked file, a `.gitignore`, an open hand-off, a live session's file, a
-# receipt for a PR not closed or merged (none under --offline), or a seed's newest backup.
+# receipt for a PR not closed or merged (none under --offline), a seed's newest backup, or a
+# path with a tab or newline in it.
 # Exit: 0 done · 2 usage, no .loopd, or tracked files unreadable. Reasoning: bound-loopd-dir-growth/task-005.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -14,9 +15,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 AGES=".scratch:14 tmp:14 .tick-receipts:14 .handoffs:14 refresh:30"
 KEPT="kb.git kb-src seed-base citations log .qa-dispatch .new-project .queue .sessions
 counts.json.* METRICS.json.* .METRICS.json.* upstream-proposals.md.*"
+TAB=$'\t'; NL=$'\n'
 TERMINAL=" done gone stopped completed cancelled failed error exited dead "
 
-usage() { sed -n '3,9p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '3,10p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 root=""; apply=0; offline=0
 for a in "$@"; do
   case "$a" in --apply) apply=1 ;; --offline) offline=1 ;; -*) usage ;; *) [ -z "$root" ] || usage; root="$a" ;; esac
@@ -27,9 +29,10 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/prune-state.XXXXXX")" && [ -d "$work" ] || ex
 trap 'rm -rf "$work"' EXIT
 
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
-git -C "$root" ls-files -- "$AB_DIR" > "$work/tracked" 2>/dev/null \
+git -C "$root" ls-files -z -- "$AB_DIR" 2>/dev/null | tr '\0' '\n' > "$work/tracked" \
   || { echo "prune-state: cannot read tracked files in $root — nothing removed" >&2; exit 2; }
 bytes() { find -P "$1" -type f -exec wc -c {} \; 2>/dev/null | awk '{ s += $1 } END { print s + 0 }'; }
+ids_of() { printf '%s\n' "$1" | tr -c '0-9A-Za-z' '\n' | grep -xE '[0-9a-f]{8}'; }
 age_of() { local r; for r in $AGES; do [ "${r%%:*}" = "$1" ] && { echo "${r##*:}"; return 0; }; done; return 1; }
 
 for p in $(bash "$HERE/bundle-paths.sh" | sed -n "s#^AB_[A-Z_]*=$AB_DIR/\([^/]*\).*#\1#p"); do KEPT="$KEPT $p"; done
@@ -40,7 +43,7 @@ for p in "$root/$AB_DIR"/* "$root/$AB_DIR"/.[!.]* "$root/$AB_DIR"/..?*; do
   [ -e "$p" ] || [ -L "$p" ] || continue
   n="${p##*/}"; rel="$AB_DIR/$n"
   if age_of "$n" >/dev/null && [ -d "$p" ] && [ ! -L "$p" ]; then
-    (cd "$root" && find -P "$rel" -type f ! -name .gitignore -mtime "+$(age_of "$n")" -print 2>/dev/null) \
+    (cd "$root" && find -P "$rel" -type f ! -name .gitignore ! -path "*$TAB*" ! -path "*$NL*" -mtime "+$(age_of "$n")" -print 2>/dev/null) \
       | awk -v d="$n" '{ print d "\t" $0 }' >> "$work/cand"
   elif known "$n" || grep -q "^$rel\(/\|$\)" "$work/tracked"; then
     echo "kept $rel"
@@ -62,9 +65,7 @@ awk -F'\t' '$1 == ".handoffs" { print $2 }' "$work/cand" | while IFS= read -r f;
   if grep -qxF "hand-off $id" "$work/open" || grep -qxF 'hand-off *' "$work/open"; then keep "$f"; fi
 done
 
-cut -f2 "$work/cand" | while IFS= read -r f; do
-  printf '%s\n' "${f##*/}" | grep -oE '(^|[^0-9A-Za-z])[0-9a-f]{8}([^0-9A-Za-z]|$)' | grep -oE '[0-9a-f]{8}'
-done | sort -u > "$work/ids"
+while IFS="$TAB" read -r d f; do ids_of "${f#"$AB_DIR/$d/"}"; done < "$work/cand" | sort -u > "$work/ids"
 if [ -s "$work/ids" ]; then
   if bash "$HERE/agent-sessions.sh" states $(cat "$work/ids") > "$work/states" 2>/dev/null; then
     awk -v t="$TERMINAL" 'index(t, " " $2 " ") == 0 { print $1 }' "$work/states" > "$work/live"
@@ -72,11 +73,9 @@ if [ -s "$work/ids" ]; then
     echo "prune-state: session states unreadable — every file naming a session id kept" >&2
     cp "$work/ids" "$work/live"
   fi
-  cut -f2 "$work/cand" | while IFS= read -r f; do
-    for id in $(printf '%s\n' "${f##*/}" | grep -oE '(^|[^0-9A-Za-z])[0-9a-f]{8}([^0-9A-Za-z]|$)' | grep -oE '[0-9a-f]{8}'); do
-      grep -qxF "$id" "$work/live" && { keep "$f"; break; }
-    done
-  done
+  while IFS="$TAB" read -r d f; do
+    for id in $(ids_of "${f#"$AB_DIR/$d/"}"); do grep -qxF "$id" "$work/live" && { keep "$f"; break; }; done
+  done < "$work/cand"
 fi
 
 awk -F'\t' '$1 == ".tick-receipts" { print $2 }' "$work/cand" | while IFS= read -r f; do
@@ -90,12 +89,12 @@ awk -F'\t' '$1 == ".tick-receipts" { print $2 }' "$work/cand" | while IFS= read 
   case "$s" in CLOSED|MERGED) ;; *) keep "$f" ;; esac
 done
 
-[ -L "$root/$AB_DIR/refresh" ] || (cd "$root" && find -P "$AB_DIR/refresh" -type f ! -name .gitignore 2>/dev/null) \
+[ -L "$root/$AB_DIR/refresh" ] || (cd "$root" && find -P "$AB_DIR/refresh" -type f ! -name .gitignore ! -path "*$TAB*" ! -path "*$NL*" 2>/dev/null) \
   | sed -nE 's#^(.*)\.([0-9]+)$#\1	\2	&#p' | sort -t'	' -k1,1 -k2,2nr \
   | awk -F'\t' '!seen[$1]++ { print $3 }' >> "$work/keep"
 
 total=0; count=0
-while IFS='	' read -r d f; do
+while IFS="$TAB" read -r d f; do
   grep -qxF "$f" "$work/keep" && continue
   case "$f" in "$AB_DIR/$d/"*) ;; *) continue ;; esac
   case "/$f/" in */../*|*/./*) continue ;; esac
