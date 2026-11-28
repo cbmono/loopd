@@ -1545,7 +1545,7 @@ test('METRICS VIEW: source none draws —, stale draws the figure marked stale, 
   await ui.unmount()
 })
 
-// metrics.sh's `pane` block, schema 3 (docs/metrics.md): 11 groups, 24 figures.
+// Shape: docs/metrics.md → pane
 const LONG_VALUE = '123456789 / 987654321 over every month the ledger has'
 const PANE_BLOCK = [
   ['Delegation', [['Role-agent share', '85%'], ['Role agents / supervision', '6k / 1k']]],

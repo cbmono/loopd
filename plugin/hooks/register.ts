@@ -192,8 +192,8 @@ const WIDTH = 45        // the operator layout's width where the surface names n
 const PAD = 2           // the operator pane's padding, left and right; every row is drawn inside it
 const BAR = 10          // progress-bar cells, whatever the task count
 const ROW_LINES = 3     // a wrapped row's most lines, every section alike; the last is cut
-const VIEW_LINES = 2    // the Projects/Metrics tabs and the blank line under them
-const BUTTON_LINES = 4  // the blank, rule and blank lines above the buttons, and the buttons
+const VIEW_LINES = 2
+const BUTTON_LINES = 4
 // write-snapshot.sh's verb set, minus nothing: the pane names the verb, never the reason.
 const VERBS = ['approve', 'answer', 'merge', 'unblock', 'close'] as const
 const ANSWER = 'loopd:answer'
